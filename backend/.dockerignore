@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SQLite database files (will be mounted as volume)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Tests (not needed in production image)
+tests/
+pytest.ini
+conftest.py
+
+# Documentation
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
