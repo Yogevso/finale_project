@@ -1,0 +1,445 @@
+import axios, { AxiosError, AxiosInstance } from 'axios'
+import type {
+  LoginRequest,
+  TokenResponse,
+  User,
+  UserCreate,
+  Document,
+  DocumentCreate,
+  DocumentUpdate,
+  DocumentListResponse,
+  DocumentQueryParams,
+  MessageResponse,
+  PasswordChange,
+  Version,
+  VersionCreate,
+  VersionUpdate,
+  VersionListResponse,
+  Attachment,
+  AttachmentUploadResponse,
+  Comment,
+  CommentCreate,
+  CommentUpdate,
+  NotificationListResponse,
+  NotificationCountResponse,
+} from '@/types'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+
+class ApiClient {
+  private client: AxiosInstance
+  private token: string | null = null
+  private refreshToken: string | null = null
+  private isRefreshing = false
+  private refreshSubscribers: ((token: string) => void)[] = []
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    // Load tokens from localStorage
+    this.token = localStorage.getItem('token')
+    this.refreshToken = localStorage.getItem('refreshToken')
+
+    // Add auth header to requests
+    this.client.interceptors.request.use((config) => {
+      if (this.token) {
+        config.headers.Authorization = `Bearer ${this.token}`
+      }
+      return config
+    })
+
+    // Handle 401 errors with token refresh
+    this.client.interceptors.response.use(
+      (response) => response,
+      async (error: AxiosError) => {
+        const originalRequest = error.config
+        
+        if (error.response?.status === 401 && originalRequest && !originalRequest.url?.includes('/auth/refresh')) {
+          // Try to refresh the token
+          if (this.refreshToken && !this.isRefreshing) {
+            this.isRefreshing = true
+            try {
+              const newToken = await this.doRefreshToken()
+              this.isRefreshing = false
+              this.onRefreshed(newToken)
+              originalRequest.headers.Authorization = `Bearer ${newToken}`
+              return this.client(originalRequest)
+            } catch {
+              this.isRefreshing = false
+              this.clearTokens()
+              window.location.href = '/login'
+              return Promise.reject(error)
+            }
+          } else if (this.isRefreshing) {
+            // Wait for token refresh
+            return new Promise((resolve) => {
+              this.subscribeTokenRefresh((token: string) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`
+                resolve(this.client(originalRequest))
+              })
+            })
+          } else {
+            this.clearTokens()
+            window.location.href = '/login'
+          }
+        }
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  private subscribeTokenRefresh(cb: (token: string) => void) {
+    this.refreshSubscribers.push(cb)
+  }
+
+  private onRefreshed(token: string) {
+    this.refreshSubscribers.forEach(cb => cb(token))
+    this.refreshSubscribers = []
+  }
+
+  private async doRefreshToken(): Promise<string> {
+    const { data } = await axios.post<TokenResponse>(
+      `${API_BASE_URL}/auth/refresh`,
+      { refresh_token: this.refreshToken }
+    )
+    this.setToken(data.access_token)
+    return data.access_token
+  }
+
+  setToken(token: string, refresh?: string | null) {
+    this.token = token
+    localStorage.setItem('token', token)
+    if (refresh) {
+      this.refreshToken = refresh
+      localStorage.setItem('refreshToken', refresh)
+    }
+  }
+
+  clearTokens() {
+    this.token = null
+    this.refreshToken = null
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+  }
+
+  hasToken(): boolean {
+    return !!this.token
+  }
+
+  // ========== Auth ==========
+  async login(credentials: LoginRequest): Promise<TokenResponse> {
+    const { data } = await this.client.post<TokenResponse>('/auth/login', credentials)
+    this.setToken(data.access_token, data.refresh_token)
+    return data
+  }
+
+  async register(userData: UserCreate): Promise<User> {
+    const { data } = await this.client.post<User>('/auth/register', userData)
+    return data
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const { data } = await this.client.get<User>('/auth/me')
+    return data
+  }
+
+  async changePassword(passwords: PasswordChange): Promise<MessageResponse> {
+    const { data } = await this.client.post<MessageResponse>('/auth/change-password', passwords)
+    return data
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.client.post('/auth/logout')
+    } catch {
+      // Ignore logout errors
+    }
+    this.clearTokens()
+  }
+
+  // ========== Users ==========
+  async getUsers(): Promise<User[]> {
+    const { data } = await this.client.get<User[]>('/users')
+    return data
+  }
+
+  async getUser(id: number): Promise<User> {
+    const { data } = await this.client.get<User>(`/users/${id}`)
+    return data
+  }
+
+  // ========== Documents ==========
+  async getDocuments(params?: DocumentQueryParams): Promise<DocumentListResponse> {
+    const { data } = await this.client.get<DocumentListResponse>('/documents', { params })
+    return data
+  }
+
+  async getDocument(id: number): Promise<Document> {
+    const { data } = await this.client.get<Document>(`/documents/${id}`)
+    return data
+  }
+
+  async createDocument(document: DocumentCreate): Promise<Document> {
+    const { data } = await this.client.post<Document>('/documents', document)
+    return data
+  }
+
+  async updateDocument(id: number, document: DocumentUpdate): Promise<Document> {
+    const { data } = await this.client.put<Document>(`/documents/${id}`, document)
+    return data
+  }
+
+  async deleteDocument(id: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/documents/${id}`)
+    return data
+  }
+
+  async uploadDocument(file: File, metadata?: { title?: string; description?: string; category?: string; tags?: string }): Promise<Document> {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (metadata?.title) formData.append('title', metadata.title)
+    if (metadata?.description) formData.append('description', metadata.description)
+    if (metadata?.category) formData.append('category', metadata.category)
+    if (metadata?.tags) formData.append('tags', metadata.tags)
+    
+    const { data } = await this.client.post<Document>('/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return data
+  }
+
+  // ========== Versions ==========
+  async getVersions(documentId: number): Promise<VersionListResponse> {
+    const { data } = await this.client.get<VersionListResponse>(`/documents/${documentId}/versions`)
+    return data
+  }
+
+  async getVersion(documentId: number, versionId: number): Promise<Version> {
+    const { data } = await this.client.get<Version>(`/documents/${documentId}/versions/${versionId}`)
+    return data
+  }
+
+  async createVersion(documentId: number, version: VersionCreate): Promise<Version> {
+    const { data } = await this.client.post<Version>(`/documents/${documentId}/versions`, version)
+    return data
+  }
+
+  async updateVersion(documentId: number, versionId: number, version: VersionUpdate): Promise<Version> {
+    const { data } = await this.client.patch<Version>(`/documents/${documentId}/versions/${versionId}`, version)
+    return data
+  }
+
+  async publishVersion(documentId: number, versionId: number): Promise<Version> {
+    const { data } = await this.client.post<Version>(`/documents/${documentId}/versions/${versionId}/publish`)
+    return data
+  }
+
+  async deleteVersion(documentId: number, versionId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/documents/${documentId}/versions/${versionId}`)
+    return data
+  }
+
+  // ========== Attachments ==========
+  async getAttachments(documentId: number): Promise<Attachment[]> {
+    const { data } = await this.client.get<Attachment[]>(`/documents/${documentId}/attachments`)
+    return data
+  }
+
+  async uploadAttachment(documentId: number, file: File): Promise<AttachmentUploadResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await this.client.post<AttachmentUploadResponse>(
+      `/documents/${documentId}/attachments`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+    return data
+  }
+
+  async deleteAttachment(documentId: number, attachmentId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/documents/${documentId}/attachments/${attachmentId}`)
+    return data
+  }
+
+  getAttachmentDownloadUrl(documentId: number, attachmentId: number): string {
+    // Include token in URL for authenticated download
+    const token = this.token || localStorage.getItem('token')
+    return `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download?token=${token}`
+  }
+
+  async getAttachmentBlob(documentId: number, attachmentId: number): Promise<Blob> {
+    const response = await this.client.get(
+      `/documents/${documentId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' }
+    )
+    return response.data
+  }
+
+  // ========== Comments ==========
+  async getComments(documentId: number, parentId?: number): Promise<Comment[]> {
+    const params = parentId !== undefined ? { parent_id: parentId } : {}
+    const { data } = await this.client.get<Comment[]>(`/documents/${documentId}/comments`, { params })
+    return data
+  }
+
+  async getComment(documentId: number, commentId: number): Promise<Comment> {
+    const { data } = await this.client.get<Comment>(`/documents/${documentId}/comments/${commentId}`)
+    return data
+  }
+
+  async createComment(documentId: number, comment: CommentCreate): Promise<Comment> {
+    const { data } = await this.client.post<Comment>(`/documents/${documentId}/comments`, comment)
+    return data
+  }
+
+  async updateComment(documentId: number, commentId: number, comment: CommentUpdate): Promise<Comment> {
+    const { data } = await this.client.patch<Comment>(`/documents/${documentId}/comments/${commentId}`, comment)
+    return data
+  }
+
+  async deleteComment(documentId: number, commentId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/documents/${documentId}/comments/${commentId}`)
+    return data
+  }
+
+  // ========== Search ==========
+  async search(query: string, options?: { category?: string; page?: number; pageSize?: number }) {
+    const params = { q: query, ...options }
+    const { data } = await this.client.get('/search', { params })
+    return data
+  }
+
+  async getAutocomplete(query: string) {
+    const { data } = await this.client.get('/search/autocomplete', { params: { q: query } })
+    return data
+  }
+
+  async getSearchFacets() {
+    const { data } = await this.client.get('/search/facets')
+    return data
+  }
+
+  // ========== Saved Searches ==========
+  async getSavedSearches() {
+    const { data } = await this.client.get('/search/saved')
+    return data
+  }
+
+  async createSavedSearch(search: { name: string; query?: string; category?: string }) {
+    const { data } = await this.client.post('/search/saved', search)
+    return data
+  }
+
+  async deleteSavedSearch(searchId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/search/saved/${searchId}`)
+    return data
+  }
+
+  // ========== Bookmarks ==========
+  async getBookmarks() {
+    const { data } = await this.client.get('/engagement/bookmarks')
+    return data
+  }
+
+  async addBookmark(documentId: number) {
+    const { data } = await this.client.post(`/engagement/bookmarks/${documentId}`)
+    return data
+  }
+
+  async removeBookmark(documentId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/engagement/bookmarks/${documentId}`)
+    return data
+  }
+
+  async checkBookmarkStatus(documentId: number) {
+    const { data } = await this.client.get(`/engagement/bookmarks/${documentId}/status`)
+    return data
+  }
+
+  // ========== Feedback ==========
+  async submitFeedback(documentId: number, isHelpful: boolean, comment?: string) {
+    const { data } = await this.client.post(`/engagement/feedback/${documentId}`, {
+      is_helpful: isHelpful,
+      comment,
+    })
+    return data
+  }
+
+  async getFeedbackStats(documentId: number) {
+    const { data } = await this.client.get(`/engagement/feedback/${documentId}/stats`)
+    return data
+  }
+
+  async getMyFeedback(documentId: number) {
+    const { data } = await this.client.get(`/engagement/feedback/${documentId}/my`)
+    return data
+  }
+
+  // ========== Reading Progress ==========
+  async getReadingProgress() {
+    const { data } = await this.client.get('/engagement/progress')
+    return data
+  }
+
+  async updateReadingProgress(documentId: number, progressPercent: number) {
+    const { data } = await this.client.put(`/engagement/progress/${documentId}`, {
+      progress_percent: progressPercent,
+    })
+    return data
+  }
+
+  async getDocumentProgress(documentId: number) {
+    const { data } = await this.client.get(`/engagement/progress/${documentId}`)
+    return data
+  }
+
+  async getEngagementStats() {
+    const { data } = await this.client.get('/engagement/stats')
+    return data
+  }
+
+  // ========== Notifications ==========
+  async getNotifications(unreadOnly: boolean = false, limit: number = 50): Promise<NotificationListResponse> {
+    const { data } = await this.client.get<NotificationListResponse>('/notifications', {
+      params: { unread_only: unreadOnly, limit }
+    })
+    return data
+  }
+
+  async getNotificationCount(): Promise<NotificationCountResponse> {
+    const { data } = await this.client.get<NotificationCountResponse>('/notifications/count')
+    return data
+  }
+
+  async markNotificationRead(notificationId: number): Promise<MessageResponse> {
+    const { data } = await this.client.post<MessageResponse>(`/notifications/${notificationId}/read`)
+    return data
+  }
+
+  async markAllNotificationsRead(notificationIds?: number[]): Promise<MessageResponse> {
+    const { data } = await this.client.post<MessageResponse>('/notifications/read', {
+      notification_ids: notificationIds || null
+    })
+    return data
+  }
+
+  async deleteNotification(notificationId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/notifications/${notificationId}`)
+    return data
+  }
+
+  async deleteAllNotifications(readOnly: boolean = true): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>('/notifications', {
+      params: { read_only: readOnly }
+    })
+    return data
+  }
+}
+
+// Export singleton instance
+export const api = new ApiClient()
