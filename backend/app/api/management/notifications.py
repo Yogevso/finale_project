@@ -4,7 +4,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -52,18 +51,18 @@ def get_notifications(
 ):
     """Get notifications for current user"""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
-    
+
     if unread_only:
-        query = query.filter(Notification.is_read == False)
-    
+        query = query.filter(Notification.is_read.is_(False))
+
     total = query.count()
     unread_count = db.query(Notification).filter(
         Notification.user_id == current_user.id,
-        Notification.is_read == False
+        Notification.is_read.is_(False)
     ).count()
-    
+
     items = query.order_by(Notification.created_at.desc()).limit(limit).all()
-    
+
     return NotificationListResponse(
         items=[NotificationResponse(
             id=n.id,
@@ -88,9 +87,9 @@ def get_notification_count(
     """Get unread notification count for current user"""
     unread_count = db.query(Notification).filter(
         Notification.user_id == current_user.id,
-        Notification.is_read == False
+        Notification.is_read.is_(False)
     ).count()
-    
+
     return {"unread_count": unread_count}
 
 
@@ -103,19 +102,19 @@ def mark_notifications_read(
     """Mark notifications as read"""
     query = db.query(Notification).filter(
         Notification.user_id == current_user.id,
-        Notification.is_read == False
+        Notification.is_read.is_(False)
     )
-    
+
     if data.notification_ids:
         query = query.filter(Notification.id.in_(data.notification_ids))
-    
+
     now = datetime.utcnow()
     updated = query.update(
         {Notification.is_read: True, Notification.read_at: now},
         synchronize_session=False
     )
     db.commit()
-    
+
     return {"message": f"Marked {updated} notifications as read"}
 
 
@@ -130,15 +129,15 @@ def mark_notification_read(
         Notification.id == notification_id,
         Notification.user_id == current_user.id
     ).first()
-    
+
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
     if not notification.is_read:
         notification.is_read = True
         notification.read_at = datetime.utcnow()
         db.commit()
-    
+
     return {"message": "Notification marked as read"}
 
 
@@ -153,13 +152,13 @@ def delete_notification(
         Notification.id == notification_id,
         Notification.user_id == current_user.id
     ).first()
-    
+
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
     db.delete(notification)
     db.commit()
-    
+
     return {"message": "Notification deleted"}
 
 
@@ -171,11 +170,11 @@ def delete_all_notifications(
 ):
     """Delete notifications (by default only read ones)"""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
-    
+
     if read_only:
-        query = query.filter(Notification.is_read == True)
-    
+        query = query.filter(Notification.is_read.is_(True))
+
     deleted = query.delete(synchronize_session=False)
     db.commit()
-    
+
     return {"message": f"Deleted {deleted} notifications"}

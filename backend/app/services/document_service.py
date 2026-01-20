@@ -6,26 +6,26 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
-from app.models import ActionType, AuditLog, Document, DocumentStatus, User, UserRole, Version
+from app.models import ActionType, AuditLog, Document, DocumentStatus, User, Version
 from app.schemas import DocumentCreate, DocumentUpdate
 
 
 class DocumentService:
     """Document CRUD service with multi-tenancy support"""
-    
+
     def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None):
         self.db = db
         self.tenant_ctx = tenant_ctx
-    
+
     def _base_query(self):
         """Base query with tenant filtering applied"""
         query = self.db.query(Document)
-        
+
         if self.tenant_ctx and not self.tenant_ctx.is_super_admin:
             query = query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-        
+
         return query
-    
+
     def _verify_access(self, document: Document) -> None:
         """Verify current user can access this document"""
         if not document:
@@ -33,7 +33,7 @@ class DocumentService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Document not found"
             )
-        
+
         if self.tenant_ctx and not self.tenant_ctx.is_super_admin:
             if document.tenant_id != self.tenant_ctx.tenant_id:
                 raise HTTPException(
@@ -59,7 +59,7 @@ class DocumentService:
         """Create a new document"""
         # Generate document number
         document_number = self.generate_document_number()
-        
+
         # Get tenant_id from context or user
         tenant_id = None
         if self.tenant_ctx:

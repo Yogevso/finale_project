@@ -16,8 +16,8 @@ from app.schemas import (
     MessageResponse,
 )
 from app.security import get_current_active_user
-from app.services.document_service import DocumentService
 from app.services.attachment_service import AttachmentService
+from app.services.document_service import DocumentService
 
 router = APIRouter()
 
@@ -148,11 +148,11 @@ async def upload_document(
 ):
     """
     Upload a document file (PDF/Word) and create a new document with it attached.
-    
+
     Only admins and editors can upload documents.
     Max file size: 10MB.
     Allowed types: PDF, Word documents.
-    
+
     The file name will be used as the document title if not provided.
     """
     # Check permission - only admin/editor can upload
@@ -161,10 +161,10 @@ async def upload_document(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins and editors can upload documents"
         )
-    
+
     # Use filename as title if not provided
     doc_title = title or file.filename.rsplit('.', 1)[0] if file.filename else "Uploaded Document"
-    
+
     # Create the document first
     service = DocumentService(db, tenant_ctx)
     document_data = DocumentCreate(
@@ -175,7 +175,7 @@ async def upload_document(
         tags=tags or ""
     )
     document = service.create_document(document_data, current_user)
-    
+
     # Now attach the uploaded file
     try:
         await AttachmentService.upload_attachment(db, document.id, file, current_user)
@@ -183,7 +183,7 @@ async def upload_document(
         # If attachment fails, delete the document and re-raise
         service.delete_document(document.id, current_user)
         raise e
-    
+
     # Refresh to get updated data
     db.refresh(document)
     return document

@@ -2,11 +2,9 @@
 import io
 import logging
 import os
-import shutil
 import uuid
-from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -237,17 +235,17 @@ class AttachmentService:
 
         # If not found, try resolving through the upload directory
         upload_dir = AttachmentService.get_upload_dir()
-        
+
         # Try just the filename in uploads directory
         possible_path = upload_dir / attachment.storage_path
         if possible_path.exists():
             return str(possible_path), attachment.original_filename, attachment.mime_type
-        
+
         # Try in document subdirectory
         doc_subdir = upload_dir / str(document_id) / attachment.storage_path
         if doc_subdir.exists():
             return str(doc_subdir), attachment.original_filename, attachment.mime_type
-        
+
         # Try using the filename field
         possible_path = upload_dir / attachment.filename
         if possible_path.exists():

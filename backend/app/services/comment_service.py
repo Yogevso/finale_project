@@ -59,7 +59,7 @@ class CommentService:
         if not CommentService.can_view_private_comments(current_user):
             for comment in comments:
                 comment.replies = [
-                    r for r in comment.replies 
+                    r for r in comment.replies
                     if not r.is_private or r.user_id == current_user.id
                 ]
 
@@ -172,8 +172,9 @@ class CommentService:
             if not settings.EMAIL_ENABLED:
                 return
 
-            from app.services.email_service import email_service
             import asyncio
+
+            from app.services.email_service import email_service
 
             notified_users = set()
 
@@ -208,7 +209,7 @@ class CommentService:
                         )
                     )
                     notified_users.add(author.id)
-                    logger.info(f"Queued comment notification to document author")
+                    logger.info("Queued comment notification to document author")
 
             # For private comments or inline comments, notify all admins/editors
             if comment.is_private or comment.anchor_text:
@@ -325,13 +326,13 @@ class CommentService:
     ) -> dict:
         """Get comment counts for a document"""
         total = db.query(Comment).filter(Comment.document_id == document_id).count()
-        
+
         # Get top-level comments only
         top_level = db.query(Comment).filter(
             Comment.document_id == document_id,
             Comment.parent_id == None  # noqa: E711
         ).count()
-        
+
         # Count private comments
         private_count = db.query(Comment).filter(
             Comment.document_id == document_id,

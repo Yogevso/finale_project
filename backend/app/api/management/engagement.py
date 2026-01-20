@@ -1,6 +1,6 @@
 """Engagement API - Bookmarks, Feedback, Reading Progress"""
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -8,8 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models import Bookmark, Document, Feedback, ReadingProgress, User
 from app.security import get_current_user
-from app.models import User, Document, Bookmark, Feedback, ReadingProgress
 
 router = APIRouter(prefix="/engagement", tags=["Engagement"])
 
@@ -78,7 +78,7 @@ def list_bookmarks(
     bookmarks = db.query(Bookmark).filter(
         Bookmark.user_id == current_user.id
     ).order_by(Bookmark.created_at.desc()).all()
-    
+
     return [
         BookmarkResponse(
             id=b.id,
@@ -102,13 +102,13 @@ def add_bookmark(
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Check if already bookmarked
     existing = db.query(Bookmark).filter(
         Bookmark.user_id == current_user.id,
         Bookmark.document_id == document_id
     ).first()
-    
+
     if existing:
         return BookmarkResponse(
             id=existing.id,
@@ -117,7 +117,7 @@ def add_bookmark(
             document_number=document.document_number,
             created_at=existing.created_at,
         )
-    
+
     bookmark = Bookmark(
         user_id=current_user.id,
         document_id=document_id,
@@ -125,7 +125,7 @@ def add_bookmark(
     db.add(bookmark)
     db.commit()
     db.refresh(bookmark)
-    
+
     return BookmarkResponse(
         id=bookmark.id,
         document_id=bookmark.document_id,
@@ -146,10 +146,10 @@ def remove_bookmark(
         Bookmark.user_id == current_user.id,
         Bookmark.document_id == document_id
     ).first()
-    
+
     if not bookmark:
         raise HTTPException(status_code=404, detail="Bookmark not found")
-    
+
     db.delete(bookmark)
     db.commit()
     return {"message": "Bookmark removed"}
@@ -166,7 +166,7 @@ def check_bookmark_status(
         Bookmark.user_id == current_user.id,
         Bookmark.document_id == document_id
     ).first()
-    
+
     return {"is_bookmarked": bookmark is not None}
 
 
@@ -184,13 +184,13 @@ def submit_feedback(
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Check if user already submitted feedback
     existing = db.query(Feedback).filter(
         Feedback.user_id == current_user.id,
         Feedback.document_id == document_id
     ).first()
-    
+
     if existing:
         # Update existing feedback
         existing.is_helpful = data.is_helpful
@@ -198,7 +198,7 @@ def submit_feedback(
         db.commit()
         db.refresh(existing)
         return existing
-    
+
     # Create new feedback
     feedback = Feedback(
         user_id=current_user.id,
@@ -209,7 +209,7 @@ def submit_feedback(
     db.add(feedback)
     db.commit()
     db.refresh(feedback)
-    
+
     return feedback
 
 
@@ -221,17 +221,17 @@ def get_feedback_stats(
     """Get feedback statistics for a document (public)"""
     helpful = db.query(func.count(Feedback.id)).filter(
         Feedback.document_id == document_id,
-        Feedback.is_helpful == True
+        Feedback.is_helpful.is_(True)
     ).scalar() or 0
-    
+
     not_helpful = db.query(func.count(Feedback.id)).filter(
         Feedback.document_id == document_id,
-        Feedback.is_helpful == False
+        Feedback.is_helpful.is_(False)
     ).scalar() or 0
-    
+
     total = helpful + not_helpful
     percentage = (helpful / total * 100) if total > 0 else 0
-    
+
     return FeedbackStats(
         document_id=document_id,
         helpful_count=helpful,
@@ -252,10 +252,10 @@ def get_my_feedback(
         Feedback.user_id == current_user.id,
         Feedback.document_id == document_id
     ).first()
-    
+
     if not feedback:
         return {"has_feedback": False, "is_helpful": None}
-    
+
     return {
         "has_feedback": True,
         "is_helpful": feedback.is_helpful,
@@ -275,12 +275,12 @@ def list_reading_progress(
     query = db.query(ReadingProgress).filter(
         ReadingProgress.user_id == current_user.id
     )
-    
+
     if completed_only:
         query = query.filter(ReadingProgress.completed_at.isnot(None))
-    
+
     progress_list = query.order_by(ReadingProgress.last_read_at.desc()).all()
-    
+
     return [
         ReadingProgressResponse(
             id=p.id,
@@ -305,20 +305,20 @@ def update_reading_progress(
     # Validate progress
     if data.progress_percent < 0 or data.progress_percent > 100:
         raise HTTPException(status_code=400, detail="Progress must be 0-100")
-    
+
     # Check document exists
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Find or create progress record
     progress = db.query(ReadingProgress).filter(
         ReadingProgress.user_id == current_user.id,
         ReadingProgress.document_id == document_id
     ).first()
-    
+
     now = datetime.utcnow()
-    
+
     if progress:
         progress.progress_percent = data.progress_percent
         progress.last_read_at = now
@@ -333,10 +333,10 @@ def update_reading_progress(
             completed_at=now if data.progress_percent >= 100 else None,
         )
         db.add(progress)
-    
+
     db.commit()
     db.refresh(progress)
-    
+
     return ReadingProgressResponse(
         id=progress.id,
         document_id=progress.document_id,
@@ -358,14 +358,14 @@ def get_document_progress(
         ReadingProgress.user_id == current_user.id,
         ReadingProgress.document_id == document_id
     ).first()
-    
+
     if not progress:
         return {
             "has_progress": False,
             "progress_percent": 0,
             "is_completed": False,
         }
-    
+
     return {
         "has_progress": True,
         "progress_percent": progress.progress_percent,
@@ -383,20 +383,20 @@ def get_engagement_stats(
     bookmark_count = db.query(func.count(Bookmark.id)).filter(
         Bookmark.user_id == current_user.id
     ).scalar() or 0
-    
+
     feedback_count = db.query(func.count(Feedback.id)).filter(
         Feedback.user_id == current_user.id
     ).scalar() or 0
-    
+
     reading_count = db.query(func.count(ReadingProgress.id)).filter(
         ReadingProgress.user_id == current_user.id
     ).scalar() or 0
-    
+
     completed_count = db.query(func.count(ReadingProgress.id)).filter(
         ReadingProgress.user_id == current_user.id,
         ReadingProgress.completed_at.isnot(None)
     ).scalar() or 0
-    
+
     return {
         "bookmarks": bookmark_count,
         "feedbacks_given": feedback_count,

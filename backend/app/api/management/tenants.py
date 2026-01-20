@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, require_super_admin
 from app.models import Tenant, User
-from app.schemas.tenant import TenantCreate, TenantResponse, TenantUpdate, TenantListResponse
+from app.schemas.tenant import TenantCreate, TenantListResponse, TenantResponse, TenantUpdate
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -28,7 +28,7 @@ def create_tenant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Tenant with slug '{tenant_data.slug}' already exists"
         )
-    
+
     tenant = Tenant(
         name=tenant_data.name,
         slug=tenant_data.slug,
@@ -37,7 +37,7 @@ def create_tenant(
     db.add(tenant)
     db.commit()
     db.refresh(tenant)
-    
+
     return tenant
 
 
@@ -87,7 +87,7 @@ def update_tenant(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     # Check slug uniqueness if changing
     if tenant_data.slug and tenant_data.slug != tenant.slug:
         existing = db.query(Tenant).filter(Tenant.slug == tenant_data.slug).first()
@@ -97,19 +97,19 @@ def update_tenant(
                 detail=f"Tenant with slug '{tenant_data.slug}' already exists"
             )
         tenant.slug = tenant_data.slug
-    
+
     if tenant_data.name is not None:
         tenant.name = tenant_data.name
-    
+
     if tenant_data.is_active is not None:
         tenant.is_active = tenant_data.is_active
-    
+
     if tenant_data.settings is not None:
         tenant.settings = tenant_data.settings
-    
+
     db.commit()
     db.refresh(tenant)
-    
+
     return tenant
 
 
@@ -121,7 +121,7 @@ def delete_tenant(
 ):
     """
     Delete tenant (Super Admin only).
-    
+
     Warning: This will fail if there are users or documents in this tenant.
     """
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -130,7 +130,7 @@ def delete_tenant(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     # Check for users in this tenant
     user_count = db.query(User).filter(User.tenant_id == tenant_id).count()
     if user_count > 0:
@@ -138,10 +138,10 @@ def delete_tenant(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot delete tenant with {user_count} users. Reassign or delete users first."
         )
-    
+
     db.delete(tenant)
     db.commit()
-    
+
     return {"message": f"Tenant '{tenant.name}' deleted successfully"}
 
 
@@ -160,7 +160,7 @@ def get_tenant_users(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     users = db.query(User).filter(User.tenant_id == tenant_id).all()
     return [
         {

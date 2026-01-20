@@ -1,7 +1,7 @@
 """Comments API Routes"""
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -108,8 +108,8 @@ def resolve_comment(
     Only admins and editors can resolve comments.
     """
     return CommentService.update_comment(
-        db, document_id, comment_id, 
-        CommentUpdate(is_resolved=True), 
+        db, document_id, comment_id,
+        CommentUpdate(is_resolved=True),
         current_user
     )
 

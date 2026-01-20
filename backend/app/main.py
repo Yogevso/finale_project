@@ -61,9 +61,20 @@ async def root():
 
 
 # Import and include routers
-from app.api.management import attachments, auth, comments, documents, versions, search, engagement, tenants, users, notifications  # noqa: E402
-from app.api.viewer import documents as viewer_documents  # noqa: E402
 from app.api import health  # noqa: E402
+from app.api.management import (  # noqa: E402
+    attachments,
+    auth,
+    comments,
+    documents,
+    engagement,
+    notifications,
+    search,
+    tenants,
+    users,
+    versions,
+)
+from app.api.viewer import documents as viewer_documents  # noqa: E402
 
 # Health check routes (no prefix for load balancer compatibility)
 app.include_router(health.router, tags=["Health"])

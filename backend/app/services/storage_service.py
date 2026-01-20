@@ -1,10 +1,9 @@
 """Storage Service - Local and S3 storage backends"""
-import os
-import uuid
 import logging
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, BinaryIO, TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 from app.config import settings
 
@@ -12,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Lazy import boto3 only when S3 is enabled
 if TYPE_CHECKING:
-    import boto3
-    from botocore.exceptions import ClientError
+    pass
 
 
 class StorageBackend(ABC):
@@ -60,13 +58,13 @@ class LocalStorageBackend(StorageBackend):
         # Generate unique key
         ext = Path(filename).suffix
         storage_key = f"{uuid.uuid4().hex}{ext}"
-        
+
         file_path = self._get_path(storage_key)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(file_path, "wb") as f:
             f.write(file_data.read())
-        
+
         logger.info(f"Uploaded file to local storage: {storage_key}")
         return storage_key
 
@@ -75,7 +73,7 @@ class LocalStorageBackend(StorageBackend):
         file_path = self._get_path(storage_key)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {storage_key}")
-        
+
         with open(file_path, "rb") as f:
             return f.read()
 
@@ -106,22 +104,22 @@ class S3StorageBackend(StorageBackend):
         import boto3
         from botocore.exceptions import ClientError
         self._ClientError = ClientError
-        
+
         self.bucket = settings.S3_BUCKET
         self.region = settings.S3_REGION
-        
+
         # Initialize S3 client
         client_kwargs = {
             "region_name": self.region,
         }
-        
+
         if settings.S3_ENDPOINT_URL:
             client_kwargs["endpoint_url"] = settings.S3_ENDPOINT_URL
-        
+
         if settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY:
             client_kwargs["aws_access_key_id"] = settings.S3_ACCESS_KEY
             client_kwargs["aws_secret_access_key"] = settings.S3_SECRET_KEY
-        
+
         self.client = boto3.client("s3", **client_kwargs)
         logger.info(f"Initialized S3 storage: bucket={self.bucket}, region={self.region}")
 
@@ -130,7 +128,7 @@ class S3StorageBackend(StorageBackend):
         # Generate unique key with folder structure
         ext = Path(filename).suffix
         storage_key = f"documents/{uuid.uuid4().hex}{ext}"
-        
+
         try:
             self.client.upload_fileobj(
                 file_data,
@@ -153,7 +151,7 @@ class S3StorageBackend(StorageBackend):
             return response["Body"].read()
         except self._ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
-                raise FileNotFoundError(f"File not found in S3: {storage_key}")
+                raise FileNotFoundError(f"File not found in S3: {storage_key}") from e
             raise
 
     def delete(self, storage_key: str) -> bool:

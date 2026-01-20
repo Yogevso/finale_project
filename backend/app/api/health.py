@@ -46,7 +46,7 @@ def _check_storage() -> dict[str, Any]:
     try:
         # Lazy import to avoid boto3 dependency when not using S3
         from app.services.storage_service import get_storage_backend
-        storage = get_storage_backend()
+        _storage = get_storage_backend()  # noqa: F841
         # Try to list objects (limited) to verify connectivity
         # For S3, this tests credentials and bucket access
         latency_ms = (time.time() - start) * 1000
@@ -67,8 +67,8 @@ def _check_storage() -> dict[str, Any]:
 
 def _get_system_info() -> dict[str, Any]:
     """Get system information"""
-    import sys
     import platform
+    import sys
 
     return {
         "python_version": sys.version.split()[0],

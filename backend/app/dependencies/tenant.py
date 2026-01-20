@@ -17,7 +17,7 @@ class TenantContext:
     user_id: int
     user_role: UserRole
     is_super_admin: bool
-    
+
     def can_access_tenant(self, target_tenant_id: int) -> bool:
         """Check if user can access a specific tenant"""
         if self.is_super_admin:
@@ -31,12 +31,12 @@ async def get_tenant_context(
 ) -> TenantContext:
     """
     Dependency to get tenant context from the current authenticated user.
-    
+
     - SUPER_ADMIN users have is_super_admin=True and can access all tenants
     - Regular users are scoped to their tenant_id
     """
     is_super_admin = current_user.role == UserRole.SUPER_ADMIN
-    
+
     return TenantContext(
         tenant_id=current_user.tenant_id,
         user_id=current_user.id,

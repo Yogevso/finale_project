@@ -6,14 +6,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import User, PasswordReset
+from app.models import PasswordReset, User
 from app.schemas import TokenResponse, UserCreate
 from app.security import (
     create_access_token,
     create_refresh_token,
     get_password_hash,
     verify_password,
-    REFRESH_TOKEN_EXPIRE_DAYS,
 )
 
 
@@ -65,7 +64,7 @@ class AuthService:
 
         # Create refresh token
         refresh_token, expires_at = create_refresh_token(user.id)
-        
+
         # Store refresh token hash in password_resets table (repurposed for refresh tokens)
         token_hash = get_password_hash(refresh_token)
         refresh_record = PasswordReset(

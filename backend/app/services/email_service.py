@@ -1,8 +1,8 @@
 """Email Service for sending notifications"""
 import logging
-from typing import Optional
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
 
 import aiosmtplib
 
@@ -58,7 +58,7 @@ class EmailService:
                 if self.user and self.password:
                     await smtp.login(self.user, self.password)
                 await smtp.send_message(message)
-            
+
             logger.info(f"Email sent successfully to {to_email}: {subject}")
             return True
         except Exception as e:
@@ -74,7 +74,7 @@ class EmailService:
     ) -> bool:
         """Notify when a document is published"""
         subject = f"📄 Document Published: {document_title}"
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -101,12 +101,12 @@ class EmailService:
                 </div>
                 <div class="content">
                     <p>Great news! A document has been published and is now available for viewing.</p>
-                    
+
                     <div class="document-card">
                         <div class="document-title">{document_title}</div>
                         <div class="document-number">{document_number}</div>
                     </div>
-                    
+
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{document_url}" class="button">View Document →</a>
                     </p>
@@ -118,7 +118,7 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         text = f"""
 Document Published: {document_title}
 
@@ -132,7 +132,7 @@ View the document: {document_url}
 ---
 Document Portal V2
         """
-        
+
         return await self.send_email(to_email, subject, html, text)
 
     async def send_new_comment(
@@ -145,7 +145,7 @@ Document Portal V2
     ) -> bool:
         """Notify when someone comments on a document"""
         subject = f"💬 New Comment on: {document_title}"
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -172,13 +172,13 @@ Document Portal V2
                 </div>
                 <div class="content">
                     <p>Someone left a comment on a document you're following.</p>
-                    
+
                     <div class="comment-card">
                         <div class="commenter">{commenter_name} wrote:</div>
                         <div class="comment-text">"{comment_text}"</div>
                         <div class="document-name">on {document_title}</div>
                     </div>
-                    
+
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{document_url}" class="button">View Document →</a>
                     </p>
@@ -190,7 +190,7 @@ Document Portal V2
         </body>
         </html>
         """
-        
+
         text = f"""
 New Comment on: {document_title}
 
@@ -202,7 +202,7 @@ View the document: {document_url}
 ---
 Document Portal V2
         """
-        
+
         return await self.send_email(to_email, subject, html, text)
 
     async def send_comment_reply(
@@ -216,7 +216,7 @@ Document Portal V2
     ) -> bool:
         """Notify when someone replies to your comment"""
         subject = f"↩️ Reply to your comment on: {document_title}"
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -244,18 +244,18 @@ Document Portal V2
                 </div>
                 <div class="content">
                     <p>Someone replied to your comment!</p>
-                    
+
                     <div class="original-comment">
                         <strong>Your comment:</strong><br>
                         "{original_comment}..."
                     </div>
-                    
+
                     <div class="reply-card">
                         <div class="replier">{replier_name} replied:</div>
                         <div class="reply-text">"{reply_content}"</div>
                         <div class="document-name">on {document_title}</div>
                     </div>
-                    
+
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{document_url}" class="button">View Conversation →</a>
                     </p>
@@ -267,7 +267,7 @@ Document Portal V2
         </body>
         </html>
         """
-        
+
         text = f"""
 Reply to your comment on: {document_title}
 
@@ -282,7 +282,7 @@ View the conversation: {document_url}
 ---
 Document Portal V2
         """
-        
+
         return await self.send_email(to_email, subject, html, text)
 
     async def send_password_reset(
@@ -293,7 +293,7 @@ Document Portal V2
     ) -> bool:
         """Send password reset link"""
         subject = "🔐 Password Reset Request"
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -317,11 +317,11 @@ Document Portal V2
                 </div>
                 <div class="content">
                     <p>You requested to reset your password. Click the button below to set a new password.</p>
-                    
+
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{reset_url}" class="button">Reset Password →</a>
                     </p>
-                    
+
                     <div class="warning">
                         <strong>⚠️ This link expires in {expires_minutes} minutes.</strong><br>
                         If you didn't request this, please ignore this email.
@@ -334,7 +334,7 @@ Document Portal V2
         </body>
         </html>
         """
-        
+
         text = f"""
 Password Reset Request
 
@@ -349,7 +349,7 @@ If you didn't request this, please ignore this email.
 ---
 Document Portal V2
         """
-        
+
         return await self.send_email(to_email, subject, html, text)
 
     async def send_welcome(
@@ -360,7 +360,7 @@ Document Portal V2
     ) -> bool:
         """Send welcome email to new users"""
         subject = "🎉 Welcome to Document Portal!"
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -387,14 +387,14 @@ Document Portal V2
                 <div class="content">
                     <p>Hi {user_name},</p>
                     <p>Welcome to Document Portal! Your account has been created successfully.</p>
-                    
+
                     <div class="features">
                         <div class="feature">📄 Browse and search documents</div>
                         <div class="feature">💬 Leave comments and feedback</div>
                         <div class="feature">📌 Bookmark your favorites</div>
                         <div class="feature">📊 Track your reading progress</div>
                     </div>
-                    
+
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="{login_url}" class="button">Get Started →</a>
                     </p>
@@ -406,7 +406,7 @@ Document Portal V2
         </body>
         </html>
         """
-        
+
         text = f"""
 Welcome to Document Portal!
 
@@ -425,7 +425,7 @@ Get started: {login_url}
 ---
 Document Portal V2
         """
-        
+
         return await self.send_email(to_email, subject, html, text)
 
 

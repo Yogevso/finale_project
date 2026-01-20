@@ -2,17 +2,16 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Document, DocumentStatus, Version, Attachment, Comment
+from app.models import Attachment, Comment, Document, DocumentStatus, Version
 from app.schemas import (
-    DocumentResponse,
-    DocumentListResponse,
-    VersionResponse,
     AttachmentResponse,
     CommentResponse,
+    DocumentListResponse,
+    DocumentResponse,
+    VersionResponse,
 )
 
 router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
@@ -131,7 +130,7 @@ def get_published_versions(
         db.query(Version)
         .filter(
             Version.document_id == document_id,
-            Version.is_published == True,
+            Version.is_published.is_(True),
         )
         .order_by(Version.version_number.desc())
         .all()

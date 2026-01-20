@@ -1,15 +1,15 @@
 """Search API with FTS5 and saved searches"""
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models import Document, SavedSearch, User
 from app.security import get_current_user
-from app.models import User, Document, DocumentStatus, SavedSearch
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -71,7 +71,7 @@ def search_documents(
 ):
     """Full-text search using SQLite FTS5"""
     offset = (page - 1) * page_size
-    
+
     # Try FTS5 search first
     try:
         fts_query = text("""
@@ -84,7 +84,7 @@ def search_documents(
         """)
         result = db.execute(fts_query, {"query": q, "limit": page_size, "offset": offset})
         docs = result.fetchall()
-        
+
         # Count total
         count_query = text("""
             SELECT COUNT(*) FROM documents d
@@ -92,24 +92,24 @@ def search_documents(
             WHERE documents_fts MATCH :query
         """)
         total = db.execute(count_query, {"query": q}).scalar() or 0
-        
+
     except Exception:
         # Fallback to LIKE search if FTS5 fails
         query = db.query(Document).filter(
             (Document.title.ilike(f"%{q}%")) |
             (Document.description.ilike(f"%{q}%"))
         )
-        
+
         if category:
             query = query.filter(Document.category == category)
         if date_from:
             query = query.filter(Document.created_at >= date_from)
         if date_to:
             query = query.filter(Document.created_at <= date_to)
-        
+
         total = query.count()
         docs = query.order_by(Document.updated_at.desc()).offset(offset).limit(page_size).all()
-    
+
     items = [
         SearchResult(
             id=d.id if hasattr(d, 'id') else d[0],
@@ -124,10 +124,10 @@ def search_documents(
         )
         for d in docs
     ]
-    
+
     # Get autocomplete suggestions
     suggestions = get_autocomplete_suggestions(db, q)
-    
+
     return SearchResponse(items=items, total=total, query=q, suggestions=suggestions)
 
 
@@ -148,7 +148,7 @@ def get_autocomplete_suggestions(db: Session, q: str, limit: int = 5) -> List[st
     docs = db.query(Document.title).filter(
         Document.title.ilike(f"%{q}%")
     ).limit(limit).all()
-    
+
     return [d.title for d in docs]
 
 
@@ -163,13 +163,13 @@ def get_search_facets(
         Document.category,
         text("COUNT(*)")
     ).group_by(Document.category).all()
-    
+
     # Status counts
     statuses = db.query(
         Document.status,
         text("COUNT(*)")
     ).group_by(Document.status).all()
-    
+
     return {
         "categories": [{"name": c[0] or "Uncategorized", "count": c[1]} for c in categories],
         "statuses": [{"name": s[0].value if s[0] else "unknown", "count": s[1]} for s in statuses],
@@ -186,7 +186,7 @@ def list_saved_searches(
     searches = db.query(SavedSearch).filter(
         SavedSearch.user_id == current_user.id
     ).order_by(SavedSearch.created_at.desc()).all()
-    
+
     return searches
 
 
@@ -222,10 +222,10 @@ def delete_saved_search(
         SavedSearch.id == search_id,
         SavedSearch.user_id == current_user.id
     ).first()
-    
+
     if not saved:
         raise HTTPException(status_code=404, detail="Saved search not found")
-    
+
     db.delete(saved)
     db.commit()
     return {"message": "Saved search deleted"}

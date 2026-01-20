@@ -1,7 +1,7 @@
 """Attachments API Routes"""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status, HTTPException
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.schemas import (
     AttachmentUploadResponse,
     MessageResponse,
 )
-from app.security import get_current_active_user, verify_token
+from app.security import get_current_active_user
 from app.services.attachment_service import AttachmentService
 
 router = APIRouter()
