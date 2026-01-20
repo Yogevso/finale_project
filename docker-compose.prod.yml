@@ -1,0 +1,91 @@
+version: "3.8"
+
+# Production Docker Compose for Document Portal V2
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: portal-backend
+    restart: unless-stopped
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=sqlite:///./data/portal.db
+      - CORS_ORIGINS=["https://portal.example.com"]
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=60
+      # Email (optional)
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@portal.com}
+      # S3 Storage (optional)
+      - S3_ENABLED=${S3_ENABLED:-false}
+      - S3_BUCKET=${S3_BUCKET:-document-portal}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - S3_REGION=${S3_REGION:-us-east-1}
+    volumes:
+      - backend-data:/app/data
+      - backend-uploads:/app/uploads
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - portal-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://api.portal.example.com
+    container_name: portal-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount SSL certificates if using HTTPS
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - portal-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  backend-data:
+    name: portal-backend-data
+  backend-uploads:
+    name: portal-backend-uploads
+
+networks:
+  portal-network:
+    name: portal-network
+    driver: bridge
