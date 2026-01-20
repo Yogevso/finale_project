@@ -160,6 +160,5 @@ jobs:
           cd frontend
           docker build -t document-portal-frontend:test .
 
-      - name: Test docker-compose config
-        run: docker-compose config
-
+      - name: Test docker compose config
+        run: docker compose config
