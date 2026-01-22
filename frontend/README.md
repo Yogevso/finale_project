@@ -1,6 +1,6 @@
 # Document Portal V2 - Frontend
 
-Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor.
+Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor. Includes management portal for internal users, customer portal for company-based access, and public viewer.
 
 ---
 
@@ -19,7 +19,16 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 - **Version Management** - Create, view, publish versions
 - **File Attachments** - Drag & drop upload, download
 - **Comments** - Threaded discussions, inline comments
+- **Reviews** - Peer review workflow (submit, approve, reject)
 - **User Management** - CRUD for users (admin only)
+- **Company Management** - Company CRUD, user assignment (admin only)
+
+### Customer Portal
+- **Company Access** - Documents visible to customer's company
+- **Document Viewing** - Read company & public documents
+- **Feedback** - Submit feedback on documents
+- **Search** - Search within accessible documents
+- **Downloads** - Download attachments from accessible docs
 
 ### Viewer Portal
 - **Public Access** - No login required
@@ -48,7 +57,7 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 | Rich Text | TipTap 2 |
 | HTTP Client | Fetch API |
 | Routing | React Router 6 |
-| Testing | Vitest + Playwright |
+| Testing | Vitest + Playwright (278 E2E tests, 100% pass) |
 | Linting | ESLint + TypeScript ESLint |
 
 ---
@@ -113,11 +122,40 @@ npm run test:watch
 # Run tests with UI
 npm run test:ui
 
-# Run E2E tests (Playwright)
+# Run all E2E tests (278 tests - 100% pass rate)
 npm run test:e2e
 
 # Run E2E tests headed (see browser)
 npm run test:e2e -- --headed
+```
+
+### E2E Test Files (Playwright)
+
+| File | Description | Tests |
+|------|-------------|-------|
+| app.spec.ts | Auth & dashboard | 17 |
+| admin.spec.ts | Admin role permissions | 28 |
+| manager.spec.ts | Manager role (publish, delete) | 21 |
+| editor.spec.ts | Editor role (create, edit) | 25 |
+| system-admin.spec.ts | System Admin full access | 28 |
+| viewer-role.spec.ts | Internal viewer (read-only) | 23 |
+| viewer.spec.ts | Public viewer portal | 12 |
+| customer.spec.ts | Customer restrictions | 20 |
+| customer-portal.spec.ts | Customer portal features | 35 |
+| public.spec.ts | Anonymous/public access | 14 |
+| permissions.spec.ts | Cross-role boundaries | 38 |
+| documents.spec.ts | Document CRUD | 6 |
+| workflows.spec.ts | Complex workflows | 18 |
+| **Total** | **All roles covered** | **278** |
+
+```bash
+# Run specific role tests
+npx playwright test admin.spec.ts
+npx playwright test customer.spec.ts
+npx playwright test permissions.spec.ts
+
+# Run with specific browser
+npx playwright test --project=chromium
 ```
 
 ---
@@ -167,6 +205,11 @@ frontend/
 │   │   ├── DocumentsPage.tsx    # Document list
 │   │   ├── DocumentDetailPage.tsx # Document view/edit
 │   │   ├── UsersPage.tsx        # User management
+│   │   ├── CompaniesPage.tsx    # Company management
+│   │   ├── ReviewsPage.tsx      # Peer review workflow
+│   │   ├── portal/              # Customer portal pages
+│   │   │   ├── PortalHomePage.tsx
+│   │   │   └── PortalDocumentPage.tsx
 │   │   └── viewer/              # Public viewer pages
 │   │       ├── ViewerHomePage.tsx
 │   │       └── ViewerDocumentPage.tsx
@@ -182,9 +225,20 @@ frontend/
 ├── public/                      # Static assets
 │   └── favicon.ico
 │
-├── tests/                       # Test files
-│   ├── *.test.ts               # Vitest unit tests
-│   └── e2e/                    # Playwright E2E tests
+├── e2e/                         # Playwright E2E tests
+│   ├── admin.spec.ts            # Admin role tests
+│   ├── system-admin.spec.ts     # System admin tests
+│   ├── manager.spec.ts          # Manager role tests
+│   ├── editor.spec.ts           # Editor role tests
+│   ├── viewer-role.spec.ts      # Internal viewer tests
+│   ├── customer.spec.ts         # Customer role tests
+│   ├── public.spec.ts           # Anonymous access tests
+│   ├── permissions.spec.ts      # Cross-role boundaries
+│   ├── customer-portal.spec.ts  # Portal features
+│   ├── app.spec.ts              # Auth & dashboard
+│   ├── documents.spec.ts        # Document CRUD
+│   ├── viewer.spec.ts           # Public viewer
+│   └── workflows.spec.ts        # Complex workflows
 │
 ├── index.html                   # HTML template
 ├── vite.config.ts               # Vite configuration

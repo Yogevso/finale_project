@@ -378,9 +378,10 @@ function CommentThread({
             </span>
             {comment.user?.role && (
               <span className={`text-xs px-1.5 py-0.5 rounded ${
-                comment.user.role === 'super_admin' ? 'bg-red-100 text-red-700' :
-                comment.user.role === 'admin' ? 'bg-blue-100 text-blue-700' :
-                comment.user.role === 'editor' ? 'bg-green-100 text-green-700' :
+                comment.user.role === 'system_admin' ? 'bg-red-100 text-red-700' :
+                comment.user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                comment.user.role === 'manager' ? 'bg-orange-100 text-orange-700' :
+                comment.user.role === 'editor' ? 'bg-blue-100 text-blue-700' :
                 'bg-gray-100 text-gray-600'
               }`}>
                 {comment.user.role.replace('_', ' ')}
@@ -471,11 +472,12 @@ function CommentThread({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="font-medium text-gray-900 text-sm">{reply.user?.full_name || reply.user?.username || 'Unknown'}</span>
-                      {reply.user?.role && ['super_admin', 'admin', 'editor'].includes(reply.user.role) && (
+                      {reply.user?.role && ['system_admin', 'admin', 'manager', 'editor'].includes(reply.user.role) && (
                         <span className={`text-xs px-1 py-0.5 rounded ${
-                          reply.user.role === 'super_admin' ? 'bg-red-100 text-red-700' :
-                          reply.user.role === 'admin' ? 'bg-blue-100 text-blue-700' :
-                          'bg-green-100 text-green-700'
+                          reply.user.role === 'system_admin' ? 'bg-red-100 text-red-700' :
+                          reply.user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                          reply.user.role === 'manager' ? 'bg-orange-100 text-orange-700' :
+                          'bg-blue-100 text-blue-700'
                         }`}>
                           {reply.user.role.replace('_', ' ')}
                         </span>

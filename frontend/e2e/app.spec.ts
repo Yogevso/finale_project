@@ -3,6 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 // Test credentials
 const ADMIN = { username: 'admin', password: 'admin123' };
 const EDITOR = { username: 'editor', password: 'editor123' };
+const CUSTOMER = { username: 'customer1', password: 'customer123' };
 const INVALID = { username: 'invalid', password: 'wrongpass' };
 
 // Helper function to login
@@ -13,6 +14,8 @@ async function login(page: Page, credentials: { username: string; password: stri
   await page.click('button[type="submit"]');
   // Wait for network to settle after login attempt
   await page.waitForLoadState('networkidle');
+  // Wait for redirect to complete
+  await page.waitForTimeout(2000);
 }
 
 test.describe('Authentication', () => {
@@ -79,6 +82,29 @@ test.describe('Authentication', () => {
     
     // Should redirect to login
     await expect(page).toHaveURL(/login/);
+  });
+
+  test('should login as customer and redirect to portal', async ({ page }) => {
+    await login(page, CUSTOMER);
+    
+    // Customer should be redirected to portal or customer dashboard
+    await expect(page).toHaveURL(/portal|dashboard/);
+  });
+
+  test('customer should not access admin documents page', async ({ page }) => {
+    await login(page, CUSTOMER);
+    
+    // Try to access admin documents
+    await page.goto('/documents');
+    await page.waitForTimeout(1000);
+    
+    // Should be redirected or show access denied
+    const url = page.url();
+    const isOnAdminDocs = url.includes('/documents') && !url.includes('/portal');
+    const hasAccessDenied = await page.locator('text=/access denied|forbidden|not authorized/i').count() > 0;
+    
+    // Either redirected away or shown access denied
+    expect(!isOnAdminDocs || hasAccessDenied).toBeTruthy();
   });
 });
 

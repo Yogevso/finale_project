@@ -9,6 +9,9 @@ import AttachmentsSection from '@/components/AttachmentsSection'
 import CommentsSection from '@/components/CommentsSection'
 import EngagementBar from '@/components/EngagementBar'
 import DocumentEditor from '@/components/DocumentEditor'
+import VisibilityBadge from '@/components/VisibilityBadge'
+import CompanySelector from '@/components/CompanySelector'
+import { Building2, X, Send, Clock, CheckCircle, XCircle, History } from 'lucide-react'
 import mammoth from 'mammoth'
 
 type TabType = 'preview' | 'edit-content' | 'details' | 'versions' | 'attachments' | 'comments'
@@ -72,6 +75,53 @@ export default function DocumentDetailPage() {
     },
   })
 
+  // Company assignment state and mutations (for visibility='company' documents)
+  const [showCompanySelector, setShowCompanySelector] = useState(false)
+
+  const { data: assignedCompaniesData } = useQuery({
+    queryKey: ['document-assigned-companies', id],
+    queryFn: () => api.getAssignedCompanies(Number(id)),
+    enabled: !!id && document?.visibility === 'company',
+  })
+
+  const assignCompaniesMutation = useMutation({
+    mutationFn: (companyIds: number[]) => api.assignCompanies(Number(id), companyIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document-assigned-companies', id] })
+      queryClient.invalidateQueries({ queryKey: ['document', id] })
+      setShowCompanySelector(false)
+    },
+  })
+
+  const removeCompanyMutation = useMutation({
+    mutationFn: (companyId: number) => api.removeCompanyAssignment(Number(id), companyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document-assigned-companies', id] })
+      queryClient.invalidateQueries({ queryKey: ['document', id] })
+    },
+  })
+
+  // Submit for review state and mutation
+  const [showSubmitReview, setShowSubmitReview] = useState(false)
+  const [submitMessage, setSubmitMessage] = useState('')
+
+  const submitReviewMutation = useMutation({
+    mutationFn: (message?: string) => api.submitForReview(Number(id), { message }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document', id] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      setShowSubmitReview(false)
+      setSubmitMessage('')
+    },
+  })
+
+  // Fetch review history
+  const { data: reviewHistory } = useQuery({
+    queryKey: ['document-reviews', id],
+    queryFn: () => api.getDocumentReviewHistory(Number(id)),
+    enabled: !!id,
+  })
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -110,6 +160,22 @@ export default function DocumentDetailPage() {
         </div>
         {isEditor && (
           <div className="flex gap-2">
+            {/* Submit for Review button - only show for draft documents */}
+            {document.status === 'draft' && (
+              <button
+                onClick={() => setShowSubmitReview(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Send className="w-4 h-4" />
+                Submit for Review
+              </button>
+            )}
+            {document.status === 'pending_review' && (
+              <span className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg">
+                <Clock className="w-4 h-4" />
+                Pending Review
+              </span>
+            )}
             <button
               onClick={() => setIsEditing(!isEditing)}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -198,6 +264,12 @@ export default function DocumentDetailPage() {
                   </p>
                 </div>
                 <div>
+                  <label className="text-sm text-gray-500">Visibility</label>
+                  <div className="mt-1">
+                    <VisibilityBadge visibility={document.visibility} showLabel />
+                  </div>
+                </div>
+                <div>
                   <label className="text-sm text-gray-500">Category</label>
                   <p className="mt-1 text-gray-900">{document.category || '-'}</p>
                 </div>
@@ -237,6 +309,127 @@ export default function DocumentDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Company Assignment Section - only for company visibility */}
+              {document.visibility === 'company' && (
+                <div className="border-t border-gray-200 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-gray-500" />
+                      <label className="text-sm font-medium text-gray-700">Assigned Companies</label>
+                    </div>
+                    {isEditor && (
+                      <button
+                        onClick={() => setShowCompanySelector(!showCompanySelector)}
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        {showCompanySelector ? 'Cancel' : 'Assign Companies'}
+                      </button>
+                    )}
+                  </div>
+
+                  {showCompanySelector && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-3">Select companies to assign this document to:</p>
+                      <CompanySelector
+                        selectedIds={assignedCompaniesData?.companies?.map(c => c.id) || []}
+                        onChange={(ids) => {
+                          assignCompaniesMutation.mutate(ids)
+                        }}
+                      />
+                      {assignCompaniesMutation.isPending && (
+                        <p className="mt-2 text-sm text-gray-500">Saving...</p>
+                      )}
+                    </div>
+                  )}
+
+                  {assignedCompaniesData?.companies && assignedCompaniesData.companies.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {assignedCompaniesData.companies.map((company) => (
+                        <div
+                          key={company.id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-full text-sm"
+                        >
+                          <Building2 className="w-4 h-4" />
+                          <span>{company.name}</span>
+                          {isEditor && (
+                            <button
+                              onClick={() => removeCompanyMutation.mutate(company.id)}
+                              className="ml-1 hover:text-orange-900"
+                              disabled={removeCompanyMutation.isPending}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      No companies assigned yet. {isEditor && 'Click "Assign Companies" to add.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Review History Section */}
+              {reviewHistory?.items && reviewHistory.items.length > 0 && (
+                <div className="border-t border-gray-200 pt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <History className="w-5 h-5 text-gray-500" />
+                    <label className="text-sm font-medium text-gray-700">Review History</label>
+                  </div>
+                  <div className="space-y-3">
+                    {reviewHistory.items.slice(0, 5).map((review) => (
+                      <div
+                        key={review.id}
+                        className={`p-3 rounded-lg border ${
+                          review.status === 'approved'
+                            ? 'bg-green-50 border-green-200'
+                            : review.status === 'rejected'
+                            ? 'bg-red-50 border-red-200'
+                            : review.status === 'pending'
+                            ? 'bg-yellow-50 border-yellow-200'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {review.status === 'approved' && (
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            )}
+                            {review.status === 'rejected' && (
+                              <XCircle className="w-4 h-4 text-red-600" />
+                            )}
+                            {review.status === 'pending' && (
+                              <Clock className="w-4 h-4 text-yellow-600" />
+                            )}
+                            <span className="text-sm font-medium capitalize">{review.status}</span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(review.submitted_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {review.submitter && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            Submitted by {review.submitter.full_name}
+                          </p>
+                        )}
+                        {review.reviewer && (
+                          <p className="text-xs text-gray-600">
+                            Reviewed by {review.reviewer.full_name}
+                          </p>
+                        )}
+                        {review.review_comments && (
+                          <p className="text-sm text-gray-700 mt-2 italic">
+                            "{review.review_comments}"
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -252,6 +445,55 @@ export default function DocumentDetailPage() {
 
       {activeTab === 'comments' && (
         <CommentsSection documentId={Number(id)} pendingAnchor={pendingAnchor} onClearAnchor={() => setPendingAnchor(null)} />
+      )}
+
+      {/* Submit for Review Modal */}
+      {showSubmitReview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit for Review</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This will submit "{document.title}" for review. A manager or peer editor will review and approve or reject it.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Message (optional)
+              </label>
+              <textarea
+                value={submitMessage}
+                onChange={(e) => setSubmitMessage(e.target.value)}
+                placeholder="Add a note for the reviewer..."
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowSubmitReview(false)
+                  setSubmitMessage('')
+                }}
+                disabled={submitReviewMutation.isPending}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => submitReviewMutation.mutate(submitMessage || undefined)}
+                disabled={submitReviewMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                {submitReviewMutation.isPending ? 'Submitting...' : 'Submit'}
+              </button>
+            </div>
+            {submitReviewMutation.isError && (
+              <p className="mt-3 text-sm text-red-600">
+                Error submitting for review. Please try again.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

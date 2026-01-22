@@ -2,7 +2,8 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import type { DocumentStatus, DocumentCreate } from '@/types'
+import VisibilityBadge from '@/components/VisibilityBadge'
+import type { DocumentStatus, DocumentVisibility, DocumentCreate } from '@/types'
 
 export default function DocumentsPage() {
   const { isEditor } = useAuth()
@@ -10,6 +11,7 @@ export default function DocumentsPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('')
+  const [visibilityFilter, setVisibilityFilter] = useState<DocumentVisibility | ''>('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
 
@@ -63,13 +65,13 @@ export default function DocumentsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-wrap">
         <input
           type="text"
           placeholder="Search documents..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
         />
         <select
           value={statusFilter}
@@ -78,8 +80,19 @@ export default function DocumentsPage() {
         >
           <option value="">All Status</option>
           <option value="draft">Draft</option>
+          <option value="pending_review">Pending Review</option>
           <option value="active">Active</option>
           <option value="archived">Archived</option>
+        </select>
+        <select
+          value={visibilityFilter}
+          onChange={(e) => setVisibilityFilter(e.target.value as DocumentVisibility | '')}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Visibility</option>
+          <option value="public">Public</option>
+          <option value="internal">Internal</option>
+          <option value="company">Company</option>
         </select>
       </div>
 
@@ -90,6 +103,7 @@ export default function DocumentsPage() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Document</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Visibility</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -98,13 +112,13 @@ export default function DocumentsPage() {
           <tbody className="divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   Loading...
                 </td>
               </tr>
             ) : data?.items.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   No documents found
                 </td>
               </tr>
@@ -124,11 +138,16 @@ export default function DocumentsPage() {
                           ? 'bg-green-100 text-green-700'
                           : doc.status === 'draft'
                           ? 'bg-yellow-100 text-yellow-700'
+                          : doc.status === 'pending_review'
+                          ? 'bg-purple-100 text-purple-700'
                           : 'bg-gray-100 text-gray-700'
                       }`}
                     >
                       {doc.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
                   </td>
                   <td className="px-6 py-4 text-gray-500">{doc.category || '-'}</td>
                   <td className="px-6 py-4 text-gray-500">
@@ -201,6 +220,7 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     title: '',
     description: '',
     status: 'draft',
+    visibility: 'internal',
     category: '',
     tags: '',
   })
@@ -272,6 +292,21 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+              <select
+                value={formData.visibility}
+                onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="internal">🏢 Internal</option>
+                <option value="public">🌐 Public</option>
+                <option value="company">🔒 Company</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
               <input
                 type="text"
@@ -280,17 +315,16 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                 className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-            <input
-              type="text"
-              value={formData.tags}
-              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              placeholder="Comma-separated tags"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+              <input
+                type="text"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Comma-separated"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Allow running on either port 3000 or 3001
+const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // Run tests sequentially for stability
@@ -15,7 +18,7 @@ export default defineConfig({
     timeout: 10000,
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -26,11 +29,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // WebServer config - comment out when running manually
+  // WebServer config disabled - servers must be started manually before running tests
   // webServer: [
   //   {
-  //     command: 'cd ../backend && python -m uvicorn app.main:app --port 8001',
-  //     url: 'http://localhost:8001/health',
+  //     command: 'cd ../backend && .\\venv\\Scripts\\Activate.ps1 && python -m uvicorn app.main:app --port 8000',
+  //     url: 'http://localhost:8000/health',
   //     reuseExistingServer: true,
   //     timeout: 120000,
   //   },

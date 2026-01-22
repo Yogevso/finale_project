@@ -4,6 +4,7 @@ import type {
   TokenResponse,
   User,
   UserCreate,
+  UserRole,
   Document,
   DocumentCreate,
   DocumentUpdate,
@@ -22,6 +23,27 @@ import type {
   CommentUpdate,
   NotificationListResponse,
   NotificationCountResponse,
+  Company,
+  CompanyListResponse,
+  CompanyCreate,
+  CompanyUpdate,
+  CompanyUserAdd,
+  CompanyUser,
+  CompanyDocumentsResponse,
+  ReviewRequest,
+  ReviewSubmit,
+  ReviewAction,
+  ReviewListResponse,
+  FeedbackDetailResponse,
+  FeedbackListManagementResponse,
+  FeedbackStatus,
+  FeedbackType,
+  Invitation,
+  InvitationListResponse,
+  InvitationCreate,
+  InvitationStatus,
+  InvitationValidateResponse,
+  AcceptInvitationRequest,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
@@ -163,14 +185,46 @@ class ApiClient {
   }
 
   // ========== Users ==========
-  async getUsers(): Promise<User[]> {
-    const { data } = await this.client.get<User[]>('/users')
+  async getUsers(params?: {
+    role?: UserRole
+    company_id?: number
+    is_active?: boolean
+    search?: string
+  }): Promise<User[]> {
+    const { data } = await this.client.get<User[]>('/users', { params })
     return data
   }
 
   async getUser(id: number): Promise<User> {
     const { data } = await this.client.get<User>(`/users/${id}`)
     return data
+  }
+
+  async createUser(userData: {
+    email: string
+    username: string
+    full_name: string
+    password: string
+    role: UserRole
+    tenant_id?: number
+  }): Promise<User> {
+    const { data } = await this.client.post<User>('/users', userData)
+    return data
+  }
+
+  async updateUser(id: number, userData: {
+    email?: string
+    full_name?: string
+    role?: UserRole
+    is_active?: boolean
+    tenant_id?: number | null
+  }): Promise<User> {
+    const { data } = await this.client.put<User>(`/users/${id}`, userData)
+    return data
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await this.client.delete(`/users/${id}`)
   }
 
   // ========== Documents ==========
@@ -210,6 +264,22 @@ class ApiClient {
     const { data } = await this.client.post<Document>('/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+    return data
+  }
+
+  // ========== Document Company Assignment ==========
+  async getAssignedCompanies(documentId: number): Promise<{ companies: Company[] }> {
+    const { data } = await this.client.get<{ companies: Company[] }>(`/documents/${documentId}/assigned-companies`)
+    return data
+  }
+
+  async assignCompanies(documentId: number, companyIds: number[]): Promise<{ message: string; assigned_count: number }> {
+    const { data } = await this.client.post<{ message: string; assigned_count: number }>(`/documents/${documentId}/assign-companies`, { company_ids: companyIds })
+    return data
+  }
+
+  async removeCompanyAssignment(documentId: number, companyId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/documents/${documentId}/assign-companies/${companyId}`)
     return data
   }
 
@@ -437,6 +507,180 @@ class ApiClient {
     const { data } = await this.client.delete<MessageResponse>('/notifications', {
       params: { read_only: readOnly }
     })
+    return data
+  }
+
+  // ========== Companies (Admin) ==========
+  async getCompanies(params?: {
+    page?: number
+    per_page?: number
+    search?: string
+    company_type?: string
+    is_active?: boolean
+  }): Promise<CompanyListResponse> {
+    const { data } = await this.client.get<CompanyListResponse>('/companies', { params })
+    return data
+  }
+
+  async getCompany(id: number): Promise<Company> {
+    const { data } = await this.client.get<Company>(`/companies/${id}`)
+    return data
+  }
+
+  async createCompany(company: CompanyCreate): Promise<Company> {
+    const { data } = await this.client.post<Company>('/companies', company)
+    return data
+  }
+
+  async updateCompany(id: number, company: CompanyUpdate): Promise<Company> {
+    const { data } = await this.client.put<Company>(`/companies/${id}`, company)
+    return data
+  }
+
+  async deleteCompany(id: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/companies/${id}`)
+    return data
+  }
+
+  async getCompanyUsers(companyId: number): Promise<CompanyUser[]> {
+    const { data } = await this.client.get<CompanyUser[]>(`/companies/${companyId}/users`)
+    return data
+  }
+
+  async addUserToCompany(companyId: number, userData: CompanyUserAdd): Promise<MessageResponse> {
+    const { data } = await this.client.post<MessageResponse>(`/companies/${companyId}/users`, userData)
+    return data
+  }
+
+  async removeUserFromCompany(companyId: number, userId: number): Promise<MessageResponse> {
+    const { data } = await this.client.delete<MessageResponse>(`/companies/${companyId}/users/${userId}`)
+    return data
+  }
+
+  async getCompanyDocuments(companyId: number, params?: {
+    page?: number
+    per_page?: number
+  }): Promise<CompanyDocumentsResponse> {
+    const { data } = await this.client.get<CompanyDocumentsResponse>(`/companies/${companyId}/documents`, { params })
+    return data
+  }
+
+  // ========== Reviews ==========
+  async submitForReview(documentId: number, data: ReviewSubmit): Promise<ReviewRequest> {
+    const { data: response } = await this.client.post<ReviewRequest>(`/reviews/documents/${documentId}/submit`, data)
+    return response
+  }
+
+  async getPendingReviews(params?: { page?: number; per_page?: number }): Promise<ReviewListResponse> {
+    const { data } = await this.client.get<ReviewListResponse>('/reviews/pending', { params })
+    return data
+  }
+
+  async getMySubmissions(params?: { page?: number; per_page?: number; status?: string }): Promise<ReviewListResponse> {
+    const { data } = await this.client.get<ReviewListResponse>('/reviews/my-submissions', { params })
+    return data
+  }
+
+  async getReview(reviewId: number): Promise<ReviewRequest> {
+    const { data } = await this.client.get<ReviewRequest>(`/reviews/${reviewId}`)
+    return data
+  }
+
+  async approveReview(reviewId: number, data: ReviewAction): Promise<ReviewRequest> {
+    const { data: response } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/approve`, data)
+    return response
+  }
+
+  async rejectReview(reviewId: number, data: { comments: string }): Promise<ReviewRequest> {
+    const { data: response } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/reject`, data)
+    return response
+  }
+
+  async cancelReview(reviewId: number): Promise<ReviewRequest> {
+    const { data } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/cancel`)
+    return data
+  }
+
+  async getDocumentReviewHistory(documentId: number, params?: { page?: number; per_page?: number }): Promise<ReviewListResponse> {
+    const { data } = await this.client.get<ReviewListResponse>(`/reviews/documents/${documentId}/history`, { params })
+    return data
+  }
+
+  // ========== Feedback Management ==========
+  async getAllFeedback(params?: {
+    page?: number
+    per_page?: number
+    status?: FeedbackStatus
+    type?: FeedbackType
+    company_id?: number
+    search?: string
+  }): Promise<FeedbackListManagementResponse> {
+    const { data } = await this.client.get<FeedbackListManagementResponse>('/feedback', { params })
+    return data
+  }
+
+  async getFeedback(feedbackId: number): Promise<FeedbackDetailResponse> {
+    const { data } = await this.client.get<FeedbackDetailResponse>(`/feedback/${feedbackId}`)
+    return data
+  }
+
+  async respondToFeedback(feedbackId: number, response: string): Promise<FeedbackDetailResponse> {
+    const { data } = await this.client.post<FeedbackDetailResponse>(`/feedback/${feedbackId}/respond`, { response })
+    return data
+  }
+
+  async updateFeedbackStatus(feedbackId: number, status: FeedbackStatus): Promise<FeedbackDetailResponse> {
+    const { data } = await this.client.put<FeedbackDetailResponse>(`/feedback/${feedbackId}/status`, { status })
+    return data
+  }
+
+  async getManagementFeedbackStats(): Promise<{
+    total: number
+    pending: number
+    responded: number
+    closed: number
+    by_type: Record<string, number>
+  }> {
+    const { data } = await this.client.get('/feedback/stats/summary')
+    return data
+  }
+
+  // ========== Invitations ==========
+  async getInvitations(params?: {
+    page?: number
+    per_page?: number
+    status?: InvitationStatus
+  }): Promise<InvitationListResponse> {
+    const { data } = await this.client.get<InvitationListResponse>('/invitations', { params })
+    return data
+  }
+
+  async getInvitation(id: number): Promise<Invitation> {
+    const { data } = await this.client.get<Invitation>(`/invitations/${id}`)
+    return data
+  }
+
+  async createInvitation(invitation: InvitationCreate): Promise<Invitation> {
+    const { data } = await this.client.post<Invitation>('/invitations', invitation)
+    return data
+  }
+
+  async cancelInvitation(id: number): Promise<void> {
+    await this.client.delete(`/invitations/${id}`)
+  }
+
+  async resendInvitation(id: number): Promise<Invitation> {
+    const { data } = await this.client.post<Invitation>(`/invitations/${id}/resend`)
+    return data
+  }
+
+  async validateInvitation(token: string): Promise<InvitationValidateResponse> {
+    const { data } = await this.client.get<InvitationValidateResponse>(`/auth/invitation/${token}`)
+    return data
+  }
+
+  async acceptInvitation(request: AcceptInvitationRequest): Promise<TokenResponse> {
+    const { data } = await this.client.post<TokenResponse>('/auth/invitation/accept', request)
     return data
   }
 }

@@ -6,7 +6,9 @@ async function loginAsAdmin(page: Page) {
   await page.fill('input#username', 'admin');
   await page.fill('input#password', 'admin123');
   await page.click('button[type="submit"]');
-  await page.waitForURL(/dashboard/);
+  await page.waitForURL(/dashboard|documents/, { timeout: 15000 }).catch(() => {});
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1000);
 }
 
 test.describe('Document Versions', () => {

@@ -1,14 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { getHomeRouteForRole } from '@/config/routes'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { login } = useAuth()
+  const { login, user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
+
+  // If already logged in, redirect to appropriate home
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(getHomeRouteForRole(user.role), { replace: true })
+    }
+  }, [user, authLoading, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -17,7 +25,7 @@ export default function LoginPage() {
 
     try {
       await login({ username, password })
-      navigate('/dashboard')
+      // After login, useEffect will redirect based on role
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } }
       setError(error.response?.data?.detail || 'Login failed. Please check your credentials.')
@@ -82,22 +90,27 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 text-center">Demo Credentials</p>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+            <p className="text-sm text-gray-500 text-center mb-3">Demo Credentials</p>
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2 bg-purple-50 rounded text-center">
-                <div className="font-medium text-purple-700">Super Admin</div>
-                <div className="text-gray-500">super_admin / super123</div>
-                <div className="text-purple-500 text-[10px]">sees everything</div>
+                <div className="font-medium text-purple-700">System Admin</div>
+                <div className="text-gray-500">sysadmin / sysadmin123</div>
+              </div>
+              <div className="p-2 bg-red-50 rounded text-center">
+                <div className="font-medium text-red-700">Admin</div>
+                <div className="text-gray-500">admin / admin123</div>
               </div>
               <div className="p-2 bg-blue-50 rounded text-center">
-                <div className="font-medium text-blue-700">Acme Admin</div>
-                <div className="text-gray-500">acme_admin / acme123</div>
-                <div className="text-blue-500 text-[10px]">Acme only</div>
+                <div className="font-medium text-blue-700">Manager</div>
+                <div className="text-gray-500">manager / manager123</div>
               </div>
               <div className="p-2 bg-green-50 rounded text-center">
-                <div className="font-medium text-green-700">Beta Admin</div>
-                <div className="text-gray-500">beta_admin / beta123</div>
-                <div className="text-green-500 text-[10px]">Beta only</div>
+                <div className="font-medium text-green-700">Editor</div>
+                <div className="text-gray-500">editor / editor123</div>
+              </div>
+              <div className="p-2 bg-orange-50 rounded text-center col-span-2">
+                <div className="font-medium text-orange-700">Customer</div>
+                <div className="text-gray-500">customer1 / customer123</div>
               </div>
             </div>
           </div>
