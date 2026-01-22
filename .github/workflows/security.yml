@@ -94,10 +94,13 @@ jobs:
 
   # ============================================
   # CodeQL Analysis (SAST)
+  # Note: Requires "Code scanning" to be enabled in repo Settings > Security
+  # If not enabled, results won't upload but scan still runs
   # ============================================
   codeql-analysis:
     name: CodeQL Security Analysis
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't fail if code scanning not enabled
 
     strategy:
       fail-fast: false
@@ -119,6 +122,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        continue-on-error: true  # Continue if upload fails (code scanning not enabled)
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -167,6 +171,7 @@ jobs:
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true  # Continue if code scanning not enabled
         with:
           sarif_file: 'trivy-${{ matrix.image.name }}.sarif'
 
