@@ -5,7 +5,7 @@ httpx==0.26.0
 faker==22.0.0
 
 # Linting & formatting
-ruff==0.1.11
+ruff>=0.14.0
 mypy==1.8.0
 
 # Type stubs
