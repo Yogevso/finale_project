@@ -1,4 +1,5 @@
 """Application Configuration"""
+
 import logging
 import logging.config
 from typing import Optional
@@ -75,31 +76,33 @@ def setup_logging():
         else "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    logging.config.dictConfig({
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "default": {
-                "format": log_format,
-                "datefmt": "%Y-%m-%dT%H:%M:%S%z",
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "default",
-                "stream": "ext://sys.stdout",
-            }
-        },
-        "root": {
-            "level": settings.LOG_LEVEL,
-            "handlers": ["console"],
-        },
-        "loggers": {
-            "uvicorn": {"level": "INFO"},
-            "sqlalchemy": {"level": "WARNING"},
-        },
-    })
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": log_format,
+                    "datefmt": "%Y-%m-%dT%H:%M:%S%z",
+                }
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                    "stream": "ext://sys.stdout",
+                }
+            },
+            "root": {
+                "level": settings.LOG_LEVEL,
+                "handlers": ["console"],
+            },
+            "loggers": {
+                "uvicorn": {"level": "INFO"},
+                "sqlalchemy": {"level": "WARNING"},
+            },
+        }
+    )
 
 
 # Initialize logging

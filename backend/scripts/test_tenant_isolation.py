@@ -87,27 +87,27 @@ def test_tenant_isolation():
         print("  ✗ FAILED: Non-Beta documents visible!")
         return False
     
-    # Test 3: Super admin can see all documents
-    print("\n[Test 3] Super admin can see all documents")
-    super_token = login("super_admin", "super123")
-    if not super_token:
+    # Test 3: System admin can see all documents
+    print("\n[Test 3] System admin can see all documents")
+    system_admin_token = login("super_admin", "super123")  # Username unchanged
+    if not system_admin_token:
         return False
     
-    super_docs = get_documents(super_token)
-    print(f"  Super admin sees {len(super_docs)} documents:")
+    system_admin_docs = get_documents(system_admin_token)
+    print(f"  System admin sees {len(system_admin_docs)} documents:")
     
-    acme_count = sum(1 for d in super_docs if d["document_number"].startswith("ACME-"))
-    beta_count = sum(1 for d in super_docs if d["document_number"].startswith("BETA-"))
-    other_count = len(super_docs) - acme_count - beta_count
+    acme_count = sum(1 for d in system_admin_docs if d["document_number"].startswith("ACME-"))
+    beta_count = sum(1 for d in system_admin_docs if d["document_number"].startswith("BETA-"))
+    other_count = len(system_admin_docs) - acme_count - beta_count
     
     print(f"    - Acme documents: {acme_count}")
     print(f"    - Beta documents: {beta_count}")
     print(f"    - Other documents: {other_count}")
     
     if acme_count >= 3 and beta_count >= 3:
-        print("  ✓ Super admin can see documents from all tenants")
+        print("  ✓ System admin can see documents from all tenants")
     else:
-        print("  ✗ FAILED: Super admin not seeing all tenant documents!")
+        print("  ✗ FAILED: System admin not seeing all tenant documents!")
         return False
     
     # Test 4: Cross-tenant access blocked

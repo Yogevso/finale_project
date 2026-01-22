@@ -1,11 +1,10 @@
 """Seed script to create test tenants and users for multi-tenancy testing
 
 Creates:
-- 1 Super Admin (can access all tenants)
-- 2 Test Tenants (Acme Corp, Beta Inc)
-- 2 Tenant Admins (1 per tenant)
-- 4 Regular Users (2 per tenant)
-- Sample documents for each tenant
+- 1 System Admin (sysadmin) - can access all tenants
+- Test users for each role: admin, manager, editor, viewer
+- 2 Companies with customer users
+- Sample documents with different visibility levels
 """
 import sys
 import os
@@ -14,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import text
 from app.db import engine, SessionLocal
-from app.models import Tenant, User, UserRole, Document, DocumentStatus
+from app.models import Tenant, User, UserRole, Document, DocumentStatus, DocumentVisibility, Version, document_company_assignments
 from app.security import get_password_hash
 
 
@@ -28,82 +27,59 @@ def seed_multi_tenant_data():
     
     try:
         # ========================================
-        # 1. Create Super Admin
+        # 1. Create Default Tenant
         # ========================================
-        print("\n[1/5] Creating Super Admin...")
+        print("\n[1/7] Creating Default Tenant...")
         
-        super_admin = db.query(User).filter(User.username == "super_admin").first()
-        if not super_admin:
-            super_admin = User(
-                username="super_admin",
-                email="super@docportal.com",
-                full_name="Super Administrator",
-                hashed_password=get_password_hash("super123"),
-                role=UserRole.SUPER_ADMIN,
+        default_tenant = db.query(Tenant).filter(Tenant.slug == "default").first()
+        if not default_tenant:
+            default_tenant = Tenant(name="Default Organization", slug="default", is_active=True)
+            db.add(default_tenant)
+            db.commit()
+            db.refresh(default_tenant)
+            print(f"      ✓ Created 'Default Organization' (ID: {default_tenant.id})")
+        else:
+            print(f"      ✓ 'Default Organization' already exists (ID: {default_tenant.id})")
+        
+        # ========================================
+        # 2. Create System Admin
+        # ========================================
+        print("\n[2/7] Creating System Admin...")
+        
+        sysadmin = db.query(User).filter(User.username == "sysadmin").first()
+        if not sysadmin:
+            sysadmin = User(
+                username="sysadmin",
+                email="sysadmin@docportal.com",
+                full_name="System Administrator",
+                hashed_password=get_password_hash("sysadmin123"),
+                role=UserRole.SYSTEM_ADMIN,
                 is_active=True,
-                tenant_id=None  # Super admin has no tenant
+                tenant_id=default_tenant.id
             )
-            db.add(super_admin)
+            db.add(sysadmin)
             db.commit()
-            print("      ✓ Created super_admin (password: super123)")
+            print("      ✓ Created sysadmin (password: sysadmin123)")
         else:
-            # Update role to super_admin if not already
-            if super_admin.role != UserRole.SUPER_ADMIN:
-                super_admin.role = UserRole.SUPER_ADMIN
-                super_admin.tenant_id = None
-                db.commit()
-            print("      ✓ super_admin already exists")
+            print("      ✓ sysadmin already exists")
         
         # ========================================
-        # 2. Create Tenants
+        # 3. Create Role-Based Users
         # ========================================
-        print("\n[2/5] Creating Test Tenants...")
+        print("\n[3/7] Creating Role-Based Users...")
         
-        # Acme Corp
-        acme = db.query(Tenant).filter(Tenant.slug == "acme").first()
-        if not acme:
-            acme = Tenant(name="Acme Corporation", slug="acme", is_active=True)
-            db.add(acme)
-            db.commit()
-            db.refresh(acme)
-            print(f"      ✓ Created 'Acme Corporation' (ID: {acme.id})")
-        else:
-            print(f"      ✓ 'Acme Corporation' already exists (ID: {acme.id})")
-        
-        # Beta Inc
-        beta = db.query(Tenant).filter(Tenant.slug == "beta").first()
-        if not beta:
-            beta = Tenant(name="Beta Incorporated", slug="beta", is_active=True)
-            db.add(beta)
-            db.commit()
-            db.refresh(beta)
-            print(f"      ✓ Created 'Beta Incorporated' (ID: {beta.id})")
-        else:
-            print(f"      ✓ 'Beta Incorporated' already exists (ID: {beta.id})")
-        
-        # ========================================
-        # 3. Create Tenant Users
-        # ========================================
-        print("\n[3/5] Creating Tenant Users...")
-        
-        users_to_create = [
-            # Acme users
-            {"username": "acme_admin", "email": "admin@acme.com", "full_name": "Acme Admin",
-             "password": "acme123", "role": UserRole.ADMIN, "tenant_id": acme.id},
-            {"username": "acme_editor", "email": "editor@acme.com", "full_name": "Acme Editor",
-             "password": "acme123", "role": UserRole.EDITOR, "tenant_id": acme.id},
-            {"username": "acme_viewer", "email": "viewer@acme.com", "full_name": "Acme Viewer",
-             "password": "acme123", "role": UserRole.VIEWER, "tenant_id": acme.id},
-            # Beta users
-            {"username": "beta_admin", "email": "admin@beta.com", "full_name": "Beta Admin",
-             "password": "beta123", "role": UserRole.ADMIN, "tenant_id": beta.id},
-            {"username": "beta_editor", "email": "editor@beta.com", "full_name": "Beta Editor",
-             "password": "beta123", "role": UserRole.EDITOR, "tenant_id": beta.id},
-            {"username": "beta_viewer", "email": "viewer@beta.com", "full_name": "Beta Viewer",
-             "password": "beta123", "role": UserRole.VIEWER, "tenant_id": beta.id},
+        role_users = [
+            {"username": "admin", "email": "admin@docportal.com", "full_name": "Admin User",
+             "password": "admin123", "role": UserRole.ADMIN},
+            {"username": "manager", "email": "manager@docportal.com", "full_name": "Manager User",
+             "password": "manager123", "role": UserRole.MANAGER},
+            {"username": "editor", "email": "editor@docportal.com", "full_name": "Editor User",
+             "password": "editor123", "role": UserRole.EDITOR},
+            {"username": "viewer", "email": "viewer@docportal.com", "full_name": "Viewer User",
+             "password": "viewer123", "role": UserRole.VIEWER},
         ]
         
-        for user_data in users_to_create:
+        for user_data in role_users:
             existing = db.query(User).filter(User.username == user_data["username"]).first()
             if not existing:
                 user = User(
@@ -113,48 +89,135 @@ def seed_multi_tenant_data():
                     hashed_password=get_password_hash(user_data["password"]),
                     role=user_data["role"],
                     is_active=True,
-                    tenant_id=user_data["tenant_id"]
+                    tenant_id=default_tenant.id
                 )
                 db.add(user)
-                print(f"      ✓ Created {user_data['username']} (password: {user_data['password']})")
+                print(f"      ✓ Created {user_data['username']} ({user_data['role'].value}) - password: {user_data['password']}")
             else:
-                # Update tenant_id if not set
-                if existing.tenant_id != user_data["tenant_id"]:
-                    existing.tenant_id = user_data["tenant_id"]
                 print(f"      ✓ {user_data['username']} already exists")
         
         db.commit()
         
         # ========================================
-        # 4. Create Sample Documents
+        # 4. Create Customer Companies (as Tenants)
         # ========================================
-        print("\n[4/5] Creating Sample Documents...")
+        print("\n[4/7] Creating Customer Companies...")
         
-        # Get admin users for document creation
-        acme_admin = db.query(User).filter(User.username == "acme_admin").first()
-        beta_admin = db.query(User).filter(User.username == "beta_admin").first()
+        # Company A (as a tenant for customers)
+        company_a = db.query(Tenant).filter(Tenant.slug == "company-a").first()
+        if not company_a:
+            company_a = Tenant(
+                name="Company A",
+                slug="company-a",
+                is_active=True,
+                company_type="customer"
+            )
+            db.add(company_a)
+            db.commit()
+            db.refresh(company_a)
+            print(f"      ✓ Created 'Company A' (ID: {company_a.id})")
+        else:
+            print(f"      ✓ 'Company A' already exists (ID: {company_a.id})")
+        
+        # Company B (as a tenant for customers)
+        company_b = db.query(Tenant).filter(Tenant.slug == "company-b").first()
+        if not company_b:
+            company_b = Tenant(
+                name="Company B",
+                slug="company-b",
+                is_active=True,
+                company_type="customer"
+            )
+            db.add(company_b)
+            db.commit()
+            db.refresh(company_b)
+            print(f"      ✓ Created 'Company B' (ID: {company_b.id})")
+        else:
+            print(f"      ✓ 'Company B' already exists (ID: {company_b.id})")
+        
+        # ========================================
+        # 5. Create Customer Users
+        # ========================================
+        print("\n[5/7] Creating Customer Users...")
+        
+        customer1 = db.query(User).filter(User.username == "customer1").first()
+        if not customer1:
+            customer1 = User(
+                username="customer1",
+                email="customer1@companya.com",
+                full_name="Customer One",
+                hashed_password=get_password_hash("customer123"),
+                role=UserRole.CUSTOMER,
+                is_active=True,
+                tenant_id=company_a.id  # Customer's tenant IS their company
+            )
+            db.add(customer1)
+            print("      ✓ Created customer1 (Company A) - password: customer123")
+        else:
+            print("      ✓ customer1 already exists")
+        
+        customer2 = db.query(User).filter(User.username == "customer2").first()
+        if not customer2:
+            customer2 = User(
+                username="customer2",
+                email="customer2@companyb.com",
+                full_name="Customer Two",
+                hashed_password=get_password_hash("customer123"),
+                role=UserRole.CUSTOMER,
+                is_active=True,
+                tenant_id=company_b.id  # Customer's tenant IS their company
+            )
+            db.add(customer2)
+            print("      ✓ Created customer2 (Company B) - password: customer123")
+        else:
+            print("      ✓ customer2 already exists")
+        
+        db.commit()
+        
+        # Get admin for document creation
+        admin = db.query(User).filter(User.username == "admin").first()
+        
+        # ========================================
+        # 6. Create Sample Documents
+        # ========================================
+        print("\n[6/7] Creating Sample Documents...")
         
         documents_to_create = [
-            # Acme documents
-            {"title": "Acme Product Catalog", "doc_num": "ACME-2024-001",
-             "description": "Official product catalog for Acme Corporation",
-             "category": "Products", "tenant_id": acme.id, "created_by": acme_admin.id},
-            {"title": "Acme Employee Handbook", "doc_num": "ACME-2024-002",
-             "description": "Employee policies and procedures for Acme",
-             "category": "HR", "tenant_id": acme.id, "created_by": acme_admin.id},
-            {"title": "Acme Safety Guidelines", "doc_num": "ACME-2024-003",
-             "description": "Workplace safety guidelines",
-             "category": "Compliance", "tenant_id": acme.id, "created_by": acme_admin.id},
-            # Beta documents
-            {"title": "Beta Service Agreement", "doc_num": "BETA-2024-001",
-             "description": "Standard service agreement template for Beta Inc",
-             "category": "Legal", "tenant_id": beta.id, "created_by": beta_admin.id},
-            {"title": "Beta Technical Specs", "doc_num": "BETA-2024-002",
-             "description": "Technical specifications for Beta products",
-             "category": "Technical", "tenant_id": beta.id, "created_by": beta_admin.id},
-            {"title": "Beta Onboarding Guide", "doc_num": "BETA-2024-003",
-             "description": "New employee onboarding guide for Beta Inc",
-             "category": "HR", "tenant_id": beta.id, "created_by": beta_admin.id},
+            # Public documents (visible to everyone including anonymous)
+            {"title": "Public Policy Document", "doc_num": "PUB-2024-001",
+             "description": "A publicly available policy document",
+             "category": "Policy", "visibility": DocumentVisibility.PUBLIC,
+             "content": "<h1>Public Policy</h1><p>This document is publicly accessible.</p>"},
+            {"title": "Public User Guide", "doc_num": "PUB-2024-002",
+             "description": "Public user guide for all users",
+             "category": "Guides", "visibility": DocumentVisibility.PUBLIC,
+             "content": "<h1>User Guide</h1><p>Welcome to our public user guide.</p>"},
+            # Internal documents (visible to internal users only)
+            {"title": "Internal Procedures", "doc_num": "INT-2024-001",
+             "description": "Internal company procedures",
+             "category": "Procedures", "visibility": DocumentVisibility.INTERNAL,
+             "content": "<h1>Internal Procedures</h1><p>For internal use only.</p>"},
+            {"title": "Internal Training Material", "doc_num": "INT-2024-002",
+             "description": "Training materials for staff",
+             "category": "Training", "visibility": DocumentVisibility.INTERNAL,
+             "content": "<h1>Training</h1><p>Internal training content.</p>"},
+            # Company A documents
+            {"title": "Company A Contract", "doc_num": "COMP-A-001",
+             "description": "Contract for Company A",
+             "category": "Contracts", "visibility": DocumentVisibility.COMPANY,
+             "content": "<h1>Company A Contract</h1><p>Confidential contract for Company A.</p>",
+             "assigned_company": company_a},
+            {"title": "Company A Specifications", "doc_num": "COMP-A-002",
+             "description": "Technical specs for Company A",
+             "category": "Technical", "visibility": DocumentVisibility.COMPANY,
+             "content": "<h1>Specifications</h1><p>Technical details for Company A.</p>",
+             "assigned_company": company_a},
+            # Company B documents
+            {"title": "Company B Agreement", "doc_num": "COMP-B-001",
+             "description": "Agreement for Company B",
+             "category": "Contracts", "visibility": DocumentVisibility.COMPANY,
+             "content": "<h1>Company B Agreement</h1><p>Confidential agreement for Company B.</p>",
+             "assigned_company": company_b},
         ]
         
         for doc_data in documents_to_create:
@@ -168,45 +231,59 @@ def seed_multi_tenant_data():
                     description=doc_data["description"],
                     category=doc_data["category"],
                     status=DocumentStatus.ACTIVE,
-                    tenant_id=doc_data["tenant_id"],
-                    created_by=doc_data["created_by"]
+                    visibility=doc_data["visibility"],
+                    tenant_id=default_tenant.id,
+                    created_by=admin.id
                 )
                 db.add(doc)
-                print(f"      ✓ Created '{doc_data['title']}'")
+                db.flush()
+                
+                # Create initial version with content
+                version = Version(
+                    document_id=doc.id,
+                    version_number=1,
+                    content=doc_data["content"],
+                    changes_summary="Initial version",
+                    created_by=admin.id,
+                    is_published=True
+                )
+                db.add(version)
+                
+                # Assign company (tenant) if specified
+                if doc_data.get("assigned_company"):
+                    doc.assigned_companies.append(doc_data["assigned_company"])
+                
+                print(f"      ✓ Created '{doc_data['title']}' ({doc_data['visibility'].value})")
             else:
-                # Update tenant_id if not set
-                if existing.tenant_id != doc_data["tenant_id"]:
-                    existing.tenant_id = doc_data["tenant_id"]
                 print(f"      ✓ '{doc_data['title']}' already exists")
         
         db.commit()
         
         # ========================================
-        # 5. Summary
+        # 7. Summary
         # ========================================
-        print("\n[5/5] Summary...")
+        print("\n[7/7] Summary...")
         
         tenant_count = db.query(Tenant).count()
         user_count = db.query(User).count()
         doc_count = db.query(Document).count()
         
-        print(f"      Tenants: {tenant_count}")
+        print(f"      Tenants/Companies: {tenant_count}")
         print(f"      Users: {user_count}")
         print(f"      Documents: {doc_count}")
         
         print("\n" + "=" * 60)
         print("Test Accounts")
         print("=" * 60)
-        print("\nSuper Admin (all tenants):")
-        print("  - super_admin / super123")
-        print("\nAcme Corporation:")
-        print("  - acme_admin / acme123 (Admin)")
-        print("  - acme_editor / acme123 (Editor)")
-        print("  - acme_viewer / acme123 (Viewer)")
-        print("\nBeta Incorporated:")
-        print("  - beta_admin / beta123 (Admin)")
-        print("  - beta_editor / beta123 (Editor)")
-        print("  - beta_viewer / beta123 (Viewer)")
+        print("\nInternal Users:")
+        print("  - sysadmin / sysadmin123 (System Admin)")
+        print("  - admin / admin123 (Admin)")
+        print("  - manager / manager123 (Manager)")
+        print("  - editor / editor123 (Editor)")
+        print("  - viewer / viewer123 (Viewer)")
+        print("\nCustomer Users:")
+        print("  - customer1 / customer123 (Customer - Company A)")
+        print("  - customer2 / customer123 (Customer - Company B)")
         print("\n" + "=" * 60)
         print("✓ Seed completed successfully!")
         print("=" * 60)

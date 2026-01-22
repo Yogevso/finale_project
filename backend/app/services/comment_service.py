@@ -1,4 +1,5 @@
 """Comment Service - Business logic for document comments with visibility and threading"""
+
 import logging
 from typing import List, Optional
 
@@ -18,39 +19,39 @@ class CommentService:
     @staticmethod
     def can_view_private_comments(user: User) -> bool:
         """Check if user can view private comments"""
-        return user.role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EDITOR]
+        return user.role in [
+            UserRole.SYSTEM_ADMIN,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.EDITOR,
+        ]
 
     @staticmethod
     def get_comments(
-        db: Session,
-        document_id: int,
-        current_user: User,
-        include_private: bool = True
+        db: Session, document_id: int, current_user: User, include_private: bool = True
     ) -> List[Comment]:
         """Get comments for a document with visibility filtering"""
         # Check document exists
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         # Base query - get top-level comments only (no parent)
-        query = db.query(Comment).filter(
-            Comment.document_id == document_id,
-            Comment.parent_id == None  # noqa: E711
-        ).options(
-            joinedload(Comment.user),
-            joinedload(Comment.replies).joinedload(Comment.user)
+        query = (
+            db.query(Comment)
+            .filter(
+                Comment.document_id == document_id,
+                Comment.parent_id == None,  # noqa: E711
+            )
+            .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
         )
 
         # Filter private comments based on user role
         if not CommentService.can_view_private_comments(current_user):
             # Regular users can only see public comments OR their own private comments
             query = query.filter(
-                (Comment.is_private == False) |  # noqa: E712
-                (Comment.user_id == current_user.id)
+                (Comment.is_private == False)  # noqa: E712
+                | (Comment.user_id == current_user.id)
             )
 
         comments = query.order_by(Comment.created_at.desc()).all()
@@ -59,8 +60,7 @@ class CommentService:
         if not CommentService.can_view_private_comments(current_user):
             for comment in comments:
                 comment.replies = [
-                    r for r in comment.replies
-                    if not r.is_private or r.user_id == current_user.id
+                    r for r in comment.replies if not r.is_private or r.user_id == current_user.id
                 ]
 
         # Add reply count to each comment
@@ -70,33 +70,27 @@ class CommentService:
         return comments
 
     @staticmethod
-    def get_comment(
-        db: Session,
-        document_id: int,
-        comment_id: int,
-        current_user: User
-    ) -> Comment:
+    def get_comment(db: Session, document_id: int, comment_id: int, current_user: User) -> Comment:
         """Get a specific comment with its replies"""
-        comment = db.query(Comment).filter(
-            Comment.id == comment_id,
-            Comment.document_id == document_id
-        ).options(
-            joinedload(Comment.user),
-            joinedload(Comment.replies).joinedload(Comment.user)
-        ).first()
+        comment = (
+            db.query(Comment)
+            .filter(Comment.id == comment_id, Comment.document_id == document_id)
+            .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
+            .first()
+        )
 
         if not comment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Comment not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
         # Check visibility
         if comment.is_private:
-            if not CommentService.can_view_private_comments(current_user) and comment.user_id != current_user.id:
+            if (
+                not CommentService.can_view_private_comments(current_user)
+                and comment.user_id != current_user.id
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view this comment"
+                    detail="You don't have permission to view this comment",
                 )
 
         comment.reply_count = len(comment.replies)
@@ -104,33 +98,27 @@ class CommentService:
 
     @staticmethod
     def create_comment(
-        db: Session,
-        document_id: int,
-        comment_data: CommentCreate,
-        current_user: User
+        db: Session, document_id: int, comment_data: CommentCreate, current_user: User
     ) -> Comment:
         """Create a new comment with visibility and anchor support"""
         # Check document exists
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         parent_id = comment_data.parent_id
 
         # If parent_id is provided, verify parent exists
         parent_comment = None
         if parent_id:
-            parent_comment = db.query(Comment).filter(
-                Comment.id == parent_id,
-                Comment.document_id == document_id
-            ).first()
+            parent_comment = (
+                db.query(Comment)
+                .filter(Comment.id == parent_id, Comment.document_id == document_id)
+                .first()
+            )
             if not parent_comment:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Parent comment not found"
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Parent comment not found"
                 )
 
         # Create comment with new fields
@@ -141,7 +129,7 @@ class CommentService:
             parent_id=parent_id,
             is_private=comment_data.is_private,
             anchor_text=comment_data.anchor_text,
-            anchor_id=comment_data.anchor_id
+            anchor_id=comment_data.anchor_id,
         )
 
         db.add(comment)
@@ -149,7 +137,7 @@ class CommentService:
         db.refresh(comment)
 
         # Load user relationship
-        db.refresh(comment, ['user'])
+        db.refresh(comment, ["user"])
 
         # Send notifications
         CommentService._send_comment_notifications(
@@ -165,7 +153,7 @@ class CommentService:
         document: Document,
         comment: Comment,
         current_user: User,
-        parent_comment: Optional[Comment] = None
+        parent_comment: Optional[Comment] = None,
     ):
         """Send notifications for new comments"""
         try:
@@ -189,14 +177,18 @@ class CommentService:
                             document_title=document.title,
                             original_comment=parent_comment.content[:100],
                             reply_content=comment.content[:200],
-                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}"
+                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
                         )
                     )
                     notified_users.add(parent_author.id)
                     logger.info(f"Queued reply notification to {parent_author.email}")
 
             # Notify document author if not already notified
-            if document.created_by and document.created_by != current_user.id and document.created_by not in notified_users:
+            if (
+                document.created_by
+                and document.created_by != current_user.id
+                and document.created_by not in notified_users
+            ):
                 author = db.query(User).filter(User.id == document.created_by).first()
                 if author and author.email:
                     asyncio.create_task(
@@ -205,7 +197,7 @@ class CommentService:
                             commenter_name=current_user.full_name or current_user.username,
                             document_title=document.title,
                             comment_text=comment.content[:200],
-                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}"
+                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
                         )
                     )
                     notified_users.add(author.id)
@@ -213,12 +205,23 @@ class CommentService:
 
             # For private comments or inline comments, notify all admins/editors
             if comment.is_private or comment.anchor_text:
-                admins = db.query(User).filter(
-                    User.role.in_([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EDITOR]),
-                    User.id != current_user.id,
-                    User.id.notin_(notified_users),
-                    User.is_active == True  # noqa: E712
-                ).all()
+                admins = (
+                    db.query(User)
+                    .filter(
+                        User.role.in_(
+                            [
+                                UserRole.SYSTEM_ADMIN,
+                                UserRole.ADMIN,
+                                UserRole.MANAGER,
+                                UserRole.EDITOR,
+                            ]
+                        ),
+                        User.id != current_user.id,
+                        User.id.notin_(notified_users),
+                        User.is_active == True,  # noqa: E712
+                    )
+                    .all()
+                )
 
                 for admin in admins:
                     if admin.email:
@@ -229,7 +232,7 @@ class CommentService:
                                 commenter_name=current_user.full_name or current_user.username,
                                 document_title=document.title,
                                 comment_text=f"[{comment_type.upper()}] {comment.content[:200]}",
-                                document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}"
+                                document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
                             )
                         )
                         logger.info(f"Queued {comment_type} comment notification to {admin.email}")
@@ -244,22 +247,26 @@ class CommentService:
         document_id: int,
         comment_id: int,
         comment_data: CommentUpdate,
-        current_user: User
+        current_user: User,
     ) -> Comment:
         """Update a comment"""
-        comment = db.query(Comment).filter(
-            Comment.id == comment_id,
-            Comment.document_id == document_id
-        ).options(joinedload(Comment.user)).first()
+        comment = (
+            db.query(Comment)
+            .filter(Comment.id == comment_id, Comment.document_id == document_id)
+            .options(joinedload(Comment.user))
+            .first()
+        )
 
         if not comment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Comment not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
         # Check permissions
-        is_admin = current_user.role in [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EDITOR]
+        is_admin = current_user.role in [
+            UserRole.SYSTEM_ADMIN,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.EDITOR,
+        ]
         is_author = comment.user_id == current_user.id
 
         # Only author can update content
@@ -267,16 +274,16 @@ class CommentService:
             if not is_author and not is_admin:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only the comment author can update the content"
+                    detail="Only the comment author can update the content",
                 )
             comment.content = comment_data.content
 
-        # Only admins/editors can resolve comments
+        # Only admins/editors/managers can resolve comments
         if comment_data.is_resolved is not None:
             if not is_admin:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only admins and editors can resolve comments"
+                    detail="Only admins, managers and editors can resolve comments",
                 )
             comment.is_resolved = comment_data.is_resolved
 
@@ -287,30 +294,23 @@ class CommentService:
         return comment
 
     @staticmethod
-    def delete_comment(
-        db: Session,
-        document_id: int,
-        comment_id: int,
-        current_user: User
-    ) -> None:
+    def delete_comment(db: Session, document_id: int, comment_id: int, current_user: User) -> None:
         """Delete a comment and its replies"""
-        comment = db.query(Comment).filter(
-            Comment.id == comment_id,
-            Comment.document_id == document_id
-        ).first()
+        comment = (
+            db.query(Comment)
+            .filter(Comment.id == comment_id, Comment.document_id == document_id)
+            .first()
+        )
 
         if not comment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Comment not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
         # Only the comment author or admin can delete
-        is_admin = current_user.role in [UserRole.SUPER_ADMIN, UserRole.ADMIN]
+        is_admin = current_user.role in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
         if comment.user_id != current_user.id and not is_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the comment author or admin can delete this comment"
+                detail="Only the comment author, admin or manager can delete this comment",
             )
 
         # Delete replies first
@@ -320,35 +320,45 @@ class CommentService:
 
     @staticmethod
     def get_comment_count(
-        db: Session,
-        document_id: int,
-        current_user: Optional[User] = None
+        db: Session, document_id: int, current_user: Optional[User] = None
     ) -> dict:
         """Get comment counts for a document"""
         total = db.query(Comment).filter(Comment.document_id == document_id).count()
 
         # Get top-level comments only
-        top_level = db.query(Comment).filter(
-            Comment.document_id == document_id,
-            Comment.parent_id == None  # noqa: E711
-        ).count()
+        top_level = (
+            db.query(Comment)
+            .filter(
+                Comment.document_id == document_id,
+                Comment.parent_id == None,  # noqa: E711
+            )
+            .count()
+        )
 
         # Count private comments
-        private_count = db.query(Comment).filter(
-            Comment.document_id == document_id,
-            Comment.is_private == True  # noqa: E712
-        ).count()
+        private_count = (
+            db.query(Comment)
+            .filter(
+                Comment.document_id == document_id,
+                Comment.is_private == True,  # noqa: E712
+            )
+            .count()
+        )
 
         # Count unresolved threads
-        unresolved = db.query(Comment).filter(
-            Comment.document_id == document_id,
-            Comment.parent_id == None,  # noqa: E711
-            Comment.is_resolved == False  # noqa: E712
-        ).count()
+        unresolved = (
+            db.query(Comment)
+            .filter(
+                Comment.document_id == document_id,
+                Comment.parent_id == None,  # noqa: E711
+                Comment.is_resolved == False,  # noqa: E712
+            )
+            .count()
+        )
 
         return {
             "total": total,
             "threads": top_level,
             "private": private_count,
-            "unresolved": unresolved
+            "unresolved": unresolved,
         }

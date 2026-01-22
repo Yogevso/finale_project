@@ -1,4 +1,5 @@
 """Security & Authentication Utilities"""
+
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -62,10 +63,7 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Dependency to get current authenticated user"""
     from app.models import User  # Import here to avoid circular dependency
 
@@ -90,10 +88,11 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
-    current_user = Depends(get_current_user)
-):
+async def get_current_active_user(current_user=Depends(get_current_user)):
     """Dependency to get current active user"""
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+# Re-export permission dependencies for convenience

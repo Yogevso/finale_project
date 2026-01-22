@@ -1,4 +1,5 @@
 """Storage Service - Local and S3 storage backends"""
+
 import logging
 import uuid
 from abc import ABC, abstractmethod
@@ -103,6 +104,7 @@ class S3StorageBackend(StorageBackend):
         # Lazy import boto3 only when actually used
         import boto3
         from botocore.exceptions import ClientError
+
         self._ClientError = ClientError
 
         self.bucket = settings.S3_BUCKET
@@ -136,7 +138,7 @@ class S3StorageBackend(StorageBackend):
                 storage_key,
                 ExtraArgs={
                     "ContentType": content_type,
-                }
+                },
             )
             logger.info(f"Uploaded file to S3: {storage_key}")
             return storage_key

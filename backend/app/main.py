@@ -1,4 +1,5 @@
 """FastAPI Application Entry Point"""
+
 import logging
 
 from fastapi import FastAPI
@@ -56,7 +57,7 @@ async def root():
     return {
         "message": "Document Portal V2 API",
         "version": settings.APP_VERSION,
-        "docs": f"{settings.API_PREFIX}/docs"
+        "docs": f"{settings.API_PREFIX}/docs",
     }
 
 
@@ -66,18 +67,27 @@ from app.api.management import (  # noqa: E402
     attachments,
     auth,
     comments,
+    companies,
     documents,
     engagement,
+    feedback,
+    invitations,
     notifications,
+    reviews,
     search,
     tenants,
     users,
     versions,
 )
+from app.api.portal import router as portal_router  # noqa: E402
+from app.api.public import router as public_router  # noqa: E402
 from app.api.viewer import documents as viewer_documents  # noqa: E402
 
 # Health check routes (no prefix for load balancer compatibility)
 app.include_router(health.router, tags=["Health"])
+
+# Public API (no authentication required)
+app.include_router(public_router, prefix=settings.API_PREFIX, tags=["Public"])
 
 app.include_router(auth.router, prefix=settings.API_PREFIX, tags=["Authentication"])
 app.include_router(documents.router, prefix=settings.API_PREFIX, tags=["Documents"])
@@ -89,6 +99,13 @@ app.include_router(engagement.router, prefix=settings.API_PREFIX, tags=["Engagem
 app.include_router(tenants.router, prefix=settings.API_PREFIX, tags=["Tenants"])
 app.include_router(users.router, prefix=settings.API_PREFIX, tags=["Users"])
 app.include_router(notifications.router, prefix=settings.API_PREFIX, tags=["Notifications"])
+app.include_router(companies.router, prefix=settings.API_PREFIX, tags=["Companies"])
+app.include_router(reviews.router, prefix=settings.API_PREFIX, tags=["Reviews"])
+app.include_router(feedback.router, prefix=settings.API_PREFIX, tags=["Feedback"])
+app.include_router(invitations.router, prefix=settings.API_PREFIX, tags=["Invitations"])
 
 # Viewer Portal (public, no auth required)
 app.include_router(viewer_documents.router, prefix=settings.API_PREFIX, tags=["Viewer"])
+
+# Customer Portal (authenticated customers only)
+app.include_router(portal_router, prefix=settings.API_PREFIX, tags=["Customer Portal"])

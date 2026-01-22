@@ -1,4 +1,5 @@
 """Notifications API Routes"""
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -16,6 +17,7 @@ router = APIRouter()
 # Schemas
 class NotificationResponse(BaseModel):
     """Notification response schema"""
+
     id: int
     type: str
     title: str
@@ -31,6 +33,7 @@ class NotificationResponse(BaseModel):
 
 class NotificationListResponse(BaseModel):
     """List of notifications with counts"""
+
     items: List[NotificationResponse]
     total: int
     unread_count: int
@@ -38,6 +41,7 @@ class NotificationListResponse(BaseModel):
 
 class NotificationMarkRead(BaseModel):
     """Mark notifications as read"""
+
     notification_ids: Optional[List[int]] = None  # None = mark all
 
 
@@ -56,26 +60,30 @@ def get_notifications(
         query = query.filter(Notification.is_read.is_(False))
 
     total = query.count()
-    unread_count = db.query(Notification).filter(
-        Notification.user_id == current_user.id,
-        Notification.is_read.is_(False)
-    ).count()
+    unread_count = (
+        db.query(Notification)
+        .filter(Notification.user_id == current_user.id, Notification.is_read.is_(False))
+        .count()
+    )
 
     items = query.order_by(Notification.created_at.desc()).limit(limit).all()
 
     return NotificationListResponse(
-        items=[NotificationResponse(
-            id=n.id,
-            type=n.type.value if isinstance(n.type, NotificationType) else n.type,
-            title=n.title,
-            message=n.message,
-            link=n.link,
-            is_read=n.is_read,
-            read_at=n.read_at,
-            created_at=n.created_at
-        ) for n in items],
+        items=[
+            NotificationResponse(
+                id=n.id,
+                type=n.type.value if isinstance(n.type, NotificationType) else n.type,
+                title=n.title,
+                message=n.message,
+                link=n.link,
+                is_read=n.is_read,
+                read_at=n.read_at,
+                created_at=n.created_at,
+            )
+            for n in items
+        ],
         total=total,
-        unread_count=unread_count
+        unread_count=unread_count,
     )
 
 
@@ -85,10 +93,11 @@ def get_notification_count(
     current_user: User = Depends(get_current_user),
 ):
     """Get unread notification count for current user"""
-    unread_count = db.query(Notification).filter(
-        Notification.user_id == current_user.id,
-        Notification.is_read.is_(False)
-    ).count()
+    unread_count = (
+        db.query(Notification)
+        .filter(Notification.user_id == current_user.id, Notification.is_read.is_(False))
+        .count()
+    )
 
     return {"unread_count": unread_count}
 
@@ -101,8 +110,7 @@ def mark_notifications_read(
 ):
     """Mark notifications as read"""
     query = db.query(Notification).filter(
-        Notification.user_id == current_user.id,
-        Notification.is_read.is_(False)
+        Notification.user_id == current_user.id, Notification.is_read.is_(False)
     )
 
     if data.notification_ids:
@@ -110,8 +118,7 @@ def mark_notifications_read(
 
     now = datetime.utcnow()
     updated = query.update(
-        {Notification.is_read: True, Notification.read_at: now},
-        synchronize_session=False
+        {Notification.is_read: True, Notification.read_at: now}, synchronize_session=False
     )
     db.commit()
 
@@ -125,10 +132,11 @@ def mark_notification_read(
     current_user: User = Depends(get_current_user),
 ):
     """Mark a single notification as read"""
-    notification = db.query(Notification).filter(
-        Notification.id == notification_id,
-        Notification.user_id == current_user.id
-    ).first()
+    notification = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
+        .first()
+    )
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -148,10 +156,11 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a notification"""
-    notification = db.query(Notification).filter(
-        Notification.id == notification_id,
-        Notification.user_id == current_user.id
-    ).first()
+    notification = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
+        .first()
+    )
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")

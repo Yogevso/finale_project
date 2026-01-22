@@ -1,9 +1,13 @@
 """Authentication API Routes"""
-from fastapi import APIRouter, Depends, status
+
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import User
+from app.models import Invitation, InvitationStatus, User
 from app.schemas import (
     LoginRequest,
     MessageResponse,
@@ -13,17 +17,36 @@ from app.schemas import (
     UserCreate,
     UserResponse,
 )
-from app.security import get_current_active_user
+from app.security import get_current_active_user, get_password_hash
 from app.services.auth_service import AuthService
 
 router = APIRouter()
 
 
+# ========== Invitation Acceptance Schemas ==========
+class InvitationValidateResponse(BaseModel):
+    """Response for validating an invitation token"""
+
+    valid: bool
+    email: str | None = None
+    role: str | None = None
+    company_name: str | None = None
+    inviter_name: str | None = None
+    message: str | None = None
+    expires_at: datetime | None = None
+
+
+class AcceptInvitationRequest(BaseModel):
+    """Request to accept an invitation"""
+
+    token: str
+    username: str = Field(..., min_length=3, max_length=100)
+    full_name: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=8, max_length=100)
+
+
 @router.post("/auth/login", response_model=TokenResponse)
-def login(
-    credentials: LoginRequest,
-    db: Session = Depends(get_db)
-):
+def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     """
     Login with username and password.
 
@@ -33,10 +56,7 @@ def login(
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)
-def refresh_token(
-    token_data: RefreshTokenRequest,
-    db: Session = Depends(get_db)
-):
+def refresh_token(token_data: RefreshTokenRequest, db: Session = Depends(get_db)):
     """
     Refresh access token using refresh token.
 
@@ -46,10 +66,7 @@ def refresh_token(
 
 
 @router.post("/auth/logout", response_model=MessageResponse)
-def logout(
-    current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
-):
+def logout(current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """
     Logout user and invalidate all refresh tokens.
     """
@@ -58,10 +75,7 @@ def logout(
 
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(
-    user_data: UserCreate,
-    db: Session = Depends(get_db)
-):
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """
     Register a new user.
 
@@ -71,9 +85,7 @@ def register(
 
 
 @router.get("/auth/me", response_model=UserResponse)
-def get_current_user_info(
-    current_user: User = Depends(get_current_active_user)
-):
+def get_current_user_info(current_user: User = Depends(get_current_active_user)):
     """Get current user information"""
     return current_user
 
@@ -82,13 +94,127 @@ def get_current_user_info(
 def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Change current user's password"""
     AuthService.change_password(
-        db,
-        current_user,
-        password_data.old_password,
-        password_data.new_password
+        db, current_user, password_data.old_password, password_data.new_password
     )
     return MessageResponse(message="Password changed successfully")
+
+
+# ========== Invitation Endpoints (Public - No Auth) ==========
+
+
+@router.get("/auth/invitation/{token}", response_model=InvitationValidateResponse)
+def validate_invitation(token: str, db: Session = Depends(get_db)):
+    """
+    Validate an invitation token.
+
+    This is a public endpoint - no authentication required.
+    Returns invitation details if valid.
+    """
+    invitation = db.query(Invitation).filter(Invitation.token == token).first()
+
+    if not invitation:
+        return InvitationValidateResponse(valid=False)
+
+    # Check if expired
+    if invitation.expires_at < datetime.utcnow():
+        invitation.status = InvitationStatus.EXPIRED
+        db.commit()
+        return InvitationValidateResponse(valid=False)
+
+    # Check if already accepted or cancelled
+    if invitation.status != InvitationStatus.PENDING:
+        return InvitationValidateResponse(valid=False)
+
+    # Get inviter info
+    inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+    inviter_name = inviter.full_name if inviter else "Unknown"
+
+    # Get company name
+    company_name = None
+    if invitation.tenant_id:
+        from app.models import Tenant
+
+        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
+        if tenant:
+            company_name = tenant.name
+
+    return InvitationValidateResponse(
+        valid=True,
+        email=invitation.email,
+        role=invitation.role.value,
+        company_name=company_name,
+        inviter_name=inviter_name,
+        message=invitation.message,
+        expires_at=invitation.expires_at,
+    )
+
+
+@router.post("/auth/invitation/accept", response_model=TokenResponse)
+def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(get_db)):
+    """
+    Accept an invitation and create a new user account.
+
+    This is a public endpoint - no authentication required.
+    Returns JWT tokens for immediate login after account creation.
+    """
+    invitation = db.query(Invitation).filter(Invitation.token == request.token).first()
+
+    if not invitation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invalid invitation token"
+        )
+
+    # Check if expired
+    if invitation.expires_at < datetime.utcnow():
+        invitation.status = InvitationStatus.EXPIRED
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="This invitation has expired"
+        )
+
+    # Check if already accepted
+    if invitation.status != InvitationStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This invitation has already been used or cancelled",
+        )
+
+    # Check if email is already registered
+    if db.query(User).filter(User.email == invitation.email).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
+        )
+
+    # Check if username is taken
+    if db.query(User).filter(User.username == request.username).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="This username is already taken"
+        )
+
+    # Create user
+    user = User(
+        email=invitation.email,
+        username=request.username,
+        full_name=request.full_name,
+        hashed_password=get_password_hash(request.password),
+        role=invitation.role,
+        tenant_id=invitation.tenant_id,
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()  # Get user ID
+
+    # Update invitation
+    invitation.status = InvitationStatus.ACCEPTED
+    invitation.accepted_at = datetime.utcnow()
+    invitation.created_user_id = user.id
+
+    db.commit()
+    db.refresh(user)
+
+    # Generate tokens for immediate login
+    return AuthService.login(db, request.username, request.password)

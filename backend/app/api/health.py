@@ -1,4 +1,5 @@
 """Health Check API Endpoints"""
+
 import logging
 import time
 from datetime import datetime
@@ -46,6 +47,7 @@ def _check_storage() -> dict[str, Any]:
     try:
         # Lazy import to avoid boto3 dependency when not using S3
         from app.services.storage_service import get_storage_backend
+
         _storage = get_storage_backend()  # noqa: F841
         # Try to list objects (limited) to verify connectivity
         # For S3, this tests credentials and bucket access
@@ -105,9 +107,7 @@ async def readiness_check(db: Session = Depends(get_db)):
     storage_status = _check_storage()
 
     # Determine overall status
-    all_healthy = all(
-        s.get("status") == "healthy" for s in [db_status, storage_status]
-    )
+    all_healthy = all(s.get("status") == "healthy" for s in [db_status, storage_status])
 
     response = {
         "status": "ready" if all_healthy else "not_ready",
@@ -140,9 +140,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
     storage_status = _check_storage()
     system_info = _get_system_info()
 
-    all_healthy = all(
-        s.get("status") == "healthy" for s in [db_status, storage_status]
-    )
+    all_healthy = all(s.get("status") == "healthy" for s in [db_status, storage_status])
 
     return {
         "status": "healthy" if all_healthy else "degraded",

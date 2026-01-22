@@ -1,4 +1,5 @@
 """Search API with FTS5 and saved searches"""
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -96,8 +97,7 @@ def search_documents(
     except Exception:
         # Fallback to LIKE search if FTS5 fails
         query = db.query(Document).filter(
-            (Document.title.ilike(f"%{q}%")) |
-            (Document.description.ilike(f"%{q}%"))
+            (Document.title.ilike(f"%{q}%")) | (Document.description.ilike(f"%{q}%"))
         )
 
         if category:
@@ -112,15 +112,15 @@ def search_documents(
 
     items = [
         SearchResult(
-            id=d.id if hasattr(d, 'id') else d[0],
-            title=d.title if hasattr(d, 'title') else d[1],
-            document_number=d.document_number if hasattr(d, 'document_number') else d[2],
-            description=d.description if hasattr(d, 'description') else d[3],
-            category=d.category if hasattr(d, 'category') else d[5],
-            status=d.status.value if hasattr(d, 'status') else d[4],
-            created_at=d.created_at if hasattr(d, 'created_at') else d[7],
-            updated_at=d.updated_at if hasattr(d, 'updated_at') else d[8],
-            relevance_score=getattr(d, 'score', 0.0) if hasattr(d, 'score') else 0.0,
+            id=d.id if hasattr(d, "id") else d[0],
+            title=d.title if hasattr(d, "title") else d[1],
+            document_number=d.document_number if hasattr(d, "document_number") else d[2],
+            description=d.description if hasattr(d, "description") else d[3],
+            category=d.category if hasattr(d, "category") else d[5],
+            status=d.status.value if hasattr(d, "status") else d[4],
+            created_at=d.created_at if hasattr(d, "created_at") else d[7],
+            updated_at=d.updated_at if hasattr(d, "updated_at") else d[8],
+            relevance_score=getattr(d, "score", 0.0) if hasattr(d, "score") else 0.0,
         )
         for d in docs
     ]
@@ -145,9 +145,7 @@ def autocomplete(
 
 def get_autocomplete_suggestions(db: Session, q: str, limit: int = 5) -> List[str]:
     """Get document title suggestions matching query prefix"""
-    docs = db.query(Document.title).filter(
-        Document.title.ilike(f"%{q}%")
-    ).limit(limit).all()
+    docs = db.query(Document.title).filter(Document.title.ilike(f"%{q}%")).limit(limit).all()
 
     return [d.title for d in docs]
 
@@ -159,16 +157,10 @@ def get_search_facets(
 ):
     """Get facet counts for filtering"""
     # Category counts
-    categories = db.query(
-        Document.category,
-        text("COUNT(*)")
-    ).group_by(Document.category).all()
+    categories = db.query(Document.category, text("COUNT(*)")).group_by(Document.category).all()
 
     # Status counts
-    statuses = db.query(
-        Document.status,
-        text("COUNT(*)")
-    ).group_by(Document.status).all()
+    statuses = db.query(Document.status, text("COUNT(*)")).group_by(Document.status).all()
 
     return {
         "categories": [{"name": c[0] or "Uncategorized", "count": c[1]} for c in categories],
@@ -183,9 +175,12 @@ def list_saved_searches(
     current_user: User = Depends(get_current_user),
 ):
     """List user's saved searches"""
-    searches = db.query(SavedSearch).filter(
-        SavedSearch.user_id == current_user.id
-    ).order_by(SavedSearch.created_at.desc()).all()
+    searches = (
+        db.query(SavedSearch)
+        .filter(SavedSearch.user_id == current_user.id)
+        .order_by(SavedSearch.created_at.desc())
+        .all()
+    )
 
     return searches
 
@@ -218,10 +213,11 @@ def delete_saved_search(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a saved search"""
-    saved = db.query(SavedSearch).filter(
-        SavedSearch.id == search_id,
-        SavedSearch.user_id == current_user.id
-    ).first()
+    saved = (
+        db.query(SavedSearch)
+        .filter(SavedSearch.id == search_id, SavedSearch.user_id == current_user.id)
+        .first()
+    )
 
     if not saved:
         raise HTTPException(status_code=404, detail="Saved search not found")

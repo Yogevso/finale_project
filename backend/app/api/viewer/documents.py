@@ -1,4 +1,5 @@
 """Viewer Portal - Public Document API (No Auth Required)"""
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -35,8 +36,7 @@ def list_published_documents(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Document.title.ilike(search_term))
-            | (Document.description.ilike(search_term))
+            (Document.title.ilike(search_term)) | (Document.description.ilike(search_term))
         )
 
     # Filter by category
@@ -48,12 +48,7 @@ def list_published_documents(
 
     # Paginate
     offset = (page - 1) * page_size
-    documents = (
-        query.order_by(Document.updated_at.desc())
-        .offset(offset)
-        .limit(page_size)
-        .all()
-    )
+    documents = query.order_by(Document.updated_at.desc()).offset(offset).limit(page_size).all()
 
     return DocumentListResponse(
         items=[DocumentResponse.model_validate(d) for d in documents],

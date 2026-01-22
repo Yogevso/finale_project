@@ -1,4 +1,5 @@
 """Comments API Routes"""
+
 from typing import List
 
 from fastapi import APIRouter, Depends, status
@@ -22,7 +23,7 @@ router = APIRouter()
 def list_comments(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     List comments for a document.
@@ -37,7 +38,7 @@ def list_comments(
 def get_comment_stats(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get comment statistics for a document.
@@ -50,7 +51,7 @@ def get_comment(
     document_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a specific comment with its replies.
@@ -61,13 +62,13 @@ def get_comment(
 @router.post(
     "/documents/{document_id}/comments",
     response_model=CommentResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 def create_comment(
     document_id: int,
     comment_data: CommentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Create a new comment.
@@ -85,7 +86,7 @@ def update_comment(
     comment_id: int,
     comment_data: CommentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Update a comment.
@@ -96,33 +97,30 @@ def update_comment(
     return CommentService.update_comment(db, document_id, comment_id, comment_data, current_user)
 
 
-@router.post("/documents/{document_id}/comments/{comment_id}/resolve", response_model=CommentResponse)
+@router.post(
+    "/documents/{document_id}/comments/{comment_id}/resolve", response_model=CommentResponse
+)
 def resolve_comment(
     document_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Mark a comment thread as resolved.
     Only admins and editors can resolve comments.
     """
     return CommentService.update_comment(
-        db, document_id, comment_id,
-        CommentUpdate(is_resolved=True),
-        current_user
+        db, document_id, comment_id, CommentUpdate(is_resolved=True), current_user
     )
 
 
-@router.delete(
-    "/documents/{document_id}/comments/{comment_id}",
-    response_model=MessageResponse
-)
+@router.delete("/documents/{document_id}/comments/{comment_id}", response_model=MessageResponse)
 def delete_comment(
     document_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Delete a comment and its replies.

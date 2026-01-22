@@ -1,4 +1,5 @@
 """Base class for tenant-aware services"""
+
 from typing import Generic, List, Optional, Type, TypeVar
 
 from sqlalchemy.orm import Query, Session
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Query, Session
 from app.dependencies.tenant import TenantContext
 from app.models import Base
 
-T = TypeVar('T', bound=Base)
+T = TypeVar("T", bound=Base)
 
 
 class TenantAwareService(Generic[T]):
@@ -14,7 +15,7 @@ class TenantAwareService(Generic[T]):
     Base class for services that need tenant isolation.
 
     Automatically filters queries by tenant_id unless:
-    - User is SUPER_ADMIN
+    - User is SYSTEM_ADMIN
     - Service is explicitly used in unscoped mode
     """
 
@@ -28,15 +29,15 @@ class TenantAwareService(Generic[T]):
         """
         Create a base query with tenant filtering applied.
 
-        If tenant_ctx is provided and user is not super_admin,
+        If tenant_ctx is provided and user is not system_admin,
         the query will be filtered by tenant_id.
         """
         target_model = model or self.model
         query = self.db.query(target_model)
 
-        if self.tenant_ctx and not self.tenant_ctx.is_super_admin:
+        if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             # Apply tenant filter if model has tenant_id column
-            if hasattr(target_model, 'tenant_id'):
+            if hasattr(target_model, "tenant_id"):
                 query = query.filter(target_model.tenant_id == self.tenant_ctx.tenant_id)
 
         return query
@@ -55,7 +56,7 @@ class TenantAwareService(Generic[T]):
 
     def create(self, obj: T) -> T:
         """Create a new record with automatic tenant assignment"""
-        if self.tenant_ctx and hasattr(obj, 'tenant_id') and obj.tenant_id is None:
+        if self.tenant_ctx and hasattr(obj, "tenant_id") and obj.tenant_id is None:
             # Auto-assign tenant_id from context
             obj.tenant_id = self.tenant_ctx.tenant_id
 
@@ -80,17 +81,17 @@ class TenantAwareService(Generic[T]):
         Verify that the current user can access this object.
 
         Returns True if:
-        - User is SUPER_ADMIN
+        - User is SYSTEM_ADMIN
         - Object belongs to user's tenant
         - Object has no tenant (legacy/unassigned)
         """
         if not self.tenant_ctx:
             return True
 
-        if self.tenant_ctx.is_super_admin:
+        if self.tenant_ctx.is_system_admin:
             return True
 
-        if not hasattr(obj, 'tenant_id'):
+        if not hasattr(obj, "tenant_id"):
             return True
 
         # Allow access to null tenant_id (legacy data)

@@ -1,4 +1,5 @@
 """Document Service"""
+
 from typing import List, Optional
 
 from fastapi import HTTPException, status
@@ -21,7 +22,7 @@ class DocumentService:
         """Base query with tenant filtering applied"""
         query = self.db.query(Document)
 
-        if self.tenant_ctx and not self.tenant_ctx.is_super_admin:
+        if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             query = query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
 
         return query
@@ -29,16 +30,12 @@ class DocumentService:
     def _verify_access(self, document: Document) -> None:
         """Verify current user can access this document"""
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-        if self.tenant_ctx and not self.tenant_ctx.is_super_admin:
+        if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             if document.tenant_id != self.tenant_ctx.tenant_id:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Document not found"
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
                 )
 
     def generate_document_number(self) -> str:
@@ -49,9 +46,7 @@ class DocumentService:
         prefix = f"DOC-{today}"
 
         # Get count of documents created today (tenant-scoped)
-        count = self._base_query().filter(
-            Document.document_number.like(f"{prefix}-%")
-        ).count()
+        count = self._base_query().filter(Document.document_number.like(f"{prefix}-%")).count()
 
         return f"{prefix}-{count + 1:04d}"
 
@@ -76,7 +71,7 @@ class DocumentService:
             category=document_data.category,
             tags=document_data.tags,
             created_by=user.id,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
         )
 
         self.db.add(document)
@@ -89,7 +84,7 @@ class DocumentService:
             version_number=1,
             content=document_data.description or "",
             changes_summary="Initial version",
-            created_by=user.id
+            created_by=user.id,
         )
         self.db.add(version)
 
@@ -98,7 +93,7 @@ class DocumentService:
             user_id=user.id,
             document_id=document.id,
             action=ActionType.CREATE,
-            details=f"Created document: {document.title}"
+            details=f"Created document: {document.title}",
         )
         self.db.add(audit)
 
@@ -118,7 +113,7 @@ class DocumentService:
         limit: int = 100,
         status: Optional[DocumentStatus] = None,
         category: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
     ) -> tuple[List[Document], int]:
         """Get list of documents with filters, pagination, and tenant filtering"""
         query = self._base_query()
@@ -137,7 +132,7 @@ class DocumentService:
                     Document.title.ilike(search_pattern),
                     Document.description.ilike(search_pattern),
                     Document.document_number.ilike(search_pattern),
-                    Document.tags.ilike(search_pattern)
+                    Document.tags.ilike(search_pattern),
                 )
             )
 
@@ -150,10 +145,7 @@ class DocumentService:
         return documents, total
 
     def update_document(
-        self,
-        document_id: int,
-        document_data: DocumentUpdate,
-        user: User
+        self, document_id: int, document_data: DocumentUpdate, user: User
     ) -> Document:
         """Update document with tenant verification"""
         document = self.get_document(document_id)
@@ -173,7 +165,9 @@ class DocumentService:
 
         if document_data.status is not None:
             if document.status != document_data.status:
-                changes.append(f"Status changed from '{document.status.value}' to '{document_data.status.value}'")
+                changes.append(
+                    f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
+                )
             document.status = document_data.status
 
         if document_data.category is not None:
@@ -184,9 +178,12 @@ class DocumentService:
 
         # Create new version if there are changes
         if changes:
-            latest_version = self.db.query(Version).filter(
-                Version.document_id == document_id
-            ).order_by(Version.version_number.desc()).first()
+            latest_version = (
+                self.db.query(Version)
+                .filter(Version.document_id == document_id)
+                .order_by(Version.version_number.desc())
+                .first()
+            )
 
             new_version_number = (latest_version.version_number + 1) if latest_version else 1
 
@@ -195,7 +192,7 @@ class DocumentService:
                 version_number=new_version_number,
                 content=document.description or "",
                 changes_summary="; ".join(changes),
-                created_by=user.id
+                created_by=user.id,
             )
             self.db.add(version)
 
@@ -204,7 +201,7 @@ class DocumentService:
             user_id=user.id,
             document_id=document.id,
             action=ActionType.UPDATE,
-            details="; ".join(changes) if changes else "Document updated"
+            details="; ".join(changes) if changes else "Document updated",
         )
         self.db.add(audit)
 
@@ -223,7 +220,7 @@ class DocumentService:
             user_id=user.id,
             document_id=document.id,
             action=ActionType.DELETE,
-            details=f"Deleted document: {document.title}"
+            details=f"Deleted document: {document.title}",
         )
         self.db.add(audit)
         self.db.commit()

@@ -1,4 +1,5 @@
 """Attachments API Routes"""
+
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
@@ -22,7 +23,7 @@ router = APIRouter()
 def list_attachments(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     List all attachments for a document.
@@ -30,12 +31,14 @@ def list_attachments(
     return AttachmentService.get_attachments(db, document_id, current_user)
 
 
-@router.get("/documents/{document_id}/attachments/{attachment_id}", response_model=AttachmentResponse)
+@router.get(
+    "/documents/{document_id}/attachments/{attachment_id}", response_model=AttachmentResponse
+)
 def get_attachment(
     document_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a specific attachment metadata.
@@ -47,9 +50,11 @@ def get_attachment(
 def download_attachment(
     document_id: int,
     attachment_id: int,
-    token: Optional[str] = Query(None, description="JWT token for authentication (alternative to header)"),
+    token: Optional[str] = Query(
+        None, description="JWT token for authentication (alternative to header)"
+    ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Download an attachment file.
@@ -57,23 +62,19 @@ def download_attachment(
     file_path, filename, mime_type = AttachmentService.get_file_path(
         db, document_id, attachment_id, current_user
     )
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type=mime_type
-    )
+    return FileResponse(path=file_path, filename=filename, media_type=mime_type)
 
 
 @router.post(
     "/documents/{document_id}/attachments",
     response_model=AttachmentUploadResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 async def upload_attachment(
     document_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Upload a new attachment.
@@ -82,26 +83,23 @@ async def upload_attachment(
     Max file size: 10MB.
     Allowed types: PDF, Office docs, images, text files.
     """
-    attachment = await AttachmentService.upload_attachment(
-        db, document_id, file, current_user
-    )
+    attachment = await AttachmentService.upload_attachment(db, document_id, file, current_user)
     return AttachmentUploadResponse(
         id=attachment.id,
         filename=attachment.original_filename,
         url=f"/api/v1/documents/{document_id}/attachments/{attachment.id}/download",
-        message="File uploaded successfully"
+        message="File uploaded successfully",
     )
 
 
 @router.delete(
-    "/documents/{document_id}/attachments/{attachment_id}",
-    response_model=MessageResponse
+    "/documents/{document_id}/attachments/{attachment_id}", response_model=MessageResponse
 )
 def delete_attachment(
     document_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Delete an attachment.

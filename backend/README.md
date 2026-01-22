@@ -1,6 +1,6 @@
 # Document Portal V2 - Backend
 
-FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document management features.
+FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document management features including customer portal with company-based access control.
 
 ---
 
@@ -8,7 +8,7 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 
 ### Authentication & Authorization
 - JWT-based authentication with access/refresh tokens
-- Role-based access control (Super Admin, Admin, Editor, Viewer)
+- Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
 - Password reset with email verification
 - Secure password hashing with bcrypt
 
@@ -54,6 +54,14 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 - User bookmarks
 - Saved searches
 
+### Customer Portal
+- Company-based document visibility (PUBLIC, INTERNAL, COMPANY)
+- Customer users assigned to companies
+- Portal-specific API endpoints (/api/portal/*)
+- Document search within accessible documents
+- Customer feedback on documents
+- Secure attachment downloads
+
 ### Search
 - Full-text search across documents
 - Filter by category, status, date range
@@ -73,7 +81,7 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 | Auth | python-jose (JWT) + passlib (bcrypt) |
 | Email | aiosmtplib |
 | Storage | boto3 (S3-compatible) |
-| Testing | pytest + pytest-asyncio |
+| Testing | pytest + pytest-asyncio (262+ tests, paired with 278 E2E tests) |
 | Linting | ruff |
 
 ---
@@ -191,24 +199,31 @@ uvicorn app.main:app --reload
 ### Seed Sample Data
 
 ```bash
+# Seed with all roles and companies
+python scripts/seed_multi_tenant.py
+
+# Or basic seed
 python seed_sample_data.py
 ```
 
 ### Default Users
 
-| Email | Password | Role |
-|-------|----------|------|
-| super@example.com | password | Super Admin |
-| admin@example.com | password | Admin |
-| editor@example.com | password | Editor |
-| viewer@example.com | password | Viewer |
+| Username | Password | Role | Description |
+|----------|----------|------|-------------|
+| sysadmin | sysadmin123 | System Admin | Full system access |
+| admin | admin123 | Admin | Manage users, companies |
+| manager | manager123 | Manager | Publish, delete, reviews |
+| editor | editor123 | Editor | Create, edit documents |
+| viewer | viewer123 | Viewer | Read-only access |
+| customer1 | customer123 | Customer | Portal access (Company A) |
+| customer2 | customer123 | Customer | Portal access (Company B) |
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# Run all tests (262+ tests)
 pytest
 
 # Run with verbose output
@@ -217,12 +232,39 @@ pytest -v
 # Run specific test file
 pytest tests/test_auth.py -v
 
+# Run customer portal tests
+pytest tests/test_portal_api.py -v
+
+# Run permission/role tests
+pytest tests/test_permissions.py tests/test_roles.py -v
+
 # Run with coverage report
 pytest --cov=app --cov-report=html
 
 # Run only unit tests (skip integration)
 pytest -m "not integration"
 ```
+
+### Test Coverage
+
+| Test File | Tests | Description |
+|-----------|-------|-------------|
+| test_auth.py | 13 | Authentication & JWT |
+| test_documents.py | 9 | Document CRUD |
+| test_versions.py | 6 | Version management |
+| test_attachments.py | 7 | File uploads |
+| test_comments.py | 6 | Comments & threads |
+| test_engagement.py | 16 | Feedback, bookmarks |
+| test_portal_api.py | 19 | Customer portal |
+| test_public_api.py | 17 | Public viewer |
+| test_permissions.py | 20 | Permission matrix |
+| test_roles.py | 32 | Role-based access |
+| test_reviews_api.py | 17 | Peer reviews |
+| test_security.py | 25 | Security tests |
+| test_search_api.py | 10 | Search functionality |
+| test_viewer_api.py | 12 | Viewer portal |
+| test_viewer_portal.py | 11 | Viewer integration |
+| + others | 42 | Health, rate limit, storage |
 
 ---
 
@@ -259,7 +301,7 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── health.py           # Health check endpoints
 │   │   │
-│   │   ├── management/         # Admin/Editor API routes
+│   │   ├── management/         # Internal user API routes
 │   │   │   ├── auth.py         # Login, logout, password reset
 │   │   │   ├── documents.py    # Document CRUD
 │   │   │   ├── versions.py     # Version management
@@ -267,20 +309,27 @@ backend/
 │   │   │   ├── comments.py     # Comments & threads
 │   │   │   ├── notifications.py# User notifications
 │   │   │   ├── engagement.py   # Feedback, bookmarks, progress
+│   │   │   ├── reviews.py      # Peer review workflow
 │   │   │   ├── search.py       # Search & saved searches
 │   │   │   ├── users.py        # User management
+│   │   │   ├── companies.py    # Company management
 │   │   │   └── tenants.py      # Tenant management
+│   │   │
+│   │   ├── portal/             # Customer portal routes
+│   │   │   ├── documents.py    # Company-scoped documents
+│   │   │   └── feedback.py     # Customer feedback
 │   │   │
 │   │   └── viewer/             # Public viewer routes
 │   │       └── documents.py    # Published document access
 │   │
 │   ├── models/
 │   │   └── __init__.py         # SQLAlchemy ORM models
-│   │                           # - Tenant, User, Document
+│   │                           # - Tenant, User, Company, Document
 │   │                           # - Version, Section, Attachment
 │   │                           # - Comment, AuditLog, Notification
 │   │                           # - SavedSearch, Bookmark, Feedback
 │   │                           # - ReadingProgress, PasswordReset
+│   │                           # - Review (peer review workflow)
 │   │
 │   ├── schemas/
 │   │   └── __init__.py         # Pydantic request/response schemas
@@ -411,12 +460,44 @@ backend/
 | PUT | `/{id}` | Update tenant |
 | DELETE | `/{id}` | Delete tenant |
 
+### Customer Portal (`/api/portal`) - Customer role only
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/documents` | List company-accessible documents |
+| GET | `/documents/{id}` | Get document (company or public) |
+| GET | `/documents/search` | Search within accessible docs |
+| GET | `/documents/{id}/versions` | List document versions |
+| GET | `/documents/{id}/attachments` | List attachments |
+| GET | `/attachments/{id}/download` | Download attachment |
+| POST | `/documents/{id}/feedback` | Submit feedback |
+| GET | `/feedback` | List user's feedback |
+
+### Companies (`/api/companies`) - Admin only
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | List companies |
+| POST | `/` | Create company |
+| GET | `/{id}` | Get company |
+| PUT | `/{id}` | Update company |
+| DELETE | `/{id}` | Delete company |
+| POST | `/{id}/users` | Assign users to company |
+
+### Reviews (`/api/reviews`) - Manager+ only
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | List pending reviews |
+| POST | `/documents/{id}/submit` | Submit for review |
+| POST | `/{id}/approve` | Approve review |
+| POST | `/{id}/reject` | Reject review |
+
 ### Viewer Portal (`/api/viewer`)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/documents` | List published documents |
-| GET | `/documents/{id}` | Get published document |
+| GET | `/documents` | List public documents |
+| GET | `/documents/{id}` | Get public document |
+| GET | `/documents/search` | Search public documents |
 | GET | `/documents/{id}/versions` | List published versions |
+| GET | `/documents/{id}/attachments` | List attachments |
 
 ### Health (`/health`)
 | Method | Endpoint | Description |

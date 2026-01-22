@@ -1,4 +1,5 @@
 """Rate Limiting Middleware"""
+
 import logging
 import time
 from collections import defaultdict
@@ -115,9 +116,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._cleanup_old_entries()
 
         if is_limited:
-            logger.warning(
-                f"Rate limit exceeded for {client_ip} on {request.url.path}"
-            )
+            logger.warning(f"Rate limit exceeded for {client_ip} on {request.url.path}")
             return JSONResponse(
                 status_code=429,
                 content={

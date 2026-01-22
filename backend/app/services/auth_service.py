@@ -1,4 +1,5 @@
 """Authentication Service"""
+
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -46,8 +47,7 @@ class AuthService:
 
         if not user.is_active:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive"
+                status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
             )
 
         # Create access token
@@ -57,9 +57,9 @@ class AuthService:
                 "sub": str(user.id),
                 "username": user.username,
                 "role": user.role.value,
-                "tenant_id": user.tenant_id
+                "tenant_id": user.tenant_id,
             },
-            expires_delta=access_token_expires
+            expires_delta=access_token_expires,
         )
 
         # Create refresh token
@@ -68,17 +68,13 @@ class AuthService:
         # Store refresh token hash in password_resets table (repurposed for refresh tokens)
         token_hash = get_password_hash(refresh_token)
         refresh_record = PasswordReset(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at
+            user_id=user.id, token_hash=token_hash, expires_at=expires_at
         )
         db.add(refresh_record)
         db.commit()
 
         return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer"
+            access_token=access_token, refresh_token=refresh_token, token_type="bearer"
         )
 
     @staticmethod
@@ -86,10 +82,11 @@ class AuthService:
         """Generate new access token using refresh token"""
         # Find all non-expired refresh tokens
         now = datetime.utcnow()
-        refresh_records = db.query(PasswordReset).filter(
-            PasswordReset.expires_at > now,
-            PasswordReset.used_at.is_(None)
-        ).all()
+        refresh_records = (
+            db.query(PasswordReset)
+            .filter(PasswordReset.expires_at > now, PasswordReset.used_at.is_(None))
+            .all()
+        )
 
         # Verify refresh token against stored hashes
         valid_record = None
@@ -109,8 +106,7 @@ class AuthService:
         user = db.query(User).filter(User.id == valid_record.user_id).first()
         if not user or not user.is_active:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
             )
 
         # Create new access token
@@ -120,23 +116,19 @@ class AuthService:
                 "sub": str(user.id),
                 "username": user.username,
                 "role": user.role.value,
-                "tenant_id": user.tenant_id
+                "tenant_id": user.tenant_id,
             },
-            expires_delta=access_token_expires
+            expires_delta=access_token_expires,
         )
 
-        return TokenResponse(
-            access_token=access_token,
-            token_type="bearer"
-        )
+        return TokenResponse(access_token=access_token, token_type="bearer")
 
     @staticmethod
     def logout(db: Session, user_id: int) -> None:
         """Invalidate all refresh tokens for user"""
         now = datetime.utcnow()
         db.query(PasswordReset).filter(
-            PasswordReset.user_id == user_id,
-            PasswordReset.used_at.is_(None)
+            PasswordReset.user_id == user_id, PasswordReset.used_at.is_(None)
         ).update({"used_at": now})
         db.commit()
 
@@ -147,16 +139,14 @@ class AuthService:
         existing_user = db.query(User).filter(User.username == user_data.username).first()
         if existing_user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
             )
 
         # Check if email already exists
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
             )
 
         # Create new user
@@ -166,7 +156,7 @@ class AuthService:
             full_name=user_data.full_name,
             hashed_password=get_password_hash(user_data.password),
             role=user_data.role,
-            is_active=True
+            is_active=True,
         )
 
         db.add(user)
@@ -181,8 +171,7 @@ class AuthService:
         # Verify old password
         if not verify_password(old_password, user.hashed_password):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Incorrect current password"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password"
             )
 
         # Update password

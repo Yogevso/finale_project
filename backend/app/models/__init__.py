@@ -1,8 +1,9 @@
 """Database Models"""
+
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
@@ -11,22 +12,63 @@ from app.db import Base
 
 # Enums
 class UserRole(str, enum.Enum):
-    """User roles"""
-    SUPER_ADMIN = "super_admin"  # Can manage all tenants
-    ADMIN = "admin"              # Tenant admin
-    EDITOR = "editor"
-    VIEWER = "viewer"
+    """User roles - 6 total roles for the customer portal"""
+
+    SYSTEM_ADMIN = "system_admin"  # Full platform control, manages admins
+    ADMIN = "admin"  # Manages users, companies, full access
+    MANAGER = "manager"  # Approves content, creates editors, publishes
+    EDITOR = "editor"  # Creates/edits content, peer reviews
+    VIEWER = "viewer"  # Internal viewer (legacy, same as editor but read-only)
+    CUSTOMER = "customer"  # External - views company docs, downloads, submits feedback
 
 
 class DocumentStatus(str, enum.Enum):
     """Document statuses"""
+
     DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"  # Waiting for approval
     ACTIVE = "active"
+    PUBLISHED = "active"  # Alias for ACTIVE
     ARCHIVED = "archived"
+
+
+class DocumentVisibility(str, enum.Enum):
+    """Document visibility levels"""
+
+    PUBLIC = "public"  # Anyone can see (no login needed)
+    INTERNAL = "internal"  # All internal staff (editor+)
+    COMPANY = "company"  # Assigned companies + internal staff
+
+
+class ReviewStatus(str, enum.Enum):
+    """Review request statuses"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+
+class FeedbackType(str, enum.Enum):
+    """Feedback types from customers"""
+
+    QUESTION = "question"
+    SUGGESTION = "suggestion"
+    ISSUE = "issue"
+    OTHER = "other"
+
+
+class FeedbackStatus(str, enum.Enum):
+    """Feedback processing status"""
+
+    PENDING = "pending"
+    RESPONDED = "responded"
+    CLOSED = "closed"
 
 
 class ActionType(str, enum.Enum):
     """Audit log action types"""
+
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -37,18 +79,46 @@ class ActionType(str, enum.Enum):
 
 class NotificationType(str, enum.Enum):
     """Notification types"""
+
     DOCUMENT_CREATED = "document_created"
     DOCUMENT_UPDATED = "document_updated"
     DOCUMENT_PUBLISHED = "document_published"
     COMMENT_ADDED = "comment_added"
     COMMENT_REPLY = "comment_reply"
     VERSION_PUBLISHED = "version_published"
+    REVIEW_SUBMITTED = "review_submitted"
+    REVIEW_APPROVED = "review_approved"
+    REVIEW_REJECTED = "review_rejected"
+    FEEDBACK_RECEIVED = "feedback_received"
+    FEEDBACK_RESPONDED = "feedback_responded"
+    INVITATION_SENT = "invitation_sent"
     SYSTEM = "system"
+
+
+class InvitationStatus(str, enum.Enum):
+    """Invitation status"""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
+# Junction table for document-company assignments
+document_company_assignments = Table(
+    "document_company_assignments",
+    Base.metadata,
+    Column("document_id", Integer, ForeignKey("documents.id"), primary_key=True),
+    Column("tenant_id", Integer, ForeignKey("tenants.id"), primary_key=True),
+    Column("assigned_at", DateTime, default=datetime.utcnow),
+    Column("assigned_by", Integer, ForeignKey("users.id")),
+)
 
 
 # Models
 class Tenant(Base):
-    """Tenant model - represents an organization"""
+    """Tenant model - represents an organization/company"""
+
     __tablename__ = "tenants"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -56,20 +126,29 @@ class Tenant(Base):
     slug = Column(String(100), unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     settings = Column(Text, nullable=True)  # JSON settings
+    company_logo = Column(String(500), nullable=True)  # Logo URL
+    contact_email = Column(String(255), nullable=True)  # Primary contact
+    company_type = Column(String(50), default="customer")  # customer, partner, internal
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
     users = relationship("User", back_populates="tenant")
     documents = relationship("Document", back_populates="tenant")
+    assigned_documents = relationship(
+        "Document", secondary=document_company_assignments, back_populates="assigned_companies"
+    )
 
 
 class User(Base):
     """User model"""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)  # Multi-tenancy
+    tenant_id = Column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )  # Multi-tenancy
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(100), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=False)
@@ -86,22 +165,39 @@ class User(Base):
     audit_logs = relationship("AuditLog", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
     password_resets = relationship("PasswordReset", back_populates="user")
-    saved_searches = relationship("SavedSearch", back_populates="user", cascade="all, delete-orphan")
+    saved_searches = relationship(
+        "SavedSearch", back_populates="user", cascade="all, delete-orphan"
+    )
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
-    feedbacks = relationship("Feedback", back_populates="user", cascade="all, delete-orphan")
-    reading_progress = relationship("ReadingProgress", back_populates="user", cascade="all, delete-orphan")
+    feedbacks = relationship(
+        "Feedback",
+        back_populates="user",
+        foreign_keys="[Feedback.user_id]",
+        cascade="all, delete-orphan",
+    )
+    reading_progress = relationship(
+        "ReadingProgress", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Document(Base):
     """Document model"""
+
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)  # Multi-tenancy
+    tenant_id = Column(
+        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+    )  # Multi-tenancy
     title = Column(String(500), nullable=False, index=True)
     document_number = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT, nullable=False, index=True)
+    status = Column(
+        SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT, nullable=False, index=True
+    )
+    visibility = Column(
+        SQLEnum(DocumentVisibility), default=DocumentVisibility.INTERNAL, nullable=False, index=True
+    )
     category = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -112,16 +208,27 @@ class Document(Base):
     tenant = relationship("Tenant", back_populates="documents")
     created_by_user = relationship("User", back_populates="documents")
     versions = relationship("Version", back_populates="document", cascade="all, delete-orphan")
-    attachments = relationship("Attachment", back_populates="document", cascade="all, delete-orphan")
+    attachments = relationship(
+        "Attachment", back_populates="document", cascade="all, delete-orphan"
+    )
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="document")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
     feedbacks = relationship("Feedback", back_populates="document", cascade="all, delete-orphan")
-    reading_progress = relationship("ReadingProgress", back_populates="document", cascade="all, delete-orphan")
+    reading_progress = relationship(
+        "ReadingProgress", back_populates="document", cascade="all, delete-orphan"
+    )
+    assigned_companies = relationship(
+        "Tenant", secondary=document_company_assignments, back_populates="assigned_documents"
+    )
+    review_requests = relationship(
+        "ReviewRequest", back_populates="document", cascade="all, delete-orphan"
+    )
 
 
 class Version(Base):
     """Document version model"""
+
     __tablename__ = "versions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -142,6 +249,7 @@ class Version(Base):
 
 class Attachment(Base):
     """File attachment model"""
+
     __tablename__ = "attachments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -161,14 +269,19 @@ class Attachment(Base):
 
 class Comment(Base):
     """Comment model with threading support and visibility controls"""
+
     __tablename__ = "comments"
 
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("comments.id"), nullable=True, index=True)  # For threading
+    parent_id = Column(
+        Integer, ForeignKey("comments.id"), nullable=True, index=True
+    )  # For threading
     content = Column(Text, nullable=False)
-    is_private = Column(Boolean, default=False, nullable=False)  # Private = only admins/editors can see
+    is_private = Column(
+        Boolean, default=False, nullable=False
+    )  # Private = only admins/editors can see
     anchor_text = Column(Text, nullable=True)  # The text that was selected for inline comment
     anchor_id = Column(String(100), nullable=True)  # Reference to heading/section ID
     is_resolved = Column(Boolean, default=False, nullable=False)  # Mark comment thread as resolved
@@ -183,6 +296,7 @@ class Comment(Base):
 
 class AuditLog(Base):
     """Audit log model"""
+
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -200,6 +314,7 @@ class AuditLog(Base):
 
 class Section(Base):
     """Document section model - for rich content within versions"""
+
     __tablename__ = "sections"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -216,6 +331,7 @@ class Section(Base):
 
 class Notification(Base):
     """User notification model"""
+
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -234,6 +350,7 @@ class Notification(Base):
 
 class PasswordReset(Base):
     """Password reset token model"""
+
     __tablename__ = "password_resets"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -249,6 +366,7 @@ class PasswordReset(Base):
 
 class SavedSearch(Base):
     """Saved search model for users"""
+
     __tablename__ = "saved_searches"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -266,6 +384,7 @@ class SavedSearch(Base):
 
 class Bookmark(Base):
     """User bookmarks for documents"""
+
     __tablename__ = "bookmarks"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -279,23 +398,35 @@ class Bookmark(Base):
 
 
 class Feedback(Base):
-    """Document feedback/rating model"""
+    """Document feedback from customers"""
+
     __tablename__ = "feedbacks"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
-    is_helpful = Column(Boolean, nullable=False)  # True = helpful, False = not helpful
-    comment = Column(Text, nullable=True)  # Optional feedback comment
+    feedback_type = Column(SQLEnum(FeedbackType), default=FeedbackType.OTHER, nullable=False)
+    status = Column(
+        SQLEnum(FeedbackStatus), default=FeedbackStatus.PENDING, nullable=False, index=True
+    )
+    content = Column(Text, nullable=False)  # Feedback content
+    response = Column(Text, nullable=True)  # Admin response
+    responded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    responded_at = Column(DateTime, nullable=True)
+    # Legacy field - keep for backwards compatibility
+    is_helpful = Column(Boolean, nullable=True)  # True = helpful, False = not helpful
+    comment = Column(Text, nullable=True)  # Optional feedback comment (legacy)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    user = relationship("User", back_populates="feedbacks")
+    user = relationship("User", back_populates="feedbacks", foreign_keys=[user_id])
     document = relationship("Document", back_populates="feedbacks")
+    responder = relationship("User", foreign_keys=[responded_by])
 
 
 class ReadingProgress(Base):
     """Track user reading progress on documents"""
+
     __tablename__ = "reading_progress"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -311,8 +442,63 @@ class ReadingProgress(Base):
     document = relationship("Document", back_populates="reading_progress")
 
 
+class ReviewRequest(Base):
+    """Review request for document approval workflow"""
+
+    __tablename__ = "review_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    version_id = Column(
+        Integer, ForeignKey("versions.id"), nullable=True
+    )  # Specific version if applicable
+    submitted_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status = Column(SQLEnum(ReviewStatus), default=ReviewStatus.PENDING, nullable=False, index=True)
+    message = Column(Text, nullable=True)  # Submission message
+    review_comments = Column(Text, nullable=True)  # Reviewer's comments
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    document = relationship("Document", back_populates="review_requests")
+    version = relationship("Version")
+    submitter = relationship("User", foreign_keys=[submitted_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class Invitation(Base):
+    """User invitation for onboarding new users via email"""
+
+    __tablename__ = "invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    role = Column(SQLEnum(UserRole), default=UserRole.CUSTOMER, nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(
+        SQLEnum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False, index=True
+    )
+    message = Column(Text, nullable=True)  # Optional message to include in invitation
+    expires_at = Column(DateTime, nullable=False)  # Invitation expiration
+    accepted_at = Column(DateTime, nullable=True)
+    created_user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )  # User created from invitation
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    tenant = relationship("Tenant")
+    inviter = relationship("User", foreign_keys=[invited_by])
+    created_user = relationship("User", foreign_keys=[created_user_id])
+
+
 # Export all models
 __all__ = [
+    # Models
     "Tenant",
     "User",
     "Document",
@@ -327,8 +513,18 @@ __all__ = [
     "Bookmark",
     "Feedback",
     "ReadingProgress",
+    "ReviewRequest",
+    "Invitation",
+    # Enums
     "UserRole",
     "DocumentStatus",
+    "DocumentVisibility",
+    "ReviewStatus",
+    "FeedbackType",
+    "FeedbackStatus",
     "ActionType",
     "NotificationType",
+    "InvitationStatus",
+    # Junction tables
+    "document_company_assignments",
 ]

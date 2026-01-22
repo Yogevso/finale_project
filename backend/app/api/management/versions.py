@@ -22,7 +22,7 @@ router = APIRouter()
 def list_versions(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     List all versions for a document.
@@ -36,7 +36,7 @@ def get_version(
     document_id: int,
     version_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a specific version.
@@ -47,13 +47,13 @@ def get_version(
 @router.post(
     "/documents/{document_id}/versions",
     response_model=VersionResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 def create_version(
     document_id: int,
     version_data: VersionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Create a new version for a document.
@@ -69,7 +69,7 @@ def update_version(
     version_id: int,
     version_data: VersionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Update an unpublished version.
@@ -79,12 +79,14 @@ def update_version(
     return VersionService.update_version(db, document_id, version_id, version_data, current_user)
 
 
-@router.post("/documents/{document_id}/versions/{version_id}/publish", response_model=VersionResponse)
+@router.post(
+    "/documents/{document_id}/versions/{version_id}/publish", response_model=VersionResponse
+)
 def publish_version(
     document_id: int,
     version_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Publish a version.
@@ -95,15 +97,12 @@ def publish_version(
     return VersionService.publish_version(db, document_id, version_id, current_user)
 
 
-@router.delete(
-    "/documents/{document_id}/versions/{version_id}",
-    response_model=MessageResponse
-)
+@router.delete("/documents/{document_id}/versions/{version_id}", response_model=MessageResponse)
 def delete_version(
     document_id: int,
     version_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Delete an unpublished version.
