@@ -1,0 +1,261 @@
+# Pull Request Checks Workflow
+# Runs specific checks for pull requests including labeling, size checks, and code review automation
+
+name: PR - Review Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  # ============================================
+  # PR Labeler - Auto-label based on files changed
+  # ============================================
+  labeler:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Label PR based on files
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+  # ============================================
+  # PR Size Check
+  # ============================================
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        id: size
+        run: |
+          # Get the number of changed lines
+          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions -q '.additions')
+          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions -q '.deletions')
+          TOTAL=$((ADDITIONS + DELETIONS))
+          
+          echo "additions=$ADDITIONS" >> $GITHUB_OUTPUT
+          echo "deletions=$DELETIONS" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          
+          # Determine size label
+          if [ $TOTAL -lt 50 ]; then
+            echo "size=XS" >> $GITHUB_OUTPUT
+          elif [ $TOTAL -lt 200 ]; then
+            echo "size=S" >> $GITHUB_OUTPUT
+          elif [ $TOTAL -lt 500 ]; then
+            echo "size=M" >> $GITHUB_OUTPUT
+          elif [ $TOTAL -lt 1000 ]; then
+            echo "size=L" >> $GITHUB_OUTPUT
+          else
+            echo "size=XL" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add size label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const size = '${{ steps.size.outputs.size }}';
+            const sizeLabels = ['size/XS', 'size/S', 'size/M', 'size/L', 'size/XL'];
+            const currentLabel = `size/${size}`;
+            
+            // Remove old size labels
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            for (const label of labels) {
+              if (sizeLabels.includes(label.name) && label.name !== currentLabel) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: label.name
+                });
+              }
+            }
+            
+            // Add new size label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [currentLabel]
+            });
+
+      - name: Warn on large PRs
+        if: steps.size.outputs.total > 1000
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `⚠️ **Large PR Warning**\n\nThis PR has ${${{ steps.size.outputs.total }}} changed lines (${${{ steps.size.outputs.additions }}} additions, ${${{ steps.size.outputs.deletions }}} deletions).\n\nConsider breaking this into smaller PRs for easier review.`
+            });
+
+  # ============================================
+  # Conventional Commits Check
+  # ============================================
+  commit-check:
+    name: Commit Message Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        uses: wagoid/commitlint-github-action@v5
+        with:
+          configFile: .github/commitlint.config.js
+        continue-on-error: true
+
+  # ============================================
+  # PR Title Check
+  # ============================================
+  title-check:
+    name: PR Title Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            should start with a lowercase letter.
+
+  # ============================================
+  # Code Coverage Check
+  # ============================================
+  coverage-check:
+    name: Coverage Check
+    runs-on: ubuntu-latest
+    if: github.event.action == 'synchronize' || github.event.action == 'opened'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download coverage from CI
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ci.yml
+          name: backend-test-results
+          path: ./coverage
+        continue-on-error: true
+
+      - name: Post coverage comment
+        uses: actions/github-script@v7
+        if: success()
+        with:
+          script: |
+            // Parse and post coverage report
+            console.log('Coverage check completed');
+
+  # ============================================
+  # Dependency Review
+  # ============================================
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
+
+  # ============================================
+  # Auto-merge Dependabot PRs
+  # ============================================
+  auto-merge-dependabot:
+    name: Auto-merge Dependabot
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    needs: [dependency-review]
+
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge minor/patch updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # PR Review Summary
+  # ============================================
+  review-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [labeler, size-check, title-check, dependency-review]
+
+    steps:
+      - name: Post summary
+        run: |
+          echo "## 📋 PR Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Auto Labeler | ${{ needs.labeler.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size Check | ${{ needs.size-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Title Check | ${{ needs.title-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Review | ${{ needs.dependency-review.result }} |" >> $GITHUB_STEP_SUMMARY

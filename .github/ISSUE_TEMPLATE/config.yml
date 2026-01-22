@@ -1,0 +1,15 @@
+# Issue and PR Templates
+
+## Bug Report Template
+name: 🐛 Bug Report
+about: Report a bug or unexpected behavior
+labels: ["bug", "triage"]
+assignees: []
+
+---
+
+## Feature Request Template  
+name: ✨ Feature Request
+about: Suggest a new feature or enhancement
+labels: ["enhancement", "triage"]
+assignees: []

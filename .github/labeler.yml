@@ -1,0 +1,79 @@
+# PR Labeler Configuration
+# Automatically adds labels based on file paths changed
+
+# Backend labels
+backend:
+  - changed-files:
+      - any-glob-to-any-file: 'backend/**/*'
+
+backend/api:
+  - changed-files:
+      - any-glob-to-any-file: 'backend/app/api/**/*'
+
+backend/tests:
+  - changed-files:
+      - any-glob-to-any-file: 'backend/tests/**/*'
+
+# Frontend labels
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/**/*'
+
+frontend/components:
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/src/components/**/*'
+
+frontend/e2e:
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/e2e/**/*'
+
+# Documentation
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*.md'
+          - 'docs/**/*'
+
+# Infrastructure & DevOps
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docker-compose*.yml'
+          - '**/Dockerfile*'
+          - '.github/**/*'
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file: '.github/workflows/**/*'
+
+# Dependencies
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/package*.json'
+          - '**/requirements*.txt'
+          - '**/pyproject.toml'
+
+# Configuration
+configuration:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/*.config.*'
+          - '**/tsconfig*.json'
+          - '**/.env*'
+          - '**/nginx.conf'
+
+# Database
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'backend/app/models/**/*'
+          - 'backend/migrations/**/*'
+          - 'backend/app/db.py'
+
+# Security
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'backend/app/security.py'
+          - 'backend/app/middleware/**/*'

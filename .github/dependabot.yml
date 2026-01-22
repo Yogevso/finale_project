@@ -1,0 +1,116 @@
+# Dependabot Configuration
+# Automatically creates PRs for dependency updates
+
+version: 2
+
+registries:
+  npm-registry:
+    type: npm-registry
+    url: https://registry.npmjs.org
+    replaces-base: true
+
+updates:
+  # Backend Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "backend"
+      - "automated"
+    reviewers:
+      - "Yogevso"
+    groups:
+      # Group minor and patch updates together
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Frontend npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "automated"
+    reviewers:
+      - "Yogevso"
+    registries:
+      - npm-registry
+    groups:
+      # Group React ecosystem updates
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
+      # Group testing tools
+      testing:
+        patterns:
+          - "@playwright/*"
+          - "playwright"
+          - "vitest"
+          - "@testing-library/*"
+      # Group build tools
+      build:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "typescript"
+          - "tailwindcss"
+          - "postcss"
+          - "autoprefixer"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci(deps)"
+    labels:
+      - "dependencies"
+      - "ci/cd"
+      - "automated"
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "infrastructure"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "infrastructure"
