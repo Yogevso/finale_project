@@ -1,11 +1,12 @@
 # Continuous Deployment Workflow
 # Builds and pushes Docker images, optionally deploys to environments
+# NOTE: Only runs on version tags (v*.*.*) or manual trigger - NOT on every push
 
 name: CD - Build & Deploy
 
 on:
+  # Only deploy on version tags, not every push
   push:
-    branches: [main]
     tags:
       - 'v*.*.*'
   workflow_dispatch:
