@@ -2,16 +2,16 @@
 
 [![CI/CD](https://github.com/Yogevso/finale_project/actions/workflows/test.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/test.yml)
 
-A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time notifications, and a public viewer portal.
+A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time notifications, customer portal with company-based access, and a public viewer portal.
 
 ---
 
 ## 🚀 Features
 
-### Management Portal (Admin/Editor)
+### Management Portal (Internal Users)
 - **🔐 Authentication & Authorization**
   - JWT-based authentication with refresh tokens
-  - Role-based access control (Super Admin, Admin, Editor, Viewer)
+  - Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
   - Password reset with email verification
   - Multi-tenancy support with tenant isolation
 
@@ -72,21 +72,39 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Tenant-specific settings and branding
   - Cross-tenant document sharing (future)
 
+### Customer Portal (Authenticated Customers)
+- **🏢 Company-Based Access**
+  - Customers see documents assigned to their company
+  - Company visibility (COMPANY level) for targeted content
+  - Public documents also visible
+  - Secure authenticated access
+
+- **📝 Customer Engagement**
+  - Submit feedback on documents
+  - View document versions
+  - Download attachments
+  - Search within accessible documents
+
+- **👤 Customer Management**
+  - Admin assigns customers to companies
+  - Companies assigned to documents via visibility
+  - Self-service password reset
+
 ### Viewer Portal (Public)
 - **📖 Document Viewing**
   - Clean, distraction-free reading experience
-  - Published version access only
+  - Published version access only (PUBLIC visibility)
   - Table of contents navigation
   - Print-friendly layout
 
 - **🔍 Discovery**
-  - Browse all published documents
+  - Browse all public documents
   - Search and filter
   - Category-based navigation
   - Recent and popular documents
 
 - **📥 Downloads**
-  - Download attachments
+  - Download attachments from public documents
   - Download tracking and analytics
 
 ---
@@ -117,7 +135,7 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 | **Database** | SQLite (development), PostgreSQL (production ready) |
 | **Storage** | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem) |
 | **Email** | aiosmtplib (SMTP), HTML templates |
-| **Testing** | Pytest (backend), Vitest (frontend), Playwright (E2E) |
+| **Testing** | Pytest 262+ tests (backend), Vitest (frontend), Playwright 278 E2E tests (100% pass) |
 | **CI/CD** | GitHub Actions (lint, test, build, docker) |
 | **Deployment** | Docker Compose |
 
@@ -247,12 +265,15 @@ docker compose up -d
 
 ## 🔑 Default Users
 
-| Email | Password | Role |
-|-------|----------|------|
-| super@example.com | password | Super Admin |
-| admin@example.com | password | Admin |
-| editor@example.com | password | Editor |
-| viewer@example.com | password | Viewer |
+| Username | Password | Role | Description |
+|----------|----------|------|-------------|
+| sysadmin | sysadmin123 | System Admin | Full system access, manage all admins |
+| admin | admin123 | Admin | Manage users, companies, settings |
+| manager | manager123 | Manager | Publish, delete, approve reviews |
+| editor | editor123 | Editor | Create, edit documents, comments |
+| viewer | viewer123 | Viewer | Read-only internal access |
+| customer1 | customer123 | Customer | Customer portal access (Company A) |
+| customer2 | customer123 | Customer | Customer portal access (Company B) |
 
 ---
 
@@ -294,18 +315,26 @@ FRONTEND_URL=http://localhost:5173
 
 ## 🧪 Testing
 
-### Backend Tests
+### Backend Tests (262+ tests)
 ```bash
 cd backend
-pytest -v
-pytest --cov=app --cov-report=html  # With coverage
+pytest -v                              # Run all tests
+pytest --cov=app --cov-report=html     # With coverage
+pytest tests/test_portal_api.py -v     # Customer portal tests
+pytest tests/test_permissions.py -v    # Permission tests
+pytest tests/test_roles.py -v          # Role-based tests
 ```
 
-### Frontend Tests
+### Frontend E2E Tests (278 tests - 100% pass rate)
 ```bash
 cd frontend
 npm test           # Unit tests (Vitest)
 npm run test:e2e   # E2E tests (Playwright)
+
+# Run specific role tests
+npx playwright test admin.spec.ts
+npx playwright test customer.spec.ts
+npx playwright test permissions.spec.ts
 ```
 
 ### Linting
@@ -399,7 +428,7 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
 - [x] Engagement tracking
 
 ### Planned 🔜
-- [ ] Customer Portal (self-registration, subscription management)
+- [x] Customer Portal (company-based document access, feedback)
 - [ ] Real-time collaboration (WebSocket, presence indicators)
 - [ ] Document templates
 - [ ] Workflow approvals
