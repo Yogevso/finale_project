@@ -130,12 +130,35 @@ def test_update_document(client, auth_headers, db, test_user):
     assert data["status"] == "active"
 
 
-def test_delete_document(client, auth_headers, db, test_user):
-    """Test deleting a document"""
+def test_delete_document(client, admin_headers, db, test_admin):
+    """Test deleting a document (requires manager role or above)"""
     # Create document
     doc = Document(
         title="To Delete",
         document_number="DOC-TEST-0001",
+        status=DocumentStatus.DRAFT,
+        created_by=test_admin.id,
+    )
+    db.add(doc)
+    db.commit()
+    doc_id = doc.id
+
+    # Delete document - requires MANAGER+ role
+    response = client.delete(f"/api/v1/documents/{doc_id}", headers=admin_headers)
+
+    assert response.status_code == 200
+
+    # Verify deletion
+    get_response = client.get(f"/api/v1/documents/{doc_id}", headers=admin_headers)
+    assert get_response.status_code == 404
+
+
+def test_delete_document_forbidden_for_editor(client, auth_headers, db, test_user):
+    """Test that EDITOR cannot delete documents"""
+    # Create document
+    doc = Document(
+        title="Cannot Delete",
+        document_number="DOC-TEST-0002",
         status=DocumentStatus.DRAFT,
         created_by=test_user.id,
     )
@@ -143,14 +166,10 @@ def test_delete_document(client, auth_headers, db, test_user):
     db.commit()
     doc_id = doc.id
 
-    # Delete document
+    # Editor should get 403
     response = client.delete(f"/api/v1/documents/{doc_id}", headers=auth_headers)
-
-    assert response.status_code == 200
-
-    # Verify deletion
-    get_response = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers)
-    assert get_response.status_code == 404
+    assert response.status_code == 403
+    assert "manager" in response.json()["detail"].lower()
 
 
 def test_search_documents(client, auth_headers, db, test_user):

@@ -43,6 +43,17 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 - **AttachmentsSection** - File upload and management
 - **EngagementBar** - Bookmarks, feedback, progress
 
+### Analytics Dashboard
+- **Overview Section** - Key stats with trend indicators
+- **Engagement Section** - Views/downloads charts, top documents
+- **User Section** - Role distribution, most active users (Admin+)
+- **Content Section** - Production metrics, review pipeline
+- **Feedback Section** - Response times, helpfulness rates
+- **Tenant Section** - Cross-tenant comparison (System Admin)
+- **Chart Components** - Line, Bar, Pie, Donut charts with Recharts
+- **Export Button** - CSV/PDF report downloads
+- **Date Range Picker** - Preset ranges and granularity selection
+
 ---
 
 ## 📦 Tech Stack
@@ -55,6 +66,7 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 | Styling | TailwindCSS 3 |
 | Icons | Lucide React |
 | Rich Text | TipTap 2 |
+| Charts | Recharts 2 |
 | HTTP Client | Fetch API |
 | Routing | React Router 6 |
 | Testing | Vitest + Playwright (278 E2E tests, 100% pass) |
@@ -197,7 +209,18 @@ frontend/
 │   │   ├── CommentsSection.tsx  # Comments list + form
 │   │   ├── VersionsSection.tsx  # Version history
 │   │   ├── AttachmentsSection.tsx # File attachments
-│   │   └── EngagementBar.tsx    # Bookmark, feedback, progress
+│   │   ├── EngagementBar.tsx    # Bookmark, feedback, progress
+│   │   └── analytics/           # Analytics dashboard components
+│   │       ├── StatCard.tsx     # Stats with trends
+│   │       ├── LineChartWidget.tsx
+│   │       ├── BarChartWidget.tsx
+│   │       ├── PieChartWidget.tsx
+│   │       ├── DonutChartWidget.tsx
+│   │       ├── LeaderboardTable.tsx
+│   │       ├── DateRangePicker.tsx
+│   │       ├── ExportButton.tsx
+│   │       ├── hooks/useAnalytics.ts
+│   │       └── sections/        # Dashboard sections
 │   │
 │   ├── pages/                   # Page components
 │   │   ├── LoginPage.tsx        # Login form
@@ -207,6 +230,7 @@ frontend/
 │   │   ├── UsersPage.tsx        # User management
 │   │   ├── CompaniesPage.tsx    # Company management
 │   │   ├── ReviewsPage.tsx      # Peer review workflow
+│   │   ├── AnalyticsDashboardPage.tsx # Analytics dashboard
 │   │   ├── portal/              # Customer portal pages
 │   │   │   ├── PortalHomePage.tsx
 │   │   │   └── PortalDocumentPage.tsx

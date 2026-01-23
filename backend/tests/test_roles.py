@@ -185,10 +185,10 @@ class TestCustomerAccess:
     """Test customer access levels"""
 
     def test_cannot_access_internal_documents_endpoint(self, client, customer_headers):
-        """Customer access to documents endpoint returns filtered results"""
+        """Customer cannot access internal documents endpoint - should use portal API"""
         response = client.get("/api/v1/documents", headers=customer_headers)
-        # Customer can access but gets filtered (possibly empty) results
-        assert response.status_code == 200
+        # Customer gets 403 - must use /api/v1/portal/documents instead
+        assert response.status_code == 403
 
     def test_cannot_access_users_endpoint(self, client, customer_headers):
         """Customer should not access users management"""

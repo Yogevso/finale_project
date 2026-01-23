@@ -54,6 +54,16 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - User bookmarks
   - Saved searches
 
+- **📈 Analytics Dashboard**
+  - Overview statistics with trend analysis
+  - Engagement analytics (views, downloads, reading progress)
+  - User analytics (role distribution, activity) - Admin+
+  - Content production metrics (documents, versions, reviews)
+  - Feedback analytics with response times
+  - Tenant comparison (System Admin only)
+  - Export reports (CSV/PDF)
+  - Interactive charts with Recharts
+
 - **🔍 Search & Filtering**
   - Full-text search across documents
   - Filter by category, status, date range
@@ -429,10 +439,10 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
 
 ### Planned 🔜
 - [x] Customer Portal (company-based document access, feedback)
+- [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant sections)
 - [ ] Real-time collaboration (WebSocket, presence indicators)
 - [ ] Document templates
 - [ ] Workflow approvals
-- [ ] Advanced analytics dashboard
 - [ ] Mobile app (React Native)
 - [ ] AI-powered search and summaries
 

@@ -12,7 +12,7 @@ alembic==1.14.0
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.2.1
+bcrypt>=4.0.0,<4.1.0
 
 # Storage (S3)
 boto3==1.35.0
@@ -26,6 +26,9 @@ email-validator==2.2.0
 python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.6.1
+
+# PDF Generation
+reportlab>=4.0.0
 
 # Development
 pytest==8.3.4

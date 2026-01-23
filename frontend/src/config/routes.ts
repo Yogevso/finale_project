@@ -51,6 +51,13 @@ export const internalNavItems: RouteConfig[] = [
     allowedRoles: ['system_admin', 'admin', 'manager'],
   },
   {
+    path: '/analytics',
+    label: 'Analytics',
+    icon: '📈',
+    section: 'management',
+    allowedRoles: ['system_admin', 'admin', 'manager'],
+  },
+  {
     path: '/users',
     label: 'Users',
     icon: '👥',

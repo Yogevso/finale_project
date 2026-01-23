@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.dependencies.permissions import require_editor, require_manager, require_internal_user
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import Document, DocumentStatus, Tenant, User, UserRole
 from app.schemas import (
@@ -34,13 +35,14 @@ class CompanyAssignRequest(BaseModel):
 @router.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def create_document(
     document_data: DocumentCreate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
     """
     Create a new document.
 
+    Requires: EDITOR role or above.
     Automatically generates document number and creates initial version.
     Document is assigned to the user's tenant.
     """
@@ -55,13 +57,14 @@ def list_documents(
     status: Optional[DocumentStatus] = Query(None, description="Filter by status"),
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search in title, description, tags"),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
     """
     Get paginated list of documents with optional filters.
 
+    Requires: Internal user (not customer - customers use portal API).
     Results are filtered by the user's tenant.
     Supports:
     - Pagination (page, page_size)
@@ -87,11 +90,16 @@ def list_documents(
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    """Get document by ID (must belong to user's tenant)"""
+    """
+    Get document by ID.
+
+    Requires: Internal user (not customer).
+    Document must belong to user's tenant.
+    """
     service = DocumentService(db, tenant_ctx)
     document = service.get_document(document_id)
 
@@ -105,13 +113,14 @@ def get_document(
 def update_document(
     document_id: int,
     document_data: DocumentUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
     """
     Update document.
 
+    Requires: EDITOR role or above.
     Creates new version if content changes.
     Only documents in user's tenant can be updated.
     """
@@ -122,13 +131,14 @@ def update_document(
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: int,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
     """
     Delete document.
 
+    Requires: MANAGER role or above.
     Only documents in user's tenant can be deleted.
     Cascade deletes all versions, attachments, and comments.
     """
@@ -146,31 +156,19 @@ async def upload_document(
     description: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
     """
     Upload a document file (PDF/Word) and create a new document with it attached.
 
-    Only admins and editors can upload documents.
+    Requires: EDITOR role or above.
     Max file size: 10MB.
     Allowed types: PDF, Word documents.
 
     The file name will be used as the document title if not provided.
     """
-    # Check permission - only admin/manager/editor can upload
-    if current_user.role not in [
-        UserRole.ADMIN,
-        UserRole.SYSTEM_ADMIN,
-        UserRole.MANAGER,
-        UserRole.EDITOR,
-    ]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins, managers and editors can upload documents",
-        )
-
     # Use filename as title if not provided
     doc_title = title or file.filename.rsplit(".", 1)[0] if file.filename else "Uploaded Document"
 
@@ -211,11 +209,13 @@ def require_manager_or_above(current_user: User = Depends(get_current_active_use
 @router.get("/documents/{document_id}/assigned-companies", response_model=List[TenantSummary])
 def get_assigned_companies(
     document_id: int,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     db: Session = Depends(get_db),
 ):
     """
     Get list of companies assigned to a document.
+
+    Requires: Internal user.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:

@@ -64,6 +64,7 @@ async def root():
 # Import and include routers
 from app.api import health  # noqa: E402
 from app.api.management import (  # noqa: E402
+    analytics,
     attachments,
     auth,
     comments,
@@ -103,6 +104,7 @@ app.include_router(companies.router, prefix=settings.API_PREFIX, tags=["Companie
 app.include_router(reviews.router, prefix=settings.API_PREFIX, tags=["Reviews"])
 app.include_router(feedback.router, prefix=settings.API_PREFIX, tags=["Feedback"])
 app.include_router(invitations.router, prefix=settings.API_PREFIX, tags=["Invitations"])
+app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytics"])
 
 # Viewer Portal (public, no auth required)
 app.include_router(viewer_documents.router, prefix=settings.API_PREFIX, tags=["Viewer"])

@@ -54,6 +54,16 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 - User bookmarks
 - Saved searches
 
+### Analytics Dashboard
+- Overview statistics (documents, users, views, downloads)
+- Engagement analytics (views/downloads over time, reading progress)
+- User analytics (role distribution, most active users) - Admin+
+- Content production metrics (reviews, versions, comments)
+- Feedback analytics (response times, helpfulness)
+- Tenant comparison (System Admin only)
+- CSV/PDF export with date range filtering
+- Time granularity (daily/weekly/monthly)
+
 ### Customer Portal
 - Company-based document visibility (PUBLIC, INTERNAL, COMPANY)
 - Customer users assigned to companies
@@ -81,7 +91,7 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 | Auth | python-jose (JWT) + passlib (bcrypt) |
 | Email | aiosmtplib |
 | Storage | boto3 (S3-compatible) |
-| Testing | pytest + pytest-asyncio (262+ tests, paired with 278 E2E tests) |
+| Testing | pytest + pytest-asyncio (300+ tests, paired with 278 E2E tests) |
 | Linting | ruff |
 
 ---
@@ -223,7 +233,7 @@ python seed_sample_data.py
 ## 🧪 Testing
 
 ```bash
-# Run all tests (262+ tests)
+# Run all tests (300+ tests)
 pytest
 
 # Run with verbose output
@@ -264,6 +274,7 @@ pytest -m "not integration"
 | test_search_api.py | 10 | Search functionality |
 | test_viewer_api.py | 12 | Viewer portal |
 | test_viewer_portal.py | 11 | Viewer integration |
+| test_analytics.py | 37 | Analytics dashboard |
 | + others | 42 | Health, rate limit, storage |
 
 ---
@@ -498,6 +509,20 @@ backend/
 | GET | `/documents/search` | Search public documents |
 | GET | `/documents/{id}/versions` | List published versions |
 | GET | `/documents/{id}/attachments` | List attachments |
+
+### Analytics (`/api/analytics`) - Manager+ only
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/overview` | Summary stats, document counts |
+| GET | `/recent-activity` | Activity feed |
+| GET | `/engagement` | Views/downloads over time |
+| GET | `/engagement/top-documents` | Most viewed/downloaded |
+| GET | `/users` | User metrics (Admin only) |
+| GET | `/content` | Production metrics |
+| GET | `/feedback` | Feedback metrics |
+| GET | `/tenants` | Cross-tenant comparison (System Admin) |
+| GET | `/export/csv` | CSV export |
+| GET | `/export/pdf` | PDF export |
 
 ### Health (`/health`)
 | Method | Endpoint | Description |

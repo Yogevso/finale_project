@@ -519,6 +519,144 @@ export interface AcceptInvitationRequest {
   password: string
 }
 
+// ========== Analytics Types ==========
+
+export type TimeGranularity = 'daily' | 'weekly' | 'monthly'
+
+export interface TimeSeriesPoint {
+  date: string
+  value: number
+}
+
+export interface DocumentStats {
+  document_id: number
+  document_number: string
+  title: string
+  view_count: number
+  download_count: number
+}
+
+export interface CategoryCount {
+  category: string
+  count: number
+}
+
+export interface RecentActivity {
+  id: number
+  action: string
+  document_id?: number
+  document_title?: string
+  user_id: number
+  user_name: string
+  created_at: string
+  details?: string
+}
+
+export interface AnalyticsOverview {
+  period_start: string
+  period_end: string
+  total_documents: number
+  total_users: number
+  total_views: number
+  total_downloads: number
+  documents_by_status: Record<string, number>
+  documents_by_category: CategoryCount[]
+  pending_reviews: number
+  views_today: number
+  new_docs_this_week: number
+}
+
+export interface EngagementAnalytics {
+  period_start: string
+  period_end: string
+  granularity: TimeGranularity
+  views_over_time: TimeSeriesPoint[]
+  downloads_over_time: TimeSeriesPoint[]
+  unique_visitors: number
+  avg_reading_progress: number
+  completion_rate: number
+  total_time_spent_minutes: number
+}
+
+export interface TopDocuments {
+  by_views: DocumentStats[]
+  by_downloads: DocumentStats[]
+}
+
+export interface UserActivityItem {
+  user_id: number
+  username: string
+  full_name: string
+  role: string
+  action_count: number
+  last_active?: string
+}
+
+export interface UserAnalytics {
+  period_start: string
+  period_end: string
+  granularity: TimeGranularity
+  total_users: number
+  active_users: number
+  inactive_users: number
+  users_by_role: Record<string, number>
+  new_users_over_time: TimeSeriesPoint[]
+  most_active_users: UserActivityItem[]
+}
+
+export interface ContentAnalytics {
+  period_start: string
+  period_end: string
+  granularity: TimeGranularity
+  documents_created_over_time: TimeSeriesPoint[]
+  versions_published_over_time: TimeSeriesPoint[]
+  comments_over_time: TimeSeriesPoint[]
+  avg_review_turnaround_hours: number | null
+  approval_rate: number
+  reviews_by_status: Record<string, number>
+  total_documents_created: number
+  total_versions_published: number
+  total_comments: number
+}
+
+export interface FeedbackAnalytics {
+  period_start: string
+  period_end: string
+  granularity: TimeGranularity
+  total_feedback: number
+  pending_feedback: number
+  responded_feedback: number
+  feedback_by_type: Record<string, number>
+  feedback_by_status: Record<string, number>
+  feedback_over_time: TimeSeriesPoint[]
+  avg_response_time_hours: number | null
+  helpfulness_rate: number
+}
+
+export interface TenantMetrics {
+  tenant_id: number
+  tenant_name: string
+  total_documents: number
+  total_users: number
+  active_users_30d: number
+  total_views_30d: number
+  health_score: number
+}
+
+export interface TenantAnalytics {
+  period_start: string
+  period_end: string
+  total_tenants: number
+  active_tenants: number
+  tenants: TenantMetrics[]
+}
+
+export interface AnalyticsQueryParams {
+  date_from?: string
+  date_to?: string
+  granularity?: TimeGranularity
+}
+
 export function canManageUsers(role: UserRole): boolean {
   return ['system_admin', 'admin', 'manager'].includes(role)
 }

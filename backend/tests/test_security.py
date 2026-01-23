@@ -86,11 +86,11 @@ class TestCustomerAccessControl:
     def test_customer_access_internal_documents_api_sees_filtered_results(
         self, client, customer_headers
     ):
-        """Customer can access the documents API but sees filtered results"""
-        # Note: The API allows customers but they only see their own accessible documents
+        """Customer cannot access the internal documents API - should use portal"""
+        # Customers must use /api/v1/portal/documents instead
         response = client.get("/api/v1/documents", headers=customer_headers)
-        # Customers can access but get filtered results (empty or only their docs)
-        assert response.status_code == 200
+        # Customers get 403 - internal API is for internal users only
+        assert response.status_code == 403
 
     def test_customer_cannot_view_internal_document(
         self, client, customer_headers, internal_document

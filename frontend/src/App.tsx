@@ -11,6 +11,7 @@ import CompaniesPage from './pages/CompaniesPage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
 import ReviewsPage from './pages/ReviewsPage'
 import FeedbackPage from './pages/admin/FeedbackPage'
+import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
 import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
 // Public portal pages
 import PublicLayout from './layouts/PublicLayout'
@@ -150,6 +151,18 @@ function App() {
           }
         >
           <Route index element={<FeedbackPage />} />
+        </Route>
+
+        {/* Analytics - managers and above */}
+        <Route
+          path="/analytics"
+          element={
+            <ManagerGuard>
+              <Layout />
+            </ManagerGuard>
+          }
+        >
+          <Route index element={<AnalyticsDashboardPage />} />
         </Route>
 
         {/* ==================== ADMIN ROUTES ==================== */}
