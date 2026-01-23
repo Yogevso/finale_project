@@ -3,12 +3,25 @@
 from math import ceil
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.dependencies.permissions import require_editor, require_manager, require_internal_user
+from app.dependencies.permissions import (
+    require_editor,
+    require_internal_user,
+    require_manager,
+)
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import Document, DocumentStatus, Tenant, User, UserRole
 from app.schemas import (

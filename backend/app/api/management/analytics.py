@@ -379,7 +379,7 @@ def export_pdf(
         raise HTTPException(
             status_code=501,
             detail="PDF export requires reportlab package. Install with: pip install reportlab",
-        )
+        ) from None
 
     if not date_from or not date_to:
         default_from, default_to = get_default_date_range()

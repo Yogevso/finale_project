@@ -1,9 +1,9 @@
 """Analytics Service - Business logic for analytics aggregations"""
 
 from datetime import date, datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
@@ -12,7 +12,6 @@ from app.models import (
     AuditLog,
     Comment,
     Document,
-    DocumentStatus,
     Feedback,
     FeedbackStatus,
     ReadingProgress,
@@ -20,7 +19,6 @@ from app.models import (
     ReviewStatus,
     Tenant,
     User,
-    UserRole,
     Version,
 )
 from app.schemas.analytics import (
@@ -410,7 +408,7 @@ class AnalyticsService:
             user_query = user_query.filter(User.tenant_id == self.tenant_ctx.tenant_id)
 
         total_users = user_query.count()
-        active_users = user_query.filter(User.is_active == True).count()
+        active_users = user_query.filter(User.is_active.is_(True)).count()
         inactive_users = total_users - active_users
 
         # Users by role
@@ -521,7 +519,7 @@ class AnalyticsService:
             ver_date_trunc.label("date"),
             func.count(Version.id).label("value")
         ).filter(
-            Version.is_published == True,
+            Version.is_published.is_(True),
             Version.created_at.between(start_dt, end_dt)
         ).group_by(ver_date_trunc).order_by(ver_date_trunc)
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
@@ -599,7 +597,7 @@ class AnalyticsService:
             total_docs = total_docs.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
 
         total_versions = self.db.query(Version).filter(
-            Version.is_published == True,
+            Version.is_published.is_(True),
             Version.created_at.between(start_dt, end_dt)
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
@@ -723,7 +721,7 @@ class AnalyticsService:
         # Helpfulness rate
         helpful_query = base_query.filter(Feedback.is_helpful.isnot(None))
         total_rated = helpful_query.count()
-        helpful_count = helpful_query.filter(Feedback.is_helpful == True).count()
+        helpful_count = helpful_query.filter(Feedback.is_helpful.is_(True)).count()
         helpfulness_rate = (helpful_count / total_rated * 100) if total_rated > 0 else 0.0
 
         return {
@@ -746,8 +744,6 @@ class AnalyticsService:
 
     def get_tenant_analytics(self, date_from: date, date_to: date) -> Dict:
         """Get cross-tenant analytics (system admin only)"""
-        start_dt = datetime.combine(date_from, datetime.min.time())
-        end_dt = datetime.combine(date_to, datetime.max.time())
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
 
         tenants = self.db.query(Tenant).all()
