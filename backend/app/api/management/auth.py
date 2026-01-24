@@ -218,3 +218,69 @@ def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(ge
 
     # Generate tokens for immediate login
     return AuthService.login(db, request.username, request.password)
+
+
+# ========== Collaboration Token Endpoint ==========
+
+class CollabTokenRequest(BaseModel):
+    """Request for a collaboration token"""
+    document_id: int
+
+
+class CollabTokenResponse(BaseModel):
+    """Response containing the collaboration token"""
+    token: str
+    document_id: int
+    permissions: list[str]
+    websocket_url: str
+    expires_in: int  # seconds
+
+
+@router.post("/auth/collab-token", response_model=CollabTokenResponse)
+def get_collab_token(
+    request: CollabTokenRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get a collaboration token for real-time document editing.
+
+    This token is used to authenticate with the Hocuspocus WebSocket server.
+    It contains the user's permissions for the specific document.
+    """
+    from app.models import Document
+    from app.services.collaboration_service import CollaborationService
+
+    # Get the document
+    document = db.query(Document).filter(Document.id == request.document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # Check permissions
+    permissions = CollaborationService.get_user_permissions(current_user, document)
+    if not permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to access this document"
+        )
+
+    # Create the collaboration token
+    token = CollaborationService.create_collab_token(
+        user=current_user,
+        document_id=request.document_id,
+        permissions=permissions,
+    )
+
+    # Get WebSocket URL from config or default
+    websocket_url = f"ws://localhost:8002/document/{request.document_id}"
+
+    return CollabTokenResponse(
+        token=token,
+        document_id=request.document_id,
+        permissions=permissions,
+        websocket_url=websocket_url,
+        expires_in=3600,  # 1 hour
+    )

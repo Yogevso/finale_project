@@ -1,0 +1,568 @@
+/**
+ * useCollaboration Hook
+ *
+ * Manages real-time collaboration state using Yjs and Hocuspocus.
+ * Handles WebSocket connection, document sync, and user presence.
+ */
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import * as Y from 'yjs'
+import { HocuspocusProvider } from '@hocuspocus/provider'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import { api } from '@/lib/api'
+import { getUserColor } from '@/lib/userColors'
+import { useCollaborationStore } from '@/stores/collaborationStore'
+
+export interface CollaboratorInfo {
+  clientId: number
+  userId: string
+  username: string
+  color: string
+  cursor?: {
+    anchor: number
+    head: number
+  }
+}
+
+export interface CollaborationState {
+  isConnected: boolean
+  isConnecting: boolean
+  isSynced: boolean
+  isOffline: boolean
+  isReadOnly: boolean
+  hasLocalChanges: boolean
+  reconnectAttempt: number
+  permissions: string[]
+  error: string | null
+  collaborators: CollaboratorInfo[]
+  provider: HocuspocusProvider | null
+  ydoc: Y.Doc | null
+}
+
+export interface UseCollaborationOptions {
+  documentId: number
+  documentTitle?: string
+  username: string
+  userId: string | number
+  enabled?: boolean
+  autoReconnect?: boolean
+  maxReconnectAttempts?: number
+  autoSaveInterval?: number  // Auto-snapshot interval in milliseconds (default: 5 min)
+  onConnect?: () => void
+  onDisconnect?: () => void
+  onSynced?: () => void
+  onError?: (error: Error) => void
+  onOfflineChange?: (isOffline: boolean) => void
+  onPermissionChange?: (permissions: string[], isReadOnly: boolean) => void
+}
+
+export interface UseCollaborationReturn extends CollaborationState {
+  connect: () => Promise<void>
+  disconnect: () => void
+  reconnect: () => Promise<void>
+  getFragment: (name?: string) => Y.XmlFragment | null
+  clearLocalData: () => Promise<void>
+  refreshPermissions: () => Promise<void>
+  canEdit: () => boolean
+  createSnapshot: (name?: string) => Promise<void>
+  sessionId: string | null
+}
+
+const COLLAB_SERVER_URL = import.meta.env.VITE_COLLAB_SERVER_URL || 'ws://localhost:8002'
+const MAX_RECONNECT_ATTEMPTS = 10
+const BASE_RECONNECT_DELAY = 1000 // 1 second
+const DEFAULT_AUTO_SAVE_INTERVAL = 5 * 60 * 1000 // 5 minutes
+
+export function useCollaboration({
+  documentId,
+  documentTitle = '',
+  username,
+  userId,
+  enabled = true,
+  autoReconnect = true,
+  maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS,
+  autoSaveInterval = DEFAULT_AUTO_SAVE_INTERVAL,
+  onConnect,
+  onDisconnect,
+  onSynced,
+  onError,
+  onOfflineChange,
+  onPermissionChange,
+}: UseCollaborationOptions): UseCollaborationReturn {
+  const [state, setState] = useState<CollaborationState>({
+    isConnected: false,
+    isConnecting: false,
+    isSynced: false,
+    isOffline: !navigator.onLine,
+    isReadOnly: false,
+    hasLocalChanges: false,
+    reconnectAttempt: 0,
+    permissions: [],
+    error: null,
+    collaborators: [],
+    provider: null,
+    ydoc: null,
+  })
+
+  // Collaboration store for global state
+  const setSession = useCollaborationStore((s) => s.setSession)
+  const removeSession = useCollaborationStore((s) => s.removeSession)
+  const updateCollaborators = useCollaborationStore((s) => s.updateCollaborators)
+
+  const providerRef = useRef<HocuspocusProvider | null>(null)
+  const ydocRef = useRef<Y.Doc | null>(null)
+  const indexeddbRef = useRef<IndexeddbPersistence | null>(null)
+  const tokenRef = useRef<string | null>(null)
+  const permissionsRef = useRef<string[]>([])
+  const sessionIdRef = useRef<string | null>(null)
+  const editsCountRef = useRef<number>(0)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const reconnectAttemptRef = useRef(0)
+
+  // Get user color
+  const userColor = getUserColor(userId)
+
+  // Track browser online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      setState((prev) => ({ ...prev, isOffline: false }))
+      onOfflineChange?.(false)
+      // Attempt to reconnect when coming back online
+      if (autoReconnect && !state.isConnected && !state.isConnecting) {
+        reconnectAttemptRef.current = 0
+        connect()
+      }
+    }
+
+    const handleOffline = () => {
+      setState((prev) => ({ ...prev, isOffline: true }))
+      onOfflineChange?.(true)
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [autoReconnect, state.isConnected, state.isConnecting]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Connect to collaboration server
+  const connect = useCallback(async () => {
+    if (!enabled || state.isConnecting || state.isConnected) {
+      return
+    }
+
+    setState((prev) => ({ ...prev, isConnecting: true, error: null }))
+
+    try {
+      // Get collaboration token from backend
+      const tokenResponse = await api.getCollabToken(documentId)
+      tokenRef.current = tokenResponse.token
+
+      // Store permissions from token response
+      const permissions = tokenResponse.permissions || []
+      const isReadOnly = !permissions.includes('write')
+      permissionsRef.current = permissions
+
+      setState((prev) => ({
+        ...prev,
+        permissions,
+        isReadOnly,
+      }))
+
+      // Notify about permission state
+      onPermissionChange?.(permissions, isReadOnly)
+
+      // Create Yjs document
+      const ydoc = new Y.Doc()
+      ydocRef.current = ydoc
+
+      // Set up IndexedDB persistence for offline support
+      const indexeddbProvider = new IndexeddbPersistence(`doc-${documentId}`, ydoc)
+      indexeddbRef.current = indexeddbProvider
+
+      // Track when IndexedDB has synced (local data loaded)
+      indexeddbProvider.on('synced', () => {
+        setState((prev) => ({ ...prev, hasLocalChanges: false }))
+      })
+
+      // Track local changes (edits made while potentially offline) - only if not read-only
+      ydoc.on('update', (_update: Uint8Array, origin: unknown) => {
+        // If the update is local (not from the server), mark as having local changes
+        if (origin !== providerRef.current && !isReadOnly) {
+          setState((prev) => ({ ...prev, hasLocalChanges: true }))
+          // Increment edits count for session tracking
+          editsCountRef.current += 1
+        }
+      })
+
+      // Create Hocuspocus provider
+      const provider = new HocuspocusProvider({
+        url: COLLAB_SERVER_URL,
+        name: `document/${documentId}`,
+        document: ydoc,
+        token: tokenResponse.token,
+        onConnect: () => {
+          // Reset reconnect counter on successful connection
+          reconnectAttemptRef.current = 0
+          editsCountRef.current = 0
+          setState((prev) => ({
+            ...prev,
+            isConnected: true,
+            isConnecting: false,
+            reconnectAttempt: 0,
+            error: null,
+          }))
+          // Update global store
+          setSession(documentId, {
+            documentTitle,
+            isConnected: true,
+          })
+          // Start activity tracking session
+          api.startCollaborationSession(documentId)
+            .then((response) => {
+              sessionIdRef.current = response.session_id
+            })
+            .catch((err) => {
+              console.error('Failed to start collaboration session:', err)
+            })
+          onConnect?.()
+        },
+        onDisconnect: () => {
+          setState((prev) => ({
+            ...prev,
+            isConnected: false,
+            isSynced: false,
+          }))
+          // End activity tracking session
+          if (sessionIdRef.current) {
+            api.endCollaborationSession(sessionIdRef.current, editsCountRef.current)
+              .catch((err) => {
+                console.error('Failed to end collaboration session:', err)
+              })
+            sessionIdRef.current = null
+          }
+
+          // Attempt auto-reconnect if enabled and not offline
+          if (autoReconnect && !state.isOffline && reconnectAttemptRef.current < maxReconnectAttempts) {
+            scheduleReconnect()
+          }
+          // Update global store
+          setSession(documentId, {
+            isConnected: false,
+            isSynced: false,
+          })
+          onDisconnect?.()
+        },
+        onSynced: () => {
+          setState((prev) => ({ ...prev, isSynced: true }))
+          // Update global store
+          setSession(documentId, { isSynced: true })
+          onSynced?.()
+        },
+        onAwarenessUpdate: ({ states }) => {
+          const collaborators: CollaboratorInfo[] = []
+
+          states.forEach((state, clientId) => {
+            if (state.user) {
+              collaborators.push({
+                clientId,
+                userId: state.user.userId || state.user.id,
+                username: state.user.username || state.user.name,
+                color: state.user.color || getUserColor(state.user.userId || clientId).color,
+                cursor: state.cursor,
+              })
+            }
+          })
+
+          setState((prev) => ({ ...prev, collaborators }))
+          // Update global store with join/leave detection
+          updateCollaborators(documentId, collaborators)
+        },
+        onAuthenticationFailed: ({ reason }) => {
+          const error = new Error(`Authentication failed: ${reason}`)
+          setState((prev) => ({
+            ...prev,
+            isConnecting: false,
+            error: error.message,
+          }))
+          onError?.(error)
+        },
+      })
+
+      providerRef.current = provider
+
+      // Set local awareness state
+      provider.setAwarenessField('user', {
+        userId: String(userId),
+        username,
+        color: userColor.color,
+      })
+
+      setState((prev) => ({
+        ...prev,
+        provider,
+        ydoc,
+      }))
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error('Failed to connect')
+      setState((prev) => ({
+        ...prev,
+        isConnecting: false,
+        error: err.message,
+      }))
+      onError?.(err)
+    }
+  }, [documentId, documentTitle, username, userId, userColor.color, enabled, state.isConnecting, state.isConnected, state.isOffline, autoReconnect, maxReconnectAttempts, onConnect, onDisconnect, onSynced, onError, setSession, updateCollaborators])
+
+  // Schedule a reconnection attempt with exponential backoff
+  const scheduleReconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+    }
+
+    reconnectAttemptRef.current += 1
+    const attempt = reconnectAttemptRef.current
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, attempt - 1), 30000)
+
+    setState((prev) => ({
+      ...prev,
+      reconnectAttempt: attempt,
+      error: `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s... (attempt ${attempt}/${maxReconnectAttempts})`,
+    }))
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      if (providerRef.current) {
+        providerRef.current.connect()
+      }
+    }, delay)
+  }, [maxReconnectAttempts])
+
+  // Manual reconnect function
+  const reconnect = useCallback(async () => {
+    // Clear any scheduled reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+
+    // Reset attempt counter
+    reconnectAttemptRef.current = 0
+    setState((prev) => ({ ...prev, reconnectAttempt: 0, error: null }))
+
+    // If we have a provider, try to reconnect it
+    if (providerRef.current) {
+      providerRef.current.connect()
+    } else {
+      // Otherwise, do a full connect
+      await connect()
+    }
+  }, [connect])
+
+  // Disconnect from collaboration server
+  const disconnect = useCallback(() => {
+    // Clear any scheduled reconnect
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+
+    // End activity tracking session before disconnecting
+    if (sessionIdRef.current) {
+      api.endCollaborationSession(sessionIdRef.current, editsCountRef.current)
+        .catch((err) => {
+          console.error('Failed to end collaboration session:', err)
+        })
+      sessionIdRef.current = null
+    }
+
+    if (providerRef.current) {
+      providerRef.current.destroy()
+      providerRef.current = null
+    }
+
+    if (indexeddbRef.current) {
+      indexeddbRef.current.destroy()
+      indexeddbRef.current = null
+    }
+
+    if (ydocRef.current) {
+      ydocRef.current.destroy()
+      ydocRef.current = null
+    }
+
+    tokenRef.current = null
+    editsCountRef.current = 0
+
+    // Remove from global store
+    removeSession(documentId)
+
+    setState({
+      isConnected: false,
+      isConnecting: false,
+      isSynced: false,
+      isOffline: !navigator.onLine,
+      isReadOnly: false,
+      hasLocalChanges: false,
+      reconnectAttempt: 0,
+      permissions: [],
+      error: null,
+      collaborators: [],
+      provider: null,
+      ydoc: null,
+    })
+  }, [documentId, removeSession])
+
+  // Clear local IndexedDB data for this document
+  const clearLocalData = useCallback(async () => {
+    // Delete IndexedDB database for this document
+    return new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(`doc-${documentId}`)
+      request.onsuccess = () => {
+        setState((prev) => ({ ...prev, hasLocalChanges: false }))
+        resolve()
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }, [documentId])
+
+  // Get XML fragment for TipTap
+  const getFragment = useCallback((name = 'default'): Y.XmlFragment | null => {
+    if (!ydocRef.current) return null
+    return ydocRef.current.getXmlFragment(name)
+  }, [])
+
+  // Refresh permissions from the backend
+  const refreshPermissions = useCallback(async () => {
+    try {
+      const tokenResponse = await api.getCollabToken(documentId)
+      const permissions = tokenResponse.permissions || []
+      const isReadOnly = !permissions.includes('write')
+
+      permissionsRef.current = permissions
+      tokenRef.current = tokenResponse.token
+
+      setState((prev) => ({
+        ...prev,
+        permissions,
+        isReadOnly,
+      }))
+
+      onPermissionChange?.(permissions, isReadOnly)
+
+      // If we're connected and permissions changed, we may need to reconnect
+      // to update the Hocuspocus connection's read-only state
+      if (providerRef.current && state.isConnected) {
+        // Destroy and reconnect with new token
+        providerRef.current.destroy()
+        providerRef.current = null
+        await connect()
+      }
+    } catch (error) {
+      console.error('Failed to refresh permissions:', error)
+    }
+  }, [documentId, state.isConnected, connect, onPermissionChange])
+
+  // Check if user can edit
+  const canEdit = useCallback(() => {
+    return permissionsRef.current.includes('write')
+  }, [])
+
+  // Create a manual snapshot
+  const createSnapshot = useCallback(async (name?: string) => {
+    if (!sessionIdRef.current) {
+      console.warn('Cannot create snapshot: No active session')
+      return
+    }
+    try {
+      await api.createSnapshot(documentId, {
+        name,
+        session_id: sessionIdRef.current,
+      })
+    } catch (error) {
+      console.error('Failed to create snapshot:', error)
+    }
+  }, [documentId])
+
+  // Set up auto-save interval when connected
+  useEffect(() => {
+    if (state.isConnected && autoSaveInterval > 0 && canEdit()) {
+      // Clear existing interval
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current)
+      }
+
+      // Start new auto-save interval
+      autoSaveIntervalRef.current = setInterval(async () => {
+        if (sessionIdRef.current && editsCountRef.current > 0) {
+          try {
+            await api.createAutoSnapshot(documentId, sessionIdRef.current)
+          } catch (error) {
+            console.error('Auto-save snapshot failed:', error)
+          }
+        }
+      }, autoSaveInterval)
+
+      return () => {
+        if (autoSaveIntervalRef.current) {
+          clearInterval(autoSaveIntervalRef.current)
+          autoSaveIntervalRef.current = null
+        }
+      }
+    }
+  }, [state.isConnected, autoSaveInterval, documentId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-connect when enabled
+  useEffect(() => {
+    if (enabled && !state.isConnected && !state.isConnecting) {
+      connect()
+    }
+
+    return () => {
+      disconnect()
+    }
+  }, [enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update awareness when user info changes
+  useEffect(() => {
+    if (providerRef.current) {
+      providerRef.current.setAwarenessField('user', {
+        userId: String(userId),
+        username,
+        color: userColor.color,
+      })
+    }
+  }, [userId, username, userColor.color])
+
+  // Cleanup reconnect timeout and auto-save interval on unmount
+  useEffect(() => {
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current)
+      }
+    }
+  }, [])
+
+  return {
+    ...state,
+    connect,
+    disconnect,
+    reconnect,
+    getFragment,
+    clearLocalData,
+    refreshPermissions,
+    canEdit,
+    createSnapshot,
+    sessionId: sessionIdRef.current,
+  }
+}
+
+export default useCollaboration
