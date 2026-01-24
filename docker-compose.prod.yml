@@ -58,6 +58,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=https://api.portal.example.com
+        - VITE_COLLAB_WS_URL=wss://collab.portal.example.com
     container_name: portal-frontend
     restart: unless-stopped
     ports:
@@ -77,11 +78,72 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Real-time Collaboration Server (Hocuspocus)
+  collab-server:
+    build:
+      context: ./collab-server
+      dockerfile: Dockerfile
+    container_name: portal-collab-server
+    restart: unless-stopped
+    environment:
+      - PORT=8002
+      - HOST=0.0.0.0
+      - JWT_SECRET=${SECRET_KEY}
+      - BACKEND_URL=http://backend:8000
+      - LOG_LEVEL=info
+      # Redis for horizontal scaling (optional)
+      - REDIS_URL=${REDIS_URL:-}
+    ports:
+      - "8002:8002"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - portal-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis for collaboration scaling (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: portal-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - portal-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    profiles:
+      - with-redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   backend-data:
     name: portal-backend-data
   backend-uploads:
     name: portal-backend-uploads
+  redis-data:
+    name: portal-redis-data
 
 networks:
   portal-network:

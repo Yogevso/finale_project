@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import VisibilityBadge from '@/components/VisibilityBadge'
+import RichTextEditor from '@/components/RichTextEditor'
 import type { DocumentStatus, DocumentVisibility, DocumentCreate } from '@/types'
 
 export default function DocumentsPage() {
@@ -216,21 +218,43 @@ export default function DocumentsPage() {
 
 function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState<DocumentCreate>({
+  const navigate = useNavigate()
+  const [formData, setFormData] = useState<DocumentCreate & { content?: string }>({
     title: '',
     description: '',
     status: 'draft',
     visibility: 'internal',
     category: '',
     tags: '',
+    content: '',
   })
   const [error, setError] = useState('')
 
   const createMutation = useMutation({
-    mutationFn: (data: DocumentCreate) => api.createDocument(data),
-    onSuccess: () => {
+    mutationFn: async (data: DocumentCreate & { content?: string }) => {
+      // First create the document
+      const doc = await api.createDocument({
+        title: data.title,
+        description: data.description,
+        status: data.status,
+        visibility: data.visibility,
+        category: data.category,
+        tags: data.tags,
+      })
+      // If there's content, create a version with it
+      if (data.content && data.content.trim()) {
+        await api.createVersion(doc.id, {
+          content: data.content,
+          changes_summary: 'Initial content',
+        })
+      }
+      return doc
+    },
+    onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       onClose()
+      // Navigate to the editor to continue editing
+      navigate(`/documents/${doc.id}/edit`)
     },
     onError: (err: unknown) => {
       const error = err as { response?: { data?: { detail?: string } } }
@@ -248,99 +272,135 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Create Document</h2>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-bold text-gray-900">Create Document</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
+          >
+            ✕
+          </button>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
           {error && (
-            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+            <div className="mx-4 mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left side - Document details */}
+            <div className="w-80 p-4 border-r overflow-y-auto space-y-4 bg-gray-50">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter document title"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  placeholder="Brief description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+                <select
+                  value={formData.visibility}
+                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="internal">🏢 Internal</option>
+                  <option value="public">🌐 Public</option>
+                  <option value="company">🔒 Company</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Policy, Guide"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                <input
+                  type="text"
+                  value={formData.tags}
+                  onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Comma-separated"
+                />
+              </div>
+            </div>
+
+            {/* Right side - Content editor */}
+            <div className="flex-1 p-4 flex flex-col overflow-hidden">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content <span className="text-gray-400 font-normal">(start typing your document)</span>
+              </label>
+              <div className="flex-1 border rounded-lg overflow-hidden">
+                <RichTextEditor
+                  content={formData.content || ''}
+                  onChange={(html) => setFormData({ ...formData, content: html })}
+                  editable={true}
+                  className="h-full"
+                />
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              rows={3}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="draft">Draft</option>
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
-              <select
-                value={formData.visibility}
-                onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="internal">🏢 Internal</option>
-                <option value="public">🌐 Public</option>
-                <option value="company">🔒 Company</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-              <input
-                type="text"
-                value={formData.tags}
-                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Comma-separated"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 p-4 border-t bg-gray-50">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
-              {createMutation.isPending ? 'Creating...' : 'Create'}
+              {createMutation.isPending ? (
+                <>
+                  <span className="animate-spin">⟳</span>
+                  Creating...
+                </>
+              ) : (
+                'Create & Continue Editing'
+              )}
             </button>
           </div>
         </form>

@@ -38,9 +38,36 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_URL=http://localhost:8000
+      - VITE_COLLAB_WS_URL=ws://localhost:8002
     depends_on:
       backend:
         condition: service_healthy
+    restart: unless-stopped
+
+  # Real-time Collaboration Server (Hocuspocus)
+  collab-server:
+    build:
+      context: ./collab-server
+      dockerfile: Dockerfile
+    container_name: v2-collab-server
+    ports:
+      - "8002:8002"
+      - "8003:8003"
+    environment:
+      - PORT=8002
+      - HOST=0.0.0.0
+      - JWT_SECRET=docker-dev-secret-key-change-in-prod
+      - BACKEND_URL=http://backend:8000
+      - LOG_LEVEL=debug
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
 volumes:

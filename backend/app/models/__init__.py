@@ -3,7 +3,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, LargeBinary
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
@@ -104,6 +104,31 @@ class InvitationStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class CollaborationActivityType(str, enum.Enum):
+    """Collaboration activity types"""
+
+    SESSION_START = "session_start"
+    SESSION_END = "session_end"
+    USER_JOINED = "user_joined"
+    USER_LEFT = "user_left"
+    CONTENT_EDITED = "content_edited"
+    CURSOR_MOVED = "cursor_moved"
+    SELECTION_CHANGED = "selection_changed"
+    VERSION_CREATED = "version_created"
+    COMMENT_ADDED = "comment_added"
+    SNAPSHOT_CREATED = "snapshot_created"
+    SNAPSHOT_RESTORED = "snapshot_restored"
+
+
+class SnapshotType(str, enum.Enum):
+    """Collaboration snapshot types (NOT release versions)"""
+
+    AUTO_SAVE = "auto_save"      # Automatic periodic saves
+    MANUAL_SAVE = "manual_save"  # User-triggered save action
+    SESSION_END = "session_end"  # When last user leaves
+    PRE_PUBLISH = "pre_publish"  # Before creating a Version
+
+
 # Junction table for document-company assignments
 document_company_assignments = Table(
     "document_company_assignments",
@@ -200,6 +225,7 @@ class Document(Base):
     )
     category = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
+    yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -496,6 +522,78 @@ class Invitation(Base):
     created_user = relationship("User", foreign_keys=[created_user_id])
 
 
+class CollaborationSession(Base):
+    """Tracks collaboration sessions for activity feed and analytics"""
+
+    __tablename__ = "collaboration_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(String(100), nullable=False, index=True)  # Unique session identifier
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    edits_count = Column(Integer, default=0, nullable=False)  # Number of edits made
+    last_activity_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    document = relationship("Document")
+    user = relationship("User")
+
+
+class CollaborationActivity(Base):
+    """Individual collaboration activities for the activity feed"""
+
+    __tablename__ = "collaboration_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(String(100), nullable=True, index=True)
+    activity_type = Column(SQLEnum(CollaborationActivityType), nullable=False, index=True)
+    details = Column(Text, nullable=True)  # JSON string with activity details
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    document = relationship("Document")
+    user = relationship("User")
+
+
+class CollaborationSnapshot(Base):
+    """Point-in-time snapshot of collaborative document state (NOT a Version/release)"""
+
+    __tablename__ = "collaboration_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+
+    # Snapshot metadata
+    snapshot_type = Column(SQLEnum(SnapshotType), nullable=False, index=True)
+    name = Column(String(255), nullable=True)  # Optional user-provided name
+    description = Column(Text, nullable=True)  # Optional description
+
+    # State data
+    yjs_state = Column(LargeBinary, nullable=False)  # The Yjs binary state
+    html_content = Column(Text, nullable=True)  # Rendered HTML for preview
+    state_size = Column(Integer, nullable=False)  # Size in bytes
+
+    # Context
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null for auto-saves
+    session_id = Column(String(100), nullable=True, index=True)  # Link to CollaborationSession
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Retention
+    is_pinned = Column(Boolean, default=False, nullable=False)  # Pinned = won't auto-delete
+    expires_at = Column(DateTime, nullable=True)  # Auto-cleanup after this date
+
+    # Relationships
+    document = relationship("Document")
+    created_by_user = relationship("User")
+
+
 # Export all models
 __all__ = [
     # Models
@@ -515,6 +613,9 @@ __all__ = [
     "ReadingProgress",
     "ReviewRequest",
     "Invitation",
+    "CollaborationSession",
+    "CollaborationActivity",
+    "CollaborationSnapshot",
     # Enums
     "UserRole",
     "DocumentStatus",
@@ -525,6 +626,8 @@ __all__ = [
     "ActionType",
     "NotificationType",
     "InvitationStatus",
+    "CollaborationActivityType",
+    "SnapshotType",
     # Junction tables
     "document_company_assignments",
 ]

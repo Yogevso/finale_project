@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import mammoth from 'mammoth'
 import RichTextEditor from './RichTextEditor'
+import CollaborativeEditor from './CollaborativeEditor'
 import { api } from '@/lib/api'
+import { useCollaboration } from '@/lib/useCollaboration'
+import { getUserColor } from '@/lib/userColors'
+import { useAuth } from '@/lib/auth'
 import type { Attachment } from '@/types'
 
 interface DocumentEditorProps {
@@ -9,9 +13,17 @@ interface DocumentEditorProps {
   attachments: Attachment[]
   onSave?: (content: string) => Promise<void>
   isEditor: boolean
+  collaborationEnabled?: boolean
 }
 
-export default function DocumentEditor({ documentId, attachments, onSave, isEditor }: DocumentEditorProps) {
+export default function DocumentEditor({
+  documentId,
+  attachments,
+  onSave,
+  isEditor,
+  collaborationEnabled = false,
+}: DocumentEditorProps) {
+  const { user } = useAuth()
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -20,6 +32,18 @@ export default function DocumentEditor({ documentId, attachments, onSave, isEdit
   const [hasChanges, setHasChanges] = useState(false)
   const [originalContent, setOriginalContent] = useState<string>('')
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
+
+  // Collaboration hook
+  const collaboration = useCollaboration({
+    documentId,
+    username: user?.username || 'Anonymous',
+    userId: user?.id || 0,
+    enabled: collaborationEnabled && isEditing && isEditor,
+    onError: (err) => console.error('Collaboration error:', err),
+  })
+
+  // Get user color for collaboration
+  const userColor = getUserColor(user?.id || 0)
 
   // Find Word documents
   const wordDocs = attachments.filter(
@@ -230,17 +254,41 @@ export default function DocumentEditor({ documentId, attachments, onSave, isEdit
 
       {/* Editor */}
       <div className="p-4">
-        {hasChanges && (
+        {hasChanges && !collaborationEnabled && (
           <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
             You have unsaved changes
           </div>
         )}
-        <RichTextEditor
-          content={content}
-          onChange={handleContentChange}
-          editable={isEditing && !isPdf}
-          className={isEditing ? 'ring-2 ring-blue-500' : ''}
-        />
+
+        {/* Use CollaborativeEditor when collaboration is enabled and editing */}
+        {collaborationEnabled && isEditing && user ? (
+          <CollaborativeEditor
+            ydoc={collaboration.ydoc}
+            provider={collaboration.provider}
+            isConnected={collaboration.isConnected}
+            isConnecting={collaboration.isConnecting}
+            isSynced={collaboration.isSynced}
+            error={collaboration.error}
+            collaborators={collaboration.collaborators}
+            currentUser={{
+              userId: user.id,
+              username: user.username,
+              color: userColor.color,
+            }}
+            content={content}
+            onChange={handleContentChange}
+            editable={isEditing && !isPdf}
+            className={isEditing ? 'ring-2 ring-blue-500' : ''}
+            onRetry={collaboration.connect}
+          />
+        ) : (
+          <RichTextEditor
+            content={content}
+            onChange={handleContentChange}
+            editable={isEditing && !isPdf}
+            className={isEditing ? 'ring-2 ring-blue-500' : ''}
+          />
+        )}
       </div>
     </div>
   )
