@@ -3,18 +3,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import type { DocumentUpdate, DocumentStatus, Attachment } from '@/types'
+import type { DocumentUpdate, DocumentStatus, DocumentVisibility, Attachment } from '@/types'
 import VersionsSection from '@/components/VersionsSection'
 import AttachmentsSection from '@/components/AttachmentsSection'
 import CommentsSection from '@/components/CommentsSection'
 import EngagementBar from '@/components/EngagementBar'
-import DocumentEditor from '@/components/DocumentEditor'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import CompanySelector from '@/components/CompanySelector'
-import { Building2, X, Send, Clock, CheckCircle, XCircle, History } from 'lucide-react'
+import { Building2, X, Send, Clock, CheckCircle, XCircle, History, Maximize2, Edit3, Save } from 'lucide-react'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Underline from '@tiptap/extension-underline'
+import TextAlign from '@tiptap/extension-text-align'
 import mammoth from 'mammoth'
 
-type TabType = 'preview' | 'edit-content' | 'details' | 'versions' | 'attachments' | 'comments'
+type TabType = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
 
 // Type for inline comment anchor
 interface PendingAnchor {
@@ -73,6 +76,10 @@ export default function DocumentDetailPage() {
     onSuccess: () => {
       navigate('/documents')
     },
+    onError: (error: any) => {
+      console.error('Delete error:', error)
+      alert(error?.response?.data?.detail || error?.message || 'Failed to delete document')
+    },
   })
 
   // Company assignment state and mutations (for visibility='company' documents)
@@ -125,14 +132,14 @@ export default function DocumentDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
       </div>
     )
   }
 
   if (error || !document) {
     return (
-      <div className="bg-red-50 text-red-700 p-6 rounded-xl">
+      <div className="bg-rose-50 text-rose-700 p-6 rounded-xl">
         Document not found
       </div>
     )
@@ -151,64 +158,76 @@ export default function DocumentDetailPage() {
         <div>
           <button
             onClick={() => navigate('/documents')}
-            className="text-sm text-gray-500 hover:text-gray-700 mb-2"
+            className="text-sm text-slate-500 hover:text-slate-700 mb-2"
           >
             ← Back to Documents
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">{document.title}</h1>
-          <p className="text-gray-500 mt-1">{document.document_number}</p>
+          <h1 className="text-2xl font-display font-bold text-slate-900">{document.title}</h1>
+          <p className="text-slate-500 mt-1">{document.document_number}</p>
         </div>
-        {isEditor && (
-          <div className="flex gap-2">
-            {/* Submit for Review button - only show for draft documents */}
-            {document.status === 'draft' && (
+        <div className="flex gap-2">
+          {/* Fullscreen View Button */}
+          <button
+            onClick={() => navigate(`/documents/${id}/fullscreen`)}
+            className="btn-ghost flex items-center gap-2"
+            title="Open Fullscreen View"
+          >
+            <Maximize2 className="w-4 h-4" />
+            Fullscreen
+          </button>
+          
+          {isEditor && (
+            <>
+              {/* Submit for Review button - only show for draft documents */}
+              {document.status === 'draft' && (
+                <button
+                  onClick={() => setShowSubmitReview(true)}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  Submit for Review
+                </button>
+              )}
+              {document.status === 'pending_review' && (
+                <span className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg">
+                  <Clock className="w-4 h-4" />
+                  Pending Review
+                </span>
+              )}
               <button
-                onClick={() => setShowSubmitReview(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                onClick={() => setIsEditing(!isEditing)}
+                className="btn-ghost"
               >
-                <Send className="w-4 h-4" />
-                Submit for Review
+                {isEditing ? 'Cancel' : 'Edit'}
               </button>
-            )}
-            {document.status === 'pending_review' && (
-              <span className="flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg">
-                <Clock className="w-4 h-4" />
-                Pending Review
-              </span>
-            )}
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              {isEditing ? 'Cancel' : 'Edit'}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700"
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Engagement Bar */}
       <EngagementBar documentId={Number(id)} scrollProgress={activeTab === 'preview' ? scrollProgress : undefined} />
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-6">
-          {(['preview', 'edit-content', 'details', 'versions', 'attachments', 'comments'] as TabType[]).map((tab) => (
+          {(['preview', 'details', 'versions', 'attachments', 'comments'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`py-3 text-sm font-medium border-b-2 transition-colors capitalize ${
                 activeTab === tab
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-sky-600 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
-              {tab === 'preview' ? '📄 Preview' : tab === 'edit-content' ? '✏️ Edit Content' : tab}
+              {tab === 'preview' ? '📄 Preview' : tab}
             </button>
           ))}
         </nav>
@@ -216,23 +235,7 @@ export default function DocumentDetailPage() {
 
       {/* Tab Content */}
       {activeTab === 'preview' && (
-        <DocumentPreview documentId={Number(id)} attachments={attachments} documentTitle={document.title} onScrollProgress={handleScrollProgress} onTextSelect={handleTextSelect} />
-      )}
-
-      {activeTab === 'edit-content' && (
-        <DocumentEditor
-          documentId={Number(id)}
-          attachments={attachments}
-          isEditor={isEditor}
-          onSave={async (content) => {
-            // Save as a new version
-            await api.createVersion(Number(id), {
-              content,
-              changes_summary: 'Edited document content',
-            })
-            queryClient.invalidateQueries({ queryKey: ['versions', id] })
-          }}
-        />
+        <DocumentPreview documentId={Number(id)} attachments={attachments} documentTitle={document.title} onScrollProgress={handleScrollProgress} isEditor={isEditor} />
       )}
 
       {activeTab === 'details' && (
@@ -245,18 +248,18 @@ export default function DocumentDetailPage() {
               isLoading={updateMutation.isPending}
             />
           ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-6">
+            <div className="surface-card rounded-2xl p-6 space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm text-gray-500">Status</label>
+                  <label className="text-sm text-slate-500">Status</label>
                   <p className="mt-1">
                     <span
                       className={`px-2 py-1 text-xs rounded-full ${
                         document.status === 'active'
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-emerald-100 text-emerald-700'
                           : document.status === 'draft'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-gray-100 text-gray-700'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-100 text-slate-700'
                       }`}
                     >
                       {document.status}
@@ -264,44 +267,44 @@ export default function DocumentDetailPage() {
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Visibility</label>
+                  <label className="text-sm text-slate-500">Visibility</label>
                   <div className="mt-1">
                     <VisibilityBadge visibility={document.visibility} showLabel />
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Category</label>
-                  <p className="mt-1 text-gray-900">{document.category || '-'}</p>
+                  <label className="text-sm text-slate-500">Category</label>
+                  <p className="mt-1 text-slate-900">{document.category || '-'}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Created</label>
-                  <p className="mt-1 text-gray-900">
+                  <label className="text-sm text-slate-500">Created</label>
+                  <p className="mt-1 text-slate-900">
                     {new Date(document.created_at).toLocaleString()}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Updated</label>
-                  <p className="mt-1 text-gray-900">
+                  <label className="text-sm text-slate-500">Updated</label>
+                  <p className="mt-1 text-slate-900">
                     {new Date(document.updated_at).toLocaleString()}
                   </p>
                 </div>
               </div>
 
               <div>
-                <label className="text-sm text-gray-500">Description</label>
-                <p className="mt-1 text-gray-900 whitespace-pre-wrap">
+                <label className="text-sm text-slate-500">Description</label>
+                <p className="mt-1 text-slate-900 whitespace-pre-wrap">
                   {document.description || 'No description'}
                 </p>
               </div>
 
               {document.tags && (
                 <div>
-                  <label className="text-sm text-gray-500">Tags</label>
+                  <label className="text-sm text-slate-500">Tags</label>
                   <div className="mt-1 flex flex-wrap gap-2">
                     {document.tags.split(',').map((tag, i) => (
                       <span
                         key={i}
-                        className="px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded"
+                        className="pill bg-slate-100 text-slate-700"
                       >
                         {tag.trim()}
                       </span>
@@ -312,16 +315,16 @@ export default function DocumentDetailPage() {
 
               {/* Company Assignment Section - only for company visibility */}
               {document.visibility === 'company' && (
-                <div className="border-t border-gray-200 pt-6">
+                <div className="border-t border-slate-200 pt-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <Building2 className="w-5 h-5 text-gray-500" />
-                      <label className="text-sm font-medium text-gray-700">Assigned Companies</label>
+                      <Building2 className="w-5 h-5 text-slate-500" />
+                      <label className="text-sm font-medium text-slate-700">Assigned Companies</label>
                     </div>
                     {isEditor && (
                       <button
                         onClick={() => setShowCompanySelector(!showCompanySelector)}
-                        className="text-sm text-blue-600 hover:text-blue-700"
+                        className="text-sm text-sky-600 hover:text-sky-700"
                       >
                         {showCompanySelector ? 'Cancel' : 'Assign Companies'}
                       </button>
@@ -329,8 +332,8 @@ export default function DocumentDetailPage() {
                   </div>
 
                   {showCompanySelector && (
-                    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-600 mb-3">Select companies to assign this document to:</p>
+                    <div className="mb-4 p-4 bg-slate-50 rounded-xl">
+                      <p className="text-sm text-slate-600 mb-3">Select companies to assign this document to:</p>
                       <CompanySelector
                         selectedIds={assignedCompaniesData?.companies?.map(c => c.id) || []}
                         onChange={(ids) => {
@@ -338,7 +341,7 @@ export default function DocumentDetailPage() {
                         }}
                       />
                       {assignCompaniesMutation.isPending && (
-                        <p className="mt-2 text-sm text-gray-500">Saving...</p>
+                        <p className="mt-2 text-sm text-slate-500">Saving...</p>
                       )}
                     </div>
                   )}
@@ -348,14 +351,14 @@ export default function DocumentDetailPage() {
                       {assignedCompaniesData.companies.map((company) => (
                         <div
                           key={company.id}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-full text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-sm"
                         >
                           <Building2 className="w-4 h-4" />
                           <span>{company.name}</span>
                           {isEditor && (
                             <button
                               onClick={() => removeCompanyMutation.mutate(company.id)}
-                              className="ml-1 hover:text-orange-900"
+                              className="ml-1 hover:text-amber-900"
                               disabled={removeCompanyMutation.isPending}
                             >
                               <X className="w-4 h-4" />
@@ -365,7 +368,7 @@ export default function DocumentDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-slate-500">
                       No companies assigned yet. {isEditor && 'Click "Assign Companies" to add.'}
                     </p>
                   )}
@@ -374,54 +377,54 @@ export default function DocumentDetailPage() {
 
               {/* Review History Section */}
               {reviewHistory?.items && reviewHistory.items.length > 0 && (
-                <div className="border-t border-gray-200 pt-6">
+                <div className="border-t border-slate-200 pt-6">
                   <div className="flex items-center gap-2 mb-4">
-                    <History className="w-5 h-5 text-gray-500" />
-                    <label className="text-sm font-medium text-gray-700">Review History</label>
+                    <History className="w-5 h-5 text-slate-500" />
+                    <label className="text-sm font-medium text-slate-700">Review History</label>
                   </div>
                   <div className="space-y-3">
                     {reviewHistory.items.slice(0, 5).map((review) => (
                       <div
                         key={review.id}
-                        className={`p-3 rounded-lg border ${
+                        className={`p-3 rounded-xl border ${
                           review.status === 'approved'
-                            ? 'bg-green-50 border-green-200'
+                            ? 'bg-emerald-50 border-emerald-200'
                             : review.status === 'rejected'
-                            ? 'bg-red-50 border-red-200'
+                            ? 'bg-rose-50 border-rose-200'
                             : review.status === 'pending'
-                            ? 'bg-yellow-50 border-yellow-200'
-                            : 'bg-gray-50 border-gray-200'
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-slate-50 border-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {review.status === 'approved' && (
-                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              <CheckCircle className="w-4 h-4 text-emerald-600" />
                             )}
                             {review.status === 'rejected' && (
-                              <XCircle className="w-4 h-4 text-red-600" />
+                              <XCircle className="w-4 h-4 text-rose-600" />
                             )}
                             {review.status === 'pending' && (
-                              <Clock className="w-4 h-4 text-yellow-600" />
+                              <Clock className="w-4 h-4 text-amber-600" />
                             )}
                             <span className="text-sm font-medium capitalize">{review.status}</span>
                           </div>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-slate-500">
                             {new Date(review.submitted_at).toLocaleDateString()}
                           </span>
                         </div>
                         {review.submitter && (
-                          <p className="text-xs text-gray-600 mt-1">
+                          <p className="text-xs text-slate-600 mt-1">
                             Submitted by {review.submitter.full_name}
                           </p>
                         )}
                         {review.reviewer && (
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs text-slate-600">
                             Reviewed by {review.reviewer.full_name}
                           </p>
                         )}
                         {review.review_comments && (
-                          <p className="text-sm text-gray-700 mt-2 italic">
+                          <p className="text-sm text-slate-700 mt-2 italic">
                             "{review.review_comments}"
                           </p>
                         )}
@@ -450,13 +453,13 @@ export default function DocumentDetailPage() {
       {/* Submit for Review Modal */}
       {showSubmitReview && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit for Review</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-display font-semibold text-slate-900 mb-4">Submit for Review</h3>
+            <p className="text-sm text-slate-600 mb-4">
               This will submit "{document.title}" for review. A manager or peer editor will review and approve or reject it.
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Message (optional)
               </label>
               <textarea
@@ -464,7 +467,7 @@ export default function DocumentDetailPage() {
                 onChange={(e) => setSubmitMessage(e.target.value)}
                 placeholder="Add a note for the reviewer..."
                 rows={3}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="input-field"
               />
             </div>
             <div className="flex justify-end gap-3">
@@ -474,21 +477,21 @@ export default function DocumentDetailPage() {
                   setSubmitMessage('')
                 }}
                 disabled={submitReviewMutation.isPending}
-                className="px-4 py-2 text-gray-700 hover:text-gray-900"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={() => submitReviewMutation.mutate(submitMessage || undefined)}
                 disabled={submitReviewMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="btn-primary flex items-center gap-2"
               >
                 <Send className="w-4 h-4" />
                 {submitReviewMutation.isPending ? 'Submitting...' : 'Submit'}
               </button>
             </div>
             {submitReviewMutation.isError && (
-              <p className="mt-3 text-sm text-red-600">
+              <p className="mt-3 text-sm text-rose-600">
                 Error submitting for review. Please try again.
               </p>
             )}
@@ -505,7 +508,7 @@ function EditForm({
   onCancel,
   isLoading,
 }: {
-  document: { title: string; description?: string | null; status: DocumentStatus; category?: string | null; tags?: string | null }
+  document: { title: string; description?: string | null; status: DocumentStatus; visibility: DocumentVisibility; category?: string | null; tags?: string | null }
   onSave: (data: DocumentUpdate) => void
   onCancel: () => void
   isLoading: boolean
@@ -514,6 +517,7 @@ function EditForm({
     title: document.title,
     description: document.description || '',
     status: document.status as DocumentStatus,
+    visibility: document.visibility as DocumentVisibility,
     category: document.category || '',
     tags: document.tags || '',
   })
@@ -524,35 +528,35 @@ function EditForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+    <form onSubmit={handleSubmit} className="surface-card rounded-2xl p-6 space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
         <input
           type="text"
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="input-field"
           required
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
         <textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="input-field"
           rows={4}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="select-field"
           >
             <option value="draft">Draft</option>
             <option value="active">Active</option>
@@ -560,39 +564,58 @@ function EditForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
+          <select
+            value={formData.visibility}
+            onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
+            className="select-field"
+          >
+            <option value="internal">🏢 Internal (Staff only)</option>
+            <option value="public">🌐 Public (Everyone)</option>
+            <option value="company">🔒 Company (Assigned companies)</option>
+          </select>
+          {formData.visibility === 'company' && (
+            <p className="text-xs text-amber-600 mt-1">
+              💡 After saving, go to the Details tab to assign specific companies
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
           <input
             type="text"
             value={formData.category}
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="input-field"
           />
         </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-        <input
-          type="text"
-          value={formData.tags}
-          onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-          placeholder="Comma-separated tags"
-        />
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <input
+            type="text"
+            value={formData.tags}
+            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+            className="input-field"
+            placeholder="Comma-separated tags"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+          className="btn-ghost"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="btn-primary disabled:opacity-50"
         >
           {isLoading ? 'Saving...' : 'Save Changes'}
         </button>
@@ -600,28 +623,168 @@ function EditForm({
     </form>
   )
 }
+// Section type for editing
+interface TocSection {
+  id: string
+  text: string
+  level: number
+  html: string
+  index: number
+}
+
+// Section Edit Popup Component
+function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; onClose: () => void; onSave: (newHtml: string, submitForReview: boolean) => Promise<void> }) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [submitForReview, setSubmitForReview] = useState(true)
+  
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+    ],
+    content: section.html,
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4',
+      },
+    },
+  })
+
+  const handleSave = async () => {
+    if (!editor) return
+    setIsSaving(true)
+    try {
+      await onSave(editor.getHTML(), submitForReview)
+      onClose()
+    } catch (error) {
+      console.error('Failed to save section:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700">
+          <div className="flex items-center gap-3">
+            <Edit3 className="w-5 h-5 text-white" />
+            <h2 className="text-lg font-display font-semibold text-white">Edit Section: {section.text}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        {editor && (
+          <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 bg-slate-50">
+            <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('bold') ? 'bg-slate-200' : ''}`} title="Bold"><strong>B</strong></button>
+            <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('italic') ? 'bg-slate-200' : ''}`} title="Italic"><em>I</em></button>
+            <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('underline') ? 'bg-slate-200' : ''}`} title="Underline"><span className="underline">U</span></button>
+            <div className="w-px bg-slate-300 mx-1" />
+            <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('heading', { level: 2 }) ? 'bg-slate-200' : ''}`} title="Heading 2">H2</button>
+            <button onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('heading', { level: 3 }) ? 'bg-slate-200' : ''}`} title="Heading 3">H3</button>
+            <div className="w-px bg-slate-300 mx-1" />
+            <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('bulletList') ? 'bg-slate-200' : ''}`} title="Bullet List">• List</button>
+            <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-2 rounded hover:bg-slate-200 ${editor.isActive('orderedList') ? 'bg-slate-200' : ''}`} title="Numbered List">1. List</button>
+          </div>
+        )}
+
+        {/* Editor Content */}
+        <div className="flex-1 overflow-auto bg-white">
+          <EditorContent editor={editor} className="min-h-[300px]" />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
+          <div className="text-sm text-slate-600">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={submitForReview}
+                onChange={(e) => setSubmitForReview(e.target.checked)}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              />
+              <span className="flex items-center gap-2">
+                <Send className="w-4 h-4" />
+                Submit for review after saving
+              </span>
+            </label>
+            <p className="text-xs text-slate-400 mt-1 ml-6">An admin/manager will review and approve your changes</p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn-ghost">Cancel</button>
+            <button onClick={handleSave} disabled={isSaving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+              <Save className="w-4 h-4" />
+              {isSaving ? 'Saving...' : (submitForReview ? 'Save & Submit for Review' : 'Save as Draft')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Document Preview Component
-function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgress, onTextSelect }: { documentId: number; attachments: Attachment[]; documentTitle?: string; onScrollProgress?: (progress: number) => void; onTextSelect?: (text: string) => void }) {
+function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgress, isEditor }: { documentId: number; attachments: Attachment[]; documentTitle?: string; onScrollProgress?: (progress: number) => void; isEditor?: boolean }) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [htmlContent, setHtmlContent] = useState<string | null>(null)
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [tableOfContents, setTableOfContents] = useState<{ id: string; text: string; level: number }[]>([])
+  const [sections, setSections] = useState<TocSection[]>([])
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ show: boolean; x: number; y: number; text: string }>({ show: false, x: 0, y: 0, text: '' })
+  const [editingSection, setEditingSection] = useState<TocSection | null>(null)
+  
+  // Inline comment popup state
+  const [commentPopup, setCommentPopup] = useState<{ show: boolean; x: number; y: number; text: string; anchorId: string }>({ show: false, x: 0, y: 0, text: '', anchorId: '' })
+  const [commentText, setCommentText] = useState('')
+  const [isPrivateComment, setIsPrivateComment] = useState(false)
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  
+  // Comment mutation
+  const createCommentMutation = useMutation({
+    mutationFn: (data: { content: string; is_private?: boolean; anchor_text?: string; anchor_id?: string }) => 
+      api.createComment(documentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comments', documentId] })
+      setCommentPopup({ show: false, x: 0, y: 0, text: '', anchorId: '' })
+      setCommentText('')
+      setIsPrivateComment(false)
+      setIsSubmittingComment(false)
+    },
+    onError: () => {
+      setIsSubmittingComment(false)
+    }
+  })
 
   // Handle text selection for inline comments
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Don't close popup if clicking inside the comment popup
+    if ((e.target as HTMLElement).closest('.inline-comment-popup')) {
+      return
+    }
+    
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed) {
-      setSelectionPopup({ show: false, x: 0, y: 0, text: '' })
+      // Only hide selection popup if comment popup is not open
+      if (!commentPopup.show) {
+        setSelectionPopup({ show: false, x: 0, y: 0, text: '' })
+      }
       return
     }
     
     const selectedText = selection.toString().trim()
-    if (selectedText.length >= 5) {
+    if (selectedText.length >= 3) {
       const range = selection.getRangeAt(0)
       const rect = range.getBoundingClientRect()
       setSelectionPopup({
@@ -633,15 +796,42 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     } else {
       setSelectionPopup({ show: false, x: 0, y: 0, text: '' })
     }
-  }, [])
+  }, [commentPopup.show])
 
-  const handleAddComment = useCallback(() => {
-    if (selectionPopup.text && onTextSelect) {
-      onTextSelect(selectionPopup.text)
+  // Open the full comment form popup
+  const handleOpenCommentForm = useCallback(() => {
+    if (selectionPopup.text) {
+      const anchorId = `anchor-${Date.now()}`
+      setCommentPopup({
+        show: true,
+        x: selectionPopup.x,
+        y: selectionPopup.y + 60,
+        text: selectionPopup.text,
+        anchorId
+      })
       setSelectionPopup({ show: false, x: 0, y: 0, text: '' })
-      window.getSelection()?.removeAllRanges()
     }
-  }, [selectionPopup.text, onTextSelect])
+  }, [selectionPopup])
+
+  // Submit the inline comment
+  const handleSubmitComment = useCallback(() => {
+    if (!commentText.trim()) return
+    setIsSubmittingComment(true)
+    createCommentMutation.mutate({
+      content: commentText.trim(),
+      is_private: isPrivateComment,
+      anchor_text: commentPopup.text,
+      anchor_id: commentPopup.anchorId
+    })
+  }, [commentText, isPrivateComment, commentPopup, createCommentMutation])
+
+  // Close comment popup
+  const handleCloseCommentPopup = useCallback(() => {
+    setCommentPopup({ show: false, x: 0, y: 0, text: '', anchorId: '' })
+    setCommentText('')
+    setIsPrivateComment(false)
+    window.getSelection()?.removeAllRanges()
+  }, [])
 
   // Calculate scroll progress
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -685,26 +875,68 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
            att.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
 
-  // Extract headings from HTML content and add IDs
-  const processHtmlWithHeadings = (html: string) => {
+  // Extract headings from HTML content, add IDs, and create editable sections
+  const processHtmlWithSections = useCallback((html: string) => {
     const parser = new DOMParser()
     const doc = parser.parseFromString(html, 'text/html')
-    const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
-    const toc: { id: string; text: string; level: number }[] = []
-
-    headings.forEach((heading, index) => {
-      const text = heading.textContent?.trim() || `Heading ${index + 1}`
-      const id = `heading-${index}-${text.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`
-      heading.setAttribute('id', id)
-      heading.classList.add('scroll-mt-4')
-      
-      const level = parseInt(heading.tagName.charAt(1))
-      toc.push({ id, text, level })
+    const elements = Array.from(doc.body.children)
+    const newSections: TocSection[] = []
+    
+    let currentSection: { heading: Element | null; content: Element[]; startIndex: number } = { heading: null, content: [], startIndex: 0 }
+    
+    elements.forEach((el, index) => {
+      const tagName = el.tagName.toLowerCase()
+      if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+        // Save previous section
+        if (currentSection.heading || currentSection.content.length > 0) {
+          const headingText = currentSection.heading?.textContent?.trim() || 'Introduction'
+          const sectionId = `section-${newSections.length}-${headingText.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`
+          
+          const sectionHtml = [
+            currentSection.heading?.outerHTML || '',
+            ...currentSection.content.map(c => c.outerHTML)
+          ].join('\n')
+          
+          newSections.push({
+            id: sectionId,
+            text: headingText,
+            level: currentSection.heading ? parseInt(currentSection.heading.tagName.charAt(1)) : 1,
+            html: sectionHtml,
+            index: newSections.length
+          })
+        }
+        
+        // Start new section
+        el.setAttribute('id', `heading-${newSections.length}`)
+        el.classList.add('scroll-mt-4')
+        currentSection = { heading: el, content: [], startIndex: index }
+      } else {
+        currentSection.content.push(el)
+      }
     })
-
-    setTableOfContents(toc)
+    
+    // Save last section
+    if (currentSection.heading || currentSection.content.length > 0) {
+      const headingText = currentSection.heading?.textContent?.trim() || 'Content'
+      const sectionId = `section-${newSections.length}-${headingText.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`
+      
+      const sectionHtml = [
+        currentSection.heading?.outerHTML || '',
+        ...currentSection.content.map(c => c.outerHTML)
+      ].join('\n')
+      
+      newSections.push({
+        id: sectionId,
+        text: headingText,
+        level: currentSection.heading ? parseInt(currentSection.heading.tagName.charAt(1)) : 1,
+        html: sectionHtml,
+        index: newSections.length
+      })
+    }
+    
+    setSections(newSections)
     return doc.body.innerHTML
-  }
+  }, [])
 
   useEffect(() => {
     if (previewableAttachments.length > 0 && !selectedAttachment) {
@@ -712,41 +944,70 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     }
   }, [previewableAttachments, selectedAttachment])
 
-  useEffect(() => {
-    if (!selectedAttachment) {
-      setPreviewUrl(null)
-      setHtmlContent(null)
-      setTableOfContents([])
-      return
-    }
+  // State to track if we have inline content (no attachment needed)
+  const [hasInlineContent, setHasInlineContent] = useState(false)
 
+  useEffect(() => {
     const loadPreview = async () => {
       setIsLoading(true)
       setError(null)
       
       try {
-        const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
+        // First, check if there's a published version with content (works for inline documents too)
+        const versionsResponse = await api.getVersions(documentId)
+        const publishedVersion = versionsResponse.items
+          .filter(v => v.is_published && v.content)
+          .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())[0]
         
-        if (isWordDoc(selectedAttachment)) {
-          // Convert Word doc to HTML using mammoth
-          const arrayBuffer = await blob.arrayBuffer()
-          const result = await mammoth.convertToHtml({ arrayBuffer })
-          const processedHtml = processHtmlWithHeadings(result.value)
+        if (publishedVersion?.content) {
+          // Use the published version's content - this works for PDF, Word, inline content
+          const processedHtml = processHtmlWithSections(publishedVersion.content)
           setHtmlContent(processedHtml)
           setPreviewUrl(null)
+          setHasInlineContent(true)
+          setIsLoading(false)
+          return
+        }
+        
+        // No published version, fall back to attachment-based preview
+        setHasInlineContent(false)
+        
+        if (!selectedAttachment) {
+          setPreviewUrl(null)
+          setHtmlContent(null)
+          setSections([])
+          setIsLoading(false)
+          return
+        }
+        
+        // No published version found, try to load from attachment
+        if (isWordDoc(selectedAttachment)) {
+          // Convert Word doc to HTML using mammoth (fallback if no version)
+          const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
+          const arrayBuffer = await blob.arrayBuffer()
+          const result = await mammoth.convertToHtml({ arrayBuffer })
+          const processedHtml = processHtmlWithSections(result.value)
+          setHtmlContent(processedHtml)
+          setPreviewUrl(null)
+        } else if (selectedAttachment.mime_type === 'application/pdf') {
+          // For PDFs without a published version, show a message
+          // The backend should have created a version on upload
+          setHtmlContent('<div class="text-center p-8"><p class="text-slate-500">PDF content is being processed. Please refresh the page.</p></div>')
+          setPreviewUrl(null)
         } else {
-          // For PDFs and images, create object URL
+          // For images and other files, create object URL for display
+          const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
           const url = URL.createObjectURL(blob)
           setPreviewUrl(url)
           setHtmlContent(null)
-          setTableOfContents([])
+          setSections([])
         }
       } catch (e) {
         console.error('Preview load error:', e)
         setError('Failed to load preview')
         setPreviewUrl(null)
         setHtmlContent(null)
-        setTableOfContents([])
+        setSections([])
       } finally {
         setIsLoading(false)
       }
@@ -761,12 +1022,13 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     }
   }, [selectedAttachment, documentId])
 
-  if (attachments.length === 0) {
+  // Show content if we have inline content OR attachments
+  if (attachments.length === 0 && !hasInlineContent && !htmlContent) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div className="surface-card rounded-2xl p-12 text-center">
         <div className="text-6xl mb-4">📄</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No Document Attached</h3>
-        <p className="text-gray-500">Upload a PDF or Word document to preview it here.</p>
+        <h3 className="text-lg font-display font-medium text-slate-900 mb-2">No Content Yet</h3>
+        <p className="text-slate-500">This document has no content. Add content using the editor or upload a file.</p>
       </div>
     )
   }
@@ -775,10 +1037,10 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     const firstAttachment = attachments[0]
     
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div className="surface-card rounded-2xl p-12 text-center">
         <div className="text-6xl mb-4">📎</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Not Available</h3>
-        <p className="text-gray-500 mb-4">
+        <h3 className="text-lg font-display font-medium text-slate-900 mb-2">Preview Not Available</h3>
+        <p className="text-slate-500 mb-4">
           This document type cannot be previewed.
           <br />
           Download the file to view it.
@@ -803,7 +1065,7 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                 console.error('Download failed:', err)
               }
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="btn-primary inline-flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -816,17 +1078,17 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="surface-card rounded-2xl overflow-hidden">
       {/* Attachment selector if multiple */}
       {previewableAttachments.length > 1 && (
-        <div className="border-b border-gray-200 p-3 bg-gray-50">
+        <div className="border-b border-slate-200 p-3 bg-slate-50">
           <select
             value={selectedAttachment?.id || ''}
             onChange={(e) => {
               const att = previewableAttachments.find((a) => a.id === Number(e.target.value))
               setSelectedAttachment(att || null)
             }}
-            className="px-3 py-1.5 border rounded-lg text-sm"
+            className="select-field text-sm"
           >
             {previewableAttachments.map((att) => (
               <option key={att.id} value={att.id}>
@@ -843,24 +1105,24 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="text-4xl mb-2">⚠️</div>
-              <p className="text-red-600">{error}</p>
+              <p className="text-rose-600">{error}</p>
             </div>
           </div>
         ) : isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
           </div>
         ) : htmlContent ? (
           // Word document rendered as HTML (read-only) with TOC sidebar
           <div className="flex h-[70vh]">
             {/* Table of Contents Sidebar */}
-            {tableOfContents.length > 0 && (
-              <div className={`bg-gray-50 border-r border-gray-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-64'} flex-shrink-0`}>
+            {sections.length > 0 && (
+              <div className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-64'} flex-shrink-0`}>
                 <div className="sticky top-0">
                   {/* TOC Header */}
-                  <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-white">
+                  <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-white">
                     {!tocCollapsed && (
-                      <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+                      <h3 className="font-medium text-sm text-slate-700 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                         </svg>
@@ -869,7 +1131,7 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                     )}
                     <button
                       onClick={() => setTocCollapsed(!tocCollapsed)}
-                      className="p-1 hover:bg-gray-200 rounded text-gray-500"
+                      className="p-1 hover:bg-slate-200 rounded text-slate-500"
                       title={tocCollapsed ? 'Expand' : 'Collapse'}
                     >
                       <svg className={`w-4 h-4 transition-transform ${tocCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -878,32 +1140,43 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                     </button>
                   </div>
                   
-                  {/* TOC Items */}
+                  {/* TOC Items with Edit buttons */}
                   {!tocCollapsed && (
                     <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 50px)' }}>
                       <ul className="space-y-1">
-                        {tableOfContents.map((item) => (
-                          <li key={item.id}>
-                            <button
-                              onClick={() => {
-                                const element = document.getElementById(item.id)
-                                if (element) {
-                                  element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                                  setActiveHeading(item.id)
-                                }
-                              }}
-                              className={`w-full text-left px-2 py-1.5 text-sm rounded transition-colors hover:bg-blue-50 hover:text-blue-700 ${
-                                activeHeading === item.id ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-600'
-                              }`}
-                              style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
-                            >
-                              <span className="flex items-center gap-2">
-                                {item.level === 1 && <span className="text-blue-500">●</span>}
-                                {item.level === 2 && <span className="text-gray-400">○</span>}
-                                {item.level >= 3 && <span className="text-gray-300">-</span>}
-                                <span className="truncate">{item.text}</span>
-                              </span>
-                            </button>
+                        {sections.map((item) => (
+                          <li key={item.id} className="group">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  const element = document.getElementById(`heading-${item.index}`)
+                                  if (element) {
+                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                    setActiveHeading(item.id)
+                                  }
+                                }}
+                                className={`flex-1 text-left px-2 py-1.5 text-sm rounded-l transition-colors hover:bg-sky-50 hover:text-sky-700 ${
+                                  activeHeading === item.id ? 'bg-sky-100 text-sky-700 font-medium' : 'text-slate-600'
+                                }`}
+                                style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
+                              >
+                                <span className="flex items-center gap-2">
+                                  {item.level === 1 && <span className="text-sky-500">●</span>}
+                                  {item.level === 2 && <span className="text-slate-400">○</span>}
+                                  {item.level >= 3 && <span className="text-slate-300">-</span>}
+                                  <span className="truncate">{item.text}</span>
+                                </span>
+                              </button>
+                              {isEditor && (
+                                <button
+                                  onClick={() => setEditingSection(item)}
+                                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-sky-100 rounded text-sky-600 transition-opacity"
+                                  title="Edit section"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -916,7 +1189,7 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
             {/* Document Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Document header bar */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 flex items-center justify-between flex-shrink-0">
+              <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-4 py-2 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
@@ -924,12 +1197,16 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                   <span className="font-medium truncate">{documentTitle || selectedAttachment?.filename}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {tableOfContents.length > 0 && (
+                  {sections.length > 0 && (
                     <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
-                      {tableOfContents.length} sections
+                      {sections.length} sections
                     </span>
                   )}
-                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded whitespace-nowrap">Read Only</span>
+                  {isEditor ? (
+                    <span className="text-xs bg-emerald-500/80 px-2 py-0.5 rounded whitespace-nowrap">Click section to edit</span>
+                  ) : (
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded whitespace-nowrap">Read Only</span>
+                  )}
                 </div>
               </div>
               
@@ -949,22 +1226,116 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                 />
                 
                 {/* Text selection popup for adding inline comment */}
-                {selectionPopup.show && (
+                {selectionPopup.show && !commentPopup.show && (
                   <div
                     className="fixed z-50 transform -translate-x-1/2 -translate-y-full"
                     style={{ left: selectionPopup.x, top: selectionPopup.y }}
                   >
                     <button
-                      onClick={handleAddComment}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-yellow-500 text-white text-xs font-medium rounded-full shadow-lg hover:bg-yellow-600 transition-colors"
+                      onClick={handleOpenCommentForm}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-full shadow-lg hover:bg-amber-600 transition-colors"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
-                      Comment on selection
+                      Add Comment
                     </button>
                     <div className="absolute left-1/2 transform -translate-x-1/2 top-full">
-                      <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-yellow-500"></div>
+                      <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-amber-500"></div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Full inline comment form popup */}
+                {commentPopup.show && user && (
+                  <div
+                    className="inline-comment-popup fixed z-50 transform -translate-x-1/2"
+                    style={{ left: Math.max(180, Math.min(commentPopup.x, window.innerWidth - 180)), top: commentPopup.y }}
+                  >
+                    <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-80 overflow-hidden">
+                      {/* Header with quoted text */}
+                      <div className="bg-amber-50 border-b border-amber-100 px-4 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-amber-800 mb-1">Commenting on:</p>
+                            <p className="text-sm text-amber-700 italic line-clamp-2">"{commentPopup.text.slice(0, 100)}{commentPopup.text.length > 100 ? '...' : ''}"</p>
+                          </div>
+                          <button
+                            onClick={handleCloseCommentPopup}
+                            className="p-1 hover:bg-amber-100 rounded text-amber-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Comment form */}
+                      <div className="p-4 space-y-3">
+                        <textarea
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder="Write your comment..."
+                          className="input-field resize-none"
+                          rows={3}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                              handleSubmitComment()
+                            }
+                            if (e.key === 'Escape') {
+                              handleCloseCommentPopup()
+                            }
+                          }}
+                        />
+                        
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isPrivateComment}
+                              onChange={(e) => setIsPrivateComment(e.target.checked)}
+                              className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                            />
+                            <span className="flex items-center gap-1">
+                              🔒 Private
+                            </span>
+                          </label>
+                          
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleCloseCommentPopup}
+                              className="btn-ghost text-sm"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSubmitComment}
+                              disabled={!commentText.trim() || isSubmittingComment}
+                              className="px-3 py-1.5 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              {isSubmittingComment ? (
+                                <>
+                                  <span className="animate-spin">⏳</span>
+                                  Posting...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-3.5 h-3.5" />
+                                  Post
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <p className="text-xs text-slate-400 text-center">
+                          Press Ctrl+Enter to submit • Esc to cancel
+                        </p>
+                      </div>
+                    </div>
+                    {/* Arrow pointing up */}
+                    <div className="absolute left-1/2 transform -translate-x-1/2 -top-2">
+                      <div className="w-0 h-0 border-l-8 border-r-8 border-b-8 border-transparent border-b-white"></div>
                     </div>
                   </div>
                 )}
@@ -991,11 +1362,11 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
 
       {/* Download button */}
       {selectedAttachment && (
-        <div className="border-t border-gray-200 p-3 bg-gray-50 flex justify-between items-center">
-          <span className="text-sm text-gray-600">
+        <div className="border-t border-slate-200 p-3 bg-slate-50 flex justify-between items-center">
+          <span className="text-sm text-slate-600">
             {documentTitle || selectedAttachment.filename}
             {isWordDoc(selectedAttachment) && (
-              <span className="ml-2 text-xs text-blue-600">(Converted from Word)</span>
+              <span className="ml-2 text-xs text-sky-600">(Converted from Word)</span>
             )}
           </span>
           <a
@@ -1020,11 +1391,60 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
                 console.error('Download failed:', err)
               }
             }}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+            className="btn-primary text-sm"
           >
             Download Original
           </a>
         </div>
+      )}
+
+      {/* Section Edit Popup */}
+      {editingSection && (
+        <SectionEditPopup
+          section={editingSection}
+          onClose={() => setEditingSection(null)}
+          onSave={async (newHtml, submitForReview) => {
+            // Get old section content for comparison
+            const oldSectionHtml = editingSection.html
+            
+            // Update the section in the sections array
+            const updatedSections = sections.map((s, idx) => 
+              idx === editingSection.index ? { ...s, html: newHtml } : s
+            )
+            
+            // Rebuild full HTML from sections
+            const newFullHtml = updatedSections.map(s => s.html).join('\n')
+            
+            // Update local state
+            setHtmlContent(processHtmlWithSections(newFullHtml))
+            
+            // Create detailed change summary
+            const changesSummary = `Section edited: "${editingSection.text}"\n\n` +
+              `--- Original content ---\n${oldSectionHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${oldSectionHtml.length > 500 ? '...' : ''}\n\n` +
+              `--- New content ---\n${newHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${newHtml.length > 500 ? '...' : ''}`
+            
+            // Save as new version (draft)
+            const version = await api.createVersion(documentId, {
+              content: newFullHtml,
+              changes_summary: changesSummary,
+            })
+            
+            // Set document status back to draft so it requires approval
+            await api.updateDocument(documentId, { status: 'draft' as any })
+            
+            // If submitForReview is checked, auto-submit for review
+            if (submitForReview) {
+              await api.submitForReview(documentId, {
+                version_id: version.id,
+                message: `Edited section: "${editingSection.text}"`,
+              })
+            }
+            
+            queryClient.invalidateQueries({ queryKey: ['versions', documentId] })
+            queryClient.invalidateQueries({ queryKey: ['document', documentId.toString()] })
+            queryClient.invalidateQueries({ queryKey: ['reviews'] })
+          }}
+        />
       )}
     </div>
   )

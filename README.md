@@ -41,6 +41,13 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Comment resolution workflow
   - @mentions and notifications
 
+- **🤝 Real-Time Collaboration**
+  - Google Docs-style simultaneous editing
+  - Live cursor presence (see where others are editing)
+  - Yjs CRDT conflict resolution
+  - Automatic sync with offline support
+  - Collaboration snapshots and history
+
 - **🔔 Notifications**
   - Real-time notification bell with unread count
   - Email notifications (document published, comments, replies)
@@ -122,12 +129,14 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│   React SPA     │     │  FastAPI        │
-│   (Vite + TS)   │────▶│  Backend        │
-│   Port: 3000    │     │  Port: 8001     │
-└─────────────────┘     └────────┬────────┘
-                                 │
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   React SPA     │────▶│  FastAPI        │     │  Hocuspocus     │
+│   (Vite + TS)   │     │  Backend        │◀───▶│  Collab Server  │
+│   Port: 3000    │     │  Port: 8000     │     │  Port: 8002     │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │                      ▲
+         │   WebSocket           │                      │
+         └───────────────────────┼──────────────────────┘
                     ┌────────────┼────────────┐
                     ▼            ▼            ▼
               ┌──────────┐ ┌──────────┐ ┌──────────┐
@@ -141,6 +150,8 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor |
+| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette) |
+| **Real-time** | Hocuspocus (Yjs CRDT), WebSocket collaboration |
 | **Backend** | FastAPI 0.109+, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0 |
 | **Database** | SQLite (development), PostgreSQL (production ready) |
 | **Storage** | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem) |
@@ -190,39 +201,78 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 │   ├── data/                     # SQLite database files
 │   ├── requirements.txt
 │   └── Dockerfile
+├── collab-server/                # Real-time collaboration
+│   ├── src/
+│   │   ├── index.ts              # Hocuspocus server entry
+│   │   ├── auth.ts               # JWT authentication
+│   │   ├── persistence.ts        # Document persistence
+│   │   └── types.ts              # TypeScript types
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── Dockerfile
 ├── frontend/
 │   ├── src/
 │   │   ├── components/           # Reusable UI components
-│   │   │   ├── Layout.tsx        # Main layout with sidebar
-│   │   │   ├── Header.tsx        # Top navigation
-│   │   │   ├── Sidebar.tsx       # Side navigation
+│   │   │   ├── Layout.tsx        # Top header navigation
 │   │   │   ├── NotificationBell.tsx # Real-time notifications
 │   │   │   ├── DocumentEditor.tsx# Rich text editor
 │   │   │   ├── RichTextEditor.tsx# TipTap wrapper
+│   │   │   ├── CollaborativeEditor.tsx # Real-time collab
 │   │   │   ├── CommentsSection.tsx
 │   │   │   ├── VersionsSection.tsx
 │   │   │   ├── AttachmentsSection.tsx
-│   │   │   └── EngagementBar.tsx
+│   │   │   └── analytics/        # Dashboard components
 │   │   ├── pages/
 │   │   │   ├── LoginPage.tsx
 │   │   │   ├── DashboardPage.tsx
 │   │   │   ├── DocumentsPage.tsx
 │   │   │   ├── DocumentDetailPage.tsx
 │   │   │   ├── UsersPage.tsx
+│   │   │   ├── portal/           # Customer portal pages
 │   │   │   └── viewer/           # Public viewer pages
 │   │   ├── lib/
 │   │   │   ├── api.ts            # API client
 │   │   │   └── auth.ts           # Auth context
 │   │   └── types/                # TypeScript definitions
-│   ├── tests/                    # Vitest + Playwright tests
+│   ├── e2e/                      # Playwright E2E tests (278 tests)
 │   ├── package.json
 │   ├── vite.config.ts
-│   ├── tailwind.config.js
+│   ├── tailwind.config.js        # Zip B design tokens
 │   └── Dockerfile
 ├── docs/                         # Documentation
 ├── docker-compose.yml            # Production deployment
 └── README.md
 ```
+
+---
+
+## 🎨 Design System (Zip B)
+
+The frontend uses the **Zip B Design System** for a modern, cohesive visual experience.
+
+### Typography
+- **Display Font**: Space Grotesk (headings)
+- **Body Font**: IBM Plex Sans (text, UI)
+
+### Color Palette
+| Color | Usage |
+|-------|-------|
+| `slate-*` | Backgrounds, text, borders |
+| `sky-*` | Primary actions, links, focus |
+| `emerald-*` | Success, published, positive |
+| `amber-*` | Warning, draft, pending |
+| `rose-*` | Error, delete, destructive |
+
+### Component Classes
+| Class | Description |
+|-------|-------------|
+| `surface-card` | Card with border & shadow |
+| `btn-primary` | Primary action button |
+| `btn-secondary` | Secondary outline button |
+| `btn-ghost` | Transparent hover button |
+| `input-field` | Styled text input |
+| `select-field` | Styled dropdown |
+| `pill` | Rounded badge/tag |
 
 ---
 
@@ -246,7 +296,14 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Collaboration Server:**
+```bash
+cd collab-server
+npm install
+npm run dev
 ```
 
 **Frontend:**
@@ -257,9 +314,10 @@ npm run dev
 ```
 
 **Access:**
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:8001
-- API Docs: http://localhost:8001/docs
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- Collab Server: ws://localhost:8002
+- API Docs: http://localhost:8000/docs
 
 ### Option 2: Docker Compose
 
@@ -269,7 +327,8 @@ docker compose up -d
 
 **Access:**
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8001
+- Backend API: http://localhost:8000
+- Collab Server: ws://localhost:8002
 
 ---
 

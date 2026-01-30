@@ -11,7 +11,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Attachment, Document, User, UserRole
+from app.models import Attachment, Document, User, UserRole, Version
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +168,40 @@ class AttachmentService:
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
+        
+        # Convert document to HTML and create initial version
+        try:
+            from app.utils.document_converter import convert_document_to_html
+            
+            html_content = convert_document_to_html(content, content_type, original_filename)
+            
+            if html_content:
+                # Check if there's already a version for this document
+                existing_version = (
+                    db.query(Version)
+                    .filter(Version.document_id == document_id)
+                    .order_by(Version.version_number.desc())
+                    .first()
+                )
+                
+                next_version = (existing_version.version_number + 1) if existing_version else 1
+                
+                # Create initial version with converted content
+                version = Version(
+                    document_id=document_id,
+                    version_number=next_version,
+                    content=html_content,
+                    changes_summary=f"Initial content from uploaded file: {original_filename}",
+                    is_published=True,  # Auto-publish initial version
+                    published_at=attachment.uploaded_at,
+                    created_by=current_user.id,
+                )
+                db.add(version)
+                db.commit()
+                logger.info(f"Created initial version {next_version} for document {document_id}")
+        except Exception as e:
+            logger.error(f"Failed to convert document to HTML: {e}")
+            # Don't fail the upload if conversion fails
 
         return attachment
 

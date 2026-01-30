@@ -82,16 +82,16 @@ function CollaborationToastItem({
   const Icon = iconMap[notification.type] || LogIn
 
   const bgColorMap = {
-    join: 'bg-green-50 border-green-200',
-    leave: 'bg-gray-50 border-gray-200',
-    edit: 'bg-blue-50 border-blue-200',
+    join: 'bg-emerald-50 border-emerald-200',
+    leave: 'bg-slate-50 border-slate-200',
+    edit: 'bg-sky-50 border-sky-200',
     version: 'bg-purple-50 border-purple-200',
   }
 
   const iconColorMap = {
-    join: 'text-green-600',
-    leave: 'text-gray-600',
-    edit: 'text-blue-600',
+    join: 'text-emerald-600',
+    leave: 'text-slate-600',
+    edit: 'text-sky-600',
     version: 'text-purple-600',
   }
 
@@ -108,14 +108,14 @@ function CollaborationToastItem({
     >
       <Icon className={`w-5 h-5 mt-0.5 ${iconColorMap[notification.type]}`} />
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm text-gray-900">
+        <p className="font-medium text-sm text-slate-900">
           {titleMap[notification.type]}
         </p>
-        <p className="text-sm text-gray-600 truncate">{notification.message}</p>
+        <p className="text-sm text-slate-600 truncate">{notification.message}</p>
       </div>
       <button
         onClick={onDismiss}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
+        className="text-slate-400 hover:text-slate-600 transition-colors"
       >
         <X className="w-4 h-4" />
       </button>

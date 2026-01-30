@@ -34,20 +34,20 @@ export function CollaborationStatus({
       {/* Connection Status Indicator */}
       <div className="flex items-center gap-2">
         {isConnecting && (
-          <div className="flex items-center gap-1.5 text-yellow-600">
-            <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+          <div className="flex items-center gap-1.5 text-amber-600">
+            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             <span className="text-xs">Connecting...</span>
           </div>
         )}
 
         {error && (
-          <div className="flex items-center gap-1.5 text-red-600">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
+          <div className="flex items-center gap-1.5 text-rose-600">
+            <div className="w-2 h-2 rounded-full bg-rose-500" />
             <span className="text-xs">Disconnected</span>
             {onRetry && (
               <button
                 onClick={onRetry}
-                className="text-xs text-blue-600 hover:text-blue-700 underline ml-1"
+                className="text-xs text-sky-600 hover:text-sky-700 underline ml-1"
               >
                 Retry
               </button>
@@ -56,15 +56,15 @@ export function CollaborationStatus({
         )}
 
         {isConnected && !isSynced && (
-          <div className="flex items-center gap-1.5 text-blue-600">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          <div className="flex items-center gap-1.5 text-sky-600">
+            <div className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
             <span className="text-xs">Syncing...</span>
           </div>
         )}
 
         {isConnected && isSynced && (
-          <div className="flex items-center gap-1.5 text-green-600">
-            <div className="w-2 h-2 rounded-full bg-green-500" />
+          <div className="flex items-center gap-1.5 text-emerald-600">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="text-xs">Live</span>
           </div>
         )}
@@ -87,7 +87,7 @@ export function CollaborationStatus({
                   {collaborator.username.charAt(0).toUpperCase()}
                 </div>
                 {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                   {collaborator.username}
                 </div>
               </div>
@@ -95,12 +95,12 @@ export function CollaborationStatus({
           </div>
 
           {otherCollaborators.length > 5 && (
-            <div className="ml-1 px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-600">
+            <div className="ml-1 px-2 py-0.5 bg-slate-100 rounded-full text-xs text-slate-600">
               +{otherCollaborators.length - 5}
             </div>
           )}
 
-          <span className="ml-2 text-xs text-gray-500">
+          <span className="ml-2 text-xs text-slate-500">
             {otherCollaborators.length} editing
           </span>
         </div>
@@ -121,25 +121,25 @@ export function CollaborationStatusCompact({
 
   if (isConnecting) {
     return (
-      <div className="flex items-center gap-1 text-yellow-600">
-        <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+      <div className="flex items-center gap-1 text-amber-600">
+        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
       </div>
     )
   }
 
   if (!isConnected) {
     return (
-      <div className="flex items-center gap-1 text-gray-400">
-        <div className="w-2 h-2 rounded-full bg-gray-400" />
+      <div className="flex items-center gap-1 text-slate-400">
+        <div className="w-2 h-2 rounded-full bg-slate-400" />
       </div>
     )
   }
 
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-2 h-2 rounded-full bg-green-500" />
+      <div className="w-2 h-2 rounded-full bg-emerald-500" />
       {count > 1 && (
-        <span className="text-xs text-gray-500">{count}</span>
+        <span className="text-xs text-slate-500">{count}</span>
       )}
     </div>
   )

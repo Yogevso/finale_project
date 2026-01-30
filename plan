@@ -1,0 +1,687 @@
+Here’s a detailed, implementation-ready plan to make Zip A (v2 frontend — Vite/React) look as close to “pixel-identical” as possible to Zip 2 (Next.js design) — without rewriting your app logic.
+
+I’m assuming Zip A’s frontend is the one you uploaded as frontend.zip (Vite + Tailwind + React Router + React Query).
+
+================================================================================
+                           MIGRATION PROGRESS TRACKER
+================================================================================
+
+✅ COMPLETED:
+  - Phase 0: Design tokens, CSS utilities, Google Fonts
+  - Phase 1: Layout shell (sidebar → top header navigation)  
+  - Phase 2: Shared UI components (6 components restyled)
+  - Phase 3: Login page
+  - Phase 3: Dashboard page
+  - Phase 3: Documents page (including CreateDocumentModal & UploadDocumentModal)
+  - Phase 3: Public pages (PublicHomePage, PublicDocumentsPage, PublicDocumentPage, PublicSearchPage)
+  - Phase 3: Customer portal pages (CustomerDashboard, CustomerDocumentsPage, CustomerDocumentPage, MyFeedbackPage)
+  - Phase 4: UsersPage.tsx (role badges, filters, tables, pending invitations, UserFormDialog)
+  - Phase 4: ReviewsPage.tsx (status config, tabs, reviews table)
+  - Phase 4: AnalyticsDashboardPage.tsx (access restricted, header, tabs)
+  - Phase 4: CompaniesPage.tsx (type badges, filters, table, dropdown, pagination)
+  - Phase 4: CompanyDetailPage.tsx (stats cards, company info, tabs, users/documents tables)
+  - Phase 4: admin/FeedbackPage.tsx (status/type config, stats cards, filters, table, pagination)
+  - Phase 4: FeedbackResponseDialog.tsx (modal styling, status badges)
+  - Phase 5: FeedbackForm.tsx (already had Zip B styling)
+  - Phase 5: ReviewDialog.tsx (already had Zip B styling)
+  - Phase 5: InviteUserDialog.tsx (already had Zip B styling)
+  - Phase 5: ViewerHomePage.tsx (full Zip B restyling - header, search, filters, cards, pagination, footer)
+  - Phase 5: ViewerDocumentPage.tsx (full Zip B restyling - loading, error, cards, attachments, versions, comments)
+  - Phase 5: DocumentFullscreenPage.tsx (full Zip B restyling - header, TOC, section edit popup, comment popup)
+  - Phase 5: DocumentDetailPage.tsx (full Zip B restyling - tabs, details card, preview, edit form, modals)
+  - Phase 6: Cleanup legacy components - ALL old colors migrated to Zip B palette
+
+🔄 IN PROGRESS:
+  - None
+
+⏳ REMAINING:
+  - Phase 6: Visual regression tests (optional - Playwright screenshot tests)
+
+🎉 MIGRATION ESSENTIALLY COMPLETE! All components now use Zip B design system.
+
+PHASE 6 CLEANUP - FILES UPDATED (gray→slate, blue→sky, green→emerald, red→rose, yellow→amber):
+  - frontend/src/pages/AcceptInvitationPage.tsx
+  - frontend/src/components/VersionsSection.tsx
+  - frontend/src/components/SnapshotManager.tsx
+  - frontend/src/components/RichTextEditor.tsx
+  - frontend/src/components/AttachmentsSection.tsx
+  - frontend/src/components/CollaborativeEditor.tsx
+  - frontend/src/components/CollaborationStatus.tsx
+  - frontend/src/components/CommentsSection.tsx
+  - frontend/src/components/NotificationBell.tsx
+  - frontend/src/components/ReadOnlyBanner.tsx
+  - frontend/src/components/ReviewDialog.tsx
+  - frontend/src/components/InviteUserDialog.tsx
+  - frontend/src/components/FeedbackForm.tsx
+  - frontend/src/components/DocumentEditor.tsx
+  - frontend/src/components/CompanyForm.tsx
+  - frontend/src/components/guards/CustomerRoute.tsx
+  - frontend/src/components/analytics/sections/TenantSection.tsx
+  - frontend/src/components/analytics/widgets/DonutChartWidget.tsx
+  - frontend/src/components/analytics/widgets/BarChartWidget.tsx
+  - frontend/src/components/analytics/DateRangePicker.tsx
+  - frontend/src/components/analytics/ExportButton.tsx
+  - frontend/src/index.css (scrollbar styling)
+
+FILES MODIFIED:
+  - frontend/tailwind.config.js (design tokens)
+  - frontend/src/index.css (utility classes, scrollbar styling)
+  - frontend/index.html (Google Fonts)
+  - frontend/src/main.tsx (body wrapper)
+  - frontend/src/components/Layout.tsx (sidebar → top nav)
+  - frontend/src/pages/LoginPage.tsx
+  - frontend/src/pages/DashboardPage.tsx
+  - frontend/src/pages/DocumentsPage.tsx
+  - frontend/src/pages/public/PublicHomePage.tsx
+  - frontend/src/pages/public/PublicDocumentsPage.tsx
+  - frontend/src/pages/public/PublicDocumentPage.tsx
+  - frontend/src/pages/public/PublicSearchPage.tsx
+  - frontend/src/pages/portal/CustomerDashboard.tsx
+  - frontend/src/pages/portal/CustomerDocumentsPage.tsx
+  - frontend/src/pages/portal/CustomerDocumentPage.tsx
+  - frontend/src/pages/portal/MyFeedbackPage.tsx
+  - frontend/src/pages/UsersPage.tsx
+  - frontend/src/pages/ReviewsPage.tsx
+  - frontend/src/pages/AnalyticsDashboardPage.tsx
+  - frontend/src/pages/CompaniesPage.tsx
+  - frontend/src/pages/CompanyDetailPage.tsx
+  - frontend/src/pages/admin/FeedbackPage.tsx
+  - frontend/src/components/FeedbackResponseDialog.tsx
+  - frontend/src/pages/viewer/ViewerHomePage.tsx
+  - frontend/src/pages/viewer/ViewerDocumentPage.tsx
+  - frontend/src/pages/DocumentFullscreenPage.tsx
+  - frontend/src/pages/DocumentDetailPage.tsx
+
+Last Updated: Phase 5 Complete
+================================================================================
+
+Guiding principle (how to get "exact")
+
+To get exactly Zip2's look, you don't "restyle everything randomly".
+You copy Zip2's design system and layout primitives 1:1 into ZipA, then migrate page-by-page.
+
+That means:
+
+Same fonts
+
+Same Tailwind theme extensions
+
+Same global utility classes (surface-card, btn-primary, input-field, etc.)
+
+Same layout markup (PortalHeader + container spacing + gradient hero sections)
+
+Phase 0 — Create a "Zip2 Design Layer" inside ZipA ✅ COMPLETE
+
+Goal: after this phase, ZipA can render Zip2-style components without touching pages yet.
+
+0.1 Copy Tailwind theme tokens (Zip2 → ZipA) ✅
+
+Edit: frontend/tailwind.config.js
+
+Add Zip2’s extensions:
+
+fontFamily.display = var(--font-display)
+
+fontFamily.body = var(--font-body)
+
+color scales: slate, accent, surface
+
+borderRadius: xl/2xl/3xl
+
+boxShadow: surface, surface-lg
+
+This is what makes the same class names behave the same.
+
+0.2 Copy Zip2’s global component utility classes
+
+Edit: frontend/src/index.css
+
+Inside @layer components { ... } add Zip2’s classes 1:1:
+
+.surface-card
+
+.surface-card-hover
+
+.surface-muted
+
+.surface-contrast
+
+.eyebrow
+
+.section-title
+
+.btn-primary
+
+.btn-secondary
+
+.btn-ghost
+
+.input-field
+
+.select-field
+
+.pill
+
+These classes are the “magic” that makes Zip2 look like Zip2.
+
+0.3 Add Zip2 fonts (Space Grotesk + IBM Plex Sans)
+
+Edit: frontend/index.html
+Add <link rel="preconnect"> and Google Fonts links for:
+
+Space Grotesk
+
+IBM Plex Sans (400/500/600/700)
+
+Edit: frontend/src/index.css
+Add:
+
+:root {
+  --font-display: "Space Grotesk";
+  --font-body: "IBM Plex Sans";
+}
+
+0.4 Make Zip2’s base body look
+
+Zip2 uses:
+
+font-body bg-slate-50 text-slate-900 min-h-screen
+
+In ZipA you can apply this at the root app wrapper.
+
+Edit: frontend/src/main.tsx
+Wrap <App /> with a div:
+
+<div className="font-body bg-slate-50 text-slate-900 min-h-screen">
+  <App />
+</div>
+
+
+✅ Definition of done for Phase 0:
+
+You can create a dummy component using surface-card btn-primary input-field pill and it looks like Zip2.
+
+Phase 1 — Replace ZipA's layout shell with Zip2's PortalHeader shell ✅ COMPLETE
+
+Right now ZipA has:
+
+fixed header + left sidebar (internal)
+
+separate public/customer layouts
+
+Zip2 has:
+
+top PortalHeader with pill nav
+
+no left sidebar
+
+container spacing + footer
+
+1.1 Implement PortalHeader (Zip2 markup, Router version)
+
+Create: frontend/src/components/shared/layout/PortalHeader.tsx
+
+Copy Zip2’s markup and classNames exactly, but replace next/link with react-router-dom NavLink/Link.
+
+Props should match Zip2:
+
+portal, subtitle
+
+nav: {label, href}[]
+
+optional action {label, href}
+
+optional homeHref
+
+Add a SignOutButton that calls your ZipA auth logout.
+
+1.2 Create 3 portal layouts (match Zip2)
+
+Create these new layout wrappers:
+
+frontend/src/layouts/ViewerLayoutZip2.tsx
+
+frontend/src/layouts/ManagementLayoutZip2.tsx
+
+frontend/src/layouts/CustomerLayoutZip2.tsx
+
+Each should:
+
+render <PortalHeader .../> with the same nav items as Zip2
+
+wrap content in <main className="flex-1">
+
+include the Zip2 footer (border top, bg white/80, container, 2-line text)
+
+Important: Don’t delete old layouts yet — migrate routes gradually.
+
+1.3 Deprecate Sidebar shell
+
+Your current internal shell is:
+
+src/components/Header.tsx
+
+src/components/Sidebar.tsx
+
+src/components/Layout.tsx
+
+Plan:
+
+Keep them temporarily
+
+Move all internal routes to ManagementLayoutZip2
+
+Remove Sidebar after the migration is complete
+
+✅ Definition of done for Phase 1:
+
+At least one page renders under the Zip2 header + footer (no sidebar).
+
+Phase 2 — Migrate Viewer Portal pages to Zip2 layout + styling ✅ COMPLETE
+
+Zip2 viewer pages:
+
+/ (viewer landing)
+
+/docs (library)
+
+/docs/:id (doc view)
+
+/topics, /tools, /help
+
+ZipA currently has public routes:
+
+/browse
+
+/doc/:id
+
+/search
+
+Strategy:
+
+Add Zip2 routes in parallel, keep old routes as redirects.
+
+2.1 Viewer Home page (Zip2 hero gradient) ✅ PublicHomePage.tsx updated
+
+Create: frontend/src/pages/viewer/ViewerHomeZip2.tsx
+
+Copy Zip2 structure:
+
+container mx-auto px-4 py-12 space-y-10
+
+hero card with:
+
+rounded-[32px]
+
+gradient: bg-[linear-gradient(120deg,#003B6F_0%,#0071C5_45%,#7BC5FF_100%)]
+
+eyebrow + h1 + paragraph
+
+search bar using input-field ... rounded-full
+
+quick links styled as Zip2
+
+Wire search submit to navigate to /docs?q=....
+
+2.2 Docs Library page (Zip2) ✅ PublicDocumentsPage.tsx updated
+
+Create: frontend/src/pages/viewer/DocsZip2.tsx
+
+Copy Zip2 layout:
+
+top surface-card with gradient header + search + filters
+
+FilterChips row when filters active
+
+"Featured docs" grid then remaining docs list
+
+You can reuse ZipA's public docs API, just reshape the display into Zip2's DocCard style.
+
+Create: frontend/src/components/viewer/docs/DocCardZip2.tsx
+Use Zip2's classNames: surface-card-hover, badges, metadata rows.
+
+2.3 Doc Detail page (Zip2) ✅ PublicDocumentPage.tsx updated
+
+Create: frontend/src/pages/viewer/DocDetailZip2.tsx
+
+Zip2 uses a 2-column feel (aside + main).
+Even if ZipA’s content is plain text now, you can still match visuals:
+
+main wrapper: container mx-auto px-4 py-10
+
+header card: surface-card p-8
+
+content card: surface-card p-8
+
+aside blocks: surface-muted p-5 etc
+
+Optional (recommended for closer match):
+
+convert content rendering to HTML/Markdown with heading IDs
+
+generate TOC (Zip2 has TOC feel)
+
+2.4 Topics/Tools/Help pages ✅ PublicSearchPage.tsx updated
+
+If ZipA doesn’t have real Topics/Tools:
+
+implement UI pages that list categories/tags as “topics” + show “tools” as a second grouping
+
+even if backed by placeholder data, the visual matches Zip2.
+
+✅ Definition of done for Phase 2:
+
+Viewer routes render with Zip2 header + hero gradient + DocCards that visually match Zip2.
+
+Phase 3 — Migrate Login to Zip2 styling ✅ COMPLETE
+
+Zip2 login is a very specific look:
+
+bg #ecf2ff
+
+centered card with border and custom shadow
+
+primary button bg-[#2f6bff]
+
+Update ZipA:
+
+frontend/src/pages/LoginPage.tsx ✅ Updated with dark slate gradient, surface-card, input-field, btn-primary
+Replace layout/classes to match Zip2 (keep logic intact).
+
+✅ DoD:
+
+Login page looks the same (spacing, colors, button).
+
+
+Phase 4 — Migrate Management portal pages to Zip2 layout + styling ✅ PARTIALLY COMPLETE
+
+Zip2 management nav:
+
+Dashboard
+
+Docs
+
+Requests
+
+Users
+
+Notifications
+
+Profile
+
+ZipA currently:
+
+/dashboard ✅ DashboardPage.tsx updated
+
+/documents ✅ DocumentsPage.tsx updated (including modals)
+
+/reviews ⏳ Pending
+
+/users ⏳ Pending
+
+/analytics ⏳ Pending
+
+/admin/... ⏳ Pending
+
+Strategy:
+
+Create Zip2-style routes like /management/... and keep old routes as redirects.
+
+4.1 Add management routes (new)
+
+In App.tsx:
+
+/management → existing DashboardPage restyled
+
+/management/docs → existing DocumentsPage restyled
+
+/management/requests → map to ReviewsPage + access requests UI
+
+/management/users → UsersPage restyled
+
+/management/notifications → (if you already have bell dropdown, make a page wrapper)
+
+/management/profile → user profile/preferences
+
+Wrap all of these under ManagementLayoutZip2.
+
+4.2 Restyle each page using Zip2 primitives
+
+Rules:
+
+outer: container mx-auto px-4 py-10
+
+main sections: surface-card p-8
+
+tables: keep logic, wrap in surface-card, use slate borders, rounded corners
+
+actions: replace blue buttons with btn-primary/secondary
+
+filters/search: use input-field / select-field
+
+✅ DoD:
+
+Management portal has Zip2 header + pill nav + same spacing and card system.
+
+Phase 5 — Customer Portal (Zip2 look, ZipA logic)
+
+Zip2 portal is lighter than management but same header.
+
+ZipA routes:
+
+/portal/dashboard
+
+/portal/documents
+
+/portal/documents/:id
+
+/portal/feedback
+
+Wrap in CustomerLayoutZip2 (PortalHeader + footer).
+Restyle doc cards + doc view to match viewer look (same components).
+
+✅ DoD:
+
+Customer portal feels like Zip2 (same typography/cards/buttons).
+
+Phase 6 — Make it “exact” with visual regression + cleanup
+
+If you truly want “exactly like Zip2”, you need enforcement:
+
+6.1 Add visual screenshot tests (Playwright)
+
+You already have Playwright E2E in ZipA.
+Add a visual.spec.ts that:
+
+navigates to core pages
+
+uses fixed viewport (e.g., 1440x900)
+
+takes screenshots
+
+compares to baseline images
+
+This catches tiny spacing/colors regressions.
+
+6.2 Remove legacy layout components
+
+Once all main routes are on Zip2 layouts:
+
+delete/retire Sidebar.tsx
+
+simplify Header.tsx (or delete it)
+
+remove old Layout.tsx wrapper
+
+keep route redirects for backward compatibility
+
+✅ Final DoD:
+
+There is no sidebar shell left
+
+All primary user flows (viewer/portal/management) use Zip2 header + cards + typography
+
+Visual snapshots are stable
+
+Practical migration order (min risk)
+
+✅ Phase 0 (tokens + global classes + fonts)
+
+✅ Phase 1 (PortalHeader + layouts)
+
+✅ Phase 3 (Login — quick win)
+
+✅ Phase 2 (Viewer home + docs + doc detail)
+
+🟡 Phase 4 (Management routes + restyle) - Partially done (Dashboard, Documents complete; Users, Reviews, Analytics pending)
+
+✅ Phase 5 (Customer portal)
+
+⏳ Phase 6 (visual tests + remove old shell)
+
+What in the plan already matches your requirement ✅
+
+These parts are purely visual refactors (safe):
+
+Phase 0 (design tokens + global CSS utilities + fonts)
+No logic changes. Just Tailwind config + globals.css.
+
+Restyling buttons/inputs/cards/tables by swapping classNames
+Same components, same hooks, same API calls.
+
+Replacing Header/Sidebar look with Zip2 styling
+As long as we keep the same routes and guards, this is still “design-only”.
+
+Restyling pages in-place (DocumentsPage, DashboardPage, etc.)
+You keep the same data flow and handlers.
+
+Where the original plan could change logic/behavior ⚠️
+1) “Create new routes like /management/…”
+
+That changes routing behavior (URLs), redirects, E2E expectations, bookmarks, etc.
+
+2) “Recreate viewer pages as /docs instead of /browse”
+
+Same issue: changing paths = behavior change.
+
+3) “Add new components that restructure content rendering / TOC generation”
+
+If we introduce new parsing or rendering logic (TOC, markdown conversions), it’s no longer “design-only”.
+
+The corrected plan (PERFECT for “logic stays identical”)
+
+Rule: No route changes, no new flows, no new data processing.
+Only:
+
+Tailwind tokens
+
+global classes
+
+layout markup (header/sidebar/footer) but same links
+
+className swaps in existing components
+
+Phase 0 — Zip2 design system injection (safe)
+
+Same as before:
+
+Copy Zip2 Tailwind theme extensions into ZipA
+
+Copy Zip2 globals.css component classes
+
+Add fonts + root vars
+
+Set base body styles
+
+✅ No logic changes.
+Phase 1 — “Skin” your existing layouts (no routing changes)
+
+Instead of creating new layouts and new route groups:
+
+1.1 Keep your current routing exactly as-is
+
+/browse, /doc/:id, /search, /portal/*, /documents, /dashboard, etc. remain unchanged.
+
+1.2 Replace layout visuals only
+
+Update your existing Layout components:
+
+PublicLayout
+
+internal Layout (header + sidebar)
+
+CustomerLayout
+
+Approach:
+
+Option A (closest to Zip2): Convert internal layout to top header + no sidebar, but keep the same nav destinations (to existing routes).
+This changes only how navigation looks, not where it goes.
+
+Option B (lower risk): Keep sidebar structurally, but restyle it to look like Zip2 (less “exact” because Zip2 has no sidebar).
+
+If you want “exactly like Zip2”, we do Option A.
+
+✅ Logic stays the same if you:
+
+keep the same Link to="..." targets
+
+keep the same auth guards
+
+keep the same page components
+
+Phase 2 — Update shared UI components (design-only)
+
+Make a list of reusable components in ZipA and restyle them:
+
+Button component(s): map to Zip2 btn-primary/secondary/ghost
+
+Inputs/selects: map to input-field/select-field
+
+Cards/wrappers: map to surface-card/surface-muted
+
+Badges/status pills: map to Zip2 pill styling
+
+✅ This gives you 70% of the Zip2 “feel” across the app without touching business logic.
+
+Phase 3 — Page-level restyle (same pages, same hooks)
+
+For each existing page, only change markup + classNames:
+
+Public:
+
+Browse page → add Zip2 hero gradient section but keep same queries/results
+
+Search page → same logic, Zip2 layout
+
+Doc page → same content rendering, Zip2 card layout
+
+Internal:
+
+Dashboard, Documents, Reviews, Users, Analytics, Feedback, Companies
+
+Keep data fetching/mutations identical. Only reorganize to Zip2 spacing/cards.
+
+Customer:
+
+/portal/dashboard, /portal/documents, /portal/feedback
+
+same logic, Zip2 visual language
+
+✅ If we keep all event handlers and API hooks intact, behavior won’t change.
+
+Phase 4 — Visual regression checks (optional but smart)
+
+This doesn’t change logic, it just ensures the look stays stable:
+
+Add Playwright screenshots for key pages.
+
+So… is the original plan “perfect”?
+
+Not perfectly — because it proposed new route structure, which is a behavior change.
+
+But with the corrections above (restyle existing routes and existing components), the plan becomes perfect for your requirement:
+✅ same logic
+✅ same API calls
+✅ same routes
+✅ same permissions
+✅ only visual changes

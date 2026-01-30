@@ -65,9 +65,9 @@ export default function AnalyticsDashboardPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
-          <p className="text-gray-500">
+          <BarChart3 className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+          <h2 className="text-xl font-display font-semibold text-slate-900 mb-2">Access Restricted</h2>
+          <p className="text-slate-500">
             You need Manager or higher role to access analytics.
           </p>
         </div>
@@ -104,8 +104,8 @@ export default function AnalyticsDashboardPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-          <p className="text-gray-500">Insights into your content and user engagement</p>
+          <h1 className="text-2xl font-display font-bold text-slate-900">Analytics Dashboard</h1>
+          <p className="text-slate-500">Insights into your content and user engagement</p>
         </div>
         {activeTab !== 'tenant' && (
           <ExportButton 
@@ -127,8 +127,8 @@ export default function AnalyticsDashboardPage() {
       />
 
       {/* Tab Navigation */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="border-b border-gray-200">
+      <div className="surface-card rounded-2xl">
+        <div className="border-b border-slate-200">
           <nav className="flex -mb-px overflow-x-auto">
             {accessibleTabs.map((tab) => {
               const Icon = tab.icon
@@ -139,8 +139,8 @@ export default function AnalyticsDashboardPage() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 whitespace-nowrap ${
                     isActive
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-sky-500 text-sky-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                   }`}
                 >
                   <Icon className="w-5 h-5" />

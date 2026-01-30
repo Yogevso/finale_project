@@ -43,21 +43,21 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
   })
 
   if (isLoading) {
-    return <div className="animate-pulse bg-gray-100 h-32 rounded-lg"></div>
+    return <div className="animate-pulse bg-slate-100 h-32 rounded-xl"></div>
   }
 
   const versions = versionsData?.items || []
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="surface-card rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-slate-900">
           Versions ({versions.length})
         </h2>
         {isEditor && !isCreating && (
           <button
             onClick={() => setIsCreating(true)}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="btn-primary text-sm"
           >
             + New Version
           </button>
@@ -66,26 +66,26 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
 
       {/* Create New Version Form */}
       {isCreating && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="font-medium text-blue-900 mb-3">Create New Version</h3>
+        <div className="mb-4 p-4 bg-sky-50 rounded-xl border border-sky-200">
+          <h3 className="font-medium text-sky-900 mb-3">Create New Version</h3>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm text-blue-800 mb-1">Content</label>
+              <label className="block text-sm text-sky-800 mb-1">Content</label>
               <textarea
                 value={newVersion.content || ''}
                 onChange={(e) => setNewVersion({ ...newVersion, content: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="input-field"
                 rows={4}
                 placeholder="Version content..."
               />
             </div>
             <div>
-              <label className="block text-sm text-blue-800 mb-1">Changes Summary</label>
+              <label className="block text-sm text-sky-800 mb-1">Changes Summary</label>
               <input
                 type="text"
                 value={newVersion.changes_summary || ''}
                 onChange={(e) => setNewVersion({ ...newVersion, changes_summary: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="input-field"
                 placeholder="What changed in this version?"
               />
             </div>
@@ -93,13 +93,13 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               <button
                 onClick={() => createMutation.mutate(newVersion)}
                 disabled={createMutation.isPending}
-                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="btn-primary text-sm"
               >
                 {createMutation.isPending ? 'Creating...' : 'Create Version'}
               </button>
               <button
                 onClick={() => setIsCreating(false)}
-                className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                className="btn-ghost text-sm"
               >
                 Cancel
               </button>
@@ -110,7 +110,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
 
       {/* Versions List */}
       {versions.length === 0 ? (
-        <p className="text-gray-500 text-sm">No versions yet</p>
+        <p className="text-slate-500 text-sm">No versions yet</p>
       ) : (
         <div className="space-y-3">
           {versions.map((version: Version) => (
@@ -153,34 +153,34 @@ function VersionCard({
   isPublishing: boolean
 }) {
   return (
-    <div className={`border rounded-lg ${version.is_published ? 'border-green-200 bg-green-50' : 'border-gray-200'}`}>
+    <div className={`border rounded-xl ${version.is_published ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200'}`}>
       <div
-        className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 rounded-t-xl"
         onClick={onToggle}
       >
         <div className="flex items-center gap-3">
           <span className="font-medium">v{version.version_number}</span>
           {version.is_published ? (
-            <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+            <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full">
               Published
             </span>
           ) : (
-            <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full">
+            <span className="px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">
               Draft
             </span>
           )}
           {version.changes_summary && (
-            <span className="text-sm text-gray-500 truncate max-w-xs">
+            <span className="text-sm text-slate-500 truncate max-w-xs">
               {version.changes_summary}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-slate-400">
             {new Date(version.created_at).toLocaleDateString()}
           </span>
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -191,16 +191,16 @@ function VersionCard({
       </div>
 
       {isExpanded && (
-        <div className="px-3 pb-3 border-t border-gray-100">
+        <div className="px-3 pb-3 border-t border-slate-100">
           <div className="mt-3">
-            <label className="text-xs text-gray-500">Content</label>
-            <div className="mt-1 p-2 bg-white rounded border text-sm whitespace-pre-wrap">
+            <label className="text-xs text-slate-500">Content</label>
+            <div className="mt-1 p-2 bg-white rounded-lg border text-sm whitespace-pre-wrap">
               {version.content || 'No content'}
             </div>
           </div>
 
           {version.published_at && (
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-2 text-xs text-slate-500">
               Published: {new Date(version.published_at).toLocaleString()}
             </p>
           )}
@@ -213,7 +213,7 @@ function VersionCard({
                   onPublish()
                 }}
                 disabled={isPublishing}
-                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
               >
                 {isPublishing ? 'Publishing...' : 'Publish'}
               </button>
@@ -222,7 +222,7 @@ function VersionCard({
                   e.stopPropagation()
                   onDelete()
                 }}
-                className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
+                className="px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 rounded"
               >
                 Delete
               </button>

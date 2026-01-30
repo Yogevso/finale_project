@@ -30,6 +30,11 @@ pydantic-settings==2.6.1
 # PDF Generation
 reportlab>=4.0.0
 
+# Document Conversion
+PyMuPDF>=1.24.0
+python-docx>=1.1.0
+mammoth>=1.8.0
+
 # Development
 pytest==8.3.4
 pytest-asyncio==0.24.0

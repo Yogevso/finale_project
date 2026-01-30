@@ -21,16 +21,16 @@ export function OverviewSection({ params }: OverviewSectionProps) {
     : []
 
   const getActivityIcon = (action: RecentActivity['action']) => {
-    if (action.includes('view')) return <Eye className="w-4 h-4 text-blue-500" />
-    if (action.includes('comment')) return <MessageSquare className="w-4 h-4 text-green-500" />
+    if (action.includes('view')) return <Eye className="w-4 h-4 text-sky-500" />
+    if (action.includes('comment')) return <MessageSquare className="w-4 h-4 text-emerald-500" />
     if (action.includes('review')) return <FileText className="w-4 h-4 text-purple-500" />
     if (action.includes('status')) return <Clock className="w-4 h-4 text-orange-500" />
-    return <FileText className="w-4 h-4 text-gray-500" />
+    return <FileText className="w-4 h-4 text-slate-500" />
   }
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Overview</h2>
+      <h2 className="text-xl font-semibold text-slate-900">Overview</h2>
       
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -64,21 +64,21 @@ export function OverviewSection({ params }: OverviewSectionProps) {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Documents by Category</h3>
+        <div className="bg-white rounded-xl shadow p-6">
+          <h3 className="text-lg font-medium text-slate-900 mb-4">Documents by Category</h3>
           {overviewLoading ? (
-            <div className="animate-pulse h-64 bg-gray-100 rounded"></div>
+            <div className="animate-pulse h-64 bg-slate-100 rounded"></div>
           ) : overview?.documents_by_category && overview.documents_by_category.length > 0 ? (
             <ul className="space-y-2">
               {overview.documents_by_category.map((cat, idx) => (
-                <li key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-sm font-medium text-gray-700">{cat.category || 'Uncategorized'}</span>
-                  <span className="text-sm font-bold text-gray-900">{cat.count}</span>
+                <li key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                  <span className="text-sm font-medium text-slate-700">{cat.category || 'Uncategorized'}</span>
+                  <span className="text-sm font-bold text-slate-900">{cat.count}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-gray-500 text-center py-4">No categories</p>
+            <p className="text-slate-500 text-center py-4">No categories</p>
           )}
         </div>
         <DonutChartWidget
@@ -91,40 +91,40 @@ export function OverviewSection({ params }: OverviewSectionProps) {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+      <div className="bg-white rounded-xl shadow p-6">
+        <h3 className="text-lg font-medium text-slate-900 mb-4">Recent Activity</h3>
         {activityLoading ? (
           <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="flex items-center gap-4 animate-pulse">
-                <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
-                <div className="flex-1 h-4 bg-gray-200 rounded"></div>
+                <div className="w-8 h-8 bg-slate-200 rounded-full"></div>
+                <div className="flex-1 h-4 bg-slate-200 rounded"></div>
               </div>
             ))}
           </div>
         ) : recentActivity && recentActivity.length > 0 ? (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-slate-100">
             {recentActivity.map((activity: RecentActivity) => (
               <li key={activity.id} className="py-3 flex items-center gap-4">
-                <div className="p-2 bg-gray-50 rounded-full">
+                <div className="p-2 bg-slate-50 rounded-full">
                   {getActivityIcon(activity.action)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-slate-900 truncate">
                     {activity.document_title || activity.action}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     {activity.user_name} • {activity.action.replace('_', ' ')}
                   </p>
                 </div>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-400">
                   {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-gray-500 text-center py-4">No recent activity</p>
+          <p className="text-slate-500 text-center py-4">No recent activity</p>
         )}
       </div>
     </div>

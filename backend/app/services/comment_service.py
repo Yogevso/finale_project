@@ -1,13 +1,13 @@
 """Comment Service - Business logic for document comments with visibility and threading"""
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
-from app.models import Comment, Document, User, UserRole
+from app.models import Comment, Document, User, UserRole, Version, Attachment
 from app.schemas import CommentCreate, CommentUpdate
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,79 @@ class CommentService:
     """Service for managing document comments with visibility controls"""
 
     @staticmethod
+    def is_internal_staff(user: User) -> bool:
+        """Check if user is internal staff (not a customer)"""
+        return user.role in [
+            UserRole.SYSTEM_ADMIN,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.EDITOR,
+            UserRole.VIEWER,
+        ]
+
+    @staticmethod
+    def get_document_contributors(db: Session, document_id: int) -> Set[int]:
+        """
+        Get all user IDs who have 'touched' (contributed to) a document.
+        This includes:
+        - Document creator
+        - Version creators (editors)
+        - Attachment uploaders
+        - Commenters
+        """
+        contributors: Set[int] = set()
+        
+        # Get document creator
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if document:
+            contributors.add(document.created_by)
+        
+        # Get version creators
+        versions = db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+        for (user_id,) in versions:
+            contributors.add(user_id)
+        
+        # Get attachment uploaders
+        attachments = db.query(Attachment.uploaded_by).filter(Attachment.document_id == document_id).distinct().all()
+        for (user_id,) in attachments:
+            contributors.add(user_id)
+        
+        # Get commenters (they've also engaged with the document)
+        comments = db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
+        for (user_id,) in comments:
+            contributors.add(user_id)
+        
+        return contributors
+
+    @staticmethod
+    def can_view_comment(db: Session, comment: Comment, current_user: User, contributors: Set[int] = None) -> bool:
+        """
+        Check if a user can view a specific comment.
+        Rules:
+        - Comment author can always see their own comments
+        - Internal staff who have contributed to the document can see all comments
+        - System admins can see all comments
+        """
+        # Comment author can always see their own comment
+        if comment.user_id == current_user.id:
+            return True
+        
+        # System admin can see all
+        if current_user.role == UserRole.SYSTEM_ADMIN:
+            return True
+        
+        # Internal staff who have contributed to this document can see comments
+        if CommentService.is_internal_staff(current_user):
+            if contributors is None:
+                contributors = CommentService.get_document_contributors(db, comment.document_id)
+            if current_user.id in contributors:
+                return True
+        
+        return False
+
+    @staticmethod
     def can_view_private_comments(user: User) -> bool:
-        """Check if user can view private comments"""
+        """Check if user can view private comments (legacy - kept for compatibility)"""
         return user.role in [
             UserRole.SYSTEM_ADMIN,
             UserRole.ADMIN,
@@ -30,44 +101,48 @@ class CommentService:
     def get_comments(
         db: Session, document_id: int, current_user: User, include_private: bool = True
     ) -> List[Comment]:
-        """Get comments for a document with visibility filtering"""
+        """
+        Get comments for a document with contributor-based visibility filtering.
+        
+        Comments are visible to:
+        - The comment author
+        - Internal staff who have contributed to the document
+        - System admins
+        """
         # Check document exists
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-        # Base query - get top-level comments only (no parent)
-        query = (
+        # Get all contributors to this document for visibility checks
+        contributors = CommentService.get_document_contributors(db, document_id)
+
+        # Base query - get all top-level comments
+        all_comments = (
             db.query(Comment)
             .filter(
                 Comment.document_id == document_id,
                 Comment.parent_id == None,  # noqa: E711
             )
             .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
+            .order_by(Comment.created_at.desc())
+            .all()
         )
 
-        # Filter private comments based on user role
-        if not CommentService.can_view_private_comments(current_user):
-            # Regular users can only see public comments OR their own private comments
-            query = query.filter(
-                (Comment.is_private == False)  # noqa: E712
-                | (Comment.user_id == current_user.id)
-            )
-
-        comments = query.order_by(Comment.created_at.desc()).all()
-
-        # Also filter replies for non-privileged users
-        if not CommentService.can_view_private_comments(current_user):
-            for comment in comments:
-                comment.replies = [
-                    r for r in comment.replies if not r.is_private or r.user_id == current_user.id
+        # Filter comments based on visibility rules
+        visible_comments = []
+        for comment in all_comments:
+            if CommentService.can_view_comment(db, comment, current_user, contributors):
+                # Also filter replies
+                visible_replies = [
+                    r for r in comment.replies 
+                    if CommentService.can_view_comment(db, r, current_user, contributors)
                 ]
+                comment.replies = visible_replies
+                comment.reply_count = len(visible_replies)
+                visible_comments.append(comment)
 
-        # Add reply count to each comment
-        for comment in comments:
-            comment.reply_count = len(comment.replies)
-
-        return comments
+        return visible_comments
 
     @staticmethod
     def get_comment(db: Session, document_id: int, comment_id: int, current_user: User) -> Comment:
@@ -82,17 +157,19 @@ class CommentService:
         if not comment:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
-        # Check visibility
-        if comment.is_private:
-            if (
-                not CommentService.can_view_private_comments(current_user)
-                and comment.user_id != current_user.id
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to view this comment",
-                )
+        # Check visibility using new contributor-based rules
+        contributors = CommentService.get_document_contributors(db, document_id)
+        if not CommentService.can_view_comment(db, comment, current_user, contributors):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to view this comment",
+            )
 
+        # Filter replies based on visibility
+        comment.replies = [
+            r for r in comment.replies 
+            if CommentService.can_view_comment(db, r, current_user, contributors)
+        ]
         comment.reply_count = len(comment.replies)
         return comment
 
@@ -322,39 +399,31 @@ class CommentService:
     def get_comment_count(
         db: Session, document_id: int, current_user: Optional[User] = None
     ) -> dict:
-        """Get comment counts for a document"""
-        total = db.query(Comment).filter(Comment.document_id == document_id).count()
-
-        # Get top-level comments only
-        top_level = (
-            db.query(Comment)
-            .filter(
-                Comment.document_id == document_id,
-                Comment.parent_id == None,  # noqa: E711
-            )
-            .count()
-        )
-
-        # Count private comments
-        private_count = (
-            db.query(Comment)
-            .filter(
-                Comment.document_id == document_id,
-                Comment.is_private == True,  # noqa: E712
-            )
-            .count()
-        )
-
-        # Count unresolved threads
-        unresolved = (
-            db.query(Comment)
-            .filter(
-                Comment.document_id == document_id,
-                Comment.parent_id == None,  # noqa: E711
-                Comment.is_resolved == False,  # noqa: E712
-            )
-            .count()
-        )
+        """
+        Get comment counts for a document.
+        
+        Returns counts of comments visible to the current user based on 
+        contributor visibility rules.
+        """
+        if not current_user:
+            return {"total": 0, "threads": 0, "private": 0, "unresolved": 0}
+        
+        # Get contributors for visibility checks
+        contributors = CommentService.get_document_contributors(db, document_id)
+        
+        # Get all comments and filter by visibility
+        all_comments = db.query(Comment).filter(Comment.document_id == document_id).all()
+        
+        visible_comments = [
+            c for c in all_comments 
+            if CommentService.can_view_comment(db, c, current_user, contributors)
+        ]
+        
+        # Calculate counts from visible comments
+        total = len(visible_comments)
+        top_level = len([c for c in visible_comments if c.parent_id is None])
+        private_count = len([c for c in visible_comments if c.is_private])
+        unresolved = len([c for c in visible_comments if c.parent_id is None and not c.is_resolved])
 
         return {
             "total": total,

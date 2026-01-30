@@ -2,9 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles */
+/* ============================================
+   ZIP B DESIGN SYSTEM
+   ============================================ */
+
+@layer base {
+  :root {
+    --font-display: "Space Grotesk", sans-serif;
+    --font-body: "IBM Plex Sans", sans-serif;
+    --background: 210 35% 98%;
+    --foreground: 222 47% 11%;
+    --brand: 209 100% 40%;
+    --brand-strong: 209 100% 32%;
+    --brand-soft: 209 100% 92%;
+  }
+}
+
+@layer components {
+  /* Surface Cards */
+  .surface-card {
+    @apply bg-white border border-slate-200 rounded-2xl shadow-[0_12px_24px_-24px_rgba(8,30,55,0.45)];
+  }
+  
+  .surface-card-hover {
+    @apply bg-white border border-slate-200 rounded-2xl shadow-[0_12px_24px_-24px_rgba(8,30,55,0.45)] hover:border-slate-300 hover:shadow-[0_20px_36px_-24px_rgba(8,30,55,0.5)] transition-all duration-200;
+  }
+
+  .surface-muted {
+    @apply bg-slate-50 border border-slate-200 rounded-2xl;
+  }
+
+  .surface-contrast {
+    @apply bg-gradient-to-br from-sky-900 via-sky-800 to-sky-700 text-white border border-sky-800 rounded-2xl;
+  }
+
+  /* Typography */
+  .eyebrow {
+    @apply text-xs uppercase tracking-[0.22em] text-slate-500;
+  }
+
+  .section-title {
+    @apply text-2xl md:text-3xl font-semibold text-sky-950;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-sky-700 text-white px-5 py-2.5 text-sm font-semibold shadow-sm hover:bg-sky-800 transition;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-white text-slate-900 px-5 py-2.5 text-sm font-semibold border border-slate-300 hover:border-slate-400 hover:bg-slate-50 transition;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full text-slate-600 px-3 py-2 text-sm font-semibold hover:text-slate-900 hover:bg-slate-100 transition;
+  }
+
+  /* Form Fields */
+  .input-field {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500;
+  }
+
+  .select-field {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500;
+  }
+
+  /* Pills/Badges */
+  .pill {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600;
+  }
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  @apply bg-gray-50 text-gray-900;
+  font-family: var(--font-body);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  color: #0b2d52;
+  background: radial-gradient(circle at top, rgba(0, 113, 197, 0.08), transparent 52%),
+    radial-gradient(circle at 20% 20%, rgba(123, 197, 255, 0.12), transparent 45%),
+    #f7f9fc;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 /* Custom scrollbar */
@@ -14,15 +103,15 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100;
+  @apply bg-slate-100;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full;
+  @apply bg-slate-300 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400;
+  @apply bg-slate-400;
 }
 
 /* TipTap Editor Styles */

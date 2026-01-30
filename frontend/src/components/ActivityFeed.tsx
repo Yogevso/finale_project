@@ -49,21 +49,21 @@ function getActivityIcon(type: string) {
   switch (type) {
     case 'session_start':
     case 'user_joined':
-      return <LogIn className="w-4 h-4 text-green-500" />
+      return <LogIn className="w-4 h-4 text-emerald-500" />
     case 'session_end':
     case 'user_left':
-      return <LogOut className="w-4 h-4 text-gray-500" />
+      return <LogOut className="w-4 h-4 text-slate-500" />
     case 'content_edited':
-      return <Edit3 className="w-4 h-4 text-blue-500" />
+      return <Edit3 className="w-4 h-4 text-sky-500" />
     case 'version_created':
       return <Save className="w-4 h-4 text-purple-500" />
     case 'comment_added':
       return <MessageSquare className="w-4 h-4 text-amber-500" />
     case 'cursor_moved':
     case 'selection_changed':
-      return <Users className="w-4 h-4 text-gray-400" />
+      return <Users className="w-4 h-4 text-slate-400" />
     default:
-      return <Activity className="w-4 h-4 text-gray-400" />
+      return <Activity className="w-4 h-4 text-slate-400" />
   }
 }
 
@@ -115,19 +115,19 @@ function ActivityItemRow({
       <div className="flex items-center gap-2 py-1 px-2 text-sm">
         {getActivityIcon(activity.activity_type)}
         <span className="truncate flex-1">{getActivityDescription(activity)}</span>
-        <span className="text-xs text-gray-400 whitespace-nowrap">{timeAgo}</span>
+        <span className="text-xs text-slate-400 whitespace-nowrap">{timeAgo}</span>
       </div>
     )
   }
 
   return (
-    <div className="flex items-start gap-3 p-3 hover:bg-gray-50 transition-colors">
+    <div className="flex items-start gap-3 p-3 hover:bg-slate-50 transition-colors">
       <div className="mt-0.5">{getActivityIcon(activity.activity_type)}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-gray-900">{getActivityDescription(activity)}</p>
+        <p className="text-sm text-slate-900">{getActivityDescription(activity)}</p>
         <div className="flex items-center gap-2 mt-1">
-          <Clock className="w-3 h-3 text-gray-400" />
-          <span className="text-xs text-gray-500">{timeAgo}</span>
+          <Clock className="w-3 h-3 text-slate-400" />
+          <span className="text-xs text-slate-500">{timeAgo}</span>
         </div>
       </div>
     </div>
@@ -187,8 +187,8 @@ export function ActivityFeed({
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-        <div className="p-4 text-center text-gray-500">
+      <div className={`bg-white rounded-xl border border-slate-200 ${className}`}>
+        <div className="p-4 text-center text-slate-500">
           <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
           <span className="text-sm">Loading activity...</span>
         </div>
@@ -198,12 +198,12 @@ export function ActivityFeed({
 
   if (error) {
     return (
-      <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+      <div className={`bg-white rounded-xl border border-slate-200 ${className}`}>
         <div className="p-4 text-center">
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-rose-600">{error}</p>
           <button
             onClick={fetchActivities}
-            className="mt-2 text-sm text-blue-600 hover:underline"
+            className="mt-2 text-sm text-sky-600 hover:underline"
           >
             Try again
           </button>
@@ -213,16 +213,16 @@ export function ActivityFeed({
   }
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className={`bg-white rounded-xl border border-slate-200 ${className}`}>
       {/* Header */}
       <div
-        className="flex items-center justify-between p-3 border-b border-gray-200 cursor-pointer hover:bg-gray-50"
+        className="flex items-center justify-between p-3 border-b border-slate-200 cursor-pointer hover:bg-slate-50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-gray-600" />
-          <span className="font-medium text-sm text-gray-900">Activity Feed</span>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+          <Activity className="w-4 h-4 text-slate-600" />
+          <span className="font-medium text-sm text-slate-900">Activity Feed</span>
+          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
             {activities.length}
           </span>
         </div>
@@ -232,13 +232,13 @@ export function ActivityFeed({
               e.stopPropagation()
               fetchActivities()
             }}
-            className="p-1 hover:bg-gray-200 rounded"
+            className="p-1 hover:bg-slate-200 rounded"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4 text-gray-500" />
+            <RefreshCw className="w-4 h-4 text-slate-500" />
           </button>
           <ChevronDown
-            className={`w-4 h-4 text-gray-500 transition-transform ${
+            className={`w-4 h-4 text-slate-500 transition-transform ${
               isExpanded ? '' : '-rotate-90'
             }`}
           />
@@ -247,9 +247,9 @@ export function ActivityFeed({
 
       {/* Activity list */}
       {isExpanded && (
-        <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+        <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
           {activities.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 text-sm">
+            <div className="p-4 text-center text-slate-500 text-sm">
               No activity yet
             </div>
           ) : (
@@ -264,7 +264,7 @@ export function ActivityFeed({
               {hasMore && (
                 <button
                   onClick={loadMore}
-                  className="w-full p-2 text-center text-sm text-blue-600 hover:bg-gray-50"
+                  className="w-full p-2 text-center text-sm text-sky-600 hover:bg-slate-50"
                 >
                   Load more
                 </button>
@@ -306,12 +306,12 @@ export function ActivityFeedCompact({
     <div className={`relative ${className}`}>
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded"
+        className="flex items-center gap-1 px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 rounded"
       >
         <Activity className="w-4 h-4" />
         <span className="hidden sm:inline">Activity</span>
         {activities.length > 0 && (
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
         )}
       </button>
 
@@ -321,13 +321,13 @@ export function ActivityFeedCompact({
             className="fixed inset-0 z-10"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
-            <div className="p-2 border-b border-gray-100">
-              <span className="text-sm font-medium text-gray-900">Recent Activity</span>
+          <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl shadow-lg border border-slate-200 z-20">
+            <div className="p-2 border-b border-slate-100">
+              <span className="text-sm font-medium text-slate-900">Recent Activity</span>
             </div>
             <div className="max-h-64 overflow-y-auto">
               {activities.length === 0 ? (
-                <div className="p-3 text-center text-sm text-gray-500">
+                <div className="p-3 text-center text-sm text-slate-500">
                   No recent activity
                 </div>
               ) : (

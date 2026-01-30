@@ -75,17 +75,17 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   }
 
   if (isLoading) {
-    return <div className="animate-pulse bg-gray-100 h-32 rounded-lg"></div>
+    return <div className="animate-pulse bg-slate-100 h-32 rounded-xl"></div>
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="surface-card rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-slate-900">
           Attachments ({attachments.length})
         </h2>
         {isEditor && (
-          <label className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+          <label className="btn-primary text-sm cursor-pointer">
             <input
               ref={fileInputRef}
               type="file"
@@ -99,7 +99,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
       </div>
 
       {uploadError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-700">
           {uploadError}
         </div>
       )}
@@ -107,9 +107,9 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
       {attachments.length === 0 ? (
         <div className="text-center py-8">
           <div className="text-4xl mb-2">📎</div>
-          <p className="text-gray-500 text-sm">No attachments yet</p>
+          <p className="text-slate-500 text-sm">No attachments yet</p>
           {isEditor && (
-            <p className="text-gray-400 text-xs mt-1">Upload files to attach them to this document</p>
+            <p className="text-slate-400 text-xs mt-1">Upload files to attach them to this document</p>
           )}
         </div>
       ) : (
@@ -117,13 +117,13 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
           {attachments.map((attachment: Attachment) => (
             <div
               key={attachment.id}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 group"
+              className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 group"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-2xl">{getFileIcon(attachment.mime_type)}</span>
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{attachment.filename}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="font-medium text-slate-900 truncate">{attachment.filename}</p>
+                  <p className="text-xs text-slate-500">
                     {formatFileSize(attachment.file_size)} • {new Date(attachment.uploaded_at).toLocaleDateString()}
                     {attachment.uploader_name && ` • ${attachment.uploader_name}`}
                   </p>
@@ -133,7 +133,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleDownload(attachment)}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                  className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg"
                   title="Download"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +147,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
                         deleteMutation.mutate(attachment.id)
                       }
                     }}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg"
                     title="Delete"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

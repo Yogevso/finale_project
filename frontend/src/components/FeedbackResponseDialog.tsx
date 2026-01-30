@@ -28,7 +28,7 @@ const typeConfig: Record<FeedbackType, { label: string; icon: React.ReactNode; c
   question: {
     label: 'Question',
     icon: <HelpCircle className="w-4 h-4" />,
-    className: 'text-blue-600 bg-blue-50',
+    className: 'text-sky-600 bg-sky-50',
   },
   suggestion: {
     label: 'Suggestion',
@@ -38,12 +38,12 @@ const typeConfig: Record<FeedbackType, { label: string; icon: React.ReactNode; c
   issue: {
     label: 'Issue',
     icon: <AlertTriangle className="w-4 h-4" />,
-    className: 'text-red-600 bg-red-50',
+    className: 'text-rose-600 bg-rose-50',
   },
   other: {
     label: 'Other',
     icon: <MoreHorizontal className="w-4 h-4" />,
-    className: 'text-gray-600 bg-gray-50',
+    className: 'text-slate-600 bg-slate-50',
   },
 }
 
@@ -64,26 +64,26 @@ export default function FeedbackResponseDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${type.className}`}>
+            <div className={`p-2 rounded-xl ${type.className}`}>
               {type.icon}
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-lg font-display font-semibold text-slate-900">
                 {type.label} from {feedback.user_name}
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-slate-500">
                 {new Date(feedback.created_at).toLocaleString()}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-slate-400 hover:text-slate-600"
           >
             <X className="w-5 h-5" />
           </button>
@@ -92,7 +92,7 @@ export default function FeedbackResponseDialog({
         {/* Content */}
         <div className="p-6 space-y-6">
           {/* Customer Info */}
-          <div className="flex items-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-4 text-sm text-slate-600">
             <div className="flex items-center gap-1">
               <User className="w-4 h-4" />
               <span>{feedback.user_name}</span>
@@ -106,17 +106,17 @@ export default function FeedbackResponseDialog({
           </div>
 
           {/* Document Link */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-500 mb-2">Document</p>
+          <div className="bg-slate-50 rounded-xl p-4">
+            <p className="text-sm text-slate-500 mb-2">Document</p>
             <Link
               to={`/documents/${feedback.document_id}`}
               target="_blank"
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
+              className="flex items-center gap-2 text-sky-600 hover:text-sky-700"
             >
               <FileText className="w-4 h-4" />
               <span className="font-medium">{feedback.document_title}</span>
               {feedback.document_number && (
-                <span className="text-gray-500">#{feedback.document_number}</span>
+                <span className="text-slate-500">#{feedback.document_number}</span>
               )}
               <ExternalLink className="w-3 h-3 ml-auto" />
             </Link>
@@ -124,22 +124,22 @@ export default function FeedbackResponseDialog({
 
           {/* Original Feedback */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">Feedback</p>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-gray-800 whitespace-pre-wrap">{feedback.content}</p>
+            <p className="text-sm font-medium text-slate-700 mb-2">Feedback</p>
+            <div className="bg-slate-50 rounded-xl p-4">
+              <p className="text-slate-800 whitespace-pre-wrap">{feedback.content}</p>
             </div>
           </div>
 
           {/* Existing Response */}
           {feedback.response && feedback.responded_at && (
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" />
+              <p className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
                 Response from {feedback.responder_name}
               </p>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-gray-800 whitespace-pre-wrap">{feedback.response}</p>
-                <p className="text-xs text-gray-500 mt-2">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                <p className="text-slate-800 whitespace-pre-wrap">{feedback.response}</p>
+                <p className="text-xs text-slate-500 mt-2">
                   Responded on {new Date(feedback.responded_at).toLocaleString()}
                 </p>
               </div>
@@ -149,7 +149,7 @@ export default function FeedbackResponseDialog({
           {/* Response Form */}
           {feedback.status === 'pending' && (
             <form onSubmit={handleSubmit}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Your Response
               </label>
               <textarea
@@ -157,23 +157,23 @@ export default function FeedbackResponseDialog({
                 onChange={(e) => setResponse(e.target.value)}
                 rows={5}
                 placeholder="Type your response to the customer..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="input-field resize-none"
               />
             </form>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between p-6 border-t border-slate-200 bg-slate-50">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">Status:</span>
+            <span className="text-sm text-slate-500">Status:</span>
             <span
-              className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
+              className={`pill flex items-center gap-1 ${
                 feedback.status === 'pending'
-                  ? 'bg-yellow-100 text-yellow-700'
+                  ? 'bg-amber-100 text-amber-700'
                   : feedback.status === 'responded'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-gray-100 text-gray-700'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-700'
               }`}
             >
               {feedback.status === 'pending' && <Clock className="w-3 h-3" />}
@@ -186,7 +186,7 @@ export default function FeedbackResponseDialog({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900"
+              className="btn-ghost"
             >
               Close
             </button>
@@ -195,7 +195,7 @@ export default function FeedbackResponseDialog({
               <button
                 onClick={() => onUpdateStatus('closed')}
                 disabled={isLoading}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                className="btn-secondary disabled:opacity-50"
               >
                 Mark as Closed
               </button>
@@ -205,7 +205,7 @@ export default function FeedbackResponseDialog({
               <button
                 onClick={handleSubmit}
                 disabled={isLoading || !response.trim()}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="btn-primary flex items-center gap-2 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
                 Send Response

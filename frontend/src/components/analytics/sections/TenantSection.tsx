@@ -40,7 +40,7 @@ export function TenantSection({ params }: TenantSectionProps) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Tenant Analytics</h2>
+      <h2 className="text-xl font-semibold text-slate-900">Tenant Analytics</h2>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -94,24 +94,24 @@ export function TenantSection({ params }: TenantSectionProps) {
 
       {/* Tenant Health */}
       {tenantAnalytics?.tenants && tenantAnalytics.tenants.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Tenant Health Scores</h3>
+        <div className="bg-white rounded-xl shadow p-6">
+          <h3 className="text-lg font-medium text-slate-900 mb-4">Tenant Health Scores</h3>
           <div className="space-y-4">
             {tenantAnalytics.tenants.map((tenant: TenantMetrics) => (
               <div key={tenant.tenant_id} className="flex items-center gap-4">
-                <span className="w-40 text-sm font-medium text-gray-700 truncate">
+                <span className="w-40 text-sm font-medium text-slate-700 truncate">
                   {tenant.tenant_name}
                 </span>
-                <div className="flex-1 bg-gray-200 rounded-full h-3">
+                <div className="flex-1 bg-slate-200 rounded-full h-3">
                   <div
                     className={`h-3 rounded-full ${
-                      tenant.health_score >= 80 ? 'bg-green-500' :
-                      tenant.health_score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                      tenant.health_score >= 80 ? 'bg-emerald-500' :
+                      tenant.health_score >= 50 ? 'bg-amber-500' : 'bg-rose-500'
                     }`}
                     style={{ width: `${tenant.health_score}%` }}
                   />
                 </div>
-                <span className="w-12 text-sm font-bold text-gray-900 text-right">
+                <span className="w-12 text-sm font-bold text-slate-900 text-right">
                   {tenant.health_score}%
                 </span>
               </div>

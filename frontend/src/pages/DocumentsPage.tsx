@@ -33,6 +33,10 @@ export default function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
     },
+    onError: (error: any) => {
+      console.error('Delete error:', error)
+      alert(error?.response?.data?.detail || error?.message || 'Failed to delete document. You may need Manager or Admin role.')
+    },
   })
 
   const handleDelete = (id: number, title: string) => {
@@ -42,23 +46,23 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-gray-500 mt-1">Manage all documents</p>
+          <h1 className="section-title">Documents</h1>
+          <p className="text-slate-500 mt-1">Manage all documents</p>
         </div>
         {isEditor && (
           <div className="flex gap-3">
             <button
               onClick={() => setShowUploadModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              className="btn-secondary flex items-center gap-2"
             >
               <span>📤</span> Upload File
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="btn-primary"
             >
               + New Document
             </button>
@@ -73,12 +77,12 @@ export default function DocumentsPage() {
           placeholder="Search documents..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="input-field flex-1 min-w-[200px]"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | '')}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="select-field"
         >
           <option value="">All Status</option>
           <option value="draft">Draft</option>
@@ -89,7 +93,7 @@ export default function DocumentsPage() {
         <select
           value={visibilityFilter}
           onChange={(e) => setVisibilityFilter(e.target.value as DocumentVisibility | '')}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          className="select-field"
         >
           <option value="">All Visibility</option>
           <option value="public">Public</option>
@@ -99,50 +103,50 @@ export default function DocumentsPage() {
       </div>
 
       {/* Documents Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="surface-card rounded-2xl overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Document</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Visibility</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Document</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Visibility</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-slate-100">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                   Loading...
                 </td>
               </tr>
             ) : data?.items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
                   No documents found
                 </td>
               </tr>
             ) : (
               data?.items.map((doc) => (
-                <tr key={doc.id} className="hover:bg-gray-50">
+                <tr key={doc.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="font-medium text-gray-900">{doc.title}</div>
-                      <div className="text-sm text-gray-500">{doc.document_number}</div>
+                      <div className="font-medium text-slate-900">{doc.title}</div>
+                      <div className="text-sm text-slate-500">{doc.document_number}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`px-2 py-1 text-xs rounded-full ${
+                      className={`pill ${
                         doc.status === 'active'
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : doc.status === 'draft'
-                          ? 'bg-yellow-100 text-yellow-700'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
                           : doc.status === 'pending_review'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-gray-100 text-gray-700'
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
                       }`}
                     >
                       {doc.status}
@@ -151,21 +155,21 @@ export default function DocumentsPage() {
                   <td className="px-6 py-4">
                     <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
                   </td>
-                  <td className="px-6 py-4 text-gray-500">{doc.category || '-'}</td>
-                  <td className="px-6 py-4 text-gray-500">
+                  <td className="px-6 py-4 text-slate-500">{doc.category || '-'}</td>
+                  <td className="px-6 py-4 text-slate-500">
                     {new Date(doc.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right space-x-2">
                     <a
                       href={`/documents/${doc.id}`}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-sky-600 hover:text-sky-800 font-medium"
                     >
                       View
                     </a>
                     {isEditor && (
                       <button
                         onClick={() => handleDelete(doc.id, doc.title)}
-                        className="text-red-600 hover:text-red-800"
+                        className="text-rose-500 hover:text-rose-700 font-medium"
                       >
                         Delete
                       </button>
@@ -179,22 +183,22 @@ export default function DocumentsPage() {
 
         {/* Pagination */}
         {data && data.pages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-            <div className="text-sm text-gray-500">
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+            <div className="text-sm text-slate-500">
               Page {data.page} of {data.pages} ({data.total} total)
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
+                className="btn-ghost disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
                 disabled={page === data.pages}
-                className="px-3 py-1 border rounded disabled:opacity-50"
+                className="btn-ghost disabled:opacity-50"
               >
                 Next
               </button>
@@ -241,12 +245,14 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
         category: data.category,
         tags: data.tags,
       })
-      // If there's content, create a version with it
+      // If there's content, create a version with it and publish it
       if (data.content && data.content.trim()) {
-        await api.createVersion(doc.id, {
+        const version = await api.createVersion(doc.id, {
           content: data.content,
           changes_summary: 'Initial content',
         })
+        // Publish the initial version so it shows in preview
+        await api.publishVersion(doc.id, version.id)
       }
       return doc
     },
@@ -273,12 +279,12 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Create Document</h2>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <h2 className="text-xl font-display font-bold text-slate-900">Create Document</h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
+            className="p-2 hover:bg-slate-100 rounded-xl text-slate-500"
           >
             ✕
           </button>
@@ -286,41 +292,41 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
           {error && (
-            <div className="mx-4 mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+            <div className="mx-4 mt-4 p-3 bg-rose-50 text-rose-700 rounded-xl text-sm">{error}</div>
           )}
 
           <div className="flex-1 flex overflow-hidden">
             {/* Left side - Document details */}
-            <div className="w-80 p-4 border-r overflow-y-auto space-y-4 bg-gray-50">
+            <div className="w-80 p-4 border-r border-slate-200 overflow-y-auto space-y-4 surface-muted">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input-field"
                   placeholder="Enter document title"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input-field"
                   rows={2}
                   placeholder="Brief description"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="select-field"
                 >
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
@@ -329,11 +335,11 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
                 <select
                   value={formData.visibility}
                   onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="select-field"
                 >
                   <option value="internal">🏢 Internal</option>
                   <option value="public">🌐 Public</option>
@@ -342,23 +348,23 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                 <input
                   type="text"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input-field"
                   placeholder="e.g., Policy, Guide"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
                 <input
                   type="text"
                   value={formData.tags}
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="input-field"
                   placeholder="Comma-separated"
                 />
               </div>
@@ -366,10 +372,10 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
             {/* Right side - Content editor */}
             <div className="flex-1 p-4 flex flex-col overflow-hidden">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content <span className="text-gray-400 font-normal">(start typing your document)</span>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Content <span className="text-slate-400 font-normal">(start typing your document)</span>
               </label>
-              <div className="flex-1 border rounded-lg overflow-hidden">
+              <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden">
                 <RichTextEditor
                   content={formData.content || ''}
                   onChange={(html) => setFormData({ ...formData, content: html })}
@@ -380,18 +386,18 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 p-4 border-t bg-gray-50">
+          <div className="flex justify-end gap-3 p-4 border-t border-slate-200 surface-muted">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg"
+              className="btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="btn-primary flex items-center gap-2"
             >
               {createMutation.isPending ? (
                 <>
@@ -480,18 +486,18 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Upload Document</h2>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 className="text-xl font-display font-bold text-slate-900 mb-4">Upload Document</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+            <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-sm">{error}</div>
           )}
 
           {/* Drop zone */}
           <div
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+              dragActive ? 'border-sky-500 bg-sky-50' : 'border-slate-300 hover:border-slate-400'
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragActive(true) }}
             onDragLeave={() => setDragActive(false)}
@@ -508,35 +514,35 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             {selectedFile ? (
               <div>
                 <span className="text-3xl">📄</span>
-                <p className="mt-2 font-medium text-gray-900">{selectedFile.name}</p>
-                <p className="text-sm text-gray-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="mt-2 font-medium text-slate-900">{selectedFile.name}</p>
+                <p className="text-sm text-slate-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
             ) : (
               <div>
                 <span className="text-3xl">📤</span>
-                <p className="mt-2 text-gray-600">Drag & drop a file here, or click to browse</p>
-                <p className="text-sm text-gray-400 mt-1">PDF, DOC, DOCX (max 10MB)</p>
+                <p className="mt-2 text-slate-600">Drag & drop a file here, or click to browse</p>
+                <p className="text-sm text-slate-400 mt-1">PDF, DOC, DOCX (max 10MB)</p>
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="input-field"
               placeholder="Document title (uses filename if empty)"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="input-field"
               rows={2}
               placeholder="Optional description"
             />
@@ -544,22 +550,22 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
               <input
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="input-field"
                 placeholder="e.g., Reports"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
               <input
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="input-field"
                 placeholder="tag1, tag2"
               />
             </div>
@@ -569,14 +575,14 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="btn-ghost"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!selectedFile || uploadMutation.isPending}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="btn-primary disabled:opacity-50"
             >
               {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
             </button>

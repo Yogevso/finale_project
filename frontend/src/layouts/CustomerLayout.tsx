@@ -1,28 +1,24 @@
 /**
  * CustomerLayout - Layout for customer portal (authenticated customers)
+ * Restyled with Zip B design system
  */
 import { useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
   Menu,
   X,
-  FileText,
-  Home,
-  MessageSquare,
-  UserCircle,
-  LogOut,
   Search,
 } from 'lucide-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/portal/dashboard', icon: Home },
-  { name: 'Documents', href: '/portal/documents', icon: FileText },
-  { name: 'My Feedback', href: '/portal/feedback', icon: MessageSquare },
+  { name: 'Dashboard', href: '/portal/dashboard', icon: '📊' },
+  { name: 'Documents', href: '/portal/documents', icon: '📄' },
+  { name: 'My Feedback', href: '/portal/feedback', icon: '💬' },
 ]
 
 export default function CustomerLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -33,149 +29,151 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar */}
-      <div
-        className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? '' : 'hidden'}`}
-      >
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">
-          <div className="flex h-16 items-center justify-between px-4 border-b">
-            <span className="text-xl font-bold text-indigo-600">Customer Portal</span>
+    <div className="min-h-screen flex flex-col">
+      {/* Zip B Style Header */}
+      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
+        <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* Logo */}
+          <div className="flex items-center justify-between">
+            <Link to="/portal/dashboard" className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-semibold font-display">
+                DP
+              </div>
+              <div>
+                <div className="text-sm text-slate-500">Customer</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+              </div>
+            </Link>
+            
+            {/* Mobile menu button */}
             <button
-              onClick={() => setSidebarOpen(false)}
-              className="rounded-md p-2 text-gray-500 hover:bg-gray-100"
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
-              <X className="h-6 w-6" />
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6 text-slate-600" />
+              ) : (
+                <Menu className="h-6 w-6 text-slate-600" />
+              )}
             </button>
           </div>
-          <nav className="flex-1 px-2 py-4 space-y-1">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium ${
-                    isActive
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon className="h-5 w-5 mr-3" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-      </div>
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r">
-          {/* Logo */}
-          <div className="flex h-16 items-center px-4 border-b">
-            <Link to="/portal/dashboard" className="flex items-center">
-              <FileText className="h-8 w-8 text-indigo-600" />
-              <span className="ml-2 text-xl font-bold text-gray-900">Customer Portal</span>
-            </Link>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1">
-            {navigation.map((item) => {
-              const isActive = location.pathname === item.href
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
+            {navigation.map((item) => (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-full transition-colors ${
                     isActive
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon className="h-5 w-5 mr-3" />
-                  {item.name}
-                </Link>
-              )
-            })}
+                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`
+                }
+              >
+                <span className="mr-1.5">{item.icon}</span>
+                {item.name}
+              </NavLink>
+            ))}
           </nav>
 
-          {/* User info at bottom */}
-          <div className="border-t p-4">
-            <div className="flex items-center">
-              <UserCircle className="h-10 w-10 text-gray-400" />
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.full_name || user?.email}
-                </p>
-                <p className="text-xs text-gray-500 truncate">Customer</p>
-              </div>
+          {/* Search & User */}
+          <div className="hidden md:flex items-center gap-4">
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Search documents..."
+                className="input-field pl-9 w-64"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const query = (e.target as HTMLInputElement).value
+                    if (query) {
+                      navigate(`/portal/documents?search=${encodeURIComponent(query)}`)
+                    }
+                  }
+                }}
+              />
             </div>
-            <button
-              onClick={handleLogout}
-              className="mt-3 w-full flex items-center justify-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
-            >
-              <LogOut className="h-5 w-5 mr-2" />
+            
+            {/* User info */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-500">{user?.full_name || user?.email}</span>
+              <span className="pill">Customer</span>
+            </div>
+            
+            <button onClick={handleLogout} className="btn-ghost">
               Sign Out
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Main content area */}
-      <div className="lg:pl-64">
-        {/* Top header */}
-        <header className="sticky top-0 z-40 bg-white border-b">
-          <div className="flex h-16 items-center justify-between px-4">
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden rounded-md p-2 text-gray-500 hover:bg-gray-100"
-            >
-              <Menu className="h-6 w-6" />
-            </button>
-
-            {/* Search bar */}
-            <div className="flex-1 max-w-lg mx-4">
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white">
+            <div className="container mx-auto px-4 py-4 space-y-2">
+              {navigation.map((item) => (
+                <NavLink
+                  key={item.href}
+                  to={item.href}
+                  className={({ isActive }) =>
+                    `flex items-center px-4 py-2 rounded-xl transition-colors ${
+                      isActive
+                        ? 'bg-sky-100 text-sky-800 font-medium'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`
+                  }
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <span className="mr-2">{item.icon}</span>
+                  {item.name}
+                </NavLink>
+              ))}
+              <hr className="my-3 border-slate-200" />
+              {/* Mobile search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="search"
                   placeholder="Search documents..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="input-field pl-9"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       const query = (e.target as HTMLInputElement).value
                       if (query) {
+                        setMobileMenuOpen(false)
                         navigate(`/portal/documents?search=${encodeURIComponent(query)}`)
                       }
                     }
                   }}
                 />
               </div>
-            </div>
-
-            {/* User dropdown - mobile */}
-            <div className="lg:hidden">
-              <button
-                onClick={handleLogout}
-                className="rounded-md p-2 text-gray-500 hover:bg-gray-100"
-              >
-                <LogOut className="h-6 w-6" />
-              </button>
+              <div className="pt-2">
+                <button onClick={handleLogout} className="w-full btn-secondary">
+                  Sign Out
+                </button>
+              </div>
             </div>
           </div>
-        </header>
+        )}
+      </header>
 
-        {/* Page content */}
-        <main className="p-6">
+      {/* Main Content */}
+      <main className="flex-1">
+        <div className="container mx-auto px-4 py-8">
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
+        <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
+          <p>Customer Portal</p>
+          <p className="text-xs mt-1">© {new Date().getFullYear()} DocPortal. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   )
 }

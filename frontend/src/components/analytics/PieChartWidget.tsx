@@ -22,10 +22,10 @@ export function PieChartWidget({
 }: PieChartWidgetProps) {
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="h-5 bg-gray-200 rounded w-40 mb-4 animate-pulse"></div>
+      <div className="bg-white rounded-xl shadow p-6">
+        <div className="h-5 bg-slate-200 rounded w-40 mb-4 animate-pulse"></div>
         <div className="animate-pulse" style={{ height }}>
-          <div className="bg-gray-100 rounded-full w-48 h-48 mx-auto"></div>
+          <div className="bg-slate-100 rounded-full w-48 h-48 mx-auto"></div>
         </div>
       </div>
     )
@@ -35,18 +35,18 @@ export function PieChartWidget({
 
   if (filteredData.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">{title}</h3>
+      <div className="bg-white rounded-xl shadow p-6">
+        <h3 className="text-lg font-medium text-slate-900 mb-4">{title}</h3>
         <div className="flex items-center justify-center" style={{ height }}>
-          <p className="text-gray-500">No data available</p>
+          <p className="text-slate-500">No data available</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">{title}</h3>
+    <div className="bg-white rounded-xl shadow p-6">
+      <h3 className="text-lg font-medium text-slate-900 mb-4">{title}</h3>
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Pie
@@ -75,7 +75,7 @@ export function PieChartWidget({
             layout="horizontal"
             verticalAlign="bottom"
             align="center"
-            formatter={(value) => <span className="text-sm text-gray-600">{value}</span>}
+            formatter={(value) => <span className="text-sm text-slate-600">{value}</span>}
           />
         </PieChart>
       </ResponsiveContainer>

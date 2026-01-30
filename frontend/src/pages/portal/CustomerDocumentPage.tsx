@@ -59,22 +59,22 @@ export default function CustomerDocumentPage() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
       </div>
     )
   }
 
   if (error || !document) {
     return (
-      <div className="text-center py-12 bg-white rounded-lg shadow">
-        <FileText className="h-16 w-16 mx-auto text-gray-300" />
-        <h3 className="mt-4 text-lg font-medium text-gray-900">Document not found</h3>
-        <p className="mt-2 text-gray-500">
+      <div className="text-center py-12 surface-card rounded-2xl">
+        <FileText className="h-16 w-16 mx-auto text-slate-300" />
+        <h3 className="mt-4 text-lg font-display font-medium text-slate-900">Document not found</h3>
+        <p className="mt-2 text-slate-500">
           This document may not exist or you don't have access to view it.
         </p>
         <Link
           to="/portal/documents"
-          className="mt-4 inline-flex items-center text-indigo-600 hover:text-indigo-500"
+          className="mt-4 inline-flex items-center text-sky-600 hover:text-sky-500"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Documents
@@ -88,29 +88,29 @@ export default function CustomerDocumentPage() {
       {/* Back button */}
       <Link
         to="/portal/documents"
-        className="inline-flex items-center text-gray-600 hover:text-gray-900"
+        className="inline-flex items-center text-slate-600 hover:text-slate-900"
       >
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Documents
       </Link>
 
       {/* Document header */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
+      <div className="surface-card rounded-2xl">
+        <div className="p-6 border-b border-slate-200">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{document.title}</h1>
+              <h1 className="text-2xl font-display font-bold text-slate-900">{document.title}</h1>
               {document.description && (
-                <p className="mt-2 text-gray-600">{document.description}</p>
+                <p className="mt-2 text-slate-600">{document.description}</p>
               )}
             </div>
-            <span className="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
+            <span className="pill bg-emerald-100 text-emerald-700">
               v{document.version}
             </span>
           </div>
 
           {/* Metadata */}
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
+          <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-500">
             {document.category && (
               <span className="inline-flex items-center">
                 <Folder className="h-4 w-4 mr-1" />
@@ -126,11 +126,11 @@ export default function CustomerDocumentPage() {
           {/* Tags */}
           {document.tags.length > 0 && (
             <div className="mt-4 flex items-center gap-2">
-              <Tag className="h-4 w-4 text-gray-400" />
+              <Tag className="h-4 w-4 text-slate-400" />
               {document.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="px-2 py-0.5 bg-gray-100 text-gray-600 text-sm rounded"
+                  className="pill bg-sky-100 text-sky-700"
                 >
                   {tag}
                 </span>
@@ -150,9 +150,9 @@ export default function CustomerDocumentPage() {
 
       {/* Attachments */}
       {document.attachments.length > 0 && (
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+        <div className="surface-card rounded-2xl">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
               <Paperclip className="h-5 w-5 mr-2" />
               Attachments ({document.attachments.length})
             </h2>
@@ -162,13 +162,13 @@ export default function CustomerDocumentPage() {
               {document.attachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"
                 >
                   <div className="flex items-center min-w-0">
-                    <FileText className="h-8 w-8 text-gray-400 flex-shrink-0" />
+                    <FileText className="h-8 w-8 text-slate-400 flex-shrink-0" />
                     <div className="ml-3 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{attachment.filename}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-medium text-slate-900 truncate">{attachment.filename}</p>
+                      <p className="text-sm text-slate-500">
                         {formatFileSize(attachment.file_size)}
                         {attachment.mime_type && ` • ${attachment.mime_type}`}
                       </p>
@@ -176,7 +176,7 @@ export default function CustomerDocumentPage() {
                   </div>
                   <a
                     href={`/api/v1/attachments/${attachment.id}/download`}
-                    className="ml-4 flex items-center px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
+                    className="ml-4 flex items-center px-3 py-2 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700"
                   >
                     <Download className="h-4 w-4 mr-1" />
                     Download
@@ -189,29 +189,29 @@ export default function CustomerDocumentPage() {
       )}
 
       {/* Feedback section */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Submit Feedback</h2>
-          <p className="text-sm text-gray-500">
+      <div className="surface-card rounded-2xl">
+        <div className="px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-display font-semibold text-slate-900">Submit Feedback</h2>
+          <p className="text-sm text-slate-500">
             Have a question or suggestion about this document? Let us know!
           </p>
         </div>
         <div className="p-6">
           {feedbackSubmitted ? (
             <div className="text-center py-8">
-              <CheckCircle className="h-12 w-12 mx-auto text-green-500" />
-              <h3 className="mt-4 font-medium text-gray-900">Thank you for your feedback!</h3>
-              <p className="mt-2 text-gray-500">
+              <CheckCircle className="h-12 w-12 mx-auto text-emerald-500" />
+              <h3 className="mt-4 font-medium text-slate-900">Thank you for your feedback!</h3>
+              <p className="mt-2 text-slate-500">
                 We've received your submission and will respond soon.
               </p>
               <div className="mt-4 flex justify-center gap-4">
                 <button
                   onClick={() => setFeedbackSubmitted(false)}
-                  className="text-indigo-600 hover:text-indigo-500"
+                  className="text-sky-600 hover:text-sky-500"
                 >
                   Submit another
                 </button>
-                <Link to="/portal/feedback" className="text-indigo-600 hover:text-indigo-500">
+                <Link to="/portal/feedback" className="text-sky-600 hover:text-sky-500">
                   View my feedback
                 </Link>
               </div>

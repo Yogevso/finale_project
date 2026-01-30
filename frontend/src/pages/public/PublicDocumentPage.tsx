@@ -42,12 +42,12 @@ export default function PublicDocumentPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/2 mb-4" />
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-8" />
+          <div className="h-8 bg-slate-200 rounded-xl w-1/2 mb-4" />
+          <div className="h-4 bg-slate-200 rounded-xl w-1/4 mb-8" />
           <div className="space-y-3">
-            <div className="h-4 bg-gray-200 rounded" />
-            <div className="h-4 bg-gray-200 rounded" />
-            <div className="h-4 bg-gray-200 rounded w-3/4" />
+            <div className="h-4 bg-slate-200 rounded-xl" />
+            <div className="h-4 bg-slate-200 rounded-xl" />
+            <div className="h-4 bg-slate-200 rounded-xl w-3/4" />
           </div>
         </div>
       </div>
@@ -57,14 +57,14 @@ export default function PublicDocumentPage() {
   if (error || !doc) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Document Not Found</h1>
-        <p className="text-gray-500 mb-6">
+        <FileText className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+        <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Document Not Found</h1>
+        <p className="text-slate-500 mb-6">
           This document doesn't exist or is not publicly accessible.
         </p>
         <Link
           to="/browse"
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+          className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 font-medium"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to documents
@@ -78,7 +78,7 @@ export default function PublicDocumentPage() {
       {/* Back link */}
       <Link
         to="/browse"
-        className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-6"
+        className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to documents
@@ -87,17 +87,17 @@ export default function PublicDocumentPage() {
       {/* Document Header */}
       <header className="mb-8">
         <div className="flex items-start gap-4">
-          <div className="bg-blue-100 rounded-lg p-3">
-            <FileText className="h-8 w-8 text-blue-600" />
+          <div className="bg-sky-100 rounded-xl p-3">
+            <FileText className="h-8 w-8 text-sky-600" />
           </div>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">{doc.title}</h1>
-            <p className="text-gray-500 mt-1">{doc.document_number}</p>
+            <h1 className="text-3xl font-display font-bold text-slate-900">{doc.title}</h1>
+            <p className="text-slate-500 mt-1">{doc.document_number}</p>
           </div>
         </div>
 
         {/* Metadata */}
-        <div className="flex flex-wrap gap-4 mt-6 text-sm text-gray-500">
+        <div className="flex flex-wrap gap-4 mt-6 text-sm text-slate-500">
           <div className="flex items-center gap-1">
             <Calendar className="h-4 w-4" />
             <span>Created {formatDate(doc.created_at)}</span>
@@ -128,7 +128,7 @@ export default function PublicDocumentPage() {
             {doc.tags.split(',').map((tag, i) => (
               <span
                 key={i}
-                className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm"
+                className="pill bg-slate-100 text-slate-600 border-slate-200"
               >
                 {tag.trim()}
               </span>
@@ -140,16 +140,16 @@ export default function PublicDocumentPage() {
       {/* Description */}
       {doc.description && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Description</h2>
-          <p className="text-gray-600 leading-relaxed">{doc.description}</p>
+          <h2 className="text-lg font-display font-semibold text-slate-900 mb-3">Description</h2>
+          <p className="text-slate-600 leading-relaxed">{doc.description}</p>
         </section>
       )}
 
       {/* Document Content */}
       {doc.content && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Content</h2>
-          <div className="prose prose-gray max-w-none bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-lg font-display font-semibold text-slate-900 mb-3">Content</h2>
+          <div className="prose prose-slate max-w-none surface-card rounded-2xl p-6">
             <div 
               dangerouslySetInnerHTML={{ __html: doc.content }}
               className="whitespace-pre-wrap"
@@ -161,28 +161,28 @@ export default function PublicDocumentPage() {
       {/* Attachments */}
       {doc.attachments && doc.attachments.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-display font-semibold text-slate-900 mb-3 flex items-center gap-2">
             <Paperclip className="h-5 w-5" />
             Attachments ({doc.attachments.length})
           </h2>
-          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+          <div className="surface-card rounded-2xl divide-y divide-slate-100">
             {doc.attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="flex items-center justify-between p-4 hover:bg-gray-50"
+                className="flex items-center justify-between p-4 hover:bg-slate-50"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-gray-400" />
+                  <FileText className="h-5 w-5 text-slate-400" />
                   <div>
-                    <p className="font-medium text-gray-900">{attachment.filename}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-slate-900">{attachment.filename}</p>
+                    <p className="text-sm text-slate-500">
                       {formatFileSize(attachment.file_size)} • {attachment.content_type}
                     </p>
                   </div>
                 </div>
                 <Link
                   to="/login"
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  className="flex items-center gap-2 text-sky-600 hover:text-sky-700 text-sm font-medium"
                 >
                   <Download className="h-4 w-4" />
                   Login to download
@@ -194,16 +194,16 @@ export default function PublicDocumentPage() {
       )}
 
       {/* Login CTA */}
-      <section className="bg-blue-50 rounded-lg p-6 text-center">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      <section className="bg-sky-50 rounded-2xl p-6 text-center">
+        <h3 className="text-lg font-display font-semibold text-slate-900 mb-2">
           Want access to more documents?
         </h3>
-        <p className="text-gray-600 mb-4">
+        <p className="text-slate-600 mb-4">
           Login to access internal documentation, download attachments, and more.
         </p>
         <Link
           to="/login"
-          className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"
+          className="btn-primary inline-flex items-center gap-2"
         >
           <LogIn className="h-4 w-4" />
           Login

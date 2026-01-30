@@ -94,7 +94,7 @@ export function PermissionIndicator({
   if (!canRead && !canWrite) {
     return (
       <div
-        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs ${className}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-rose-100 text-rose-700 text-xs ${className}`}
       >
         <Lock className="w-3 h-3" />
         <span>No Access</span>
@@ -105,10 +105,10 @@ export function PermissionIndicator({
   if (canWrite) {
     return (
       <div
-        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs ${className}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs ${className}`}
         title="You can edit this document"
       >
-        <span className="w-2 h-2 rounded-full bg-green-500" />
+        <span className="w-2 h-2 rounded-full bg-emerald-500" />
         <span>Can Edit</span>
       </div>
     )

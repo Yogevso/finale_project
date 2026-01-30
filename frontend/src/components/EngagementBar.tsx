@@ -90,8 +90,8 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
           disabled={toggleBookmark.isPending}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
             bookmarkStatus?.is_bookmarked
-              ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-              : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
           }`}
         >
           <span>{bookmarkStatus?.is_bookmarked ? '★' : '☆'}</span>
@@ -102,14 +102,14 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
 
         {/* Feedback */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Was this helpful?</span>
+          <span className="text-sm text-slate-500">Was this helpful?</span>
           <button
             onClick={() => submitFeedback.mutate(true)}
             disabled={submitFeedback.isPending}
-            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-xl text-sm flex items-center gap-1 ${
               myFeedback?.is_helpful === true
-                ? 'bg-green-100 text-green-700 border border-green-200'
-                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
           >
             👍 <span className="hidden sm:inline">Yes</span>
@@ -120,10 +120,10 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
           <button
             onClick={() => submitFeedback.mutate(false)}
             disabled={submitFeedback.isPending}
-            className={`px-3 py-1 rounded-lg text-sm flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-xl text-sm flex items-center gap-1 ${
               myFeedback?.is_helpful === false
-                ? 'bg-red-100 text-red-700 border border-red-200'
-                : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
+                ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
           >
             👎 <span className="hidden sm:inline">No</span>
@@ -135,24 +135,24 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
 
         {/* Reading Progress */}
         <div className="flex items-center gap-3 ml-auto">
-          <span className="text-sm text-gray-500">Reading:</span>
+          <span className="text-sm text-slate-500">Reading:</span>
           <div className="flex items-center gap-2">
-            <div className="w-32 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-32 h-2.5 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 ${
-                  displayProgress >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                  displayProgress >= 100 ? 'bg-emerald-500' : 'bg-sky-500'
                 }`}
                 style={{ width: `${displayProgress}%` }}
               />
             </div>
             <span className={`text-sm font-medium min-w-[3rem] ${
-              displayProgress >= 100 ? 'text-green-600' : 'text-blue-600'
+              displayProgress >= 100 ? 'text-emerald-600' : 'text-sky-600'
             }`}>
               {Math.round(displayProgress)}%
             </span>
           </div>
           {displayProgress >= 100 && (
-            <span className="text-green-600 text-sm">✓ Complete</span>
+            <span className="text-emerald-600 text-sm">✓ Complete</span>
           )}
         </div>
       </div>

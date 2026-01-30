@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import DocumentsPage from './pages/DocumentsPage'
 import DocumentDetailPage from './pages/DocumentDetailPage'
+import DocumentFullscreenPage from './pages/DocumentFullscreenPage'
 import UsersPage from './pages/UsersPage'
 import CompaniesPage from './pages/CompaniesPage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
@@ -37,7 +38,7 @@ function RoleBasedRedirect() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
       </div>
     )
   }
@@ -47,8 +48,8 @@ function RoleBasedRedirect() {
     return <Navigate to={getHomeRouteForRole(user.role)} replace />
   }
 
-  // Not logged in, show public home
-  return <PublicHomePage />
+  // Not logged in, redirect to public browse page
+  return <Navigate to="/browse" replace />
 }
 
 // 404 page component
@@ -57,11 +58,11 @@ function NotFoundPage() {
   const homePath = user ? getHomeRouteForRole(user.role) : '/'
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
-        <h1 className="text-6xl font-bold text-gray-300">404</h1>
-        <p className="text-xl text-gray-600 mt-4">Page not found</p>
-        <a href={homePath} className="mt-6 inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <h1 className="text-6xl font-bold text-slate-300">404</h1>
+        <p className="text-xl text-slate-600 mt-4">Page not found</p>
+        <a href={homePath} className="mt-6 inline-block px-6 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700">
           Go Home
         </a>
       </div>
@@ -115,6 +116,16 @@ function App() {
           <Route index element={<DocumentsPage />} />
           <Route path=":id" element={<DocumentDetailPage />} />
         </Route>
+
+        {/* Fullscreen Document View - no layout wrapper */}
+        <Route
+          path="/documents/:id/fullscreen"
+          element={
+            <InternalGuard>
+              <DocumentFullscreenPage />
+            </InternalGuard>
+          }
+        />
 
         {/* Reviews - editors and above */}
         <Route

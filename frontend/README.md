@@ -1,14 +1,16 @@
 # Document Portal V2 - Frontend
 
-Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor. Includes management portal for internal users, customer portal for company-based access, and public viewer.
+Modern React SPA with TypeScript, Vite, TailwindCSS, TipTap rich text editor, and real-time collaboration. Features the Zip B design system with Space Grotesk typography and a modern slate/sky color palette.
 
 ---
 
 ## 🚀 Features
 
 ### User Interface
+- **Zip B Design System** - Space Grotesk + IBM Plex Sans typography
+- **Modern Color Palette** - Slate, Sky, Emerald, Amber, Rose
 - **Responsive Design** - Works on desktop, tablet, and mobile
-- **Dark/Light Mode** - System preference detection (coming soon)
+- **Top Header Navigation** - Clean, modern navigation layout
 - **Accessible** - ARIA labels, keyboard navigation
 - **Fast** - Vite HMR, optimized builds
 
@@ -16,6 +18,7 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 - **Dashboard** - Overview of recent documents, stats
 - **Document List** - Paginated, searchable, filterable
 - **Document Editor** - Rich text editing with TipTap
+- **Real-Time Collaboration** - Google Docs-style simultaneous editing
 - **Version Management** - Create, view, publish versions
 - **File Attachments** - Drag & drop upload, download
 - **Comments** - Threaded discussions, inline comments
@@ -38,6 +41,8 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 ### Components
 - **NotificationBell** - Real-time notification dropdown
 - **RichTextEditor** - TipTap with headings, lists, links, tables
+- **CollaborativeEditor** - Real-time multi-user editing
+- **CollaborationStatus** - Live cursor presence indicators
 - **CommentsSection** - Threaded comments with replies
 - **VersionsSection** - Version history and publishing
 - **AttachmentsSection** - File upload and management
@@ -64,8 +69,10 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, and TipTap rich text editor
 | Language | TypeScript 5 |
 | Build Tool | Vite 5 |
 | Styling | TailwindCSS 3 |
+| Design System | Zip B (Space Grotesk + IBM Plex Sans) |
 | Icons | Lucide React |
 | Rich Text | TipTap 2 |
+| Real-Time Collab | Yjs + Hocuspocus (WebSocket) |
 | Charts | Recharts 2 |
 | HTTP Client | Fetch API |
 | Routing | React Router 6 |
@@ -200,16 +207,16 @@ frontend/
 │   ├── index.css                # Global styles + Tailwind
 │   │
 │   ├── components/              # Reusable UI components
-│   │   ├── Layout.tsx           # Main layout wrapper
-│   │   ├── Header.tsx           # Top navigation bar
-│   │   ├── Sidebar.tsx          # Side navigation menu
+│   │   ├── Layout.tsx           # Top header navigation layout
 │   │   ├── NotificationBell.tsx # Notification dropdown
 │   │   ├── DocumentEditor.tsx   # Document form + editor
 │   │   ├── RichTextEditor.tsx   # TipTap editor wrapper
+│   │   ├── CollaborativeEditor.tsx # Real-time collaboration
 │   │   ├── CommentsSection.tsx  # Comments list + form
 │   │   ├── VersionsSection.tsx  # Version history
 │   │   ├── AttachmentsSection.tsx # File attachments
 │   │   ├── EngagementBar.tsx    # Bookmark, feedback, progress
+│   │   ├── CollaborationStatus.tsx # Live editing indicators
 │   │   └── analytics/           # Analytics dashboard components
 │   │       ├── StatCard.tsx     # Stats with trends
 │   │       ├── LineChartWidget.tsx
@@ -279,39 +286,107 @@ frontend/
 
 ---
 
-## 🎨 Styling
+## 🎨 Design System (Zip B)
 
-### TailwindCSS Classes
+The frontend uses the **Zip B Design System** with a modern, cohesive visual language.
 
-Common patterns used:
+### Typography
 
-```tsx
-// Card
-<div className="bg-white rounded-lg shadow-md p-6">
-
-// Button Primary
-<button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-
-// Button Secondary
-<button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg">
-
-// Input
-<input className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500">
-
-// Badge
-<span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-```
+| Font | Usage | Source |
+|------|-------|--------|
+| **Space Grotesk** | Headings, display text | Google Fonts |
+| **IBM Plex Sans** | Body text, UI elements | Google Fonts |
 
 ### Color Palette
 
-| Color | Usage |
-|-------|-------|
-| Blue-600 | Primary actions, links |
-| Green-600 | Success, published |
-| Yellow-500 | Warning, draft |
-| Red-600 | Error, delete |
-| Gray-100/200 | Backgrounds |
-| Gray-700/800 | Text |
+| Color | Tailwind | Usage |
+|-------|----------|-------|
+| Slate | `slate-*` | Backgrounds, text, borders |
+| Sky | `sky-*` | Primary actions, links, focus states |
+| Emerald | `emerald-*` | Success, published, positive |
+| Amber | `amber-*` | Warning, draft, pending |
+| Rose | `rose-*` | Error, delete, destructive |
+
+### Component Classes
+
+```tsx
+// Card - Modern rounded with subtle shadow
+<div className="surface-card rounded-2xl p-6">
+
+// Card with hover effect
+<div className="surface-card-hover rounded-2xl p-6">
+
+// Muted background section
+<div className="surface-muted rounded-xl p-4">
+
+// Primary Button
+<button className="btn-primary">Submit</button>
+
+// Secondary Button
+<button className="btn-secondary">Cancel</button>
+
+// Ghost Button
+<button className="btn-ghost">View Details</button>
+
+// Input Field
+<input className="input-field" placeholder="Enter text..." />
+
+// Select Field
+<select className="select-field">
+  <option>Option 1</option>
+</select>
+
+// Section Title
+<h2 className="section-title">Documents</h2>
+
+// Eyebrow Label
+<span className="eyebrow">Category</span>
+
+// Pill/Badge
+<span className="pill bg-emerald-100 text-emerald-700">Published</span>
+```
+
+### Utility Classes
+
+| Class | Description |
+|-------|-------------|
+| `surface-card` | White card with border, shadow, rounded-2xl |
+| `surface-card-hover` | Card with hover lift effect |
+| `surface-muted` | Subtle slate-50 background |
+| `surface-contrast` | Dark slate-900 background |
+| `btn-primary` | Sky-600 button with hover states |
+| `btn-secondary` | Slate outline button |
+| `btn-ghost` | Transparent with hover background |
+| `input-field` | Styled input with focus ring |
+| `select-field` | Styled select dropdown |
+| `section-title` | Large bold heading |
+| `eyebrow` | Small uppercase label |
+| `pill` | Rounded badge/tag |
+
+### Border Radius
+
+| Element | Radius |
+|---------|--------|
+| Cards | `rounded-2xl` (16px) |
+| Buttons | `rounded-xl` (12px) |
+| Inputs | `rounded-xl` (12px) |
+| Badges | `rounded-full` |
+| Modals | `rounded-2xl` (16px) |### Status Badges
+
+```tsx
+// Document Status
+<span className="pill bg-emerald-100 text-emerald-700">Published</span>
+<span className="pill bg-amber-100 text-amber-700">Draft</span>
+<span className="pill bg-slate-100 text-slate-700">Archived</span>
+
+// Role Badges
+<span className="pill bg-purple-100 text-purple-700">System Admin</span>
+<span className="pill bg-rose-100 text-rose-700">Admin</span>
+<span className="pill bg-sky-100 text-sky-700">Manager</span>
+<span className="pill bg-emerald-100 text-emerald-700">Editor</span>
+<span className="pill bg-slate-100 text-slate-700">Viewer</span>
+<span className="pill bg-amber-100 text-amber-700">Customer</span>
+```
 
 ---
 

@@ -46,33 +46,33 @@ function CollaboratorAvatar({
       onMouseLeave={() => setShowTooltip(false)}
     >
       <div
-        className={`relative rounded-full flex items-center justify-center font-medium text-white ring-2 ring-white transition-transform hover:scale-110 cursor-pointer ${sizeClasses[size]} ${isCurrentUser ? 'ring-blue-500' : ''}`}
+        className={`relative rounded-full flex items-center justify-center font-medium text-white ring-2 ring-white transition-transform hover:scale-110 cursor-pointer ${sizeClasses[size]} ${isCurrentUser ? 'ring-sky-500' : ''}`}
         style={{ backgroundColor: collaborator.color }}
       >
         {initial}
 
         {/* Online indicator */}
         <Circle
-          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 fill-green-500 text-green-500"
+          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 fill-emerald-500 text-emerald-500"
         />
       </div>
 
       {/* Tooltip */}
       {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-xs rounded whitespace-nowrap z-50 pointer-events-none">
           <div className="text-center">
             <p className="font-medium">
               {collaborator.username}
               {isCurrentUser && ' (you)'}
             </p>
             {collaborator.cursor && (
-              <p className="text-xs text-gray-300 flex items-center gap-1 justify-center">
+              <p className="text-xs text-slate-300 flex items-center gap-1 justify-center">
                 <Edit3 className="w-3 h-3" />
                 Currently editing
               </p>
             )}
           </div>
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
         </div>
       )}
     </div>
@@ -108,7 +108,7 @@ export function PresenceIndicator({
 
   if (collaborators.length === 0) {
     return (
-      <div className={`flex items-center gap-2 text-gray-500 ${className}`}>
+      <div className={`flex items-center gap-2 text-slate-500 ${className}`}>
         <Users className="w-4 h-4" />
         <span className="text-sm">No collaborators</span>
       </div>
@@ -131,7 +131,7 @@ export function PresenceIndicator({
         {/* Overflow indicator */}
         {overflowCount > 0 && (
           <div
-            className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium ring-2 ring-white cursor-pointer"
+            className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-medium ring-2 ring-white cursor-pointer"
             title={`${overflowCount} more collaborator${overflowCount > 1 ? 's' : ''}`}
           >
             +{overflowCount}
@@ -141,7 +141,7 @@ export function PresenceIndicator({
 
       {/* Count badge */}
       {showCount && (
-        <span className="ml-2 px-2 py-0.5 bg-gray-100 rounded-full text-xs font-medium text-gray-600 flex items-center gap-1">
+        <span className="ml-2 px-2 py-0.5 bg-slate-100 rounded-full text-xs font-medium text-slate-600 flex items-center gap-1">
           <Users className="w-3 h-3" />
           {collaborators.length}
         </span>
@@ -157,7 +157,7 @@ export function PresenceIndicator({
     <div className={`relative ${className}`}>
       <button
         onClick={() => setIsPopoverOpen(!isPopoverOpen)}
-        className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+        className="p-1 hover:bg-slate-100 rounded-xl transition-colors"
       >
         {avatarStack}
       </button>
@@ -176,7 +176,7 @@ export function PresenceIndicator({
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold">Collaborators</h4>
-                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">
                   {collaborators.length} online
                 </span>
               </div>
@@ -189,7 +189,7 @@ export function PresenceIndicator({
                   return (
                     <div
                       key={collaborator.clientId}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors"
                     >
                       <CollaboratorAvatar
                         collaborator={collaborator}
@@ -200,10 +200,10 @@ export function PresenceIndicator({
                         <p className="font-medium truncate">
                           {collaborator.username}
                           {isCurrentUser && (
-                            <span className="text-gray-500 ml-1">(you)</span>
+                            <span className="text-slate-500 ml-1">(you)</span>
                           )}
                         </p>
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                        <p className="text-xs text-slate-500 flex items-center gap-1">
                           {isEditing ? (
                             <>
                               <Edit3 className="w-3 h-3" />
@@ -249,7 +249,7 @@ export function PresenceIndicatorCompact({
 
   return (
     <div
-      className={`flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-sm ${className}`}
+      className={`flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm ${className}`}
       title={`${otherCount} other user${otherCount > 1 ? 's' : ''} editing this document`}
     >
       <Circle className="w-2 h-2 fill-current" />

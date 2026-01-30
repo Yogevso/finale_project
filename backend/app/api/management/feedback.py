@@ -3,7 +3,7 @@ Feedback Management API - Admin/Manager endpoints for managing customer feedback
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.models import (
+    Attachment,
+    Comment,
     Document,
     Feedback,
     FeedbackStatus,
@@ -21,8 +23,69 @@ from app.models import (
     Tenant,
     User,
     UserRole,
+    Version,
 )
 from app.security import get_current_user
+
+
+def get_document_contributors(db: Session, document_id: int) -> Set[int]:
+    """
+    Get all user IDs who have 'touched' (contributed to) a document.
+    This includes:
+    - Document creator
+    - Version creators (editors)
+    - Attachment uploaders
+    - Commenters
+    """
+    contributors: Set[int] = set()
+    
+    # Get document creator
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if document:
+        contributors.add(document.created_by)
+    
+    # Get version creators
+    versions = db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+    for (user_id,) in versions:
+        contributors.add(user_id)
+    
+    # Get attachment uploaders
+    attachments = db.query(Attachment.uploaded_by).filter(Attachment.document_id == document_id).distinct().all()
+    for (user_id,) in attachments:
+        contributors.add(user_id)
+    
+    # Get commenters
+    comments = db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
+    for (user_id,) in comments:
+        contributors.add(user_id)
+    
+    return contributors
+
+
+def can_view_feedback(db: Session, feedback: Feedback, current_user: User, contributors: Set[int] = None) -> bool:
+    """
+    Check if a user can view a specific feedback.
+    Rules:
+    - Feedback author can always see their own feedback
+    - Internal staff who have contributed to the document can see all feedback
+    - System admins can see all feedback
+    """
+    # Feedback author can always see their own
+    if feedback.user_id == current_user.id:
+        return True
+    
+    # System admin can see all
+    if current_user.role == UserRole.SYSTEM_ADMIN:
+        return True
+    
+    # Internal staff who have contributed to this document can see feedback
+    if current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
+        if contributors is None:
+            contributors = get_document_contributors(db, feedback.document_id)
+        if current_user.id in contributors:
+            return True
+    
+    return False
 
 
 # ========== Schemas ==========
@@ -85,6 +148,15 @@ def require_admin_or_manager(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
+def require_internal_staff(current_user: User = Depends(get_current_user)) -> User:
+    """Require internal staff role (not customer)"""
+    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Internal staff access required"
+        )
+    return current_user
+
+
 # ========== List All Feedback ==========
 @router.get("", response_model=FeedbackListManagementResponse)
 async def list_all_feedback(
@@ -95,11 +167,15 @@ async def list_all_feedback(
     company_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_internal_staff),
 ):
     """
-    List all feedback with filters (admin/manager only).
+    List feedback with contributor-based visibility filtering.
+    
+    Only shows feedback for documents the current user has contributed to
+    (unless user is system admin who can see all).
     """
+    # Get all feedback first, then filter by visibility
     query = db.query(Feedback).options(
         joinedload(Feedback.user),
         joinedload(Feedback.document),
@@ -129,11 +205,31 @@ async def list_all_feedback(
     # Order by newest first
     query = query.order_by(Feedback.created_at.desc())
 
-    # Get total count
-    total = query.count()
-
-    # Paginate
-    items = query.offset((page - 1) * per_page).limit(per_page).all()
+    # Get all matching feedback
+    all_feedback = query.all()
+    
+    # Filter by contributor visibility (unless system admin)
+    if current_user.role == UserRole.SYSTEM_ADMIN:
+        visible_feedback = all_feedback
+    else:
+        # Cache contributors per document to avoid repeated queries
+        contributors_cache: dict[int, Set[int]] = {}
+        visible_feedback = []
+        
+        for fb in all_feedback:
+            if fb.document_id not in contributors_cache:
+                contributors_cache[fb.document_id] = get_document_contributors(db, fb.document_id)
+            
+            if can_view_feedback(db, fb, current_user, contributors_cache[fb.document_id]):
+                visible_feedback.append(fb)
+    
+    # Get total count of visible items
+    total = len(visible_feedback)
+    
+    # Manual pagination on filtered results
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    items = visible_feedback[start_idx:end_idx]
 
     # Build response
     response_items = []
@@ -179,10 +275,10 @@ async def list_all_feedback(
 async def get_feedback(
     feedback_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_internal_staff),
 ):
     """
-    Get feedback details (admin/manager only).
+    Get feedback details with contributor-based visibility.
     """
     feedback = (
         db.query(Feedback)
@@ -197,6 +293,13 @@ async def get_feedback(
 
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    # Check visibility using contributor rules
+    if not can_view_feedback(db, feedback, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to view this feedback"
+        )
 
     tenant = (
         db.query(Tenant).filter(Tenant.id == feedback.user.tenant_id).first()
@@ -235,6 +338,7 @@ async def respond_to_feedback(
 ):
     """
     Respond to customer feedback. Sets status to RESPONDED and notifies customer.
+    Only allowed for contributors to the document.
     """
     feedback = (
         db.query(Feedback)
@@ -248,6 +352,13 @@ async def respond_to_feedback(
 
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
+
+    # Check visibility using contributor rules
+    if not can_view_feedback(db, feedback, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to respond to this feedback"
+        )
 
     # Update feedback
     feedback.response = data.response
@@ -313,10 +424,11 @@ async def update_feedback_status(
     feedback_id: int,
     data: FeedbackStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_internal_staff),
 ):
     """
     Update feedback status (e.g., mark as closed).
+    Only allowed for contributors to the document.
     """
     feedback = (
         db.query(Feedback)
@@ -331,6 +443,13 @@ async def update_feedback_status(
 
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
+
+    # Check visibility using contributor rules
+    if not can_view_feedback(db, feedback, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to update this feedback"
+        )
 
     feedback.status = data.status
     db.commit()

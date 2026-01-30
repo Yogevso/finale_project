@@ -29,7 +29,7 @@ export function FeedbackSection({ params }: FeedbackSectionProps) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">Feedback Analytics</h2>
+      <h2 className="text-xl font-semibold text-slate-900">Feedback Analytics</h2>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -61,14 +61,14 @@ export function FeedbackSection({ params }: FeedbackSectionProps) {
 
       {/* Response Time */}
       {feedbackAnalytics?.avg_response_time_hours !== null && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-xl shadow p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-50 rounded-full">
-              <Clock className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-emerald-50 rounded-full">
+              <Clock className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Avg. Response Time</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-slate-500">Avg. Response Time</p>
+              <p className="text-2xl font-bold text-slate-900">
                 {feedbackAnalytics?.avg_response_time_hours?.toFixed(1) || 'N/A'} hours
               </p>
             </div>

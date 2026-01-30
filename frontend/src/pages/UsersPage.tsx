@@ -106,7 +106,7 @@ export default function UsersPage() {
 
   if (!isAdmin) {
     return (
-      <div className="bg-yellow-50 text-yellow-700 p-6 rounded-xl">
+      <div className="surface-card rounded-2xl p-6 text-amber-700 bg-amber-50">
         You don't have permission to view this page.
       </div>
     )
@@ -115,17 +115,17 @@ export default function UsersPage() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'system_admin':
-        return 'bg-red-100 text-red-700'
+        return 'bg-rose-100 text-rose-700'
       case 'admin':
         return 'bg-purple-100 text-purple-700'
       case 'manager':
-        return 'bg-orange-100 text-orange-700'
+        return 'bg-amber-100 text-amber-700'
       case 'editor':
-        return 'bg-blue-100 text-blue-700'
+        return 'bg-sky-100 text-sky-700'
       case 'customer':
-        return 'bg-green-100 text-green-700'
+        return 'bg-emerald-100 text-emerald-700'
       default:
-        return 'bg-gray-100 text-gray-700'
+        return 'bg-slate-100 text-slate-700'
     }
   }
 
@@ -135,20 +135,20 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-500 mt-1">Manage users in your organization</p>
+          <h1 className="text-2xl font-display font-bold text-slate-900">User Management</h1>
+          <p className="text-slate-500 mt-1">Manage users in your organization</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowInviteDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700"
           >
             <Mail className="w-4 h-4" />
             Invite User
           </button>
           <button
             onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add User
@@ -157,29 +157,29 @@ export default function UsersPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <div className="surface-card rounded-2xl p-4">
         <div className="flex items-center gap-4 flex-wrap">
           {/* Search */}
           <div className="flex-1 min-w-[200px]">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search users..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="input-field pl-10"
               />
             </div>
           </div>
 
           {/* Role Filter */}
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-slate-400" />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value as UserRole | '')}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="select-field"
             >
               <option value="">All Roles</option>
               {roles.map((role) => (
@@ -194,7 +194,7 @@ export default function UsersPage() {
           <select
             value={companyFilter}
             onChange={(e) => setCompanyFilter(e.target.value ? Number(e.target.value) : '')}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="select-field"
           >
             <option value="">All Companies</option>
             {companies.map((company: Company) => (
@@ -211,7 +211,7 @@ export default function UsersPage() {
               if (e.target.value === '') setStatusFilter('')
               else setStatusFilter(e.target.value === 'active')
             }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="select-field"
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
@@ -221,68 +221,68 @@ export default function UsersPage() {
       </div>
 
       {/* Users table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="surface-card rounded-2xl overflow-hidden">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">User</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Company</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-slate-200">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                   Loading users...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-red-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-rose-500">
                   Failed to load users
                 </td>
               </tr>
             ) : users?.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
                   No users found
                 </td>
               </tr>
             ) : (
               users?.map((user: User) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+                <tr key={user.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <UserIcon className="w-4 h-4 text-blue-600" />
+                      <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
+                        <UserIcon className="w-4 h-4 text-sky-600" />
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{user.full_name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
+                        <div className="font-medium text-slate-900">{user.full_name}</div>
+                        <div className="text-sm text-slate-500">{user.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full capitalize ${getRoleBadgeColor(user.role)}`}>
+                    <span className={`pill capitalize ${getRoleBadgeColor(user.role)}`}>
                       {user.role.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     {user.company_name ? (
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <div className="flex items-center gap-1 text-sm text-slate-600">
                         <Building2 className="w-3 h-3" />
                         {user.company_name}
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">-</span>
+                      <span className="text-slate-400 text-sm">-</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    <span className={`pill ${
+                      user.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                     }`}>
                       {user.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -291,7 +291,7 @@ export default function UsersPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => setEditingUser(user)}
-                        className="p-1 text-gray-500 hover:text-blue-600"
+                        className="p-1 text-slate-500 hover:text-sky-600"
                         title="Edit"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -303,7 +303,7 @@ export default function UsersPage() {
                               deleteMutation.mutate(user.id)
                             }
                           }}
-                          className="p-1 text-gray-500 hover:text-red-600"
+                          className="p-1 text-slate-500 hover:text-rose-600"
                           title="Deactivate"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -320,56 +320,56 @@ export default function UsersPage() {
 
       {/* Pending Invitations */}
       {pendingInvitations.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="surface-card rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-600" />
-              <h3 className="font-semibold text-gray-900">Pending Invitations</h3>
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">
+              <h3 className="font-display font-semibold text-slate-900">Pending Invitations</h3>
+              <span className="pill bg-amber-100 text-amber-700">
                 {pendingInvitations.length}
               </span>
             </div>
           </div>
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Company</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Invited By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Expires</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-200">
               {pendingInvitations.map((invitation: Invitation) => (
-                <tr key={invitation.id} className="hover:bg-gray-50">
+                <tr key={invitation.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-900">{invitation.email}</span>
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-900">{invitation.email}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs rounded-full capitalize ${getRoleBadgeColor(invitation.role)}`}>
+                    <span className={`pill capitalize ${getRoleBadgeColor(invitation.role)}`}>
                       {invitation.role.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     {invitation.tenant_name ? (
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <div className="flex items-center gap-1 text-sm text-slate-600">
                         <Building2 className="w-3 h-3" />
                         {invitation.tenant_name}
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">-</span>
+                      <span className="text-slate-400 text-sm">-</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td className="px-6 py-4 text-sm text-slate-600">
                     {invitation.inviter_name || '-'}
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-slate-500">
                       {new Date(invitation.expires_at).toLocaleDateString()}
                     </span>
                   </td>
@@ -378,7 +378,7 @@ export default function UsersPage() {
                       <button
                         onClick={() => resendInvitationMutation.mutate(invitation.id)}
                         disabled={resendInvitationMutation.isPending}
-                        className="p-1 text-gray-500 hover:text-blue-600"
+                        className="p-1 text-slate-500 hover:text-sky-600"
                         title="Resend Invitation"
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -390,7 +390,7 @@ export default function UsersPage() {
                           }
                         }}
                         disabled={cancelInvitationMutation.isPending}
-                        className="p-1 text-gray-500 hover:text-red-600"
+                        className="p-1 text-slate-500 hover:text-rose-600"
                         title="Cancel Invitation"
                       >
                         <XCircle className="w-4 h-4" />
@@ -495,11 +495,11 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <h2 className="text-lg font-display font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -508,58 +508,58 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           {!isEdit && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
                 <input
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
                   minLength={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input-field"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
                 <input
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
                   minLength={8}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input-field"
                 />
               </div>
             </>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input-field"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
             <input
               type="text"
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input-field"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="select-field"
             >
               {availableRoles.map((role) => (
                 <option key={role} value={role}>
@@ -572,14 +572,14 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           {/* Show company selector for customer role or if editing a customer */}
           {(formData.role === 'customer' || user?.role === 'customer') && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Company <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Company <span className="text-rose-500">*</span>
               </label>
               <select
                 value={formData.tenant_id}
                 onChange={(e) => setFormData({ ...formData, tenant_id: e.target.value ? Number(e.target.value) : '' })}
                 required={formData.role === 'customer'}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="select-field"
               >
                 <option value="">Select Company</option>
                 {companies.map((company) => (
@@ -589,7 +589,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
                 ))}
               </select>
               {formData.role === 'customer' && (
-                <p className="text-xs text-gray-500 mt-1">Customers must be assigned to a company</p>
+                <p className="text-xs text-slate-500 mt-1">Customers must be assigned to a company</p>
               )}
             </div>
           )}
@@ -601,9 +601,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
                 id="is_active"
                 checked={formData.is_active}
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                className="rounded border-gray-300"
+                className="rounded border-slate-300"
               />
-              <label htmlFor="is_active" className="text-sm text-gray-700">Active</label>
+              <label htmlFor="is_active" className="text-sm text-slate-700">Active</label>
             </div>
           )}
 
@@ -611,14 +611,14 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 hover:text-gray-900"
+              className="px-4 py-2 text-slate-700 hover:text-slate-900"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="btn-primary"
             >
               {isLoading ? 'Saving...' : isEdit ? 'Save Changes' : 'Create User'}
             </button>

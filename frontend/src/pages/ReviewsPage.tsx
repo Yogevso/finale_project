@@ -22,22 +22,22 @@ const statusConfig: Record<ReviewStatus, { label: string; icon: React.ReactNode;
   pending: {
     label: 'Pending',
     icon: <Clock className="w-4 h-4" />,
-    className: 'bg-yellow-100 text-yellow-700',
+    className: 'bg-amber-100 text-amber-700',
   },
   approved: {
     label: 'Approved',
     icon: <CheckCircle className="w-4 h-4" />,
-    className: 'bg-green-100 text-green-700',
+    className: 'bg-emerald-100 text-emerald-700',
   },
   rejected: {
     label: 'Rejected',
     icon: <XCircle className="w-4 h-4" />,
-    className: 'bg-red-100 text-red-700',
+    className: 'bg-rose-100 text-rose-700',
   },
   cancelled: {
     label: 'Cancelled',
     icon: <AlertCircle className="w-4 h-4" />,
-    className: 'bg-gray-100 text-gray-700',
+    className: 'bg-slate-100 text-slate-700',
   },
 }
 
@@ -98,26 +98,26 @@ export default function ReviewsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reviews</h1>
-          <p className="text-gray-600">Review and approve document submissions</p>
+          <h1 className="text-2xl font-display font-bold text-slate-900">Reviews</h1>
+          <p className="text-slate-600">Review and approve document submissions</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-slate-200">
         <nav className="flex gap-6">
           <button
             onClick={() => setActiveTab('pending')}
             className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'pending'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-sky-600 text-sky-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Clock className="w-4 h-4" />
             Pending My Review
             {pendingData?.total ? (
-              <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full">
+              <span className="pill bg-amber-100 text-amber-700">
                 {pendingData.total}
               </span>
             ) : null}
@@ -126,8 +126,8 @@ export default function ReviewsPage() {
             onClick={() => setActiveTab('my-submissions')}
             className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'my-submissions'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-sky-600 text-sky-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
             <Send className="w-4 h-4" />
@@ -139,11 +139,11 @@ export default function ReviewsPage() {
       {/* Status Filter (for My Submissions) */}
       {activeTab === 'my-submissions' && (
         <div className="flex items-center gap-4">
-          <label className="text-sm text-gray-600">Filter by status:</label>
+          <label className="text-sm text-slate-600">Filter by status:</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as ReviewStatus | '')}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            className="select-field"
           >
             <option value="">All</option>
             <option value="pending">Pending</option>
@@ -155,11 +155,11 @@ export default function ReviewsPage() {
       )}
 
       {/* Reviews List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="surface-card rounded-2xl overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500">Loading reviews...</div>
+          <div className="p-8 text-center text-slate-500">Loading reviews...</div>
         ) : !reviews?.length ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-slate-500">
             <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>
               {activeTab === 'pending'
@@ -168,41 +168,41 @@ export default function ReviewsPage() {
             </p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Document
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   {activeTab === 'pending' ? 'Submitted By' : 'Reviewed By'}
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Date
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-slate-200">
               {reviews.map((review) => (
-                <tr key={review.id} className="hover:bg-gray-50">
+                <tr key={review.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-gray-400" />
+                      <FileText className="w-5 h-5 text-slate-400" />
                       <div>
                         <Link
                           to={`/documents/${review.document_id}`}
-                          className="text-blue-600 hover:text-blue-700 font-medium"
+                          className="text-sky-600 hover:text-sky-700 font-medium"
                         >
                           {review.document?.title || `Document #${review.document_id}`}
                         </Link>
                         {review.message && (
-                          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                          <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
                             <MessageSquare className="w-3 h-3" />
                             {review.message.length > 50
                               ? `${review.message.slice(0, 50)}...`
@@ -213,7 +213,7 @@ export default function ReviewsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
                       <User className="w-4 h-4" />
                       {activeTab === 'pending'
                         ? review.submitter?.full_name || 'Unknown'
@@ -222,7 +222,7 @@ export default function ReviewsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
+                      className={`pill ${
                         statusConfig[review.status].className
                       }`}
                     >
@@ -230,7 +230,7 @@ export default function ReviewsPage() {
                       {statusConfig[review.status].label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
+                  <td className="px-6 py-4 text-sm text-slate-600">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
                       {new Date(review.submitted_at).toLocaleDateString()}
@@ -240,14 +240,14 @@ export default function ReviewsPage() {
                     <div className="flex items-center justify-end gap-2">
                       <Link
                         to={`/documents/${review.document_id}`}
-                        className="text-gray-600 hover:text-gray-800 text-sm"
+                        className="text-slate-600 hover:text-slate-800 text-sm"
                       >
                         View
                       </Link>
                       {activeTab === 'pending' && review.status === 'pending' && (
                         <button
                           onClick={() => setSelectedReview(review)}
-                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          className="btn-primary text-sm px-3 py-1"
                         >
                           Review
                         </button>
@@ -260,7 +260,7 @@ export default function ReviewsPage() {
                             }
                           }}
                           disabled={cancelMutation.isPending}
-                          className="text-red-600 hover:text-red-700 text-sm"
+                          className="text-rose-600 hover:text-rose-700 text-sm"
                         >
                           Cancel
                         </button>
@@ -275,7 +275,7 @@ export default function ReviewsPage() {
 
         {/* Footer with count */}
         {reviews && reviews.length > 0 && (
-          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
+          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
             Showing {reviews.length} of {total} reviews
           </div>
         )}

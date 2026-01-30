@@ -1,5 +1,5 @@
 import { useAuth } from '@/lib/auth'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import NotificationBell from './NotificationBell'
 
 export default function Header() {
@@ -12,17 +12,24 @@ export default function Header() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50">
-      <div className="flex items-center justify-between h-full px-6">
-        <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-bold text-blue-600">Document Portal V2</h1>
+    <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
+      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-semibold font-display">
+              DP
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+            </div>
+          </Link>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="text-sm">
-            <span className="text-gray-500">Logged in as </span>
-            <span className="font-medium text-gray-900">{user?.full_name}</span>
-            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 capitalize">
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 text-sm">
+            <span className="text-slate-500">Logged in as</span>
+            <span className="font-medium text-slate-900">{user?.full_name}</span>
+            <span className="pill capitalize">
               {user?.role}
             </span>
           </div>
@@ -32,9 +39,9 @@ export default function Header() {
           
           <button
             onClick={handleLogout}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            className="btn-ghost"
           >
-            Logout
+            Sign Out
           </button>
         </div>
       </div>

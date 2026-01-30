@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Document, User, UserRole, Version
+from app.models import Document, DocumentStatus, User, UserRole, Version
 from app.schemas import VersionCreate, VersionUpdate
 
 logger = logging.getLogger(__name__)
@@ -171,10 +171,10 @@ class VersionService:
         version.is_published = True
         version.published_at = datetime.utcnow()
 
-        # Update document status
+        # Update document status to active
         document = db.query(Document).filter(Document.id == document_id).first()
         if document:
-            document.status = "published"
+            document.status = DocumentStatus.ACTIVE
 
         db.commit()
         db.refresh(version)

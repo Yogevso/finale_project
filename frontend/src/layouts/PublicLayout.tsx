@@ -1,5 +1,5 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom'
-import { FileText, Search, LogIn, Menu, X } from 'lucide-react'
+import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom'
+import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 
@@ -9,104 +9,128 @@ export default function PublicLayout() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-2">
-              <FileText className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">DocPortal</span>
+    <div className="min-h-screen flex flex-col">
+      {/* Zip B Style Header */}
+      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
+        <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* Logo */}
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-semibold font-display">
+                DP
+              </div>
+              <div>
+                <div className="text-sm text-slate-500">Viewer</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+              </div>
             </Link>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6">
-              <Link 
-                to="/browse" 
-                className="text-gray-600 hover:text-gray-900 font-medium"
-              >
-                Browse Documents
-              </Link>
-              <Link 
-                to="/search" 
-                className="text-gray-600 hover:text-gray-900 font-medium flex items-center gap-1"
-              >
-                <Search className="h-4 w-4" />
-                Search
-              </Link>
-            </nav>
-
-            {/* Auth Button */}
-            <div className="hidden md:flex items-center gap-4">
-              {user ? (
-                <button
-                  onClick={() => navigate('/dashboard')}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Go to Dashboard
-                </button>
-              ) : (
-                <Link
-                  to="/login"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
-                >
-                  <LogIn className="h-4 w-4" />
-                  Login
-                </Link>
-              )}
-            </div>
-
+            
             {/* Mobile menu button */}
             <button
-              className="md:hidden p-2"
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
-                <X className="h-6 w-6 text-gray-600" />
+                <X className="h-6 w-6 text-slate-600" />
               ) : (
-                <Menu className="h-6 w-6 text-gray-600" />
+                <Menu className="h-6 w-6 text-slate-600" />
               )}
             </button>
+          </div>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
+            <NavLink 
+              to="/browse"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-sky-100 text-sky-800 font-medium'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`
+              }
+            >
+              Browse
+            </NavLink>
+            <NavLink 
+              to="/search"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-sky-100 text-sky-800 font-medium'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`
+              }
+            >
+              Search
+            </NavLink>
+          </nav>
+
+          {/* Auth Button */}
+          <div className="hidden md:flex items-center gap-3 text-sm">
+            {user ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="btn-primary"
+              >
+                Go to Dashboard
+              </button>
+            ) : (
+              <Link to="/login" className="btn-primary">
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200">
-            <div className="px-4 py-4 space-y-3">
-              <Link
+          <div className="md:hidden border-t border-slate-200 bg-white">
+            <div className="container mx-auto px-4 py-4 space-y-2">
+              <NavLink
                 to="/browse"
-                className="block text-gray-600 hover:text-gray-900 font-medium"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Browse Documents
-              </Link>
-              <Link
+              </NavLink>
+              <NavLink
                 to="/search"
-                className="block text-gray-600 hover:text-gray-900 font-medium"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Search
-              </Link>
-              <hr className="my-2" />
+              </NavLink>
+              <hr className="my-3 border-slate-200" />
               {user ? (
                 <button
                   onClick={() => {
                     setMobileMenuOpen(false)
                     navigate('/dashboard')
                   }}
-                  className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                  className="w-full btn-primary"
                 >
                   Go to Dashboard
                 </button>
               ) : (
                 <Link
                   to="/login"
-                  className="block w-full text-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                  className="block w-full text-center btn-primary"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Login
+                  Sign In
                 </Link>
               )}
             </div>
@@ -115,50 +139,52 @@ export default function PublicLayout() {
       </header>
 
       {/* Main Content */}
-      <main>
+      <main className="flex-1">
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Zip B Style Footer */}
+      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
+        <div className="container mx-auto px-4 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="h-6 w-6 text-blue-600" />
-                <span className="text-lg font-bold text-gray-900">DocPortal</span>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-8 w-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-semibold text-sm font-display">
+                  DP
+                </div>
+                <span className="text-lg font-semibold text-slate-900 font-display">DocPortal</span>
               </div>
-              <p className="text-gray-500 text-sm">
+              <p className="text-slate-500 text-sm">
                 Your central hub for documentation and knowledge sharing.
               </p>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Quick Links</h3>
+              <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/browse" className="text-gray-500 hover:text-gray-900">
+                  <Link to="/browse" className="text-slate-500 hover:text-slate-900 transition-colors">
                     Browse All Documents
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="text-gray-500 hover:text-gray-900">
+                  <Link to="/search" className="text-slate-500 hover:text-slate-900 transition-colors">
                     Search
                   </Link>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900 mb-3">Access</h3>
+              <h3 className="font-semibold text-slate-900 mb-3 font-display">Access</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/login" className="text-gray-500 hover:text-gray-900">
+                  <Link to="/login" className="text-slate-500 hover:text-slate-900 transition-colors">
                     Login for more content
                   </Link>
                 </li>
               </ul>
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-gray-200 text-center text-sm text-gray-500">
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
             © {new Date().getFullYear()} DocPortal. All rights reserved.
           </div>
         </div>

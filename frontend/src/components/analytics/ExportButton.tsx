@@ -38,24 +38,24 @@ export function ExportButton({ exportType, startDate, endDate }: ExportButtonPro
       <button
         onClick={() => setShowDropdown(!showDropdown)}
         disabled={exporting}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-50"
       >
         <Download className="w-4 h-4" />
         {exporting ? 'Exporting...' : 'Export'}
       </button>
       
       {showDropdown && (
-        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10">
           <button
             onClick={() => handleExport('csv')}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-t-xl"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Export as CSV
           </button>
           <button
             onClick={() => handleExport('pdf')}
-            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+            className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-b-xl"
           >
             <FileText className="w-4 h-4" />
             Export as PDF

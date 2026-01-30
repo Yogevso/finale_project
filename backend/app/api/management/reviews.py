@@ -16,6 +16,7 @@ from app.models import (
     ReviewStatus,
     User,
     UserRole,
+    Version,
 )
 from app.schemas import (
     ReviewAction,
@@ -308,6 +309,13 @@ async def approve_review(
 
     # Update document status to active
     review.document.status = DocumentStatus.ACTIVE
+    
+    # If this review has a version, mark it as published
+    if review.version_id:
+        version = db.query(Version).filter(Version.id == review.version_id).first()
+        if version:
+            version.is_published = True
+            version.published_at = datetime.utcnow()
 
     # Notify submitter
     notification = Notification(

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { 
   X, 
@@ -8,9 +8,11 @@ import {
   MessageSquare,
   CheckCircle,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  GitBranch
 } from 'lucide-react'
-import type { ReviewRequest } from '@/types'
+import type { ReviewRequest, Version } from '@/types'
+import { api } from '@/lib/api'
 
 interface ReviewDialogProps {
   review: ReviewRequest
@@ -30,6 +32,19 @@ export default function ReviewDialog({
   const [comments, setComments] = useState('')
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [version, setVersion] = useState<Version | null>(null)
+  const [loadingVersion, setLoadingVersion] = useState(false)
+
+  // Fetch version details if version_id is present
+  useEffect(() => {
+    if (review.version_id && review.document_id) {
+      setLoadingVersion(true)
+      api.getVersion(review.document_id, review.version_id)
+        .then(setVersion)
+        .catch(console.error)
+        .finally(() => setLoadingVersion(false))
+    }
+  }, [review.version_id, review.document_id])
 
   const handleAction = (selectedAction: 'approve' | 'reject') => {
     setAction(selectedAction)
@@ -50,14 +65,14 @@ export default function ReviewDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Review Document</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900 font-display">Review Document</h2>
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
           >
             <X className="w-5 h-5" />
           </button>
@@ -66,40 +81,40 @@ export default function ReviewDialog({
         {/* Content */}
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Document Info */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <div className="surface-muted p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <FileText className="w-6 h-6 text-blue-600" />
+              <FileText className="w-6 h-6 text-sky-600" />
               <div>
                 <Link
                   to={`/documents/${review.document_id}`}
                   target="_blank"
-                  className="text-lg font-medium text-blue-600 hover:text-blue-700"
+                  className="text-lg font-medium text-sky-700 hover:text-sky-800"
                 >
                   {review.document?.title || `Document #${review.document_id}`}
                 </Link>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-slate-500">
                   {review.document?.document_number}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center gap-2 text-gray-600">
+              <div className="flex items-center gap-2 text-slate-600">
                 <User className="w-4 h-4" />
                 <span>Submitted by: {review.submitter?.full_name || 'Unknown'}</span>
               </div>
-              <div className="flex items-center gap-2 text-gray-600">
+              <div className="flex items-center gap-2 text-slate-600">
                 <Calendar className="w-4 h-4" />
                 <span>Date: {new Date(review.submitted_at).toLocaleString()}</span>
               </div>
             </div>
 
             {review.message && (
-              <div className="pt-2 border-t border-gray-200">
-                <div className="flex items-start gap-2 text-gray-600">
+              <div className="pt-2 border-t border-slate-200">
+                <div className="flex items-start gap-2 text-slate-600">
                   <MessageSquare className="w-4 h-4 mt-0.5" />
                   <div>
-                    <span className="text-xs font-medium text-gray-500">Submission Message:</span>
+                    <span className="text-xs font-medium text-slate-500">Submission Message:</span>
                     <p className="mt-1">{review.message}</p>
                   </div>
                 </div>
@@ -107,12 +122,33 @@ export default function ReviewDialog({
             )}
           </div>
 
+          {/* Changes Summary */}
+          {review.version_id && (
+            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200">
+              <div className="flex items-start gap-2">
+                <GitBranch className="w-4 h-4 mt-0.5 text-amber-600" />
+                <div className="flex-1">
+                  <span className="text-xs font-medium text-amber-700">Changes Made:</span>
+                  {loadingVersion ? (
+                    <p className="mt-1 text-sm text-slate-500">Loading changes...</p>
+                  ) : version?.changes_summary ? (
+                    <pre className="mt-2 text-sm text-slate-700 whitespace-pre-wrap font-mono bg-white p-3 rounded-xl border border-amber-100">
+                      {version.changes_summary}
+                    </pre>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500 italic">No detailed changes recorded</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* View Document Link */}
           <div className="text-center">
             <Link
               to={`/documents/${review.document_id}`}
               target="_blank"
-              className="text-blue-600 hover:text-blue-700 text-sm underline"
+              className="text-sky-600 hover:text-sky-700 text-sm underline"
             >
               Open document in new tab to review content →
             </Link>
@@ -120,8 +156,8 @@ export default function ReviewDialog({
 
           {/* Comments */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Review Comments {action === 'reject' && <span className="text-red-500">*</span>}
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Review Comments {action === 'reject' && <span className="text-rose-500">*</span>}
             </label>
             <textarea
               value={comments}
@@ -132,7 +168,7 @@ export default function ReviewDialog({
                   : 'Optional comments for the submitter...'
               }
               rows={4}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input-field"
               disabled={isLoading}
             />
           </div>
@@ -140,22 +176,22 @@ export default function ReviewDialog({
           {/* Confirmation */}
           {showConfirm && (
             <div
-              className={`p-4 rounded-lg border ${
+              className={`p-4 rounded-2xl border ${
                 action === 'approve'
-                  ? 'bg-green-50 border-green-200'
-                  : 'bg-red-50 border-red-200'
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : 'bg-rose-50 border-rose-200'
               }`}
             >
               <div className="flex items-start gap-3">
                 <AlertTriangle
                   className={`w-5 h-5 ${
-                    action === 'approve' ? 'text-green-600' : 'text-red-600'
+                    action === 'approve' ? 'text-emerald-600' : 'text-rose-600'
                   }`}
                 />
                 <div>
                   <p
                     className={`font-medium ${
-                      action === 'approve' ? 'text-green-800' : 'text-red-800'
+                      action === 'approve' ? 'text-emerald-800' : 'text-rose-800'
                     }`}
                   >
                     {action === 'approve'
@@ -164,7 +200,7 @@ export default function ReviewDialog({
                   </p>
                   <p
                     className={`text-sm mt-1 ${
-                      action === 'approve' ? 'text-green-700' : 'text-red-700'
+                      action === 'approve' ? 'text-emerald-700' : 'text-rose-700'
                     }`}
                   >
                     {action === 'approve'
@@ -178,11 +214,11 @@ export default function ReviewDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900"
+            className="btn-ghost"
           >
             Cancel
           </button>
@@ -193,7 +229,7 @@ export default function ReviewDialog({
                 <button
                   onClick={() => handleAction('reject')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full hover:bg-rose-200 disabled:opacity-50 font-medium transition"
                 >
                   <XCircle className="w-4 h-4" />
                   Reject
@@ -201,7 +237,7 @@ export default function ReviewDialog({
                 <button
                   onClick={() => handleAction('approve')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-50 font-medium transition"
                 >
                   <CheckCircle className="w-4 h-4" />
                   Approve
@@ -212,17 +248,17 @@ export default function ReviewDialog({
                 <button
                   onClick={() => setShowConfirm(false)}
                   disabled={isLoading}
-                  className="px-4 py-2 text-gray-700 hover:text-gray-900"
+                  className="btn-ghost"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleConfirm}
                   disabled={isLoading || (action === 'reject' && !comments.trim())}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg disabled:opacity-50 ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 font-medium transition ${
                     action === 'approve'
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-red-600 text-white hover:bg-red-700'
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      : 'bg-rose-600 text-white hover:bg-rose-700'
                   }`}
                 >
                   {isLoading ? (

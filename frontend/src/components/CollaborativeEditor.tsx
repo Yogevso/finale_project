@@ -55,12 +55,12 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
   }
 
   return (
-    <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200 bg-gray-50">
+    <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 bg-slate-50">
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`px-2 py-1 rounded text-sm font-medium ${
-          editor.isActive('bold') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm font-medium ${
+          editor.isActive('bold') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Bold"
       >
@@ -69,8 +69,8 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('italic') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('italic') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Italic"
       >
@@ -79,8 +79,8 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleUnderline().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('underline') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('underline') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Underline"
       >
@@ -89,21 +89,21 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleStrike().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('strike') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('strike') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Strikethrough"
       >
         <s>S</s>
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-6 bg-slate-300 mx-1" />
 
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('heading', { level: 1 }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('heading', { level: 1 }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Heading 1"
       >
@@ -112,8 +112,8 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('heading', { level: 2 }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('heading', { level: 2 }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Heading 2"
       >
@@ -122,21 +122,21 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('heading', { level: 3 }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('heading', { level: 3 }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Heading 3"
       >
         H3
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-6 bg-slate-300 mx-1" />
 
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('bulletList') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('bulletList') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Bullet List"
       >
@@ -145,21 +145,21 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('orderedList') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('orderedList') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Numbered List"
       >
         1. List
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-6 bg-slate-300 mx-1" />
 
       <button
         type="button"
         onClick={() => editor.chain().focus().setTextAlign('left').run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive({ textAlign: 'left' }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive({ textAlign: 'left' }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Align Left"
       >
@@ -168,8 +168,8 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().setTextAlign('center').run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive({ textAlign: 'center' }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive({ textAlign: 'center' }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Align Center"
       >
@@ -178,21 +178,21 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().setTextAlign('right').run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive({ textAlign: 'right' }) ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive({ textAlign: 'right' }) ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Align Right"
       >
         ➡
       </button>
 
-      <div className="w-px h-6 bg-gray-300 mx-1" />
+      <div className="w-px h-6 bg-slate-300 mx-1" />
 
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('blockquote') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('blockquote') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Quote"
       >
@@ -201,8 +201,8 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
       <button
         type="button"
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        className={`px-2 py-1 rounded text-sm ${
-          editor.isActive('codeBlock') ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200'
+        className={`px-2 py-1 rounded-lg text-sm ${
+          editor.isActive('codeBlock') ? 'bg-sky-100 text-sky-700' : 'hover:bg-slate-200'
         }`}
         title="Code Block"
       >
@@ -286,7 +286,7 @@ export function CollaborativeEditor({
   }, [isEditable, editor])
 
   return (
-    <div className={`border border-gray-300 rounded-lg overflow-hidden ${className}`}>
+    <div className={`border border-slate-300 rounded-xl overflow-hidden ${className}`}>
       {/* Read-only banner for viewers */}
       <ReadOnlyBanner
         isReadOnly={isReadOnly}
@@ -295,16 +295,16 @@ export function CollaborativeEditor({
       />
 
       {/* Toolbar with collaboration status */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50">
         <div className="flex-1">
           {isEditable && <MenuBar editor={editor} />}
           {!isEditable && (
-            <div className="px-3 py-2 text-sm text-gray-500 italic">
+            <div className="px-3 py-2 text-sm text-slate-500 italic">
               Editing disabled — view only mode
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 px-3 py-2 border-l border-gray-200">
+        <div className="flex items-center gap-2 px-3 py-2 border-l border-slate-200">
           {permissions.length > 0 && (
             <PermissionIndicator permissions={permissions} />
           )}
@@ -323,7 +323,7 @@ export function CollaborativeEditor({
       <EditorContent
         editor={editor}
         className={`prose max-w-none p-4 min-h-[400px] focus:outline-none ${
-          isEditable ? 'bg-white' : 'bg-gray-50 cursor-not-allowed'
+          isEditable ? 'bg-white' : 'bg-slate-50 cursor-not-allowed'
         }`}
       />
 

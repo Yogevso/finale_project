@@ -11,25 +11,28 @@ const visibilityConfig = {
   public: {
     icon: Globe,
     label: 'Public',
-    bgColor: 'bg-green-100',
-    textColor: 'text-green-700',
-    iconColor: 'text-green-600',
+    bgColor: 'bg-emerald-50',
+    textColor: 'text-emerald-700',
+    iconColor: 'text-emerald-600',
+    borderColor: 'border-emerald-200',
     description: 'Visible to everyone',
   },
   internal: {
     icon: Building2,
     label: 'Internal',
-    bgColor: 'bg-blue-100',
-    textColor: 'text-blue-700',
-    iconColor: 'text-blue-600',
+    bgColor: 'bg-sky-50',
+    textColor: 'text-sky-700',
+    iconColor: 'text-sky-600',
+    borderColor: 'border-sky-200',
     description: 'Visible to internal staff only',
   },
   company: {
     icon: Lock,
     label: 'Company',
-    bgColor: 'bg-orange-100',
-    textColor: 'text-orange-700',
-    iconColor: 'text-orange-600',
+    bgColor: 'bg-amber-50',
+    textColor: 'text-amber-700',
+    iconColor: 'text-amber-600',
+    borderColor: 'border-amber-200',
     description: 'Visible to assigned companies + staff',
   },
 }
@@ -43,14 +46,14 @@ export default function VisibilityBadge({
   const Icon = config.icon
   
   const sizeClasses = size === 'sm' 
-    ? 'px-1.5 py-0.5 text-xs gap-1' 
-    : 'px-2 py-1 text-xs gap-1.5'
+    ? 'px-2 py-0.5 text-xs gap-1' 
+    : 'px-2.5 py-1 text-xs gap-1.5'
   
   const iconSize = size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5'
   
   return (
     <span 
-      className={`inline-flex items-center rounded-full ${config.bgColor} ${config.textColor} ${sizeClasses}`}
+      className={`inline-flex items-center rounded-full border ${config.bgColor} ${config.textColor} ${config.borderColor} ${sizeClasses} font-medium`}
       title={config.description}
     >
       <Icon className={`${iconSize} ${config.iconColor}`} />

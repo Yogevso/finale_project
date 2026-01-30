@@ -19,10 +19,10 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Welcome back, {user?.full_name}</p>
+        <h1 className="section-title">Dashboard</h1>
+        <p className="text-slate-500 mt-1">Welcome back, {user?.full_name}</p>
       </div>
 
       {/* Stats Grid */}
@@ -30,12 +30,12 @@ export default function DashboardPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            className="surface-card rounded-2xl p-6"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
+                <p className="eyebrow">{stat.label}</p>
+                <p className="text-3xl font-display font-bold text-slate-900 mt-1">
                   {isLoading ? '...' : stat.value}
                 </p>
               </div>
@@ -46,30 +46,30 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Documents */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Documents</h2>
+      <div className="surface-card rounded-2xl overflow-hidden">
+        <div className="p-6 border-b border-slate-200">
+          <h2 className="text-lg font-display font-semibold text-slate-900">Recent Documents</h2>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-slate-100">
           {isLoading ? (
-            <div className="p-6 text-center text-gray-500">Loading...</div>
+            <div className="p-6 text-center text-slate-500">Loading...</div>
           ) : documents?.items.length === 0 ? (
-            <div className="p-6 text-center text-gray-500">No documents yet</div>
+            <div className="p-6 text-center text-slate-500">No documents yet</div>
           ) : (
             documents?.items.map((doc) => (
-              <div key={doc.id} className="p-4 hover:bg-gray-50 transition-colors">
+              <div key={doc.id} className="p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-gray-900">{doc.title}</h3>
-                    <p className="text-sm text-gray-500">{doc.document_number}</p>
+                    <h3 className="font-medium text-slate-900">{doc.title}</h3>
+                    <p className="text-sm text-slate-500">{doc.document_number}</p>
                   </div>
                   <span
-                    className={`px-2 py-1 text-xs rounded-full ${
+                    className={`pill ${
                       doc.status === 'active'
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : doc.status === 'draft'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-gray-100 text-gray-700'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >
                     {doc.status}
@@ -82,17 +82,17 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="surface-card rounded-2xl p-6">
+        <h2 className="text-lg font-display font-semibold text-slate-900 mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
           <a
             href="/documents"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="btn-primary"
           >
             View All Documents
           </a>
           <button
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="btn-secondary"
             onClick={() => window.location.href = '/documents?action=create'}
           >
             Create New Document
@@ -119,18 +119,18 @@ function BookmarksWidget() {
   })
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+    <div className="surface-card rounded-2xl overflow-hidden">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+        <h2 className="font-display font-semibold text-slate-900 flex items-center gap-2">
           ★ My Bookmarks
         </h2>
-        <span className="text-sm text-gray-500">{bookmarks.length} saved</span>
+        <span className="pill bg-slate-100 text-slate-600 border-slate-200">{bookmarks.length} saved</span>
       </div>
-      <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-gray-500">Loading...</div>
+          <div className="p-4 text-center text-slate-500">Loading...</div>
         ) : bookmarks.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
+          <div className="p-6 text-center text-slate-500">
             <div className="text-2xl mb-2">☆</div>
             <p>No bookmarks yet</p>
             <p className="text-xs mt-1">Bookmark documents for quick access</p>
@@ -140,10 +140,10 @@ function BookmarksWidget() {
             <Link
               key={b.id}
               to={`/documents/${b.document_id}`}
-              className="block p-3 hover:bg-gray-50 transition-colors"
+              className="block p-3 hover:bg-slate-50 transition-colors"
             >
-              <p className="font-medium text-gray-900 text-sm truncate">{b.document_title}</p>
-              <p className="text-xs text-gray-500">{b.document_number}</p>
+              <p className="font-medium text-slate-900 text-sm truncate">{b.document_title}</p>
+              <p className="text-xs text-slate-500">{b.document_number}</p>
             </Link>
           ))
         )}
@@ -162,18 +162,18 @@ function ReadingProgressWidget() {
   const completed = progress.filter((p: any) => p.progress_percent >= 100)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+    <div className="surface-card rounded-2xl overflow-hidden">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
+        <h2 className="font-display font-semibold text-slate-900 flex items-center gap-2">
           📖 Reading Progress
         </h2>
-        <span className="text-sm text-gray-500">{completed.length} completed</span>
+        <span className="pill bg-emerald-50 text-emerald-700 border-emerald-200">{completed.length} completed</span>
       </div>
-      <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-gray-500">Loading...</div>
+          <div className="p-4 text-center text-slate-500">Loading...</div>
         ) : inProgress.length === 0 && completed.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">
+          <div className="p-6 text-center text-slate-500">
             <div className="text-2xl mb-2">📚</div>
             <p>No reading activity</p>
             <p className="text-xs mt-1">Start reading documents to track progress</p>
@@ -184,15 +184,15 @@ function ReadingProgressWidget() {
               <Link
                 key={p.id}
                 to={`/documents/${p.document_id}`}
-                className="block p-3 hover:bg-gray-50 transition-colors"
+                className="block p-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <p className="font-medium text-gray-900 text-sm truncate flex-1">{p.document_title}</p>
-                  <span className="text-xs text-blue-600 ml-2">{p.progress_percent}%</span>
+                  <p className="font-medium text-slate-900 text-sm truncate flex-1">{p.document_title}</p>
+                  <span className="text-xs text-sky-600 ml-2">{p.progress_percent}%</span>
                 </div>
-                <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all"
+                    className="h-full bg-sky-500 transition-all"
                     style={{ width: `${p.progress_percent}%` }}
                   />
                 </div>
@@ -202,11 +202,11 @@ function ReadingProgressWidget() {
               <Link
                 key={p.id}
                 to={`/documents/${p.document_id}`}
-                className="block p-3 hover:bg-gray-50 transition-colors"
+                className="block p-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-green-500">✓</span>
-                  <p className="font-medium text-gray-700 text-sm truncate">{p.document_title}</p>
+                  <span className="text-emerald-500">✓</span>
+                  <p className="font-medium text-slate-700 text-sm truncate">{p.document_title}</p>
                 </div>
               </Link>
             ))}

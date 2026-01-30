@@ -35,23 +35,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="surface-card rounded-2xl p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Document Portal V2</h1>
-            <p className="text-gray-500 mt-2">Sign in to your account</p>
+            <div className="inline-flex items-center gap-2 mb-4">
+              <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-lg">DP</span>
+              </div>
+            </div>
+            <h1 className="text-3xl font-display font-bold text-slate-900">Document Portal</h1>
+            <p className="text-slate-500 mt-2">Sign in to your account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm">
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-2">
                 Username
               </label>
               <input
@@ -59,14 +64,14 @@ export default function LoginPage() {
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="input-field"
                 placeholder="Enter your username"
                 required
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
                 Password
               </label>
               <input
@@ -74,7 +79,7 @@ export default function LoginPage() {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="input-field"
                 placeholder="Enter your password"
                 required
               />
@@ -83,35 +88,55 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-primary w-full py-3"
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500 text-center mb-3">Demo Credentials</p>
+          <div className="mt-8 pt-6 border-t border-slate-200">
+            <p className="text-sm text-slate-500 text-center mb-3">Demo Credentials (click to login)</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2 bg-purple-50 rounded text-center">
+              <button
+                type="button"
+                onClick={() => { setUsername('sysadmin'); setPassword('sysadmin123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
+                className="p-2 surface-muted rounded-xl text-center hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
+              >
                 <div className="font-medium text-purple-700">System Admin</div>
-                <div className="text-gray-500">sysadmin / sysadmin123</div>
-              </div>
-              <div className="p-2 bg-red-50 rounded text-center">
-                <div className="font-medium text-red-700">Admin</div>
-                <div className="text-gray-500">admin / admin123</div>
-              </div>
-              <div className="p-2 bg-blue-50 rounded text-center">
-                <div className="font-medium text-blue-700">Manager</div>
-                <div className="text-gray-500">manager / manager123</div>
-              </div>
-              <div className="p-2 bg-green-50 rounded text-center">
-                <div className="font-medium text-green-700">Editor</div>
-                <div className="text-gray-500">editor / editor123</div>
-              </div>
-              <div className="p-2 bg-orange-50 rounded text-center col-span-2">
-                <div className="font-medium text-orange-700">Customer</div>
-                <div className="text-gray-500">customer1 / customer123</div>
-              </div>
+                <div className="text-slate-500">sysadmin / sysadmin123</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('admin'); setPassword('admin123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
+                className="p-2 surface-muted rounded-xl text-center hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
+              >
+                <div className="font-medium text-rose-600">Admin</div>
+                <div className="text-slate-500">admin / admin123</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('manager'); setPassword('manager123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
+                className="p-2 surface-muted rounded-xl text-center hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
+              >
+                <div className="font-medium text-sky-600">Manager</div>
+                <div className="text-slate-500">manager / manager123</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('editor'); setPassword('editor123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
+                className="p-2 surface-muted rounded-xl text-center hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
+              >
+                <div className="font-medium text-emerald-600">Editor</div>
+                <div className="text-slate-500">editor / editor123</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('customer1'); setPassword('customer123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
+                className="p-2 surface-muted rounded-xl text-center col-span-2 hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
+              >
+                <div className="font-medium text-amber-600">Customer</div>
+                <div className="text-slate-500">customer1 / customer123</div>
+              </button>
             </div>
           </div>
         </div>

@@ -37,10 +37,10 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
 
   const getColorClasses = (type: typeof feedbackTypes[number], isSelected: boolean) => {
     const colors = {
-      blue: isSelected ? 'bg-blue-100 border-blue-500 text-blue-700' : 'hover:bg-blue-50',
-      yellow: isSelected ? 'bg-yellow-100 border-yellow-500 text-yellow-700' : 'hover:bg-yellow-50',
-      red: isSelected ? 'bg-red-100 border-red-500 text-red-700' : 'hover:bg-red-50',
-      gray: isSelected ? 'bg-gray-100 border-gray-500 text-gray-700' : 'hover:bg-gray-50',
+      blue: isSelected ? 'bg-sky-50 border-sky-500 text-sky-700' : 'hover:bg-sky-50',
+      yellow: isSelected ? 'bg-amber-50 border-amber-500 text-amber-700' : 'hover:bg-amber-50',
+      red: isSelected ? 'bg-rose-50 border-rose-500 text-rose-700' : 'hover:bg-rose-50',
+      gray: isSelected ? 'bg-slate-100 border-slate-500 text-slate-700' : 'hover:bg-slate-50',
     }
     return colors[type.color]
   }
@@ -49,7 +49,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Feedback type selector */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
+        <label className="block text-sm font-medium text-slate-700 mb-3">
           What type of feedback?
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -60,8 +60,8 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
                 key={type.id}
                 type="button"
                 onClick={() => setFeedbackType(type.id)}
-                className={`flex flex-col items-center p-4 border-2 rounded-lg transition-colors ${
-                  isSelected ? 'border-2' : 'border-gray-200'
+                className={`flex flex-col items-center p-4 border-2 rounded-2xl transition-colors ${
+                  isSelected ? 'border-2' : 'border-slate-200'
                 } ${getColorClasses(type, isSelected)}`}
               >
                 <type.icon className="h-6 w-6" />
@@ -74,7 +74,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
 
       {/* Content textarea */}
       <div>
-        <label htmlFor="feedback-content" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="feedback-content" className="block text-sm font-medium text-slate-700 mb-2">
           Your feedback
         </label>
         <textarea
@@ -83,11 +83,11 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Please provide details about your question, suggestion, or issue..."
-          className="w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          className="input-field resize-none"
           minLength={10}
           required
         />
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-slate-500">
           {content.length < 10 ? (
             `Minimum 10 characters required (${10 - content.length} more needed)`
           ) : (
@@ -98,7 +98,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
 
       {/* Error message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm">
           {error}
         </div>
       )}
@@ -108,7 +108,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
         <button
           type="submit"
           disabled={isLoading || content.trim().length < 10}
-          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <>

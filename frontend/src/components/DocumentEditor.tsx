@@ -135,21 +135,21 @@ export default function DocumentEditor({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-500">Loading document...</p>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mx-auto mb-4"></div>
+        <p className="text-slate-500">Loading document...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
         <div className="text-4xl mb-4">⚠️</div>
-        <h3 className="text-lg font-medium text-red-600 mb-2">{error}</h3>
+        <h3 className="text-lg font-medium text-rose-600 mb-2">{error}</h3>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-700"
         >
           Retry
         </button>
@@ -159,20 +159,20 @@ export default function DocumentEditor({
 
   if (attachments.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
         <div className="text-6xl mb-4">📄</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No Document Attached</h3>
-        <p className="text-gray-500">Upload a Word document to edit it here.</p>
+        <h3 className="text-lg font-medium text-slate-900 mb-2">No Document Attached</h3>
+        <p className="text-slate-500">Upload a Word document to edit it here.</p>
       </div>
     )
   }
 
   if (wordDocs.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
         <div className="text-6xl mb-4">📎</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Editing Not Available</h3>
-        <p className="text-gray-500">
+        <h3 className="text-lg font-medium text-slate-900 mb-2">Editing Not Available</h3>
+        <p className="text-slate-500">
           Only Word documents (.doc, .docx) can be edited.
           <br />
           PDF files are read-only.
@@ -184,9 +184,9 @@ export default function DocumentEditor({
   const isPdf = selectedAttachment?.mime_type === 'application/pdf'
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
         <div className="flex items-center gap-3">
           {wordDocs.length > 1 && (
             <select
@@ -205,7 +205,7 @@ export default function DocumentEditor({
             </select>
           )}
           {wordDocs.length === 1 && (
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-slate-600">
               📄 {selectedAttachment?.original_filename}
             </span>
           )}
@@ -217,7 +217,7 @@ export default function DocumentEditor({
               <>
                 <button
                   onClick={handleCancel}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
+                  className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900"
                   disabled={saving}
                 >
                   Cancel
@@ -225,7 +225,7 @@ export default function DocumentEditor({
                 <button
                   onClick={handleSave}
                   disabled={saving || !hasChanges}
-                  className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-1.5 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {saving ? (
                     <>
@@ -240,7 +240,7 @@ export default function DocumentEditor({
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                className="px-4 py-1.5 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -255,7 +255,7 @@ export default function DocumentEditor({
       {/* Editor */}
       <div className="p-4">
         {hasChanges && !collaborationEnabled && (
-          <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+          <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
             You have unsaved changes
           </div>
         )}
@@ -278,7 +278,7 @@ export default function DocumentEditor({
             content={content}
             onChange={handleContentChange}
             editable={isEditing && !isPdf}
-            className={isEditing ? 'ring-2 ring-blue-500' : ''}
+            className={isEditing ? 'ring-2 ring-sky-500' : ''}
             onRetry={collaboration.connect}
           />
         ) : (
@@ -286,7 +286,7 @@ export default function DocumentEditor({
             content={content}
             onChange={handleContentChange}
             editable={isEditing && !isPdf}
-            className={isEditing ? 'ring-2 ring-blue-500' : ''}
+            className={isEditing ? 'ring-2 ring-sky-500' : ''}
           />
         )}
       </div>

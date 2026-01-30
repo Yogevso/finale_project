@@ -67,23 +67,23 @@ export default function CustomerDocumentsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-        <p className="mt-1 text-gray-500">Browse all available documents and resources</p>
+        <h1 className="section-title">Documents</h1>
+        <p className="mt-1 text-slate-500">Browse all available documents and resources</p>
       </div>
 
       {/* Search and filters */}
-      <div className="bg-white rounded-lg shadow p-4">
+      <div className="surface-card rounded-2xl p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input
                 type="search"
                 name="search"
                 defaultValue={search}
                 placeholder="Search documents..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="input-field pl-10"
               />
             </div>
           </form>
@@ -92,7 +92,7 @@ export default function CustomerDocumentsPage() {
           <select
             value={category || ''}
             onChange={(e) => handleCategoryChange(e.target.value || null)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="select-field"
           >
             <option value="">All Categories</option>
             {categories?.map((cat) => (
@@ -103,16 +103,16 @@ export default function CustomerDocumentsPage() {
           </select>
 
           {/* View toggle */}
-          <div className="flex border rounded-lg overflow-hidden">
+          <div className="flex border border-slate-200 rounded-xl overflow-hidden">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 ${viewMode === 'grid' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
+              className={`p-2 ${viewMode === 'grid' ? 'bg-sky-100 text-sky-600' : 'text-slate-500 hover:bg-slate-100'}`}
             >
               <LayoutGrid className="h-5 w-5" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 ${viewMode === 'list' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-500 hover:bg-gray-100'}`}
+              className={`p-2 ${viewMode === 'list' ? 'bg-sky-100 text-sky-600' : 'text-slate-500 hover:bg-slate-100'}`}
             >
               <List className="h-5 w-5" />
             </button>
@@ -121,29 +121,29 @@ export default function CustomerDocumentsPage() {
 
         {/* Active filters */}
         {(category || search) && (
-          <div className="flex items-center gap-2 mt-4 pt-4 border-t">
-            <span className="text-sm text-gray-500">Filters:</span>
+          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200">
+            <span className="text-sm text-slate-500">Filters:</span>
             {category && (
-              <span className="inline-flex items-center px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm">
+              <span className="inline-flex items-center px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-sm">
                 <Folder className="h-4 w-4 mr-1" />
                 {category}
                 <button
                   onClick={() => handleCategoryChange(null)}
-                  className="ml-2 hover:text-indigo-900"
+                  className="ml-2 hover:text-sky-900"
                 >
                   ×
                 </button>
               </span>
             )}
             {search && (
-              <span className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+              <span className="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">
                 "{search}"
                 <button
                   onClick={() => {
                     searchParams.delete('search')
                     setSearchParams(searchParams)
                   }}
-                  className="ml-2 hover:text-gray-900"
+                  className="ml-2 hover:text-slate-900"
                 >
                   ×
                 </button>
@@ -156,13 +156,13 @@ export default function CustomerDocumentsPage() {
       {/* Documents */}
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
         </div>
       ) : documents?.items.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <FileText className="h-16 w-16 mx-auto text-gray-300" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">No documents found</h3>
-          <p className="mt-2 text-gray-500">
+        <div className="text-center py-12 surface-card rounded-2xl">
+          <FileText className="h-16 w-16 mx-auto text-slate-300" />
+          <h3 className="mt-4 text-lg font-display font-medium text-slate-900">No documents found</h3>
+          <p className="mt-2 text-slate-500">
             {search || category
               ? 'Try adjusting your search or filters'
               : 'No documents are available at this time'}
@@ -174,21 +174,21 @@ export default function CustomerDocumentsPage() {
             <Link
               key={doc.id}
               to={`/portal/documents/${doc.id}`}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-5"
+              className="surface-card-hover rounded-2xl p-5"
             >
               <div className="flex items-start">
-                <FileText className="h-10 w-10 text-indigo-500 flex-shrink-0" />
+                <FileText className="h-10 w-10 text-sky-500 flex-shrink-0" />
                 <div className="ml-4 flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{doc.title}</h3>
+                  <h3 className="font-display font-semibold text-slate-900 truncate">{doc.title}</h3>
                   {doc.description && (
-                    <p className="text-sm text-gray-500 line-clamp-2 mt-1">{doc.description}</p>
+                    <p className="text-sm text-slate-500 line-clamp-2 mt-1">{doc.description}</p>
                   )}
                 </div>
               </div>
-              <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
+              <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
                 <div className="flex items-center gap-2">
                   {doc.category && (
-                    <span className="bg-gray-100 px-2 py-0.5 rounded">{doc.category}</span>
+                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.category}</span>
                   )}
                   {doc.has_attachments && (
                     <Paperclip className="h-4 w-4" />
@@ -200,24 +200,24 @@ export default function CustomerDocumentsPage() {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow divide-y">
+        <div className="surface-card rounded-2xl divide-y divide-slate-100">
           {documents?.items.map((doc) => (
             <Link
               key={doc.id}
               to={`/portal/documents/${doc.id}`}
-              className="block p-4 hover:bg-gray-50"
+              className="block p-4 hover:bg-slate-50"
             >
               <div className="flex items-center">
-                <FileText className="h-8 w-8 text-indigo-500 flex-shrink-0" />
+                <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
                 <div className="ml-4 flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900">{doc.title}</h3>
+                  <h3 className="font-medium text-slate-900">{doc.title}</h3>
                   {doc.description && (
-                    <p className="text-sm text-gray-500 truncate">{doc.description}</p>
+                    <p className="text-sm text-slate-500 truncate">{doc.description}</p>
                   )}
                 </div>
-                <div className="ml-4 flex items-center gap-3 text-sm text-gray-400">
+                <div className="ml-4 flex items-center gap-3 text-sm text-slate-400">
                   {doc.category && (
-                    <span className="bg-gray-100 px-2 py-0.5 rounded">{doc.category}</span>
+                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.category}</span>
                   )}
                   {doc.has_attachments && <Paperclip className="h-4 w-4" />}
                   <span>v{doc.version}</span>
@@ -230,8 +230,8 @@ export default function CustomerDocumentsPage() {
 
       {/* Pagination */}
       {documents && documents.pages > 1 && (
-        <div className="flex items-center justify-between bg-white rounded-lg shadow px-4 py-3">
-          <p className="text-sm text-gray-500">
+        <div className="flex items-center justify-between surface-card rounded-2xl px-4 py-3">
+          <p className="text-sm text-slate-500">
             Showing {(page - 1) * 12 + 1} to {Math.min(page * 12, documents.total)} of{' '}
             {documents.total} results
           </p>
@@ -239,7 +239,7 @@ export default function CustomerDocumentsPage() {
             <button
               onClick={() => handlePageChange(page - 1)}
               disabled={page === 1}
-              className="p-2 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -249,7 +249,7 @@ export default function CustomerDocumentsPage() {
             <button
               onClick={() => handlePageChange(page + 1)}
               disabled={page === documents.pages}
-              className="p-2 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronRight className="h-5 w-5" />
             </button>

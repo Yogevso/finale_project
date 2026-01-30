@@ -52,9 +52,9 @@ export function OfflineIndicator({
         icon: WifiOff,
         label: 'Offline',
         description: 'No internet connection. Changes are saved locally.',
-        color: 'text-gray-600',
-        bgColor: 'bg-gray-100',
-        borderColor: 'border-gray-300',
+        color: 'text-slate-600',
+        bgColor: 'bg-slate-100',
+        borderColor: 'border-slate-300',
       }
     }
 
@@ -65,9 +65,9 @@ export function OfflineIndicator({
         description: reconnectAttempt > 0
           ? `Reconnecting... (attempt ${reconnectAttempt})`
           : 'Establishing connection...',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
+        color: 'text-sky-600',
+        bgColor: 'bg-sky-50',
+        borderColor: 'border-sky-200',
         animate: true,
       }
     }
@@ -77,9 +77,9 @@ export function OfflineIndicator({
         icon: AlertTriangle,
         label: 'Disconnected',
         description: error,
-        color: 'text-red-600',
-        bgColor: 'bg-red-50',
-        borderColor: 'border-red-200',
+        color: 'text-rose-600',
+        bgColor: 'bg-rose-50',
+        borderColor: 'border-rose-200',
       }
     }
 
@@ -88,9 +88,9 @@ export function OfflineIndicator({
         icon: Cloud,
         label: 'Syncing',
         description: 'Synchronizing with server...',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
+        color: 'text-sky-600',
+        bgColor: 'bg-sky-50',
+        borderColor: 'border-sky-200',
         animate: true,
       }
     }
@@ -100,9 +100,9 @@ export function OfflineIndicator({
         icon: Check,
         label: 'Connected',
         description: hasLocalChanges ? 'All changes synced' : 'Up to date',
-        color: 'text-green-600',
-        bgColor: 'bg-green-50',
-        borderColor: 'border-green-200',
+        color: 'text-emerald-600',
+        bgColor: 'bg-emerald-50',
+        borderColor: 'border-emerald-200',
       }
     }
 
@@ -110,9 +110,9 @@ export function OfflineIndicator({
       icon: CloudOff,
       label: 'Disconnected',
       description: 'Not connected to collaboration server',
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-100',
-      borderColor: 'border-gray-300',
+      color: 'text-slate-600',
+      bgColor: 'bg-slate-100',
+      borderColor: 'border-slate-300',
     }
   }
 
@@ -174,33 +174,33 @@ export function OfflineIndicator({
                   <h4 className={`font-semibold ${status.color}`}>
                     {status.label}
                   </h4>
-                  <p className="text-sm text-gray-600">{status.description}</p>
+                  <p className="text-sm text-slate-600">{status.description}</p>
                 </div>
               </div>
 
               {/* Connection info */}
               <div className="border-t pt-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Internet</span>
-                  <span className={isOffline ? 'text-red-600' : 'text-green-600'}>
+                  <span className="text-slate-500">Internet</span>
+                  <span className={isOffline ? 'text-rose-600' : 'text-emerald-600'}>
                     {isOffline ? 'Offline' : 'Online'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Server</span>
-                  <span className={isConnected ? 'text-green-600' : 'text-gray-500'}>
+                  <span className="text-slate-500">Server</span>
+                  <span className={isConnected ? 'text-emerald-600' : 'text-slate-500'}>
                     {isConnected ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Synced</span>
-                  <span className={isSynced ? 'text-green-600' : 'text-amber-600'}>
+                  <span className="text-slate-500">Synced</span>
+                  <span className={isSynced ? 'text-emerald-600' : 'text-amber-600'}>
                     {isSynced ? 'Yes' : 'Pending'}
                   </span>
                 </div>
                 {hasLocalChanges && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Local changes</span>
+                    <span className="text-slate-500">Local changes</span>
                     <span className="text-amber-600">Unsaved</span>
                   </div>
                 )}
@@ -214,7 +214,7 @@ export function OfflineIndicator({
                       setShowDetails(false)
                       onReconnect()
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-700 transition-colors"
                   >
                     <RefreshCw className="w-4 h-4" />
                     Reconnect Now
@@ -225,7 +225,7 @@ export function OfflineIndicator({
                   <button
                     onClick={handleClearLocalData}
                     disabled={isClearing}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 text-rose-600 border border-rose-200 rounded-xl hover:bg-rose-50 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="w-4 h-4" />
                     {isClearing ? 'Clearing...' : 'Clear Local Data'}
@@ -234,7 +234,7 @@ export function OfflineIndicator({
               </div>
 
               {/* Help text */}
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-slate-400 text-center">
                 Your edits are automatically saved locally when offline
               </p>
             </div>
@@ -261,7 +261,7 @@ export function OfflineIndicatorCompact({
   if (isOffline) {
     return (
       <div
-        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-gray-200 text-gray-700 text-xs ${className}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-slate-200 text-slate-700 text-xs ${className}`}
         title="Working offline - changes saved locally"
       >
         <WifiOff className="w-3 h-3" />
@@ -273,7 +273,7 @@ export function OfflineIndicatorCompact({
   if (!isConnected) {
     return (
       <div
-        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs ${className}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded-full bg-rose-100 text-rose-700 text-xs ${className}`}
         title="Disconnected from server"
       >
         <CloudOff className="w-3 h-3" />
@@ -316,10 +316,10 @@ export function OfflineBanner({
 
   if (isOffline) {
     return (
-      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-100 border-b border-gray-200">
+      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-slate-100 border-b border-slate-200">
         <div className="flex items-center gap-2">
-          <WifiOff className="w-4 h-4 text-gray-600" />
-          <span className="text-sm text-gray-700">
+          <WifiOff className="w-4 h-4 text-slate-600" />
+          <span className="text-sm text-slate-700">
             You're offline. Don't worry, your changes are being saved locally.
           </span>
         </div>
@@ -335,10 +335,10 @@ export function OfflineBanner({
 
   if (!isConnected && error) {
     return (
-      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-red-50 border-b border-red-200">
+      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-rose-50 border-b border-rose-200">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-red-600" />
-          <span className="text-sm text-red-700">
+          <AlertTriangle className="w-4 h-4 text-rose-600" />
+          <span className="text-sm text-rose-700">
             {reconnectAttempt > 0
               ? `Connection lost. Reconnecting... (attempt ${reconnectAttempt})`
               : 'Connection to the collaboration server was lost.'}
@@ -347,14 +347,14 @@ export function OfflineBanner({
         <div className="flex items-center gap-2">
           <button
             onClick={onReconnect}
-            className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            className="px-3 py-1 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors"
           >
             Reconnect
           </button>
           {onDismiss && (
             <button
               onClick={onDismiss}
-              className="text-red-400 hover:text-red-600"
+              className="text-rose-400 hover:text-rose-600"
             >
               ×
             </button>
