@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, isCustomer } = useAuth()
   
   const { data: documents, isLoading } = useQuery({
     queryKey: ['documents', 'dashboard'],
@@ -101,21 +101,23 @@ export default function DashboardPage() {
       </div>
 
       {/* Engagement Widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid gap-6 ${isCustomer ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
         {/* Bookmarks */}
-        <BookmarksWidget />
+        {isCustomer && <BookmarksWidget />}
         
         {/* Reading Progress */}
-        <ReadingProgressWidget />
+        {isCustomer && <ReadingProgressWidget />}
       </div>
     </div>
   )
 }
 
 function BookmarksWidget() {
+  const { isCustomer } = useAuth()
   const { data: bookmarks = [], isLoading } = useQuery({
     queryKey: ['bookmarks'],
     queryFn: () => api.getBookmarks(),
+    enabled: isCustomer,
   })
 
   return (
@@ -153,9 +155,11 @@ function BookmarksWidget() {
 }
 
 function ReadingProgressWidget() {
+  const { isCustomer } = useAuth()
   const { data: progress = [], isLoading } = useQuery({
     queryKey: ['reading-progress'],
     queryFn: () => api.getReadingProgress(),
+    enabled: isCustomer,
   })
 
   const inProgress = progress.filter((p: any) => p.progress_percent < 100)

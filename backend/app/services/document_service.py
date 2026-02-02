@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
-from app.models import ActionType, AuditLog, Document, DocumentStatus, User, Version
+from app.models import ActionType, AuditLog, Document, DocumentStatus, User, UserRole, Version
 from app.schemas import DocumentCreate, DocumentUpdate
 
 
@@ -169,6 +169,18 @@ class DocumentService:
                     f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
                 )
             document.status = document_data.status
+
+        if document_data.visibility is not None:
+            if document.visibility != document_data.visibility:
+                if user.role not in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only managers can change document visibility",
+                    )
+                changes.append(
+                    f"Visibility changed from '{document.visibility.value}' to '{document_data.visibility.value}'"
+                )
+            document.visibility = document_data.visibility
 
         if document_data.category is not None:
             document.category = document_data.category

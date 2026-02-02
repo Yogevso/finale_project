@@ -8,7 +8,7 @@ import RichTextEditor from '@/components/RichTextEditor'
 import type { DocumentStatus, DocumentVisibility, DocumentCreate } from '@/types'
 
 export default function DocumentsPage() {
-  const { isEditor } = useAuth()
+  const { isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -16,6 +16,7 @@ export default function DocumentsPage() {
   const [visibilityFilter, setVisibilityFilter] = useState<DocumentVisibility | ''>('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [visibilityOverrides, setVisibilityOverrides] = useState<Record<number, DocumentVisibility>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents', page, search, statusFilter],
@@ -36,6 +37,27 @@ export default function DocumentsPage() {
     onError: (error: any) => {
       console.error('Delete error:', error)
       alert(error?.response?.data?.detail || error?.message || 'Failed to delete document. You may need Manager or Admin role.')
+    },
+  })
+
+  const visibilityMutation = useMutation({
+    mutationFn: ({ id, visibility }: { id: number; visibility: DocumentVisibility }) =>
+      api.updateDocument(id, { visibility }),
+    onSuccess: (_, variables) => {
+      setVisibilityOverrides((prev) => {
+        const next = { ...prev }
+        delete next[variables.id]
+        return next
+      })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+    },
+    onError: (error: any, variables) => {
+      setVisibilityOverrides((prev) => {
+        const next = { ...prev }
+        delete next[variables.id]
+        return next
+      })
+      alert(error?.response?.data?.detail || error?.message || 'Failed to update visibility.')
     },
   })
 
@@ -153,7 +175,23 @@ export default function DocumentsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
+                    {isManager ? (
+                      <select
+                        value={visibilityOverrides[doc.id] || doc.visibility || 'internal'}
+                        onChange={(e) => {
+                          const nextVisibility = e.target.value as DocumentVisibility
+                          setVisibilityOverrides((prev) => ({ ...prev, [doc.id]: nextVisibility }))
+                          visibilityMutation.mutate({ id: doc.id, visibility: nextVisibility })
+                        }}
+                        className="select-field w-44"
+                      >
+                        <option value="internal">Internal</option>
+                        <option value="public">Public</option>
+                        <option value="company">Company</option>
+                      </select>
+                    ) : (
+                      <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
+                    )}
                   </td>
                   <td className="px-6 py-4 text-slate-500">{doc.category || '-'}</td>
                   <td className="px-6 py-4 text-slate-500">

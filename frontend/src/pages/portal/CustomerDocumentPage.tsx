@@ -1,10 +1,12 @@
 /**
  * CustomerDocumentPage - Document detail view for customer portal
  */
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { portalApi } from '../../lib/portalApi'
+import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import FeedbackForm from '../../components/FeedbackForm'
 import {
   FileText,
@@ -35,6 +37,10 @@ export default function CustomerDocumentPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const { isCustomer } = useAuth()
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const lastSavedProgress = useRef<number>(0)
+  const rafId = useRef<number | null>(null)
 
   // Fetch document
   const { data: document, isLoading, error } = useQuery({
@@ -55,6 +61,73 @@ export default function CustomerDocumentPage() {
       queryClient.invalidateQueries({ queryKey: ['portal', 'feedback'] })
     },
   })
+
+  const updateProgressMutation = useMutation({
+    mutationFn: (percent: number) => api.updateReadingProgress(Number(id), percent),
+  })
+
+  const computeAndSaveProgress = useCallback(() => {
+    if (!isCustomer || !contentRef.current || !id) {
+      return
+    }
+
+    const element = contentRef.current
+    const scrollY = window.scrollY
+    const elementTop = element.getBoundingClientRect().top + scrollY
+    const elementHeight = element.scrollHeight
+    const viewportHeight = window.innerHeight
+    const end = elementTop + elementHeight - viewportHeight
+
+    let progress = 0
+    if (end <= elementTop) {
+      progress = 100
+    } else if (scrollY <= elementTop) {
+      progress = 0
+    } else if (scrollY >= end) {
+      progress = 100
+    } else {
+      progress = Math.round(((scrollY - elementTop) / (end - elementTop)) * 100)
+    }
+
+    progress = Math.max(0, Math.min(100, progress))
+    if (progress <= lastSavedProgress.current) {
+      return
+    }
+
+    const currentMilestone = Math.floor(progress / 10) * 10
+    const savedMilestone = Math.floor(lastSavedProgress.current / 10) * 10
+    if (currentMilestone > savedMilestone && progress > lastSavedProgress.current) {
+      lastSavedProgress.current = progress
+      updateProgressMutation.mutate(progress)
+    }
+  }, [id, isCustomer, updateProgressMutation])
+
+  useEffect(() => {
+    if (!isCustomer || !id) {
+      return
+    }
+
+    const handleScroll = () => {
+      if (rafId.current !== null) {
+        return
+      }
+      rafId.current = window.requestAnimationFrame(() => {
+        rafId.current = null
+        computeAndSaveProgress()
+      })
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (rafId.current !== null) {
+        window.cancelAnimationFrame(rafId.current)
+        rafId.current = null
+      }
+    }
+  }, [computeAndSaveProgress, id, isCustomer])
 
   if (isLoading) {
     return (
@@ -142,6 +215,7 @@ export default function CustomerDocumentPage() {
         {/* Document content */}
         <div className="p-6">
           <div
+            ref={contentRef}
             className="prose max-w-none"
             dangerouslySetInnerHTML={{ __html: document.content }}
           />

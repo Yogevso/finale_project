@@ -28,7 +28,7 @@ interface PendingAnchor {
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { isEditor } = useAuth()
+  const { isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('preview')
@@ -241,12 +241,13 @@ export default function DocumentDetailPage() {
       {activeTab === 'details' && (
         <>
           {isEditing ? (
-            <EditForm
-              document={document}
-              onSave={(data) => updateMutation.mutate(data)}
-              onCancel={() => setIsEditing(false)}
-              isLoading={updateMutation.isPending}
-            />
+              <EditForm
+                document={document}
+                onSave={(data) => updateMutation.mutate(data)}
+                onCancel={() => setIsEditing(false)}
+                isLoading={updateMutation.isPending}
+                canEditVisibility={isManager}
+              />
           ) : (
             <div className="surface-card rounded-2xl p-6 space-y-6">
               <div className="grid grid-cols-2 gap-6">
@@ -507,11 +508,13 @@ function EditForm({
   onSave,
   onCancel,
   isLoading,
+  canEditVisibility,
 }: {
   document: { title: string; description?: string | null; status: DocumentStatus; visibility: DocumentVisibility; category?: string | null; tags?: string | null }
   onSave: (data: DocumentUpdate) => void
   onCancel: () => void
   isLoading: boolean
+  canEditVisibility: boolean
 }) {
   const [formData, setFormData] = useState<DocumentUpdate>({
     title: document.title,
@@ -568,15 +571,21 @@ function EditForm({
           <select
             value={formData.visibility}
             onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
-            className="select-field"
+            className="select-field disabled:opacity-60"
+            disabled={!canEditVisibility}
           >
             <option value="internal">🏢 Internal (Staff only)</option>
             <option value="public">🌐 Public (Everyone)</option>
             <option value="company">🔒 Company (Assigned companies)</option>
           </select>
-          {formData.visibility === 'company' && (
+          {formData.visibility === 'company' && canEditVisibility && (
             <p className="text-xs text-amber-600 mt-1">
               💡 After saving, go to the Details tab to assign specific companies
+            </p>
+          )}
+          {!canEditVisibility && (
+            <p className="text-xs text-slate-500 mt-1">
+              Only managers can change document visibility.
             </p>
           )}
         </div>

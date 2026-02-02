@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Bookmark, Document, Feedback, ReadingProgress, User
+from app.models import Bookmark, Document, Feedback, ReadingProgress, User, UserRole
 from app.security import get_current_user
 
 router = APIRouter(prefix="/engagement", tags=["Engagement"])
@@ -78,6 +78,8 @@ def list_bookmarks(
     current_user: User = Depends(get_current_user),
 ):
     """List user's bookmarked documents"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Bookmarks are only available for customers")
     bookmarks = (
         db.query(Bookmark)
         .filter(Bookmark.user_id == current_user.id)
@@ -104,6 +106,8 @@ def add_bookmark(
     current_user: User = Depends(get_current_user),
 ):
     """Bookmark a document"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Bookmarks are only available for customers")
     # Check document exists
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
@@ -149,6 +153,8 @@ def remove_bookmark(
     current_user: User = Depends(get_current_user),
 ):
     """Remove a bookmark"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Bookmarks are only available for customers")
     bookmark = (
         db.query(Bookmark)
         .filter(Bookmark.user_id == current_user.id, Bookmark.document_id == document_id)
@@ -170,6 +176,8 @@ def check_bookmark_status(
     current_user: User = Depends(get_current_user),
 ):
     """Check if document is bookmarked"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Bookmarks are only available for customers")
     bookmark = (
         db.query(Bookmark)
         .filter(Bookmark.user_id == current_user.id, Bookmark.document_id == document_id)
@@ -291,6 +299,8 @@ def list_reading_progress(
     current_user: User = Depends(get_current_user),
 ):
     """List user's reading progress"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Reading progress is only available for customers")
     query = db.query(ReadingProgress).filter(ReadingProgress.user_id == current_user.id)
 
     if completed_only:
@@ -319,6 +329,8 @@ def update_reading_progress(
     current_user: User = Depends(get_current_user),
 ):
     """Update reading progress for a document"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Reading progress is only available for customers")
     # Validate progress
     if data.progress_percent < 0 or data.progress_percent > 100:
         raise HTTPException(status_code=400, detail="Progress must be 0-100")
@@ -374,6 +386,8 @@ def get_document_progress(
     current_user: User = Depends(get_current_user),
 ):
     """Get reading progress for a specific document"""
+    if current_user.role != UserRole.CUSTOMER:
+        raise HTTPException(status_code=403, detail="Reading progress is only available for customers")
     progress = (
         db.query(ReadingProgress)
         .filter(

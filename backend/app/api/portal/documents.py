@@ -35,12 +35,11 @@ def require_customer(current_user: User = Depends(get_current_active_user)) -> U
 def get_customer_documents_query(db: Session, user: User):
     """
     Build query for documents visible to customer:
-    - All PUBLIC + PUBLISHED documents (regardless of tenant)
-    - COMPANY + PUBLISHED documents assigned to customer's tenant
+    - All PUBLIC documents (regardless of tenant)
+    - COMPANY documents assigned to customer's tenant
+    - Excludes archived documents
     """
-    query = db.query(Document).filter(
-        Document.status == DocumentStatus.PUBLISHED,
-    )
+    query = db.query(Document).filter(Document.status != DocumentStatus.ARCHIVED)
 
     # Customer can see:
     # 1. PUBLIC docs (available to everyone)
@@ -148,8 +147,8 @@ async def get_customer_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Check access - document must be published (active)
-    if document.status not in [DocumentStatus.PUBLISHED, DocumentStatus.ACTIVE]:
+    # Exclude archived documents
+    if document.status == DocumentStatus.ARCHIVED:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Check visibility - must be PUBLIC or COMPANY assigned to customer's tenant
@@ -199,7 +198,7 @@ async def get_customer_document(
                 filename=att.filename,
                 file_size=att.file_size,
                 mime_type=att.mime_type,
-                created_at=att.created_at,
+                created_at=att.uploaded_at,
             )
             for att in attachments
         ],
