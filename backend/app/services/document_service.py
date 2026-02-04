@@ -45,15 +45,43 @@ class DocumentService:
         today = datetime.utcnow().strftime("%Y%m%d")
         prefix = f"DOC-{today}"
 
-        # Get count of documents created today (tenant-scoped)
-        count = self._base_query().filter(Document.document_number.like(f"{prefix}-%")).count()
+        # Find the next available sequence for today (tenant-scoped)
+        existing = (
+            self._base_query()
+            .filter(Document.document_number.like(f"{prefix}-%"))
+            .with_entities(Document.document_number)
+            .all()
+        )
 
-        return f"{prefix}-{count + 1:04d}"
+        used_numbers = set()
+        for (doc_number,) in existing:
+            try:
+                suffix = int(doc_number.split("-")[-1])
+                used_numbers.add(suffix)
+            except (ValueError, IndexError):
+                continue
+
+        next_seq = 1
+        while next_seq in used_numbers:
+            next_seq += 1
+
+        return f"{prefix}-{next_seq:04d}"
 
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
         """Create a new document"""
-        # Generate document number
-        document_number = self.generate_document_number()
+        # Use provided document number or generate one
+        if document_data.document_number:
+            existing = self._base_query().filter(
+                Document.document_number == document_data.document_number
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Document ID already exists",
+                )
+            document_number = document_data.document_number
+        else:
+            document_number = self.generate_document_number()
 
         # Get tenant_id from context or user
         tenant_id = None
@@ -62,16 +90,28 @@ class DocumentService:
         elif user.tenant_id:
             tenant_id = user.tenant_id
 
+        parent_id = document_data.parent_id
+        if parent_id:
+            parent = self._base_query().filter(Document.id == parent_id).first()
+            if not parent:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found"
+                )
+
         # Create document
         document = Document(
             title=document_data.title,
             document_number=document_number,
             description=document_data.description,
+            version_label=document_data.version_label,
             status=document_data.status,
             category=document_data.category,
+            topic=document_data.topic,
+            platform=document_data.platform,
             tags=document_data.tags,
             created_by=user.id,
             tenant_id=tenant_id,
+            parent_id=parent_id,
         )
 
         self.db.add(document)
@@ -163,6 +203,9 @@ class DocumentService:
         if document_data.description is not None:
             document.description = document_data.description
 
+        if document_data.version_label is not None:
+            document.version_label = document_data.version_label
+
         if document_data.status is not None:
             if document.status != document_data.status:
                 changes.append(
@@ -184,6 +227,12 @@ class DocumentService:
 
         if document_data.category is not None:
             document.category = document_data.category
+
+        if document_data.topic is not None:
+            document.topic = document_data.topic
+
+        if document_data.platform is not None:
+            document.platform = document_data.platform
 
         if document_data.tags is not None:
             document.tags = document_data.tags

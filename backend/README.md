@@ -1,4 +1,4 @@
-# Document Portal V2 - Backend
+# Documentation Platform - Backend
 
 FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document management features including customer portal with company-based access control.
 
@@ -166,7 +166,7 @@ SMTP_PORT=587
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 EMAIL_FROM=noreply@yourcompany.com
-EMAIL_FROM_NAME=Document Portal
+EMAIL_FROM_NAME=Documentation Platform
 
 # ===================
 # Frontend URL (for email links)

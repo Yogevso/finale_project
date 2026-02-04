@@ -14,6 +14,8 @@ class PublicDocumentSummary(BaseModel):
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
+    topic: Optional[str] = None
+    platform: Optional[str] = None
     tags: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -30,6 +32,8 @@ class PublicDocumentDetail(BaseModel):
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
+    topic: Optional[str] = None
+    platform: Optional[str] = None
     tags: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -96,6 +100,8 @@ class PublicSearchResult(BaseModel):
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
+    topic: Optional[str] = None
+    platform: Optional[str] = None
     snippet: Optional[str] = None  # Highlighted search snippet
     score: float = 0.0
 
@@ -111,3 +117,20 @@ class PublicSearchResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PublicTopic(BaseModel):
+    """Public topic metadata"""
+
+    name: str
+    slug: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    document_count: int
+
+
+class PublicTopicsResponse(BaseModel):
+    """List of topics with counts"""
+
+    items: List[PublicTopic]
+    total: int

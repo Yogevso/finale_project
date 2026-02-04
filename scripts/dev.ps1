@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 Starting V2 Document Portal development environment..." -ForegroundColor Green
+Write-Host "🚀 Starting Documentation Platform development environment..." -ForegroundColor Green
 
 # Navigate to v2 directory
 Set-Location (Split-Path -Parent $PSScriptRoot)

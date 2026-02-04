@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy script for Document Portal V2
+# Deploy script for Documentation Platform
 # Usage: ./deploy.sh [build|start|stop|restart|logs|status]
 
 set -e
@@ -29,7 +29,7 @@ check_env() {
     if [ ! -f ".env" ]; then
         log_warn ".env file not found. Creating from template..."
         cat > .env << EOF
-# Document Portal Production Configuration
+# Documentation Platform Production Configuration
 # Generated on $(date)
 
 # REQUIRED: Change this to a secure random string
@@ -63,7 +63,7 @@ build() {
 
 start() {
     check_env
-    log_info "Starting Document Portal..."
+    log_info "Starting Documentation Platform..."
     docker compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d
     log_info "Portal started! Checking health..."
     sleep 5
@@ -71,13 +71,13 @@ start() {
 }
 
 stop() {
-    log_info "Stopping Document Portal..."
+    log_info "Stopping Documentation Platform..."
     docker compose -f $COMPOSE_FILE -p $PROJECT_NAME down
     log_info "Portal stopped."
 }
 
 restart() {
-    log_info "Restarting Document Portal..."
+    log_info "Restarting Documentation Platform..."
     docker compose -f $COMPOSE_FILE -p $PROJECT_NAME restart
     log_info "Portal restarted."
 }
@@ -124,7 +124,7 @@ backup() {
 }
 
 update() {
-    log_info "Updating Document Portal..."
+    log_info "Updating Documentation Platform..."
     
     # Pull latest code (if using git)
     if [ -d ".git" ]; then

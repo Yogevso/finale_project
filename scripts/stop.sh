@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🛑 Stopping V2 Document Portal..."
+echo "🛑 Stopping Documentation Platform..."
 
 cd "$(dirname "$0")/.."
 

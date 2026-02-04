@@ -12,6 +12,7 @@ import CompaniesPage from './pages/CompaniesPage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
 import ReviewsPage from './pages/ReviewsPage'
 import FeedbackPage from './pages/admin/FeedbackPage'
+import SystemSetupPage from './pages/admin/SystemSetupPage'
 import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
 import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
 // Public portal pages
@@ -20,6 +21,10 @@ import PublicHomePage from './pages/public/PublicHomePage'
 import PublicDocumentsPage from './pages/public/PublicDocumentsPage'
 import PublicDocumentPage from './pages/public/PublicDocumentPage'
 import PublicSearchPage from './pages/public/PublicSearchPage'
+import PublicTopicsPage from './pages/public/PublicTopicsPage'
+import PublicToolsPage from './pages/public/PublicToolsPage'
+import PublicHelpPage from './pages/public/PublicHelpPage'
+import PublicTopicDetailPage from './pages/public/PublicTopicDetailPage'
 // Customer portal pages
 import CustomerLayout from './layouts/CustomerLayout'
 import CustomerRoute from './components/guards/CustomerRoute'
@@ -49,7 +54,7 @@ function RoleBasedRedirect() {
   }
 
   // Not logged in, redirect to public browse page
-  return <Navigate to="/browse" replace />
+  return <Navigate to="/docs" replace />
 }
 
 // 404 page component
@@ -78,7 +83,12 @@ function App() {
         {/* No auth required - accessible to everyone */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<RoleBasedRedirect />} />
-          <Route path="/browse" element={<PublicDocumentsPage />} />
+          <Route path="/docs" element={<PublicDocumentsPage />} />
+          <Route path="/browse" element={<Navigate to="/docs" replace />} />
+          <Route path="/topics" element={<PublicTopicsPage />} />
+          <Route path="/topics/:slug" element={<PublicTopicDetailPage />} />
+          <Route path="/tools" element={<PublicToolsPage />} />
+          <Route path="/help" element={<PublicHelpPage />} />
           <Route path="/doc/:id" element={<PublicDocumentPage />} />
           <Route path="/search" element={<PublicSearchPage />} />
         </Route>
@@ -188,6 +198,17 @@ function App() {
         >
           <Route index element={<CompaniesPage />} />
           <Route path=":id" element={<CompanyDetailPage />} />
+        </Route>
+
+        <Route
+          path="/admin/system-setup"
+          element={
+            <RoleGuard allowedRoles={['system_admin']}>
+              <Layout />
+            </RoleGuard>
+          }
+        >
+          <Route index element={<SystemSetupPage />} />
         </Route>
 
         {/* ==================== CUSTOMER PORTAL ==================== */}

@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🚀 Starting V2 Document Portal development environment..."
+echo "🚀 Starting Documentation Platform development environment..."
 
 # Navigate to v2 directory
 cd "$(dirname "$0")/.."

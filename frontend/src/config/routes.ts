@@ -71,6 +71,13 @@ export const internalNavItems: RouteConfig[] = [
     section: 'admin',
     allowedRoles: ['system_admin', 'admin'],
   },
+  {
+    path: '/admin/system-setup',
+    label: 'System Setup',
+    icon: '🛠️',
+    section: 'admin',
+    allowedRoles: ['system_admin'],
+  },
 ]
 
 // Customer portal navigation items
@@ -103,8 +110,8 @@ export const publicNavItems: RouteConfig[] = [
     icon: '🏠',
   },
   {
-    path: '/browse',
-    label: 'Browse Documents',
+    path: '/docs',
+    label: 'Docs',
     icon: '📚',
   },
   {

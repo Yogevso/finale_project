@@ -25,7 +25,7 @@ export default function CustomerLayout() {
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    navigate('/docs')
   }
 
   return (
@@ -41,7 +41,7 @@ export default function CustomerLayout() {
               </div>
               <div>
                 <div className="text-sm text-slate-500">Customer</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Documentation Platform</div>
               </div>
             </Link>
             

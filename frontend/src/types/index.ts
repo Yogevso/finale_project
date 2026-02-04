@@ -1,6 +1,27 @@
 // User types
 export type UserRole = 'system_admin' | 'admin' | 'manager' | 'editor' | 'viewer' | 'customer'
 
+export type Permission =
+  | 'view_public_docs'
+  | 'view_internal_docs'
+  | 'view_company_docs'
+  | 'create_document'
+  | 'edit_document'
+  | 'delete_document'
+  | 'submit_review'
+  | 'approve_review'
+  | 'approve_peer_review'
+  | 'publish_document'
+  | 'assign_companies'
+  | 'add_comments'
+  | 'submit_feedback'
+  | 'download_attachments'
+  | 'manage_users'
+  | 'manage_editors'
+  | 'manage_companies'
+  | 'system_settings'
+  | 'manage_admins'
+
 export interface User {
   id: number
   email: string
@@ -63,10 +84,12 @@ export interface Document {
   title: string
   document_number: string
   description: string | null
+  version_label?: string | null
   status: DocumentStatus
   visibility: DocumentVisibility
   category: string | null
   tags: string | null
+  parent_id?: number | null
   created_by: number
   created_at: string
   updated_at: string
@@ -80,6 +103,9 @@ export interface Document {
 export interface DocumentCreate {
   title: string
   description?: string
+  version_label?: string
+  document_number?: string
+  parent_id?: number
   status?: DocumentStatus
   visibility?: DocumentVisibility
   category?: string
@@ -89,6 +115,7 @@ export interface DocumentCreate {
 export interface DocumentUpdate {
   title?: string
   description?: string
+  version_label?: string
   status?: DocumentStatus
   visibility?: DocumentVisibility
   category?: string
@@ -292,6 +319,27 @@ export interface TenantUpdate {
 export interface TenantListResponse {
   items: Tenant[]
   total: number
+}
+
+export interface SystemSettingsResponse {
+  settings: Record<string, unknown>
+}
+
+export interface SystemSettingsUpdate {
+  settings: Record<string, unknown>
+}
+
+export interface RbacPolicy {
+  role: UserRole
+  permissions: Permission[]
+}
+
+export interface RbacPoliciesResponse {
+  policies: RbacPolicy[]
+}
+
+export interface RbacPoliciesUpdate {
+  policies: RbacPolicy[]
 }
 
 // Extended Company types for admin management

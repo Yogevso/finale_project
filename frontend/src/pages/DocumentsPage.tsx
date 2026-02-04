@@ -259,6 +259,7 @@ export default function DocumentsPage() {
 }
 
 function CreateDocumentModal({ onClose }: { onClose: () => void }) {
+  const { isManager } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [formData, setFormData] = useState<DocumentCreate & { content?: string }>({
@@ -283,14 +284,16 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
         category: data.category,
         tags: data.tags,
       })
-      // If there's content, create a version with it and publish it
+      // If there's content, create a version with it
       if (data.content && data.content.trim()) {
         const version = await api.createVersion(doc.id, {
           content: data.content,
           changes_summary: 'Initial content',
         })
-        // Publish the initial version so it shows in preview
-        await api.publishVersion(doc.id, version.id)
+        // Publish only if user has permission (manager/admin/system_admin)
+        if (isManager) {
+          await api.publishVersion(doc.id, version.id)
+        }
       }
       return doc
     },
@@ -455,7 +458,11 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const releaseInputRef = useRef<HTMLInputElement>(null)
+  const contentInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [releaseNotesFile, setReleaseNotesFile] = useState<File | null>(null)
+  const [contentFile, setContentFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
@@ -464,12 +471,15 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const [dragActive, setDragActive] = useState(false)
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => api.uploadDocument(file, { 
-      title: title || undefined, 
-      description: description || undefined,
-      category: category || undefined,
-      tags: tags || undefined
-    }),
+    mutationFn: (file: File) =>
+      api.uploadDocument(file, {
+        title: title || undefined,
+        description: description || undefined,
+        category: category || undefined,
+        tags: tags || undefined,
+        release_notes: releaseNotesFile,
+        content_file: contentFile,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       onClose()
@@ -484,22 +494,21 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     const allowedTypes = [
       'application/pdf',
       'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ]
-    
+
     if (!allowedTypes.includes(file.type)) {
       setError('Only PDF and Word documents are allowed')
       return
     }
-    
+
     if (file.size > 10 * 1024 * 1024) {
       setError('File size must be less than 10MB')
       return
     }
-    
+
     setSelectedFile(file)
     setError('')
-    // Use filename as default title
     if (!title) {
       setTitle(file.name.replace(/\.[^/.]+$/, ''))
     }
@@ -606,6 +615,54 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                 className="input-field"
                 placeholder="tag1, tag2"
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Release Notes (JSON, optional)</label>
+            <div className="flex items-center gap-3">
+              <input
+                ref={releaseInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={(e) => setReleaseNotesFile(e.target.files?.[0] || null)}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => releaseInputRef.current?.click()}
+              >
+                Choose File
+              </button>
+              <span className="text-sm text-slate-500">
+                {releaseNotesFile ? releaseNotesFile.name : 'No file chosen'}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Additional Document (MD/HTML/TXT, optional)
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                ref={contentInputRef}
+                type="file"
+                accept=".md,.html,.htm,.txt"
+                className="hidden"
+                onChange={(e) => setContentFile(e.target.files?.[0] || null)}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => contentInputRef.current?.click()}
+              >
+                Choose File
+              </button>
+              <span className="text-sm text-slate-500">
+                {contentFile ? contentFile.name : 'No file chosen'}
+              </span>
             </div>
           </div>
 

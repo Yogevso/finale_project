@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🧪 Running V2 Document Portal tests..."
+echo "🧪 Running Documentation Platform tests..."
 
 cd "$(dirname "$0")/.."
 

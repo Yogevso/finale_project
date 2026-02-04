@@ -14,6 +14,8 @@ export interface PublicDocumentSummary {
   title: string
   description?: string
   category?: string
+  topic?: string
+  platform?: string
   tags?: string
   created_at: string
   updated_at?: string
@@ -60,6 +62,8 @@ export interface PublicSearchResult {
   title: string
   description?: string
   category?: string
+  topic?: string
+  platform?: string
   snippet?: string
   score: number
 }
@@ -77,6 +81,19 @@ export interface PublicStats {
   total_categories: number
 }
 
+export interface PublicTopic {
+  name: string
+  slug: string
+  description?: string
+  image_url?: string
+  document_count: number
+}
+
+export interface PublicTopicsResponse {
+  items: PublicTopic[]
+  total: number
+}
+
 // API Functions
 export const publicApi = {
   /**
@@ -86,6 +103,8 @@ export const publicApi = {
     page?: number
     page_size?: number
     category?: string
+    topic?: string
+    platform?: string
     search?: string
     sort_by?: string
     sort_order?: string
@@ -94,6 +113,8 @@ export const publicApi = {
     if (params.page) searchParams.set('page', params.page.toString())
     if (params.page_size) searchParams.set('page_size', params.page_size.toString())
     if (params.category) searchParams.set('category', params.category)
+    if (params.topic) searchParams.set('topic', params.topic)
+    if (params.platform) searchParams.set('platform', params.platform)
     if (params.search) searchParams.set('search', params.search)
     if (params.sort_by) searchParams.set('sort_by', params.sort_by)
     if (params.sort_order) searchParams.set('sort_order', params.sort_order)
@@ -138,12 +159,16 @@ export const publicApi = {
     page?: number
     page_size?: number
     category?: string
+    topic?: string
+    platform?: string
   }): Promise<PublicSearchResponse> {
     const searchParams = new URLSearchParams()
     searchParams.set('q', params.q)
     if (params.page) searchParams.set('page', params.page.toString())
     if (params.page_size) searchParams.set('page_size', params.page_size.toString())
     if (params.category) searchParams.set('category', params.category)
+    if (params.topic) searchParams.set('topic', params.topic)
+    if (params.platform) searchParams.set('platform', params.platform)
 
     const response = await fetch(`${API_BASE}/search?${searchParams}`)
     if (!response.ok) {
@@ -159,6 +184,28 @@ export const publicApi = {
     const response = await fetch(`${API_BASE}/stats`)
     if (!response.ok) {
       throw new Error('Failed to fetch stats')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get list of public topics
+   */
+  async getTopics(): Promise<PublicTopicsResponse> {
+    const response = await fetch(`${API_BASE}/topics`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch topics')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get a single topic by slug
+   */
+  async getTopic(slug: string): Promise<PublicTopic> {
+    const response = await fetch(`${API_BASE}/topics/${slug}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch topic')
     }
     return response.json()
   },

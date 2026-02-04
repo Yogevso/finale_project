@@ -99,10 +99,22 @@ async def submit_for_review(
             detail="This document already has a pending review",
         )
 
+    # If no version was provided, attach the latest version automatically
+    version_id = data.version_id
+    if not version_id:
+        latest_version = (
+            db.query(Version)
+            .filter(Version.document_id == document_id)
+            .order_by(Version.version_number.desc())
+            .first()
+        )
+        if latest_version:
+            version_id = latest_version.id
+
     # Create review request
     review = ReviewRequest(
         document_id=document_id,
-        version_id=data.version_id,
+        version_id=version_id,
         submitted_by=current_user.id,
         message=data.message,
         status=ReviewStatus.PENDING,

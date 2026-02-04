@@ -113,7 +113,7 @@ class EmailService:
                     </p>
                 </div>
                 <div class="footer">
-                    <p>Document Portal V2 • This is an automated notification</p>
+                    <p>Documentation Platform • This is an automated notification</p>
                 </div>
             </div>
         </body>
@@ -131,7 +131,7 @@ Number: {document_number}
 View the document: {document_url}
 
 ---
-Document Portal V2
+Documentation Platform
         """
 
         return await self.send_email(to_email, subject, html, text)
@@ -185,7 +185,7 @@ Document Portal V2
                     </p>
                 </div>
                 <div class="footer">
-                    <p>Document Portal V2 • This is an automated notification</p>
+                    <p>Documentation Platform • This is an automated notification</p>
                 </div>
             </div>
         </body>
@@ -201,7 +201,7 @@ New Comment on: {document_title}
 View the document: {document_url}
 
 ---
-Document Portal V2
+Documentation Platform
         """
 
         return await self.send_email(to_email, subject, html, text)
@@ -262,7 +262,7 @@ Document Portal V2
                     </p>
                 </div>
                 <div class="footer">
-                    <p>Document Portal V2 • This is an automated notification</p>
+                    <p>Documentation Platform • This is an automated notification</p>
                 </div>
             </div>
         </body>
@@ -281,7 +281,7 @@ Your comment:
 View the conversation: {document_url}
 
 ---
-Document Portal V2
+Documentation Platform
         """
 
         return await self.send_email(to_email, subject, html, text)
@@ -329,7 +329,7 @@ Document Portal V2
                     </div>
                 </div>
                 <div class="footer">
-                    <p>Document Portal V2 • This is an automated notification</p>
+                    <p>Documentation Platform • This is an automated notification</p>
                 </div>
             </div>
         </body>
@@ -348,7 +348,7 @@ This link expires in {expires_minutes} minutes.
 If you didn't request this, please ignore this email.
 
 ---
-Document Portal V2
+Documentation Platform
         """
 
         return await self.send_email(to_email, subject, html, text)
@@ -360,7 +360,7 @@ Document Portal V2
         login_url: str,
     ) -> bool:
         """Send welcome email to new users"""
-        subject = "🎉 Welcome to Document Portal!"
+        subject = "🎉 Welcome to Documentation Platform!"
 
         html = f"""
         <!DOCTYPE html>
@@ -387,7 +387,7 @@ Document Portal V2
                 </div>
                 <div class="content">
                     <p>Hi {user_name},</p>
-                    <p>Welcome to Document Portal! Your account has been created successfully.</p>
+                    <p>Welcome to Documentation Platform! Your account has been created successfully.</p>
 
                     <div class="features">
                         <div class="feature">📄 Browse and search documents</div>
@@ -401,7 +401,7 @@ Document Portal V2
                     </p>
                 </div>
                 <div class="footer">
-                    <p>Document Portal V2 • This is an automated notification</p>
+                    <p>Documentation Platform • This is an automated notification</p>
                 </div>
             </div>
         </body>
@@ -409,13 +409,13 @@ Document Portal V2
         """
 
         text = f"""
-Welcome to Document Portal!
+Welcome to Documentation Platform!
 
 Hi {user_name},
 
 Your account has been created successfully.
 
-With Document Portal you can:
+With Documentation Platform you can:
 - Browse and search documents
 - Leave comments and feedback
 - Bookmark your favorites
@@ -424,7 +424,7 @@ With Document Portal you can:
 Get started: {login_url}
 
 ---
-Document Portal V2
+Documentation Platform
         """
 
         return await self.send_email(to_email, subject, html, text)

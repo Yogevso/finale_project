@@ -158,7 +158,7 @@ export default function ViewerDocumentPage() {
 
           {/* Print Footer */}
           <div className="border-t border-slate-200 pt-4 mt-8 text-xs text-slate-400 print:block">
-            <p>Printed from Document Portal • {new Date().toLocaleDateString()}</p>
+            <p>Printed from Documentation Platform • {new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
@@ -367,7 +367,7 @@ export default function ViewerDocumentPage() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 py-8 text-center text-slate-500 text-sm">
-          <p>Document Portal V2 • Built with React + FastAPI</p>
+          <p>Documentation Platform • Built with React + FastAPI</p>
         </div>
       </footer>
     </div>
@@ -380,7 +380,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between">
           <Link to="/viewer" className="flex items-center gap-2">
-            <h1 className="text-2xl font-display font-bold text-slate-900">📚 Document Portal</h1>
+            <h1 className="text-2xl font-display font-bold text-slate-900">📚 Documentation Platform</h1>
           </Link>
           <Link
             to="/login"

@@ -75,7 +75,7 @@ export default function ViewerHomePage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-display font-bold text-slate-900">📚 Document Portal</h1>
+              <h1 className="text-3xl font-display font-bold text-slate-900">📚 Documentation Platform</h1>
               <p className="text-slate-500 mt-1">Browse our published documents</p>
             </div>
             <Link
@@ -292,7 +292,7 @@ export default function ViewerHomePage() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 mt-16">
         <div className="max-w-7xl mx-auto px-4 py-8 text-center text-slate-500 text-sm">
-          <p>Document Portal V2 • Built with React + FastAPI</p>
+          <p>Documentation Platform • Built with React + FastAPI</p>
         </div>
       </footer>
     </div>

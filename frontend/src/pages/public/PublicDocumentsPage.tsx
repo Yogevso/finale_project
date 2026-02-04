@@ -62,74 +62,82 @@ export default function PublicDocumentsPage() {
     })
   }
 
+  const getTags = (tags?: string) =>
+    tags ? tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 3) : []
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="section-title">Browse Documents</h1>
-        <p className="text-slate-600 mt-2">
-          Explore our public documentation library
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-50">
+      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
+        <div className="max-w-7xl mx-auto px-6 py-14">
+          <div className="max-w-3xl">
+            <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
+            <h1 className="text-4xl font-display font-bold mb-3">Documentation Library</h1>
+            <p className="text-sky-100">
+              Explore approved documentation, release notes, and technical guides curated by the docs team.
+            </p>
+          </div>
+        </div>
+      </section>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
-        <aside className="lg:w-64 flex-shrink-0">
-          {/* Search */}
-          <form onSubmit={handleLocalSearch} className="mb-6">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search..."
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                className="input-field pl-10"
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            </div>
-          </form>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar */}
+          <aside className="lg:w-64 flex-shrink-0">
+            {/* Search */}
+            <form onSubmit={handleLocalSearch} className="mb-6">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={localSearch}
+                  onChange={(e) => setLocalSearch(e.target.value)}
+                  className="input-field pl-10"
+                />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+              </div>
+            </form>
 
-          {/* Categories */}
-          <div className="surface-card rounded-2xl p-4">
-            <h3 className="font-display font-semibold text-slate-900 mb-3">Categories</h3>
-            <ul className="space-y-1">
-              <li>
-                <button
-                  onClick={() => handleCategoryClick(null)}
-                  className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
-                    !category
-                      ? 'bg-sky-50 text-sky-700 font-medium'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  All Categories
-                </button>
-              </li>
-              {categories?.items?.map((cat) => (
-                <li key={cat.category}>
+            {/* Categories */}
+            <div className="surface-card rounded-2xl p-4">
+              <h3 className="font-display font-semibold text-slate-900 mb-3">Categories</h3>
+              <ul className="space-y-1">
+                <li>
                   <button
-                    onClick={() => handleCategoryClick(cat.category)}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex justify-between items-center ${
-                      category === cat.category
+                    onClick={() => handleCategoryClick(null)}
+                    className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
+                      !category
                         ? 'bg-sky-50 text-sky-700 font-medium'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="truncate">{cat.category}</span>
-                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">
-                      {cat.count}
-                    </span>
+                    All Categories
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
-        </aside>
+                {categories?.items?.map((cat) => (
+                  <li key={cat.category}>
+                    <button
+                      onClick={() => handleCategoryClick(cat.category)}
+                      className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex justify-between items-center ${
+                        category === cat.category
+                          ? 'bg-sky-50 text-sky-700 font-medium'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="truncate">{cat.category}</span>
+                      <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                        {cat.count}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
 
-        {/* Main Content */}
-        <main className="flex-1">
-          {/* Toolbar */}
-          <div className="flex justify-between items-center mb-6">
+          {/* Main Content */}
+          <main className="flex-1">
+            {/* Toolbar */}
+            <div className="flex justify-between items-center mb-6">
             <div className="text-sm text-slate-500">
               {docs?.total || 0} documents found
               {category && <span> in <strong>{category}</strong></span>}
@@ -159,88 +167,106 @@ export default function PublicDocumentsPage() {
             </div>
           </div>
 
-          {/* Documents */}
-          {docsLoading ? (
-            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-40 bg-slate-100 rounded-2xl animate-pulse" />
-              ))}
-            </div>
-          ) : docs?.items && docs.items.length > 0 ? (
-            <>
-              {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {docs.items.map((doc) => (
-                    <Link
-                      key={doc.id}
-                      to={`/doc/${doc.id}`}
-                      className="surface-card-hover rounded-2xl p-6 group"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="bg-sky-100 rounded-xl p-3">
-                          <FileText className="h-6 w-6 text-sky-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-display font-semibold text-slate-900 truncate group-hover:text-sky-600">
-                            {doc.title}
-                          </h3>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {doc.document_number}
-                          </p>
-                          <p className="text-sm text-slate-500 mt-2 line-clamp-2">
-                            {doc.description || 'No description'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-                        <span>{formatDate(doc.created_at)}</span>
-                        {doc.category && (
-                          <span className="pill bg-slate-100 text-slate-600 border-slate-200">
-                            {doc.category}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {docs.items.map((doc) => (
-                    <Link
-                      key={doc.id}
-                      to={`/doc/${doc.id}`}
-                      className="block surface-card-hover rounded-2xl p-4 group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-display font-semibold text-slate-900 group-hover:text-sky-600">
+            {/* Documents */}
+            {docsLoading ? (
+              <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="h-40 bg-slate-100 rounded-2xl animate-pulse" />
+                ))}
+              </div>
+            ) : docs?.items && docs.items.length > 0 ? (
+              <>
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {docs.items.map((doc) => (
+                      <Link
+                        key={doc.id}
+                        to={`/doc/${doc.id}`}
+                        className="surface-card-hover rounded-2xl p-6 group"
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="bg-sky-100 rounded-xl p-3">
+                            <FileText className="h-6 w-6 text-sky-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-display font-semibold text-slate-900 truncate group-hover:text-sky-600">
                               {doc.title}
                             </h3>
-                            <span className="text-xs text-slate-400">
+                            <p className="text-xs text-slate-400 mt-1">
                               {doc.document_number}
-                            </span>
+                            </p>
+                            <p className="text-sm text-slate-500 mt-2 line-clamp-2">
+                              {doc.description || 'No description'}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                              {doc.topic && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.topic}</span>}
+                              {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
+                              {getTags(doc.tags).map((tag) => (
+                                <span key={tag} className="pill bg-white text-slate-600 border-slate-200">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                          <p className="text-sm text-slate-500 truncate">
-                            {doc.description || 'No description'}
-                          </p>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-sm text-slate-400">
-                            {formatDate(doc.created_at)}
-                          </div>
+                        <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                          <span>{formatDate(doc.created_at)}</span>
                           {doc.category && (
                             <span className="pill bg-slate-100 text-slate-600 border-slate-200">
                               {doc.category}
                             </span>
                           )}
                         </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {docs.items.map((doc) => (
+                      <Link
+                        key={doc.id}
+                        to={`/doc/${doc.id}`}
+                        className="block surface-card-hover rounded-2xl p-4 group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3">
+                              <h3 className="font-display font-semibold text-slate-900 group-hover:text-sky-600">
+                                {doc.title}
+                              </h3>
+                              <span className="text-xs text-slate-400">
+                                {doc.document_number}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-500 truncate">
+                              {doc.description || 'No description'}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                              {doc.topic && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.topic}</span>}
+                              {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
+                              {getTags(doc.tags).map((tag) => (
+                                <span key={tag} className="pill bg-white text-slate-600 border-slate-200">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-sm text-slate-400">
+                              {formatDate(doc.created_at)}
+                            </div>
+                            {doc.category && (
+                              <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                                {doc.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
 
               {/* Pagination */}
               {docs.total_pages > 1 && (
@@ -270,7 +296,7 @@ export default function PublicDocumentsPage() {
               <Folder className="h-16 w-16 mx-auto mb-4 text-slate-300" />
               <h3 className="text-lg font-display font-medium text-slate-900 mb-2">No documents found</h3>
               <p className="text-slate-500">
-                {search ? `No documents match "${search}"` : 'No public documents available in this category'}
+                {search ? `No documents match "${search}"` : 'No approved documents available in this category'}
               </p>
               {(category || search) && (
                 <button
@@ -285,8 +311,9 @@ export default function PublicDocumentsPage() {
               )}
             </div>
           )}
-        </main>
-      </div>
+          </main>
+        </div>
+      </section>
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🧪 Running V2 Document Portal tests..." -ForegroundColor Green
+Write-Host "🧪 Running Documentation Platform tests..." -ForegroundColor Green
 
 Set-Location (Split-Path -Parent $PSScriptRoot)
 

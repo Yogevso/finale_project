@@ -20,8 +20,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.db import SessionLocal
 from app.models import (
-    Tenant, User, UserRole, Document, DocumentStatus, 
-    DocumentVisibility, Version
+    Tenant,
+    User,
+    UserRole,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    Version,
+    Topic,
 )
 from app.security import get_password_hash
 
@@ -173,6 +179,80 @@ def create_users(db, tenants):
     return created_users
 
 
+def create_topics(db):
+    """Create public topics with hero images"""
+    print("\n🧭 Creating Topics...")
+
+    topics = [
+        {
+            "name": "Platform",
+            "slug": "platform",
+            "description": "Core platform architecture, integration, and release guidance.",
+            "image_url": "/topic-hero/platform.svg",
+        },
+        {
+            "name": "Security",
+            "slug": "security",
+            "description": "Authentication, secure boot, and compliance considerations.",
+            "image_url": "/topic-hero/security.svg",
+        },
+        {
+            "name": "SDKs & Tools",
+            "slug": "sdk-tools",
+            "description": "SDKs, extension modules, and tooling resources.",
+            "image_url": "/topic-hero/sdk-tools.svg",
+        },
+        {
+            "name": "Operations",
+            "slug": "operations",
+            "description": "Deployment, observability, and incident response.",
+            "image_url": "/topic-hero/operations.svg",
+        },
+        {
+            "name": "Governance",
+            "slug": "governance",
+            "description": "Data governance, retention, and policy alignment.",
+            "image_url": "/topic-hero/governance.svg",
+        },
+        {
+            "name": "Design Systems",
+            "slug": "design-systems",
+            "description": "UI standards, accessibility, and content guidance.",
+            "image_url": "/topic-hero/design-systems.svg",
+        },
+    ]
+
+    for topic_data in topics:
+        existing = db.query(Topic).filter(Topic.slug == topic_data["slug"]).first()
+        if not existing:
+            db.add(
+                Topic(
+                    name=topic_data["name"],
+                    slug=topic_data["slug"],
+                    description=topic_data["description"],
+                    image_url=topic_data["image_url"],
+                )
+            )
+            print(f"   ✓ Created topic {topic_data['name']}")
+        else:
+            updated = False
+            if existing.name != topic_data["name"]:
+                existing.name = topic_data["name"]
+                updated = True
+            if existing.description != topic_data["description"]:
+                existing.description = topic_data["description"]
+                updated = True
+            if existing.image_url != topic_data["image_url"]:
+                existing.image_url = topic_data["image_url"]
+                updated = True
+            if updated:
+                print(f"   ✓ Updated topic {topic_data['name']}")
+            else:
+                print(f"   ✓ {topic_data['name']} already exists")
+
+    db.commit()
+
+
 def create_documents(db, tenants, users):
     """Create sample documents with different visibility levels"""
     print("\n📄 Creating Sample Documents...")
@@ -193,6 +273,9 @@ def create_documents(db, tenants, users):
             "doc_num": "PUB-2024-001",
             "description": "A publicly available policy document",
             "category": "Policy",
+            "topic": "governance",
+            "platform": "Core Platform",
+            "tags": "policy,governance,compliance",
             "visibility": DocumentVisibility.PUBLIC,
             "content": "<h1>Public Policy</h1><p>This document is publicly accessible to everyone.</p>"
         },
@@ -201,6 +284,9 @@ def create_documents(db, tenants, users):
             "doc_num": "PUB-2024-002",
             "description": "Public user guide for all users",
             "category": "Guides",
+            "topic": "platform",
+            "platform": "Core Platform",
+            "tags": "guide,getting-started,docs",
             "visibility": DocumentVisibility.PUBLIC,
             "content": "<h1>User Guide</h1><p>Welcome to our comprehensive user guide.</p>"
         },
@@ -210,6 +296,9 @@ def create_documents(db, tenants, users):
             "doc_num": "INT-2024-001",
             "description": "Internal company procedures",
             "category": "Procedures",
+            "topic": "operations",
+            "platform": "Internal Ops",
+            "tags": "internal,procedures,operations",
             "visibility": DocumentVisibility.INTERNAL,
             "content": "<h1>Internal Procedures</h1><p>This document contains internal procedures.</p>"
         },
@@ -218,6 +307,9 @@ def create_documents(db, tenants, users):
             "doc_num": "INT-2024-002",
             "description": "Training materials for staff",
             "category": "Training",
+            "topic": "platform",
+            "platform": "Internal Ops",
+            "tags": "training,internal,enablement",
             "visibility": DocumentVisibility.INTERNAL,
             "content": "<h1>Training</h1><p>Training content for internal staff members.</p>"
         },
@@ -227,6 +319,9 @@ def create_documents(db, tenants, users):
             "doc_num": "COMP-A-001",
             "description": "Contract for Company A",
             "category": "Contracts",
+            "topic": "governance",
+            "platform": "Customer Portal",
+            "tags": "contract,customer,legal",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Company A Contract</h1><p>Confidential contract for Company A.</p>",
             "assigned_company": company_a
@@ -236,6 +331,9 @@ def create_documents(db, tenants, users):
             "doc_num": "COMP-A-002",
             "description": "Technical specs for Company A",
             "category": "Technical",
+            "topic": "platform",
+            "platform": "Customer Portal",
+            "tags": "specs,technical,customer",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Specifications</h1><p>Technical specifications for Company A.</p>",
             "assigned_company": company_a
@@ -245,11 +343,74 @@ def create_documents(db, tenants, users):
             "doc_num": "COMP-B-001",
             "description": "Agreement for Company B",
             "category": "Contracts",
+            "topic": "governance",
+            "platform": "Customer Portal",
+            "tags": "agreement,customer,legal",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Company B Agreement</h1><p>Confidential agreement for Company B.</p>",
             "assigned_company": company_b
         },
     ]
+
+    extra_public_docs = [
+        ("Platform Integration Guide", "PUB-2024-010", "Core integration patterns and API baselines.", "Platform"),
+        ("Secure Boot Troubleshooting", "PUB-2024-011", "Common boot chain issues and remediation steps.", "Security"),
+        ("SDK Extension Modules", "PUB-2024-012", "Extend the SDK with modular components and hooks.", "SDK"),
+        ("Release Notes: Q1", "PUB-2024-013", "Quarterly release summary and upgrade notes.", "Release Notes"),
+        ("Release Notes: Q2", "PUB-2024-014", "Quarterly release summary and upgrade notes.", "Release Notes"),
+        ("Release Notes: Q3", "PUB-2024-015", "Quarterly release summary and upgrade notes.", "Release Notes"),
+        ("Release Notes: Q4", "PUB-2024-016", "Quarterly release summary and upgrade notes.", "Release Notes"),
+        ("Performance Tuning Handbook", "PUB-2024-017", "Optimize throughput and latency across services.", "Performance"),
+        ("Observability Quickstart", "PUB-2024-018", "Set up logs, traces, and metrics in minutes.", "Operations"),
+        ("Deployment Playbook", "PUB-2024-019", "Recommended deployment workflows and rollback plans.", "Operations"),
+        ("Data Governance Basics", "PUB-2024-020", "Data classification and retention best practices.", "Governance"),
+        ("API Authentication Guide", "PUB-2024-021", "OAuth, JWT, and service-to-service auth patterns.", "Security"),
+        ("Role-Based Access Guide", "PUB-2024-022", "Designing policies and least-privilege access.", "Security"),
+        ("Document Lifecycle Overview", "PUB-2024-023", "Draft to publish workflows and ownership.", "Process"),
+        ("Migration Checklist", "PUB-2024-024", "Step-by-step migration planning template.", "Process"),
+        ("Incident Response Runbook", "PUB-2024-025", "Escalation, comms, and recovery procedures.", "Operations"),
+        ("API Rate Limits", "PUB-2024-026", "Quota policies and retry guidance.", "API"),
+        ("Client SDK Quickstart", "PUB-2024-027", "Install, configure, and ship your first build.", "SDK"),
+        ("UI Design System", "PUB-2024-028", "Typography, spacing, and component guidelines.", "Design"),
+        ("Search Relevance Tuning", "PUB-2024-029", "Improve results ranking and query handling.", "Search"),
+        ("Storage & Retention", "PUB-2024-030", "Retention tiers and archival policy details.", "Storage"),
+        ("Compliance Mapping", "PUB-2024-031", "SOC2, ISO, and internal control mapping.", "Compliance"),
+        ("Accessibility Standards", "PUB-2024-032", "WCAG alignment and UI accessibility checks.", "Design"),
+        ("Content Authoring Guide", "PUB-2024-033", "Best practices for clarity and consistency.", "Content"),
+        ("Collaboration Features", "PUB-2024-034", "Real-time editing and review workflow.", "Collaboration"),
+        ("Customer Enablement Kit", "PUB-2024-035", "Onboarding materials and enablement assets.", "Enablement"),
+        ("Data Export Guide", "PUB-2024-036", "Export formats and compliance notes.", "Data"),
+        ("API Reference Index", "PUB-2024-037", "Quick links to API surface areas.", "API"),
+        ("Troubleshooting Matrix", "PUB-2024-038", "Known issues and resolution paths.", "Support"),
+        ("Support & Access", "PUB-2024-039", "How to request access or submit tickets.", "Support"),
+    ]
+
+    for title, doc_num, description, category in extra_public_docs:
+        topic = "platform"
+        if category in ("Security",):
+            topic = "security"
+        elif category in ("SDK", "API"):
+            topic = "sdk-tools"
+        elif category in ("Operations", "Support", "Storage"):
+            topic = "operations"
+        elif category in ("Governance", "Compliance"):
+            topic = "governance"
+        elif category in ("Design", "Content"):
+            topic = "design-systems"
+
+        documents_config.append(
+            {
+                "title": title,
+                "doc_num": doc_num,
+                "description": description,
+                "category": category,
+                "topic": topic,
+                "platform": "Developer Portal",
+                "tags": f"{category.lower()},docs,public",
+                "visibility": DocumentVisibility.PUBLIC,
+                "content": f"<h1>{title}</h1><p>{description}</p>",
+            }
+        )
     
     for doc_data in documents_config:
         existing = db.query(Document).filter(
@@ -262,6 +423,9 @@ def create_documents(db, tenants, users):
                 document_number=doc_data["doc_num"],
                 description=doc_data["description"],
                 category=doc_data["category"],
+                topic=doc_data.get("topic"),
+                platform=doc_data.get("platform"),
+                tags=doc_data.get("tags"),
                 status=DocumentStatus.ACTIVE,
                 visibility=doc_data["visibility"],
                 tenant_id=default_tenant.id,
@@ -287,7 +451,23 @@ def create_documents(db, tenants, users):
             
             print(f"   ✓ Created '{doc_data['title']}' ({doc_data['visibility'].value})")
         else:
-            print(f"   ✓ '{doc_data['title']}' already exists")
+            updated = False
+            if doc_data.get("category") and existing.category != doc_data.get("category"):
+                existing.category = doc_data["category"]
+                updated = True
+            if doc_data.get("topic") and existing.topic != doc_data.get("topic"):
+                existing.topic = doc_data["topic"]
+                updated = True
+            if doc_data.get("platform") and existing.platform != doc_data.get("platform"):
+                existing.platform = doc_data["platform"]
+                updated = True
+            if doc_data.get("tags") and existing.tags != doc_data.get("tags"):
+                existing.tags = doc_data["tags"]
+                updated = True
+            if updated:
+                print(f"   ✓ Updated '{doc_data['title']}'")
+            else:
+                print(f"   ✓ '{doc_data['title']}' already exists")
     
     db.commit()
 
@@ -332,7 +512,7 @@ def main():
     print("=" * 60)
     print("🌱 SEED DATA SCRIPT")
     print("=" * 60)
-    print("Creating test data for the Document Portal...")
+    print("Creating test data for the Documentation Platform...")
     
     db = SessionLocal()
     
@@ -343,10 +523,13 @@ def main():
         # Step 2: Create users
         users = create_users(db, tenants)
         
-        # Step 3: Create documents
+        # Step 3: Create topics
+        create_topics(db)
+
+        # Step 4: Create documents
         create_documents(db, tenants, users)
         
-        # Step 4: Print summary
+        # Step 5: Print summary
         print_summary(db)
         
         print("\n" + "=" * 60)

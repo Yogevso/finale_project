@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.db import init_db
+from app.db import SessionLocal, init_db
 from app.middleware import LoggingMiddleware, RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Document Portal V2 - Greenfield rebuild with SQLite",
+    description="Documentation Platform - Greenfield rebuild with SQLite",
     docs_url=f"{settings.API_PREFIX}/docs",
     redoc_url=f"{settings.API_PREFIX}/redoc",
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
@@ -48,6 +48,16 @@ async def startup_event():
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.APP_ENV}")
     init_db()
+    try:
+        from app.services.rbac_service import RbacService
+
+        db = SessionLocal()
+        try:
+            RbacService.publish_policies(db)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"RBAC publish skipped: {exc}")
     logger.info("Database initialized")
 
 
@@ -55,7 +65,7 @@ async def startup_event():
 async def root():
     """Root endpoint"""
     return {
-        "message": "Document Portal V2 API",
+        "message": "Documentation Platform API",
         "version": settings.APP_VERSION,
         "docs": f"{settings.API_PREFIX}/docs",
     }
@@ -75,8 +85,10 @@ from app.api.management import (  # noqa: E402
     feedback,
     invitations,
     notifications,
+    rbac,
     reviews,
     search,
+    system_settings,
     tenants,
     users,
     versions,
@@ -107,6 +119,8 @@ app.include_router(feedback.router, prefix=settings.API_PREFIX, tags=["Feedback"
 app.include_router(invitations.router, prefix=settings.API_PREFIX, tags=["Invitations"])
 app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytics"])
 app.include_router(collaboration.router, prefix=settings.API_PREFIX, tags=["Collaboration"])
+app.include_router(system_settings.router, prefix=settings.API_PREFIX, tags=["System Settings"])
+app.include_router(rbac.router, prefix=settings.API_PREFIX, tags=["RBAC"])
 
 # Viewer Portal (public, no auth required)
 app.include_router(viewer_documents.router, prefix=settings.API_PREFIX, tags=["Viewer"])

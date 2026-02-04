@@ -20,10 +20,11 @@ from app.db import get_db
 from app.dependencies.permissions import (
     require_editor,
     require_internal_user,
-    require_manager,
+    require_permission,
 )
 from app.dependencies.tenant import TenantContext, get_tenant_context
-from app.models import Document, DocumentStatus, Tenant, User, UserRole
+from app.models import Document, DocumentStatus, Tenant, User
+from app.services.permissions import Permission
 from app.schemas import (
     DocumentCreate,
     DocumentListResponse,
@@ -32,7 +33,6 @@ from app.schemas import (
     MessageResponse,
     TenantSummary,
 )
-from app.security import get_current_active_user
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
 
@@ -144,7 +144,7 @@ def update_document(
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: int,
-    current_user: User = Depends(require_manager),
+    current_user: User = Depends(require_permission(Permission.DELETE_DOCUMENT)),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
@@ -169,6 +169,14 @@ async def upload_document(
     description: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    document_number: Optional[str] = Form(None),
+    version_label: Optional[str] = Form(None),
+    visibility: Optional[str] = Form(None),
+    parent_id: Optional[int] = Form(None),
+    topic: Optional[str] = Form(None),
+    platform: Optional[str] = Form(None),
+    release_notes: Optional[UploadFile] = File(None),
+    content_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_editor),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
@@ -187,36 +195,54 @@ async def upload_document(
 
     # Create the document first
     service = DocumentService(db, tenant_ctx)
+    visibility_value = (
+        visibility if visibility in ["public", "internal", "company"] else "internal"
+    )
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",
         status="draft",
+        visibility=visibility_value,
         category=category or "Uploaded",
+        topic=topic,
+        platform=platform,
         tags=tags or "",
+        document_number=document_number,
+        version_label=version_label,
+        parent_id=parent_id,
     )
     document = service.create_document(document_data, current_user)
 
     # Now attach the uploaded file
     try:
         await AttachmentService.upload_attachment(db, document.id, file, current_user)
+        if content_file:
+            await AttachmentService.upload_attachment(db, document.id, content_file, current_user)
     except HTTPException as e:
         # If attachment fails, delete the document and re-raise
         service.delete_document(document.id, current_user)
         raise e
 
+    # Optional release notes: create child document and attach release notes file
+    if release_notes:
+        release_doc_title = f"{doc_title} Release Notes"
+        release_data = DocumentCreate(
+            title=release_doc_title,
+            description=f"Release notes for {doc_title}",
+            status="draft",
+            visibility=visibility_value,
+            category="Release Notes",
+            tags="release-notes",
+            document_number=None,
+            version_label=version_label,
+            parent_id=document.id,
+        )
+        release_doc = service.create_document(release_data, current_user)
+        await AttachmentService.upload_attachment(db, release_doc.id, release_notes, current_user)
+
     # Refresh to get updated data
     db.refresh(document)
     return document
-
-
-def require_manager_or_above(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require manager, admin, or system_admin role"""
-    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Manager access required to manage company assignments",
-        )
-    return current_user
 
 
 @router.get("/documents/{document_id}/assigned-companies", response_model=List[TenantSummary])
@@ -241,7 +267,7 @@ def get_assigned_companies(
 def assign_companies(
     document_id: int,
     request: CompanyAssignRequest,
-    current_user: User = Depends(require_manager_or_above),
+    current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
     db: Session = Depends(get_db),
 ):
     """
@@ -274,7 +300,7 @@ def assign_companies(
 def remove_company_assignment(
     document_id: int,
     company_id: int,
-    current_user: User = Depends(require_manager_or_above),
+    current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
     db: Session = Depends(get_db),
 ):
     """

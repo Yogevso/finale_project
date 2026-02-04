@@ -35,6 +35,9 @@ class AttachmentService:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/json",
+        "text/markdown",
+        "text/html",
         "text/plain",
         "text/csv",
         "image/jpeg",
@@ -110,9 +113,13 @@ class AttachmentService:
                 detail="Only admins, managers and editors can upload attachments",
             )
 
-        # Validate file type
+        # Validate file type (allow octet-stream if extension is supported)
         content_type = file.content_type or "application/octet-stream"
-        if content_type not in AttachmentService.ALLOWED_TYPES:
+        original_filename = file.filename or "unnamed"
+        file_ext = Path(original_filename).suffix.lower()
+        allowed_extensions = {".pdf", ".doc", ".docx", ".txt", ".md", ".html", ".htm", ".json"}
+
+        if content_type not in AttachmentService.ALLOWED_TYPES and file_ext not in allowed_extensions:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File type not allowed: {content_type}",
@@ -130,7 +137,6 @@ class AttachmentService:
             )
 
         # Generate unique filename
-        original_filename = file.filename or "unnamed"
         file_ext = Path(original_filename).suffix
         unique_filename = f"{uuid.uuid4().hex}{file_ext}"
 

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Application
-    APP_NAME: str = "Document Portal V2"
+    APP_NAME: str = "Documentation Platform"
     APP_VERSION: str = "2.0.0"
     APP_ENV: str = "development"
     DEBUG: bool = True
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     EMAIL_FROM: str = "noreply@portal.com"
-    EMAIL_FROM_NAME: str = "Document Portal"
+    EMAIL_FROM_NAME: str = "Documentation Platform"
 
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB

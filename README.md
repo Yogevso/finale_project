@@ -1,4 +1,4 @@
-# Document Portal V2
+# Documentation Platform
 
 [![CI/CD](https://github.com/Yogevso/finale_project/actions/workflows/test.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/test.yml)
 
@@ -82,6 +82,11 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Assign roles and permissions
   - Tenant-scoped user management
   - Activity audit logs
+
+- **🛠️ System Setup (Phase 1)**
+  - System Admin console for global settings
+  - RBAC policy management with publish-to-ACL flow
+  - System actions logged to audit logs
 
 - **🏢 Multi-Tenancy**
   - Complete tenant isolation

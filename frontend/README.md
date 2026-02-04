@@ -1,4 +1,4 @@
-# Document Portal V2 - Frontend
+# Documentation Platform - Frontend
 
 Modern React SPA with TypeScript, Vite, TailwindCSS, TipTap rich text editor, and real-time collaboration. Features the Zip B design system with Space Grotesk typography and a modern slate/sky color palette.
 
@@ -104,7 +104,7 @@ Create a `.env` file:
 VITE_API_URL=http://localhost:8001
 
 # Application
-VITE_APP_NAME=Document Portal
+VITE_APP_NAME=Documentation Platform
 VITE_APP_VERSION=2.0.0
 ```
 

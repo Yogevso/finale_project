@@ -1,6 +1,6 @@
 # Quick Start Script for Backend
 
-Write-Host "🚀 Setting up Document Portal V2 Backend..." -ForegroundColor Cyan
+Write-Host "🚀 Setting up Documentation Platform Backend..." -ForegroundColor Cyan
 
 # Navigate to backend directory
 Set-Location $PSScriptRoot

@@ -226,6 +226,16 @@ HTTP Status Codes:
 | EDITOR | Create, edit, delete documents |
 | VIEWER | Read-only access |
 
+#### Dynamic RBAC Policies (Phase 1)
+- System Admin can define RBAC policies through the DocsPortal admin console.
+- Policies are persisted in `rbac_policies` and published to the ACL engine at runtime.
+- If no policies are stored, the system falls back to built-in defaults.
+
+#### System Settings (Phase 1)
+- System-wide settings are stored in `system_settings` as key/value entries (JSON values).
+- Updates are performed by System Admins and persisted in the CMS store.
+- Each update writes a system audit log event (`ActionType.SYSTEM`) to `audit_logs`.
+
 ## File Storage
 
 ### Local Development

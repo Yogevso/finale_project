@@ -45,6 +45,8 @@ def list_public_documents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    topic: Optional[str] = Query(None, description="Filter by topic"),
+    platform: Optional[str] = Query(None, description="Filter by platform"),
     search: Optional[str] = Query(None, description="Search in title/description"),
     sort_by: Optional[str] = Query("created_at", description="Sort field"),
     sort_order: Optional[str] = Query("desc", description="Sort order (asc/desc)"),
@@ -62,9 +64,13 @@ def list_public_documents(
     """
     query = get_public_documents_query(db)
 
-    # Apply category filter
+    # Apply filters
     if category:
         query = query.filter(Document.category == category)
+    if topic:
+        query = query.filter(Document.topic == topic)
+    if platform:
+        query = query.filter(Document.platform == platform)
 
     # Apply search filter
     if search:
@@ -74,6 +80,8 @@ def list_public_documents(
                 Document.title.ilike(search_term),
                 Document.description.ilike(search_term),
                 Document.tags.ilike(search_term),
+                Document.topic.ilike(search_term),
+                Document.platform.ilike(search_term),
             )
         )
 
@@ -138,6 +146,15 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
         .first()
     )
 
+    # Fallback: if no published version exists, use latest draft version
+    if not latest_version:
+        latest_version = (
+            db.query(Version)
+            .filter(Version.document_id == document_id)
+            .order_by(Version.version_number.desc())
+            .first()
+        )
+
     # Get attachments
     attachments = db.query(Attachment).filter(Attachment.document_id == document_id).all()
 
@@ -148,6 +165,8 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
         title=document.title,
         description=document.description,
         category=document.category,
+        topic=document.topic,
+        platform=document.platform,
         tags=document.tags,
         created_at=document.created_at,
         updated_at=document.updated_at,
@@ -205,6 +224,8 @@ def search_public_documents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    topic: Optional[str] = Query(None, description="Filter by topic"),
+    platform: Optional[str] = Query(None, description="Filter by platform"),
     db: Session = Depends(get_db),
 ):
     """
@@ -226,6 +247,10 @@ def search_public_documents(
     # Apply category filter if provided
     if category:
         query = query.filter(Document.category == category)
+    if topic:
+        query = query.filter(Document.topic == topic)
+    if platform:
+        query = query.filter(Document.platform == platform)
 
     # Search in document fields
     query = query.filter(
@@ -234,6 +259,8 @@ def search_public_documents(
             Document.description.ilike(search_term),
             Document.tags.ilike(search_term),
             Document.document_number.ilike(search_term),
+            Document.topic.ilike(search_term),
+            Document.platform.ilike(search_term),
         )
     )
 
@@ -274,6 +301,8 @@ def search_public_documents(
                 title=doc.title,
                 description=doc.description,
                 category=doc.category,
+                topic=doc.topic,
+                platform=doc.platform,
                 snippet=snippet,
                 score=1.0,  # Simple relevance score
             )

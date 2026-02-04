@@ -1,4 +1,4 @@
-# Production Docker Compose for Document Portal V2
+# Production Docker Compose for Documentation Platform
 # Usage: docker-compose -f docker-compose.prod.yml up -d
 
 services:

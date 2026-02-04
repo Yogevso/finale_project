@@ -1,4 +1,4 @@
-# Contributing to Document Portal V2
+# Contributing to Documentation Platform
 
 ## Branch Strategy
 

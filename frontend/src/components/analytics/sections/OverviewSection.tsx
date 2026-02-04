@@ -69,14 +69,23 @@ export function OverviewSection({ params }: OverviewSectionProps) {
           {overviewLoading ? (
             <div className="animate-pulse h-64 bg-slate-100 rounded"></div>
           ) : overview?.documents_by_category && overview.documents_by_category.length > 0 ? (
-            <ul className="space-y-2">
-              {overview.documents_by_category.map((cat, idx) => (
-                <li key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                  <span className="text-sm font-medium text-slate-700">{cat.category || 'Uncategorized'}</span>
-                  <span className="text-sm font-bold text-slate-900">{cat.count}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="max-h-80 overflow-auto pr-2">
+              <ul className="space-y-2">
+                {overview.documents_by_category.map((cat, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-white transition"
+                  >
+                    <span className="text-sm font-medium text-slate-700">
+                      {cat.category || 'Uncategorized'}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-full px-2.5 py-0.5">
+                      {cat.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
             <p className="text-slate-500 text-center py-4">No categories</p>
           )}

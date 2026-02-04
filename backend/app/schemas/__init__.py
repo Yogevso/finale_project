@@ -101,13 +101,18 @@ class DocumentBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = None
+    version_label: Optional[str] = Field(None, max_length=50)
     category: Optional[str] = Field(None, max_length=100)
+    topic: Optional[str] = Field(None, max_length=150)
+    platform: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
 
 class DocumentCreate(DocumentBase):
     """Document creation schema"""
 
+    document_number: Optional[str] = Field(None, max_length=100)
+    parent_id: Optional[int] = None
     status: DocumentStatus = DocumentStatus.DRAFT
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL
 
@@ -117,9 +122,12 @@ class DocumentUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = None
+    version_label: Optional[str] = Field(None, max_length=50)
     status: Optional[DocumentStatus] = None
     visibility: Optional[DocumentVisibility] = None
     category: Optional[str] = Field(None, max_length=100)
+    topic: Optional[str] = Field(None, max_length=150)
+    platform: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
 
@@ -128,6 +136,7 @@ class DocumentResponse(DocumentBase):
 
     id: int
     document_number: str
+    parent_id: Optional[int] = None
     status: DocumentStatus
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL
     created_by: int

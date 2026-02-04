@@ -1,4 +1,4 @@
-# V2 Document Portal - User Guide
+# Documentation Platform - User Guide
 
 ## Quick Start
 

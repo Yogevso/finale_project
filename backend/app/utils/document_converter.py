@@ -233,6 +233,21 @@ def convert_document_to_html(content: bytes, mime_type: str, filename: str = "")
     # Plain text
     if mime_type.startswith("text/") or filename.endswith(".txt"):
         return convert_text_to_html(content)
+
+    # Markdown
+    if mime_type in ["text/markdown", "text/x-markdown"] or filename.endswith(".md"):
+        return convert_text_to_html(content)
+
+    # HTML content
+    if mime_type in ["text/html", "application/xhtml+xml"] or filename.endswith(".html") or filename.endswith(".htm"):
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError:
+            return content.decode("utf-8", errors="replace")
+
+    # JSON - show as formatted text
+    if mime_type == "application/json" or filename.endswith(".json"):
+        return convert_text_to_html(content)
     
     # RTF - treat as text for now
     if mime_type == "application/rtf" or filename.endswith(".rtf"):

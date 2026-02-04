@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Search, ArrowRight, Folder, BookOpen } from 'lucide-react'
+import { FileText, Search, ArrowRight, Folder, BookOpen, Compass, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
@@ -34,142 +34,146 @@ export default function PublicHomePage() {
   }
 
   return (
-    <div>
+    <div className="bg-slate-50">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-display font-bold mb-6">
-              Document Portal
+      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
+        <div className="max-w-7xl mx-auto px-6 py-16">
+          <div className="max-w-4xl">
+            <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
+            <h1 className="text-4xl md:text-5xl font-display font-bold mb-4">
+              Documentation Platform
             </h1>
-            <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
-              Access our public documentation library. Browse technical guides,
-              user manuals, and knowledge base articles.
+            <p className="text-lg text-sky-100 mb-6">
+              Find approved documentation fast. Browse topics, tools, and release notes with role-aware access.
             </p>
 
             {/* Search Bar */}
-            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search documents..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-6 py-4 pl-14 rounded-2xl text-slate-900 text-lg focus:outline-none focus:ring-4 focus:ring-sky-400/50"
-                />
-                <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <form onSubmit={handleSearch} className="max-w-3xl">
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search docs, topics, tools"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-6 py-3.5 pl-12 rounded-full text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40"
+                  />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                </div>
                 <button
                   type="submit"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-sky-500 text-white px-6 py-2 rounded-xl hover:bg-sky-600 font-medium"
+                  className="px-6 py-3.5 rounded-full bg-white text-sky-900 font-medium hover:bg-sky-50"
                 >
                   Search
                 </button>
               </div>
             </form>
 
-            {/* Stats */}
-            {stats && (
-              <div className="flex justify-center gap-8 mt-10">
-                <div className="text-center">
-                  <div className="text-3xl font-display font-bold">{stats.total_documents}</div>
-                  <div className="text-slate-400">Documents</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-display font-bold">{stats.total_categories}</div>
-                  <div className="text-slate-400">Categories</div>
-                </div>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-3 mt-6">
+              <Link to="/docs" className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/20 hover:bg-white/20">
+                Browse documents
+              </Link>
+              <Link to="/topics" className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/20 hover:bg-white/20">
+                Explore topics
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="section-title">Browse by Category</h2>
-            <Link
-              to="/browse"
-              className="text-sky-600 hover:text-sky-700 font-medium flex items-center gap-1"
-            >
-              View all <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          {categoriesLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />
-              ))}
-            </div>
-          ) : categories?.items && categories.items.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {categories.items.slice(0, 8).map((cat) => (
-                <Link
-                  key={cat.category}
-                  to={`/browse?category=${encodeURIComponent(cat.category)}`}
-                  className="surface-card-hover rounded-2xl p-6 text-center transition-all group"
-                >
-                  <Folder className="h-8 w-8 text-sky-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
-                  <h3 className="font-medium text-slate-900">{cat.category}</h3>
-                  <p className="text-sm text-slate-500">{cat.count} documents</p>
+      {/* Essentials + Quick Paths */}
+      <section className="py-14">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_0.8fr] gap-8">
+            <div className="surface-card rounded-3xl p-8">
+              <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Browse by</div>
+              <h2 className="text-2xl font-display font-semibold text-slate-900 mb-6">Start with the essentials</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Link to="/docs" className="surface-card-hover rounded-2xl p-4">
+                  <BookOpen className="h-6 w-6 text-sky-600 mb-3" />
+                  <div className="font-medium text-slate-900">Documentation Library</div>
+                  <p className="text-sm text-slate-500">Approved docs, release notes, and guides.</p>
                 </Link>
-              ))}
+                <Link to="/topics" className="surface-card-hover rounded-2xl p-4">
+                  <Compass className="h-6 w-6 text-sky-600 mb-3" />
+                  <div className="font-medium text-slate-900">Topics</div>
+                  <p className="text-sm text-slate-500">Browse by technical area and program.</p>
+                </Link>
+                <Link to="/tools" className="surface-card-hover rounded-2xl p-4">
+                  <Wrench className="h-6 w-6 text-sky-600 mb-3" />
+                  <div className="font-medium text-slate-900">Tools</div>
+                  <p className="text-sm text-slate-500">SDKs, APIs, and supporting resources.</p>
+                </Link>
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-12 text-slate-500">
-              <Folder className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-              <p>No categories available yet.</p>
+
+            <div className="surface-card rounded-3xl p-8">
+              <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Quick paths</div>
+              <h3 className="text-xl font-display font-semibold text-slate-900 mb-4">Most visited</h3>
+              <div className="space-y-3">
+                {(categories?.items || []).slice(0, 4).map((cat) => (
+                  <Link
+                    key={cat.category}
+                    to={`/docs?category=${encodeURIComponent(cat.category)}`}
+                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <span className="text-slate-700">{cat.category}</span>
+                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">Docs</span>
+                  </Link>
+                ))}
+              </div>
+              <div className="mt-6 text-xs text-slate-500">
+                Need internal access? Switch to the management portal for drafts, reviews, and publishing.
+              </div>
+              <Link to="/login" className="inline-flex items-center gap-2 mt-4 btn-secondary">
+                Go to Management Portal <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
-          )}
+          </div>
         </div>
       </section>
 
-      {/* Recent Documents Section */}
-      <section className="py-16 surface-muted">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="section-title">Recent Documents</h2>
-            <Link
-              to="/browse"
-              className="text-sky-600 hover:text-sky-700 font-medium flex items-center gap-1"
-            >
-              View all <ArrowRight className="h-4 w-4" />
-            </Link>
+      {/* Most Popular */}
+      <section className="py-10">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="text-xs uppercase tracking-widest text-slate-400">Most popular</div>
+              <h2 className="text-2xl font-display font-semibold text-slate-900">Most viewed documentation</h2>
+              <p className="text-slate-500 text-sm mt-1">
+                Start with the highest-impact guides and release notes.
+              </p>
+            </div>
+            <Link to="/docs" className="btn-secondary">View all</Link>
           </div>
 
           {docsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-48 bg-white rounded-2xl shadow-soft animate-pulse" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-44 bg-white rounded-2xl border border-slate-200 animate-pulse" />
               ))}
             </div>
           ) : recentDocs?.items && recentDocs.items.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentDocs.items.map((doc) => (
-                <Link
-                  key={doc.id}
-                  to={`/doc/${doc.id}`}
-                  className="surface-card-hover rounded-2xl p-6 group"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="bg-sky-100 rounded-xl p-3 group-hover:bg-sky-200 transition-colors">
-                      <FileText className="h-6 w-6 text-sky-600" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {recentDocs.items.slice(0, 3).map((doc) => (
+                <Link key={doc.id} to={`/doc/${doc.id}`} className="surface-card-hover rounded-2xl p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-sky-100 flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-sky-600" />
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-widest text-slate-400">Public access</div>
+                        <div className="font-medium text-slate-900">{doc.title}</div>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-slate-900 truncate group-hover:text-sky-600">
-                        {doc.title}
-                      </h3>
-                      <p className="text-sm text-slate-500 mt-1 line-clamp-2">
-                        {doc.description || 'No description available'}
-                      </p>
-                      {doc.category && (
-                        <span className="inline-block mt-2 pill bg-slate-100 text-slate-600 border-slate-200">
-                          {doc.category}
-                        </span>
-                      )}
-                    </div>
+                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">v1.0</span>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-3 line-clamp-2">
+                    {doc.description || 'No description available'}
+                  </p>
+                  <div className="mt-4 inline-flex items-center gap-2 text-sm text-sky-700">
+                    Open document <ArrowRight className="h-4 w-4" />
                   </div>
                 </Link>
               ))}
@@ -178,28 +182,25 @@ export default function PublicHomePage() {
             <div className="text-center py-12 text-slate-500">
               <BookOpen className="h-12 w-12 mx-auto mb-4 text-slate-300" />
               <p>No public documents available yet.</p>
-              <p className="text-sm mt-2">Check back later for new content!</p>
             </div>
           )}
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="section-title mb-4">
-            Need access to more documents?
-          </h2>
-          <p className="text-slate-600 mb-6">
-            Login to access internal documentation, company-specific resources, and more.
-          </p>
-          <Link
-            to="/login"
-            className="btn-primary inline-flex items-center gap-2"
-          >
-            Login for full access
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+      <section className="py-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="rounded-3xl bg-white border border-slate-200 p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div>
+              <h2 className="text-xl font-display font-semibold text-slate-900">Need access to more documents?</h2>
+              <p className="text-slate-500 mt-2">
+                Login to access internal documentation, company-specific resources, and more.
+              </p>
+            </div>
+            <Link to="/login" className="btn-primary inline-flex items-center gap-2">
+              Sign in for full access <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </section>
     </div>

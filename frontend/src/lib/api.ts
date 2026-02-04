@@ -53,6 +53,10 @@ import type {
   TenantAnalytics,
   RecentActivity,
   AnalyticsQueryParams,
+  SystemSettingsResponse,
+  SystemSettingsUpdate,
+  RbacPoliciesResponse,
+  RbacPoliciesUpdate,
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
@@ -193,6 +197,28 @@ class ApiClient {
     this.clearTokens()
   }
 
+  // ========== System Settings (System Admin) ==========
+  async getSystemSettings(): Promise<SystemSettingsResponse> {
+    const { data } = await this.client.get<SystemSettingsResponse>('/system/settings')
+    return data
+  }
+
+  async updateSystemSettings(payload: SystemSettingsUpdate): Promise<SystemSettingsResponse> {
+    const { data } = await this.client.put<SystemSettingsResponse>('/system/settings', payload)
+    return data
+  }
+
+  // ========== RBAC Policies (System Admin) ==========
+  async getRbacPolicies(): Promise<RbacPoliciesResponse> {
+    const { data } = await this.client.get<RbacPoliciesResponse>('/rbac/policies')
+    return data
+  }
+
+  async updateRbacPolicies(payload: RbacPoliciesUpdate): Promise<RbacPoliciesResponse> {
+    const { data } = await this.client.put<RbacPoliciesResponse>('/rbac/policies', payload)
+    return data
+  }
+
   // ========== Users ==========
   async getUsers(params?: {
     role?: UserRole
@@ -262,13 +288,34 @@ class ApiClient {
     return data
   }
 
-  async uploadDocument(file: File, metadata?: { title?: string; description?: string; category?: string; tags?: string }): Promise<Document> {
+  async uploadDocument(file: File, metadata?: {
+    title?: string
+    description?: string
+    category?: string
+    tags?: string
+    document_number?: string
+    version_label?: string
+    visibility?: DocumentVisibility
+    parent_id?: number
+    topic?: string
+    platform?: string
+    release_notes?: File | null
+    content_file?: File | null
+  }): Promise<Document> {
     const formData = new FormData()
     formData.append('file', file)
     if (metadata?.title) formData.append('title', metadata.title)
     if (metadata?.description) formData.append('description', metadata.description)
     if (metadata?.category) formData.append('category', metadata.category)
     if (metadata?.tags) formData.append('tags', metadata.tags)
+    if (metadata?.document_number) formData.append('document_number', metadata.document_number)
+    if (metadata?.version_label) formData.append('version_label', metadata.version_label)
+    if (metadata?.visibility) formData.append('visibility', metadata.visibility)
+    if (metadata?.parent_id) formData.append('parent_id', metadata.parent_id.toString())
+    if (metadata?.topic) formData.append('topic', metadata.topic)
+    if (metadata?.platform) formData.append('platform', metadata.platform)
+    if (metadata?.release_notes) formData.append('release_notes', metadata.release_notes)
+    if (metadata?.content_file) formData.append('content_file', metadata.content_file)
     
     const { data } = await this.client.post<Document>('/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }

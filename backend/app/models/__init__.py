@@ -75,6 +75,7 @@ class ActionType(str, enum.Enum):
     VIEW = "view"
     DOWNLOAD = "download"
     PUBLISH = "publish"
+    SYSTEM = "system"
 
 
 class NotificationType(str, enum.Enum):
@@ -165,6 +166,54 @@ class Tenant(Base):
     )
 
 
+class SystemSetting(Base):
+    """System-wide settings stored as key/value entries"""
+
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, index=True, nullable=False)
+    value = Column(Text, nullable=True)  # JSON-encoded value
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    updated_by_user = relationship("User")
+
+
+class RbacPolicy(Base):
+    """Role-based access control policy per role"""
+
+    __tablename__ = "rbac_policies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(SQLEnum(UserRole), unique=True, index=True, nullable=False)
+    permissions = Column(Text, nullable=False)  # JSON-encoded list of permissions
+    is_active = Column(Boolean, default=True, nullable=False)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    published_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    updated_by_user = relationship("User")
+
+
+class Topic(Base):
+    """Public topic metadata"""
+
+    __tablename__ = "topics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(150), nullable=False)
+    slug = Column(String(150), unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    image_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class User(Base):
     """User model"""
 
@@ -217,6 +266,7 @@ class Document(Base):
     title = Column(String(500), nullable=False, index=True)
     document_number = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
+    version_label = Column(String(50), nullable=True)
     status = Column(
         SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT, nullable=False, index=True
     )
@@ -224,15 +274,19 @@ class Document(Base):
         SQLEnum(DocumentVisibility), default=DocumentVisibility.INTERNAL, nullable=False, index=True
     )
     category = Column(String(100), nullable=True, index=True)
+    topic = Column(String(150), nullable=True, index=True)
+    platform = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="documents")
     created_by_user = relationship("User", back_populates="documents")
+    parent = relationship("Document", remote_side=[id], backref="children")
     versions = relationship("Version", back_populates="document", cascade="all, delete-orphan")
     attachments = relationship(
         "Attachment", back_populates="document", cascade="all, delete-orphan"
@@ -598,6 +652,9 @@ class CollaborationSnapshot(Base):
 __all__ = [
     # Models
     "Tenant",
+    "SystemSetting",
+    "RbacPolicy",
+    "Topic",
     "User",
     "Document",
     "Version",

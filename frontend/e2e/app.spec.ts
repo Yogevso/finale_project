@@ -23,7 +23,7 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     
     // Check page elements
-    await expect(page.locator('h1')).toContainText('Document Portal');
+    await expect(page.locator('h1')).toContainText('Documentation Platform');
     await expect(page.locator('input#username')).toBeVisible();
     await expect(page.locator('input#password')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();

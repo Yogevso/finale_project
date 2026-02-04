@@ -4,13 +4,13 @@ import { getNavigationForRole } from '@/config/routes'
 import NotificationBell from './NotificationBell'
 
 export default function Layout() {
-  const { user, logout } = useAuth()
+  const { user, logout, isSystemAdmin } = useAuth()
   const navigate = useNavigate()
   const navItems = getNavigationForRole(user?.role || null)
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    navigate('/docs')
   }
 
   return (
@@ -26,7 +26,7 @@ export default function Layout() {
               </div>
               <div>
                 <div className="text-sm text-slate-500">Management</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Documentation Platform</div>
               </div>
             </NavLink>
           </div>
@@ -57,6 +57,15 @@ export default function Layout() {
               <span className="text-slate-500">{user?.full_name}</span>
               <span className="pill capitalize">{user?.role}</span>
             </div>
+
+            {isSystemAdmin && (
+              <NavLink
+                to="/docs"
+                className="btn-secondary"
+              >
+                Viewer Portal
+              </NavLink>
+            )}
             
             <NotificationBell />
             
@@ -80,7 +89,7 @@ export default function Layout() {
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
-          <p>Document Portal V2</p>
+          <p>Documentation Platform</p>
           <p className="text-xs mt-1">Built with React + FastAPI</p>
         </div>
       </footer>

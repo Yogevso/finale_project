@@ -20,8 +20,8 @@ export default function PublicLayout() {
                 DP
               </div>
               <div>
-                <div className="text-sm text-slate-500">Viewer</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+                <div className="text-xs uppercase tracking-widest text-slate-400">Viewer Portal</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </Link>
             
@@ -41,7 +41,7 @@ export default function PublicLayout() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
             <NavLink 
-              to="/browse"
+              to="/docs"
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
@@ -50,10 +50,10 @@ export default function PublicLayout() {
                 }`
               }
             >
-              Browse
+              Docs
             </NavLink>
             <NavLink 
-              to="/search"
+              to="/topics"
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
@@ -62,7 +62,31 @@ export default function PublicLayout() {
                 }`
               }
             >
-              Search
+              Topics
+            </NavLink>
+            <NavLink 
+              to="/tools"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-sky-100 text-sky-800 font-medium'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`
+              }
+            >
+              Tools
+            </NavLink>
+            <NavLink 
+              to="/help"
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-full transition-colors ${
+                  isActive
+                    ? 'bg-sky-100 text-sky-800 font-medium'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`
+              }
+            >
+              Help
             </NavLink>
           </nav>
 
@@ -76,9 +100,12 @@ export default function PublicLayout() {
                 Go to Dashboard
               </button>
             ) : (
-              <Link to="/login" className="btn-primary">
-                Sign In
-              </Link>
+              <>
+                <span className="text-xs text-slate-500">External access to approved documentation</span>
+                <Link to="/login" className="btn-primary">
+                  Sign in
+                </Link>
+              </>
             )}
           </div>
         </div>
@@ -88,7 +115,7 @@ export default function PublicLayout() {
           <div className="md:hidden border-t border-slate-200 bg-white">
             <div className="container mx-auto px-4 py-4 space-y-2">
               <NavLink
-                to="/browse"
+                to="/docs"
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
@@ -98,10 +125,10 @@ export default function PublicLayout() {
                 }
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Browse Documents
+                Docs
               </NavLink>
               <NavLink
-                to="/search"
+                to="/topics"
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
@@ -111,7 +138,33 @@ export default function PublicLayout() {
                 }
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Search
+                Topics
+              </NavLink>
+              <NavLink
+                to="/tools"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Tools
+              </NavLink>
+              <NavLink
+                to="/help"
+                className={({ isActive }) =>
+                  `block px-4 py-2 rounded-xl transition-colors ${
+                    isActive
+                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Help
               </NavLink>
               <hr className="my-3 border-slate-200" />
               {user ? (
@@ -130,7 +183,7 @@ export default function PublicLayout() {
                   className="block w-full text-center btn-primary"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Sign In
+                  Sign in
                 </Link>
               )}
             </div>
@@ -152,7 +205,7 @@ export default function PublicLayout() {
                 <div className="h-8 w-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-semibold text-sm font-display">
                   DP
                 </div>
-                <span className="text-lg font-semibold text-slate-900 font-display">DocPortal</span>
+                <span className="text-lg font-semibold text-slate-900 font-display">Documentation Platform</span>
               </div>
               <p className="text-slate-500 text-sm">
                 Your central hub for documentation and knowledge sharing.
@@ -162,8 +215,8 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/browse" className="text-slate-500 hover:text-slate-900 transition-colors">
-                    Browse All Documents
+                  <Link to="/docs" className="text-slate-500 hover:text-slate-900 transition-colors">
+                    Docs Library
                   </Link>
                 </li>
                 <li>

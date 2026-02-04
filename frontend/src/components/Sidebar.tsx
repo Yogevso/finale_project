@@ -56,7 +56,7 @@ export default function Sidebar() {
 
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200">
         <div className="text-xs text-slate-400 text-center">
-          Document Portal V2
+          Documentation Platform
           <br />
           Built with React + FastAPI
         </div>

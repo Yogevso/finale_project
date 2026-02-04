@@ -3,12 +3,12 @@ import { useNavigate, Link } from 'react-router-dom'
 import NotificationBell from './NotificationBell'
 
 export default function Header() {
-  const { user, logout } = useAuth()
+  const { user, logout, isSystemAdmin } = useAuth()
   const navigate = useNavigate()
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
+    navigate('/docs')
   }
 
   return (
@@ -20,7 +20,7 @@ export default function Header() {
               DP
             </div>
             <div>
-              <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Document Portal</div>
+              <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Documentation Platform</div>
             </div>
           </Link>
         </div>
@@ -36,6 +36,12 @@ export default function Header() {
           
           {/* Notification Bell */}
           <NotificationBell />
+
+          {isSystemAdmin && (
+            <Link to="/docs" className="btn-secondary">
+              Viewer Portal
+            </Link>
+          )}
           
           <button
             onClick={handleLogout}

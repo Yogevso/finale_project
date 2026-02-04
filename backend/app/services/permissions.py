@@ -142,6 +142,29 @@ ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
 }
 
 
+# Dynamic RBAC policies (published by CMS/ACL)
+_DYNAMIC_ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {}
+
+
+def set_dynamic_role_permissions(role_permissions: dict[UserRole, Set[Permission]]) -> None:
+    """Replace dynamic RBAC policies in memory."""
+    global _DYNAMIC_ROLE_PERMISSIONS
+    _DYNAMIC_ROLE_PERMISSIONS = {
+        role: set(permissions) for role, permissions in role_permissions.items()
+    }
+
+
+def clear_dynamic_role_permissions() -> None:
+    """Clear dynamic RBAC policies, falling back to static defaults."""
+    _DYNAMIC_ROLE_PERMISSIONS.clear()
+
+
+def _effective_permissions(role: UserRole) -> Set[Permission]:
+    if role in _DYNAMIC_ROLE_PERMISSIONS:
+        return _DYNAMIC_ROLE_PERMISSIONS[role]
+    return ROLE_PERMISSIONS.get(role, set())
+
+
 def has_permission(user: User, permission: Permission) -> bool:
     """
     Check if a user has a specific permission.
@@ -156,7 +179,7 @@ def has_permission(user: User, permission: Permission) -> bool:
     if not user or not user.is_active:
         return False
 
-    user_permissions = ROLE_PERMISSIONS.get(user.role, set())
+    user_permissions = _effective_permissions(user.role)
     return permission in user_permissions
 
 
@@ -173,7 +196,7 @@ def get_user_permissions(user: User) -> Set[Permission]:
     if not user or not user.is_active:
         return set()
 
-    return ROLE_PERMISSIONS.get(user.role, set())
+    return _effective_permissions(user.role)
 
 
 def is_internal_user(user: User) -> bool:

@@ -1,4 +1,4 @@
-# Deploy script for Document Portal V2 (Windows PowerShell)
+# Deploy script for Documentation Platform (Windows PowerShell)
 # Usage: .\deploy.ps1 [build|start|stop|restart|logs|status]
 
 param(
@@ -33,7 +33,7 @@ function Check-Env {
         $secretKey = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 64 | ForEach-Object { [char]$_ })
         
         @"
-# Document Portal Production Configuration
+# Documentation Platform Production Configuration
 # Generated on $(Get-Date)
 
 # REQUIRED: Change this to a secure random string
@@ -68,7 +68,7 @@ function Invoke-Build {
 
 function Invoke-Start {
     Check-Env
-    Write-Info "Starting Document Portal..."
+    Write-Info "Starting Documentation Platform..."
     docker compose -f $ComposeFile -p $ProjectName up -d
     Write-Info "Portal started! Checking health..."
     Start-Sleep -Seconds 5
@@ -76,13 +76,13 @@ function Invoke-Start {
 }
 
 function Invoke-Stop {
-    Write-Info "Stopping Document Portal..."
+    Write-Info "Stopping Documentation Platform..."
     docker compose -f $ComposeFile -p $ProjectName down
     Write-Info "Portal stopped."
 }
 
 function Invoke-Restart {
-    Write-Info "Restarting Document Portal..."
+    Write-Info "Restarting Documentation Platform..."
     docker compose -f $ComposeFile -p $ProjectName restart
     Write-Info "Portal restarted."
 }
@@ -141,7 +141,7 @@ function Invoke-Backup {
 }
 
 function Invoke-Update {
-    Write-Info "Updating Document Portal..."
+    Write-Info "Updating Documentation Platform..."
     
     # Pull latest code (if using git)
     if (Test-Path ".git") {
@@ -161,7 +161,7 @@ function Invoke-Update {
 }
 
 function Show-Help {
-    Write-Host "Document Portal V2 Deployment Script" -ForegroundColor Cyan
+    Write-Host "Documentation Platform Deployment Script" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Usage: .\deploy.ps1 <command>" -ForegroundColor Yellow
     Write-Host ""

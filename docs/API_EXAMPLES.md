@@ -1,4 +1,4 @@
-# V2 Document Portal - API Examples
+# Documentation Platform - API Examples
 
 ## Authentication
 

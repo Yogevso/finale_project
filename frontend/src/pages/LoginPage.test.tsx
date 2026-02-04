@@ -51,9 +51,9 @@ describe('LoginPage', () => {
     expect(screen.getByText(/admin \/ admin123/i)).toBeInTheDocument();
   });
 
-  it('shows Document Portal title', () => {
+  it('shows Documentation Platform title', () => {
     renderWithProviders(<LoginPage />);
     
-    expect(screen.getByText(/Document Portal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Documentation Platform/i)).toBeInTheDocument();
   });
 });
