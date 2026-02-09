@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { getNavigationForRole } from '@/config/routes'
 import NotificationBell from './NotificationBell'
@@ -7,6 +7,8 @@ export default function Layout() {
   const { user, logout, isSystemAdmin } = useAuth()
   const navigate = useNavigate()
   const navItems = getNavigationForRole(user?.role || null)
+  const location = useLocation()
+  const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
 
   const handleLogout = () => {
     logout()
@@ -16,6 +18,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Zip B Style Header */}
+      {!isFullscreen && (
       <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
         <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
@@ -78,21 +81,24 @@ export default function Layout() {
           </div>
         </div>
       </header>
+      )}
 
       {/* Main Content */}
       <main className="flex-1">
-        <div className="container mx-auto px-4 py-8">
+        <div className={`${isFullscreen ? 'px-0 py-0' : 'container mx-auto px-4 py-8'}`}>
           <Outlet />
         </div>
       </main>
 
       {/* Footer */}
+      {!isFullscreen && (
       <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
           <p>Documentation Platform</p>
           <p className="text-xs mt-1">Built with React + FastAPI</p>
         </div>
       </footer>
+      )}
     </div>
   )
 }

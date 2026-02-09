@@ -1,4 +1,5 @@
-import { useParams, Link } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   FileText, 
@@ -12,10 +13,21 @@ import {
   LogIn
 } from 'lucide-react'
 import { publicApi } from '@/lib/publicApi'
+import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import NotFoundState from '@/components/NotFoundState'
 
 export default function PublicDocumentPage() {
   const { id } = useParams<{ id: string }>()
   const documentId = parseInt(id || '0')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const isFullscreen = location.search.includes('fullscreen=1')
+  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
+
+  const applyWidth = (value: ReadingWidth) => {
+    setContentWidth(value)
+    setReadingWidth(value)
+  }
 
   // Fetch document
   const { data: doc, isLoading, error } = useQuery({
@@ -62,27 +74,63 @@ export default function PublicDocumentPage() {
 
   if (error || !doc) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <FileText className="h-16 w-16 mx-auto mb-4 text-slate-300" />
-        <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Document Not Found</h1>
-        <p className="text-slate-500 mb-6">
-          This document doesn't exist or is not publicly accessible.
-        </p>
-        <Link
-          to="/docs"
-          className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 font-medium"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to documents
-        </Link>
+      <div className="max-w-4xl mx-auto px-4 py-16">
+        <NotFoundState
+          title="Document Not Found"
+          description="This document doesn't exist or is not publicly accessible."
+          icon={<FileText className="h-12 w-12 text-slate-300" />}
+          action={
+            <Link
+              to="/docs"
+              className="inline-flex items-center gap-2 text-sky-600 hover:text-sky-700 font-medium"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to documents
+            </Link>
+          }
+        />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
-        <div className="max-w-5xl mx-auto px-6 py-12">
+    <div className={`${isFullscreen ? 'min-h-screen bg-white' : 'min-h-screen bg-slate-50'}`}>
+      {isFullscreen && (
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg gap-4">
+          <button
+            onClick={() => navigate(`/doc/${documentId}`)}
+            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+          >
+            Exit Fullscreen
+          </button>
+          <div className="flex-1 text-center font-display font-semibold truncate">{doc.title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => applyWidth('reading')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'reading'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Reading width
+            </button>
+            <button
+              onClick={() => applyWidth('fluid')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'fluid'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Full width
+            </button>
+          </div>
+        </div>
+      )}
+
+      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+        <div className={`${isFullscreen ? (contentWidth === 'reading' ? 'max-w-5xl mx-auto' : 'max-w-none') : 'max-w-5xl mx-auto'} px-6 py-12`}>
           <Link
             to="/docs"
             className="inline-flex items-center gap-2 text-sky-100/80 hover:text-white mb-5"
@@ -124,10 +172,20 @@ export default function PublicDocumentPage() {
               </div>
             )}
           </div>
+          {!isFullscreen && (
+            <div className="mt-4">
+              <button
+                onClick={() => navigate(`/doc/${documentId}?fullscreen=1`)}
+                className="btn-secondary"
+              >
+                Fullscreen
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="max-w-4xl mx-auto px-4 py-10">
+      <section className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : 'max-w-4xl mx-auto px-4'} py-10`}>
         {/* Topic / Category / Platform */}
         {metaPills.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">

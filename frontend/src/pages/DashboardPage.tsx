@@ -11,10 +11,16 @@ export default function DashboardPage() {
     queryFn: () => api.getDocuments({ page: 1, page_size: 5 }),
   })
 
+  const { data: bookmarks = [] } = useQuery({
+    queryKey: ['bookmarks', 'dashboard'],
+    queryFn: () => api.getBookmarks(),
+    enabled: isCustomer,
+  })
+
   const stats = [
-    { label: 'Total Documents', value: documents?.total ?? 0, icon: '📄', color: 'blue' },
-    { label: 'Active', value: documents?.items.filter(d => d.status === 'active').length ?? 0, icon: '✅', color: 'green' },
-    { label: 'Draft', value: documents?.items.filter(d => d.status === 'draft').length ?? 0, icon: '📝', color: 'yellow' },
+    { label: 'Favorites', value: isCustomer ? bookmarks.length : 0, icon: '⭐', color: 'blue' },
+    { label: 'Published', value: documents?.items.filter(d => d.status === 'active').length ?? 0, icon: '✅', color: 'green' },
+    { label: 'Drafts', value: documents?.items.filter(d => d.status === 'draft').length ?? 0, icon: '📝', color: 'yellow' },
     { label: 'Archived', value: documents?.items.filter(d => d.status === 'archived').length ?? 0, icon: '📦', color: 'gray' },
   ]
 
@@ -60,8 +66,13 @@ export default function DashboardPage() {
               <div key={doc.id} className="p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-slate-900">{doc.title}</h3>
-                    <p className="text-sm text-slate-500">{doc.document_number}</p>
+                    <Link
+                      to={`/documents/${doc.id}/fullscreen`}
+                      className="block hover:text-sky-700"
+                    >
+                      <h3 className="font-medium text-slate-900">{doc.title}</h3>
+                      <p className="text-sm text-slate-500">{doc.document_number}</p>
+                    </Link>
                   </div>
                   <span
                     className={`pill ${
@@ -72,7 +83,7 @@ export default function DashboardPage() {
                         : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >
-                    {doc.status}
+                    {doc.status === 'active' ? 'Published' : doc.status}
                   </span>
                 </div>
               </div>
@@ -141,7 +152,7 @@ function BookmarksWidget() {
           bookmarks.slice(0, 5).map((b: any) => (
             <Link
               key={b.id}
-              to={`/documents/${b.document_id}`}
+              to={`/documents/${b.document_id}/fullscreen`}
               className="block p-3 hover:bg-slate-50 transition-colors"
             >
               <p className="font-medium text-slate-900 text-sm truncate">{b.document_title}</p>
@@ -187,7 +198,7 @@ function ReadingProgressWidget() {
             {inProgress.map((p: any) => (
               <Link
                 key={p.id}
-                to={`/documents/${p.document_id}`}
+                to={`/documents/${p.document_id}/fullscreen`}
                 className="block p-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -205,7 +216,7 @@ function ReadingProgressWidget() {
             {completed.slice(0, 3).map((p: any) => (
               <Link
                 key={p.id}
-                to={`/documents/${p.document_id}`}
+                to={`/documents/${p.document_id}/fullscreen`}
                 className="block p-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center gap-2">

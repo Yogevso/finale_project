@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import VisibilityBadge from '@/components/VisibilityBadge'
@@ -10,13 +10,25 @@ import type { DocumentStatus, DocumentVisibility, DocumentCreate } from '@/types
 export default function DocumentsPage() {
   const { isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('')
   const [visibilityFilter, setVisibilityFilter] = useState<DocumentVisibility | ''>('')
+  const statusDetailsRef = useRef<HTMLDetailsElement | null>(null)
+  const visibilityDetailsRef = useRef<HTMLDetailsElement | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showQuickStartModal, setShowQuickStartModal] = useState(false)
   const [visibilityOverrides, setVisibilityOverrides] = useState<Record<number, DocumentVisibility>>({})
+  const action = searchParams.get('action')
+  const isQuickCreateMode = action === 'create'
+
+  useEffect(() => {
+    if (isQuickCreateMode) {
+      setShowQuickStartModal(true)
+    }
+  }, [isQuickCreateMode])
 
   const { data, isLoading } = useQuery({
     queryKey: ['documents', page, search, statusFilter],
@@ -92,158 +104,237 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 flex-wrap">
-        <input
-          type="text"
-          placeholder="Search documents..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input-field flex-1 min-w-[200px]"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | '')}
-          className="select-field"
-        >
-          <option value="">All Status</option>
-          <option value="draft">Draft</option>
-          <option value="pending_review">Pending Review</option>
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-        </select>
-        <select
-          value={visibilityFilter}
-          onChange={(e) => setVisibilityFilter(e.target.value as DocumentVisibility | '')}
-          className="select-field"
-        >
-          <option value="">All Visibility</option>
-          <option value="public">Public</option>
-          <option value="internal">Internal</option>
-          <option value="company">Company</option>
-        </select>
-      </div>
+      {!isQuickCreateMode && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input-field pl-9"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <details ref={statusDetailsRef} className="relative">
+              <summary className="list-none cursor-pointer px-3 py-2 rounded-full border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50">
+                Status: {statusFilter === 'active' ? 'Published' : statusFilter || 'All'}
+              </summary>
+              <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-10">
+                {[
+                  { label: 'All', value: '' },
+                  { label: 'Draft', value: 'draft' },
+                  { label: 'Pending Review', value: 'pending_review' },
+                  { label: 'Published', value: 'active' },
+                  { label: 'Archived', value: 'archived' },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setStatusFilter(item.value as DocumentStatus | '')
+                      statusDetailsRef.current?.removeAttribute('open')
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-slate-100 ${
+                      statusFilter === item.value ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </details>
 
-      {/* Documents Table */}
-      <div className="surface-card rounded-2xl overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Document</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Visibility</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
+            <details ref={visibilityDetailsRef} className="relative">
+              <summary className="list-none cursor-pointer px-3 py-2 rounded-full border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50">
+                Visibility: {visibilityFilter || 'All'}
+              </summary>
+              <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-10">
+                {[
+                  { label: 'All', value: '' },
+                  { label: 'Public', value: 'public' },
+                  { label: 'Internal', value: 'internal' },
+                  { label: 'Company', value: 'company' },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      setVisibilityFilter(item.value as DocumentVisibility | '')
+                      visibilityDetailsRef.current?.removeAttribute('open')
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-slate-100 ${
+                      visibilityFilter === item.value ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
+        </div>
+      )}
+
+      {isQuickCreateMode && (
+        <div className="surface-card rounded-2xl p-6">
+          <h2 className="text-lg font-display font-semibold text-slate-900 mb-2">
+            Create a new document
+          </h2>
+          <p className="text-sm text-slate-500 mb-6">
+            Choose how you want to start.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="surface-card-hover rounded-2xl p-6 text-left"
+            >
+              <div className="text-3xl mb-3">📝</div>
+              <div className="text-lg font-display font-semibold text-slate-900">New Document</div>
+              <p className="text-sm text-slate-500 mt-2">
+                Start from a blank document and add content.
+              </p>
+            </button>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="surface-card-hover rounded-2xl p-6 text-left"
+            >
+              <div className="text-3xl mb-3">📤</div>
+              <div className="text-lg font-display font-semibold text-slate-900">Upload File</div>
+              <p className="text-sm text-slate-500 mt-2">
+                Upload a PDF or Word file and generate a document.
+              </p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isQuickCreateMode && (
+        <div className="surface-card rounded-2xl overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50">
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                  Loading...
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Document</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Visibility</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
-            ) : data?.items.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                  No documents found
-                </td>
-              </tr>
-            ) : (
-              data?.items.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4">
-                    <div>
-                      <div className="font-medium text-slate-900">{doc.title}</div>
-                      <div className="text-sm text-slate-500">{doc.document_number}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`pill ${
-                        doc.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : doc.status === 'draft'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : doc.status === 'pending_review'
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}
-                    >
-                      {doc.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {isManager ? (
-                      <select
-                        value={visibilityOverrides[doc.id] || doc.visibility || 'internal'}
-                        onChange={(e) => {
-                          const nextVisibility = e.target.value as DocumentVisibility
-                          setVisibilityOverrides((prev) => ({ ...prev, [doc.id]: nextVisibility }))
-                          visibilityMutation.mutate({ id: doc.id, visibility: nextVisibility })
-                        }}
-                        className="select-field w-44"
-                      >
-                        <option value="internal">Internal</option>
-                        <option value="public">Public</option>
-                        <option value="company">Company</option>
-                      </select>
-                    ) : (
-                      <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{doc.category || '-'}</td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {new Date(doc.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <a
-                      href={`/documents/${doc.id}`}
-                      className="text-sky-600 hover:text-sky-800 font-medium"
-                    >
-                      View
-                    </a>
-                    {isEditor && (
-                      <button
-                        onClick={() => handleDelete(doc.id, doc.title)}
-                        className="text-rose-500 hover:text-rose-700 font-medium"
-                      >
-                        Delete
-                      </button>
-                    )}
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                    Loading...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : data?.items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                    No documents found
+                  </td>
+                </tr>
+              ) : (
+                data?.items.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-slate-50">
+                  <td className="px-6 py-4">
+                    <a
+                      href={`/documents/${doc.id}/fullscreen`}
+                      className="block hover:text-sky-700"
+                    >
+                      <div className="font-medium text-slate-900">{doc.title}</div>
+                      <div className="text-sm text-slate-500">{doc.document_number}</div>
+                    </a>
+                  </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`pill ${
+                          doc.status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : doc.status === 'draft'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : doc.status === 'pending_review'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {doc.status === 'active' ? 'Published' : doc.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {isManager ? (
+                        <select
+                          value={visibilityOverrides[doc.id] || doc.visibility || 'internal'}
+                          onChange={(e) => {
+                            const nextVisibility = e.target.value as DocumentVisibility
+                            setVisibilityOverrides((prev) => ({ ...prev, [doc.id]: nextVisibility }))
+                            visibilityMutation.mutate({ id: doc.id, visibility: nextVisibility })
+                          }}
+                          className="select-field w-44"
+                        >
+                          <option value="internal">Internal</option>
+                          <option value="public">Public</option>
+                          <option value="company">Company</option>
+                        </select>
+                      ) : (
+                        <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">{doc.category || '-'}</td>
+                    <td className="px-6 py-4 text-slate-500">
+                      {new Date(doc.created_at).toLocaleDateString()}
+                    </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      <a
+                        href={`/documents/${doc.id}/fullscreen`}
+                        className="text-sky-600 hover:text-sky-800 font-medium"
+                      >
+                        View
+                      </a>
+                      {isEditor && (
+                        <button
+                          onClick={() => handleDelete(doc.id, doc.title)}
+                          className="text-rose-500 hover:text-rose-700 font-medium"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
 
-        {/* Pagination */}
-        {data && data.pages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-            <div className="text-sm text-slate-500">
-              Page {data.page} of {data.pages} ({data.total} total)
+          {data && data.pages > 1 && (
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <div className="text-sm text-slate-500">
+                Page {data.page} of {data.pages} ({data.total} total)
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn-ghost disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
+                  disabled={page === data.pages}
+                  className="btn-ghost disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="btn-ghost disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(data.pages, p + 1))}
-                disabled={page === data.pages}
-                className="btn-ghost disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (
@@ -253,6 +344,20 @@ export default function DocumentsPage() {
       {/* Upload Modal */}
       {showUploadModal && (
         <UploadDocumentModal onClose={() => setShowUploadModal(false)} />
+      )}
+
+      {showQuickStartModal && (
+        <QuickStartModal
+          onClose={() => setShowQuickStartModal(false)}
+          onCreate={() => {
+            setShowQuickStartModal(false)
+            setShowCreateModal(true)
+          }}
+          onUpload={() => {
+            setShowQuickStartModal(false)
+            setShowUploadModal(true)
+          }}
+        />
       )}
     </div>
   )
@@ -268,10 +373,12 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     status: 'draft',
     visibility: 'internal',
     category: '',
+    release_branch: '',
     tags: '',
     content: '',
   })
   const [error, setError] = useState('')
+  const [generateWord, setGenerateWord] = useState(false)
 
   const createMutation = useMutation({
     mutationFn: async (data: DocumentCreate & { content?: string }) => {
@@ -279,9 +386,10 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
       const doc = await api.createDocument({
         title: data.title,
         description: data.description,
-        status: data.status,
-        visibility: data.visibility,
+        status: 'draft',
+        visibility: 'internal',
         category: data.category,
+        release_branch: data.release_branch,
         tags: data.tags,
       })
       // If there's content, create a version with it
@@ -294,14 +402,19 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
         if (isManager) {
           await api.publishVersion(doc.id, version.id)
         }
+        if (generateWord) {
+          await api.generateWordAttachment(doc.id, data.content, `${data.title}.docx`)
+        }
+      } else if (generateWord) {
+        throw new Error('Please add content before generating a Word file')
       }
       return doc
     },
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       onClose()
-      // Navigate to the editor to continue editing
-      navigate(`/documents/${doc.id}/edit`)
+      // Navigate to fullscreen view to continue editing
+      navigate(`/documents/${doc.id}/fullscreen`)
     },
     onError: (err: unknown) => {
       const error = err as { response?: { data?: { detail?: string } } }
@@ -364,28 +477,22 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
-                  className="select-field"
-                >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="archived">Archived</option>
-                </select>
+                <input
+                  type="text"
+                  value="Draft"
+                  disabled
+                  className="input-field disabled:opacity-70"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
-                <select
-                  value={formData.visibility}
-                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })}
-                  className="select-field"
-                >
-                  <option value="internal">🏢 Internal</option>
-                  <option value="public">🌐 Public</option>
-                  <option value="company">🔒 Company</option>
-                </select>
+                <input
+                  type="text"
+                  value="Internal"
+                  disabled
+                  className="input-field disabled:opacity-70"
+                />
               </div>
 
               <div>
@@ -400,31 +507,58 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Release Branch</label>
                 <input
                   type="text"
-                  value={formData.tags}
-                  onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                  value={formData.release_branch || ''}
+                  onChange={(e) => setFormData({ ...formData, release_branch: e.target.value })}
                   className="input-field"
-                  placeholder="Comma-separated"
+                  placeholder="e.g., R580"
                 />
               </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+              <input
+                type="text"
+                value={formData.tags}
+                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                className="input-field"
+                placeholder="Comma-separated"
+              />
             </div>
 
-            {/* Right side - Content editor */}
-            <div className="flex-1 p-4 flex flex-col overflow-hidden">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Content <span className="text-slate-400 font-normal">(start typing your document)</span>
-              </label>
-              <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden">
-                <RichTextEditor
-                  content={formData.content || ''}
-                  onChange={(html) => setFormData({ ...formData, content: html })}
-                  editable={true}
-                  className="h-full"
+            <div className="pt-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={generateWord}
+                  onChange={(e) => setGenerateWord(e.target.checked)}
+                  className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                 />
-              </div>
+                Generate Word file (DOCX)
+              </label>
+              <p className="text-xs text-slate-400 mt-1">
+                Creates a Word attachment from the editor content.
+              </p>
             </div>
+          </div>
+
+            {/* Right side - Content editor */}
+              <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Content <span className="text-slate-400 font-normal">(start typing your document)</span>
+                </label>
+                <div className="flex-1 min-h-0">
+                  <RichTextEditor
+                    content={formData.content || ''}
+                    onChange={(html) => setFormData({ ...formData, content: html })}
+                    editable={true}
+                    scrollable
+                    className="h-full"
+                  />
+                </div>
+              </div>
           </div>
 
           <div className="flex justify-end gap-3 p-4 border-t border-slate-200 surface-muted">
@@ -457,15 +591,13 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 }
 function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const releaseInputRef = useRef<HTMLInputElement>(null)
-  const contentInputRef = useRef<HTMLInputElement>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [releaseNotesFile, setReleaseNotesFile] = useState<File | null>(null)
-  const [contentFile, setContentFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
+  const [releaseBranch, setReleaseBranch] = useState('')
   const [tags, setTags] = useState('')
   const [error, setError] = useState('')
   const [dragActive, setDragActive] = useState(false)
@@ -476,13 +608,13 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
         title: title || undefined,
         description: description || undefined,
         category: category || undefined,
+        release_branch: releaseBranch || undefined,
         tags: tags || undefined,
-        release_notes: releaseNotesFile,
-        content_file: contentFile,
       }),
-    onSuccess: () => {
+    onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       onClose()
+      navigate(`/documents/${doc.id}/fullscreen`)
     },
     onError: (err: unknown) => {
       const error = err as { response?: { data?: { detail?: string } } }
@@ -619,52 +751,16 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Release Notes (JSON, optional)</label>
-            <div className="flex items-center gap-3">
-              <input
-                ref={releaseInputRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={(e) => setReleaseNotesFile(e.target.files?.[0] || null)}
-              />
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => releaseInputRef.current?.click()}
-              >
-                Choose File
-              </button>
-              <span className="text-sm text-slate-500">
-                {releaseNotesFile ? releaseNotesFile.name : 'No file chosen'}
-              </span>
-            </div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Release Branch</label>
+            <input
+              type="text"
+              value={releaseBranch}
+              onChange={(e) => setReleaseBranch(e.target.value)}
+              className="input-field"
+              placeholder="e.g., R580"
+            />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Additional Document (MD/HTML/TXT, optional)
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                ref={contentInputRef}
-                type="file"
-                accept=".md,.html,.htm,.txt"
-                className="hidden"
-                onChange={(e) => setContentFile(e.target.files?.[0] || null)}
-              />
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => contentInputRef.current?.click()}
-              >
-                Choose File
-              </button>
-              <span className="text-sm text-slate-500">
-                {contentFile ? contentFile.name : 'No file chosen'}
-              </span>
-            </div>
-          </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <button
@@ -683,6 +779,57 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function QuickStartModal({
+  onClose,
+  onCreate,
+  onUpload,
+}: {
+  onClose: () => void
+  onCreate: () => void
+  onUpload: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-display font-bold text-slate-900">Start a new document</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-xl text-slate-500"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-slate-500 mb-6">
+          Choose how you want to create your document.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            onClick={onCreate}
+            className="surface-card-hover rounded-2xl p-6 text-left"
+          >
+            <div className="text-3xl mb-3">📝</div>
+            <div className="text-lg font-display font-semibold text-slate-900">New Document</div>
+            <p className="text-sm text-slate-500 mt-2">
+              Start from a blank document and add content.
+            </p>
+          </button>
+          <button
+            onClick={onUpload}
+            className="surface-card-hover rounded-2xl p-6 text-left"
+          >
+            <div className="text-3xl mb-3">📤</div>
+            <div className="text-lg font-display font-semibold text-slate-900">Upload File</div>
+            <p className="text-sm text-slate-500 mt-2">
+              Upload a PDF or Word file and generate a document.
+            </p>
+          </button>
+        </div>
       </div>
     </div>
   )

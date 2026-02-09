@@ -276,6 +276,7 @@ class Document(Base):
     category = Column(String(100), nullable=True, index=True)
     topic = Column(String(150), nullable=True, index=True)
     platform = Column(String(100), nullable=True, index=True)
+    release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

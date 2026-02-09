@@ -86,7 +86,7 @@ export default function ReviewDialog({
               <FileText className="w-6 h-6 text-sky-600" />
               <div>
                 <Link
-                  to={`/documents/${review.document_id}`}
+                  to={`/documents/${review.document_id}/fullscreen`}
                   target="_blank"
                   className="text-lg font-medium text-sky-700 hover:text-sky-800"
                 >
@@ -146,7 +146,7 @@ export default function ReviewDialog({
           {/* View Document Link */}
           <div className="text-center">
             <Link
-              to={`/documents/${review.document_id}`}
+              to={`/documents/${review.document_id}/fullscreen`}
               target="_blank"
               className="text-sky-600 hover:text-sky-700 text-sm underline"
             >

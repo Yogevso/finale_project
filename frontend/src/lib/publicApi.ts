@@ -16,9 +16,12 @@ export interface PublicDocumentSummary {
   category?: string
   topic?: string
   platform?: string
+  release_branch?: string
   tags?: string
   created_at: string
   updated_at?: string
+  published_at?: string
+  version_number?: number
 }
 
 export interface PublicAttachmentInfo {
@@ -94,6 +97,38 @@ export interface PublicTopicsResponse {
   total: number
 }
 
+export interface PublicPlatformDocument {
+  id: number
+  document_number: string
+  title: string
+  category?: string
+  platform?: string
+  release_branch?: string
+  version_label?: string
+  version_number?: number
+  published_at?: string
+  updated_at?: string
+}
+
+export interface PublicPlatformYearGroup {
+  year?: number
+  documents: PublicPlatformDocument[]
+}
+
+export interface PublicPlatformCategoryGroup {
+  category: string
+  years: PublicPlatformYearGroup[]
+}
+
+export interface PublicPlatformGroup {
+  platform: string
+  categories: PublicPlatformCategoryGroup[]
+}
+
+export interface PublicPlatformHistoryResponse {
+  items: PublicPlatformGroup[]
+}
+
 // API Functions
 export const publicApi = {
   /**
@@ -136,6 +171,17 @@ export const publicApi = {
         throw new Error('Document not found or not publicly accessible')
       }
       throw new Error('Failed to fetch document')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get platform history grouped by platform/category/year.
+   */
+  async getPlatformHistory(): Promise<PublicPlatformHistoryResponse> {
+    const response = await fetch(`${API_BASE}/platforms/history`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch platform history')
     }
     return response.json()
   },

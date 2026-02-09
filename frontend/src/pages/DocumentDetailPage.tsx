@@ -1,20 +1,26 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type { DocumentUpdate, DocumentStatus, DocumentVisibility, Attachment } from '@/types'
-import VersionsSection from '@/components/VersionsSection'
-import AttachmentsSection from '@/components/AttachmentsSection'
-import CommentsSection from '@/components/CommentsSection'
+const VersionsSection = lazy(() => import('@/components/VersionsSection'))
+const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
+const CommentsSection = lazy(() => import('@/components/CommentsSection'))
 import EngagementBar from '@/components/EngagementBar'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import CompanySelector from '@/components/CompanySelector'
-import { Building2, X, Send, Clock, CheckCircle, XCircle, History, Maximize2, Edit3, Save } from 'lucide-react'
+import NotFoundState from '@/components/NotFoundState'
+import { Building2, X, Send, Clock, CheckCircle, XCircle, History, Maximize2, Minimize2, Edit3, Save } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
 import mammoth from 'mammoth'
 
 type TabType = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
@@ -28,12 +34,20 @@ interface PendingAnchor {
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('preview')
   const [scrollProgress, setScrollProgress] = useState<number>(0)
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null)
+  const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
+  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
+
+  const applyWidth = (value: ReadingWidth) => {
+    setContentWidth(value)
+    setReadingWidth(value)
+  }
 
   // Callback for DocumentPreview to report scroll progress
   const handleScrollProgress = useCallback((progress: number) => {
@@ -139,9 +153,10 @@ export default function DocumentDetailPage() {
 
   if (error || !document) {
     return (
-      <div className="bg-rose-50 text-rose-700 p-6 rounded-xl">
-        Document not found
-      </div>
+      <NotFoundState
+        title="Document Not Found"
+        description="This document may not exist or you may not have access."
+      />
     )
   }
 
@@ -151,63 +166,117 @@ export default function DocumentDetailPage() {
     }
   }
 
+  const contentWidthClass = contentWidth === 'fluid' ? 'max-w-none' : 'max-w-5xl'
+  const readingModeClass = contentWidth === 'reading' ? 'reading-mode' : ''
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+    <div className={`${isFullscreen ? 'min-h-screen bg-slate-50 px-6 md:px-10 lg:px-14 py-6' : ''}`}>
+      {isFullscreen && (
+        <div className="sticky top-0 z-30 -mx-6 md:-mx-10 lg:-mx-14 px-6 md:px-10 lg:px-14 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg flex items-center justify-between gap-4">
           <button
-            onClick={() => navigate('/documents')}
-            className="text-sm text-slate-500 hover:text-slate-700 mb-2"
+            onClick={() => navigate(`/documents/${id}`)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/15 rounded-lg hover:bg-white/25 transition-colors"
           >
-            ← Back to Documents
+            <Minimize2 className="w-4 h-4" />
+            Exit Fullscreen
           </button>
-          <h1 className="text-2xl font-display font-bold text-slate-900">{document.title}</h1>
-          <p className="text-slate-500 mt-1">{document.document_number}</p>
+          <div className="flex-1 text-center font-display font-semibold truncate">{document.title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => applyWidth('reading')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'reading'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+              title="Reading width"
+            >
+              Reading width
+            </button>
+            <button
+              onClick={() => applyWidth('fluid')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'fluid'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+              title="Full width"
+            >
+              Full width
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          {/* Fullscreen View Button */}
-          <button
-            onClick={() => navigate(`/documents/${id}/fullscreen`)}
-            className="btn-ghost flex items-center gap-2"
-            title="Open Fullscreen View"
-          >
-            <Maximize2 className="w-4 h-4" />
-            Fullscreen
-          </button>
-          
-          {isEditor && (
-            <>
-              {/* Submit for Review button - only show for draft documents */}
-              {document.status === 'draft' && (
+      )}
+
+      <div className={`space-y-6 ${readingModeClass} ${isFullscreen ? `w-full ${contentWidthClass} mx-auto` : ''}`}>
+      {/* Header */}
+      <div className="rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg overflow-hidden">
+        <div className="px-6 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <button
+              onClick={() => navigate('/documents')}
+              className="text-sm text-sky-100/80 hover:text-white mb-2"
+            >
+              ← Back to Documents
+            </button>
+            <h1 className="text-2xl md:text-3xl font-display font-bold">{document.title}</h1>
+            <p className="text-sky-100/80 mt-1">{document.document_number}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {/* Fullscreen View Button */}
+            {!isFullscreen ? (
+              <button
+                onClick={() => navigate(`/documents/${id}/fullscreen`)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+                title="Open Fullscreen View"
+              >
+                <Maximize2 className="w-4 h-4" />
+                Fullscreen
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/documents/${id}`)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+                title="Exit Fullscreen View"
+              >
+                <Minimize2 className="w-4 h-4" />
+                Exit Fullscreen
+              </button>
+            )}
+            
+            {isEditor && (
+              <>
+                {/* Submit for Review button - only show for draft documents */}
+                {document.status === 'draft' && (
+                  <button
+                    onClick={() => setShowSubmitReview(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-sky-900 hover:bg-slate-100 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                    Submit for Review
+                  </button>
+                )}
+                {document.status === 'pending_review' && (
+                  <span className="flex items-center gap-2 px-4 py-2 bg-amber-200/30 text-amber-100 rounded-lg">
+                    <Clock className="w-4 h-4" />
+                    Pending Review
+                  </span>
+                )}
                 <button
-                  onClick={() => setShowSubmitReview(true)}
-                  className="btn-primary flex items-center gap-2"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
                 >
-                  <Send className="w-4 h-4" />
-                  Submit for Review
+                  {isEditing ? 'Cancel' : 'Edit'}
                 </button>
-              )}
-              {document.status === 'pending_review' && (
-                <span className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-lg">
-                  <Clock className="w-4 h-4" />
-                  Pending Review
-                </span>
-              )}
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="btn-ghost"
-              >
-                {isEditing ? 'Cancel' : 'Edit'}
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700"
-              >
-                Delete
-              </button>
-            </>
-          )}
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -263,7 +332,7 @@ export default function DocumentDetailPage() {
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {document.status}
+                      {document.status === 'active' ? 'Published' : document.status}
                     </span>
                   </p>
                 </div>
@@ -440,15 +509,21 @@ export default function DocumentDetailPage() {
       )}
 
       {activeTab === 'versions' && (
-        <VersionsSection documentId={Number(id)} isEditor={isEditor} />
+        <Suspense fallback={<div className="surface-card rounded-2xl p-6">Loading versions...</div>}>
+          <VersionsSection documentId={Number(id)} isEditor={isEditor} />
+        </Suspense>
       )}
 
       {activeTab === 'attachments' && (
-        <AttachmentsSection documentId={Number(id)} isEditor={isEditor} />
+        <Suspense fallback={<div className="surface-card rounded-2xl p-6">Loading attachments...</div>}>
+          <AttachmentsSection documentId={Number(id)} isEditor={isEditor} />
+        </Suspense>
       )}
 
       {activeTab === 'comments' && (
-        <CommentsSection documentId={Number(id)} pendingAnchor={pendingAnchor} onClearAnchor={() => setPendingAnchor(null)} />
+        <Suspense fallback={<div className="surface-card rounded-2xl p-6">Loading comments...</div>}>
+          <CommentsSection documentId={Number(id)} pendingAnchor={pendingAnchor} onClearAnchor={() => setPendingAnchor(null)} />
+        </Suspense>
       )}
 
       {/* Submit for Review Modal */}
@@ -499,6 +574,7 @@ export default function DocumentDetailPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -510,7 +586,7 @@ function EditForm({
   isLoading,
   canEditVisibility,
 }: {
-  document: { title: string; description?: string | null; status: DocumentStatus; visibility: DocumentVisibility; category?: string | null; tags?: string | null }
+  document: { title: string; description?: string | null; status: DocumentStatus; visibility: DocumentVisibility; category?: string | null; release_branch?: string | null; tags?: string | null }
   onSave: (data: DocumentUpdate) => void
   onCancel: () => void
   isLoading: boolean
@@ -522,6 +598,7 @@ function EditForm({
     status: document.status as DocumentStatus,
     visibility: document.visibility as DocumentVisibility,
     category: document.category || '',
+    release_branch: document.release_branch || '',
     tags: document.tags || '',
   })
 
@@ -562,7 +639,7 @@ function EditForm({
             className="select-field"
           >
             <option value="draft">Draft</option>
-            <option value="active">Active</option>
+            <option value="active">Published</option>
             <option value="archived">Archived</option>
           </select>
         </div>
@@ -602,15 +679,26 @@ function EditForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Release Branch</label>
           <input
             type="text"
-            value={formData.tags}
-            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+            value={formData.release_branch || ''}
+            onChange={(e) => setFormData({ ...formData, release_branch: e.target.value })}
             className="input-field"
-            placeholder="Comma-separated tags"
+            placeholder="e.g., R580"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+        <input
+          type="text"
+          value={formData.tags}
+          onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+          className="input-field"
+          placeholder="Comma-separated tags"
+        />
       </div>
 
       <div className="flex justify-end gap-3 pt-4">
@@ -653,6 +741,12 @@ function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; o
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: section.html,
     editorProps: {
@@ -753,6 +847,7 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ show: boolean; x: number; y: number; text: string }>({ show: false, x: 0, y: 0, text: '' })
   const [editingSection, setEditingSection] = useState<TocSection | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
   
   // Inline comment popup state
   const [commentPopup, setCommentPopup] = useState<{ show: boolean; x: number; y: number; text: string; anchorId: string }>({ show: false, x: 0, y: 0, text: '', anchorId: '' })
@@ -884,6 +979,76 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
            att.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
 
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const clearHighlights = (container: HTMLElement) => {
+    container.querySelectorAll('mark.doc-highlight').forEach((mark) => {
+      const parent = mark.parentNode
+      if (!parent) return
+      parent.replaceChild(document.createTextNode(mark.textContent || ''), mark)
+      parent.normalize()
+    })
+  }
+
+  const applyHighlights = useCallback(() => {
+    const container = document.getElementById('document-content-area')
+    if (!container) return
+
+    clearHighlights(container)
+    const term = searchTerm.trim()
+    if (!term) return
+
+    const regex = new RegExp(escapeRegExp(term), 'gi')
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT
+        const parent = (node as Text).parentElement
+        if (!parent) return NodeFilter.FILTER_REJECT
+        if (parent.tagName === 'MARK') return NodeFilter.FILTER_REJECT
+        return NodeFilter.FILTER_ACCEPT
+      },
+    })
+
+    const textNodes: Text[] = []
+    let current = walker.nextNode()
+    while (current) {
+      textNodes.push(current as Text)
+      current = walker.nextNode()
+    }
+
+    textNodes.forEach((node) => {
+      const text = node.nodeValue
+      if (!text) return
+      if (!regex.test(text)) return
+      regex.lastIndex = 0
+
+      const fragment = document.createDocumentFragment()
+      let lastIndex = 0
+      let match
+      while ((match = regex.exec(text)) !== null) {
+        const start = match.index
+        const end = start + match[0].length
+        if (start > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)))
+        }
+        const mark = document.createElement('mark')
+        mark.className = 'doc-highlight'
+        mark.textContent = text.slice(start, end)
+        fragment.appendChild(mark)
+        lastIndex = end
+      }
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)))
+      }
+      node.parentNode?.replaceChild(fragment, node)
+    })
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (!htmlContent) return
+    applyHighlights()
+  }, [applyHighlights, htmlContent])
+
   // Extract headings from HTML content, add IDs, and create editable sections
   const processHtmlWithSections = useCallback((html: string) => {
     const parser = new DOMParser()
@@ -962,15 +1127,28 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
       setError(null)
       
       try {
-        // First, check if there's a published version with content (works for inline documents too)
+        // First, check if there's a version with content (published preferred, else latest draft)
         const versionsResponse = await api.getVersions(documentId)
-        const publishedVersion = versionsResponse.items
-          .filter(v => v.is_published && v.content)
+        const withContent = versionsResponse.items.filter(v => v.content)
+        const publishedVersion = withContent
+          .filter(v => v.is_published)
           .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())[0]
-        
-        if (publishedVersion?.content) {
-          // Use the published version's content - this works for PDF, Word, inline content
-          const processedHtml = processHtmlWithSections(publishedVersion.content)
+        const latestVersion = withContent
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+        let versionToShow = publishedVersion || latestVersion
+
+        if (!versionToShow && versionsResponse.items.length > 0) {
+          // Fallback: fetch latest version detail in case list response omits content
+          const latest = versionsResponse.items[0]
+          const fullVersion = await api.getVersion(documentId, latest.id)
+          if (fullVersion?.content) {
+            versionToShow = fullVersion
+          }
+        }
+
+        if (versionToShow?.content) {
+          // Use the latest available content (published if available)
+          const processedHtml = processHtmlWithSections(versionToShow.content)
           setHtmlContent(processedHtml)
           setPreviewUrl(null)
           setHasInlineContent(true)
@@ -999,10 +1177,11 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
           setHtmlContent(processedHtml)
           setPreviewUrl(null)
         } else if (selectedAttachment.mime_type === 'application/pdf') {
-          // For PDFs without a published version, show a message
-          // The backend should have created a version on upload
-          setHtmlContent('<div class="text-center p-8"><p class="text-slate-500">PDF content is being processed. Please refresh the page.</p></div>')
-          setPreviewUrl(null)
+          // Show PDF preview directly from attachment if no version exists
+          const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
+          const url = URL.createObjectURL(blob)
+          setPreviewUrl(url)
+          setHtmlContent(null)
         } else {
           // For images and other files, create object URL for display
           const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
@@ -1198,14 +1377,23 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
             {/* Document Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Document header bar */}
-              <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-4 py-2 flex items-center justify-between flex-shrink-0">
+              <div className="bg-gradient-to-r from-sky-600 to-sky-700 text-white px-4 py-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
                   </svg>
                   <span className="font-medium truncate">{documentTitle || selectedAttachment?.filename}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search in document"
+                      className="w-44 md:w-56 rounded-lg bg-white/15 text-white placeholder:text-white/70 border border-white/20 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-white/40"
+                    />
+                  </div>
                   {sections.length > 0 && (
                     <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
                       {sections.length} sections

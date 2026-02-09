@@ -85,6 +85,7 @@ export interface Document {
   document_number: string
   description: string | null
   version_label?: string | null
+  release_branch?: string | null
   status: DocumentStatus
   visibility: DocumentVisibility
   category: string | null
@@ -104,6 +105,7 @@ export interface DocumentCreate {
   title: string
   description?: string
   version_label?: string
+  release_branch?: string
   document_number?: string
   parent_id?: number
   status?: DocumentStatus
@@ -116,6 +118,7 @@ export interface DocumentUpdate {
   title?: string
   description?: string
   version_label?: string
+  release_branch?: string
   status?: DocumentStatus
   visibility?: DocumentVisibility
   category?: string

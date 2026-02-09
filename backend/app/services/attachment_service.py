@@ -93,7 +93,12 @@ class AttachmentService:
 
     @staticmethod
     async def upload_attachment(
-        db: Session, document_id: int, file: UploadFile, current_user: User
+        db: Session,
+        document_id: int,
+        file: UploadFile,
+        current_user: User,
+        *,
+        convert_to_html: bool = True,
     ) -> Attachment:
         """Upload a new attachment"""
         # Check document exists
@@ -127,9 +132,33 @@ class AttachmentService:
 
         # Read file content
         content = await file.read()
-        file_size = len(content)
+        attachment = AttachmentService.create_attachment_from_bytes(
+            db=db,
+            document_id=document_id,
+            content=content,
+            original_filename=original_filename,
+            content_type=content_type,
+            current_user=current_user,
+            convert_to_html=convert_to_html,
+        )
+        
+        # Convert document to HTML and create initial version
+        return attachment
 
+    @staticmethod
+    def create_attachment_from_bytes(
+        db: Session,
+        document_id: int,
+        content: bytes,
+        original_filename: str,
+        content_type: str,
+        current_user: User,
+        *,
+        convert_to_html: bool = False,
+    ) -> Attachment:
+        """Create attachment from raw bytes (optional HTML conversion)."""
         # Validate file size
+        file_size = len(content)
         if file_size > AttachmentService.MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -174,40 +203,36 @@ class AttachmentService:
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
-        
-        # Convert document to HTML and create initial version
-        try:
-            from app.utils.document_converter import convert_document_to_html
-            
-            html_content = convert_document_to_html(content, content_type, original_filename)
-            
-            if html_content:
-                # Check if there's already a version for this document
-                existing_version = (
-                    db.query(Version)
-                    .filter(Version.document_id == document_id)
-                    .order_by(Version.version_number.desc())
-                    .first()
-                )
+
+        if convert_to_html:
+            try:
+                from app.utils.document_converter import convert_document_to_html
                 
-                next_version = (existing_version.version_number + 1) if existing_version else 1
+                html_content = convert_document_to_html(content, content_type, original_filename)
                 
-                # Create initial version with converted content
-                version = Version(
-                    document_id=document_id,
-                    version_number=next_version,
-                    content=html_content,
-                    changes_summary=f"Initial content from uploaded file: {original_filename}",
-                    is_published=True,  # Auto-publish initial version
-                    published_at=attachment.uploaded_at,
-                    created_by=current_user.id,
-                )
-                db.add(version)
-                db.commit()
-                logger.info(f"Created initial version {next_version} for document {document_id}")
-        except Exception as e:
-            logger.error(f"Failed to convert document to HTML: {e}")
-            # Don't fail the upload if conversion fails
+                if html_content:
+                    existing_version = (
+                        db.query(Version)
+                        .filter(Version.document_id == document_id)
+                        .order_by(Version.version_number.desc())
+                        .first()
+                    )
+                    next_version = (existing_version.version_number + 1) if existing_version else 1
+                    
+                    version = Version(
+                        document_id=document_id,
+                        version_number=next_version,
+                        content=html_content,
+                        changes_summary=f"Initial content from uploaded file: {original_filename}",
+                        is_published=True,
+                        published_at=attachment.uploaded_at,
+                        created_by=current_user.id,
+                    )
+                    db.add(version)
+                    db.commit()
+                    logger.info(f"Created initial version {next_version} for document {document_id}")
+            except Exception as e:
+                logger.error(f"Failed to convert document to HTML: {e}")
 
         return attachment
 

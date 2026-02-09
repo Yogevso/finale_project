@@ -109,7 +109,7 @@ export default function FeedbackResponseDialog({
           <div className="bg-slate-50 rounded-xl p-4">
             <p className="text-sm text-slate-500 mb-2">Document</p>
             <Link
-              to={`/documents/${feedback.document_id}`}
+              to={`/documents/${feedback.document_id}/fullscreen`}
               target="_blank"
               className="flex items-center gap-2 text-sky-600 hover:text-sky-700"
             >

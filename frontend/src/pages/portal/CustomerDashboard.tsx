@@ -131,7 +131,7 @@ export default function CustomerDashboard() {
               {recentDocs?.items.map((doc) => (
                 <Link
                   key={doc.id}
-                  to={`/portal/documents/${doc.id}`}
+                  to={`/portal/documents/${doc.id}?fullscreen=1`}
                   className="block p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-md transition-all"
                 >
                   <div className="flex items-start">

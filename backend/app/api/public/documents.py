@@ -6,6 +6,7 @@ No authentication is required for these endpoints.
 """
 
 import math
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,6 +22,11 @@ from app.schemas.public import (
     PublicDocumentListResponse,
     PublicDocumentSummary,
     PublicDocumentWithAttachments,
+    PublicPlatformCategoryGroup,
+    PublicPlatformDocument,
+    PublicPlatformGroup,
+    PublicPlatformHistoryResponse,
+    PublicPlatformYearGroup,
     PublicSearchResponse,
     PublicSearchResult,
 )
@@ -85,6 +91,21 @@ def list_public_documents(
             )
         )
 
+    latest_published = (
+        db.query(
+            Version.document_id.label("document_id"),
+            func.max(Version.published_at).label("published_at"),
+            func.max(Version.version_number).label("version_number"),
+        )
+        .filter(Version.is_published.is_(True))
+        .group_by(Version.document_id)
+        .subquery()
+    )
+
+    query = query.outerjoin(
+        latest_published, Document.id == latest_published.c.document_id
+    ).add_columns(latest_published.c.published_at, latest_published.c.version_number)
+
     # Get total count
     total = query.count()
 
@@ -108,8 +129,28 @@ def list_public_documents(
     # Calculate total pages
     total_pages = math.ceil(total / page_size) if total > 0 else 1
 
+    items = []
+    for doc, published_at, version_number in documents:
+        items.append(
+            PublicDocumentSummary(
+                id=doc.id,
+                document_number=doc.document_number,
+                title=doc.title,
+                description=doc.description,
+                category=doc.category,
+                topic=doc.topic,
+                platform=doc.platform,
+                release_branch=doc.release_branch,
+                tags=doc.tags,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+                published_at=published_at,
+                version_number=version_number,
+            )
+        )
+
     return PublicDocumentListResponse(
-        items=[PublicDocumentSummary.model_validate(doc) for doc in documents],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -167,6 +208,7 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
         category=document.category,
         topic=document.topic,
         platform=document.platform,
+        release_branch=document.release_branch,
         tags=document.tags,
         created_at=document.created_at,
         updated_at=document.updated_at,
@@ -188,6 +230,85 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
     )
 
     return response
+
+
+@router.get("/platforms/history", response_model=PublicPlatformHistoryResponse)
+def get_platform_history(db: Session = Depends(get_db)):
+    """
+    Group public documents by platform -> category -> year (from published_at).
+
+    Falls back to updated_at/created_at when published_at is not available.
+    """
+    latest_published = (
+        db.query(
+            Version.document_id.label("document_id"),
+            func.max(Version.published_at).label("published_at"),
+            func.max(Version.version_number).label("version_number"),
+        )
+        .filter(Version.is_published.is_(True))
+        .group_by(Version.document_id)
+        .subquery()
+    )
+
+    rows = (
+        get_public_documents_query(db)
+        .outerjoin(latest_published, Document.id == latest_published.c.document_id)
+        .add_columns(latest_published.c.published_at, latest_published.c.version_number)
+        .all()
+    )
+
+    platform_map: dict[str, dict[str, dict[Optional[int], list[PublicPlatformDocument]]]] = {}
+
+    for doc, published_at, version_number in rows:
+        platform = doc.platform or "Unspecified"
+        category = doc.category or "General"
+        effective_date = published_at or doc.updated_at or doc.created_at
+        year = effective_date.year if effective_date else None
+
+        platform_map.setdefault(platform, {})
+        platform_map[platform].setdefault(category, {})
+        platform_map[platform][category].setdefault(year, [])
+
+        platform_map[platform][category][year].append(
+            PublicPlatformDocument(
+                id=doc.id,
+                document_number=doc.document_number,
+                title=doc.title,
+                category=doc.category,
+        platform=doc.platform,
+        release_branch=doc.release_branch,
+        version_label=doc.version_label,
+                version_number=version_number,
+                published_at=published_at,
+                updated_at=doc.updated_at,
+            )
+        )
+
+    platforms: list[PublicPlatformGroup] = []
+    for platform_name in sorted(platform_map.keys(), key=lambda v: v.lower()):
+        categories: list[PublicPlatformCategoryGroup] = []
+        for category_name in sorted(platform_map[platform_name].keys(), key=lambda v: v.lower()):
+            year_groups: list[PublicPlatformYearGroup] = []
+            year_map = platform_map[platform_name][category_name]
+            for year in sorted(
+                year_map.keys(),
+                key=lambda v: (v is None, v),
+                reverse=True,
+            ):
+                docs = sorted(
+                    year_map[year],
+                    key=lambda d: d.published_at or d.updated_at or datetime.min,
+                    reverse=True,
+                )
+                year_groups.append(PublicPlatformYearGroup(year=year, documents=docs))
+
+            categories.append(
+                PublicPlatformCategoryGroup(category=category_name, years=year_groups)
+            )
+
+        platforms.append(PublicPlatformGroup(platform=platform_name, categories=categories))
+
+    return PublicPlatformHistoryResponse(items=platforms)
 
 
 @router.get("/categories", response_model=PublicCategoriesResponse)

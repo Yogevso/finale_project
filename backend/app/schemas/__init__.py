@@ -105,6 +105,7 @@ class DocumentBase(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
+    release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
 
@@ -128,6 +129,7 @@ class DocumentUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
+    release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
 

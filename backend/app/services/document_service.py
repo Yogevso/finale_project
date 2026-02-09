@@ -3,6 +3,7 @@
 from typing import List, Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -45,9 +46,9 @@ class DocumentService:
         today = datetime.utcnow().strftime("%Y%m%d")
         prefix = f"DOC-{today}"
 
-        # Find the next available sequence for today (tenant-scoped)
+        # Find the next available sequence for today (global, since document_number is globally unique)
         existing = (
-            self._base_query()
+            self.db.query(Document)
             .filter(Document.document_number.like(f"{prefix}-%"))
             .with_entities(Document.document_number)
             .all()
@@ -71,7 +72,8 @@ class DocumentService:
         """Create a new document"""
         # Use provided document number or generate one
         if document_data.document_number:
-            existing = self._base_query().filter(
+            # document_number is globally unique
+            existing = self.db.query(Document).filter(
                 Document.document_number == document_data.document_number
             ).first()
             if existing:
@@ -98,25 +100,41 @@ class DocumentService:
                     status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found"
                 )
 
-        # Create document
-        document = Document(
-            title=document_data.title,
-            document_number=document_number,
-            description=document_data.description,
-            version_label=document_data.version_label,
-            status=document_data.status,
-            category=document_data.category,
-            topic=document_data.topic,
-            platform=document_data.platform,
-            tags=document_data.tags,
-            created_by=user.id,
-            tenant_id=tenant_id,
-            parent_id=parent_id,
-        )
+        # Create document with retry in case of document_number collision
+        attempts = 0
+        while True:
+            attempts += 1
+            document = Document(
+                title=document_data.title,
+                document_number=document_number,
+                description=document_data.description,
+                version_label=document_data.version_label,
+                status=document_data.status,
+                category=document_data.category,
+                topic=document_data.topic,
+                platform=document_data.platform,
+                release_branch=document_data.release_branch,
+                tags=document_data.tags,
+                created_by=user.id,
+                tenant_id=tenant_id,
+                parent_id=parent_id,
+            )
 
-        self.db.add(document)
-        self.db.commit()
-        self.db.refresh(document)
+            self.db.add(document)
+            try:
+                self.db.commit()
+            except IntegrityError as exc:
+                self.db.rollback()
+                if (
+                    "documents.document_number" in str(exc)
+                    or "UNIQUE constraint failed: documents.document_number" in str(exc)
+                ) and not document_data.document_number and attempts < 5:
+                    document_number = self.generate_document_number()
+                    continue
+                raise
+            else:
+                self.db.refresh(document)
+                break
 
         # Create initial version
         version = Version(
@@ -233,6 +251,9 @@ class DocumentService:
 
         if document_data.platform is not None:
             document.platform = document_data.platform
+
+        if document_data.release_branch is not None:
+            document.release_branch = document_data.release_branch
 
         if document_data.tags is not None:
             document.tags = document_data.tags

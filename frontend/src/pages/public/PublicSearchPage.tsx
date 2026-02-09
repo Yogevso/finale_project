@@ -65,7 +65,7 @@ export default function PublicSearchPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
+      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
         <div className="max-w-6xl mx-auto px-6 py-12">
           <Link
             to="/docs"
@@ -156,7 +156,7 @@ export default function PublicSearchPage() {
               {results.items.map((item) => (
                 <Link
                   key={item.id}
-                  to={`/doc/${item.id}`}
+                  to={`/doc/${item.id}?fullscreen=1`}
                   className="block surface-card-hover rounded-2xl p-5 group"
                 >
                   <div className="flex items-start gap-4">

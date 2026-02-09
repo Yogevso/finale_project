@@ -6,7 +6,6 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import DocumentsPage from './pages/DocumentsPage'
 import DocumentDetailPage from './pages/DocumentDetailPage'
-import DocumentFullscreenPage from './pages/DocumentFullscreenPage'
 import UsersPage from './pages/UsersPage'
 import CompaniesPage from './pages/CompaniesPage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
@@ -19,6 +18,7 @@ import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
 import PublicLayout from './layouts/PublicLayout'
 import PublicHomePage from './pages/public/PublicHomePage'
 import PublicDocumentsPage from './pages/public/PublicDocumentsPage'
+import PublicPlatformsPage from './pages/public/PublicPlatformsPage'
 import PublicDocumentPage from './pages/public/PublicDocumentPage'
 import PublicSearchPage from './pages/public/PublicSearchPage'
 import PublicTopicsPage from './pages/public/PublicTopicsPage'
@@ -84,6 +84,7 @@ function App() {
         <Route element={<PublicLayout />}>
           <Route path="/" element={<RoleBasedRedirect />} />
           <Route path="/docs" element={<PublicDocumentsPage />} />
+          <Route path="/platforms" element={<PublicPlatformsPage />} />
           <Route path="/browse" element={<Navigate to="/docs" replace />} />
           <Route path="/topics" element={<PublicTopicsPage />} />
           <Route path="/topics/:slug" element={<PublicTopicDetailPage />} />
@@ -127,12 +128,12 @@ function App() {
           <Route path=":id" element={<DocumentDetailPage />} />
         </Route>
 
-        {/* Fullscreen Document View - no layout wrapper */}
+        {/* Fullscreen Document View - use DocumentDetailPage */}
         <Route
           path="/documents/:id/fullscreen"
           element={
             <InternalGuard>
-              <DocumentFullscreenPage />
+              <DocumentDetailPage />
             </InternalGuard>
           }
         />

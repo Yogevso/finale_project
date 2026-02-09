@@ -196,7 +196,7 @@ export default function ReviewsPage() {
                       <FileText className="w-5 h-5 text-slate-400" />
                       <div>
                         <Link
-                          to={`/documents/${review.document_id}`}
+                          to={`/documents/${review.document_id}/fullscreen`}
                           className="text-sky-600 hover:text-sky-700 font-medium"
                         >
                           {review.document?.title || `Document #${review.document_id}`}
@@ -239,7 +239,7 @@ export default function ReviewsPage() {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
-                        to={`/documents/${review.document_id}`}
+                        to={`/documents/${review.document_id}/fullscreen`}
                         className="text-slate-600 hover:text-slate-800 text-sm"
                       >
                         View

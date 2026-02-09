@@ -173,7 +173,7 @@ export default function CustomerDocumentsPage() {
           {documents?.items.map((doc) => (
             <Link
               key={doc.id}
-              to={`/portal/documents/${doc.id}`}
+              to={`/portal/documents/${doc.id}?fullscreen=1`}
               className="surface-card-hover rounded-2xl p-5"
             >
               <div className="flex items-start">
@@ -204,7 +204,7 @@ export default function CustomerDocumentsPage() {
           {documents?.items.map((doc) => (
             <Link
               key={doc.id}
-              to={`/portal/documents/${doc.id}`}
+              to={`/portal/documents/${doc.id}?fullscreen=1`}
               className="block p-4 hover:bg-slate-50"
             >
               <div className="flex items-center">

@@ -71,6 +71,20 @@
   .pill {
     @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600;
   }
+
+  .reading-mode .prose,
+  .reading-mode .prose-lg,
+  .reading-mode .document-preview-content {
+    font-size: 1.05rem;
+    line-height: 1.85;
+  }
+
+  mark.doc-highlight {
+    background: #fde68a;
+    color: inherit;
+    padding: 0 0.1em;
+    border-radius: 0.2em;
+  }
 }
 
 /* ============================================
@@ -140,6 +154,43 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 1.17em;
   font-weight: bold;
   margin: 0.83em 0;
+}
+
+/* TipTap Table Styles */
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.ProseMirror th {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+
+.prose th {
+  background: #f8fafc;
+  font-weight: 600;
 }
 
 .ProseMirror ul {
@@ -324,4 +375,3 @@ h1, h2, h3, h4, h5, h6 {
   height: auto;
   margin: 1em 0;
 }
-

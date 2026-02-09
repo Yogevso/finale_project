@@ -10,6 +10,10 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
 
 interface TocItem {
   id: string
@@ -38,6 +42,12 @@ function SectionEditPopup({ section, onClose, onSave }: SectionEditPopupProps) {
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: section.html,
     editorProps: {
@@ -293,62 +303,64 @@ export default function DocumentFullscreenPage() {
   // Load document content
   useEffect(() => {
     const loadContent = async () => {
-      if (!attachments.length) {
-        setIsLoading(false)
-        return
-      }
-
       try {
-        // First, check if there's a published version with content (works for any document type)
+        // First, check if there's a version with content (published preferred)
         const versionsResponse = await api.getVersions(Number(id))
-        const publishedVersion = versionsResponse.items
-          .filter(v => v.is_published && v.content)
+        const withContent = versionsResponse.items.filter(v => v.content)
+        const publishedVersion = withContent
+          .filter(v => v.is_published)
           .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())[0]
-        
-        if (publishedVersion?.content) {
-          // Use the published version's content
-          const sections = processHtmlWithSections(publishedVersion.content)
+        let versionToShow = publishedVersion || withContent[0]
+
+        if (!versionToShow && versionsResponse.items.length > 0) {
+          const fullVersion = await api.getVersion(Number(id), versionsResponse.items[0].id)
+          if (fullVersion?.content) {
+            versionToShow = fullVersion
+          }
+        }
+
+        if (versionToShow?.content) {
+          const sections = processHtmlWithSections(versionToShow.content)
           setTableOfContents(sections)
-          setHtmlContent(publishedVersion.content)
-          
-          // Add IDs to headings in the content
+
           const parser = new DOMParser()
-          const doc = parser.parseFromString(publishedVersion.content, 'text/html')
+          const doc = parser.parseFromString(versionToShow.content, 'text/html')
           const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
           headings.forEach((heading, index) => {
             heading.setAttribute('id', `heading-${index}`)
             heading.classList.add('scroll-mt-4')
           })
           setHtmlContent(doc.body.innerHTML)
-        } else {
-          // Fall back to converting Word attachment if available
-          const wordAttachment = attachments.find(
-            (a: Attachment) => a.mime_type === 'application/msword' || 
-                 a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          )
+          setIsLoading(false)
+          return
+        }
+
+        // Fall back to converting Word attachment if available
+        const wordAttachment = attachments.find(
+          (a: Attachment) => a.mime_type === 'application/msword' || 
+               a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+        if (wordAttachment) {
+          const blob = await api.getAttachmentBlob(Number(id), wordAttachment.id)
+          const arrayBuffer = await blob.arrayBuffer()
+          const result = await mammoth.convertToHtml({ arrayBuffer })
           
-          if (wordAttachment) {
-            const blob = await api.getAttachmentBlob(Number(id), wordAttachment.id)
-            const arrayBuffer = await blob.arrayBuffer()
-            const result = await mammoth.convertToHtml({ arrayBuffer })
-            
-            const sections = processHtmlWithSections(result.value)
-            setTableOfContents(sections)
-            setHtmlContent(result.value)
-            
-            // Add IDs to headings in the content
-            const parser = new DOMParser()
-            const doc = parser.parseFromString(result.value, 'text/html')
-            const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
-            headings.forEach((heading, index) => {
-              heading.setAttribute('id', `heading-${index}`)
-              heading.classList.add('scroll-mt-4')
-            })
-            setHtmlContent(doc.body.innerHTML)
-          } else {
-            // For PDF or other types without a version, show a message
-            setHtmlContent('<div class="text-center p-8"><p class="text-slate-500">Document content is being processed. Please refresh the page.</p></div>')
-          }
+          const sections = processHtmlWithSections(result.value)
+          setTableOfContents(sections)
+          
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(result.value, 'text/html')
+          const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
+          headings.forEach((heading, index) => {
+            heading.setAttribute('id', `heading-${index}`)
+            heading.classList.add('scroll-mt-4')
+          })
+          setHtmlContent(doc.body.innerHTML)
+        } else if (attachments.length) {
+          setHtmlContent('<div class="text-center p-8"><p class="text-slate-500">Document content is being processed. Please refresh the page.</p></div>')
+        } else {
+          setHtmlContent('<div class="text-center p-8"><p class="text-slate-500">No content yet.</p></div>')
         }
       } catch (e) {
         console.error('Failed to load document:', e)
@@ -627,9 +639,9 @@ export default function DocumentFullscreenPage() {
           onMouseUp={handleMouseUp}
         >
           <div 
-            className="max-w-4xl mx-auto p-8 prose prose-lg"
+            className="w-full max-w-none px-6 md:px-10 lg:px-16 xl:px-24 py-10 prose prose-lg"
             style={{
-              fontFamily: 'Georgia, "Times New Roman", serif',
+              fontFamily: 'Georgia, \"Times New Roman\", serif',
               lineHeight: '1.8',
             }}
             dangerouslySetInnerHTML={{ __html: htmlContent || '' }}

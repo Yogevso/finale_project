@@ -31,10 +31,12 @@ from app.schemas import (
     DocumentResponse,
     DocumentUpdate,
     MessageResponse,
+    AttachmentResponse,
     TenantSummary,
 )
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
+from app.utils.html_to_docx import html_to_docx_bytes
 
 router = APIRouter()
 
@@ -43,6 +45,13 @@ class CompanyAssignRequest(BaseModel):
     """Request body for assigning companies to a document"""
 
     company_ids: List[int]
+
+
+class GenerateWordRequest(BaseModel):
+    """Request body for generating a Word file from HTML content."""
+
+    html_content: str
+    filename: Optional[str] = None
 
 
 @router.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -61,6 +70,40 @@ def create_document(
     """
     service = DocumentService(db, tenant_ctx)
     return service.create_document(document_data, current_user)
+
+
+@router.post(
+    "/documents/{document_id}/generate-word",
+    response_model=AttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_word_attachment(
+    document_id: int,
+    payload: GenerateWordRequest,
+    current_user: User = Depends(require_editor),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate a Word file from HTML content and attach it to the document.
+    """
+    service = DocumentService(db, tenant_ctx)
+    document = service.get_document(document_id)
+    service._verify_access(document)
+
+    docx_bytes = html_to_docx_bytes(payload.html_content)
+    safe_name = payload.filename or f"{document.title}.docx"
+
+    attachment = AttachmentService.create_attachment_from_bytes(
+        db=db,
+        document_id=document_id,
+        content=docx_bytes,
+        original_filename=safe_name,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        current_user=current_user,
+        convert_to_html=False,
+    )
+    return attachment
 
 
 @router.get("/documents", response_model=DocumentListResponse)
@@ -175,6 +218,7 @@ async def upload_document(
     parent_id: Optional[int] = Form(None),
     topic: Optional[str] = Form(None),
     platform: Optional[str] = Form(None),
+    release_branch: Optional[str] = Form(None),
     release_notes: Optional[UploadFile] = File(None),
     content_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_editor),
@@ -196,16 +240,17 @@ async def upload_document(
     # Create the document first
     service = DocumentService(db, tenant_ctx)
     visibility_value = (
-        visibility if visibility in ["public", "internal", "company"] else "internal"
+        visibility if visibility in ["public", "internal", "company"] else "public"
     )
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",
-        status="draft",
+        status="active",
         visibility=visibility_value,
         category=category or "Uploaded",
         topic=topic,
         platform=platform,
+        release_branch=release_branch,
         tags=tags or "",
         document_number=document_number,
         version_label=version_label,

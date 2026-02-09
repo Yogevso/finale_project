@@ -146,7 +146,7 @@ export default function MyFeedbackPage() {
                         <span className="text-sm text-slate-500">{type.label}</span>
                         <span className="text-slate-300">•</span>
                         <Link
-                          to={`/portal/documents/${item.document_id}`}
+                          to={`/portal/documents/${item.document_id}?fullscreen=1`}
                           className="text-sm text-sky-600 hover:text-sky-500 truncate"
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -217,7 +217,7 @@ export default function MyFeedbackPage() {
                 <div>
                   <label className="text-sm font-medium text-slate-500">Document</label>
                   <Link
-                    to={`/portal/documents/${selectedFeedback.document_id}`}
+                    to={`/portal/documents/${selectedFeedback.document_id}?fullscreen=1`}
                     className="mt-1 flex items-center text-sky-600 hover:text-sky-500"
                     onClick={() => setSelectedFeedback(null)}
                   >

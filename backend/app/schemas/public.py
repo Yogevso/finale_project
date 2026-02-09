@@ -16,9 +16,12 @@ class PublicDocumentSummary(BaseModel):
     category: Optional[str] = None
     topic: Optional[str] = None
     platform: Optional[str] = None
+    release_branch: Optional[str] = None
     tags: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    version_number: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -34,6 +37,7 @@ class PublicDocumentDetail(BaseModel):
     category: Optional[str] = None
     topic: Optional[str] = None
     platform: Optional[str] = None
+    release_branch: Optional[str] = None
     tags: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -66,6 +70,48 @@ class PublicDocumentWithAttachments(PublicDocumentDetail):
     """Document with attachment list"""
 
     attachments: List[PublicAttachmentInfo] = []
+
+
+class PublicPlatformDocument(BaseModel):
+    """Document entry for platform history grouping"""
+
+    id: int
+    document_number: str
+    title: str
+    category: Optional[str] = None
+    platform: Optional[str] = None
+    release_branch: Optional[str] = None
+    version_label: Optional[str] = None
+    version_number: Optional[int] = None
+    published_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class PublicPlatformYearGroup(BaseModel):
+    """Year grouping for platform history"""
+
+    year: Optional[int] = None
+    documents: List[PublicPlatformDocument]
+
+
+class PublicPlatformCategoryGroup(BaseModel):
+    """Category grouping for platform history"""
+
+    category: str
+    years: List[PublicPlatformYearGroup]
+
+
+class PublicPlatformGroup(BaseModel):
+    """Platform grouping for platform history"""
+
+    platform: str
+    categories: List[PublicPlatformCategoryGroup]
+
+
+class PublicPlatformHistoryResponse(BaseModel):
+    """Platform history response"""
+
+    items: List[PublicPlatformGroup]
 
 
 class PublicCategoryCount(BaseModel):

@@ -204,7 +204,7 @@ export default function ViewerHomePage() {
             {documents.map((doc: any) => (
               <Link
                 key={doc.id}
-                to={`/viewer/documents/${doc.id}`}
+                to={`/viewer/documents/${doc.id}?fullscreen=1`}
                 className="surface-card-hover rounded-2xl p-6 group"
               >
                 <div className="flex items-start justify-between mb-3">

@@ -283,7 +283,7 @@ export default function FeedbackPage() {
                   </td>
                   <td className="px-6 py-4">
                     <Link
-                      to={`/documents/${feedback.document_id}`}
+                      to={`/documents/${feedback.document_id}/fullscreen`}
                       className="flex items-center gap-1 text-sky-600 hover:text-sky-700 text-sm"
                     >
                       <FileText className="w-3 h-3" />

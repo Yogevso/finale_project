@@ -14,6 +14,7 @@ Run this AFTER init_db.py:
 """
 import sys
 import os
+from datetime import datetime
 
 # Ensure the app module is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -275,6 +276,7 @@ def create_documents(db, tenants, users):
             "category": "Policy",
             "topic": "governance",
             "platform": "Core Platform",
+            "release_branch": "R580",
             "tags": "policy,governance,compliance",
             "visibility": DocumentVisibility.PUBLIC,
             "content": "<h1>Public Policy</h1><p>This document is publicly accessible to everyone.</p>"
@@ -286,6 +288,7 @@ def create_documents(db, tenants, users):
             "category": "Guides",
             "topic": "platform",
             "platform": "Core Platform",
+            "release_branch": "R580",
             "tags": "guide,getting-started,docs",
             "visibility": DocumentVisibility.PUBLIC,
             "content": "<h1>User Guide</h1><p>Welcome to our comprehensive user guide.</p>"
@@ -298,6 +301,7 @@ def create_documents(db, tenants, users):
             "category": "Procedures",
             "topic": "operations",
             "platform": "Internal Ops",
+            "release_branch": "R520",
             "tags": "internal,procedures,operations",
             "visibility": DocumentVisibility.INTERNAL,
             "content": "<h1>Internal Procedures</h1><p>This document contains internal procedures.</p>"
@@ -309,6 +313,7 @@ def create_documents(db, tenants, users):
             "category": "Training",
             "topic": "platform",
             "platform": "Internal Ops",
+            "release_branch": "R520",
             "tags": "training,internal,enablement",
             "visibility": DocumentVisibility.INTERNAL,
             "content": "<h1>Training</h1><p>Training content for internal staff members.</p>"
@@ -321,6 +326,7 @@ def create_documents(db, tenants, users):
             "category": "Contracts",
             "topic": "governance",
             "platform": "Customer Portal",
+            "release_branch": "R510",
             "tags": "contract,customer,legal",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Company A Contract</h1><p>Confidential contract for Company A.</p>",
@@ -333,6 +339,7 @@ def create_documents(db, tenants, users):
             "category": "Technical",
             "topic": "platform",
             "platform": "Customer Portal",
+            "release_branch": "R510",
             "tags": "specs,technical,customer",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Specifications</h1><p>Technical specifications for Company A.</p>",
@@ -345,6 +352,7 @@ def create_documents(db, tenants, users):
             "category": "Contracts",
             "topic": "governance",
             "platform": "Customer Portal",
+            "release_branch": "R510",
             "tags": "agreement,customer,legal",
             "visibility": DocumentVisibility.COMPANY,
             "content": "<h1>Company B Agreement</h1><p>Confidential agreement for Company B.</p>",
@@ -353,39 +361,37 @@ def create_documents(db, tenants, users):
     ]
 
     extra_public_docs = [
-        ("Platform Integration Guide", "PUB-2024-010", "Core integration patterns and API baselines.", "Platform"),
-        ("Secure Boot Troubleshooting", "PUB-2024-011", "Common boot chain issues and remediation steps.", "Security"),
-        ("SDK Extension Modules", "PUB-2024-012", "Extend the SDK with modular components and hooks.", "SDK"),
-        ("Release Notes: Q1", "PUB-2024-013", "Quarterly release summary and upgrade notes.", "Release Notes"),
-        ("Release Notes: Q2", "PUB-2024-014", "Quarterly release summary and upgrade notes.", "Release Notes"),
-        ("Release Notes: Q3", "PUB-2024-015", "Quarterly release summary and upgrade notes.", "Release Notes"),
-        ("Release Notes: Q4", "PUB-2024-016", "Quarterly release summary and upgrade notes.", "Release Notes"),
-        ("Performance Tuning Handbook", "PUB-2024-017", "Optimize throughput and latency across services.", "Performance"),
-        ("Observability Quickstart", "PUB-2024-018", "Set up logs, traces, and metrics in minutes.", "Operations"),
-        ("Deployment Playbook", "PUB-2024-019", "Recommended deployment workflows and rollback plans.", "Operations"),
-        ("Data Governance Basics", "PUB-2024-020", "Data classification and retention best practices.", "Governance"),
-        ("API Authentication Guide", "PUB-2024-021", "OAuth, JWT, and service-to-service auth patterns.", "Security"),
-        ("Role-Based Access Guide", "PUB-2024-022", "Designing policies and least-privilege access.", "Security"),
-        ("Document Lifecycle Overview", "PUB-2024-023", "Draft to publish workflows and ownership.", "Process"),
-        ("Migration Checklist", "PUB-2024-024", "Step-by-step migration planning template.", "Process"),
-        ("Incident Response Runbook", "PUB-2024-025", "Escalation, comms, and recovery procedures.", "Operations"),
-        ("API Rate Limits", "PUB-2024-026", "Quota policies and retry guidance.", "API"),
-        ("Client SDK Quickstart", "PUB-2024-027", "Install, configure, and ship your first build.", "SDK"),
-        ("UI Design System", "PUB-2024-028", "Typography, spacing, and component guidelines.", "Design"),
-        ("Search Relevance Tuning", "PUB-2024-029", "Improve results ranking and query handling.", "Search"),
-        ("Storage & Retention", "PUB-2024-030", "Retention tiers and archival policy details.", "Storage"),
-        ("Compliance Mapping", "PUB-2024-031", "SOC2, ISO, and internal control mapping.", "Compliance"),
-        ("Accessibility Standards", "PUB-2024-032", "WCAG alignment and UI accessibility checks.", "Design"),
-        ("Content Authoring Guide", "PUB-2024-033", "Best practices for clarity and consistency.", "Content"),
-        ("Collaboration Features", "PUB-2024-034", "Real-time editing and review workflow.", "Collaboration"),
-        ("Customer Enablement Kit", "PUB-2024-035", "Onboarding materials and enablement assets.", "Enablement"),
-        ("Data Export Guide", "PUB-2024-036", "Export formats and compliance notes.", "Data"),
-        ("API Reference Index", "PUB-2024-037", "Quick links to API surface areas.", "API"),
-        ("Troubleshooting Matrix", "PUB-2024-038", "Known issues and resolution paths.", "Support"),
-        ("Support & Access", "PUB-2024-039", "How to request access or submit tickets.", "Support"),
+        ("vGPU 19 Release Overview", "PUB-2025-010", "Highlights for vGPU 19 LTS branch.", "Release Documentation", "vGPU 19", "R580"),
+        ("vGPU 18 Production Notes", "PUB-2025-011", "Production branch capabilities and fixes.", "Release Documentation", "vGPU 18", "R570"),
+        ("vGPU 16 LTS Guidance", "PUB-2025-012", "Long-term support guidance for vGPU 16.", "Release Documentation", "vGPU 16", "R535"),
+        ("Driver Versions Matrix", "PUB-2025-013", "Driver compatibility across branches.", "Driver Versions", "vGPU 19", "R580"),
+        ("Branch Compatibility Sheet", "PUB-2025-014", "Compatibility and lifecycle notes.", "Driver Versions", "vGPU 18", "R570"),
+        ("Release Notes: Q1", "PUB-2025-015", "Quarterly release summary and upgrade notes.", "Release Notes", "vGPU 19", "R580"),
+        ("Release Notes: Q2", "PUB-2025-016", "Quarterly release summary and upgrade notes.", "Release Notes", "vGPU 19", "R580"),
+        ("Release Notes: Q3", "PUB-2025-017", "Quarterly release summary and upgrade notes.", "Release Notes", "vGPU 18", "R570"),
+        ("Release Notes: Q4", "PUB-2025-018", "Quarterly release summary and upgrade notes.", "Release Notes", "vGPU 16", "R535"),
+        ("Platform Integration Guide", "PUB-2025-019", "Core integration patterns and API baselines.", "Platform", "Core Platform", "R580"),
+        ("Secure Boot Troubleshooting", "PUB-2025-020", "Common boot chain issues and remediation steps.", "Security", "Core Platform", "R580"),
+        ("SDK Extension Modules", "PUB-2025-021", "Extend the SDK with modular components and hooks.", "SDK", "Developer Portal", "R570"),
+        ("Performance Tuning Handbook", "PUB-2025-022", "Optimize throughput and latency across services.", "Performance", "Developer Portal", "R570"),
+        ("Observability Quickstart", "PUB-2025-023", "Set up logs, traces, and metrics in minutes.", "Operations", "Developer Portal", "R570"),
+        ("Deployment Playbook", "PUB-2025-024", "Recommended deployment workflows and rollback plans.", "Operations", "Developer Portal", "R570"),
+        ("Data Governance Basics", "PUB-2025-025", "Data classification and retention best practices.", "Governance", "Developer Portal", "R535"),
+        ("API Authentication Guide", "PUB-2025-026", "OAuth, JWT, and service-to-service auth patterns.", "Security", "Developer Portal", "R535"),
+        ("Role-Based Access Guide", "PUB-2025-027", "Designing policies and least-privilege access.", "Security", "Developer Portal", "R535"),
+        ("Incident Response Runbook", "PUB-2025-028", "Escalation, comms, and recovery procedures.", "Operations", "Developer Portal", "R535"),
+        ("Client SDK Quickstart", "PUB-2025-029", "Install, configure, and ship your first build.", "SDK", "Developer Portal", "R535"),
+        ("UI Design System", "PUB-2025-030", "Typography, spacing, and component guidelines.", "Design", "Developer Portal", "R535"),
+        ("Accessibility Standards", "PUB-2025-031", "WCAG alignment and UI accessibility checks.", "Design", "Developer Portal", "R535"),
+        ("Content Authoring Guide", "PUB-2025-032", "Best practices for clarity and consistency.", "Content", "Developer Portal", "R535"),
+        ("Collaboration Features", "PUB-2025-033", "Real-time editing and review workflow.", "Collaboration", "Developer Portal", "R535"),
+        ("Customer Enablement Kit", "PUB-2025-034", "Onboarding materials and enablement assets.", "Enablement", "Developer Portal", "R535"),
+        ("API Reference Index", "PUB-2025-035", "Quick links to API surface areas.", "API", "Developer Portal", "R535"),
+        ("Troubleshooting Matrix", "PUB-2025-036", "Known issues and resolution paths.", "Support", "Developer Portal", "R535"),
+        ("Support & Access", "PUB-2025-037", "How to request access or submit tickets.", "Support", "Developer Portal", "R535"),
     ]
 
-    for title, doc_num, description, category in extra_public_docs:
+    for title, doc_num, description, category, platform_name, release_branch in extra_public_docs:
         topic = "platform"
         if category in ("Security",):
             topic = "security"
@@ -397,6 +403,8 @@ def create_documents(db, tenants, users):
             topic = "governance"
         elif category in ("Design", "Content"):
             topic = "design-systems"
+        elif category in ("Release Documentation", "Release Notes", "Driver Versions"):
+            topic = "release-management"
 
         documents_config.append(
             {
@@ -405,7 +413,8 @@ def create_documents(db, tenants, users):
                 "description": description,
                 "category": category,
                 "topic": topic,
-                "platform": "Developer Portal",
+                "platform": platform_name,
+                "release_branch": release_branch,
                 "tags": f"{category.lower()},docs,public",
                 "visibility": DocumentVisibility.PUBLIC,
                 "content": f"<h1>{title}</h1><p>{description}</p>",
@@ -425,6 +434,7 @@ def create_documents(db, tenants, users):
                 category=doc_data["category"],
                 topic=doc_data.get("topic"),
                 platform=doc_data.get("platform"),
+                release_branch=doc_data.get("release_branch"),
                 tags=doc_data.get("tags"),
                 status=DocumentStatus.ACTIVE,
                 visibility=doc_data["visibility"],
@@ -441,7 +451,8 @@ def create_documents(db, tenants, users):
                 content=doc_data["content"],
                 changes_summary="Initial version",
                 created_by=admin.id,
-                is_published=True
+                is_published=True,
+                published_at=datetime.utcnow(),
             )
             db.add(version)
             
@@ -460,6 +471,9 @@ def create_documents(db, tenants, users):
                 updated = True
             if doc_data.get("platform") and existing.platform != doc_data.get("platform"):
                 existing.platform = doc_data["platform"]
+                updated = True
+            if doc_data.get("release_branch") and existing.release_branch != doc_data.get("release_branch"):
+                existing.release_branch = doc_data["release_branch"]
                 updated = True
             if doc_data.get("tags") and existing.tags != doc_data.get("tags"):
                 existing.tags = doc_data["tags"]

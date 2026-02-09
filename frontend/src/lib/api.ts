@@ -288,10 +288,19 @@ class ApiClient {
     return data
   }
 
+  async generateWordAttachment(documentId: number, htmlContent: string, filename?: string) {
+    const { data } = await this.client.post(`/documents/${documentId}/generate-word`, {
+      html_content: htmlContent,
+      filename,
+    })
+    return data
+  }
+
   async uploadDocument(file: File, metadata?: {
     title?: string
     description?: string
     category?: string
+    release_branch?: string
     tags?: string
     document_number?: string
     version_label?: string
@@ -307,6 +316,7 @@ class ApiClient {
     if (metadata?.title) formData.append('title', metadata.title)
     if (metadata?.description) formData.append('description', metadata.description)
     if (metadata?.category) formData.append('category', metadata.category)
+    if (metadata?.release_branch) formData.append('release_branch', metadata.release_branch)
     if (metadata?.tags) formData.append('tags', metadata.tags)
     if (metadata?.document_number) formData.append('document_number', metadata.document_number)
     if (metadata?.version_label) formData.append('version_label', metadata.version_label)

@@ -2,7 +2,7 @@
  * CustomerDocumentPage - Document detail view for customer portal
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { portalApi } from '../../lib/portalApi'
 import { api } from '@/lib/api'
@@ -18,6 +18,8 @@ import {
   Clock,
   CheckCircle,
 } from 'lucide-react'
+import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import NotFoundState from '@/components/NotFoundState'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -35,12 +37,16 @@ function formatDate(dateStr: string): string {
 
 export default function CustomerDocumentPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
   const { isCustomer } = useAuth()
   const contentRef = useRef<HTMLDivElement | null>(null)
   const lastSavedProgress = useRef<number>(0)
   const rafId = useRef<number | null>(null)
+  const isFullscreen = location.search.includes('fullscreen=1')
 
   // Fetch document
   const { data: document, isLoading, error } = useQuery({
@@ -129,6 +135,11 @@ export default function CustomerDocumentPage() {
     }
   }, [computeAndSaveProgress, id, isCustomer])
 
+  const applyWidth = (value: ReadingWidth) => {
+    setContentWidth(value)
+    setReadingWidth(value)
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -139,33 +150,79 @@ export default function CustomerDocumentPage() {
 
   if (error || !document) {
     return (
-      <div className="text-center py-12 surface-card rounded-2xl">
-        <FileText className="h-16 w-16 mx-auto text-slate-300" />
-        <h3 className="mt-4 text-lg font-display font-medium text-slate-900">Document not found</h3>
-        <p className="mt-2 text-slate-500">
-          This document may not exist or you don't have access to view it.
-        </p>
-        <Link
-          to="/portal/documents"
-          className="mt-4 inline-flex items-center text-sky-600 hover:text-sky-500"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Documents
-        </Link>
+      <div className="py-12">
+        <NotFoundState
+          title="Document Not Found"
+          description="This document may not exist or you don't have access to view it."
+          icon={<FileText className="h-12 w-12 text-slate-300" />}
+          action={
+            <Link
+              to="/portal/documents"
+              className="inline-flex items-center text-sky-600 hover:text-sky-500"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Documents
+            </Link>
+          }
+        />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Back button */}
-      <Link
-        to="/portal/documents"
-        className="inline-flex items-center text-slate-600 hover:text-slate-900"
-      >
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Documents
-      </Link>
+    <div className={`${isFullscreen ? 'min-h-screen bg-white py-6' : ''}`}>
+      {isFullscreen && (
+        <div className="flex items-center justify-between bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white rounded-2xl px-4 py-3 mx-6 md:mx-10 lg:mx-16 gap-4">
+          <button
+            onClick={() => navigate(`/portal/documents/${id}`)}
+            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+          >
+            Exit Fullscreen
+          </button>
+          <div className="flex-1 text-center font-display font-semibold truncate">{document.title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => applyWidth('reading')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'reading'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Reading width
+            </button>
+            <button
+              onClick={() => applyWidth('fluid')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'fluid'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Full width
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`space-y-6 ${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'max-w-5xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : ''}`}>
+        <div className="flex items-center justify-between">
+          <Link
+            to="/portal/documents"
+            className="inline-flex items-center text-slate-600 hover:text-slate-900"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Documents
+          </Link>
+          {!isFullscreen && (
+            <button
+              onClick={() => navigate(`/portal/documents/${id}?fullscreen=1`)}
+              className="btn-ghost"
+            >
+              Fullscreen
+            </button>
+          )}
+        </div>
 
       {/* Document header */}
       <div className="surface-card rounded-2xl">
@@ -298,6 +355,7 @@ export default function CustomerDocumentPage() {
             />
           )}
         </div>
+      </div>
       </div>
     </div>
   )

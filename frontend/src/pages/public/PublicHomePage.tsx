@@ -36,7 +36,7 @@ export default function PublicHomePage() {
   return (
     <div className="bg-slate-50">
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
+      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
         <div className="max-w-7xl mx-auto px-6 py-16">
           <div className="max-w-4xl">
             <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
@@ -156,7 +156,7 @@ export default function PublicHomePage() {
           ) : recentDocs?.items && recentDocs.items.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {recentDocs.items.slice(0, 3).map((doc) => (
-                <Link key={doc.id} to={`/doc/${doc.id}`} className="surface-card-hover rounded-2xl p-6">
+                <Link key={doc.id} to={`/doc/${doc.id}?fullscreen=1`} className="surface-card-hover rounded-2xl p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-xl bg-sky-100 flex items-center justify-center">

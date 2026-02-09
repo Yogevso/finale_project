@@ -2,6 +2,10 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
 import { useEffect } from 'react'
 
 interface RichTextEditorProps {
@@ -9,6 +13,8 @@ interface RichTextEditorProps {
   onChange?: (html: string) => void
   editable?: boolean
   className?: string
+  scrollable?: boolean
+  minHeightClass?: string
 }
 
 const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
@@ -195,7 +201,14 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
   )
 }
 
-export default function RichTextEditor({ content, onChange, editable = true, className = '' }: RichTextEditorProps) {
+export default function RichTextEditor({
+  content,
+  onChange,
+  editable = true,
+  className = '',
+  scrollable = false,
+  minHeightClass = 'min-h-[400px]',
+}: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -203,6 +216,12 @@ export default function RichTextEditor({ content, onChange, editable = true, cla
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content,
     editable,
@@ -226,11 +245,11 @@ export default function RichTextEditor({ content, onChange, editable = true, cla
   }, [editable, editor])
 
   return (
-    <div className={`border border-slate-300 rounded-xl overflow-hidden ${className}`}>
+    <div className={`border border-slate-300 rounded-xl overflow-hidden ${scrollable ? 'flex flex-col h-full' : ''} ${className}`}>
       {editable && <MenuBar editor={editor} />}
       <EditorContent 
         editor={editor} 
-        className={`prose max-w-none p-4 min-h-[400px] focus:outline-none ${
+        className={`prose max-w-none p-4 ${minHeightClass} focus:outline-none ${scrollable ? 'flex-1 overflow-y-auto' : ''} ${
           editable ? 'bg-white' : 'bg-slate-50'
         }`}
       />

@@ -1,10 +1,21 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import NotFoundState from '@/components/NotFoundState'
+import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 
 export default function ViewerDocumentPage() {
   const { id } = useParams<{ id: string }>()
   const [isPrintMode, setIsPrintMode] = useState(false)
+  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
+  const location = useLocation()
+  const navigate = useNavigate()
+  const isFullscreen = location.search.includes('fullscreen=1')
+
+  const applyWidth = (value: ReadingWidth) => {
+    setContentWidth(value)
+    setReadingWidth(value)
+  }
 
   // Fetch document details
   const { data: document, isLoading: docLoading, error } = useQuery({
@@ -76,20 +87,16 @@ export default function ViewerDocumentPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50">
         <Header />
-        <main className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <div className="text-6xl mb-4">🔍</div>
-          <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">
-            Document Not Found
-          </h1>
-          <p className="text-slate-500 mb-6">
-            The document you're looking for doesn't exist or is not published.
-          </p>
-          <Link
-            to="/viewer"
-            className="btn-primary inline-block"
-          >
-            ← Back to Documents
-          </Link>
+        <main className="max-w-4xl mx-auto px-4 py-16">
+          <NotFoundState
+            title="Document Not Found"
+            description="The document you're looking for doesn't exist or is not published."
+            action={
+              <Link to="/viewer" className="btn-primary inline-block">
+                ← Back to Documents
+              </Link>
+            }
+          />
         </main>
       </div>
     )
@@ -166,17 +173,61 @@ export default function ViewerDocumentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50">
-      <Header />
+    <div className={`${isFullscreen ? 'fixed inset-0 bg-white' : 'min-h-screen bg-gradient-to-br from-slate-50 to-sky-50'}`}>
+      {!isFullscreen ? (
+        <Header />
+      ) : (
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg gap-4">
+          <button
+            onClick={() => navigate(`/viewer/documents/${id}`)}
+            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+          >
+            Exit Fullscreen
+          </button>
+          <div className="flex-1 text-center font-display font-semibold truncate">{document.title}</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => applyWidth('reading')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'reading'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Reading width
+            </button>
+            <button
+              onClick={() => applyWidth('fluid')}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                contentWidth === 'fluid'
+                  ? 'bg-white text-sky-900 border-white'
+                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+              }`}
+            >
+              Full width
+            </button>
+          </div>
+        </div>
+      )}
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `h-[calc(100vh-56px)] overflow-y-auto w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : 'max-w-4xl mx-auto px-4'} py-8`}>
         {/* Breadcrumb */}
-        <nav className="mb-6 text-sm">
+        <nav className="mb-6 text-sm flex items-center justify-between">
           <Link to="/viewer" className="text-sky-600 hover:underline">
             Documents
           </Link>
-          <span className="mx-2 text-slate-400">/</span>
-          <span className="text-slate-600">{document.title}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400">/</span>
+            <span className="text-slate-600">{document.title}</span>
+          </div>
+          {!isFullscreen && (
+            <button
+              onClick={() => navigate(`/viewer/documents/${id}?fullscreen=1`)}
+              className="btn-ghost text-sm"
+            >
+              Fullscreen
+            </button>
+          )}
         </nav>
 
         {/* Document Header */}
@@ -365,11 +416,13 @@ export default function ViewerDocumentPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 mt-16">
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center text-slate-500 text-sm">
-          <p>Documentation Platform • Built with React + FastAPI</p>
-        </div>
-      </footer>
+      {!isFullscreen && (
+        <footer className="bg-white border-t border-slate-200 mt-16">
+          <div className="max-w-7xl mx-auto px-4 py-8 text-center text-slate-500 text-sm">
+            <p>Documentation Platform • Built with React + FastAPI</p>
+          </div>
+        </footer>
+      )}
     </div>
   )
 }

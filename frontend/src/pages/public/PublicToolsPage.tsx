@@ -13,7 +13,7 @@ const tools = [
 export default function PublicToolsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
-      <section className="bg-gradient-to-r from-sky-950 via-sky-900 to-sky-700 text-white">
+      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
         <div className="max-w-6xl mx-auto px-6 py-12">
           <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
           <h1 className="text-3xl md:text-4xl font-display font-bold">Tools</h1>

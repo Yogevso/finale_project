@@ -71,7 +71,7 @@ export default function PublicTopicDetailPage() {
         ) : docs?.items && docs.items.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {docs.items.map((doc) => (
-              <Link key={doc.id} to={`/doc/${doc.id}`} className="surface-card-hover rounded-2xl p-5">
+              <Link key={doc.id} to={`/doc/${doc.id}?fullscreen=1`} className="surface-card-hover rounded-2xl p-5">
                 <div className="text-xs uppercase tracking-widest text-slate-400">{doc.category}</div>
                 <div className="font-semibold text-slate-900 mt-2 line-clamp-2">{doc.title}</div>
                 <p className="text-sm text-slate-500 mt-2 line-clamp-2">{doc.description}</p>

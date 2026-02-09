@@ -385,7 +385,7 @@ export default function CompanyDetailPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`pill capitalize ${getStatusBadgeColor(doc.status)}`}>
-                        {doc.status}
+                        {doc.status === 'active' ? 'Published' : doc.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-sm">
@@ -393,7 +393,7 @@ export default function CompanyDetailPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link
-                        to={`/documents/${doc.id}`}
+                        to={`/documents/${doc.id}/fullscreen`}
                         className="p-2 text-slate-600 hover:bg-slate-100 rounded-xl inline-flex"
                       >
                         <ChevronRight className="w-4 h-4" />
