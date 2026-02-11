@@ -8,6 +8,7 @@ import type {
   Document,
   DocumentCreate,
   DocumentUpdate,
+  DocumentVisibility,
   DocumentListResponse,
   DocumentQueryParams,
   MessageResponse,

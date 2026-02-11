@@ -20,6 +20,7 @@ from app.db import get_db
 from app.dependencies.permissions import (
     require_editor,
     require_internal_user,
+    require_manager,
     require_permission,
 )
 from app.dependencies.tenant import TenantContext, get_tenant_context
@@ -187,7 +188,7 @@ def update_document(
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: int,
-    current_user: User = Depends(require_permission(Permission.DELETE_DOCUMENT)),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):

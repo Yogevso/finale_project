@@ -119,13 +119,20 @@ export default function DocumentsPage() {
           <div className="flex flex-wrap gap-2">
             <details ref={statusDetailsRef} className="relative">
               <summary className="list-none cursor-pointer px-3 py-2 rounded-full border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50">
-                Status: {statusFilter === 'active' ? 'Published' : statusFilter || 'All'}
+                Status: {
+                  statusFilter === 'active'
+                    ? 'Published'
+                    : statusFilter === 'approved'
+                    ? 'Approved'
+                    : statusFilter || 'All'
+                }
               </summary>
               <div className="absolute right-0 mt-2 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-10">
                 {[
                   { label: 'All', value: '' },
                   { label: 'Draft', value: 'draft' },
                   { label: 'Pending Review', value: 'pending_review' },
+                  { label: 'Approved', value: 'approved' },
                   { label: 'Published', value: 'active' },
                   { label: 'Archived', value: 'archived' },
                 ].map((item) => (
@@ -253,6 +260,8 @@ export default function DocumentsPage() {
                         className={`pill ${
                           doc.status === 'active'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : doc.status === 'approved'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200'
                             : doc.status === 'draft'
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : doc.status === 'pending_review'
@@ -260,7 +269,11 @@ export default function DocumentsPage() {
                             : 'bg-slate-100 text-slate-600 border-slate-200'
                         }`}
                       >
-                        {doc.status === 'active' ? 'Published' : doc.status}
+                        {doc.status === 'active'
+                          ? 'Published'
+                          : doc.status === 'approved'
+                          ? 'Approved'
+                          : doc.status}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -364,7 +377,6 @@ export default function DocumentsPage() {
 }
 
 function CreateDocumentModal({ onClose }: { onClose: () => void }) {
-  const { isManager } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [formData, setFormData] = useState<DocumentCreate & { content?: string }>({
@@ -394,14 +406,11 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
       })
       // If there's content, create a version with it
       if (data.content && data.content.trim()) {
-        const version = await api.createVersion(doc.id, {
+        await api.createVersion(doc.id, {
           content: data.content,
           changes_summary: 'Initial content',
         })
-        // Publish only if user has permission (manager/admin/system_admin)
-        if (isManager) {
-          await api.publishVersion(doc.id, version.id)
-        }
+        // Publishing is now a separate step that requires an approved review.
         if (generateWord) {
           await api.generateWordAttachment(doc.id, data.content, `${data.title}.docx`)
         }

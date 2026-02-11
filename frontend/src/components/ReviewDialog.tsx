@@ -132,9 +132,23 @@ export default function ReviewDialog({
                   {loadingVersion ? (
                     <p className="mt-1 text-sm text-slate-500">Loading changes...</p>
                   ) : version?.changes_summary ? (
-                    <pre className="mt-2 text-sm text-slate-700 whitespace-pre-wrap font-mono bg-white p-3 rounded-xl border border-amber-100">
-                      {version.changes_summary}
-                    </pre>
+                    <>
+                      <div className="mt-2 text-xs text-slate-600">
+                        <span className="font-medium text-slate-700">
+                          Version:
+                        </span>{' '}
+                        v{version.semantic_version || `${version.version_number}.0.0`}
+                      </div>
+                      {version.created_by_user && (
+                        <div className="text-xs text-slate-600">
+                          <span className="font-medium text-slate-700">Editor:</span>{' '}
+                          {version.created_by_user.full_name} ({version.created_by_user.role.replace('_', ' ')})
+                        </div>
+                      )}
+                      <pre className="mt-2 text-sm text-slate-700 whitespace-pre-wrap font-mono bg-white p-3 rounded-xl border border-amber-100">
+                        {version.changes_summary}
+                      </pre>
+                    </>
                   ) : (
                     <p className="mt-1 text-sm text-slate-500 italic">No detailed changes recorded</p>
                   )}
@@ -204,7 +218,7 @@ export default function ReviewDialog({
                     }`}
                   >
                     {action === 'approve'
-                      ? 'This will publish the document and notify the submitter.'
+                      ? 'This will mark the document as approved (not published yet) and notify the submitter.'
                       : 'This will return the document to draft status and notify the submitter.'}
                   </p>
                 </div>

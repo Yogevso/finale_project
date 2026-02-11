@@ -5,13 +5,13 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Attachment, Document, User, UserRole, Version
+from app.models import Attachment, Document, User, UserRole, Version, VersionBumpType
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,20 @@ class AttachmentService:
         )
         upload_dir.mkdir(parents=True, exist_ok=True)
         return upload_dir
+
+    @staticmethod
+    def _parse_semver(raw_value: Optional[str], fallback_version_number: int) -> Tuple[int, int, int]:
+        if raw_value:
+            parts = raw_value.strip().split(".")
+            if len(parts) == 3 and all(part.isdigit() for part in parts):
+                return int(parts[0]), int(parts[1]), int(parts[2])
+        base = fallback_version_number if fallback_version_number > 0 else 1
+        return base, 0, 0
+
+    @staticmethod
+    def _next_patch_semver(raw_value: Optional[str], fallback_version_number: int) -> str:
+        major, minor, patch = AttachmentService._parse_semver(raw_value, fallback_version_number)
+        return f"{major}.{minor}.{patch + 1}"
 
     @staticmethod
     def get_attachments(db: Session, document_id: int, current_user: User) -> List[Attachment]:
@@ -218,14 +232,24 @@ class AttachmentService:
                         .first()
                     )
                     next_version = (existing_version.version_number + 1) if existing_version else 1
+                    next_semantic = (
+                        "1.0.0"
+                        if not existing_version
+                        else AttachmentService._next_patch_semver(
+                            existing_version.semantic_version, existing_version.version_number
+                        )
+                    )
                     
                     version = Version(
                         document_id=document_id,
                         version_number=next_version,
+                        semantic_version=next_semantic,
+                        bump_type=VersionBumpType.PATCH if existing_version else VersionBumpType.MAJOR,
                         content=html_content,
                         changes_summary=f"Initial content from uploaded file: {original_filename}",
                         is_published=True,
                         published_at=attachment.uploaded_at,
+                        published_by=current_user.id,
                         created_by=current_user.id,
                     )
                     db.add(version)

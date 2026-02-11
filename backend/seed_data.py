@@ -19,7 +19,7 @@ from datetime import datetime
 # Ensure the app module is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.db import SessionLocal
+from app.db import SessionLocal, init_db
 from app.models import (
     Tenant,
     User,
@@ -28,6 +28,7 @@ from app.models import (
     DocumentStatus,
     DocumentVisibility,
     Version,
+    VersionBumpType,
     Topic,
 )
 from app.security import get_password_hash
@@ -448,11 +449,14 @@ def create_documents(db, tenants, users):
             version = Version(
                 document_id=doc.id,
                 version_number=1,
+                semantic_version="1.0.0",
+                bump_type=VersionBumpType.MAJOR,
                 content=doc_data["content"],
                 changes_summary="Initial version",
                 created_by=admin.id,
                 is_published=True,
                 published_at=datetime.utcnow(),
+                published_by=admin.id,
             )
             db.add(version)
             
@@ -527,6 +531,9 @@ def main():
     print("🌱 SEED DATA SCRIPT")
     print("=" * 60)
     print("Creating test data for the Documentation Platform...")
+
+    # Ensure schema and lightweight migrations are always applied before seeding.
+    init_db()
     
     db = SessionLocal()
     

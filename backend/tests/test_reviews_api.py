@@ -51,6 +51,15 @@ class TestSubmitForReview:
         )
         assert response.status_code == 403
 
+    def test_submit_with_invalid_version_for_document(self, client, auth_headers, test_document):
+        """Submitting with a version_id not belonging to the document should fail."""
+        response = client.post(
+            f"/api/v1/reviews/documents/{test_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": 999999, "message": "Please review this exact version"},
+        )
+        assert response.status_code == 404
+
 
 class TestPendingReviews:
     """Test listing pending reviews"""
@@ -139,6 +148,111 @@ class TestApproveReview:
             json={"comments": "Approved"},
         )
         assert response.status_code == 403
+
+    def test_cannot_approve_outdated_review_when_newer_version_exists(
+        self,
+        client,
+        db,
+        auth_headers,
+        manager_headers,
+        test_document,
+        test_user,
+    ):
+        """Approval should fail if a newer version was created after review submission."""
+        from app.models import Version
+
+        v1 = Version(
+            document_id=test_document.id,
+            version_number=1,
+            content="v1",
+            changes_summary="init",
+            created_by=test_user.id,
+        )
+        v2 = Version(
+            document_id=test_document.id,
+            version_number=2,
+            content="v2",
+            changes_summary="candidate",
+            created_by=test_user.id,
+        )
+        db.add_all([v1, v2])
+        db.commit()
+        db.refresh(v2)
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{test_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": v2.id, "message": "Approve v2"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        v3 = Version(
+            document_id=test_document.id,
+            version_number=3,
+            content="v3",
+            changes_summary="newer version",
+            created_by=test_user.id,
+        )
+        db.add(v3)
+        db.commit()
+
+        approve_response = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "Looks good"},
+        )
+        assert approve_response.status_code == 409
+
+    def test_approve_marks_document_approved_but_not_published(
+        self,
+        client,
+        db,
+        auth_headers,
+        manager_headers,
+        test_document,
+        test_user,
+    ):
+        """Approval should move document to approved state and keep version unpublished."""
+        from app.models import Version
+
+        version = Version(
+            document_id=test_document.id,
+            version_number=1,
+            content="candidate",
+            changes_summary="ready",
+            created_by=test_user.id,
+            is_published=False,
+        )
+        db.add(version)
+        db.commit()
+        db.refresh(version)
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{test_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": version.id, "message": "Please approve"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        approve_response = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "Approved for publish"},
+        )
+        assert approve_response.status_code == 200
+
+        doc_response = client.get(f"/api/v1/documents/{test_document.id}", headers=manager_headers)
+        assert doc_response.status_code == 200
+        assert doc_response.json()["status"] == "approved"
+
+        version_response = client.get(
+            f"/api/v1/documents/{test_document.id}/versions/{version.id}",
+            headers=manager_headers,
+        )
+        assert version_response.status_code == 200
+        assert version_response.json()["is_published"] is False
 
 
 class TestRejectReview:

@@ -42,7 +42,7 @@ EXPOSE 8002
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "const http = require('http'); http.get('http://localhost:8002', (r) => process.exit(r.statusCode === 426 ? 0 : 1)).on('error', () => process.exit(1))"
+    CMD node -e "const http = require('http'); http.get('http://127.0.0.1:8002', (r) => process.exit(r.statusCode === 426 ? 0 : 1)).on('error', () => process.exit(1))"
 
 # Start the server
 CMD ["node", "dist/index.js"]

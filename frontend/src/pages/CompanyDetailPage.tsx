@@ -91,6 +91,8 @@ export default function CompanyDetailPage() {
     switch (status) {
       case 'active':
         return 'bg-emerald-100 text-emerald-700'
+      case 'approved':
+        return 'bg-sky-100 text-sky-700'
       case 'draft':
         return 'bg-slate-100 text-slate-700'
       case 'pending_review':
@@ -385,7 +387,11 @@ export default function CompanyDetailPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`pill capitalize ${getStatusBadgeColor(doc.status)}`}>
-                        {doc.status === 'active' ? 'Published' : doc.status}
+                        {doc.status === 'active'
+                          ? 'Published'
+                          : doc.status === 'approved'
+                          ? 'Approved'
+                          : doc.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500 text-sm">

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -19,7 +17,7 @@ services:
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:80"]
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -64,7 +62,7 @@ services:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8003/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8003/health"]
       interval: 10s
       timeout: 3s
       retries: 3

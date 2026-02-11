@@ -3,7 +3,17 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, LargeBinary
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Table,
+    Text,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
@@ -27,6 +37,7 @@ class DocumentStatus(str, enum.Enum):
 
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"  # Waiting for approval
+    APPROVED = "approved"  # Approved for publish, not public yet
     ACTIVE = "active"
     PUBLISHED = "active"  # Alias for ACTIVE
     ARCHIVED = "archived"
@@ -47,6 +58,14 @@ class ReviewStatus(str, enum.Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
+
+
+class VersionBumpType(str, enum.Enum):
+    """Version bump level for semantic versioning"""
+
+    MAJOR = "major"
+    MINOR = "minor"
+    PATCH = "patch"
 
 
 class FeedbackType(str, enum.Enum):
@@ -315,16 +334,20 @@ class Version(Base):
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False)
+    semantic_version = Column(String(32), nullable=True, index=True)
+    bump_type = Column(SQLEnum(VersionBumpType), default=VersionBumpType.PATCH, nullable=False)
     content = Column(Text, nullable=True)
     changes_summary = Column(Text, nullable=True)
     is_published = Column(Boolean, default=False, nullable=False)  # Immutable after publishing
     published_at = Column(DateTime, nullable=True)  # When version was published
+    published_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     document = relationship("Document", back_populates="versions")
-    created_by_user = relationship("User")
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    published_by_user = relationship("User", foreign_keys=[published_by])
     sections = relationship("Section", back_populates="version", cascade="all, delete-orphan")
 
 
@@ -679,6 +702,7 @@ __all__ = [
     "DocumentStatus",
     "DocumentVisibility",
     "ReviewStatus",
+    "VersionBumpType",
     "FeedbackType",
     "FeedbackStatus",
     "ActionType",

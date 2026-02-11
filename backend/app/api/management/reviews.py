@@ -1,5 +1,6 @@
 """Review/Approval Workflow API Routes"""
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.models import (
+    ActionType,
+    AuditLog,
     Document,
     DocumentStatus,
     Notification,
@@ -95,13 +98,32 @@ async def submit_for_review(
     )
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="This document already has a pending review",
         )
 
-    # If no version was provided, attach the latest version automatically
+    # Validate explicit version or attach latest version automatically
     version_id = data.version_id
-    if not version_id:
+    if version_id:
+        version = (
+            db.query(Version)
+            .filter(
+                Version.id == version_id,
+                Version.document_id == document_id,
+            )
+            .first()
+        )
+        if not version:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Version not found for this document",
+            )
+        if version.is_published:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot submit an already published version for review",
+            )
+    else:
         latest_version = (
             db.query(Version)
             .filter(Version.document_id == document_id)
@@ -120,9 +142,20 @@ async def submit_for_review(
         status=ReviewStatus.PENDING,
     )
     db.add(review)
+    db.flush()
 
     # Update document status
     document.status = DocumentStatus.PENDING_REVIEW
+
+    # Audit event
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            document_id=document_id,
+            action=ActionType.UPDATE,
+            details=f"Submitted review request #{review.id} for version {version_id or 'latest'}",
+        )
+    )
 
     # Create notifications for reviewers (editors, managers, admins)
     reviewers = (
@@ -301,7 +334,7 @@ async def approve_review(
 
     if review.status != ReviewStatus.PENDING:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Review is not pending. Current status: {review.status.value}",
         )
 
@@ -311,23 +344,54 @@ async def approve_review(
             detail="You cannot approve this review (cannot approve own submission)",
         )
 
+    # Prevent approving stale version reviews if a newer version exists
+    if review.version_id:
+        review_version = (
+            db.query(Version)
+            .filter(Version.id == review.version_id, Version.document_id == review.document_id)
+            .first()
+        )
+        if not review_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Review refers to a version that no longer exists",
+            )
+        latest_version = (
+            db.query(Version)
+            .filter(Version.document_id == review.document_id)
+            .order_by(Version.version_number.desc())
+            .first()
+        )
+        if latest_version and latest_version.id != review.version_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot approve outdated review because a newer version exists",
+            )
+        if review_version.is_published:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Version is already published",
+            )
+
     # Approve the review
-    from datetime import datetime
 
     review.status = ReviewStatus.APPROVED
     review.reviewed_by = current_user.id
     review.review_comments = data.comments
     review.reviewed_at = datetime.utcnow()
 
-    # Update document status to active
-    review.document.status = DocumentStatus.ACTIVE
-    
-    # If this review has a version, mark it as published
-    if review.version_id:
-        version = db.query(Version).filter(Version.id == review.version_id).first()
-        if version:
-            version.is_published = True
-            version.published_at = datetime.utcnow()
+    # Approved is a pre-publish state; publishing is a separate step.
+    review.document.status = DocumentStatus.APPROVED
+
+    # Audit event
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            document_id=review.document_id,
+            action=ActionType.UPDATE,
+            details=f"Approved review #{review.id} for version {review.version_id or 'n/a'}",
+        )
+    )
 
     # Notify submitter
     notification = Notification(
@@ -381,7 +445,7 @@ async def reject_review(
 
     if review.status != ReviewStatus.PENDING:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Review is not pending. Current status: {review.status.value}",
         )
 
@@ -391,7 +455,6 @@ async def reject_review(
         )
 
     # Reject the review
-    from datetime import datetime
 
     review.status = ReviewStatus.REJECTED
     review.reviewed_by = current_user.id
@@ -410,6 +473,14 @@ async def reject_review(
         link=f"/documents/{review.document_id}",
     )
     db.add(notification)
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            document_id=review.document_id,
+            action=ActionType.UPDATE,
+            details=f"Rejected review #{review.id} for version {review.version_id or 'n/a'}",
+        )
+    )
 
     db.commit()
     db.refresh(review)
@@ -456,18 +527,24 @@ async def cancel_review(
 
     if review.status != ReviewStatus.PENDING:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Cannot cancel review with status: {review.status.value}",
         )
 
     # Cancel the review
-    from datetime import datetime
-
     review.status = ReviewStatus.CANCELLED
     review.reviewed_at = datetime.utcnow()
 
     # Return document to draft
     review.document.status = DocumentStatus.DRAFT
+    db.add(
+        AuditLog(
+            user_id=current_user.id,
+            document_id=review.document_id,
+            action=ActionType.UPDATE,
+            details=f"Cancelled review #{review.id} for version {review.version_id or 'n/a'}",
+        )
+    )
 
     db.commit()
     db.refresh(review)

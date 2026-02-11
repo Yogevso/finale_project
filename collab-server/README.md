@@ -29,12 +29,12 @@ This server enables Google Docs-style real-time collaboration in the document ma
 
 ## Features
 
-- **Real-time sync**: Changes appear instantly for all users
-- **Cursor presence**: See where other users are editing
-- **Conflict resolution**: Yjs CRDT handles concurrent edits automatically
+- **Google Docs-style simultaneous editing**: Changes appear instantly for all users
+- **Live cursor presence**: See where other users are editing
+- **Yjs CRDT conflict resolution**: Handles concurrent edits automatically
+- **Automatic sync with offline support**: Changes sync when connection restores
 - **Authentication**: JWT-based auth validates user permissions
 - **Persistence**: Document state saved to FastAPI backend
-- **Offline support**: Changes sync when connection restores
 
 ## Quick Start
 

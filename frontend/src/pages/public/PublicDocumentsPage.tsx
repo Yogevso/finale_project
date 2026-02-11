@@ -4,6 +4,20 @@ import { FileText, Folder, ChevronLeft, ChevronRight, Grid, List, Search } from 
 import { useMemo, useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
+type LatestPlatformRelease = {
+  title: string
+  documentNumber: string
+  releaseBranch?: string
+  versionLabel?: string
+  versionNumber?: number
+  publishedAt?: string
+}
+
+type PlatformReleasePreview = {
+  platform: string
+  latestDoc: LatestPlatformRelease
+}
+
 export default function PublicDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -70,24 +84,30 @@ export default function PublicDocumentsPage() {
   const getTags = (tags?: string) =>
     tags ? tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 3) : []
 
-  const latestPlatformReleases = useMemo(() => {
+  const latestPlatformReleases = useMemo<PlatformReleasePreview[]>(() => {
     if (!platformHistory?.items) return []
-    return platformHistory.items
-      .map((platform) => {
-        let latestDoc: {
-          title: string
-          documentNumber: string
-          releaseBranch?: string
-          versionLabel?: string
-          versionNumber?: number
-          publishedAt?: string
-        } | null = null
+    const releases: PlatformReleasePreview[] = []
 
-        platform.categories.forEach((category) => {
-          category.years.forEach((yearGroup) => {
-            yearGroup.documents.forEach((doc) => {
-              const docDate = doc.published_at || doc.updated_at
-              if (!latestDoc) {
+    for (const platform of platformHistory.items) {
+      let latestDoc: LatestPlatformRelease | null = null
+
+      for (const category of platform.categories) {
+        for (const yearGroup of category.years) {
+          for (const doc of yearGroup.documents) {
+            const docDate = doc.published_at || doc.updated_at
+            if (!latestDoc) {
+              latestDoc = {
+                title: doc.title,
+                documentNumber: doc.document_number,
+                releaseBranch: doc.release_branch,
+                versionLabel: doc.version_label,
+                versionNumber: doc.version_number,
+                publishedAt: docDate,
+              }
+            } else {
+              const latestDate = latestDoc.publishedAt ? new Date(latestDoc.publishedAt).getTime() : 0
+              const candidateDate = docDate ? new Date(docDate).getTime() : 0
+              if (candidateDate > latestDate) {
                 latestDoc = {
                   title: doc.title,
                   documentNumber: doc.document_number,
@@ -96,33 +116,24 @@ export default function PublicDocumentsPage() {
                   versionNumber: doc.version_number,
                   publishedAt: docDate,
                 }
-              } else {
-                const latestDate = latestDoc.publishedAt ? new Date(latestDoc.publishedAt).getTime() : 0
-                const candidateDate = docDate ? new Date(docDate).getTime() : 0
-                if (candidateDate > latestDate) {
-                  latestDoc = {
-                    title: doc.title,
-                    documentNumber: doc.document_number,
-                    releaseBranch: doc.release_branch,
-                    versionLabel: doc.version_label,
-                    versionNumber: doc.version_number,
-                    publishedAt: docDate,
-                  }
-                }
               }
-            })
-          })
-        })
+            }
+          }
+        }
+      }
 
-        return {
+      if (latestDoc) {
+        releases.push({
           platform: platform.platform,
           latestDoc,
-        }
-      })
-      .filter((item) => item.latestDoc)
+        })
+      }
+    }
+
+    return releases
       .sort((a, b) => {
-        const aDate = a.latestDoc?.publishedAt ? new Date(a.latestDoc.publishedAt).getTime() : 0
-        const bDate = b.latestDoc?.publishedAt ? new Date(b.latestDoc.publishedAt).getTime() : 0
+        const aDate = a.latestDoc.publishedAt ? new Date(a.latestDoc.publishedAt).getTime() : 0
+        const bDate = b.latestDoc.publishedAt ? new Date(b.latestDoc.publishedAt).getTime() : 0
         return bDate - aDate
       })
       .slice(0, 3)
@@ -222,26 +233,26 @@ export default function PublicDocumentsPage() {
                         {item.platform}
                       </div>
                       <div className="mt-3 text-sm text-slate-600">
-                        {item.latestDoc?.title}
+                        {item.latestDoc.title}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        {item.latestDoc?.releaseBranch && (
+                        {item.latestDoc.releaseBranch && (
                           <span className="pill bg-white text-slate-600 border-slate-200">
                             {item.latestDoc.releaseBranch}
                           </span>
                         )}
                         <span className="pill bg-white text-slate-600 border-slate-200">
-                          {item.latestDoc?.versionLabel ||
-                            (item.latestDoc?.versionNumber
+                          {item.latestDoc.versionLabel ||
+                            (item.latestDoc.versionNumber
                               ? `v${item.latestDoc.versionNumber}`
                               : 'Version —')}
                         </span>
-                        {item.latestDoc?.publishedAt && (
+                        {item.latestDoc.publishedAt && (
                           <span>{formatDate(item.latestDoc.publishedAt)}</span>
                         )}
                       </div>
                       <div className="mt-3 text-xs text-slate-400 font-mono">
-                        {item.latestDoc?.documentNumber}
+                        {item.latestDoc.documentNumber}
                       </div>
                     </div>
                   ))}
@@ -315,7 +326,6 @@ export default function PublicDocumentsPage() {
                               {doc.description || 'No description'}
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                              {doc.topic && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.topic}</span>}
                               {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
                               {getTags(doc.tags).map((tag) => (
                                 <span key={tag} className="pill bg-white text-slate-600 border-slate-200">
@@ -359,7 +369,6 @@ export default function PublicDocumentsPage() {
                               {doc.description || 'No description'}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                              {doc.topic && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.topic}</span>}
                               {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
                               {getTags(doc.tags).map((tag) => (
                                 <span key={tag} className="pill bg-white text-slate-600 border-slate-200">

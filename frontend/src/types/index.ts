@@ -76,7 +76,7 @@ export interface PasswordChange {
 }
 
 // Document types
-export type DocumentStatus = 'draft' | 'pending_review' | 'active' | 'archived'
+export type DocumentStatus = 'draft' | 'pending_review' | 'approved' | 'active' | 'archived'
 export type DocumentVisibility = 'public' | 'internal' | 'company'
 
 export interface Document {
@@ -134,21 +134,41 @@ export interface DocumentListResponse {
 }
 
 // Version types
+export type VersionBumpType = 'major' | 'minor' | 'patch'
+
+export interface VersionReviewSummary {
+  id: number
+  status: ReviewStatus
+  submitted_at: string
+  reviewed_at?: string | null
+  submitted_by: number
+  reviewed_by?: number | null
+  submitter?: User
+  reviewer?: User
+}
+
 export interface Version {
   id: number
   document_id: number
   version_number: number
+  semantic_version?: string | null
+  bump_type?: VersionBumpType
   content: string | null
   changes_summary: string | null
   is_published: boolean
   published_at: string | null
+  published_by?: number | null
   created_by: number
   created_at: string
+  created_by_user?: User
+  published_by_user?: User
+  latest_review?: VersionReviewSummary | null
 }
 
 export interface VersionCreate {
   content?: string
   changes_summary?: string
+  bump_type?: VersionBumpType
 }
 
 export interface VersionUpdate {

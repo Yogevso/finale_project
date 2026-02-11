@@ -3,6 +3,21 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { publicApi } from '@/lib/publicApi'
 
+type LatestPlatformDocument = {
+  id: number
+  title: string
+  versionLabel?: string
+  versionNumber?: number
+  releaseBranch?: string
+  publishedAt?: string
+}
+
+type PlatformSummary = {
+  platform: string
+  latestDoc: LatestPlatformDocument | null
+  docCount: number
+}
+
 export default function PublicPlatformsPage() {
   const [activePlatform, setActivePlatform] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -13,25 +28,22 @@ export default function PublicPlatformsPage() {
     queryFn: () => publicApi.getPlatformHistory(),
   })
 
-  const platformSummaries = useMemo(() => {
+  const platformSummaries = useMemo<PlatformSummary[]>(() => {
     if (!platformHistory?.items) return []
-    return platformHistory.items.map((platform) => {
-      let latestDoc: {
-        title: string
-        versionLabel?: string
-        versionNumber?: number
-        releaseBranch?: string
-        publishedAt?: string
-      } | null = null
+    const summaries: PlatformSummary[] = []
+
+    for (const platform of platformHistory.items) {
+      let latestDoc: LatestPlatformDocument | null = null
       let docCount = 0
 
-      platform.categories.forEach((category) => {
-        category.years.forEach((yearGroup) => {
-          yearGroup.documents.forEach((doc) => {
+      for (const category of platform.categories) {
+        for (const yearGroup of category.years) {
+          for (const doc of yearGroup.documents) {
             docCount += 1
             const docDate = doc.published_at || doc.updated_at
             if (!latestDoc) {
               latestDoc = {
+                id: doc.id,
                 title: doc.title,
                 versionLabel: doc.version_label,
                 versionNumber: doc.version_number,
@@ -43,6 +55,7 @@ export default function PublicPlatformsPage() {
               const candidateDate = docDate ? new Date(docDate).getTime() : 0
               if (candidateDate > latestDate) {
                 latestDoc = {
+                  id: doc.id,
                   title: doc.title,
                   versionLabel: doc.version_label,
                   versionNumber: doc.version_number,
@@ -51,16 +64,18 @@ export default function PublicPlatformsPage() {
                 }
               }
             }
-          })
-        })
-      })
+          }
+        }
+      }
 
-      return {
+      summaries.push({
         platform: platform.platform,
         latestDoc,
         docCount,
-      }
-    })
+      })
+    }
+
+    return summaries
   }, [platformHistory])
 
   const filteredSummaries = useMemo(() => {

@@ -20,8 +20,8 @@ export default function DashboardPage() {
   const stats = [
     { label: 'Favorites', value: isCustomer ? bookmarks.length : 0, icon: '⭐', color: 'blue' },
     { label: 'Published', value: documents?.items.filter(d => d.status === 'active').length ?? 0, icon: '✅', color: 'green' },
+    { label: 'Approved', value: documents?.items.filter(d => d.status === 'approved').length ?? 0, icon: '👍', color: 'sky' },
     { label: 'Drafts', value: documents?.items.filter(d => d.status === 'draft').length ?? 0, icon: '📝', color: 'yellow' },
-    { label: 'Archived', value: documents?.items.filter(d => d.status === 'archived').length ?? 0, icon: '📦', color: 'gray' },
   ]
 
   return (
@@ -78,12 +78,18 @@ export default function DashboardPage() {
                     className={`pill ${
                       doc.status === 'active'
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : doc.status === 'approved'
+                        ? 'bg-sky-50 text-sky-700 border-sky-200'
                         : doc.status === 'draft'
                         ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >
-                    {doc.status === 'active' ? 'Published' : doc.status}
+                    {doc.status === 'active'
+                      ? 'Published'
+                      : doc.status === 'approved'
+                      ? 'Approved'
+                      : doc.status}
                   </span>
                 </div>
               </div>

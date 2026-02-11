@@ -68,18 +68,6 @@ export default function PublicLayout() {
               Platforms
             </NavLink>
             <NavLink 
-              to="/topics"
-              className={({ isActive }) =>
-                `px-4 py-2 rounded-full transition-colors ${
-                  isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`
-              }
-            >
-              Topics
-            </NavLink>
-            <NavLink 
               to="/tools"
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
@@ -154,19 +142,6 @@ export default function PublicLayout() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Platforms
-              </NavLink>
-              <NavLink
-                to="/topics"
-                className={({ isActive }) =>
-                  `block px-4 py-2 rounded-xl transition-colors ${
-                    isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`
-                }
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Topics
               </NavLink>
               <NavLink
                 to="/tools"

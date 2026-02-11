@@ -11,8 +11,11 @@ RUN npm install --legacy-peer-deps
 # Copy source
 COPY . .
 
+# Ensure local script can run in container
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Expose port
 EXPOSE 3000
 
 # Run dev server
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+CMD ["/app/docker-entrypoint.sh"]

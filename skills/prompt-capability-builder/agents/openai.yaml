@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prompt Capability Builder"
+  short_description: "Turn software prompts into clear capabilities"
+  default_prompt: "Use $prompt-capability-builder to convert this prompt into a backend/frontend/devops-ready capability spec with inputs, outputs, steps, and tests."

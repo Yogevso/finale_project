@@ -222,8 +222,8 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
                 id=att.id,
                 filename=att.filename,
                 file_size=att.file_size,
-                content_type=att.content_type,
-                created_at=att.created_at,
+                content_type=att.mime_type,
+                created_at=att.uploaded_at,
             )
             for att in attachments
         ],
@@ -464,8 +464,8 @@ def get_public_attachment(document_id: int, attachment_id: int, db: Session = De
         id=attachment.id,
         filename=attachment.filename,
         file_size=attachment.file_size,
-        content_type=attachment.content_type,
-        created_at=attachment.created_at,
+        content_type=attachment.mime_type,
+        created_at=attachment.uploaded_at,
     )
 
 

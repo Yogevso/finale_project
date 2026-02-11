@@ -51,7 +51,6 @@ export default function PublicDocumentPage() {
   }
 
   const metaPills = [
-    { label: doc?.topic, icon: 'Topic' },
     { label: doc?.category, icon: 'Category' },
     { label: doc?.platform, icon: 'Platform' },
   ].filter((item) => item.label)
@@ -186,7 +185,7 @@ export default function PublicDocumentPage() {
       </section>
 
       <section className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : 'max-w-4xl mx-auto px-4'} py-10`}>
-        {/* Topic / Category / Platform */}
+        {/* Category / Platform */}
         {metaPills.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {metaPills.map((item) => (

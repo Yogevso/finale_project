@@ -99,7 +99,7 @@ export default function ReviewsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-slate-900">Reviews</h1>
-          <p className="text-slate-600">Review and approve document submissions</p>
+          <p className="text-slate-600">Review and approve submissions. Publishing is a separate step.</p>
         </div>
       </div>
 

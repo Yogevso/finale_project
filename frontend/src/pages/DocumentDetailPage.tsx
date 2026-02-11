@@ -54,16 +54,6 @@ export default function DocumentDetailPage() {
     setScrollProgress(progress)
   }, [])
 
-  // Callback when user selects text in preview for inline comment
-  const handleTextSelect = useCallback((text: string) => {
-    if (text.trim().length >= 5) {
-      const anchorId = `anchor-${Date.now()}`
-      setPendingAnchor({ text: text.trim(), id: anchorId })
-      // Switch to comments tab to show the comment form with anchor
-      setActiveTab('comments')
-    }
-  }, [])
-
   const { data: document, isLoading, error } = useQuery({
     queryKey: ['document', id],
     queryFn: () => api.getDocument(Number(id)),
@@ -262,6 +252,12 @@ export default function DocumentDetailPage() {
                     Pending Review
                   </span>
                 )}
+                {document.status === 'approved' && (
+                  <span className="flex items-center gap-2 px-4 py-2 bg-sky-200/30 text-sky-100 rounded-lg">
+                    <CheckCircle className="w-4 h-4" />
+                    Approved (Ready to Publish)
+                  </span>
+                )}
                 <button
                   onClick={() => setIsEditing(!isEditing)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
@@ -304,7 +300,14 @@ export default function DocumentDetailPage() {
 
       {/* Tab Content */}
       {activeTab === 'preview' && (
-        <DocumentPreview documentId={Number(id)} attachments={attachments} documentTitle={document.title} onScrollProgress={handleScrollProgress} isEditor={isEditor} />
+        <DocumentPreview
+          documentId={Number(id)}
+          attachments={attachments}
+          documentTitle={document.title}
+          onScrollProgress={handleScrollProgress}
+          isEditor={isEditor}
+          widthMode={contentWidth}
+        />
       )}
 
       {activeTab === 'details' && (
@@ -327,12 +330,18 @@ export default function DocumentDetailPage() {
                       className={`px-2 py-1 text-xs rounded-full ${
                         document.status === 'active'
                           ? 'bg-emerald-100 text-emerald-700'
+                          : document.status === 'approved'
+                          ? 'bg-sky-100 text-sky-700'
                           : document.status === 'draft'
                           ? 'bg-amber-100 text-amber-700'
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {document.status === 'active' ? 'Published' : document.status}
+                      {document.status === 'active'
+                        ? 'Published'
+                        : document.status === 'approved'
+                        ? 'Approved'
+                        : document.status}
                     </span>
                   </p>
                 </div>
@@ -532,7 +541,8 @@ export default function DocumentDetailPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-display font-semibold text-slate-900 mb-4">Submit for Review</h3>
             <p className="text-sm text-slate-600 mb-4">
-              This will submit "{document.title}" for review. A manager or peer editor will review and approve or reject it.
+              This will submit "{document.title}" for review. A manager or peer editor can approve or reject it.
+              Publishing happens later as a separate step.
             </p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -568,7 +578,8 @@ export default function DocumentDetailPage() {
             </div>
             {submitReviewMutation.isError && (
               <p className="mt-3 text-sm text-rose-600">
-                Error submitting for review. Please try again.
+                {(submitReviewMutation.error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail ||
+                  'Error submitting for review. Please try again.'}
               </p>
             )}
           </div>
@@ -639,6 +650,8 @@ function EditForm({
             className="select-field"
           >
             <option value="draft">Draft</option>
+            <option value="pending_review">Pending Review</option>
+            <option value="approved">Approved</option>
             <option value="active">Published</option>
             <option value="archived">Archived</option>
           </select>
@@ -834,7 +847,21 @@ function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; o
 }
 
 // Document Preview Component
-function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgress, isEditor }: { documentId: number; attachments: Attachment[]; documentTitle?: string; onScrollProgress?: (progress: number) => void; isEditor?: boolean }) {
+function DocumentPreview({
+  documentId,
+  attachments,
+  documentTitle,
+  onScrollProgress,
+  isEditor,
+  widthMode = 'reading',
+}: {
+  documentId: number
+  attachments: Attachment[]
+  documentTitle?: string
+  onScrollProgress?: (progress: number) => void
+  isEditor?: boolean
+  widthMode?: ReadingWidth
+}) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -977,6 +1004,11 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     if (!att) return false
     return att.mime_type === 'application/msword' || 
            att.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+
+  const isSyntheticUploadPlaceholder = (content?: string | null) => {
+    if (!content) return false
+    return content.trim().toLowerCase().startsWith('uploaded from file:')
   }
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -1129,7 +1161,9 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
       try {
         // First, check if there's a version with content (published preferred, else latest draft)
         const versionsResponse = await api.getVersions(documentId)
-        const withContent = versionsResponse.items.filter(v => v.content)
+        const withContent = versionsResponse.items.filter(
+          (v) => !!v.content?.trim() && !isSyntheticUploadPlaceholder(v.content)
+        )
         const publishedVersion = withContent
           .filter(v => v.is_published)
           .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())[0]
@@ -1221,7 +1255,7 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
     )
   }
 
-  if (previewableAttachments.length === 0) {
+  if (!htmlContent && previewableAttachments.length === 0) {
     const firstAttachment = attachments[0]
     
     return (
@@ -1264,6 +1298,9 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
       </div>
     )
   }
+
+  const documentPaperClass =
+    widthMode === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'
 
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
@@ -1408,19 +1445,15 @@ function DocumentPreview({ documentId, attachments, documentTitle, onScrollProgr
               </div>
               
               {/* Document content with text selection for inline comments */}
-              <div className="flex-1 relative overflow-auto">
-                <div 
-                  id="document-content-area"
-                  className="p-6 prose prose-sm max-w-none document-preview-content bg-white"
-                  style={{
-                    fontFamily: 'Georgia, "Times New Roman", serif',
-                    lineHeight: '1.8',
-                    minHeight: '100%',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: htmlContent }}
-                  onScroll={handleScroll}
-                  onMouseUp={handleMouseUp}
-                />
+              <div className="flex-1 relative overflow-auto document-preview-pane" onScroll={handleScroll}>
+                <div className={documentPaperClass}>
+                  <div 
+                    id="document-content-area"
+                    className="document-preview-content"
+                    dangerouslySetInnerHTML={{ __html: htmlContent }}
+                    onMouseUp={handleMouseUp}
+                  />
+                </div>
                 
                 {/* Text selection popup for adding inline comment */}
                 {selectionPopup.show && !commentPopup.show && (

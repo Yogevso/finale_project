@@ -1,14 +1,23 @@
 """Document Service"""
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
-from app.models import ActionType, AuditLog, Document, DocumentStatus, User, UserRole, Version
+from app.models import (
+    ActionType,
+    AuditLog,
+    Document,
+    DocumentStatus,
+    User,
+    UserRole,
+    Version,
+    VersionBumpType,
+)
 from app.schemas import DocumentCreate, DocumentUpdate
 
 
@@ -67,6 +76,20 @@ class DocumentService:
             next_seq += 1
 
         return f"{prefix}-{next_seq:04d}"
+
+    @staticmethod
+    def _parse_semver(raw_value: Optional[str], fallback_version_number: int) -> Tuple[int, int, int]:
+        if raw_value:
+            parts = raw_value.strip().split(".")
+            if len(parts) == 3 and all(part.isdigit() for part in parts):
+                return int(parts[0]), int(parts[1]), int(parts[2])
+        base = fallback_version_number if fallback_version_number > 0 else 1
+        return base, 0, 0
+
+    @staticmethod
+    def _next_patch_version(raw_value: Optional[str], fallback_version_number: int) -> str:
+        major, minor, patch = DocumentService._parse_semver(raw_value, fallback_version_number)
+        return f"{major}.{minor}.{patch + 1}"
 
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
         """Create a new document"""
@@ -136,11 +159,14 @@ class DocumentService:
                 self.db.refresh(document)
                 break
 
-        # Create initial version
+        # Create initial version placeholder. Real content is managed via explicit
+        # version edits/uploads, not the document description metadata field.
         version = Version(
             document_id=document.id,
             version_number=1,
-            content=document_data.description or "",
+            semantic_version="1.0.0",
+            bump_type=VersionBumpType.MAJOR,
+            content="",
             changes_summary="Initial version",
             created_by=user.id,
         )
@@ -268,11 +294,18 @@ class DocumentService:
             )
 
             new_version_number = (latest_version.version_number + 1) if latest_version else 1
+            latest_content = latest_version.content if latest_version and latest_version.content else ""
+            next_semantic = self._next_patch_version(
+                latest_version.semantic_version if latest_version else None,
+                latest_version.version_number if latest_version else 1,
+            )
 
             version = Version(
                 document_id=document.id,
                 version_number=new_version_number,
-                content=document.description or "",
+                semantic_version=next_semantic,
+                bump_type=VersionBumpType.PATCH,
+                content=latest_content,
                 changes_summary="; ".join(changes),
                 created_by=user.id,
             )

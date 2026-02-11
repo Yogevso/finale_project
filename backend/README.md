@@ -18,34 +18,36 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 - Tenant-scoped queries for all resources
 
 ### Document Management
-- Full CRUD operations
-- Rich text content with HTML support
-- Document status workflow (Draft → Active → Archived)
-- Category and tag management
-- Bulk PDF/Word upload with content extraction
+- Create, edit, and delete documents
+- Rich text editor with TipTap (headings, lists, tables, links)
+- Document categorization and tagging
+- Draft → Active → Archived workflow
+- Bulk document upload (PDF/Word)
 
 ### Version Control
 - Immutable version history
-- Publish specific versions
-- Change summaries and tracking
-- Version comparison support
+- Publish specific versions to viewer portal
+- Version comparison and change summaries
+- Rollback capability
 
 ### File Attachments
-- S3-compatible storage (AWS S3, MinIO, local filesystem)
-- Secure pre-signed download URLs
-- File size limits and type validation
-- Automatic cleanup on document deletion
+- Upload files to documents (PDF, Word, images, etc.)
+- S3-compatible storage (AWS S3, MinIO, Azure Blob)
+- Secure download URLs with expiration
+- File size limits (10MB default)
 
 ### Comments & Collaboration
 - Threaded comments with replies
 - Private comments (admin/editor only)
 - Inline comments anchored to text
 - Comment resolution workflow
+- @mentions and notifications
 
 ### Notifications
-- In-app notifications with read/unread status
+- Real-time notification bell with unread count
 - Email notifications (document published, comments, replies)
-- Configurable notification preferences
+- Notification preferences per user
+- Mark as read / mark all as read
 
 ### Engagement & Analytics
 - Document view tracking
@@ -55,27 +57,30 @@ FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document manageme
 - Saved searches
 
 ### Analytics Dashboard
-- Overview statistics (documents, users, views, downloads)
-- Engagement analytics (views/downloads over time, reading progress)
-- User analytics (role distribution, most active users) - Admin+
-- Content production metrics (reviews, versions, comments)
-- Feedback analytics (response times, helpfulness)
+- Overview statistics with trend analysis
+- Engagement analytics (views, downloads, reading progress)
+- User analytics (role distribution, activity) - Admin+
+- Content production metrics (documents, versions, reviews)
+- Feedback analytics with response times
 - Tenant comparison (System Admin only)
-- CSV/PDF export with date range filtering
-- Time granularity (daily/weekly/monthly)
+- Export reports (CSV/PDF)
+- Interactive charts with Recharts
 
 ### Customer Portal
-- Company-based document visibility (PUBLIC, INTERNAL, COMPANY)
-- Customer users assigned to companies
-- Portal-specific API endpoints (/api/portal/*)
-- Document search within accessible documents
-- Customer feedback on documents
-- Secure attachment downloads
+- Customers see documents assigned to their company
+- Company visibility (COMPANY level) for targeted content
+- Public documents also visible
+- Secure authenticated access
+- Submit feedback on documents
+- View document versions
+- Download attachments
+- Search within accessible documents
 
 ### Search
 - Full-text search across documents
 - Filter by category, status, date range
-- Saved search management
+- Save and reuse search filters
+- Recent documents quick access
 
 ---
 
@@ -171,7 +176,7 @@ EMAIL_FROM_NAME=Documentation Platform
 # ===================
 # Frontend URL (for email links)
 # ===================
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:3000
 ```
 
 ---
@@ -181,14 +186,14 @@ FRONTEND_URL=http://localhost:5173
 ### Development Server
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Access Points
-- API: http://localhost:8001
-- Swagger UI: http://localhost:8001/docs
-- ReDoc: http://localhost:8001/redoc
-- Health Check: http://localhost:8001/health
+- API: http://localhost:8000
+- Swagger UI: http://localhost:8000/api/v1/docs
+- ReDoc: http://localhost:8000/api/v1/redoc
+- Health Check: http://localhost:8000/health
 
 ---
 
@@ -543,7 +548,7 @@ docker build -t document-portal-backend:latest .
 ### Run Container
 
 ```bash
-docker run -p 8001:8001 \
+docker run -p 8000:8000 \
   -e SECRET_KEY=your-secret \
   -e DATABASE_URL=sqlite:///./data/portal.db \
   -v $(pwd)/data:/app/data \

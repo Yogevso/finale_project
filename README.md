@@ -322,7 +322,7 @@ npm run dev
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 - Collab Server: ws://localhost:8002
-- API Docs: http://localhost:8000/docs
+- API Docs: http://localhost:8000/api/v1/docs
 
 ### Option 2: Docker Compose
 
@@ -382,7 +382,7 @@ SMTP_PASSWORD=your-app-password
 EMAIL_FROM=noreply@yourcompany.com
 
 # Frontend URL (for email links)
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:3000
 ```
 
 ---
@@ -470,7 +470,7 @@ npm run lint
 | POST | `/api/notifications/mark-read` | Mark as read |
 | DELETE | `/api/notifications` | Delete notifications |
 
-### Full API documentation available at `/docs` (Swagger UI) or `/redoc` (ReDoc).
+### Full API documentation available at `/api/v1/docs` (Swagger UI) or `/api/v1/redoc` (ReDoc).
 
 ---
 

@@ -37,9 +37,9 @@ def get_customer_documents_query(db: Session, user: User):
     Build query for documents visible to customer:
     - All PUBLIC documents (regardless of tenant)
     - COMPANY documents assigned to customer's tenant
-    - Excludes archived documents
+    - Includes only published (ACTIVE) documents
     """
-    query = db.query(Document).filter(Document.status != DocumentStatus.ARCHIVED)
+    query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
 
     # Customer can see:
     # 1. PUBLIC docs (available to everyone)
@@ -147,8 +147,8 @@ async def get_customer_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Exclude archived documents
-    if document.status == DocumentStatus.ARCHIVED:
+    # Only published documents are available in customer portal
+    if document.status != DocumentStatus.ACTIVE:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Check visibility - must be PUBLIC or COMPANY assigned to customer's tenant

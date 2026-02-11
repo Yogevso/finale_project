@@ -102,9 +102,32 @@ export default function ViewerDocumentPage() {
     )
   }
 
-  // Get the latest published version content
-  const latestVersion = versions.find((v: any) => v.is_published)
-  const content = latestVersion?.content || document.content || ''
+  const isSyntheticUploadPlaceholder = (value?: string | null) => {
+    if (!value) return false
+    return value.trim().toLowerCase().startsWith('uploaded from file:')
+  }
+
+  const hasRenderableContent = (value?: string | null) => {
+    if (!value) return false
+    const trimmed = value.trim()
+    return trimmed.length > 0 && !isSyntheticUploadPlaceholder(trimmed)
+  }
+
+  const normalizedVersions = Array.isArray(versions) ? versions : []
+  const latestVersion =
+    normalizedVersions.find((v: any) => v.is_published && hasRenderableContent(v.content)) ||
+    normalizedVersions.find((v: any) => hasRenderableContent(v.content))
+  const fallbackDocumentContent = hasRenderableContent((document as { content?: string | null }).content)
+    ? (document as { content?: string | null }).content || ''
+    : ''
+  const content = typeof latestVersion?.content === 'string' ? latestVersion.content : fallbackDocumentContent
+  const isHtmlContent = /<\/?[a-z][\s\S]*>/i.test(content)
+  const versionLabel = (version: { semantic_version?: string | null; version_number?: number }) =>
+    version?.semantic_version || `${version?.version_number || 1}.0.0`
+  const documentPaperClass =
+    contentWidth === 'fluid'
+      ? 'document-preview-paper document-preview-paper-fluid'
+      : 'document-preview-paper'
 
   // Print-friendly view
   if (isPrintMode) {
@@ -142,13 +165,24 @@ export default function ViewerDocumentPage() {
             )}
             <div className="mt-4 text-sm text-slate-500 flex gap-6">
               <span>Published: {new Date(document.updated_at).toLocaleDateString()}</span>
-              {latestVersion && <span>Version: {latestVersion.version_number}</span>}
+              {latestVersion && <span>Version: {versionLabel(latestVersion)}</span>}
             </div>
           </div>
 
           {/* Content */}
           <div className="prose prose-lg max-w-none mb-8">
-            <div className="whitespace-pre-wrap text-slate-700">{content}</div>
+            {content ? (
+              isHtmlContent ? (
+                <div
+                  className="document-preview-content"
+                  dangerouslySetInnerHTML={{ __html: content }}
+                />
+              ) : (
+                <div className="whitespace-pre-wrap text-slate-700">{content}</div>
+              )
+            ) : (
+              <p className="text-slate-400 italic">No content available.</p>
+            )}
           </div>
 
           {/* Attachments List */}
@@ -210,7 +244,7 @@ export default function ViewerDocumentPage() {
         </div>
       )}
 
-      <main className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `h-[calc(100vh-56px)] overflow-y-auto w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : 'max-w-4xl mx-auto px-4'} py-8`}>
+      <main className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `h-[calc(100vh-56px)] overflow-y-auto w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : `${contentWidth === 'reading' ? 'max-w-4xl mx-auto px-4' : 'max-w-none px-6 md:px-10 lg:px-16'}`} py-8`}>
         {/* Breadcrumb */}
         <nav className="mb-6 text-sm flex items-center justify-between">
           <Link to="/viewer" className="text-sky-600 hover:underline">
@@ -261,7 +295,7 @@ export default function ViewerDocumentPage() {
             {latestVersion && (
               <div>
                 <span className="font-medium text-slate-700">Version:</span>{' '}
-                {latestVersion.version_number}
+                {versionLabel(latestVersion)}
               </div>
             )}
             <div className="ml-auto flex gap-2">
@@ -280,9 +314,20 @@ export default function ViewerDocumentPage() {
           <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
             📄 Content
           </h2>
-          <div className="prose prose-lg max-w-none">
+          <div className="max-w-none">
             {content ? (
-              <div className="whitespace-pre-wrap text-slate-700">{content}</div>
+              isHtmlContent ? (
+                <div className={documentPaperClass}>
+                  <div
+                    className="document-preview-content"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
+                </div>
+              ) : (
+                <div className="prose prose-lg max-w-none">
+                  <div className="whitespace-pre-wrap text-slate-700">{content}</div>
+                </div>
+              )
             ) : (
               <p className="text-slate-400 italic">No content available.</p>
             )}
@@ -351,7 +396,7 @@ export default function ViewerDocumentPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-mono font-medium text-slate-900">
-                        v{version.version_number}
+                        v{versionLabel(version)}
                       </span>
                       {version.is_published && (
                         <span className="pill bg-emerald-100 text-emerald-700">
@@ -363,9 +408,9 @@ export default function ViewerDocumentPage() {
                       {new Date(version.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {version.change_notes && (
+                  {(version.changes_summary || version.change_notes) && (
                     <p className="text-sm text-slate-600 mt-2">
-                      {version.change_notes}
+                      {version.changes_summary || version.change_notes}
                     </p>
                   )}
                 </div>

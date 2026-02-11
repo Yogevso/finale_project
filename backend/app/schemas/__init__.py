@@ -5,7 +5,14 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import ActionType, DocumentStatus, DocumentVisibility, ReviewStatus, UserRole
+from app.models import (
+    ActionType,
+    DocumentStatus,
+    DocumentVisibility,
+    ReviewStatus,
+    UserRole,
+    VersionBumpType,
+)
 
 
 # ========== Tenant Schemas ==========
@@ -176,7 +183,7 @@ class VersionBase(BaseModel):
 class VersionCreate(VersionBase):
     """Version creation schema"""
 
-    pass
+    bump_type: VersionBumpType = VersionBumpType.PATCH
 
 
 class VersionUpdate(BaseModel):
@@ -192,10 +199,16 @@ class VersionResponse(VersionBase):
     id: int
     document_id: int
     version_number: int
+    semantic_version: Optional[str] = None
+    bump_type: VersionBumpType = VersionBumpType.PATCH
     is_published: bool = False
     published_at: Optional[datetime] = None
+    published_by: Optional[int] = None
     created_by: int
     created_at: datetime
+    created_by_user: Optional["UserResponse"] = None
+    published_by_user: Optional["UserResponse"] = None
+    latest_review: Optional["VersionReviewSummary"] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -205,6 +218,25 @@ class VersionListResponse(BaseModel):
 
     items: List[VersionResponse]
     total: int
+
+
+class VersionReviewSummary(BaseModel):
+    """Latest review details associated with a version"""
+
+    id: int
+    status: ReviewStatus
+    submitted_at: datetime
+    reviewed_at: Optional[datetime] = None
+    submitted_by: int
+    reviewed_by: Optional[int] = None
+    submitter: Optional["UserResponse"] = None
+    reviewer: Optional["UserResponse"] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+VersionResponse.model_rebuild()
+VersionReviewSummary.model_rebuild()
 
 
 # ========== Attachment Schemas ==========
@@ -394,6 +426,7 @@ __all__ = [
     "VersionUpdate",
     "VersionResponse",
     "VersionListResponse",
+    "VersionReviewSummary",
     # Attachment
     "AttachmentResponse",
     "AttachmentUploadResponse",

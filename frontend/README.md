@@ -17,26 +17,37 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, TipTap rich text editor, an
 ### Management Portal
 - **Dashboard** - Overview of recent documents, stats
 - **Document List** - Paginated, searchable, filterable
-- **Document Editor** - Rich text editing with TipTap
+- **Document Editor** - Rich text editor with TipTap (headings, lists, tables, links)
 - **Real-Time Collaboration** - Google Docs-style simultaneous editing
-- **Version Management** - Create, view, publish versions
-- **File Attachments** - Drag & drop upload, download
-- **Comments** - Threaded discussions, inline comments
+- **Version Management** - Immutable version history, publish specific versions, change summaries
+- **File Attachments** - Upload files to documents (PDF, Word, images, etc.)
+- **Comments** - Threaded comments with replies, inline comments, @mentions
 - **Reviews** - Peer review workflow (submit, approve, reject)
 - **User Management** - CRUD for users (admin only)
 - **Company Management** - Company CRUD, user assignment (admin only)
 
 ### Customer Portal
-- **Company Access** - Documents visible to customer's company
-- **Document Viewing** - Read company & public documents
+- **Company Access** - Customers see documents assigned to their company
+- **Company Visibility** - COMPANY level for targeted content
+- **Public Access** - Public documents also visible
+- **Secure Auth** - Secure authenticated access
 - **Feedback** - Submit feedback on documents
+- **Versions** - View document versions
+- **Downloads** - Download attachments
 - **Search** - Search within accessible documents
-- **Downloads** - Download attachments from accessible docs
 
 ### Viewer Portal
 - **Public Access** - No login required
-- **Clean Reading** - Distraction-free document viewing
-- **Navigation** - Table of contents, version selection
+- **Reading Experience** - Clean, distraction-free reading
+- **Published Only** - Published version access only (PUBLIC visibility)
+- **Navigation** - Table of contents navigation
+- **Print** - Print-friendly layout
+- **Discovery** - Browse all public documents
+- **Search & Filter** - Search and filter
+- **Categories** - Category-based navigation
+- **Recents** - Recent and popular documents
+- **Downloads** - Download attachments from public documents
+- **Tracking** - Download tracking and analytics
 
 ### Components
 - **NotificationBell** - Real-time notification dropdown
@@ -49,14 +60,14 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, TipTap rich text editor, an
 - **EngagementBar** - Bookmarks, feedback, progress
 
 ### Analytics Dashboard
-- **Overview Section** - Key stats with trend indicators
-- **Engagement Section** - Views/downloads charts, top documents
-- **User Section** - Role distribution, most active users (Admin+)
-- **Content Section** - Production metrics, review pipeline
-- **Feedback Section** - Response times, helpfulness rates
-- **Tenant Section** - Cross-tenant comparison (System Admin)
-- **Chart Components** - Line, Bar, Pie, Donut charts with Recharts
-- **Export Button** - CSV/PDF report downloads
+- **Overview Section** - Overview statistics with trend analysis
+- **Engagement Section** - Engagement analytics (views, downloads, reading progress)
+- **User Section** - User analytics (role distribution, activity) - Admin+
+- **Content Section** - Content production metrics (documents, versions, reviews)
+- **Feedback Section** - Feedback analytics with response times
+- **Tenant Section** - Tenant comparison (System Admin only)
+- **Chart Components** - Interactive charts with Recharts
+- **Export Button** - Export reports (CSV/PDF)
 - **Date Range Picker** - Preset ranges and granularity selection
 
 ---
@@ -101,7 +112,7 @@ Create a `.env` file:
 
 ```env
 # API Backend URL
-VITE_API_URL=http://localhost:8001
+VITE_API_URL=http://localhost:8000
 
 # Application
 VITE_APP_NAME=Documentation Platform
@@ -118,7 +129,7 @@ VITE_APP_VERSION=2.0.0
 npm run dev
 ```
 
-Frontend available at http://localhost:5173
+Frontend available at http://localhost:3000
 
 ### Production Build
 
@@ -448,7 +459,7 @@ docker run -p 3000:80 document-portal-frontend:latest
 
 ```bash
 docker build -f Dockerfile.dev -t frontend-dev .
-docker run -p 5173:5173 -v $(pwd)/src:/app/src frontend-dev
+docker run -p 3000:3000 -v $(pwd)/src:/app/src frontend-dev
 ```
 
 ---

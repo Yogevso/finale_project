@@ -57,7 +57,7 @@ async def submit_feedback(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Check document is published
-    if document.status not in [DocumentStatus.PUBLISHED, DocumentStatus.ACTIVE]:
+    if document.status != DocumentStatus.ACTIVE:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Check visibility

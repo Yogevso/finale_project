@@ -300,13 +300,20 @@ export default function DocumentFullscreenPage() {
     return toc
   }, [])
 
+  const isSyntheticUploadPlaceholder = useCallback((content?: string | null) => {
+    if (!content) return false
+    return content.trim().toLowerCase().startsWith('uploaded from file:')
+  }, [])
+
   // Load document content
   useEffect(() => {
     const loadContent = async () => {
       try {
         // First, check if there's a version with content (published preferred)
         const versionsResponse = await api.getVersions(Number(id))
-        const withContent = versionsResponse.items.filter(v => v.content)
+        const withContent = versionsResponse.items
+          .filter((v) => !!v.content?.trim() && !isSyntheticUploadPlaceholder(v.content))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         const publishedVersion = withContent
           .filter(v => v.is_published)
           .sort((a, b) => new Date(b.published_at || b.created_at).getTime() - new Date(a.published_at || a.created_at).getTime())[0]
@@ -371,7 +378,7 @@ export default function DocumentFullscreenPage() {
     }
 
     loadContent()
-  }, [attachments, id, processHtmlWithSections])
+  }, [attachments, id, isSyntheticUploadPlaceholder, processHtmlWithSections])
 
   // Handle section save
   const handleSaveSection = async (sectionIndex: number, newHtml: string, submitForReview: boolean) => {
@@ -634,18 +641,16 @@ export default function DocumentFullscreenPage() {
         {/* Document Content */}
         <div 
           ref={contentRef}
-          className="flex-1 overflow-auto bg-white"
+          className="flex-1 overflow-auto document-preview-pane"
           onScroll={handleScroll}
           onMouseUp={handleMouseUp}
         >
-          <div 
-            className="w-full max-w-none px-6 md:px-10 lg:px-16 xl:px-24 py-10 prose prose-lg"
-            style={{
-              fontFamily: 'Georgia, \"Times New Roman\", serif',
-              lineHeight: '1.8',
-            }}
-            dangerouslySetInnerHTML={{ __html: htmlContent || '' }}
-          />
+          <div className="document-preview-paper">
+            <div
+              className="document-preview-content"
+              dangerouslySetInnerHTML={{ __html: htmlContent || '' }}
+            />
+          </div>
           
           {/* Text selection popup for comments */}
           {selectionPopup.show && !commentPopup.show && (

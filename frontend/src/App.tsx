@@ -16,15 +16,12 @@ import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
 import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
 // Public portal pages
 import PublicLayout from './layouts/PublicLayout'
-import PublicHomePage from './pages/public/PublicHomePage'
 import PublicDocumentsPage from './pages/public/PublicDocumentsPage'
 import PublicPlatformsPage from './pages/public/PublicPlatformsPage'
 import PublicDocumentPage from './pages/public/PublicDocumentPage'
 import PublicSearchPage from './pages/public/PublicSearchPage'
-import PublicTopicsPage from './pages/public/PublicTopicsPage'
 import PublicToolsPage from './pages/public/PublicToolsPage'
 import PublicHelpPage from './pages/public/PublicHelpPage'
-import PublicTopicDetailPage from './pages/public/PublicTopicDetailPage'
 // Customer portal pages
 import CustomerLayout from './layouts/CustomerLayout'
 import CustomerRoute from './components/guards/CustomerRoute'
@@ -86,8 +83,8 @@ function App() {
           <Route path="/docs" element={<PublicDocumentsPage />} />
           <Route path="/platforms" element={<PublicPlatformsPage />} />
           <Route path="/browse" element={<Navigate to="/docs" replace />} />
-          <Route path="/topics" element={<PublicTopicsPage />} />
-          <Route path="/topics/:slug" element={<PublicTopicDetailPage />} />
+          <Route path="/topics" element={<Navigate to="/docs" replace />} />
+          <Route path="/topics/:slug" element={<Navigate to="/docs" replace />} />
           <Route path="/tools" element={<PublicToolsPage />} />
           <Route path="/help" element={<PublicHelpPage />} />
           <Route path="/doc/:id" element={<PublicDocumentPage />} />

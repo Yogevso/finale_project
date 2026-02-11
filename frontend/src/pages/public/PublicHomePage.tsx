@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Search, ArrowRight, Folder, BookOpen, Compass, Wrench } from 'lucide-react'
+import { FileText, Search, ArrowRight, BookOpen, Wrench } from 'lucide-react'
 import { useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
@@ -15,15 +15,9 @@ export default function PublicHomePage() {
   })
 
   // Fetch categories
-  const { data: categories, isLoading: categoriesLoading } = useQuery({
+  const { data: categories } = useQuery({
     queryKey: ['public-categories'],
     queryFn: () => publicApi.getCategories(),
-  })
-
-  // Fetch stats
-  const { data: stats } = useQuery({
-    queryKey: ['public-stats'],
-    queryFn: () => publicApi.getStats(),
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -44,7 +38,7 @@ export default function PublicHomePage() {
               Documentation Platform
             </h1>
             <p className="text-lg text-sky-100 mb-6">
-              Find approved documentation fast. Browse topics, tools, and release notes with role-aware access.
+              Find approved documentation fast. Browse tools and release notes with role-aware access.
             </p>
 
             {/* Search Bar */}
@@ -53,7 +47,7 @@ export default function PublicHomePage() {
                 <div className="relative flex-1">
                   <input
                     type="text"
-                    placeholder="Search docs, topics, tools"
+                    placeholder="Search docs and tools"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-6 py-3.5 pl-12 rounded-full text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40"
@@ -73,8 +67,8 @@ export default function PublicHomePage() {
               <Link to="/docs" className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/20 hover:bg-white/20">
                 Browse documents
               </Link>
-              <Link to="/topics" className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/20 hover:bg-white/20">
-                Explore topics
+              <Link to="/tools" className="px-4 py-2 rounded-full bg-white/10 text-white border border-white/20 hover:bg-white/20">
+                Explore tools
               </Link>
             </div>
           </div>
@@ -88,16 +82,11 @@ export default function PublicHomePage() {
             <div className="surface-card rounded-3xl p-8">
               <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Browse by</div>
               <h2 className="text-2xl font-display font-semibold text-slate-900 mb-6">Start with the essentials</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Link to="/docs" className="surface-card-hover rounded-2xl p-4">
                   <BookOpen className="h-6 w-6 text-sky-600 mb-3" />
                   <div className="font-medium text-slate-900">Documentation Library</div>
                   <p className="text-sm text-slate-500">Approved docs, release notes, and guides.</p>
-                </Link>
-                <Link to="/topics" className="surface-card-hover rounded-2xl p-4">
-                  <Compass className="h-6 w-6 text-sky-600 mb-3" />
-                  <div className="font-medium text-slate-900">Topics</div>
-                  <p className="text-sm text-slate-500">Browse by technical area and program.</p>
                 </Link>
                 <Link to="/tools" className="surface-card-hover rounded-2xl p-4">
                   <Wrench className="h-6 w-6 text-sky-600 mb-3" />
