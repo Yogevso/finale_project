@@ -10,6 +10,7 @@ import UsersPage from './pages/UsersPage'
 import CompaniesPage from './pages/CompaniesPage'
 import CompanyDetailPage from './pages/CompanyDetailPage'
 import ReviewsPage from './pages/ReviewsPage'
+import NotificationsPage from './pages/NotificationsPage'
 import FeedbackPage from './pages/admin/FeedbackPage'
 import SystemSetupPage from './pages/admin/SystemSetupPage'
 import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
@@ -147,6 +148,18 @@ function App() {
           }
         >
           <Route index element={<ReviewsPage />} />
+        </Route>
+
+        {/* Notifications - all internal users */}
+        <Route
+          path="/notifications"
+          element={
+            <InternalGuard>
+              <Layout />
+            </InternalGuard>
+          }
+        >
+          <Route index element={<NotificationsPage />} />
         </Route>
 
         {/* ==================== MANAGEMENT ROUTES ==================== */}

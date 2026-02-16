@@ -604,6 +604,11 @@ class ApiClient {
     return data
   }
 
+  async markNotificationUnread(notificationId: number): Promise<MessageResponse> {
+    const { data } = await this.client.post<MessageResponse>(`/notifications/${notificationId}/unread`)
+    return data
+  }
+
   async markAllNotificationsRead(notificationIds?: number[]): Promise<MessageResponse> {
     const { data } = await this.client.post<MessageResponse>('/notifications/read', {
       notification_ids: notificationIds || null

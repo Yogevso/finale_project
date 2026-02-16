@@ -247,19 +247,17 @@ export default function NotificationBell() {
           </div>
 
           {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
-              <button
-                onClick={() => {
-                  setIsOpen(false)
-                  navigate('/notifications')
-                }}
-                className="text-xs text-sky-600 hover:text-sky-800 w-full text-center"
-              >
-                View all notifications
-              </button>
-            </div>
-          )}
+          <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
+            <button
+              onClick={() => {
+                setIsOpen(false)
+                navigate('/notifications')
+              }}
+              className="text-xs text-sky-600 hover:text-sky-800 w-full text-center"
+            >
+              See all notifications
+            </button>
+          </div>
         </div>
       )}
     </div>

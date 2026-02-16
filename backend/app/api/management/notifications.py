@@ -149,6 +149,30 @@ def mark_notification_read(
     return {"message": "Notification marked as read"}
 
 
+@router.post("/notifications/{notification_id}/unread")
+def mark_notification_unread(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a single notification as unread"""
+    notification = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == current_user.id)
+        .first()
+    )
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    if notification.is_read:
+        notification.is_read = False
+        notification.read_at = None
+        db.commit()
+
+    return {"message": "Notification marked as unread"}
+
+
 @router.delete("/notifications/{notification_id}")
 def delete_notification(
     notification_id: int,
