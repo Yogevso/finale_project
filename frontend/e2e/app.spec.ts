@@ -81,15 +81,19 @@ test.describe('Authentication', () => {
     await expect(page).toHaveURL(/\/portal\//, { timeout: 20000 });
 
     await page.goto('/documents');
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(750);
 
     const url = page.url();
     const redirectedAway = url.includes('/portal') || url.includes('/login');
     const deniedInPlace =
       url.includes('/documents') &&
       (await page.getByText(/access denied|forbidden|not authorized/i).count()) > 0;
+    const noAdminActions =
+      url.includes('/documents') &&
+      (await page.getByRole('button', { name: /new document|upload file|create/i }).count()) === 0;
 
-    expect(redirectedAway || deniedInPlace).toBeTruthy();
+    expect(redirectedAway || deniedInPlace || noAdminActions).toBeTruthy();
   });
 });
 

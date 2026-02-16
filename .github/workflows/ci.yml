@@ -270,6 +270,7 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          RATE_LIMIT_ENABLED: "false"
           CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
@@ -354,6 +355,7 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          RATE_LIMIT_ENABLED: "false"
           CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
@@ -439,6 +441,7 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          RATE_LIMIT_ENABLED: "false"
           CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
