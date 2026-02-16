@@ -1,0 +1,23 @@
+# Source Mapping
+
+- `backend/app/models/__init__.py`
+- `backend/app/services/permissions.py`
+- `backend/app/services/auth_service.py`
+- `backend/app/api/management/auth.py`
+- `backend/app/api/management/invitations.py`
+- `backend/app/api/management/reviews.py`
+- `backend/app/services/version_service.py`
+- `backend/app/api/management/collaboration.py`
+- `backend/app/api/management/rbac.py`
+- `backend/app/api/management/system_settings.py`
+- `backend/app/api/management/companies.py`
+- `backend/app/api/management/feedback.py`
+- `backend/app/dependencies/permissions.py`
+- `backend/app/dependencies/tenant.py`
+- `backend/app/api/portal/documents.py`
+- `backend/app/api/portal/feedback.py`
+- `backend/app/api/public/documents.py`
+- `backend/app/api/public/topics.py`
+- `backend/app/api/viewer/documents.py`
+- `frontend/src/lib/useCollaboration.ts`
+- `collab-server/src/index.ts`
