@@ -27,6 +27,9 @@ import { test, expect, Page } from '@playwright/test';
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
 
 async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', credentials.username);
   await page.fill('input#password', credentials.password);

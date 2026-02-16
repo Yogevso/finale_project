@@ -6,6 +6,9 @@ const ADMIN = { username: 'admin', password: 'admin123' };
 
 // Helper to login as customer
 async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', credentials.username);
   await page.fill('input#password', credentials.password);
@@ -17,6 +20,9 @@ async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
 
 // Helper to login as admin
 async function loginAsAdmin(page: Page) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', ADMIN.username);
   await page.fill('input#password', ADMIN.password);

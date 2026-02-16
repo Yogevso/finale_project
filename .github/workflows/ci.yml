@@ -256,6 +256,14 @@ jobs:
         working-directory: ./backend
         run: mkdir -p data uploads
 
+      - name: Seed backend data for E2E
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+        run: python seed_data.py
+
       - name: Start backend server
         working-directory: ./backend
         env:
@@ -331,6 +339,14 @@ jobs:
       - name: Create backend directories
         working-directory: ./backend
         run: mkdir -p data uploads
+
+      - name: Seed backend data for E2E
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+        run: python seed_data.py
 
       - name: Start backend server
         working-directory: ./backend
@@ -408,6 +424,14 @@ jobs:
       - name: Create backend directories
         working-directory: ./backend
         run: mkdir -p data uploads
+
+      - name: Seed backend data for E2E
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+        run: python seed_data.py
 
       - name: Start backend server
         working-directory: ./backend

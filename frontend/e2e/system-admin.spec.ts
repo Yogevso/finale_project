@@ -25,6 +25,9 @@ import { test, expect, Page } from '@playwright/test';
 const SYSTEM_ADMIN = { username: 'sysadmin', password: 'sysadmin123' };
 
 async function loginAsSystemAdmin(page: Page) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', SYSTEM_ADMIN.username);
   await page.fill('input#password', SYSTEM_ADMIN.password);

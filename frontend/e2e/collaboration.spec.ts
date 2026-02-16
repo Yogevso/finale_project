@@ -18,6 +18,9 @@ const USER2 = { username: 'editor', password: 'editor123' };
 
 // Helper to login
 async function login(page: Page, username: string, password: string) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', username);
   await page.fill('input#password', password);

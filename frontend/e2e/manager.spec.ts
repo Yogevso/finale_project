@@ -27,6 +27,9 @@ import { test, expect, Page } from '@playwright/test';
 const MANAGER = { username: 'manager', password: 'manager123' };
 
 async function loginAsManager(page: Page) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', MANAGER.username);
   await page.fill('input#password', MANAGER.password);

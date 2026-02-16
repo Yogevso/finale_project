@@ -39,6 +39,9 @@ const ROLES = {
 };
 
 async function loginAs(page: Page, role: keyof typeof ROLES) {
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem('viewer_landed', '1');
+  });
   await page.goto('/login');
   await page.fill('input#username', ROLES[role].username);
   await page.fill('input#password', ROLES[role].password);
