@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { Attachment } from '@/types'
@@ -217,11 +217,12 @@ export default function DocumentFullscreenPage() {
     enabled: !!id,
   })
 
-  const { data: attachments = [] } = useQuery({
+  const { data: attachmentsData } = useQuery({
     queryKey: ['attachments', id],
     queryFn: () => api.getAttachments(Number(id)),
     enabled: !!id,
   })
+  const attachments = useMemo(() => attachmentsData ?? [], [attachmentsData])
 
   // Comment mutation
   const createCommentMutation = useMutation({

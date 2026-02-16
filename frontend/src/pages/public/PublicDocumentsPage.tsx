@@ -14,9 +14,12 @@ type LatestPlatformRelease = {
 }
 
 type PlatformReleasePreview = {
+  platformId?: number
   platform: string
   latestDoc: LatestPlatformRelease
 }
+
+const normalizePlatformName = (value: string) => value.trim().toLowerCase()
 
 export default function PublicDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -43,6 +46,19 @@ export default function PublicDocumentsPage() {
     queryKey: ['public-platform-history-preview'],
     queryFn: () => publicApi.getPlatformHistory(),
   })
+
+  const { data: platformOverview } = useQuery({
+    queryKey: ['public-platform-overview-preview'],
+    queryFn: () => publicApi.getPlatformsOverview(),
+  })
+
+  const platformIdByName = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const item of platformOverview?.items || []) {
+      map.set(normalizePlatformName(item.platform), item.id)
+    }
+    return map
+  }, [platformOverview?.items])
 
   const handleCategoryClick = (cat: string | null) => {
     const params = new URLSearchParams(searchParams)
@@ -124,6 +140,7 @@ export default function PublicDocumentsPage() {
 
       if (latestDoc) {
         releases.push({
+          platformId: platformIdByName.get(normalizePlatformName(platform.platform)),
           platform: platform.platform,
           latestDoc,
         })
@@ -137,7 +154,7 @@ export default function PublicDocumentsPage() {
         return bDate - aDate
       })
       .slice(0, 3)
-  }, [platformHistory])
+  }, [platformHistory, platformIdByName])
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -227,7 +244,11 @@ export default function PublicDocumentsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {latestPlatformReleases.map((item) => (
-                    <div key={item.platform} className="surface-muted rounded-2xl p-4">
+                    <Link
+                      key={item.platform}
+                      to={item.platformId ? `/platforms/${item.platformId}` : '/platforms'}
+                      className="surface-muted rounded-2xl p-4 block cursor-pointer transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                    >
                       <div className="text-xs uppercase tracking-widest text-slate-400">Platform</div>
                       <div className="text-lg font-display font-semibold text-slate-900 mt-1">
                         {item.platform}
@@ -254,7 +275,7 @@ export default function PublicDocumentsPage() {
                       <div className="mt-3 text-xs text-slate-400 font-mono">
                         {item.latestDoc.documentNumber}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
