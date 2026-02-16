@@ -108,15 +108,18 @@ jobs:
             });
 
       - name: Warn on large PRs
-        if: steps.size.outputs.total > 1000
+        if: ${{ fromJSON(steps.size.outputs.total) > 1000 }}
         uses: actions/github-script@v7
         with:
           script: |
+            const total = Number('${{ steps.size.outputs.total }}');
+            const additions = Number('${{ steps.size.outputs.additions }}');
+            const deletions = Number('${{ steps.size.outputs.deletions }}');
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `⚠️ **Large PR Warning**\n\nThis PR has ${${{ steps.size.outputs.total }}} changed lines (${${{ steps.size.outputs.additions }}} additions, ${${{ steps.size.outputs.deletions }}} deletions).\n\nConsider breaking this into smaller PRs for easier review.`
+              body: `⚠️ **Large PR Warning**\n\nThis PR has ${total} changed lines (${additions} additions, ${deletions} deletions).\n\nConsider breaking this into smaller PRs for easier review.`
             });
 
   # ============================================
