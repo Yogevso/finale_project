@@ -68,9 +68,9 @@ test.describe('Document Creation + Review + Publish Workflow', () => {
       if (await editBtn.count() > 0) {
         await editBtn.first().click();
         await page.waitForTimeout(500);
-        
-        // Should show edit form or modal
-        await expect(page.locator('form, [role="dialog"]')).toBeVisible();
+
+        // Edit flow now opens content edit chooser instead of a generic form/dialog.
+        await expect(page.locator('body')).toContainText(/edit content options|choose whether to edit/i);
       }
     }
   });

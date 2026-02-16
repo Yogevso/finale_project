@@ -148,8 +148,9 @@ test.describe('Customer Portal - Document Browsing', () => {
       await docLink.click();
       await page.waitForTimeout(1000);
       
-      // Should show document detail page
-      await expect(page.locator('body')).toContainText(/content|description|detail/i);
+      // Should show customer document detail page elements.
+      await expect(page).toHaveURL(/\/portal\/documents\/\d+/);
+      await expect(page.locator('body')).toContainText(/back to documents|submit feedback|updated|attachments/i);
     }
   });
 });
