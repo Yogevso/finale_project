@@ -1,7 +1,7 @@
 """Tests for Viewer Portal (Public Document Access)"""
 
-from datetime import datetime, timedelta
 import uuid
+from datetime import datetime, timedelta
 
 from app.models import Attachment, Comment, Document, DocumentStatus, Version
 

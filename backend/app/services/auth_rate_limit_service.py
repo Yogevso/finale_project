@@ -79,16 +79,12 @@ class AuthRateLimitService:
 
             if bucket.locked_until > now_ts:
                 retry_after = int(math.ceil(bucket.locked_until - now_ts))
-                cls._cleanup_stale_buckets(
-                    now_ts, max(window_seconds, lock_seconds) * 2
-                )
+                cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
                 return False, max(retry_after, 1)
 
             if len(bucket.attempts) >= max_attempts:
                 bucket.locked_until = now_ts + lock_seconds
-                cls._cleanup_stale_buckets(
-                    now_ts, max(window_seconds, lock_seconds) * 2
-                )
+                cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
                 return False, lock_seconds
 
             cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
@@ -112,9 +108,7 @@ class AuthRateLimitService:
             if len(bucket.attempts) >= max_attempts:
                 bucket.locked_until = max(bucket.locked_until, now_ts + lock_seconds)
                 retry_after = int(math.ceil(bucket.locked_until - now_ts))
-                cls._cleanup_stale_buckets(
-                    now_ts, max(window_seconds, lock_seconds) * 2
-                )
+                cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
                 return max(retry_after, 1)
 
             cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
@@ -157,9 +151,7 @@ class AuthRateLimitService:
         cls._record_success(key)
 
     @classmethod
-    def check_forgot_password_allowed(
-        cls, client_ip: str, identifier: str
-    ) -> tuple[bool, int]:
+    def check_forgot_password_allowed(cls, client_ip: str, identifier: str) -> tuple[bool, int]:
         """Check whether forgot-password request should be processed."""
         key = cls._make_key("forgot-password", client_ip, identifier)
         return cls._check_allowed(

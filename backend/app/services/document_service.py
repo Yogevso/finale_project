@@ -80,7 +80,9 @@ class DocumentService:
         return f"{prefix}-{next_seq:04d}"
 
     @staticmethod
-    def _parse_semver(raw_value: Optional[str], fallback_version_number: int) -> Tuple[int, int, int]:
+    def _parse_semver(
+        raw_value: Optional[str], fallback_version_number: int
+    ) -> Tuple[int, int, int]:
         if raw_value:
             parts = raw_value.strip().split(".")
             if len(parts) == 3 and all(part.isdigit() for part in parts):
@@ -143,9 +145,11 @@ class DocumentService:
         # Use provided document number or generate one
         if document_data.document_number:
             # document_number is globally unique
-            existing = self.db.query(Document).filter(
-                Document.document_number == document_data.document_number
-            ).first()
+            existing = (
+                self.db.query(Document)
+                .filter(Document.document_number == document_data.document_number)
+                .first()
+            )
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -201,9 +205,13 @@ class DocumentService:
             except IntegrityError as exc:
                 self.db.rollback()
                 if (
-                    "documents.document_number" in str(exc)
-                    or "UNIQUE constraint failed: documents.document_number" in str(exc)
-                ) and not document_data.document_number and attempts < 5:
+                    (
+                        "documents.document_number" in str(exc)
+                        or "UNIQUE constraint failed: documents.document_number" in str(exc)
+                    )
+                    and not document_data.document_number
+                    and attempts < 5
+                ):
                     document_number = self.generate_document_number()
                     continue
                 raise
@@ -352,7 +360,9 @@ class DocumentService:
             )
 
             new_version_number = (latest_version.version_number + 1) if latest_version else 1
-            latest_content = latest_version.content if latest_version and latest_version.content else ""
+            latest_content = (
+                latest_version.content if latest_version and latest_version.content else ""
+            )
             next_semantic = self._next_patch_version(
                 latest_version.semantic_version if latest_version else None,
                 latest_version.version_number if latest_version else 1,

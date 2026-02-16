@@ -27,7 +27,9 @@ class VersionService:
     """Service for managing document versions"""
 
     @staticmethod
-    def _parse_semver(raw_value: Optional[str], fallback_version_number: int) -> Tuple[int, int, int]:
+    def _parse_semver(
+        raw_value: Optional[str], fallback_version_number: int
+    ) -> Tuple[int, int, int]:
         """Parse semantic version string (x.y.z), fallback to version_number.0.0."""
         if raw_value:
             parts = raw_value.strip().split(".")
@@ -50,7 +52,9 @@ class VersionService:
         return VersionService._format_semver(major, minor, patch + 1)
 
     @staticmethod
-    def _latest_review_for_version(db: Session, document_id: int, version_id: int) -> Optional[ReviewRequest]:
+    def _latest_review_for_version(
+        db: Session, document_id: int, version_id: int
+    ) -> Optional[ReviewRequest]:
         """Get latest review record for a document version."""
         return (
             db.query(ReviewRequest)
@@ -317,9 +321,7 @@ class VersionService:
         return VersionService._serialize_version(version, latest_review)
 
     @staticmethod
-    def publish_version(
-        db: Session, document_id: int, version_id: int, current_user: User
-    ) -> dict:
+    def publish_version(db: Session, document_id: int, version_id: int, current_user: User) -> dict:
         """Publish a version (requires approval and makes it immutable)."""
         version = (
             db.query(Version)

@@ -26,18 +26,18 @@ from app.dependencies.permissions import (
 )
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import Document, DocumentStatus, Tenant, User
-from app.services.permissions import Permission
 from app.schemas import (
+    AttachmentResponse,
     DocumentCreate,
     DocumentListResponse,
     DocumentResponse,
     DocumentUpdate,
     MessageResponse,
-    AttachmentResponse,
     TenantSummary,
 )
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
+from app.services.permissions import Permission
 from app.utils.html_to_docx import html_to_docx_bytes
 
 router = APIRouter()
@@ -242,9 +242,7 @@ async def upload_document(
 
     # Create the document first
     service = DocumentService(db, tenant_ctx)
-    visibility_value = (
-        visibility if visibility in ["public", "internal", "company"] else "public"
-    )
+    visibility_value = visibility if visibility in ["public", "internal", "company"] else "public"
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",

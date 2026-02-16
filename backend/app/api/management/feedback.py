@@ -38,31 +38,40 @@ def get_document_contributors(db: Session, document_id: int) -> Set[int]:
     - Commenters
     """
     contributors: Set[int] = set()
-    
+
     # Get document creator
     document = db.query(Document).filter(Document.id == document_id).first()
     if document:
         contributors.add(document.created_by)
-    
+
     # Get version creators
-    versions = db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+    versions = (
+        db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+    )
     for (user_id,) in versions:
         contributors.add(user_id)
-    
+
     # Get attachment uploaders
-    attachments = db.query(Attachment.uploaded_by).filter(Attachment.document_id == document_id).distinct().all()
+    attachments = (
+        db.query(Attachment.uploaded_by)
+        .filter(Attachment.document_id == document_id)
+        .distinct()
+        .all()
+    )
     for (user_id,) in attachments:
         contributors.add(user_id)
-    
+
     # Get commenters
     comments = db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
     for (user_id,) in comments:
         contributors.add(user_id)
-    
+
     return contributors
 
 
-def can_view_feedback(db: Session, feedback: Feedback, current_user: User, contributors: Set[int] = None) -> bool:
+def can_view_feedback(
+    db: Session, feedback: Feedback, current_user: User, contributors: Set[int] = None
+) -> bool:
     """
     Check if a user can view a specific feedback.
     Rules:
@@ -73,18 +82,18 @@ def can_view_feedback(db: Session, feedback: Feedback, current_user: User, contr
     # Feedback author can always see their own
     if feedback.user_id == current_user.id:
         return True
-    
+
     # System admin can see all
     if current_user.role == UserRole.SYSTEM_ADMIN:
         return True
-    
+
     # Internal staff who have contributed to this document can see feedback
     if current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
         if contributors is None:
             contributors = get_document_contributors(db, feedback.document_id)
         if current_user.id in contributors:
             return True
-    
+
     return False
 
 
@@ -150,7 +159,13 @@ def require_admin_or_manager(current_user: User = Depends(get_current_user)) -> 
 
 def require_internal_staff(current_user: User = Depends(get_current_user)) -> User:
     """Require internal staff role (not customer)"""
-    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
+    if current_user.role not in [
+        UserRole.SYSTEM_ADMIN,
+        UserRole.ADMIN,
+        UserRole.MANAGER,
+        UserRole.EDITOR,
+        UserRole.VIEWER,
+    ]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Internal staff access required"
         )
@@ -171,7 +186,7 @@ async def list_all_feedback(
 ):
     """
     List feedback with contributor-based visibility filtering.
-    
+
     Only shows feedback for documents the current user has contributed to
     (unless user is system admin who can see all).
     """
@@ -207,7 +222,7 @@ async def list_all_feedback(
 
     # Get all matching feedback
     all_feedback = query.all()
-    
+
     # Filter by contributor visibility (unless system admin)
     if current_user.role == UserRole.SYSTEM_ADMIN:
         visible_feedback = all_feedback
@@ -215,17 +230,17 @@ async def list_all_feedback(
         # Cache contributors per document to avoid repeated queries
         contributors_cache: dict[int, Set[int]] = {}
         visible_feedback = []
-        
+
         for fb in all_feedback:
             if fb.document_id not in contributors_cache:
                 contributors_cache[fb.document_id] = get_document_contributors(db, fb.document_id)
-            
+
             if can_view_feedback(db, fb, current_user, contributors_cache[fb.document_id]):
                 visible_feedback.append(fb)
-    
+
     # Get total count of visible items
     total = len(visible_feedback)
-    
+
     # Manual pagination on filtered results
     start_idx = (page - 1) * per_page
     end_idx = start_idx + per_page
@@ -293,12 +308,12 @@ async def get_feedback(
 
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
-    
+
     # Check visibility using contributor rules
     if not can_view_feedback(db, feedback, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to view this feedback"
+            detail="You don't have permission to view this feedback",
         )
 
     tenant = (
@@ -357,7 +372,7 @@ async def respond_to_feedback(
     if not can_view_feedback(db, feedback, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to respond to this feedback"
+            detail="You don't have permission to respond to this feedback",
         )
 
     # Update feedback
@@ -448,7 +463,7 @@ async def update_feedback_status(
     if not can_view_feedback(db, feedback, current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to update this feedback"
+            detail="You don't have permission to update this feedback",
         )
 
     feedback.status = data.status

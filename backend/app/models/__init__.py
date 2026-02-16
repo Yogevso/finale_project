@@ -143,7 +143,7 @@ class CollaborationActivityType(str, enum.Enum):
 class SnapshotType(str, enum.Enum):
     """Collaboration snapshot types (NOT release versions)"""
 
-    AUTO_SAVE = "auto_save"      # Automatic periodic saves
+    AUTO_SAVE = "auto_save"  # Automatic periodic saves
     MANUAL_SAVE = "manual_save"  # User-triggered save action
     SESSION_END = "session_end"  # When last user leaves
     PRE_PUBLISH = "pre_publish"  # Before creating a Version

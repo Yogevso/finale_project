@@ -38,6 +38,7 @@ def init_db():
 
 def _run_lightweight_migrations() -> None:
     """Apply lightweight migrations for SQLite without Alembic."""
+
     def slugify(value: str) -> str:
         normalized = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
         return normalized or "platform"
@@ -185,7 +186,9 @@ def _run_lightweight_migrations() -> None:
                 conn.execute(text(ddl))
 
         conn.execute(
-            text("CREATE INDEX IF NOT EXISTS ix_attachments_storage_key ON attachments (storage_key)")
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_attachments_storage_key ON attachments (storage_key)"
+            )
         )
         conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_attachments_sha256 ON attachments (sha256)")
@@ -232,7 +235,10 @@ def _run_lightweight_migrations() -> None:
                 conn.execute(text(ddl))
 
         # Backfill semantic_version if missing on old rows.
-        if "semantic_version" in existing_version_columns or "semantic_version" in required_version_columns:
+        if (
+            "semantic_version" in existing_version_columns
+            or "semantic_version" in required_version_columns
+        ):
             conn.execute(
                 text(
                     "UPDATE versions "

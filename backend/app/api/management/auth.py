@@ -51,9 +51,7 @@ class AcceptInvitationRequest(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     """Request for password reset instructions."""
 
-    identifier: str = Field(
-        ..., min_length=1, max_length=255, description="Username or email"
-    )
+    identifier: str = Field(..., min_length=1, max_length=255, description="Username or email")
 
 
 def _get_client_ip(request: Request) -> str:
@@ -322,13 +320,16 @@ def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(ge
 
 # ========== Collaboration Token Endpoint ==========
 
+
 class CollabTokenRequest(BaseModel):
     """Request for a collaboration token"""
+
     document_id: int
 
 
 class CollabTokenResponse(BaseModel):
     """Response containing the collaboration token"""
+
     token: str
     document_id: int
     permissions: list[str]
@@ -354,17 +355,14 @@ def get_collab_token(
     # Get the document
     document = db.query(Document).filter(Document.id == request.document_id).first()
     if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
     permissions = CollaborationService.get_user_permissions(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document"
+            detail="You don't have permission to access this document",
         )
 
     # Create the collaboration token

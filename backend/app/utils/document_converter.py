@@ -4,8 +4,8 @@ Document Converter Utility
 Converts various document types (PDF, Word, etc.) to HTML for editing.
 """
 
-import io
 import html
+import io
 import logging
 import re
 from typing import Any, Optional
@@ -37,7 +37,9 @@ def _is_italic_span(flags: int, font_name: str) -> bool:
     return bool(flags & (1 << 1)) or "italic" in (font_name or "").lower()
 
 
-def _extract_pdf_tables_with_bboxes(page) -> tuple[list[dict[str, Any]], list[tuple[float, float, float, float]]]:
+def _extract_pdf_tables_with_bboxes(
+    page,
+) -> tuple[list[dict[str, Any]], list[tuple[float, float, float, float]]]:
     """Extract table-like structures and their rough page coordinates."""
     if not hasattr(page, "find_tables"):
         return [], []
@@ -144,7 +146,8 @@ def _bbox_overlap_ratio(
 
 
 def _line_intersects_table(
-    line_bbox: tuple[float, float, float, float], table_bboxes: list[tuple[float, float, float, float]]
+    line_bbox: tuple[float, float, float, float],
+    table_bboxes: list[tuple[float, float, float, float]],
 ) -> bool:
     for table_bbox in table_bboxes:
         if _bbox_overlap_ratio(line_bbox, table_bbox) >= 0.45:
@@ -472,7 +475,8 @@ def _map_outline_to_toc(
                         if normalized_outline_title
                         and (
                             normalized_outline_title in str(heading.get("normalized_title") or "")
-                            or str(heading.get("normalized_title") or "") in normalized_outline_title
+                            or str(heading.get("normalized_title") or "")
+                            in normalized_outline_title
                         )
                     ),
                     None,
@@ -655,17 +659,17 @@ def convert_word_to_html(content: bytes) -> str:
     except ImportError:
         logger.error("mammoth not installed")
         return "<p>Word conversion not available. Please install mammoth.</p>"
-    
+
     try:
         result = mammoth.convert_to_html(io.BytesIO(content))
         html = result.value
-        
+
         # Clean up the HTML a bit
         if not html.strip():
             html = "<p>No content could be extracted from this document.</p>"
-        
+
         return html
-        
+
     except Exception as e:
         logger.error(f"Word conversion error: {e}")
         # Try python-docx as fallback
@@ -680,16 +684,16 @@ def convert_word_to_html_fallback(content: bytes) -> str:
         from docx import Document
     except ImportError:
         return "<p>Word conversion not available.</p>"
-    
+
     try:
         doc = Document(io.BytesIO(content))
         html_parts = []
-        
+
         for para in doc.paragraphs:
             text = para.text.strip()
             if not text:
                 continue
-            
+
             # Check for heading styles
             if para.style and para.style.name:
                 style = para.style.name.lower()
@@ -705,9 +709,9 @@ def convert_word_to_html_fallback(content: bytes) -> str:
                     html_parts.append(f"<p>{text}</p>")
             else:
                 html_parts.append(f"<p>{text}</p>")
-        
+
         return "\n".join(html_parts) if html_parts else "<p>No content found.</p>"
-        
+
     except Exception as e:
         logger.error(f"Word fallback conversion error: {e}")
         return f"<p>Error converting Word document: {str(e)}</p>"
@@ -720,15 +724,12 @@ def convert_text_to_html(content: bytes) -> str:
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:
-        try:
-            text = content.decode("latin-1")
-        except:
-            text = content.decode("utf-8", errors="replace")
-    
+        text = content.decode("latin-1", errors="replace")
+
     # Convert newlines to paragraphs
     paragraphs = text.split("\n\n")
     html_parts = []
-    
+
     for para in paragraphs:
         para = para.strip()
         if para:
@@ -739,30 +740,35 @@ def convert_text_to_html(content: bytes) -> str:
             # Convert single newlines to <br>
             para = para.replace("\n", "<br>")
             html_parts.append(f"<p>{para}</p>")
-    
+
     return "\n".join(html_parts) if html_parts else "<p>No content.</p>"
 
 
 def convert_document_to_html(content: bytes, mime_type: str, filename: str = "") -> Optional[str]:
     """
     Convert a document to HTML based on its MIME type.
-    
+
     Returns HTML string or None if conversion is not supported.
     """
     mime_type = mime_type.lower()
     filename = filename.lower()
-    
+
     # PDF
     if mime_type == "application/pdf" or filename.endswith(".pdf"):
         return convert_pdf_to_html(content)
-    
+
     # Word documents
-    if mime_type in [
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ] or filename.endswith(".docx") or filename.endswith(".doc"):
+    if (
+        mime_type
+        in [
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ]
+        or filename.endswith(".docx")
+        or filename.endswith(".doc")
+    ):
         return convert_word_to_html(content)
-    
+
     # Plain text
     if mime_type.startswith("text/") or filename.endswith(".txt"):
         return convert_text_to_html(content)
@@ -772,7 +778,11 @@ def convert_document_to_html(content: bytes, mime_type: str, filename: str = "")
         return convert_text_to_html(content)
 
     # HTML content
-    if mime_type in ["text/html", "application/xhtml+xml"] or filename.endswith(".html") or filename.endswith(".htm"):
+    if (
+        mime_type in ["text/html", "application/xhtml+xml"]
+        or filename.endswith(".html")
+        or filename.endswith(".htm")
+    ):
         try:
             return content.decode("utf-8")
         except UnicodeDecodeError:
@@ -781,11 +791,11 @@ def convert_document_to_html(content: bytes, mime_type: str, filename: str = "")
     # JSON - show as formatted text
     if mime_type == "application/json" or filename.endswith(".json"):
         return convert_text_to_html(content)
-    
+
     # RTF - treat as text for now
     if mime_type == "application/rtf" or filename.endswith(".rtf"):
         return convert_text_to_html(content)
-    
+
     logger.info(f"No converter for mime_type={mime_type}, filename={filename}")
     return None
 

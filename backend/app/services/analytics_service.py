@@ -71,9 +71,7 @@ class AnalyticsService:
     # Overview Analytics
     # ========================================================================
 
-    def get_overview(
-        self, date_from: date, date_to: date
-    ) -> Dict:
+    def get_overview(self, date_from: date, date_to: date) -> Dict:
         """Get overview analytics"""
         # Convert dates to datetime for queries
         start_dt = datetime.combine(date_from, datetime.min.time())
@@ -94,39 +92,37 @@ class AnalyticsService:
         total_users = user_query.count()
 
         # Views and downloads in period
-        audit_query = self.db.query(AuditLog).filter(
-            AuditLog.created_at.between(start_dt, end_dt)
-        )
+        audit_query = self.db.query(AuditLog).filter(AuditLog.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             # Filter by documents in tenant
-            tenant_doc_ids = self.db.query(Document.id).filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            ).subquery()
+            tenant_doc_ids = (
+                self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .subquery()
+            )
             audit_query = audit_query.filter(
-                or_(
-                    AuditLog.document_id.in_(tenant_doc_ids),
-                    AuditLog.document_id.is_(None)
-                )
+                or_(AuditLog.document_id.in_(tenant_doc_ids), AuditLog.document_id.is_(None))
             )
 
         total_views = audit_query.filter(AuditLog.action == ActionType.VIEW).count()
         total_downloads = audit_query.filter(AuditLog.action == ActionType.DOWNLOAD).count()
 
         # Documents by status
-        status_query = self.db.query(
-            Document.status, func.count(Document.id)
-        ).group_by(Document.status)
+        status_query = self.db.query(Document.status, func.count(Document.id)).group_by(
+            Document.status
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             status_query = status_query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
         documents_by_status = {
-            status.value if status else "unknown": count
-            for status, count in status_query.all()
+            status.value if status else "unknown": count for status, count in status_query.all()
         }
 
         # Documents by category
-        cat_query = self.db.query(
-            Document.category, func.count(Document.id)
-        ).filter(Document.category.isnot(None)).group_by(Document.category)
+        cat_query = (
+            self.db.query(Document.category, func.count(Document.id))
+            .filter(Document.category.isnot(None))
+            .group_by(Document.category)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             cat_query = cat_query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
         documents_by_category = [
@@ -147,8 +143,7 @@ class AnalyticsService:
 
         # Views today
         views_today_query = self.db.query(AuditLog).filter(
-            AuditLog.action == ActionType.VIEW,
-            AuditLog.created_at >= today_start
+            AuditLog.action == ActionType.VIEW, AuditLog.created_at >= today_start
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             views_today_query = views_today_query.filter(
@@ -158,19 +153,15 @@ class AnalyticsService:
                             Document.tenant_id == self.tenant_ctx.tenant_id
                         )
                     ),
-                    AuditLog.document_id.is_(None)
+                    AuditLog.document_id.is_(None),
                 )
             )
         views_today = views_today_query.count()
 
         # New docs this week
-        new_docs_query = self.db.query(Document).filter(
-            Document.created_at >= week_ago
-        )
+        new_docs_query = self.db.query(Document).filter(Document.created_at >= week_ago)
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            new_docs_query = new_docs_query.filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            )
+            new_docs_query = new_docs_query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
         new_docs_this_week = new_docs_query.count()
 
         return {
@@ -192,14 +183,13 @@ class AnalyticsService:
         query = self.db.query(AuditLog).join(User, AuditLog.user_id == User.id)
 
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_ids = self.db.query(Document.id).filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            ).subquery()
+            tenant_doc_ids = (
+                self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .subquery()
+            )
             query = query.filter(
-                or_(
-                    AuditLog.document_id.in_(tenant_doc_ids),
-                    AuditLog.document_id.is_(None)
-                )
+                or_(AuditLog.document_id.in_(tenant_doc_ids), AuditLog.document_id.is_(None))
             )
 
         logs = query.order_by(AuditLog.created_at.desc()).limit(limit).all()
@@ -211,16 +201,18 @@ class AnalyticsService:
             if log.document_id:
                 doc = self.db.query(Document).filter(Document.id == log.document_id).first()
 
-            activities.append(RecentActivity(
-                id=log.id,
-                action=log.action.value if log.action else "unknown",
-                document_id=log.document_id,
-                document_title=doc.title if doc else None,
-                user_id=log.user_id,
-                user_name=user.full_name if user else "Unknown",
-                created_at=log.created_at.isoformat() if log.created_at else "",
-                details=log.details,
-            ))
+            activities.append(
+                RecentActivity(
+                    id=log.id,
+                    action=log.action.value if log.action else "unknown",
+                    document_id=log.document_id,
+                    document_title=doc.title if doc else None,
+                    user_id=log.user_id,
+                    user_name=user.full_name if user else "Unknown",
+                    created_at=log.created_at.isoformat() if log.created_at else "",
+                    details=log.details,
+                )
+            )
 
         return activities
 
@@ -244,55 +236,55 @@ class AnalyticsService:
         # Get tenant document IDs for filtering
         tenant_doc_subquery = None
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_subquery = self.db.query(Document.id).filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            ).subquery()
+            tenant_doc_subquery = (
+                self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .subquery()
+            )
 
         def apply_tenant_filter(query):
             if tenant_doc_subquery is not None:
                 return query.filter(
                     or_(
                         AuditLog.document_id.in_(tenant_doc_subquery),
-                        AuditLog.document_id.is_(None)
+                        AuditLog.document_id.is_(None),
                     )
                 )
             return query
 
         # Views over time
         date_trunc = self._get_date_trunc(granularity, AuditLog.created_at)
-        views_query = self.db.query(
-            date_trunc.label("date"),
-            func.count(AuditLog.id).label("value")
-        ).filter(
-            AuditLog.action == ActionType.VIEW,
-            AuditLog.created_at.between(start_dt, end_dt)
-        ).group_by(date_trunc).order_by(date_trunc)
+        views_query = (
+            self.db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            .filter(
+                AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
+            )
+            .group_by(date_trunc)
+            .order_by(date_trunc)
+        )
         views_query = apply_tenant_filter(views_query)
         views_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in views_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in views_query.all()
         ]
 
         # Downloads over time
-        downloads_query = self.db.query(
-            date_trunc.label("date"),
-            func.count(AuditLog.id).label("value")
-        ).filter(
-            AuditLog.action == ActionType.DOWNLOAD,
-            AuditLog.created_at.between(start_dt, end_dt)
-        ).group_by(date_trunc).order_by(date_trunc)
+        downloads_query = (
+            self.db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            .filter(
+                AuditLog.action == ActionType.DOWNLOAD,
+                AuditLog.created_at.between(start_dt, end_dt),
+            )
+            .group_by(date_trunc)
+            .order_by(date_trunc)
+        )
         downloads_query = apply_tenant_filter(downloads_query)
         downloads_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in downloads_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in downloads_query.all()
         ]
 
         # Unique visitors
-        visitors_query = self.db.query(
-            func.count(func.distinct(AuditLog.user_id))
-        ).filter(
-            AuditLog.action == ActionType.VIEW,
-            AuditLog.created_at.between(start_dt, end_dt)
+        visitors_query = self.db.query(func.count(func.distinct(AuditLog.user_id))).filter(
+            AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
         )
         visitors_query = apply_tenant_filter(visitors_query)
         unique_visitors = visitors_query.scalar() or 0
@@ -304,9 +296,7 @@ class AnalyticsService:
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
 
-        avg_progress = self.db.query(
-            func.avg(ReadingProgress.progress_percent)
-        )
+        avg_progress = self.db.query(func.avg(ReadingProgress.progress_percent))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             avg_progress = avg_progress.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
@@ -346,38 +336,43 @@ class AnalyticsService:
 
         tenant_doc_subquery = None
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_subquery = self.db.query(Document.id).filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            ).subquery()
+            tenant_doc_subquery = (
+                self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .subquery()
+            )
 
         def get_top_by_action(action: ActionType) -> List[DocumentStats]:
             query = self.db.query(
-                AuditLog.document_id,
-                func.count(AuditLog.id).label("count")
+                AuditLog.document_id, func.count(AuditLog.id).label("count")
             ).filter(
                 AuditLog.action == action,
                 AuditLog.created_at.between(start_dt, end_dt),
-                AuditLog.document_id.isnot(None)
+                AuditLog.document_id.isnot(None),
             )
 
             if tenant_doc_subquery is not None:
                 query = query.filter(AuditLog.document_id.in_(tenant_doc_subquery))
 
-            query = query.group_by(AuditLog.document_id).order_by(
-                func.count(AuditLog.id).desc()
-            ).limit(limit)
+            query = (
+                query.group_by(AuditLog.document_id)
+                .order_by(func.count(AuditLog.id).desc())
+                .limit(limit)
+            )
 
             results = []
             for row in query.all():
                 doc = self.db.query(Document).filter(Document.id == row.document_id).first()
                 if doc:
-                    results.append(DocumentStats(
-                        document_id=doc.id,
-                        document_number=doc.document_number,
-                        title=doc.title,
-                        view_count=row.count if action == ActionType.VIEW else 0,
-                        download_count=row.count if action == ActionType.DOWNLOAD else 0,
-                    ))
+                    results.append(
+                        DocumentStats(
+                            document_id=doc.id,
+                            document_number=doc.document_number,
+                            title=doc.title,
+                            view_count=row.count if action == ActionType.VIEW else 0,
+                            download_count=row.count if action == ActionType.DOWNLOAD else 0,
+                        )
+                    )
             return results
 
         return {
@@ -412,43 +407,39 @@ class AnalyticsService:
         inactive_users = total_users - active_users
 
         # Users by role
-        role_query = self.db.query(
-            User.role, func.count(User.id)
-        ).group_by(User.role)
+        role_query = self.db.query(User.role, func.count(User.id)).group_by(User.role)
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             role_query = role_query.filter(User.tenant_id == self.tenant_ctx.tenant_id)
         users_by_role = {
-            role.value if role else "unknown": count
-            for role, count in role_query.all()
+            role.value if role else "unknown": count for role, count in role_query.all()
         }
 
         # New users over time
         date_trunc = self._get_date_trunc(granularity, User.created_at)
-        new_users_query = self.db.query(
-            date_trunc.label("date"),
-            func.count(User.id).label("value")
-        ).filter(
-            User.created_at.between(start_dt, end_dt)
-        ).group_by(date_trunc).order_by(date_trunc)
+        new_users_query = (
+            self.db.query(date_trunc.label("date"), func.count(User.id).label("value"))
+            .filter(User.created_at.between(start_dt, end_dt))
+            .group_by(date_trunc)
+            .order_by(date_trunc)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            new_users_query = new_users_query.filter(
-                User.tenant_id == self.tenant_ctx.tenant_id
-            )
+            new_users_query = new_users_query.filter(User.tenant_id == self.tenant_ctx.tenant_id)
         new_users_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in new_users_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in new_users_query.all()
         ]
 
         # Most active users
-        activity_query = self.db.query(
-            AuditLog.user_id,
-            func.count(AuditLog.id).label("count"),
-            func.max(AuditLog.created_at).label("last_active")
-        ).filter(
-            AuditLog.created_at.between(start_dt, end_dt)
-        ).group_by(AuditLog.user_id).order_by(
-            func.count(AuditLog.id).desc()
-        ).limit(10)
+        activity_query = (
+            self.db.query(
+                AuditLog.user_id,
+                func.count(AuditLog.id).label("count"),
+                func.max(AuditLog.created_at).label("last_active"),
+            )
+            .filter(AuditLog.created_at.between(start_dt, end_dt))
+            .group_by(AuditLog.user_id)
+            .order_by(func.count(AuditLog.id).desc())
+            .limit(10)
+        )
 
         most_active = []
         for row in activity_query.all():
@@ -458,14 +449,16 @@ class AnalyticsService:
                 if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
                     if user.tenant_id != self.tenant_ctx.tenant_id:
                         continue
-                most_active.append(UserActivityItem(
-                    user_id=user.id,
-                    username=user.username,
-                    full_name=user.full_name,
-                    role=user.role.value if user.role else "unknown",
-                    action_count=row.count,
-                    last_active=row.last_active.isoformat() if row.last_active else None,
-                ))
+                most_active.append(
+                    UserActivityItem(
+                        user_id=user.id,
+                        username=user.username,
+                        full_name=user.full_name,
+                        role=user.role.value if user.role else "unknown",
+                        action_count=row.count,
+                        last_active=row.last_active.isoformat() if row.last_active else None,
+                    )
+                )
 
         return {
             "period_start": date_from,
@@ -498,54 +491,48 @@ class AnalyticsService:
 
         # Documents created over time
         doc_date_trunc = self._get_date_trunc(granularity, Document.created_at)
-        docs_query = self.db.query(
-            doc_date_trunc.label("date"),
-            func.count(Document.id).label("value")
-        ).filter(
-            Document.created_at.between(start_dt, end_dt)
-        ).group_by(doc_date_trunc).order_by(doc_date_trunc)
+        docs_query = (
+            self.db.query(doc_date_trunc.label("date"), func.count(Document.id).label("value"))
+            .filter(Document.created_at.between(start_dt, end_dt))
+            .group_by(doc_date_trunc)
+            .order_by(doc_date_trunc)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            docs_query = docs_query.filter(
-                Document.tenant_id == self.tenant_ctx.tenant_id
-            )
+            docs_query = docs_query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
         docs_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in docs_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in docs_query.all()
         ]
 
         # Versions published over time
         ver_date_trunc = self._get_date_trunc(granularity, Version.created_at)
-        versions_query = self.db.query(
-            ver_date_trunc.label("date"),
-            func.count(Version.id).label("value")
-        ).filter(
-            Version.is_published.is_(True),
-            Version.created_at.between(start_dt, end_dt)
-        ).group_by(ver_date_trunc).order_by(ver_date_trunc)
+        versions_query = (
+            self.db.query(ver_date_trunc.label("date"), func.count(Version.id).label("value"))
+            .filter(Version.is_published.is_(True), Version.created_at.between(start_dt, end_dt))
+            .group_by(ver_date_trunc)
+            .order_by(ver_date_trunc)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             versions_query = versions_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         versions_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in versions_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in versions_query.all()
         ]
 
         # Comments over time
         comment_date_trunc = self._get_date_trunc(granularity, Comment.created_at)
-        comments_query = self.db.query(
-            comment_date_trunc.label("date"),
-            func.count(Comment.id).label("value")
-        ).filter(
-            Comment.created_at.between(start_dt, end_dt)
-        ).group_by(comment_date_trunc).order_by(comment_date_trunc)
+        comments_query = (
+            self.db.query(comment_date_trunc.label("date"), func.count(Comment.id).label("value"))
+            .filter(Comment.created_at.between(start_dt, end_dt))
+            .group_by(comment_date_trunc)
+            .order_by(comment_date_trunc)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             comments_query = comments_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         comments_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in comments_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in comments_query.all()
         ]
 
         # Review metrics
@@ -562,24 +549,21 @@ class AnalyticsService:
         approval_rate = (approved / total_reviews * 100) if total_reviews > 0 else 0.0
 
         # Reviews by status
-        status_query = self.db.query(
-            ReviewRequest.status, func.count(ReviewRequest.id)
-        ).filter(
-            ReviewRequest.created_at.between(start_dt, end_dt)
-        ).group_by(ReviewRequest.status)
+        status_query = (
+            self.db.query(ReviewRequest.status, func.count(ReviewRequest.id))
+            .filter(ReviewRequest.created_at.between(start_dt, end_dt))
+            .group_by(ReviewRequest.status)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             status_query = status_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         reviews_by_status = {
-            status.value if status else "unknown": count
-            for status, count in status_query.all()
+            status.value if status else "unknown": count for status, count in status_query.all()
         }
 
         # Average review turnaround (for completed reviews)
-        completed_reviews = review_query.filter(
-            ReviewRequest.reviewed_at.isnot(None)
-        ).all()
+        completed_reviews = review_query.filter(ReviewRequest.reviewed_at.isnot(None)).all()
         turnaround_hours = None
         if completed_reviews:
             total_hours = sum(
@@ -590,24 +574,19 @@ class AnalyticsService:
             turnaround_hours = total_hours / len(completed_reviews)
 
         # Totals
-        total_docs = self.db.query(Document).filter(
-            Document.created_at.between(start_dt, end_dt)
-        )
+        total_docs = self.db.query(Document).filter(Document.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             total_docs = total_docs.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
 
         total_versions = self.db.query(Version).filter(
-            Version.is_published.is_(True),
-            Version.created_at.between(start_dt, end_dt)
+            Version.is_published.is_(True), Version.created_at.between(start_dt, end_dt)
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             total_versions = total_versions.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
 
-        total_comments = self.db.query(Comment).filter(
-            Comment.created_at.between(start_dt, end_dt)
-        )
+        total_comments = self.db.query(Comment).filter(Comment.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             total_comments = total_comments.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
@@ -646,9 +625,7 @@ class AnalyticsService:
         end_dt = datetime.combine(date_to, datetime.max.time())
 
         # Base query
-        base_query = self.db.query(Feedback).filter(
-            Feedback.created_at.between(start_dt, end_dt)
-        )
+        base_query = self.db.query(Feedback).filter(Feedback.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             base_query = base_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
@@ -659,56 +636,51 @@ class AnalyticsService:
         responded = base_query.filter(Feedback.status == FeedbackStatus.RESPONDED).count()
 
         # Feedback by type
-        type_query = self.db.query(
-            Feedback.feedback_type, func.count(Feedback.id)
-        ).filter(
-            Feedback.created_at.between(start_dt, end_dt)
-        ).group_by(Feedback.feedback_type)
+        type_query = (
+            self.db.query(Feedback.feedback_type, func.count(Feedback.id))
+            .filter(Feedback.created_at.between(start_dt, end_dt))
+            .group_by(Feedback.feedback_type)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             type_query = type_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         feedback_by_type = {
-            ftype.value if ftype else "unknown": count
-            for ftype, count in type_query.all()
+            ftype.value if ftype else "unknown": count for ftype, count in type_query.all()
         }
 
         # Feedback by status
-        status_query = self.db.query(
-            Feedback.status, func.count(Feedback.id)
-        ).filter(
-            Feedback.created_at.between(start_dt, end_dt)
-        ).group_by(Feedback.status)
+        status_query = (
+            self.db.query(Feedback.status, func.count(Feedback.id))
+            .filter(Feedback.created_at.between(start_dt, end_dt))
+            .group_by(Feedback.status)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             status_query = status_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         feedback_by_status = {
-            status.value if status else "unknown": count
-            for status, count in status_query.all()
+            status.value if status else "unknown": count for status, count in status_query.all()
         }
 
         # Feedback over time
         date_trunc = self._get_date_trunc(granularity, Feedback.created_at)
-        time_query = self.db.query(
-            date_trunc.label("date"),
-            func.count(Feedback.id).label("value")
-        ).filter(
-            Feedback.created_at.between(start_dt, end_dt)
-        ).group_by(date_trunc).order_by(date_trunc)
+        time_query = (
+            self.db.query(date_trunc.label("date"), func.count(Feedback.id).label("value"))
+            .filter(Feedback.created_at.between(start_dt, end_dt))
+            .group_by(date_trunc)
+            .order_by(date_trunc)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             time_query = time_query.join(Document).filter(
                 Document.tenant_id == self.tenant_ctx.tenant_id
             )
         feedback_over_time = [
-            TimeSeriesPoint(date=str(row.date), value=row.value)
-            for row in time_query.all()
+            TimeSeriesPoint(date=str(row.date), value=row.value) for row in time_query.all()
         ]
 
         # Average response time
-        responded_feedback = base_query.filter(
-            Feedback.responded_at.isnot(None)
-        ).all()
+        responded_feedback = base_query.filter(Feedback.responded_at.isnot(None)).all()
         avg_response_hours = None
         if responded_feedback:
             total_hours = sum(
@@ -753,52 +725,57 @@ class AnalyticsService:
         tenant_metrics = []
         for tenant in tenants:
             # Document count
-            doc_count = self.db.query(Document).filter(
-                Document.tenant_id == tenant.id
-            ).count()
+            doc_count = self.db.query(Document).filter(Document.tenant_id == tenant.id).count()
 
             # User count
-            user_count = self.db.query(User).filter(
-                User.tenant_id == tenant.id
-            ).count()
+            user_count = self.db.query(User).filter(User.tenant_id == tenant.id).count()
 
             # Active users (had activity in last 30 days)
-            active_user_ids = self.db.query(
-                func.distinct(AuditLog.user_id)
-            ).join(User).filter(
-                User.tenant_id == tenant.id,
-                AuditLog.created_at >= thirty_days_ago
-            ).all()
+            active_user_ids = (
+                self.db.query(func.distinct(AuditLog.user_id))
+                .join(User)
+                .filter(User.tenant_id == tenant.id, AuditLog.created_at >= thirty_days_ago)
+                .all()
+            )
             active_users_30d = len(active_user_ids)
 
             # Views in last 30 days
-            tenant_doc_ids = self.db.query(Document.id).filter(
-                Document.tenant_id == tenant.id
-            ).subquery()
-            views_30d = self.db.query(AuditLog).filter(
-                AuditLog.action == ActionType.VIEW,
-                AuditLog.created_at >= thirty_days_ago,
-                AuditLog.document_id.in_(tenant_doc_ids)
-            ).count()
+            tenant_doc_ids = (
+                self.db.query(Document.id).filter(Document.tenant_id == tenant.id).subquery()
+            )
+            views_30d = (
+                self.db.query(AuditLog)
+                .filter(
+                    AuditLog.action == ActionType.VIEW,
+                    AuditLog.created_at >= thirty_days_ago,
+                    AuditLog.document_id.in_(tenant_doc_ids),
+                )
+                .count()
+            )
 
             # Health score (simple formula: activity + content)
-            health_score = min(100, (
-                (active_users_30d / max(user_count, 1) * 40) +  # 40% weight: active user ratio
-                (min(views_30d, 100) / 100 * 30) +  # 30% weight: views (capped at 100)
-                (min(doc_count, 50) / 50 * 30)  # 30% weight: documents (capped at 50)
-            ))
+            health_score = min(
+                100,
+                (
+                    (active_users_30d / max(user_count, 1) * 40)  # 40% weight: active user ratio
+                    + (min(views_30d, 100) / 100 * 30)  # 30% weight: views (capped at 100)
+                    + (min(doc_count, 50) / 50 * 30)  # 30% weight: documents (capped at 50)
+                ),
+            )
 
-            tenant_metrics.append(TenantMetrics(
-                tenant_id=tenant.id,
-                tenant_name=tenant.name,
-                tenant_slug=tenant.slug,
-                is_active=tenant.is_active,
-                total_documents=doc_count,
-                total_users=user_count,
-                active_users_30d=active_users_30d,
-                total_views_30d=views_30d,
-                health_score=round(health_score, 2),
-            ))
+            tenant_metrics.append(
+                TenantMetrics(
+                    tenant_id=tenant.id,
+                    tenant_name=tenant.name,
+                    tenant_slug=tenant.slug,
+                    is_active=tenant.is_active,
+                    total_documents=doc_count,
+                    total_users=user_count,
+                    active_users_30d=active_users_30d,
+                    total_views_30d=views_30d,
+                    health_score=round(health_score, 2),
+                )
+            )
 
         return {
             "period_start": date_from,

@@ -11,8 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple
 
-from fastapi import BackgroundTasks
-from fastapi import HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -70,7 +69,9 @@ class AttachmentService:
         return upload_dir
 
     @staticmethod
-    def _parse_semver(raw_value: Optional[str], fallback_version_number: int) -> Tuple[int, int, int]:
+    def _parse_semver(
+        raw_value: Optional[str], fallback_version_number: int
+    ) -> Tuple[int, int, int]:
         if raw_value:
             parts = raw_value.strip().split(".")
             if len(parts) == 3 and all(part.isdigit() for part in parts):
@@ -195,7 +196,10 @@ class AttachmentService:
         file_ext = Path(original_filename).suffix.lower()
         allowed_extensions = {".pdf", ".doc", ".docx", ".txt", ".md", ".html", ".htm", ".json"}
 
-        if content_type not in AttachmentService.ALLOWED_TYPES and file_ext not in allowed_extensions:
+        if (
+            content_type not in AttachmentService.ALLOWED_TYPES
+            and file_ext not in allowed_extensions
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File type not allowed: {content_type}",
@@ -213,7 +217,7 @@ class AttachmentService:
             convert_to_html=convert_to_html,
             background_tasks=background_tasks,
         )
-        
+
         # Convert document to HTML and create initial version
         return attachment
 
@@ -298,9 +302,9 @@ class AttachmentService:
         if convert_to_html:
             try:
                 from app.utils.document_converter import convert_document_to_html
-                
+
                 html_content = convert_document_to_html(content, content_type, original_filename)
-                
+
                 if html_content:
                     existing_version = (
                         db.query(Version)
@@ -316,12 +320,14 @@ class AttachmentService:
                             existing_version.semantic_version, existing_version.version_number
                         )
                     )
-                    
+
                     version = Version(
                         document_id=document_id,
                         version_number=next_version,
                         semantic_version=next_semantic,
-                        bump_type=VersionBumpType.PATCH if existing_version else VersionBumpType.MAJOR,
+                        bump_type=VersionBumpType.PATCH
+                        if existing_version
+                        else VersionBumpType.MAJOR,
                         content=html_content,
                         changes_summary=f"Initial content from uploaded file: {original_filename}",
                         is_published=True,
@@ -331,7 +337,9 @@ class AttachmentService:
                     )
                     db.add(version)
                     db.commit()
-                    logger.info(f"Created initial version {next_version} for document {document_id}")
+                    logger.info(
+                        f"Created initial version {next_version} for document {document_id}"
+                    )
             except Exception as e:
                 logger.error(f"Failed to convert document to HTML: {e}")
 
@@ -404,11 +412,7 @@ class AttachmentService:
                 level = max(1, int(raw_item.get("level", 1) or 1))
                 page_start = max(
                     1,
-                    int(
-                        raw_item.get("page_start")
-                        or raw_item.get("page")
-                        or 1
-                    ),
+                    int(raw_item.get("page_start") or raw_item.get("page") or 1),
                 )
             except (TypeError, ValueError):
                 continue
@@ -460,7 +464,9 @@ class AttachmentService:
         try:
             attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
             if not attachment:
-                logger.warning("Reader artifact generation skipped: attachment %s not found", attachment_id)
+                logger.warning(
+                    "Reader artifact generation skipped: attachment %s not found", attachment_id
+                )
                 return
             if not (attachment.mime_type or "").lower().startswith("application/pdf"):
                 return
@@ -488,7 +494,9 @@ class AttachmentService:
                 "conversion not available",
                 "error converting pdf",
             )
-            has_error_marker = any(marker in html_content.lower() for marker in conversion_error_markers)
+            has_error_marker = any(
+                marker in html_content.lower() for marker in conversion_error_markers
+            )
 
             if not html_content or has_error_marker or artifact_error:
                 attachment.reader_html_status = AttachmentService.READER_STATUS_FAILED
@@ -686,7 +694,9 @@ class AttachmentService:
             logger.warning(f"Failed to delete from storage: {e}")
             # Try local file fallback
             try:
-                local_path = AttachmentService._resolve_local_attachment_path(attachment, document_id)
+                local_path = AttachmentService._resolve_local_attachment_path(
+                    attachment, document_id
+                )
                 if local_path and os.path.exists(local_path):
                     os.remove(local_path)
             except OSError:

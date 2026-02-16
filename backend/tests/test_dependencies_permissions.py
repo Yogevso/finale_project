@@ -83,17 +83,13 @@ class TestRequireAnyPermission:
 
     def test_require_any_permission_second_match(self, db, test_viewer):
         """Viewer should have VIEW_PUBLIC_DOCS even if not internal"""
-        dependency = require_any_permission(
-            Permission.MANAGE_USERS, Permission.VIEW_PUBLIC_DOCS
-        )
+        dependency = require_any_permission(Permission.MANAGE_USERS, Permission.VIEW_PUBLIC_DOCS)
         result = run_async(dependency(current_user=test_viewer))
         assert result == test_viewer
 
     def test_require_any_permission_none_match(self, db, test_viewer):
         """Should fail when user has none of the permissions"""
-        dependency = require_any_permission(
-            Permission.DELETE_DOCUMENT, Permission.MANAGE_USERS
-        )
+        dependency = require_any_permission(Permission.DELETE_DOCUMENT, Permission.MANAGE_USERS)
         with pytest.raises(HTTPException) as exc_info:
             run_async(dependency(current_user=test_viewer))
         assert exc_info.value.status_code == 403
@@ -320,9 +316,7 @@ class TestDocumentAccessChecker:
     def test_document_access_checker_view_public(self, db, test_viewer, public_document):
         """Viewer should be able to view public documents"""
         checker = DocumentAccessChecker("view")
-        result = run_async(
-            checker(document_id=public_document.id, current_user=test_viewer, db=db)
-        )
+        result = run_async(checker(document_id=public_document.id, current_user=test_viewer, db=db))
         assert result == public_document
 
     def test_document_access_checker_view_internal(self, db, test_viewer, internal_document):
@@ -339,45 +333,35 @@ class TestDocumentAccessChecker:
         """Customer should NOT view internal documents"""
         checker = DocumentAccessChecker("view")
         with pytest.raises(HTTPException) as exc_info:
-            run_async(
-                checker(document_id=internal_document.id, current_user=test_customer, db=db)
-            )
+            run_async(checker(document_id=internal_document.id, current_user=test_customer, db=db))
         assert exc_info.value.status_code == 403
         assert "cannot view" in exc_info.value.detail
 
     def test_document_access_checker_edit_admin(self, db, test_admin, public_document):
         """Admin should be able to edit documents"""
         checker = DocumentAccessChecker("edit")
-        result = run_async(
-            checker(document_id=public_document.id, current_user=test_admin, db=db)
-        )
+        result = run_async(checker(document_id=public_document.id, current_user=test_admin, db=db))
         assert result == public_document
 
     def test_document_access_checker_edit_viewer_denied(self, db, test_viewer, public_document):
         """Viewer should NOT edit documents"""
         checker = DocumentAccessChecker("edit")
         with pytest.raises(HTTPException) as exc_info:
-            run_async(
-                checker(document_id=public_document.id, current_user=test_viewer, db=db)
-            )
+            run_async(checker(document_id=public_document.id, current_user=test_viewer, db=db))
         assert exc_info.value.status_code == 403
         assert "cannot edit" in exc_info.value.detail
 
     def test_document_access_checker_delete_admin(self, db, test_admin, public_document):
         """Admin should be able to delete documents"""
         checker = DocumentAccessChecker("delete")
-        result = run_async(
-            checker(document_id=public_document.id, current_user=test_admin, db=db)
-        )
+        result = run_async(checker(document_id=public_document.id, current_user=test_admin, db=db))
         assert result == public_document
 
     def test_document_access_checker_delete_editor_denied(self, db, test_user, public_document):
         """Editor should NOT delete documents"""
         checker = DocumentAccessChecker("delete")
         with pytest.raises(HTTPException) as exc_info:
-            run_async(
-                checker(document_id=public_document.id, current_user=test_user, db=db)
-            )
+            run_async(checker(document_id=public_document.id, current_user=test_user, db=db))
         assert exc_info.value.status_code == 403
         assert "cannot delete" in exc_info.value.detail
 
@@ -421,9 +405,7 @@ class TestDocumentAccessChecker:
     def test_document_access_checker_unknown_type(self, db, test_admin, public_document):
         """Unknown access type should default to view"""
         checker = DocumentAccessChecker("unknown")
-        result = run_async(
-            checker(document_id=public_document.id, current_user=test_admin, db=db)
-        )
+        result = run_async(checker(document_id=public_document.id, current_user=test_admin, db=db))
         assert result == public_document
 
     def test_document_access_checker_not_found(self, db, test_admin):
@@ -444,27 +426,21 @@ class TestPreConfiguredCheckers:
     def test_require_document_view(self, db, test_viewer, public_document):
         """Test require_document_view checker"""
         result = run_async(
-            require_document_view(
-                document_id=public_document.id, current_user=test_viewer, db=db
-            )
+            require_document_view(document_id=public_document.id, current_user=test_viewer, db=db)
         )
         assert result == public_document
 
     def test_require_document_edit(self, db, test_admin, public_document):
         """Test require_document_edit checker"""
         result = run_async(
-            require_document_edit(
-                document_id=public_document.id, current_user=test_admin, db=db
-            )
+            require_document_edit(document_id=public_document.id, current_user=test_admin, db=db)
         )
         assert result == public_document
 
     def test_require_document_delete(self, db, test_admin, public_document):
         """Test require_document_delete checker"""
         result = run_async(
-            require_document_delete(
-                document_id=public_document.id, current_user=test_admin, db=db
-            )
+            require_document_delete(document_id=public_document.id, current_user=test_admin, db=db)
         )
         assert result == public_document
 
@@ -514,9 +490,7 @@ class TestGetDocumentIfAccessible:
     def test_get_document_if_accessible_not_found(self, db, test_admin):
         """Non-existent document should return 404"""
         with pytest.raises(HTTPException) as exc_info:
-            run_async(
-                get_document_if_accessible(document_id=99999, current_user=test_admin, db=db)
-            )
+            run_async(get_document_if_accessible(document_id=99999, current_user=test_admin, db=db))
         assert exc_info.value.status_code == 404
         assert "Document not found" in exc_info.value.detail
 
@@ -651,9 +625,7 @@ class TestPermissionDependenciesViaAPI:
 class TestCustomerCompanyDocumentAccess:
     """Tests for customer access to company-specific documents"""
 
-    def test_customer_can_view_assigned_company_doc(
-        self, db, test_customer, company_document
-    ):
+    def test_customer_can_view_assigned_company_doc(self, db, test_customer, company_document):
         """Customer should view documents assigned to their company"""
         checker = DocumentAccessChecker("view")
         result = run_async(
@@ -661,13 +633,9 @@ class TestCustomerCompanyDocumentAccess:
         )
         assert result == company_document
 
-    def test_customer_cannot_view_other_company_doc(
-        self, db, test_customer_2, company_document
-    ):
+    def test_customer_cannot_view_other_company_doc(self, db, test_customer_2, company_document):
         """Customer should NOT view documents assigned to other companies"""
         checker = DocumentAccessChecker("view")
         with pytest.raises(HTTPException) as exc_info:
-            run_async(
-                checker(document_id=company_document.id, current_user=test_customer_2, db=db)
-            )
+            run_async(checker(document_id=company_document.id, current_user=test_customer_2, db=db))
         assert exc_info.value.status_code == 403

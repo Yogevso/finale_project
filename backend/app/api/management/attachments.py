@@ -94,10 +94,7 @@ def _build_content_disposition(filename: str, inline: bool = False) -> str:
     disposition_type = "inline" if inline else "attachment"
     safe_filename = filename.replace('"', "").replace("\\", "_") or "download"
     utf8_filename = quote(filename or "download")
-    return (
-        f'{disposition_type}; filename="{safe_filename}"; '
-        f"filename*=UTF-8''{utf8_filename}"
-    )
+    return f"{disposition_type}; filename=\"{safe_filename}\"; filename*=UTF-8''{utf8_filename}"
 
 
 def _stream_original_attachment(

@@ -254,7 +254,9 @@ def get_tenant_analytics(
 
 @router.get("/export/csv")
 def export_csv(
-    report: str = Query(..., description="Report type: overview, engagement, users, content, feedback"),
+    report: str = Query(
+        ..., description="Report type: overview, engagement, users, content, feedback"
+    ),
     date_from: Optional[date] = Query(None, description="Start date"),
     date_to: Optional[date] = Query(None, description="End date"),
     current_user: User = Depends(require_manager),
@@ -319,7 +321,10 @@ def export_csv(
             {"metric": "Versions Published", "value": data["total_versions_published"]},
             {"metric": "Total Comments", "value": data["total_comments"]},
             {"metric": "Approval Rate (%)", "value": data["approval_rate"]},
-            {"metric": "Avg Review Turnaround (hrs)", "value": data["avg_review_turnaround_hours"] or "N/A"},
+            {
+                "metric": "Avg Review Turnaround (hrs)",
+                "value": data["avg_review_turnaround_hours"] or "N/A",
+            },
         ]
 
     elif report == "feedback":
@@ -329,7 +334,10 @@ def export_csv(
             {"metric": "Pending Feedback", "value": data["pending_feedback"]},
             {"metric": "Responded Feedback", "value": data["responded_feedback"]},
             {"metric": "Helpfulness Rate (%)", "value": data["helpfulness_rate"]},
-            {"metric": "Avg Response Time (hrs)", "value": data["avg_response_time_hours"] or "N/A"},
+            {
+                "metric": "Avg Response Time (hrs)",
+                "value": data["avg_response_time_hours"] or "N/A",
+            },
         ]
         for ftype, count in data["feedback_by_type"].items():
             rows.append({"metric": f"Feedback - {ftype}", "value": count})
@@ -376,6 +384,7 @@ def export_pdf(
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ImportError:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=501,
             detail="PDF export requires reportlab package. Install with: pip install reportlab",
@@ -425,16 +434,20 @@ def export_pdf(
     elements.append(Spacer(1, 20))
 
     table = Table(table_data)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-        ("GRID", (0, 0), (-1, -1), 1, colors.black),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ]
+        )
+    )
     elements.append(table)
 
     doc.build(elements)

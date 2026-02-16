@@ -11,11 +11,10 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Document,
-    User,
-    CollaborationSnapshot,
     CollaborationActivity,
     CollaborationActivityType,
+    CollaborationSnapshot,
+    Document,
     SnapshotType,
 )
 
@@ -60,7 +59,9 @@ class SnapshotService:
         # Calculate expiration for auto-saves
         expires_at = None
         if snapshot_type == SnapshotType.AUTO_SAVE:
-            expires_at = datetime.utcnow() + timedelta(days=SnapshotService.AUTO_SAVE_RETENTION_DAYS)
+            expires_at = datetime.utcnow() + timedelta(
+                days=SnapshotService.AUTO_SAVE_RETENTION_DAYS
+            )
 
         # Generate default name if not provided
         if not name:
@@ -123,9 +124,9 @@ class SnapshotService:
         Returns:
             The updated Document, or None if snapshot not found
         """
-        snapshot = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.id == snapshot_id
-        ).first()
+        snapshot = (
+            db.query(CollaborationSnapshot).filter(CollaborationSnapshot.id == snapshot_id).first()
+        )
 
         if not snapshot:
             return None
@@ -194,23 +195,26 @@ class SnapshotService:
 
         if not include_expired:
             query = query.filter(
-                (CollaborationSnapshot.expires_at.is_(None)) |
-                (CollaborationSnapshot.expires_at > datetime.utcnow())
+                (CollaborationSnapshot.expires_at.is_(None))
+                | (CollaborationSnapshot.expires_at > datetime.utcnow())
             )
 
         total = query.count()
-        snapshots = query.order_by(
-            CollaborationSnapshot.created_at.desc()
-        ).offset(offset).limit(limit).all()
+        snapshots = (
+            query.order_by(CollaborationSnapshot.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
         return snapshots, total
 
     @staticmethod
     def get_snapshot(db: Session, snapshot_id: int) -> Optional[CollaborationSnapshot]:
         """Get a single snapshot by ID."""
-        return db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.id == snapshot_id
-        ).first()
+        return (
+            db.query(CollaborationSnapshot).filter(CollaborationSnapshot.id == snapshot_id).first()
+        )
 
     @staticmethod
     def update_snapshot(
@@ -233,9 +237,9 @@ class SnapshotService:
         Returns:
             Updated snapshot or None if not found
         """
-        snapshot = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.id == snapshot_id
-        ).first()
+        snapshot = (
+            db.query(CollaborationSnapshot).filter(CollaborationSnapshot.id == snapshot_id).first()
+        )
 
         if not snapshot:
             return None
@@ -266,9 +270,9 @@ class SnapshotService:
         Returns:
             True if deleted, False if not found
         """
-        snapshot = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.id == snapshot_id
-        ).first()
+        snapshot = (
+            db.query(CollaborationSnapshot).filter(CollaborationSnapshot.id == snapshot_id).first()
+        )
 
         if not snapshot:
             return False
@@ -289,19 +293,22 @@ class SnapshotService:
             Number of snapshots deleted
         """
         # Get all unpinned auto-saves for this document, ordered by date
-        auto_saves = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.document_id == document_id,
-            CollaborationSnapshot.snapshot_type == SnapshotType.AUTO_SAVE,
-            CollaborationSnapshot.is_pinned == False,
-        ).order_by(
-            CollaborationSnapshot.created_at.desc()
-        ).all()
+        auto_saves = (
+            db.query(CollaborationSnapshot)
+            .filter(
+                CollaborationSnapshot.document_id == document_id,
+                CollaborationSnapshot.snapshot_type == SnapshotType.AUTO_SAVE,
+                CollaborationSnapshot.is_pinned.is_(False),
+            )
+            .order_by(CollaborationSnapshot.created_at.desc())
+            .all()
+        )
 
         # Keep only the most recent ones
         if len(auto_saves) <= SnapshotService.MAX_AUTO_SAVES_PER_DOCUMENT:
             return 0
 
-        to_delete = auto_saves[SnapshotService.MAX_AUTO_SAVES_PER_DOCUMENT:]
+        to_delete = auto_saves[SnapshotService.MAX_AUTO_SAVES_PER_DOCUMENT :]
         deleted_count = 0
 
         for snapshot in to_delete:
@@ -321,11 +328,15 @@ class SnapshotService:
         Returns:
             Number of snapshots deleted
         """
-        expired = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.expires_at.isnot(None),
-            CollaborationSnapshot.expires_at < datetime.utcnow(),
-            CollaborationSnapshot.is_pinned == False,
-        ).all()
+        expired = (
+            db.query(CollaborationSnapshot)
+            .filter(
+                CollaborationSnapshot.expires_at.isnot(None),
+                CollaborationSnapshot.expires_at < datetime.utcnow(),
+                CollaborationSnapshot.is_pinned.is_(False),
+            )
+            .all()
+        )
 
         deleted_count = len(expired)
         for snapshot in expired:
@@ -345,12 +356,15 @@ class SnapshotService:
         Returns:
             True if enough time has passed since last auto-save
         """
-        last_auto_save = db.query(CollaborationSnapshot).filter(
-            CollaborationSnapshot.document_id == document_id,
-            CollaborationSnapshot.snapshot_type == SnapshotType.AUTO_SAVE,
-        ).order_by(
-            CollaborationSnapshot.created_at.desc()
-        ).first()
+        last_auto_save = (
+            db.query(CollaborationSnapshot)
+            .filter(
+                CollaborationSnapshot.document_id == document_id,
+                CollaborationSnapshot.snapshot_type == SnapshotType.AUTO_SAVE,
+            )
+            .order_by(CollaborationSnapshot.created_at.desc())
+            .first()
+        )
 
         if not last_auto_save:
             return True

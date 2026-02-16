@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
-from app.models import Comment, Document, User, UserRole, Version, Attachment
+from app.models import Attachment, Comment, Document, User, UserRole, Version
 from app.schemas import CommentCreate, CommentUpdate
 
 logger = logging.getLogger(__name__)
@@ -38,31 +38,42 @@ class CommentService:
         - Commenters
         """
         contributors: Set[int] = set()
-        
+
         # Get document creator
         document = db.query(Document).filter(Document.id == document_id).first()
         if document:
             contributors.add(document.created_by)
-        
+
         # Get version creators
-        versions = db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+        versions = (
+            db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
+        )
         for (user_id,) in versions:
             contributors.add(user_id)
-        
+
         # Get attachment uploaders
-        attachments = db.query(Attachment.uploaded_by).filter(Attachment.document_id == document_id).distinct().all()
+        attachments = (
+            db.query(Attachment.uploaded_by)
+            .filter(Attachment.document_id == document_id)
+            .distinct()
+            .all()
+        )
         for (user_id,) in attachments:
             contributors.add(user_id)
-        
+
         # Get commenters (they've also engaged with the document)
-        comments = db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
+        comments = (
+            db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
+        )
         for (user_id,) in comments:
             contributors.add(user_id)
-        
+
         return contributors
 
     @staticmethod
-    def can_view_comment(db: Session, comment: Comment, current_user: User, contributors: Set[int] = None) -> bool:
+    def can_view_comment(
+        db: Session, comment: Comment, current_user: User, contributors: Set[int] = None
+    ) -> bool:
         """
         Check if a user can view a specific comment.
         Rules:
@@ -73,18 +84,18 @@ class CommentService:
         # Comment author can always see their own comment
         if comment.user_id == current_user.id:
             return True
-        
+
         # System admin can see all
         if current_user.role == UserRole.SYSTEM_ADMIN:
             return True
-        
+
         # Internal staff who have contributed to this document can see comments
         if CommentService.is_internal_staff(current_user):
             if contributors is None:
                 contributors = CommentService.get_document_contributors(db, comment.document_id)
             if current_user.id in contributors:
                 return True
-        
+
         return False
 
     @staticmethod
@@ -103,7 +114,7 @@ class CommentService:
     ) -> List[Comment]:
         """
         Get comments for a document with contributor-based visibility filtering.
-        
+
         Comments are visible to:
         - The comment author
         - Internal staff who have contributed to the document
@@ -135,7 +146,8 @@ class CommentService:
             if CommentService.can_view_comment(db, comment, current_user, contributors):
                 # Also filter replies
                 visible_replies = [
-                    r for r in comment.replies 
+                    r
+                    for r in comment.replies
                     if CommentService.can_view_comment(db, r, current_user, contributors)
                 ]
                 comment.replies = visible_replies
@@ -167,7 +179,8 @@ class CommentService:
 
         # Filter replies based on visibility
         comment.replies = [
-            r for r in comment.replies 
+            r
+            for r in comment.replies
             if CommentService.can_view_comment(db, r, current_user, contributors)
         ]
         comment.reply_count = len(comment.replies)
@@ -401,24 +414,25 @@ class CommentService:
     ) -> dict:
         """
         Get comment counts for a document.
-        
-        Returns counts of comments visible to the current user based on 
+
+        Returns counts of comments visible to the current user based on
         contributor visibility rules.
         """
         if not current_user:
             return {"total": 0, "threads": 0, "private": 0, "unresolved": 0}
-        
+
         # Get contributors for visibility checks
         contributors = CommentService.get_document_contributors(db, document_id)
-        
+
         # Get all comments and filter by visibility
         all_comments = db.query(Comment).filter(Comment.document_id == document_id).all()
-        
+
         visible_comments = [
-            c for c in all_comments 
+            c
+            for c in all_comments
             if CommentService.can_view_comment(db, c, current_user, contributors)
         ]
-        
+
         # Calculate counts from visible comments
         total = len(visible_comments)
         top_level = len([c for c in visible_comments if c.parent_id is None])

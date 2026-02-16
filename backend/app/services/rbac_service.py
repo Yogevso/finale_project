@@ -16,7 +16,9 @@ class RbacService:
     """Service for RBAC policy persistence and publishing"""
 
     @staticmethod
-    def get_policies(db: Session, include_inactive: bool = False) -> Dict[UserRole, Set[Permission]]:
+    def get_policies(
+        db: Session, include_inactive: bool = False
+    ) -> Dict[UserRole, Set[Permission]]:
         query = db.query(RbacPolicy)
         if not include_inactive:
             query = query.filter(RbacPolicy.is_active.is_(True))

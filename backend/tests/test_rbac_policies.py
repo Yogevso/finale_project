@@ -1,9 +1,7 @@
 from app.services.permissions import Permission, clear_dynamic_role_permissions, has_permission
 
 
-def test_rbac_policy_update_publishes_dynamic_permissions(
-    client, test_user, system_admin_headers
-):
+def test_rbac_policy_update_publishes_dynamic_permissions(client, test_user, system_admin_headers):
     clear_dynamic_role_permissions()
 
     payload = {

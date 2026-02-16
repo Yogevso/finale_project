@@ -46,11 +46,7 @@ class CollaborationService:
             "iat": datetime.utcnow(),
         }
 
-        encoded_jwt = jwt.encode(
-            to_encode,
-            settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM
-        )
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
 
     @staticmethod
@@ -123,11 +119,7 @@ class CollaborationService:
         return None
 
     @staticmethod
-    def save_document_state(
-        db: Session,
-        document_id: int,
-        state: bytes
-    ) -> bool:
+    def save_document_state(db: Session, document_id: int, state: bytes) -> bool:
         """Save the Yjs state for a document"""
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:

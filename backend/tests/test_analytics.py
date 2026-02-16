@@ -1,7 +1,7 @@
 """Unit tests for Analytics API"""
 
-import pytest
 from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
 
 
@@ -13,7 +13,7 @@ class TestAnalyticsOverview:
         response = client.get("/api/v1/analytics/overview", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         # Check required fields exist
         assert "total_documents" in data
         assert "total_users" in data
@@ -54,7 +54,7 @@ class TestAnalyticsOverview:
         """Analytics should support date range filtering"""
         today = date.today()
         week_ago = today - timedelta(days=7)
-        
+
         response = client.get(
             "/api/v1/analytics/overview",
             headers=admin_headers,
@@ -102,7 +102,7 @@ class TestEngagementAnalytics:
         response = client.get("/api/v1/analytics/engagement", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "views_over_time" in data
         assert "downloads_over_time" in data
         assert "unique_visitors" in data
@@ -132,7 +132,7 @@ class TestTopDocuments:
         response = client.get("/api/v1/analytics/engagement/top-documents", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "by_views" in data
         assert "by_downloads" in data
 
@@ -157,7 +157,7 @@ class TestUserAnalytics:
         response = client.get("/api/v1/analytics/users", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "total_users" in data
         assert "active_users" in data
         assert "inactive_users" in data
@@ -183,7 +183,7 @@ class TestContentAnalytics:
         response = client.get("/api/v1/analytics/content", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "total_documents_created" in data
         assert "total_versions_published" in data
         assert "total_comments" in data
@@ -204,7 +204,7 @@ class TestFeedbackAnalytics:
         response = client.get("/api/v1/analytics/feedback", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert "total_feedback" in data
         assert "pending_feedback" in data
         assert "responded_feedback" in data
@@ -332,7 +332,7 @@ class TestAnalyticsDataIntegrity:
         response = client.get("/api/v1/analytics/overview", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert data["total_documents"] >= 0
         assert data["total_users"] >= 0
         assert data["total_views"] >= 0
@@ -344,7 +344,7 @@ class TestAnalyticsDataIntegrity:
         response = client.get("/api/v1/analytics/engagement", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         assert 0 <= data["avg_reading_progress"] <= 100
         assert 0 <= data["completion_rate"] <= 100
 
@@ -353,7 +353,7 @@ class TestAnalyticsDataIntegrity:
         response = client.get("/api/v1/analytics/engagement", headers=admin_headers)
         assert response.status_code == 200
         data = response.json()
-        
+
         for point in data["views_over_time"]:
             assert "date" in point
             assert "value" in point

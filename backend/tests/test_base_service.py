@@ -15,7 +15,6 @@ from app.models import (
 from app.security import get_password_hash
 from app.services.base_service import TenantAwareService
 
-
 # ============================================================================
 # Test Service Classes
 # ============================================================================
@@ -332,7 +331,11 @@ class TestBaseQuery:
         assert tenant2.id in tenant_ids
 
     def test_custom_model_parameter(
-        self, db: Session, tenant1_context: TenantContext, doc_tenant1: Document, doc_tenant2: Document
+        self,
+        db: Session,
+        tenant1_context: TenantContext,
+        doc_tenant1: Document,
+        doc_tenant2: Document,
     ):
         """Can pass custom model to _base_query"""
         # Using UserService but querying Documents
@@ -389,7 +392,11 @@ class TestGetById:
         assert result is None
 
     def test_system_admin_can_get_any_record(
-        self, db: Session, system_admin_context: TenantContext, user_tenant1: User, user_tenant2: User
+        self,
+        db: Session,
+        system_admin_context: TenantContext,
+        user_tenant1: User,
+        user_tenant2: User,
     ):
         """System admin can get record from any tenant"""
         service = UserService(db, system_admin_context)
@@ -417,9 +424,7 @@ class TestGetById:
         assert result is not None
         assert result.id == doc_tenant1.id
 
-    def test_no_context_gets_any_record(
-        self, db: Session, user_tenant1: User, user_tenant2: User
-    ):
+    def test_no_context_gets_any_record(self, db: Session, user_tenant1: User, user_tenant2: User):
         """Without context, can get any record"""
         service = UserService(db)
 
@@ -508,7 +513,11 @@ class TestGetAll:
         assert results == []
 
     def test_get_all_with_custom_model(
-        self, db: Session, tenant1_context: TenantContext, doc_tenant1: Document, doc_tenant2: Document
+        self,
+        db: Session,
+        tenant1_context: TenantContext,
+        doc_tenant1: Document,
+        doc_tenant2: Document,
     ):
         """get_all with custom model parameter"""
         service = UserService(db, tenant1_context)
@@ -559,7 +568,11 @@ class TestCount:
         assert count == 0
 
     def test_count_with_custom_model(
-        self, db: Session, tenant1_context: TenantContext, doc_tenant1: Document, doc_tenant2: Document
+        self,
+        db: Session,
+        tenant1_context: TenantContext,
+        doc_tenant1: Document,
+        doc_tenant2: Document,
     ):
         """count with custom model parameter"""
         service = UserService(db, tenant1_context)
@@ -636,9 +649,7 @@ class TestCreate:
         assert created.id is not None
         assert created.tenant_id is None  # Should remain null
 
-    def test_create_model_without_tenant_id(
-        self, db: Session, tenant1_context: TenantContext
-    ):
+    def test_create_model_without_tenant_id(self, db: Session, tenant1_context: TenantContext):
         """create works for models without tenant_id attribute"""
         service = TenantService(db, tenant1_context)
 
@@ -704,7 +715,6 @@ class TestUpdate:
         """update refreshes object from database"""
         service = UserService(db, tenant1_context)
 
-        original_updated_at = user_tenant1.updated_at
         user_tenant1.full_name = "Refresh Test"
 
         updated = service.update(user_tenant1)
@@ -997,7 +1007,9 @@ class TestEdgeCases:
 
         assert len(results) == 100
 
-    def test_zero_skip_and_limit(self, db: Session, tenant1_context: TenantContext, user_tenant1: User):
+    def test_zero_skip_and_limit(
+        self, db: Session, tenant1_context: TenantContext, user_tenant1: User
+    ):
         """Skip=0 and limit=0 returns empty list"""
         service = UserService(db, tenant1_context)
         results = service.get_all(skip=0, limit=0)

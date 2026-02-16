@@ -138,7 +138,9 @@ def get_published_versions(
     return [VersionResponse.model_validate(v) for v in versions]
 
 
-@router.get("/{document_id}/versions/{version_id}/attachments", response_model=list[AttachmentResponse])
+@router.get(
+    "/{document_id}/versions/{version_id}/attachments", response_model=list[AttachmentResponse]
+)
 def get_version_attachments(
     document_id: int,
     version_id: int,
