@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
@@ -50,6 +50,7 @@ export default function DocumentDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('preview')
   const [scrollProgress, setScrollProgress] = useState<number>(0)
   const [pendingAnchor, setPendingAnchor] = useState<PendingAnchor | null>(null)
+  const [contentEditRequestToken, setContentEditRequestToken] = useState(0)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
   const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
 
@@ -70,11 +71,12 @@ export default function DocumentDetailPage() {
   })
 
   // Fetch attachments to check if there's a primary document to preview
-  const { data: attachments = [] } = useQuery({
+  const { data: attachmentsData } = useQuery({
     queryKey: ['attachments', id],
     queryFn: () => api.getAttachments(Number(id)),
     enabled: !!id,
   })
+  const attachments = useMemo(() => attachmentsData ?? [], [attachmentsData])
 
   const updateMutation = useMutation({
     mutationFn: (data: DocumentUpdate) => api.updateDocument(Number(id), data),
@@ -269,10 +271,26 @@ export default function DocumentDetailPage() {
                   </span>
                 )}
                 <button
-                  onClick={() => setIsEditing(!isEditing)}
+                  onClick={() => {
+                    if (activeTab === 'details') {
+                      if (isEditing) {
+                        setIsEditing(false)
+                        return
+                      }
+                      setIsEditing(true)
+                      return
+                    }
+                    setIsEditing(false)
+                    setActiveTab('preview')
+                    setContentEditRequestToken((prev) => prev + 1)
+                  }}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
                 >
-                  {isEditing ? 'Cancel' : 'Edit'}
+                  {activeTab === 'details'
+                    ? isEditing
+                      ? 'Cancel Details'
+                      : 'Edit Details'
+                    : 'Edit Content'}
                 </button>
                 <button
                   onClick={handleDelete}
@@ -317,6 +335,7 @@ export default function DocumentDetailPage() {
           onScrollProgress={handleScrollProgress}
           isEditor={isEditor}
           widthMode={contentWidth}
+          contentEditRequestToken={contentEditRequestToken}
         />
       )}
 
@@ -755,8 +774,125 @@ interface TocSection {
   pageEnd?: number | null
 }
 
+type SectionEditMode = 'edit' | 'insert' | 'full'
+
+interface SectionEditTarget extends TocSection {
+  editMode?: SectionEditMode
+  insertAfterIndex?: number
+  fromChooser?: boolean
+}
+
+function ContentEditChooserPopup({
+  sections,
+  onClose,
+  onEditSection,
+  onAddSection,
+}: {
+  sections: TocSection[]
+  onClose: () => void
+  onEditSection: (section: TocSection) => void
+  onAddSection: (insertAfterIndex: number) => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700">
+          <div>
+            <h2 className="text-lg font-display font-semibold text-white">Edit Content Options</h2>
+            <p className="text-xs text-sky-100 mt-1">
+              Choose whether to edit an existing section or insert a new one.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 p-6 overflow-auto">
+          <section className="space-y-3">
+            <h3 className="font-display font-semibold text-slate-900">Edit Existing Section</h3>
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+              {sections.map((section, idx) => (
+                <button
+                  key={`${section.id}-edit-${idx}`}
+                  type="button"
+                  onClick={() => onEditSection(section)}
+                  className="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-colors"
+                >
+                  <div className="text-xs uppercase tracking-widest text-slate-400">
+                    Section {idx + 1}
+                  </div>
+                  <div className="text-sm font-medium text-slate-900 mt-1">{section.text}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="font-display font-semibold text-slate-900">Add New Section</h3>
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+              {sections.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => onAddSection(-1)}
+                  className="w-full text-left p-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                >
+                  <div className="text-sm font-medium text-emerald-800">Add first section</div>
+                </button>
+              )}
+
+              {sections.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onAddSection(-1)}
+                    className="w-full text-left p-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                  >
+                    <div className="text-xs uppercase tracking-widest text-emerald-700">Insert</div>
+                    <div className="text-sm font-medium text-emerald-800 mt-1">
+                      Before "{sections[0]?.text}"
+                    </div>
+                  </button>
+
+                  {sections.map((section, idx) => {
+                    const nextSection = sections[idx + 1]
+                    const label = nextSection
+                      ? `Between "${section.text}" and "${nextSection.text}"`
+                      : `After "${section.text}"`
+                    return (
+                      <button
+                        key={`${section.id}-insert-${idx}`}
+                        type="button"
+                        onClick={() => onAddSection(idx)}
+                        className="w-full text-left p-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                      >
+                        <div className="text-xs uppercase tracking-widest text-emerald-700">Insert</div>
+                        <div className="text-sm font-medium text-emerald-800 mt-1">{label}</div>
+                      </button>
+                    )
+                  })}
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Section Edit Popup Component
-function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; onClose: () => void; onSave: (newHtml: string, submitForReview: boolean) => Promise<void> }) {
+function SectionEditPopup({
+  section,
+  onClose,
+  onSave,
+  onBack,
+}: {
+  section: SectionEditTarget
+  onClose: () => void
+  onSave: (newHtml: string, submitForReview: boolean) => Promise<void>
+  onBack?: () => void
+}) {
   const [isSaving, setIsSaving] = useState(false)
   const [submitForReview, setSubmitForReview] = useState(true)
   
@@ -795,6 +931,13 @@ function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; o
     }
   }
 
+  const popupTitle =
+    section.editMode === 'insert'
+      ? 'Add New Section'
+      : section.editMode === 'full'
+        ? 'Edit Document Content'
+        : `Edit Section: ${section.text}`
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -802,7 +945,7 @@ function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; o
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700">
           <div className="flex items-center gap-3">
             <Edit3 className="w-5 h-5 text-white" />
-            <h2 className="text-lg font-display font-semibold text-white">Edit Section: {section.text}</h2>
+            <h2 className="text-lg font-display font-semibold text-white">{popupTitle}</h2>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white">
             <X className="w-5 h-5" />
@@ -847,6 +990,11 @@ function SectionEditPopup({ section, onClose, onSave }: { section: TocSection; o
             <p className="text-xs text-slate-400 mt-1 ml-6">An admin/manager will review and approve your changes</p>
           </div>
           <div className="flex gap-3">
+            {onBack && (
+              <button onClick={onBack} className="btn-ghost">
+                Back
+              </button>
+            )}
             <button onClick={onClose} className="btn-ghost">Cancel</button>
             <button onClick={handleSave} disabled={isSaving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
               <Save className="w-4 h-4" />
@@ -867,6 +1015,7 @@ function DocumentPreview({
   onScrollProgress,
   isEditor,
   widthMode = 'reading',
+  contentEditRequestToken = 0,
 }: {
   documentId: number
   attachments: Attachment[]
@@ -874,6 +1023,7 @@ function DocumentPreview({
   onScrollProgress?: (progress: number) => void
   isEditor?: boolean
   widthMode?: ReadingWidth
+  contentEditRequestToken?: number
 }) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
@@ -898,7 +1048,8 @@ function DocumentPreview({
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ show: boolean; x: number; y: number; text: string }>({ show: false, x: 0, y: 0, text: '' })
-  const [editingSection, setEditingSection] = useState<TocSection | null>(null)
+  const [showContentEditChooser, setShowContentEditChooser] = useState(false)
+  const [editingSection, setEditingSection] = useState<SectionEditTarget | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   
   // Inline comment popup state
@@ -906,6 +1057,7 @@ function DocumentPreview({
   const [commentText, setCommentText] = useState('')
   const [isPrivateComment, setIsPrivateComment] = useState(false)
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [handledContentEditToken, setHandledContentEditToken] = useState(0)
   
   // Comment mutation
   const createCommentMutation = useMutation({
@@ -1020,11 +1172,16 @@ function DocumentPreview({
   }
 
   // Find previewable attachments (PDF, images, or Word docs)
-  const previewableAttachments = attachments.filter(
-    (a) => a.mime_type.startsWith('application/pdf') || 
-           a.mime_type.startsWith('image/') ||
-           a.mime_type === 'application/msword' ||
-           a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const previewableAttachments = useMemo(
+    () =>
+      attachments.filter(
+        (a) =>
+          a.mime_type.startsWith('application/pdf') ||
+          a.mime_type.startsWith('image/') ||
+          a.mime_type === 'application/msword' ||
+          a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    [attachments],
   )
 
   const isWordDoc = (att: Attachment | null) => {
@@ -1218,6 +1375,20 @@ function DocumentPreview({
         index: newSections.length,
         anchorId: headingAnchorId,
       })
+    }
+
+    if (newSections.length === 0) {
+      const fullDocumentHtml = doc.body.innerHTML.trim()
+      if (fullDocumentHtml) {
+        newSections.push({
+          id: 'section-0-full-document',
+          text: 'Document Content',
+          level: 1,
+          html: fullDocumentHtml,
+          index: 0,
+          anchorId: 'document-content-area',
+        })
+      }
     }
     
     setSections(newSections)
@@ -1552,6 +1723,42 @@ function DocumentPreview({
     selectedAttachment,
   ])
 
+  const tocSectionsForHtml =
+    showingReaderView && sections.length === 0 ? pdfOutlineSections : sections
+
+  useEffect(() => {
+    if (!contentEditRequestToken || contentEditRequestToken === handledContentEditToken) {
+      return
+    }
+
+    if (!isEditor) {
+      setHandledContentEditToken(contentEditRequestToken)
+      return
+    }
+
+    // Reader mode is non-editable; switch back to original first and continue on next render.
+    if (showingReaderView) {
+      setPdfPreviewMode('original')
+      return
+    }
+
+    if (!activeHtmlContent || isLoading) {
+      return
+    }
+
+    setEditingSection(null)
+    setShowContentEditChooser(true)
+    setHandledContentEditToken(contentEditRequestToken)
+  }, [
+    activeHtmlContent,
+    contentEditRequestToken,
+    handledContentEditToken,
+    isEditor,
+    isLoading,
+    showingReaderView,
+    tocSectionsForHtml,
+  ])
+
   // Show content if we have inline content OR attachments
   if (attachments.length === 0 && !hasInlineContent && !activeHtmlContent) {
     return (
@@ -1610,8 +1817,6 @@ function DocumentPreview({
   const documentPaperClass =
     widthMode === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'
   const pdfPreviewSrc = previewUrl && pdfOutlinePage ? `${previewUrl}#page=${pdfOutlinePage}` : previewUrl
-  const tocSectionsForHtml =
-    showingReaderView && sections.length === 0 ? pdfOutlineSections : sections
 
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
@@ -2051,30 +2256,99 @@ function DocumentPreview({
         </div>
       )}
 
+      {/* Content Edit Chooser Popup */}
+      {showContentEditChooser && (
+        <ContentEditChooserPopup
+          sections={tocSectionsForHtml}
+          onClose={() => setShowContentEditChooser(false)}
+          onEditSection={(section) => {
+            setShowContentEditChooser(false)
+            setEditingSection({
+              ...section,
+              editMode: section.index < 0 ? 'full' : 'edit',
+              fromChooser: true,
+            })
+          }}
+          onAddSection={(insertAfterIndex) => {
+            const neighbor =
+              insertAfterIndex >= 0
+                ? tocSectionsForHtml[insertAfterIndex]
+                : tocSectionsForHtml[0]
+            const headingLevel = Math.min(6, Math.max(2, neighbor?.level || 2))
+            const headingTag = `h${headingLevel}`
+            const defaultTitle = 'New Section'
+            const defaultHtml = `<${headingTag}>${defaultTitle}</${headingTag}><p>Write section content here.</p>`
+
+            setShowContentEditChooser(false)
+            setEditingSection({
+              id: `insert-${Date.now()}-${insertAfterIndex}`,
+              text: defaultTitle,
+              level: headingLevel,
+              html: defaultHtml,
+              index: Math.max(0, insertAfterIndex + 1),
+              editMode: 'insert',
+              insertAfterIndex,
+              fromChooser: true,
+            })
+          }}
+        />
+      )}
+
       {/* Section Edit Popup */}
       {editingSection && (
         <SectionEditPopup
           section={editingSection}
           onClose={() => setEditingSection(null)}
+          onBack={
+            editingSection.fromChooser
+              ? () => {
+                  setEditingSection(null)
+                  setShowContentEditChooser(true)
+                }
+              : undefined
+          }
           onSave={async (newHtml, submitForReview) => {
             // Get old section content for comparison
-            const oldSectionHtml = editingSection.html
-            
-            // Update the section in the sections array
-            const updatedSections = sections.map((s, idx) => 
-              idx === editingSection.index ? { ...s, html: newHtml } : s
-            )
-            
-            // Rebuild full HTML from sections
-            const newFullHtml = updatedSections.map(s => s.html).join('\n')
+            const oldSectionHtml = editingSection.editMode === 'insert' ? '' : editingSection.html
+
+            let newFullHtml = ''
+            if (editingSection.editMode === 'insert') {
+              const insertAt = Math.max(
+                0,
+                Math.min(sections.length, (editingSection.insertAfterIndex ?? -1) + 1),
+              )
+              const updatedSections = [...sections]
+              updatedSections.splice(insertAt, 0, {
+                ...editingSection,
+                html: newHtml,
+                index: insertAt,
+              })
+              newFullHtml = updatedSections.map((s) => s.html).join('\n')
+            } else if (editingSection.index < 0 || editingSection.editMode === 'full') {
+              newFullHtml = newHtml
+            } else {
+              newFullHtml = sections
+                .map((s, idx) => (idx === editingSection.index ? { ...s, html: newHtml } : s))
+                .map((s) => s.html)
+                .join('\n')
+            }
             
             // Update local state
             setHtmlContent(processHtmlWithSections(newFullHtml))
-            
+
             // Create detailed change summary
-            const changesSummary = `Section edited: "${editingSection.text}"\n\n` +
-              `--- Original content ---\n${oldSectionHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${oldSectionHtml.length > 500 ? '...' : ''}\n\n` +
-              `--- New content ---\n${newHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${newHtml.length > 500 ? '...' : ''}`
+            const sectionAction = editingSection.editMode === 'insert' ? 'Section added' : 'Section edited'
+            const oldContentSummary =
+              editingSection.editMode === 'insert'
+                ? 'N/A (new section)'
+                : `${oldSectionHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
+                    oldSectionHtml.length > 500 ? '...' : ''
+                  }`
+            const changesSummary = `${sectionAction}: "${editingSection.text}"\n\n` +
+              `--- Original content ---\n${oldContentSummary}\n\n` +
+              `--- New content ---\n${newHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
+                newHtml.length > 500 ? '...' : ''
+              }`
             
             // Save as new version (draft)
             const version = await api.createVersion(documentId, {
@@ -2087,9 +2361,11 @@ function DocumentPreview({
             
             // If submitForReview is checked, auto-submit for review
             if (submitForReview) {
+              const reviewActionLabel =
+                editingSection.editMode === 'insert' ? 'Added section' : 'Edited section'
               await api.submitForReview(documentId, {
                 version_id: version.id,
-                message: `Edited section: "${editingSection.text}"`,
+                message: `${reviewActionLabel}: "${editingSection.text}"`,
               })
             }
             
