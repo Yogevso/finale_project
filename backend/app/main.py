@@ -95,6 +95,7 @@ from app.api.management import (  # noqa: E402
 )
 from app.api.portal import router as portal_router  # noqa: E402
 from app.api.public import router as public_router  # noqa: E402
+from app.api.public.platforms import router as public_platforms_router  # noqa: E402
 from app.api.viewer import documents as viewer_documents  # noqa: E402
 
 # Health check routes (no prefix for load balancer compatibility)
@@ -102,6 +103,8 @@ app.include_router(health.router, tags=["Health"])
 
 # Public API (no authentication required)
 app.include_router(public_router, prefix=settings.API_PREFIX, tags=["Public"])
+# Alias for platform routes to support /api/platforms/:id/documents path.
+app.include_router(public_platforms_router, prefix="/api", tags=["Public"])
 
 app.include_router(auth.router, prefix=settings.API_PREFIX, tags=["Authentication"])
 app.include_router(documents.router, prefix=settings.API_PREFIX, tags=["Documents"])

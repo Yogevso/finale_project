@@ -1,9 +1,10 @@
 """Document Service"""
 
+import re
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.models import (
     AuditLog,
     Document,
     DocumentStatus,
+    Platform,
     User,
     UserRole,
     Version,
@@ -91,6 +93,51 @@ class DocumentService:
         major, minor, patch = DocumentService._parse_semver(raw_value, fallback_version_number)
         return f"{major}.{minor}.{patch + 1}"
 
+    @staticmethod
+    def _slugify_platform(name: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower())
+        slug = slug.strip("-")
+        return slug or "platform"
+
+    @staticmethod
+    def _normalize_platform_name(name: Optional[str]) -> str:
+        if not name or not name.strip():
+            return "Unspecified"
+        return name.strip()
+
+    def _get_or_create_platform(
+        self, platform_name: Optional[str] = None, platform_id: Optional[int] = None
+    ) -> Platform:
+        if platform_id is not None:
+            platform = self.db.query(Platform).filter(Platform.id == platform_id).first()
+            if not platform:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Platform {platform_id} not found",
+                )
+            return platform
+
+        normalized_name = self._normalize_platform_name(platform_name)
+        platform = (
+            self.db.query(Platform)
+            .filter(func.lower(Platform.name) == normalized_name.lower())
+            .first()
+        )
+        if platform:
+            return platform
+
+        base_slug = self._slugify_platform(normalized_name)
+        slug = base_slug
+        suffix = 2
+        while self.db.query(Platform).filter(Platform.slug == slug).first():
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+
+        platform = Platform(name=normalized_name, slug=slug)
+        self.db.add(platform)
+        self.db.flush()
+        return platform
+
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
         """Create a new document"""
         # Use provided document number or generate one
@@ -123,6 +170,10 @@ class DocumentService:
                     status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found"
                 )
 
+        platform = self._get_or_create_platform(
+            platform_name=document_data.platform, platform_id=document_data.platform_id
+        )
+
         # Create document with retry in case of document_number collision
         attempts = 0
         while True:
@@ -135,7 +186,8 @@ class DocumentService:
                 status=document_data.status,
                 category=document_data.category,
                 topic=document_data.topic,
-                platform=document_data.platform,
+                platform=platform.name,
+                platform_id=platform.id,
                 release_branch=document_data.release_branch,
                 tags=document_data.tags,
                 created_by=user.id,
@@ -275,8 +327,14 @@ class DocumentService:
         if document_data.topic is not None:
             document.topic = document_data.topic
 
-        if document_data.platform is not None:
-            document.platform = document_data.platform
+        if document_data.platform is not None or document_data.platform_id is not None:
+            platform = self._get_or_create_platform(
+                platform_name=document_data.platform, platform_id=document_data.platform_id
+            )
+            if document.platform_id != platform.id:
+                changes.append(f"Platform changed to '{platform.name}'")
+            document.platform = platform.name
+            document.platform_id = platform.id
 
         if document_data.release_branch is not None:
             document.release_branch = document_data.release_branch

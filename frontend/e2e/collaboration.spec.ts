@@ -1,4 +1,4 @@
-import { test, expect, Page, Browser, BrowserContext } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
 /**
  * Real-Time Collaboration E2E Tests
@@ -474,9 +474,6 @@ test.describe('Snapshot Management', () => {
     if (await snapshotsButton.isVisible()) {
       await snapshotsButton.click();
       await page.waitForTimeout(1000);
-      
-      // Should show snapshots list
-      const snapshotList = page.locator('[class*="snapshot-list"], [class*="snapshot"] li');
       
       // List might be empty or have items
       await expect(page.locator('body')).toContainText(/snapshot|No snapshots|Create/i);

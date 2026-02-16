@@ -18,6 +18,38 @@ from app.schemas import (
 router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
 
 
+def _get_active_document_or_404(db: Session, document_id: int) -> Document:
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.status == DocumentStatus.ACTIVE,
+        )
+        .first()
+    )
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found or not published",
+        )
+    return document
+
+
+def _get_published_version_or_404(db: Session, document_id: int, version_id: int) -> Version:
+    version = (
+        db.query(Version)
+        .filter(
+            Version.id == version_id,
+            Version.document_id == document_id,
+            Version.is_published.is_(True),
+        )
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="Published version not found")
+    return version
+
+
 @router.get("", response_model=DocumentListResponse)
 def list_published_documents(
     page: int = Query(1, ge=1),
@@ -80,21 +112,7 @@ def get_published_document(
     db: Session = Depends(get_db),
 ):
     """Get a single published document by ID."""
-    document = (
-        db.query(Document)
-        .filter(
-            Document.id == document_id,
-            Document.status == DocumentStatus.ACTIVE,
-        )
-        .first()
-    )
-
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found or not published",
-        )
-
+    document = _get_active_document_or_404(db, document_id)
     return DocumentResponse.model_validate(document)
 
 
@@ -104,21 +122,7 @@ def get_published_versions(
     db: Session = Depends(get_db),
 ):
     """Get published versions for a document."""
-    # Verify document is published
-    document = (
-        db.query(Document)
-        .filter(
-            Document.id == document_id,
-            Document.status == DocumentStatus.ACTIVE,
-        )
-        .first()
-    )
-
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found or not published",
-        )
+    _get_active_document_or_404(db, document_id)
 
     # Get only published versions
     versions = (
@@ -134,27 +138,37 @@ def get_published_versions(
     return [VersionResponse.model_validate(v) for v in versions]
 
 
+@router.get("/{document_id}/versions/{version_id}/attachments", response_model=list[AttachmentResponse])
+def get_version_attachments(
+    document_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get document attachments available for a specific published version."""
+    _get_active_document_or_404(db, document_id)
+    version = _get_published_version_or_404(db, document_id, version_id)
+    cutoff_timestamp = version.published_at or version.created_at
+
+    attachments = (
+        db.query(Attachment)
+        .filter(
+            Attachment.document_id == document_id,
+            Attachment.uploaded_at <= cutoff_timestamp,
+        )
+        .order_by(Attachment.uploaded_at.desc())
+        .all()
+    )
+
+    return [AttachmentResponse.model_validate(a) for a in attachments]
+
+
 @router.get("/{document_id}/attachments", response_model=list[AttachmentResponse])
 def get_document_attachments(
     document_id: int,
     db: Session = Depends(get_db),
 ):
     """Get attachments for a published document."""
-    # Verify document is published
-    document = (
-        db.query(Document)
-        .filter(
-            Document.id == document_id,
-            Document.status == DocumentStatus.ACTIVE,
-        )
-        .first()
-    )
-
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found or not published",
-        )
+    _get_active_document_or_404(db, document_id)
 
     attachments = (
         db.query(Attachment)
@@ -172,21 +186,7 @@ def get_document_comments(
     db: Session = Depends(get_db),
 ):
     """Get comments for a published document (read-only for viewers)."""
-    # Verify document is published
-    document = (
-        db.query(Document)
-        .filter(
-            Document.id == document_id,
-            Document.status == DocumentStatus.ACTIVE,
-        )
-        .first()
-    )
-
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail="Document not found or not published",
-        )
+    _get_active_document_or_404(db, document_id)
 
     comments = (
         db.query(Comment)

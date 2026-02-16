@@ -233,6 +233,21 @@ class Topic(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class Platform(Base):
+    """Platform metadata used for release/document grouping."""
+
+    __tablename__ = "platforms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    slug = Column(String(120), unique=True, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    documents = relationship("Document", back_populates="platform_ref")
+
+
 class User(Base):
     """User model"""
 
@@ -295,6 +310,7 @@ class Document(Base):
     category = Column(String(100), nullable=True, index=True)
     topic = Column(String(150), nullable=True, index=True)
     platform = Column(String(100), nullable=True, index=True)
+    platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
@@ -306,6 +322,7 @@ class Document(Base):
     # Relationships
     tenant = relationship("Tenant", back_populates="documents")
     created_by_user = relationship("User", back_populates="documents")
+    platform_ref = relationship("Platform", back_populates="documents")
     parent = relationship("Document", remote_side=[id], backref="children")
     versions = relationship("Version", back_populates="document", cascade="all, delete-orphan")
     attachments = relationship(
@@ -361,8 +378,17 @@ class Attachment(Base):
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
+    size_bytes = Column(Integer, nullable=True)
     mime_type = Column(String(100), nullable=False)
     storage_path = Column(String(500), nullable=False)  # S3 key or local path
+    storage_key = Column(String(500), nullable=True, index=True)
+    sha256 = Column(String(64), nullable=True, index=True)
+    reader_html_status = Column(String(20), nullable=True, index=True)
+    reader_html_content = Column(Text, nullable=True)
+    reader_toc_json = Column(Text, nullable=True)
+    reader_toc_source = Column(String(20), nullable=True)
+    reader_html_error = Column(Text, nullable=True)
+    reader_html_generated_at = Column(DateTime, nullable=True)
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

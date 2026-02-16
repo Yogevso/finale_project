@@ -111,8 +111,6 @@ test.describe('Manager Role', () => {
         await page.waitForTimeout(500);
         
         // Manager should have delete option
-        const deleteBtn = page.locator('button:has-text("Delete"), button[aria-label*="delete" i]');
-        // Delete button should be visible for manager
         await expect(page.locator('body')).toBeVisible();
       }
     });
@@ -181,11 +179,7 @@ test.describe('Manager Role', () => {
       await page.goto('/reviews');
       await page.waitForTimeout(1000);
       
-      // If there are pending reviews, should see action buttons
-      const approveBtn = page.locator('button:has-text("Approve")');
-      const rejectBtn = page.locator('button:has-text("Reject")');
-      
-      // Just verify page loaded - actual buttons depend on pending reviews
+      // Just verify page loaded - action buttons depend on pending reviews
       await expect(page.locator('body')).toBeVisible();
     });
 
@@ -217,7 +211,6 @@ test.describe('Manager Role', () => {
         
         // Manager should be able to assign companies
         // Look for visibility selector or company assignment
-        const visibilitySelect = page.locator('select[name="visibility"], text=/visibility|assign/i');
         await expect(page.locator('body')).toBeVisible();
       }
     });
@@ -315,7 +308,6 @@ test.describe('Manager Role', () => {
         // Role selector should not have admin option for manager
         const roleSelect = page.locator('select[name="role"]');
         if (await roleSelect.count() > 0) {
-          const options = await roleSelect.locator('option').allTextContents();
           // Manager should not be able to create admin/system_admin
           // They can only create editors
         }

@@ -19,6 +19,25 @@ import {
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
 
+type UserCreateFormData = {
+  email: string
+  username: string
+  full_name: string
+  password: string
+  role: UserRole
+  tenant_id?: number
+}
+
+type UserUpdateFormData = {
+  email?: string
+  full_name?: string
+  role?: UserRole
+  is_active?: boolean
+  tenant_id?: number | null
+}
+
+type UserFormSubmission = UserCreateFormData | UserUpdateFormData
+
 export default function UsersPage() {
   const { isAdmin, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
@@ -60,14 +79,7 @@ export default function UsersPage() {
   const pendingInvitations = invitationsData?.items || []
 
   const createMutation = useMutation({
-    mutationFn: (data: {
-      email: string
-      username: string
-      full_name: string
-      password: string
-      role: UserRole
-      tenant_id?: number
-    }) => api.createUser(data),
+    mutationFn: (data: UserCreateFormData) => api.createUser(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateDialog(false)
@@ -75,7 +87,7 @@ export default function UsersPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { email?: string; full_name?: string; role?: UserRole; is_active?: boolean; tenant_id?: number } }) =>
+    mutationFn: ({ id, data }: { id: number; data: UserUpdateFormData }) =>
       api.updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -410,7 +422,7 @@ export default function UsersPage() {
           title="Create User"
           companies={companies}
           currentUserRole={currentUser?.role || 'viewer'}
-          onSubmit={(data) => createMutation.mutate(data)}
+          onSubmit={(data) => createMutation.mutate(data as UserCreateFormData)}
           onClose={() => setShowCreateDialog(false)}
           isLoading={createMutation.isPending}
         />
@@ -423,7 +435,7 @@ export default function UsersPage() {
           user={editingUser}
           companies={companies}
           currentUserRole={currentUser?.role || 'viewer'}
-          onSubmit={(data) => updateMutation.mutate({ id: editingUser.id, data })}
+          onSubmit={(data) => updateMutation.mutate({ id: editingUser.id, data: data as UserUpdateFormData })}
           onClose={() => setEditingUser(null)}
           isLoading={updateMutation.isPending}
         />
@@ -445,7 +457,7 @@ interface UserFormDialogProps {
   user?: User
   companies: Company[]
   currentUserRole: UserRole
-  onSubmit: (data: any) => void
+  onSubmit: (data: UserFormSubmission) => void
   onClose: () => void
   isLoading: boolean
 }
@@ -480,7 +492,12 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
         full_name: formData.full_name !== user.full_name ? formData.full_name : undefined,
         role: formData.role !== user.role ? formData.role : undefined,
         is_active: formData.is_active !== user.is_active ? formData.is_active : undefined,
-        tenant_id: formData.tenant_id !== user.tenant_id ? (formData.tenant_id || null) : undefined,
+        tenant_id:
+          formData.tenant_id !== user.tenant_id
+            ? formData.tenant_id === ''
+              ? null
+              : Number(formData.tenant_id)
+            : undefined,
       })
     } else {
       onSubmit({
@@ -489,7 +506,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
         full_name: formData.full_name,
         password: formData.password,
         role: formData.role,
-        tenant_id: formData.tenant_id || undefined,
+        tenant_id: formData.tenant_id === '' ? undefined : Number(formData.tenant_id),
       })
     }
   }

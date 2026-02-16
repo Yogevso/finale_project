@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -208,6 +209,7 @@ def delete_document(
     "/documents/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED
 )
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
@@ -261,9 +263,21 @@ async def upload_document(
 
     # Now attach the uploaded file
     try:
-        await AttachmentService.upload_attachment(db, document.id, file, current_user)
+        await AttachmentService.upload_attachment(
+            db,
+            document.id,
+            file,
+            current_user,
+            background_tasks=background_tasks,
+        )
         if content_file:
-            await AttachmentService.upload_attachment(db, document.id, content_file, current_user)
+            await AttachmentService.upload_attachment(
+                db,
+                document.id,
+                content_file,
+                current_user,
+                background_tasks=background_tasks,
+            )
     except HTTPException as e:
         # If attachment fails, delete the document and re-raise
         service.delete_document(document.id, current_user)
@@ -284,7 +298,13 @@ async def upload_document(
             parent_id=document.id,
         )
         release_doc = service.create_document(release_data, current_user)
-        await AttachmentService.upload_attachment(db, release_doc.id, release_notes, current_user)
+        await AttachmentService.upload_attachment(
+            db,
+            release_doc.id,
+            release_notes,
+            current_user,
+            background_tasks=background_tasks,
+        )
 
     # Refresh to get updated data
     db.refresh(document)

@@ -63,20 +63,38 @@ test: add auth service unit tests
 
 ### Backend
 ```bash
-cd v2/backend
+cd backend
 pytest
 ```
 
 ### Frontend
 ```bash
-cd v2/frontend
-npm test
+cd frontend
+npm run lint
+npm run test -- --run
+```
+
+### Collaboration Server
+```bash
+cd collab-server
+npm run lint
+npm run test
+```
+
+## PR Review Workflow
+
+Use the PR comment triage script before requesting re-review:
+
+```bash
+# Requires GitHub CLI (gh) and gh auth login
+python scripts/fetch_pr_comments.py
 ```
 
 ## Pull Request Checklist
 
 - [ ] Code follows project style guidelines
 - [ ] Tests pass locally
+- [ ] Unresolved PR review comments are addressed or acknowledged
 - [ ] New features have tests
 - [ ] Documentation updated if needed
 - [ ] No console.log or print statements left

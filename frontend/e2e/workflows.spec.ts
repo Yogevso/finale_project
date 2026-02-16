@@ -11,16 +11,6 @@ async function loginAsAdmin(page: Page) {
   await page.waitForTimeout(2000);
 }
 
-// Helper to login as editor
-async function loginAsEditor(page: Page) {
-  await page.goto('/login');
-  await page.fill('input#username', 'editor');
-  await page.fill('input#password', 'editor123');
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
-}
-
 // =====================================================
 // 3.2.1.4 Document Creation + Review + Publish Workflow
 // =====================================================
@@ -408,7 +398,7 @@ test.describe('Notification Interactions', () => {
     
     // Look for notification bell/icon
     const notificationIcon = page.locator('button[aria-label*="notification" i], [class*="notification"], svg[class*="bell"], button:has-text("Notifications")');
-    const hasNotifications = await notificationIcon.count() > 0;
+    await notificationIcon.count();
     // Notifications may or may not be implemented - just check the page loads
     expect(true).toBeTruthy();
   });

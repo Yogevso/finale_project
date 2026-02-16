@@ -2,10 +2,12 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.models import Invitation, InvitationStatus, User
 from app.schemas import (
@@ -18,6 +20,7 @@ from app.schemas import (
     UserResponse,
 )
 from app.security import get_current_active_user, get_password_hash
+from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
 
 router = APIRouter()
@@ -45,14 +48,111 @@ class AcceptInvitationRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request for password reset instructions."""
+
+    identifier: str = Field(
+        ..., min_length=1, max_length=255, description="Username or email"
+    )
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract request client IP with proxy header support."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limited_response(detail: str, retry_after: int) -> JSONResponse:
+    """Standardized auth rate-limit response payload."""
+    safe_retry_after = max(int(retry_after), 1)
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "detail": detail,
+            "error_code": "RATE_LIMITED",
+            "retry_after": safe_retry_after,
+        },
+        headers={"Retry-After": str(safe_retry_after)},
+    )
+
+
 @router.post("/auth/login", response_model=TokenResponse)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
     Login with username and password.
 
     Returns JWT access token and refresh token.
     """
-    return AuthService.login(db, credentials.username, credentials.password)
+    client_ip = _get_client_ip(request)
+    username = (credentials.username or "").strip()
+
+    if settings.RATE_LIMIT_ENABLED:
+        allowed, retry_after = AuthRateLimitService.check_login_allowed(client_ip, username)
+        if not allowed:
+            return _rate_limited_response(
+                "Too many login attempts. Please try again later.",
+                retry_after,
+            )
+
+    try:
+        token_response = AuthService.login(db, credentials.username, credentials.password)
+    except HTTPException as exc:
+        if settings.RATE_LIMIT_ENABLED and exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            retry_after = AuthRateLimitService.record_login_failure(client_ip, username)
+            if retry_after > 0:
+                return _rate_limited_response(
+                    "Too many login attempts. Please try again later.",
+                    retry_after,
+                )
+        raise
+
+    if settings.RATE_LIMIT_ENABLED:
+        AuthRateLimitService.record_login_success(client_ip, username)
+
+    return token_response
+
+
+@router.post("/auth/forgot-password", response_model=MessageResponse)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    _db: Session = Depends(get_db),
+):
+    """
+    Request password reset instructions.
+
+    The response is intentionally generic to avoid user enumeration.
+    """
+    client_ip = _get_client_ip(request)
+    identifier = payload.identifier.strip()
+
+    if settings.RATE_LIMIT_ENABLED:
+        allowed, retry_after = AuthRateLimitService.check_forgot_password_allowed(
+            client_ip, identifier
+        )
+        if not allowed:
+            return _rate_limited_response(
+                "Too many password reset requests. Please try again later.",
+                retry_after,
+            )
+
+        lock_retry_after = AuthRateLimitService.record_forgot_password_request(
+            client_ip, identifier
+        )
+        if lock_retry_after > 0:
+            return _rate_limited_response(
+                "Too many password reset requests. Please try again later.",
+                lock_retry_after,
+            )
+
+    return MessageResponse(
+        message="If an account exists for that identifier, reset instructions will be sent."
+    )
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)

@@ -32,7 +32,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     # Endpoints excluded from rate limiting
-    EXCLUDED_PATHS = {"/health", "/ready", "/docs", "/redoc", "/openapi.json"}
+    EXCLUDED_PATHS = {
+        "/health",
+        "/ready",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        f"{settings.API_PREFIX}/docs",
+        f"{settings.API_PREFIX}/redoc",
+        f"{settings.API_PREFIX}/openapi.json",
+        f"{settings.API_PREFIX}/auth/login",
+        f"{settings.API_PREFIX}/auth/forgot-password",
+    }
 
     def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
         super().__init__(app)
@@ -103,7 +114,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Skip excluded paths
-        if request.url.path in self.EXCLUDED_PATHS:
+        request_path = request.url.path.rstrip("/") or "/"
+        if request_path in self.EXCLUDED_PATHS:
             return await call_next(request)
 
         # Get client IP

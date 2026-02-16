@@ -1,123 +1,48 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { publicApi } from '@/lib/publicApi'
+import { publicApi, type PublicPlatformOverviewItem } from '@/lib/publicApi'
 
-type LatestPlatformDocument = {
-  id: number
-  title: string
-  versionLabel?: string
-  versionNumber?: number
-  releaseBranch?: string
-  publishedAt?: string
-}
-
-type PlatformSummary = {
-  platform: string
-  latestDoc: LatestPlatformDocument | null
-  docCount: number
-}
+type PlatformSort = 'latest' | 'docs' | 'name'
 
 export default function PublicPlatformsPage() {
-  const [activePlatform, setActivePlatform] = useState<string | null>(null)
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<'latest' | 'docs' | 'name'>('latest')
+  const [sortBy, setSortBy] = useState<PlatformSort>('latest')
 
-  const { data: platformHistory, isLoading } = useQuery({
-    queryKey: ['public-platform-history'],
-    queryFn: () => publicApi.getPlatformHistory(),
+  const { data, isLoading } = useQuery({
+    queryKey: ['platform-overview'],
+    queryFn: () => publicApi.getPlatformsOverview(),
   })
 
-  const platformSummaries = useMemo<PlatformSummary[]>(() => {
-    if (!platformHistory?.items) return []
-    const summaries: PlatformSummary[] = []
-
-    for (const platform of platformHistory.items) {
-      let latestDoc: LatestPlatformDocument | null = null
-      let docCount = 0
-
-      for (const category of platform.categories) {
-        for (const yearGroup of category.years) {
-          for (const doc of yearGroup.documents) {
-            docCount += 1
-            const docDate = doc.published_at || doc.updated_at
-            if (!latestDoc) {
-              latestDoc = {
-                id: doc.id,
-                title: doc.title,
-                versionLabel: doc.version_label,
-                versionNumber: doc.version_number,
-                releaseBranch: doc.release_branch,
-                publishedAt: docDate,
-              }
-            } else {
-              const latestDate = latestDoc.publishedAt ? new Date(latestDoc.publishedAt).getTime() : 0
-              const candidateDate = docDate ? new Date(docDate).getTime() : 0
-              if (candidateDate > latestDate) {
-                latestDoc = {
-                  id: doc.id,
-                  title: doc.title,
-                  versionLabel: doc.version_label,
-                  versionNumber: doc.version_number,
-                  releaseBranch: doc.release_branch,
-                  publishedAt: docDate,
-                }
-              }
-            }
-          }
-        }
-      }
-
-      summaries.push({
-        platform: platform.platform,
-        latestDoc,
-        docCount,
-      })
-    }
-
-    return summaries
-  }, [platformHistory])
-
   const filteredSummaries = useMemo(() => {
+    const items = data?.items || []
     const term = searchTerm.trim().toLowerCase()
-    const summaries = term
-      ? platformSummaries.filter((summary) => summary.platform.toLowerCase().includes(term))
-      : platformSummaries
+    const filtered = term
+      ? items.filter((item) => item.platform.toLowerCase().includes(term))
+      : items
 
-    return [...summaries].sort((a, b) => {
-      if (sortBy === 'docs') return b.docCount - a.docCount
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'docs') return b.doc_count - a.doc_count
       if (sortBy === 'name') return a.platform.localeCompare(b.platform)
-      const aDate = a.latestDoc?.publishedAt ? new Date(a.latestDoc.publishedAt).getTime() : 0
-      const bDate = b.latestDoc?.publishedAt ? new Date(b.latestDoc.publishedAt).getTime() : 0
-      return bDate - aDate
+
+      const aDate = a.latest_release?.published_at || a.latest_release?.updated_at || ''
+      const bDate = b.latest_release?.published_at || b.latest_release?.updated_at || ''
+      return new Date(bDate).getTime() - new Date(aDate).getTime()
     })
-  }, [platformSummaries, searchTerm, sortBy])
+  }, [data?.items, searchTerm, sortBy])
 
-  const filteredPlatforms = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
-    if (!platformHistory?.items) return []
-    const base = term
-      ? platformHistory.items.filter((platform) =>
-          platform.platform.toLowerCase().includes(term)
-        )
-      : platformHistory.items
-    return [...base].sort((a, b) => a.platform.localeCompare(b.platform))
-  }, [platformHistory, searchTerm])
-
-  useEffect(() => {
-    if (filteredPlatforms.length === 0) return
-    if (!activePlatform || !filteredPlatforms.find((item) => item.platform === activePlatform)) {
-      setActivePlatform(filteredPlatforms[0].platform)
-    }
-  }, [activePlatform, filteredPlatforms])
-
-  const formatDateOrDash = (dateStr?: string) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-US', {
+  const formatDateOrDash = (value?: string) => {
+    if (!value) return '—'
+    return new Date(value).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     })
+  }
+
+  const openPlatform = (platform: PublicPlatformOverviewItem) => {
+    navigate(`/platforms/${platform.id}`)
   }
 
   return (
@@ -134,7 +59,7 @@ export default function PublicPlatformsPage() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="surface-card rounded-3xl p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
             <div>
@@ -143,7 +68,7 @@ export default function PublicPlatformsPage() {
                 Active platform lines
               </h2>
               <p className="text-sm text-slate-500 mt-1">
-                Quick view of the newest published documents per platform.
+                Click a platform row to open its full document table.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -156,7 +81,7 @@ export default function PublicPlatformsPage() {
               />
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                onChange={(e) => setSortBy(e.target.value as PlatformSort)}
                 className="select-field sm:w-48"
               >
                 <option value="latest">Sort by latest</option>
@@ -182,47 +107,32 @@ export default function PublicPlatformsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSummaries.map((summary) => (
-                  <tr key={summary.platform} className="border-t border-slate-200">
-                    <td className="py-3 px-4 font-medium text-slate-900">
-                      {summary.latestDoc ? (
-                        <Link
-                          to={`/doc/${summary.latestDoc.id}?fullscreen=1`}
-                          className="hover:text-sky-700"
-                        >
-                          {summary.platform}
-                        </Link>
-                      ) : (
-                        summary.platform
-                      )}
-                    </td>
+                {filteredSummaries.map((platform) => (
+                  <tr
+                    key={platform.id}
+                    className="border-t border-slate-200 hover:bg-slate-50 cursor-pointer"
+                    onClick={() => openPlatform(platform)}
+                  >
+                    <td className="py-3 px-4 font-medium text-slate-900">{platform.platform}</td>
                     <td className="py-3 px-4 text-slate-700">
-                      {summary.latestDoc ? (
-                        <Link
-                          to={`/doc/${summary.latestDoc.id}?fullscreen=1`}
-                          className="hover:text-sky-700"
-                        >
-                          {summary.latestDoc.title}
-                        </Link>
-                      ) : (
-                        '—'
-                      )}
+                      {platform.latest_release?.title || '—'}
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {summary.latestDoc?.releaseBranch || '—'}
+                      {platform.latest_release?.release_branch || '—'}
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {summary.latestDoc?.versionLabel ||
-                        (summary.latestDoc?.versionNumber
-                          ? `v${summary.latestDoc.versionNumber}`
+                      {platform.latest_release?.version_label ||
+                        (platform.latest_release?.version_number
+                          ? `v${platform.latest_release.version_number}`
                           : '—')}
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {formatDateOrDash(summary.latestDoc?.publishedAt)}
+                      {formatDateOrDash(
+                        platform.latest_release?.published_at ||
+                          platform.latest_release?.updated_at
+                      )}
                     </td>
-                    <td className="py-3 px-4 text-right text-slate-500">
-                      {summary.docCount}
-                    </td>
+                    <td className="py-3 px-4 text-right text-slate-500">{platform.doc_count}</td>
                   </tr>
                 ))}
                 {!filteredSummaries.length && !isLoading && (
@@ -232,112 +142,15 @@ export default function PublicPlatformsPage() {
                     </td>
                   </tr>
                 )}
+                {isLoading && (
+                  <tr>
+                    <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
+                      Loading platform overview...
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div className="surface-card rounded-3xl p-6">
-          <div className="flex flex-col lg:flex-row gap-6">
-            <aside className="lg:w-56 flex-shrink-0">
-              <div className="surface-muted rounded-2xl p-3">
-                <div className="text-xs uppercase tracking-widest text-slate-500 mb-3">
-                  Platforms
-                </div>
-                <div className="space-y-1">
-                  {filteredPlatforms.map((platform) => (
-                    <button
-                      key={platform.platform}
-                      onClick={() => setActivePlatform(platform.platform)}
-                      className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
-                        activePlatform === platform.platform
-                          ? 'bg-sky-800 text-white font-semibold'
-                          : 'text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {platform.platform}
-                    </button>
-                  ))}
-                  {!filteredPlatforms.length && !isLoading && (
-                    <div className="text-sm text-slate-400 px-3 py-2">
-                      No platforms yet
-                    </div>
-                  )}
-                </div>
-              </div>
-            </aside>
-
-            <div className="flex-1 space-y-5">
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />
-                  ))}
-                </div>
-              ) : (
-                platformHistory?.items
-                  ?.find((p) => p.platform === activePlatform)
-                  ?.categories?.map((cat) => (
-                    <details key={cat.category} open className="surface-muted rounded-2xl p-4">
-                      <summary className="cursor-pointer list-none flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm uppercase tracking-widest text-slate-500">Category</span>
-                          <span className="text-lg font-display font-semibold text-slate-900">
-                            {cat.category}
-                          </span>
-                        </div>
-                        <span className="text-xs text-slate-400">
-                          {cat.years.reduce((sum, year) => sum + year.documents.length, 0)} docs
-                        </span>
-                      </summary>
-
-                      <div className="mt-4 space-y-4">
-                        {cat.years.map((yearGroup) => (
-                          <div key={`${cat.category}-${yearGroup.year || 'unknown'}`} className="bg-white border border-slate-200 rounded-2xl">
-                            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-                              <div className="flex items-center gap-3">
-                                <span className="pill bg-slate-100 text-slate-700 border-slate-200">
-                                  {yearGroup.year || 'Unknown'}
-                                </span>
-                                <span className="text-xs text-slate-400">
-                                  {yearGroup.documents.length} documents
-                                </span>
-                              </div>
-                            </div>
-                            <div className="divide-y divide-slate-100">
-                              {yearGroup.documents.map((doc) => (
-                                <div key={doc.id} className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                  <Link
-                                  to={`/doc/${doc.id}?fullscreen=1`}
-                                    className="font-display font-semibold text-slate-900 hover:text-sky-600"
-                                  >
-                                    {doc.title}
-                                    <span className="ml-2 text-xs text-slate-400 font-mono">
-                                      {doc.document_number}
-                                    </span>
-                                  </Link>
-                                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                                    <span className="pill bg-slate-50 text-slate-600 border-slate-200">
-                                      {doc.version_label ||
-                                        (doc.version_number ? `v${doc.version_number}` : 'Version —')}
-                                    </span>
-                                    {doc.release_branch && (
-                                      <span className="pill bg-slate-100 text-slate-600 border-slate-200">
-                                        {doc.release_branch}
-                                      </span>
-                                    )}
-                                    <span>{formatDateOrDash(doc.published_at || doc.updated_at)}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  ))
-              )}
-            </div>
           </div>
         </div>
       </section>

@@ -398,7 +398,6 @@ test.describe('Cross-Role Permission Boundaries', () => {
         await page.waitForTimeout(500);
         
         // Should see feedback form
-        const feedbackBtn = page.locator('button:has-text("Feedback"), textarea');
         await expect(page.locator('body')).toBeVisible();
       }
     });

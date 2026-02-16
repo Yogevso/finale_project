@@ -408,7 +408,7 @@ export default function DocumentFullscreenPage() {
     })
     
     // Set document status back to draft so it requires approval
-    await api.updateDocument(Number(id), { status: 'draft' as any })
+    await api.updateDocument(Number(id), { status: 'draft' })
     
     // If submitForReview is checked, auto-submit for review
     if (submitForReview) {

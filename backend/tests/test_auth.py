@@ -1,5 +1,8 @@
 """Authentication Tests"""
 
+from app.config import settings
+from app.services.auth_rate_limit_service import AuthRateLimitService
+
 
 def test_register_user(client):
     """Test user registration"""
@@ -167,3 +170,63 @@ def test_logout(client, auth_headers, test_user):
     # Try to use refresh token - should fail
     response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert response.status_code == 401
+
+
+def test_login_rate_limited_by_ip_and_username(client, test_user, monkeypatch):
+    """Rapid failed logins should be rate-limited per ip+username key."""
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    AuthRateLimitService.reset()
+
+    headers = {"x-forwarded-for": "127.0.0.10"}
+    for _ in range(AuthRateLimitService.LOGIN_MAX_ATTEMPTS - 1):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"username": "testuser", "password": "wrongpassword"},
+            headers=headers,
+        )
+        assert response.status_code == 401
+
+    limited_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "wrongpassword"},
+        headers=headers,
+    )
+    assert limited_response.status_code == 429
+    payload = limited_response.json()
+    assert payload["error_code"] == "RATE_LIMITED"
+    assert payload["retry_after"] >= 1
+    assert int(limited_response.headers.get("Retry-After", "0")) >= 1
+
+    # Same IP but different username should not be blocked.
+    different_user_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "another-user", "password": "wrongpassword"},
+        headers=headers,
+    )
+    assert different_user_response.status_code == 401
+
+
+def test_forgot_password_rate_limited(client, monkeypatch):
+    """Forgot-password endpoint should return 429 only after repeated abuse."""
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    AuthRateLimitService.reset()
+
+    headers = {"x-forwarded-for": "127.0.0.11"}
+    for _ in range(AuthRateLimitService.FORGOT_MAX_ATTEMPTS - 1):
+        response = client.post(
+            "/api/v1/auth/forgot-password",
+            json={"identifier": "test@example.com"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+
+    limited_response = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"identifier": "test@example.com"},
+        headers=headers,
+    )
+    assert limited_response.status_code == 429
+    payload = limited_response.json()
+    assert payload["error_code"] == "RATE_LIMITED"
+    assert payload["retry_after"] >= 1
+    assert int(limited_response.headers.get("Retry-After", "0")) >= 1

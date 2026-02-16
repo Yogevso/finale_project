@@ -114,6 +114,57 @@ class PublicPlatformHistoryResponse(BaseModel):
     items: List[PublicPlatformGroup]
 
 
+class PublicPlatformLatestRelease(BaseModel):
+    """Latest release metadata for a platform summary row."""
+
+    id: int
+    document_number: str
+    title: str
+    release_branch: Optional[str] = None
+    version_label: Optional[str] = None
+    version_number: Optional[int] = None
+    published_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class PublicPlatformOverviewItem(BaseModel):
+    """Platform overview entry used in the platforms landing table."""
+
+    id: int
+    platform: str
+    doc_count: int
+    latest_release: Optional[PublicPlatformLatestRelease] = None
+
+
+class PublicPlatformOverviewResponse(BaseModel):
+    """Response schema for platform overview rows."""
+
+    items: List[PublicPlatformOverviewItem]
+
+
+class PublicPlatformDocumentRow(BaseModel):
+    """Single document row returned for a platform details table."""
+
+    id: int
+    title: str
+    document_number: str
+    category: Optional[str] = None
+    version_label: Optional[str] = None
+    version_number: Optional[int] = None
+    published_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    status: str
+
+
+class PublicPlatformDocumentsResponse(BaseModel):
+    """Paginated document list for a given platform."""
+
+    platform_id: int
+    platform: str
+    total: int
+    items: List[PublicPlatformDocumentRow]
+
+
 class PublicCategoryCount(BaseModel):
     """Category with document count"""
 

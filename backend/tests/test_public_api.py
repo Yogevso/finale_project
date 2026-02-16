@@ -1,5 +1,7 @@
 """Tests for the Public API endpoints (no authentication required)"""
 
+from datetime import datetime
+
 
 class TestPublicDocumentsEndpoint:
     """Test /api/v1/public/documents endpoint"""
@@ -134,6 +136,140 @@ class TestPublicStatsEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "total_documents" in data
+
+
+class TestPublicPlatformsEndpoints:
+    """Test /api/v1/platforms endpoints"""
+
+    def test_list_platform_overview(self, client, db, test_admin):
+        """Should return platform summary rows with latest release metadata."""
+        from app.models import (
+            Document,
+            DocumentStatus,
+            DocumentVisibility,
+            Platform,
+            Version,
+            VersionBumpType,
+        )
+
+        platform = Platform(name="Core Platform", slug="core-platform")
+        db.add(platform)
+        db.flush()
+
+        doc = Document(
+            title="Core Platform Guide",
+            document_number="DOC-PLAT-001",
+            description="Platform release doc",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            category="Guides",
+            platform=platform.name,
+            platform_id=platform.id,
+            created_by=test_admin.id,
+        )
+        db.add(doc)
+        db.flush()
+
+        version = Version(
+            document_id=doc.id,
+            version_number=1,
+            semantic_version="1.0.0",
+            bump_type=VersionBumpType.MAJOR,
+            content="test",
+            changes_summary="initial",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            created_by=test_admin.id,
+        )
+        db.add(version)
+        db.commit()
+
+        response = client.get("/api/platforms")
+        assert response.status_code == 200
+        payload = response.json()
+        assert "items" in payload
+        assert len(payload["items"]) == 1
+        assert payload["items"][0]["platform"] == "Core Platform"
+        assert payload["items"][0]["doc_count"] == 1
+        assert payload["items"][0]["latest_release"]["title"] == "Core Platform Guide"
+
+    def test_get_platform_documents(self, client, db, test_admin):
+        """Should return only documents linked to the requested platform ID."""
+        from app.models import (
+            Document,
+            DocumentStatus,
+            DocumentVisibility,
+            Platform,
+            Version,
+            VersionBumpType,
+        )
+
+        platform_a = Platform(name="Developer Portal", slug="developer-portal")
+        platform_b = Platform(name="Core Platform", slug="core-platform")
+        db.add_all([platform_a, platform_b])
+        db.flush()
+
+        doc_a = Document(
+            title="API Reference Index",
+            document_number="DOC-PLAT-010",
+            description="Platform A doc",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            category="API",
+            platform=platform_a.name,
+            platform_id=platform_a.id,
+            created_by=test_admin.id,
+        )
+        doc_b = Document(
+            title="Core Platform Guide",
+            document_number="DOC-PLAT-020",
+            description="Platform B doc",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            category="Guide",
+            platform=platform_b.name,
+            platform_id=platform_b.id,
+            created_by=test_admin.id,
+        )
+        db.add_all([doc_a, doc_b])
+        db.flush()
+
+        db.add_all(
+            [
+                Version(
+                    document_id=doc_a.id,
+                    version_number=2,
+                    semantic_version="2.0.0",
+                    bump_type=VersionBumpType.MAJOR,
+                    content="a",
+                    changes_summary="major",
+                    is_published=True,
+                    published_at=datetime.utcnow(),
+                    created_by=test_admin.id,
+                ),
+                Version(
+                    document_id=doc_b.id,
+                    version_number=1,
+                    semantic_version="1.0.0",
+                    bump_type=VersionBumpType.MAJOR,
+                    content="b",
+                    changes_summary="initial",
+                    is_published=True,
+                    published_at=datetime.utcnow(),
+                    created_by=test_admin.id,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get(f"/api/platforms/{platform_a.id}/documents")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["platform_id"] == platform_a.id
+        assert payload["platform"] == "Developer Portal"
+        assert payload["total"] == 1
+        assert payload["items"][0]["title"] == "API Reference Index"
+        assert payload["items"][0]["document_number"] == "DOC-PLAT-010"
 
 
 class TestPublicEndpointsSecure:

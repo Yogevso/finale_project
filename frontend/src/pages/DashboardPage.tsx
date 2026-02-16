@@ -3,6 +3,20 @@ import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
+interface DashboardBookmark {
+  id: number
+  document_id: number
+  document_title: string
+  document_number?: string
+}
+
+interface DashboardProgressItem {
+  id: number
+  document_id: number
+  document_title: string
+  progress_percent: number
+}
+
 export default function DashboardPage() {
   const { user, isCustomer } = useAuth()
   
@@ -11,7 +25,7 @@ export default function DashboardPage() {
     queryFn: () => api.getDocuments({ page: 1, page_size: 5 }),
   })
 
-  const { data: bookmarks = [] } = useQuery({
+  const { data: bookmarks = [] } = useQuery<DashboardBookmark[]>({
     queryKey: ['bookmarks', 'dashboard'],
     queryFn: () => api.getBookmarks(),
     enabled: isCustomer,
@@ -131,7 +145,7 @@ export default function DashboardPage() {
 
 function BookmarksWidget() {
   const { isCustomer } = useAuth()
-  const { data: bookmarks = [], isLoading } = useQuery({
+  const { data: bookmarks = [], isLoading } = useQuery<DashboardBookmark[]>({
     queryKey: ['bookmarks'],
     queryFn: () => api.getBookmarks(),
     enabled: isCustomer,
@@ -155,7 +169,7 @@ function BookmarksWidget() {
             <p className="text-xs mt-1">Bookmark documents for quick access</p>
           </div>
         ) : (
-          bookmarks.slice(0, 5).map((b: any) => (
+          bookmarks.slice(0, 5).map((b) => (
             <Link
               key={b.id}
               to={`/documents/${b.document_id}/fullscreen`}
@@ -173,14 +187,14 @@ function BookmarksWidget() {
 
 function ReadingProgressWidget() {
   const { isCustomer } = useAuth()
-  const { data: progress = [], isLoading } = useQuery({
+  const { data: progress = [], isLoading } = useQuery<DashboardProgressItem[]>({
     queryKey: ['reading-progress'],
     queryFn: () => api.getReadingProgress(),
     enabled: isCustomer,
   })
 
-  const inProgress = progress.filter((p: any) => p.progress_percent < 100)
-  const completed = progress.filter((p: any) => p.progress_percent >= 100)
+  const inProgress = progress.filter((p) => p.progress_percent < 100)
+  const completed = progress.filter((p) => p.progress_percent >= 100)
 
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
@@ -201,7 +215,7 @@ function ReadingProgressWidget() {
           </div>
         ) : (
           <>
-            {inProgress.map((p: any) => (
+            {inProgress.map((p) => (
               <Link
                 key={p.id}
                 to={`/documents/${p.document_id}/fullscreen`}
@@ -219,7 +233,7 @@ function ReadingProgressWidget() {
                 </div>
               </Link>
             ))}
-            {completed.slice(0, 3).map((p: any) => (
+            {completed.slice(0, 3).map((p) => (
               <Link
                 key={p.id}
                 to={`/documents/${p.document_id}/fullscreen`}

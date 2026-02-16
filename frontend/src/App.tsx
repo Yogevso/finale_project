@@ -18,6 +18,7 @@ import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
 import PublicLayout from './layouts/PublicLayout'
 import PublicDocumentsPage from './pages/public/PublicDocumentsPage'
 import PublicPlatformsPage from './pages/public/PublicPlatformsPage'
+import PublicPlatformDetailPage from './pages/public/PublicPlatformDetailPage'
 import PublicDocumentPage from './pages/public/PublicDocumentPage'
 import PublicSearchPage from './pages/public/PublicSearchPage'
 import PublicToolsPage from './pages/public/PublicToolsPage'
@@ -82,6 +83,7 @@ function App() {
           <Route path="/" element={<RoleBasedRedirect />} />
           <Route path="/docs" element={<PublicDocumentsPage />} />
           <Route path="/platforms" element={<PublicPlatformsPage />} />
+          <Route path="/platforms/:platformId" element={<PublicPlatformDetailPage />} />
           <Route path="/browse" element={<Navigate to="/docs" replace />} />
           <Route path="/topics" element={<Navigate to="/docs" replace />} />
           <Route path="/topics/:slug" element={<Navigate to="/docs" replace />} />

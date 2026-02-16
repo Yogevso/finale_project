@@ -25,7 +25,6 @@ import { test, expect, Page } from '@playwright/test';
  */
 
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
-const CUSTOMER_2 = { username: 'customer2', password: 'customer123' };
 
 async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
   await page.goto('/login');

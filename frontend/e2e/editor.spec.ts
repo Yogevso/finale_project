@@ -345,7 +345,6 @@ test.describe('Editor Role', () => {
         await page.waitForTimeout(500);
         
         // Editor should NOT have delete button
-        const deleteBtn = page.locator('button:has-text("Delete Document"), button[aria-label="Delete"]');
         // May have delete for attachments/comments they own, but not for documents
         await expect(page.locator('body')).toBeVisible();
       }

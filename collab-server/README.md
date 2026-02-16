@@ -88,7 +88,7 @@ The server exposes WebSocket endpoints only. HTTP endpoints are handled by FastA
 | `npm run dev` | Start with hot-reload |
 | `npm run build` | Compile TypeScript |
 | `npm start` | Run production build |
-| `npm run lint` | Run ESLint |
+| `npm run lint` | Run TypeScript static checks |
 | `npm run typecheck` | Type check without emit |
 
 ## Docker

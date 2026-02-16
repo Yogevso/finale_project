@@ -46,9 +46,10 @@ export default function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
       console.error('Delete error:', error)
-      alert(error?.response?.data?.detail || error?.message || 'Failed to delete document. You may need Manager or Admin role.')
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to delete document. You may need Manager or Admin role.')
     },
   })
 
@@ -63,13 +64,14 @@ export default function DocumentsPage() {
       })
       queryClient.invalidateQueries({ queryKey: ['documents'] })
     },
-    onError: (error: any, variables) => {
+    onError: (error: unknown, variables) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
       setVisibilityOverrides((prev) => {
         const next = { ...prev }
         delete next[variables.id]
         return next
       })
-      alert(error?.response?.data?.detail || error?.message || 'Failed to update visibility.')
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to update visibility.')
     },
   })
 

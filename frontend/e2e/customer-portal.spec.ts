@@ -2,7 +2,6 @@ import { test, expect, Page } from '@playwright/test';
 
 // Customer test credentials (from seed data)
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
-const CUSTOMER_2 = { username: 'customer2', password: 'customer123' };
 const ADMIN = { username: 'admin', password: 'admin123' };
 
 // Helper to login as customer
@@ -171,7 +170,7 @@ test.describe('Customer Portal - Dashboard', () => {
     
     // Should display stats cards or counts
     const statsSection = page.locator('[class*="stat"], [class*="card"], [class*="count"]');
-    const hasStats = await statsSection.count() > 0;
+    await statsSection.count();
     
     // Just verify page loaded successfully
     await expect(page.locator('body')).toBeVisible();
@@ -359,7 +358,7 @@ test.describe('Customer Portal - Navigation', () => {
     
     // Should display user info or username somewhere
     const userInfo = page.locator('text=/customer|profile|user/i');
-    const hasUserInfo = await userInfo.count() > 0;
+    await userInfo.count();
     
     // Just verify page loaded
     await expect(page.locator('body')).toBeVisible();
@@ -399,7 +398,7 @@ test.describe('Customer Portal - Document Downloads', () => {
       
       // Look for download buttons
       const downloadBtn = page.locator('a:has-text("Download"), button:has-text("Download"), [aria-label*="download" i]');
-      const hasDownloadOption = await downloadBtn.count() > 0;
+      await downloadBtn.count();
       
       // Just verify page shows document details
       await expect(page.locator('body')).toBeVisible();
@@ -484,7 +483,7 @@ test.describe('Admin - Company Management', () => {
     await page.waitForTimeout(1000);
     
     const createBtn = page.locator('button:has-text("Create"), button:has-text("Add"), button:has-text("New")');
-    const hasCreateBtn = await createBtn.count() > 0;
+    await createBtn.count();
     
     // Just verify page loaded
     await expect(page.locator('body')).toBeVisible();
@@ -548,8 +547,8 @@ test.describe('Admin - Document Visibility', () => {
       
       // Should have visibility selector
       const visibilitySelect = page.locator('select[name*="visibility" i], [aria-label*="visibility" i], input[name*="visibility" i]');
-      const hasVisibility = await visibilitySelect.count() > 0 || 
-                            await page.locator('text=/public|internal|company/i').count() > 0;
+      await visibilitySelect.count();
+      await page.locator('text=/public|internal|company/i').count();
       
       // Just verify form is open
       await expect(page.locator('body')).toBeVisible();
@@ -566,7 +565,7 @@ test.describe('Admin - Document Visibility', () => {
       await page.waitForTimeout(1000);
       
       // Look for company assignment section or tab
-      const companySection = page.locator('text=/assign|companies|visibility|share/i');
+      await page.locator('text=/assign|companies|visibility|share/i').count();
       
       // Just verify page loaded
       await expect(page.locator('body')).toBeVisible();
@@ -618,7 +617,7 @@ test.describe('Admin - Feedback Management', () => {
       
       // Should show respond option
       const respondBtn = page.locator('button:has-text("Respond"), button:has-text("Reply"), textarea');
-      const canRespond = await respondBtn.count() > 0;
+      await respondBtn.count();
       
       // Just verify detail view works
       await expect(page.locator('body')).toBeVisible();

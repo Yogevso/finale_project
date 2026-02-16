@@ -188,7 +188,11 @@ export interface Attachment {
   filename: string
   original_filename: string
   file_size: number
+  size_bytes?: number
   mime_type: string
+  sha256?: string
+  reader_html_status?: 'pending' | 'processing' | 'ready' | 'failed' | null
+  reader_toc_source?: 'outline' | 'heuristic' | 'none' | string | null
   uploaded_by: number
   uploaded_at: string
   uploader_name?: string  // populated from join
@@ -197,8 +201,37 @@ export interface Attachment {
 export interface AttachmentUploadResponse {
   id: number
   filename: string
+  sha256?: string
   url: string
   message: string
+}
+
+export interface AttachmentReaderViewResponse {
+  attachment_id: number
+  status: 'pending' | 'processing' | 'ready' | 'failed' | string
+  html_content: string | null
+  toc_items: AttachmentOutlineItem[]
+  toc_source: 'outline' | 'heuristic' | 'none' | string | null
+  error: string | null
+  generated_at: string | null
+}
+
+export interface AttachmentOutlineItem {
+  id: string
+  level: number
+  title: string
+  page: number
+  page_start: number
+  page_end?: number | null
+  anchor_id?: string | null
+}
+
+export interface AttachmentOutlineResponse {
+  attachment_id: number
+  has_outline: boolean
+  items: AttachmentOutlineItem[]
+  source?: 'outline' | 'heuristic' | 'none' | string | null
+  error: string | null
 }
 
 // Comment types

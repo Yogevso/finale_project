@@ -1,12 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
+import { api } from '@/lib/api'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import type { Attachment, AttachmentOutlineItem, Comment, Document, Version } from '@/types'
 
 export default function ViewerDocumentPage() {
   const { id } = useParams<{ id: string }>()
   const [isPrintMode, setIsPrintMode] = useState(false)
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null)
+  const [showTextMode, setShowTextMode] = useState(false)
+  const [pdfOutlineItems, setPdfOutlineItems] = useState<AttachmentOutlineItem[]>([])
+  const [pdfOutlineLoading, setPdfOutlineLoading] = useState(false)
+  const [pdfOutlineError, setPdfOutlineError] = useState<string | null>(null)
+  const [pdfOutlinePage, setPdfOutlinePage] = useState<number | null>(null)
   const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
   const location = useLocation()
   const navigate = useNavigate()
@@ -18,7 +26,7 @@ export default function ViewerDocumentPage() {
   }
 
   // Fetch document details
-  const { data: document, isLoading: docLoading, error } = useQuery({
+  const { data: document, isLoading: docLoading, error } = useQuery<Document>({
     queryKey: ['viewer-document', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}`)
@@ -26,43 +34,159 @@ export default function ViewerDocumentPage() {
         if (response.status === 404) throw new Error('Document not found')
         throw new Error('Failed to fetch document')
       }
-      return response.json()
+      return response.json() as Promise<Document>
     },
     enabled: !!id,
   })
 
   // Fetch versions
-  const { data: versions = [] } = useQuery({
+  const { data: versions = [] } = useQuery<Version[]>({
     queryKey: ['viewer-document-versions', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}/versions`)
       if (!response.ok) return []
-      return response.json()
+      return response.json() as Promise<Version[]>
     },
     enabled: !!id,
   })
 
-  // Fetch attachments
-  const { data: attachments = [] } = useQuery({
-    queryKey: ['viewer-document-attachments', id],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/viewer/documents/${id}/attachments`)
-      if (!response.ok) return []
-      return response.json()
-    },
-    enabled: !!id,
-  })
+  const { data: selectedVersionAttachments = [], isLoading: selectedVersionAttachmentsLoading } =
+    useQuery<Attachment[]>({
+      queryKey: ['viewer-document-version-attachments', id, selectedVersionId],
+      queryFn: async () => {
+        if (!selectedVersionId) return []
+        const response = await fetch(`/api/v1/viewer/documents/${id}/versions/${selectedVersionId}/attachments`)
+        if (!response.ok) return []
+        return response.json() as Promise<Attachment[]>
+      },
+      enabled: !!id && !!selectedVersionId,
+    })
 
   // Fetch comments
-  const { data: comments = [] } = useQuery({
+  const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ['viewer-document-comments', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}/comments`)
       if (!response.ok) return []
-      return response.json()
+      return response.json() as Promise<Comment[]>
     },
     enabled: !!id,
   })
+
+  const isSyntheticUploadPlaceholder = (value?: string | null) => {
+    if (!value) return false
+    return value.trim().toLowerCase().startsWith('uploaded from file:')
+  }
+
+  const hasRenderableContent = (value?: string | null) => {
+    if (!value) return false
+    const trimmed = value.trim()
+    return trimmed.length > 0 && !isSyntheticUploadPlaceholder(trimmed)
+  }
+
+  const normalizedVersions: Version[] = Array.isArray(versions) ? versions : []
+  const requestedVersionId = Number(new URLSearchParams(location.search).get('version') || '')
+
+  useEffect(() => {
+    if (normalizedVersions.length === 0) {
+      setSelectedVersionId(null)
+      return
+    }
+    if (
+      selectedVersionId &&
+      normalizedVersions.some((version) => version.id === selectedVersionId)
+    ) {
+      return
+    }
+    if (
+      Number.isInteger(requestedVersionId) &&
+      requestedVersionId > 0 &&
+      normalizedVersions.some((version) => version.id === requestedVersionId)
+    ) {
+      setSelectedVersionId(requestedVersionId)
+      return
+    }
+    setSelectedVersionId(null)
+  }, [normalizedVersions, requestedVersionId, selectedVersionId])
+
+  useEffect(() => {
+    setShowTextMode(false)
+  }, [selectedVersionId])
+
+  const handleVersionSelect = (versionId: number) => {
+    setSelectedVersionId(versionId)
+    const params = new URLSearchParams(location.search)
+    params.set('version', String(versionId))
+    navigate(
+      {
+        pathname: location.pathname,
+        search: `?${params.toString()}`,
+      },
+      { replace: true },
+    )
+  }
+
+  const selectedVersion =
+    selectedVersionId === null
+      ? null
+      : normalizedVersions.find((version) => version.id === selectedVersionId) || null
+  const effectiveAttachments = selectedVersionId ? selectedVersionAttachments : []
+  const selectedPdfAttachment = effectiveAttachments.find((attachment) =>
+    (attachment.mime_type || '').startsWith('application/pdf'),
+  )
+  const pdfPreviewUrl = selectedPdfAttachment && id
+    ? `${api.getAttachmentPreviewUrl(Number(id), selectedPdfAttachment.id)}&version=${selectedVersionId || 'none'}`
+    : null
+  const pdfPreviewSrc =
+    pdfPreviewUrl && pdfOutlinePage ? `${pdfPreviewUrl}#page=${pdfOutlinePage}` : pdfPreviewUrl
+
+  const contentSource =
+    selectedVersion && hasRenderableContent(selectedVersion.content) ? selectedVersion.content : ''
+  const content = typeof contentSource === 'string' ? contentSource : ''
+  const isHtmlContent = /<\/?[a-z][\s\S]*>/i.test(content)
+  const versionLabel = (version: { semantic_version?: string | null; version_number?: number }) =>
+    version?.semantic_version || `${version?.version_number || 1}.0.0`
+  const documentPaperClass =
+    contentWidth === 'fluid'
+      ? 'document-preview-paper document-preview-paper-fluid'
+      : 'document-preview-paper'
+
+  useEffect(() => {
+    if (!selectedPdfAttachment || !id) {
+      setPdfOutlineItems([])
+      setPdfOutlineLoading(false)
+      setPdfOutlineError(null)
+      setPdfOutlinePage(null)
+      return
+    }
+
+    let cancelled = false
+    setPdfOutlineLoading(true)
+    setPdfOutlineError(null)
+    setPdfOutlinePage(null)
+
+    api.getAttachmentOutline(Number(id), selectedPdfAttachment.id)
+      .then((payload) => {
+        if (cancelled) return
+        setPdfOutlineItems(payload.items || [])
+        setPdfOutlineError(payload.error || null)
+      })
+      .catch((outlineError) => {
+        if (cancelled) return
+        console.error('Failed loading PDF outline:', outlineError)
+        setPdfOutlineItems([])
+        setPdfOutlineError('Failed to load TOC')
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPdfOutlineLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, selectedPdfAttachment])
 
   if (docLoading) {
     return (
@@ -102,33 +226,6 @@ export default function ViewerDocumentPage() {
     )
   }
 
-  const isSyntheticUploadPlaceholder = (value?: string | null) => {
-    if (!value) return false
-    return value.trim().toLowerCase().startsWith('uploaded from file:')
-  }
-
-  const hasRenderableContent = (value?: string | null) => {
-    if (!value) return false
-    const trimmed = value.trim()
-    return trimmed.length > 0 && !isSyntheticUploadPlaceholder(trimmed)
-  }
-
-  const normalizedVersions = Array.isArray(versions) ? versions : []
-  const latestVersion =
-    normalizedVersions.find((v: any) => v.is_published && hasRenderableContent(v.content)) ||
-    normalizedVersions.find((v: any) => hasRenderableContent(v.content))
-  const fallbackDocumentContent = hasRenderableContent((document as { content?: string | null }).content)
-    ? (document as { content?: string | null }).content || ''
-    : ''
-  const content = typeof latestVersion?.content === 'string' ? latestVersion.content : fallbackDocumentContent
-  const isHtmlContent = /<\/?[a-z][\s\S]*>/i.test(content)
-  const versionLabel = (version: { semantic_version?: string | null; version_number?: number }) =>
-    version?.semantic_version || `${version?.version_number || 1}.0.0`
-  const documentPaperClass =
-    contentWidth === 'fluid'
-      ? 'document-preview-paper document-preview-paper-fluid'
-      : 'document-preview-paper'
-
   // Print-friendly view
   if (isPrintMode) {
     return (
@@ -165,7 +262,7 @@ export default function ViewerDocumentPage() {
             )}
             <div className="mt-4 text-sm text-slate-500 flex gap-6">
               <span>Published: {new Date(document.updated_at).toLocaleDateString()}</span>
-              {latestVersion && <span>Version: {versionLabel(latestVersion)}</span>}
+              {selectedVersion && <span>Version: {versionLabel(selectedVersion)}</span>}
             </div>
           </div>
 
@@ -186,11 +283,11 @@ export default function ViewerDocumentPage() {
           </div>
 
           {/* Attachments List */}
-          {attachments.length > 0 && (
+          {effectiveAttachments.length > 0 && (
             <div className="border-t border-slate-200 pt-4 mt-8">
               <h2 className="text-lg font-display font-semibold mb-2">Attachments</h2>
               <ul className="list-disc list-inside text-sm text-slate-600">
-                {attachments.map((a: any) => (
+                {effectiveAttachments.map((a) => (
                   <li key={a.id}>{a.filename} ({formatFileSize(a.file_size)})</li>
                 ))}
               </ul>
@@ -213,7 +310,11 @@ export default function ViewerDocumentPage() {
       ) : (
         <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg gap-4">
           <button
-            onClick={() => navigate(`/viewer/documents/${id}`)}
+            onClick={() => {
+              const params = new URLSearchParams(location.search)
+              params.delete('fullscreen')
+              navigate(`/viewer/documents/${id}${params.toString() ? `?${params.toString()}` : ''}`)
+            }}
             className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
           >
             Exit Fullscreen
@@ -256,7 +357,11 @@ export default function ViewerDocumentPage() {
           </div>
           {!isFullscreen && (
             <button
-              onClick={() => navigate(`/viewer/documents/${id}?fullscreen=1`)}
+              onClick={() => {
+                const params = new URLSearchParams(location.search)
+                params.set('fullscreen', '1')
+                navigate(`/viewer/documents/${id}?${params.toString()}`)
+              }}
               className="btn-ghost text-sm"
             >
               Fullscreen
@@ -292,10 +397,10 @@ export default function ViewerDocumentPage() {
                 day: 'numeric',
               })}
             </div>
-            {latestVersion && (
+            {selectedVersion && (
               <div>
                 <span className="font-medium text-slate-700">Version:</span>{' '}
-                {versionLabel(latestVersion)}
+                {versionLabel(selectedVersion)}
               </div>
             )}
             <div className="ml-auto flex gap-2">
@@ -315,7 +420,65 @@ export default function ViewerDocumentPage() {
             📄 Content
           </h2>
           <div className="max-w-none">
-            {content ? (
+            {!selectedVersion ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+                <p className="text-slate-700 font-medium">Select a version to load preview.</p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Viewer does not auto-select the latest version.
+                </p>
+              </div>
+            ) : selectedVersionAttachmentsLoading ? (
+              <div className="h-[65vh] flex items-center justify-center">
+                <div className="text-center text-slate-500">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600 mx-auto mb-3"></div>
+                  Loading version preview...
+                </div>
+              </div>
+            ) : selectedPdfAttachment && pdfPreviewUrl ? (
+              <div className="flex h-[70vh] rounded-xl border border-slate-200 overflow-hidden">
+                <aside className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col">
+                  <div className="px-4 py-3 border-b border-slate-200 bg-white">
+                    <h3 className="text-sm font-semibold text-slate-800">Contents</h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {pdfOutlineLoading ? (
+                      <div className="p-4 text-sm text-slate-500">Loading TOC...</div>
+                    ) : pdfOutlineItems.length > 0 ? (
+                      <nav className="p-2 space-y-1">
+                        {pdfOutlineItems.map((item) => {
+                          const pageStart = item.page_start || item.page
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setPdfOutlinePage(pageStart)}
+                              className={`w-full text-left px-2 py-1.5 text-sm rounded hover:bg-sky-100 hover:text-sky-800 ${
+                                pdfOutlinePage === pageStart
+                                  ? 'bg-sky-100 text-sky-800 font-medium'
+                                  : 'text-slate-700'
+                              }`}
+                              style={{ paddingLeft: `${Math.max(0, item.level - 1) * 14 + 8}px` }}
+                            >
+                              <span className="truncate block">{item.title}</span>
+                            </button>
+                          )
+                        })}
+                      </nav>
+                    ) : (
+                      <div className="p-4 text-sm text-slate-500">
+                        {pdfOutlineError || 'No TOC available'}
+                      </div>
+                    )}
+                  </div>
+                </aside>
+                <iframe
+                  key={`${selectedVersion.id}-${selectedPdfAttachment.id}`}
+                  src={pdfPreviewSrc || undefined}
+                  className="flex-1 h-full"
+                  title={`${document.title} PDF Preview`}
+                />
+              </div>
+            ) : showTextMode && content ? (
               isHtmlContent ? (
                 <div className={documentPaperClass}>
                   <div
@@ -329,22 +492,38 @@ export default function ViewerDocumentPage() {
                 </div>
               )
             ) : (
-              <p className="text-slate-400 italic">No content available.</p>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                <p className="text-amber-900 font-medium">
+                  No PDF attachment is available for the selected version.
+                </p>
+                <p className="text-sm text-amber-800 mt-1">
+                  Visual preview requires a PDF attachment for this version.
+                </p>
+                {content && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTextMode(true)}
+                    className="mt-4 btn-secondary text-sm"
+                  >
+                    Open Text Mode
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
 
         {/* Attachments */}
-        {attachments.length > 0 && (
+        {effectiveAttachments.length > 0 && (
           <div className="surface-card rounded-2xl p-8 mb-6">
             <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
               📎 Attachments
               <span className="text-sm font-normal text-slate-400">
-                ({attachments.length})
+                ({effectiveAttachments.length})
               </span>
             </h2>
             <div className="space-y-3">
-              {attachments.map((attachment: any) => (
+              {effectiveAttachments.map((attachment) => (
                 <div
                   key={attachment.id}
                   className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
@@ -363,7 +542,7 @@ export default function ViewerDocumentPage() {
                     </div>
                   </div>
                   <a
-                    href={`/api/v1/attachments/${attachment.id}/download`}
+                    href={id ? api.getAttachmentDownloadUrl(Number(id), attachment.id) : '#'}
                     className="btn-primary text-sm"
                   >
                     Download
@@ -384,20 +563,27 @@ export default function ViewerDocumentPage() {
               </span>
             </h2>
             <div className="space-y-3">
-              {versions.map((version: any) => (
-                <div
+              {versions.map((version) => (
+                <button
                   key={version.id}
+                  type="button"
+                  onClick={() => handleVersionSelect(version.id)}
                   className={`p-4 rounded-xl border ${
-                    version.is_published
+                    selectedVersionId === version.id
+                      ? 'border-sky-400 bg-sky-50'
+                      : version.is_published
                       ? 'border-emerald-200 bg-emerald-50'
                       : 'border-slate-200 bg-slate-50'
-                  }`}
+                  } w-full text-left transition-colors hover:border-sky-300`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-mono font-medium text-slate-900">
                         v{versionLabel(version)}
                       </span>
+                      {selectedVersionId === version.id && (
+                        <span className="pill bg-sky-100 text-sky-700">Viewing</span>
+                      )}
                       {version.is_published && (
                         <span className="pill bg-emerald-100 text-emerald-700">
                           Published
@@ -408,12 +594,12 @@ export default function ViewerDocumentPage() {
                       {new Date(version.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {(version.changes_summary || version.change_notes) && (
+                  {version.changes_summary && (
                     <p className="text-sm text-slate-600 mt-2">
-                      {version.changes_summary || version.change_notes}
+                      {version.changes_summary}
                     </p>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -429,7 +615,7 @@ export default function ViewerDocumentPage() {
               </span>
             </h2>
             <div className="space-y-4">
-              {comments.map((comment: any) => (
+              {comments.map((comment) => (
                 <div
                   key={comment.id}
                   className="p-4 bg-slate-50 rounded-xl border-l-4 border-sky-200"

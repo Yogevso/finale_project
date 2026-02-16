@@ -61,8 +61,9 @@ export default function AcceptInvitationPage() {
         navigate('/')
       }
     },
-    onError: (err: any) => {
-      setError(err.response?.data?.detail || 'Failed to create account')
+    onError: (err: unknown) => {
+      const apiError = err as { response?: { data?: { detail?: string } } }
+      setError(apiError.response?.data?.detail || 'Failed to create account')
     },
   })
 

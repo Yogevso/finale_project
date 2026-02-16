@@ -400,6 +400,39 @@ h1, h2, h3, h4, h5, h6 {
   background: #ffffff;
 }
 
+.document-preview-content--reader {
+  font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.document-preview-content--reader table {
+  table-layout: auto;
+}
+
+.document-preview-content--reader .pdf-table-wrap {
+  margin: 1.2rem 0;
+  overflow-x: auto;
+  border: 1px solid #d8e0e9;
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.document-preview-content--reader .pdf-table-wrap table {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.document-preview-content--reader th,
+.document-preview-content--reader td {
+  white-space: normal;
+  min-width: 8rem;
+  overflow-wrap: break-word;
+}
+
 .document-preview-content th,
 .document-preview-content td {
   border: 1px solid #d8e0e9;

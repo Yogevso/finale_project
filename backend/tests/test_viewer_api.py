@@ -1,5 +1,6 @@
 """Tests for Viewer Portal (Public Document Access)"""
 
+from datetime import datetime, timedelta
 import uuid
 
 from app.models import Attachment, Comment, Document, DocumentStatus, Version
@@ -255,3 +256,79 @@ class TestViewerAttachments:
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
+
+    def test_list_version_attachments(self, client, db, test_user):
+        """List attachments resolved for a selected published version."""
+        doc = Document(
+            title="Version Attachment Scope",
+            document_number=f"DOC-VAS-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        now = datetime.utcnow()
+        v1_time = now - timedelta(days=2)
+        v2_time = now - timedelta(days=1)
+
+        version_one = Version(
+            document_id=doc.id,
+            version_number=1,
+            is_published=True,
+            created_by=test_user.id,
+            created_at=v1_time,
+            published_at=v1_time,
+        )
+        version_two = Version(
+            document_id=doc.id,
+            version_number=2,
+            is_published=True,
+            created_by=test_user.id,
+            created_at=v2_time,
+            published_at=v2_time,
+        )
+        db.add_all([version_one, version_two])
+        db.commit()
+        db.refresh(version_one)
+        db.refresh(version_two)
+
+        attachment_one = Attachment(
+            document_id=doc.id,
+            filename="v1.pdf",
+            original_filename="v1.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            storage_path="/uploads/v1.pdf",
+            uploaded_by=test_user.id,
+            uploaded_at=v1_time - timedelta(minutes=5),
+        )
+        attachment_two = Attachment(
+            document_id=doc.id,
+            filename="v2.pdf",
+            original_filename="v2.pdf",
+            file_size=1024,
+            mime_type="application/pdf",
+            storage_path="/uploads/v2.pdf",
+            uploaded_by=test_user.id,
+            uploaded_at=v2_time - timedelta(minutes=5),
+        )
+        db.add_all([attachment_one, attachment_two])
+        db.commit()
+
+        first_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/versions/{version_one.id}/attachments"
+        )
+        assert first_response.status_code == 200
+        first_ids = {item["id"] for item in first_response.json()}
+        assert attachment_one.id in first_ids
+        assert attachment_two.id not in first_ids
+
+        second_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/versions/{version_two.id}/attachments"
+        )
+        assert second_response.status_code == 200
+        second_ids = {item["id"] for item in second_response.json()}
+        assert attachment_one.id in second_ids
+        assert attachment_two.id in second_ids

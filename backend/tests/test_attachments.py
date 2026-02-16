@@ -1,5 +1,6 @@
 """Tests for Attachments API endpoints."""
 
+import hashlib
 import io
 
 from fastapi.testclient import TestClient
@@ -30,6 +31,115 @@ class TestAttachments:
         data = response.json()
         assert data["filename"] == "test_file.txt"
         assert "id" in data
+        assert "sha256" in data
+
+    def test_original_download_preserves_bytes_and_sha256(
+        self, client: TestClient, auth_headers: dict, test_document
+    ):
+        """Uploaded bytes must match downloaded bytes exactly."""
+        uploaded_bytes = (
+            b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+            b"2 0 obj\n<< /Length 5 >>\nstream\nhello\nendstream\nendobj\n%%EOF"
+        )
+        expected_sha = hashlib.sha256(uploaded_bytes).hexdigest()
+
+        upload_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("intel-original.pdf", io.BytesIO(uploaded_bytes), "application/pdf")},
+        )
+        assert upload_response.status_code == 201
+        payload = upload_response.json()
+        attachment_id = payload["id"]
+        assert payload["sha256"] == expected_sha
+
+        metadata_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}",
+            headers=auth_headers,
+        )
+        assert metadata_response.status_code == 200
+        metadata = metadata_response.json()
+        assert metadata["sha256"] == expected_sha
+        assert metadata["size_bytes"] == len(uploaded_bytes)
+
+        download_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/download-original",
+            headers=auth_headers,
+        )
+        assert download_response.status_code == 200
+        assert download_response.headers["content-type"].startswith("application/pdf")
+        assert "attachment;" in download_response.headers["content-disposition"]
+        assert "intel-original.pdf" in download_response.headers["content-disposition"]
+        assert download_response.headers["x-checksum-sha256"] == expected_sha
+        assert int(download_response.headers["content-length"]) == len(uploaded_bytes)
+        assert hashlib.sha256(download_response.content).hexdigest() == expected_sha
+
+        legacy_download_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/download",
+            headers=auth_headers,
+        )
+        assert legacy_download_response.status_code == 200
+        assert hashlib.sha256(legacy_download_response.content).hexdigest() == expected_sha
+
+        preview_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/preview",
+            headers=auth_headers,
+        )
+        assert preview_response.status_code == 200
+        assert "inline;" in preview_response.headers["content-disposition"]
+        assert hashlib.sha256(preview_response.content).hexdigest() == expected_sha
+
+        query_token = auth_headers["Authorization"].split(" ", 1)[1]
+        preview_via_query_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/preview?token={query_token}"
+        )
+        assert preview_via_query_response.status_code == 200
+        assert hashlib.sha256(preview_via_query_response.content).hexdigest() == expected_sha
+
+    def test_reader_view_endpoint_returns_status(
+        self, client: TestClient, auth_headers: dict, test_document
+    ):
+        """Reader-view endpoint should always return artifact status for PDF attachments."""
+        uploaded_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
+        upload_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("reader.pdf", io.BytesIO(uploaded_bytes), "application/pdf")},
+        )
+        assert upload_response.status_code == 201
+        attachment_id = upload_response.json()["id"]
+
+        response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/reader-view",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["attachment_id"] == attachment_id
+        assert payload["status"] in {"pending", "processing", "ready", "failed"}
+
+    def test_outline_endpoint_returns_payload(
+        self, client: TestClient, auth_headers: dict, test_document
+    ):
+        """Outline endpoint should return a valid payload for PDF attachments."""
+        uploaded_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
+        upload_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("outline.pdf", io.BytesIO(uploaded_bytes), "application/pdf")},
+        )
+        assert upload_response.status_code == 201
+        attachment_id = upload_response.json()["id"]
+
+        response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/outline",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["attachment_id"] == attachment_id
+        assert "has_outline" in payload
+        assert isinstance(payload.get("items"), list)
 
     def test_upload_attachment_to_nonexistent_document(
         self, client: TestClient, auth_headers: dict

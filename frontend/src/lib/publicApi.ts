@@ -6,6 +6,7 @@
  */
 
 const API_BASE = '/api/v1/public'
+const PLATFORM_API_BASE = '/api/platforms'
 
 // Types matching backend schemas
 export interface PublicDocumentSummary {
@@ -129,6 +130,47 @@ export interface PublicPlatformHistoryResponse {
   items: PublicPlatformGroup[]
 }
 
+export interface PublicPlatformLatestRelease {
+  id: number
+  document_number: string
+  title: string
+  release_branch?: string
+  version_label?: string
+  version_number?: number
+  published_at?: string
+  updated_at?: string
+}
+
+export interface PublicPlatformOverviewItem {
+  id: number
+  platform: string
+  doc_count: number
+  latest_release?: PublicPlatformLatestRelease | null
+}
+
+export interface PublicPlatformOverviewResponse {
+  items: PublicPlatformOverviewItem[]
+}
+
+export interface PublicPlatformDocumentRow {
+  id: number
+  title: string
+  document_number: string
+  category?: string
+  version_label?: string
+  version_number?: number
+  published_at?: string
+  updated_at?: string
+  status: string
+}
+
+export interface PublicPlatformDocumentsResponse {
+  platform_id: number
+  platform: string
+  total: number
+  items: PublicPlatformDocumentRow[]
+}
+
 // API Functions
 export const publicApi = {
   /**
@@ -182,6 +224,38 @@ export const publicApi = {
     const response = await fetch(`${API_BASE}/platforms/history`)
     if (!response.ok) {
       throw new Error('Failed to fetch platform history')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get high-level platform rows for the overview table.
+   */
+  async getPlatformsOverview(): Promise<PublicPlatformOverviewResponse> {
+    const response = await fetch(`${PLATFORM_API_BASE}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch platforms overview')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get all documents belonging to a single platform.
+   */
+  async getPlatformDocuments(
+    platformId: number,
+    params: { search?: string; sort_by?: string; sort_order?: string } = {}
+  ): Promise<PublicPlatformDocumentsResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.search) searchParams.set('search', params.search)
+    if (params.sort_by) searchParams.set('sort_by', params.sort_by)
+    if (params.sort_order) searchParams.set('sort_order', params.sort_order)
+
+    const response = await fetch(
+      `${PLATFORM_API_BASE}/${platformId}/documents?${searchParams.toString()}`
+    )
+    if (!response.ok) {
+      throw new Error('Failed to fetch platform documents')
     }
     return response.json()
   },

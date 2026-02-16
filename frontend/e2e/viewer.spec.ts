@@ -129,10 +129,9 @@ test.describe('Viewer Portal - Pagination', () => {
     await page.waitForTimeout(1000);
     
     // Look for pagination
-    const pagination = page.locator('[class*="pagination"], nav[aria-label*="pagination"], button:has-text("Next"), button:has-text("Previous")');
-    
-    // Pagination may or may not be visible depending on document count
-    const hasPagination = await pagination.count() > 0;
+    await page
+      .locator('[class*="pagination"], nav[aria-label*="pagination"], button:has-text("Next"), button:has-text("Previous")')
+      .count()
     
     // Just verify page loaded
     await expect(page.locator('body')).toBeVisible();

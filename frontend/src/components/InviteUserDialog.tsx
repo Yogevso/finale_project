@@ -50,8 +50,9 @@ export default function InviteUserDialog({
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
       onClose()
     },
-    onError: (err: any) => {
-      setError(err.response?.data?.detail || 'Failed to send invitation')
+    onError: (err: unknown) => {
+      const apiError = err as { response?: { data?: { detail?: string } } }
+      setError(apiError.response?.data?.detail || 'Failed to send invitation')
     },
   })
 

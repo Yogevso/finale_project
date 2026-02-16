@@ -105,7 +105,6 @@ test.describe('Admin Role', () => {
         await docLink.click();
         await page.waitForTimeout(500);
         
-        const deleteBtn = page.locator('button:has-text("Delete")');
         // Admin should have delete permission
         await expect(page.locator('body')).toBeVisible();
       }

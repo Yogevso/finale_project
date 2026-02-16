@@ -18,6 +18,8 @@ import type {
   VersionUpdate,
   VersionListResponse,
   Attachment,
+  AttachmentOutlineResponse,
+  AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   Comment,
   CommentCreate,
@@ -94,8 +96,13 @@ class ApiClient {
       (response) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config
+        const requestUrl = originalRequest?.url || ''
+        const isAuthFlowRequest =
+          requestUrl.includes('/auth/login') ||
+          requestUrl.includes('/auth/forgot-password') ||
+          requestUrl.includes('/auth/refresh')
         
-        if (error.response?.status === 401 && originalRequest && !originalRequest.url?.includes('/auth/refresh')) {
+        if (error.response?.status === 401 && originalRequest && !isAuthFlowRequest) {
           // Try to refresh the token
           if (this.refreshToken && !this.isRefreshing) {
             this.isRefreshing = true
@@ -407,6 +414,45 @@ class ApiClient {
     // Include token in URL for authenticated download
     const token = this.token || localStorage.getItem('token')
     return `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download?token=${token}`
+  }
+
+  getAttachmentPreviewUrl(documentId: number, attachmentId: number): string {
+    const token = this.token || localStorage.getItem('token')
+    return `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/preview?token=${token}`
+  }
+
+  async getAttachmentReaderView(
+    documentId: number,
+    attachmentId: number,
+    options?: { retry?: boolean },
+  ): Promise<AttachmentReaderViewResponse> {
+    const { data } = await this.client.get<AttachmentReaderViewResponse>(
+      `/documents/${documentId}/attachments/${attachmentId}/reader-view`,
+      {
+        params: options?.retry ? { retry: true } : undefined,
+      },
+    )
+    return data
+  }
+
+  async retryAttachmentReaderView(
+    documentId: number,
+    attachmentId: number,
+  ): Promise<AttachmentReaderViewResponse> {
+    const { data } = await this.client.post<AttachmentReaderViewResponse>(
+      `/documents/${documentId}/attachments/${attachmentId}/reader-view/retry`,
+    )
+    return data
+  }
+
+  async getAttachmentOutline(
+    documentId: number,
+    attachmentId: number,
+  ): Promise<AttachmentOutlineResponse> {
+    const { data } = await this.client.get<AttachmentOutlineResponse>(
+      `/documents/${documentId}/attachments/${attachmentId}/outline`,
+    )
+    return data
   }
 
   async getAttachmentBlob(documentId: number, attachmentId: number): Promise<Blob> {

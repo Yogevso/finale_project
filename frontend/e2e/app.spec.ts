@@ -2,7 +2,6 @@ import { test, expect, Page } from '@playwright/test';
 
 // Test credentials
 const ADMIN = { username: 'admin', password: 'admin123' };
-const EDITOR = { username: 'editor', password: 'editor123' };
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
 const INVALID = { username: 'invalid', password: 'wrongpass' };
 

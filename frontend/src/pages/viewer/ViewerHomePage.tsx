@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
+import type { Document, DocumentListResponse } from '@/types'
 
 export default function ViewerHomePage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -11,7 +12,7 @@ export default function ViewerHomePage() {
   const category = searchParams.get('category') || ''
 
   // Fetch published documents
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<DocumentListResponse>({
     queryKey: ['viewer-documents', page, search, category],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -22,17 +23,17 @@ export default function ViewerHomePage() {
       
       const response = await fetch(`/api/v1/viewer/documents?${params}`)
       if (!response.ok) throw new Error('Failed to fetch documents')
-      return response.json()
+      return response.json() as Promise<DocumentListResponse>
     },
   })
 
   // Fetch categories
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [] } = useQuery<string[]>({
     queryKey: ['viewer-categories'],
     queryFn: async () => {
       const response = await fetch('/api/v1/viewer/documents/categories')
       if (!response.ok) throw new Error('Failed to fetch categories')
-      return response.json()
+      return response.json() as Promise<string[]>
     },
   })
 
@@ -65,7 +66,7 @@ export default function ViewerHomePage() {
     setSearchParams(params)
   }
 
-  const documents = data?.items || []
+  const documents: Document[] = data?.items || []
   const totalPages = data?.pages || 1
 
   return (
@@ -201,7 +202,7 @@ export default function ViewerHomePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documents.map((doc: any) => (
+            {documents.map((doc) => (
               <Link
                 key={doc.id}
                 to={`/viewer/documents/${doc.id}?fullscreen=1`}

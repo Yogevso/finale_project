@@ -112,6 +112,7 @@ class DocumentBase(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
+    platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
@@ -136,6 +137,7 @@ class DocumentUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
+    platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
 
@@ -248,7 +250,11 @@ class AttachmentResponse(BaseModel):
     filename: str
     original_filename: str
     file_size: int
+    size_bytes: Optional[int] = None
     mime_type: str
+    sha256: Optional[str] = None
+    reader_html_status: Optional[str] = None
+    reader_toc_source: Optional[str] = None
     uploaded_by: int
     uploaded_at: datetime
 
@@ -260,8 +266,46 @@ class AttachmentUploadResponse(BaseModel):
 
     id: int
     filename: str
+    sha256: Optional[str] = None
     url: Optional[str] = None
     message: str = "File uploaded successfully"
+
+
+class AttachmentReaderViewResponse(BaseModel):
+    """Derived reader-view artifact status/content for PDF attachments."""
+
+    attachment_id: int
+    status: str
+    html_content: Optional[str] = None
+    toc_items: List["AttachmentOutlineItem"] = Field(default_factory=list)
+    toc_source: Optional[str] = None
+    error: Optional[str] = None
+    generated_at: Optional[datetime] = None
+
+
+class AttachmentOutlineItem(BaseModel):
+    """PDF outline/bookmark item for TOC navigation."""
+
+    id: str
+    level: int
+    title: str
+    page: int
+    page_start: int
+    page_end: Optional[int] = None
+    anchor_id: Optional[str] = None
+
+
+class AttachmentOutlineResponse(BaseModel):
+    """PDF outline payload for attachment preview TOC."""
+
+    attachment_id: int
+    has_outline: bool
+    items: List[AttachmentOutlineItem]
+    source: Optional[str] = None
+    error: Optional[str] = None
+
+
+AttachmentReaderViewResponse.model_rebuild()
 
 
 # ========== Comment Schemas ==========
@@ -430,6 +474,9 @@ __all__ = [
     # Attachment
     "AttachmentResponse",
     "AttachmentUploadResponse",
+    "AttachmentReaderViewResponse",
+    "AttachmentOutlineItem",
+    "AttachmentOutlineResponse",
     # Comment
     "CommentBase",
     "CommentCreate",
