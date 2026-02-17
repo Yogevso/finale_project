@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { portalApi, FeedbackItem } from '../../lib/portalApi'
+import PageHeader from '@/components/PageHeader'
 import {
   MessageSquare,
   Clock,
@@ -67,11 +68,11 @@ export default function MyFeedbackPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold text-slate-900">My Feedback</h1>
-        <p className="mt-1 text-slate-500">Track your feedback submissions and responses</p>
-      </div>
+      <PageHeader
+        eyebrow="Customer Portal"
+        title="My Feedback"
+        subtitle="Track your feedback submissions and responses"
+      />
 
       {/* Status filter */}
       <div className="surface-card rounded-2xl p-4">

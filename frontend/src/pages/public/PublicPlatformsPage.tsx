@@ -48,20 +48,24 @@ export default function PublicPlatformsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-14">
+        <div className="max-w-7xl mx-auto px-6 py-9">
           <div className="max-w-3xl">
             <div className="text-xs uppercase tracking-widest text-slate-300 mb-3">Viewer Portal</div>
-            <h1 className="text-4xl font-display font-bold mb-3">Platform Release History</h1>
+            <h1 className="text-3xl font-display font-bold mb-2">Platform Release History</h1>
             <p className="text-slate-200">
               Browse platform documentation by category, year, and release lineage.
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-slate-100">
+              <span className="font-semibold">{data?.items.length || 0}</span>
+              active platform lines
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="surface-card rounded-3xl p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="surface-card rounded-3xl overflow-hidden">
+          <div className="px-6 pt-6 pb-4 border-b border-slate-200">
             <div>
               <div className="text-xs uppercase tracking-widest text-slate-400">Latest Releases</div>
               <h2 className="text-2xl font-display font-semibold text-slate-900">
@@ -71,7 +75,10 @@ export default function PublicPlatformsPage() {
                 Click a platform row to open its full document table.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          </div>
+
+          <div className="sticky top-2 z-20 border-b border-slate-200 bg-white/95 backdrop-blur px-6 py-3">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
               <input
                 type="text"
                 value={searchTerm}
@@ -96,24 +103,25 @@ export default function PublicPlatformsPage() {
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-widest text-slate-400">
-                  <th className="py-3 px-4">Platform</th>
-                  <th className="py-3 px-4">Latest Release</th>
-                  <th className="py-3 px-4">Branch</th>
-                  <th className="py-3 px-4">Version</th>
-                  <th className="py-3 px-4">Published</th>
-                  <th className="py-3 px-4 text-right">Docs</th>
+              <thead className="bg-slate-50/90">
+                <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
+                  <th className="py-3.5 px-4">Platform</th>
+                  <th className="py-3.5 px-4">Latest Release</th>
+                  <th className="py-3.5 px-4">Branch</th>
+                  <th className="py-3.5 px-4">Version</th>
+                  <th className="py-3.5 px-4">Published</th>
+                  <th className="py-3.5 px-4 text-right">Docs</th>
+                  <th className="py-3.5 px-4 text-right">Open</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSummaries.map((platform) => (
                   <tr
                     key={platform.id}
-                    className="border-t border-slate-200 hover:bg-slate-50 cursor-pointer"
+                    className="group border-t border-slate-200 hover:bg-sky-50/60 cursor-pointer transition-colors"
                     onClick={() => openPlatform(platform)}
                   >
-                    <td className="py-3 px-4 font-medium text-slate-900">{platform.platform}</td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">{platform.platform}</td>
                     <td className="py-3 px-4 text-slate-700">
                       {platform.latest_release?.title || '—'}
                     </td>
@@ -132,19 +140,25 @@ export default function PublicPlatformsPage() {
                           platform.latest_release?.updated_at
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right text-slate-500">{platform.doc_count}</td>
+                    <td className="py-3 px-4 text-right text-slate-600">{platform.doc_count}</td>
+                    <td className="py-3 px-4 text-right">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 group-hover:text-sky-800">
+                        Open
+                        <span aria-hidden>→</span>
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 {!filteredSummaries.length && !isLoading && (
                   <tr>
-                    <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
+                    <td colSpan={7} className="py-8 px-4 text-center text-slate-400">
                       No platform data available yet.
                     </td>
                   </tr>
                 )}
                 {isLoading && (
                   <tr>
-                    <td colSpan={6} className="py-6 px-4 text-center text-slate-400">
+                    <td colSpan={7} className="py-8 px-4 text-center text-slate-400">
                       Loading platform overview...
                     </td>
                   </tr>

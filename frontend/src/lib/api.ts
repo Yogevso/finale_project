@@ -71,6 +71,20 @@ class ApiClient {
   private isRefreshing = false
   private refreshSubscribers: ((token: string) => void)[] = []
 
+  private resolveAttachmentAccessToken(): string | null {
+    const authToken = this.token || localStorage.getItem('token')
+    if (authToken && authToken !== 'null' && authToken !== 'undefined') {
+      return authToken
+    }
+    if (typeof window !== 'undefined') {
+      const urlToken = new URLSearchParams(window.location.search).get('token')
+      if (urlToken && urlToken !== 'null' && urlToken !== 'undefined') {
+        return urlToken
+      }
+    }
+    return null
+  }
+
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
@@ -411,14 +425,30 @@ class ApiClient {
   }
 
   getAttachmentDownloadUrl(documentId: number, attachmentId: number): string {
-    // Include token in URL for authenticated download
-    const token = this.token || localStorage.getItem('token')
-    return `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download?token=${token}`
+    const token = this.resolveAttachmentAccessToken()
+    const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download`
+    if (token) {
+      return `${base}?token=${encodeURIComponent(token)}`
+    }
+    return base
   }
 
   getAttachmentPreviewUrl(documentId: number, attachmentId: number): string {
-    const token = this.token || localStorage.getItem('token')
-    return `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/preview?token=${token}`
+    const token = this.resolveAttachmentAccessToken()
+    const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/preview`
+    if (token) {
+      return `${base}?token=${encodeURIComponent(token)}`
+    }
+    return base
+  }
+
+  getAttachmentOriginalDownloadUrl(documentId: number, attachmentId: number): string {
+    const token = this.resolveAttachmentAccessToken()
+    const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download-original`
+    if (token) {
+      return `${base}?token=${encodeURIComponent(token)}`
+    }
+    return base
   }
 
   async getAttachmentReaderView(
@@ -458,6 +488,14 @@ class ApiClient {
   async getAttachmentBlob(documentId: number, attachmentId: number): Promise<Blob> {
     const response = await this.client.get(
       `/documents/${documentId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' }
+    )
+    return response.data
+  }
+
+  async getAttachmentOriginalBlob(documentId: number, attachmentId: number): Promise<Blob> {
+    const response = await this.client.get(
+      `/documents/${documentId}/attachments/${attachmentId}/download-original`,
       { responseType: 'blob' }
     )
     return response.data

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { portalApi } from '../../lib/portalApi'
+import PageHeader from '@/components/PageHeader'
 import {
   FileText,
   Folder,
@@ -65,11 +66,11 @@ export default function CustomerDocumentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="section-title">Documents</h1>
-        <p className="mt-1 text-slate-500">Browse all available documents and resources</p>
-      </div>
+      <PageHeader
+        eyebrow="Customer Portal"
+        title="Documents"
+        subtitle="Browse all available documents and resources"
+      />
 
       {/* Search and filters */}
       <div className="surface-card rounded-2xl p-4">

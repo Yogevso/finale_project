@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import PageHeader from '@/components/PageHeader'
 
 interface DashboardBookmark {
   id: number
@@ -40,10 +41,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="section-title">Dashboard</h1>
-        <p className="text-slate-500 mt-1">Welcome back, {user?.full_name}</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Welcome back, ${user?.full_name || 'team member'}`}
+        eyebrow="Internal Portal"
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
+import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
 import { api } from '@/lib/api'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type { Attachment, AttachmentOutlineItem, Comment, Document, Version } from '@/types'
@@ -60,6 +61,15 @@ export default function ViewerDocumentPage() {
         return response.json() as Promise<Attachment[]>
       },
       enabled: !!id && !!selectedVersionId,
+      refetchInterval: (query) => {
+        const items = (query.state.data as Attachment[] | undefined) ?? []
+        const hasPendingPreview = items.some(
+          (attachment) =>
+            attachment.preview_pdf_status === 'pending' ||
+            attachment.preview_pdf_status === 'processing',
+        )
+        return hasPendingPreview ? 2500 : false
+      },
     })
 
   // Fetch comments
@@ -131,14 +141,37 @@ export default function ViewerDocumentPage() {
       ? null
       : normalizedVersions.find((version) => version.id === selectedVersionId) || null
   const effectiveAttachments = selectedVersionId ? selectedVersionAttachments : []
-  const selectedPdfAttachment = effectiveAttachments.find((attachment) =>
-    (attachment.mime_type || '').startsWith('application/pdf'),
+  const selectedPreviewAttachment = effectiveAttachments.find((attachment) => {
+    if (attachment.preview_pdf_status === 'ready') return true
+    return (attachment.mime_type || '').startsWith('application/pdf')
+  })
+  const pendingPreviewAttachment = effectiveAttachments.find((attachment) =>
+    attachment.preview_pdf_status === 'pending' || attachment.preview_pdf_status === 'processing',
   )
-  const pdfPreviewUrl = selectedPdfAttachment && id
-    ? `${api.getAttachmentPreviewUrl(Number(id), selectedPdfAttachment.id)}&version=${selectedVersionId || 'none'}`
+  const failedPreviewAttachment = effectiveAttachments.find(
+    (attachment) => attachment.preview_pdf_status === 'failed',
+  )
+
+  const pdfPreviewUrl = selectedPreviewAttachment && id
+    ? (() => {
+        const basePreviewUrl = api.getAttachmentPreviewUrl(Number(id), selectedPreviewAttachment.id)
+        const separator = basePreviewUrl.includes('?') ? '&' : '?'
+        return `${basePreviewUrl}${separator}version=${selectedVersionId || 'none'}`
+      })()
     : null
   const pdfPreviewSrc =
     pdfPreviewUrl && pdfOutlinePage ? `${pdfPreviewUrl}#page=${pdfOutlinePage}` : pdfPreviewUrl
+  const pdfTocItems: PdfTocItem[] = pdfOutlineItems
+    .map((item, index) => {
+      const pageStart = item.page_start || item.page
+      return {
+        id: item.id || `outline-${index}`,
+        title: item.title,
+        level: Math.max(1, item.level || 1),
+        pageStart,
+      }
+    })
+    .filter((item) => item.title.trim().length > 0)
 
   const contentSource =
     selectedVersion && hasRenderableContent(selectedVersion.content) ? selectedVersion.content : ''
@@ -152,7 +185,7 @@ export default function ViewerDocumentPage() {
       : 'document-preview-paper'
 
   useEffect(() => {
-    if (!selectedPdfAttachment || !id) {
+    if (!selectedPreviewAttachment || !id) {
       setPdfOutlineItems([])
       setPdfOutlineLoading(false)
       setPdfOutlineError(null)
@@ -165,7 +198,7 @@ export default function ViewerDocumentPage() {
     setPdfOutlineError(null)
     setPdfOutlinePage(null)
 
-    api.getAttachmentOutline(Number(id), selectedPdfAttachment.id)
+    api.getAttachmentOutline(Number(id), selectedPreviewAttachment.id)
       .then((payload) => {
         if (cancelled) return
         setPdfOutlineItems(payload.items || [])
@@ -186,7 +219,7 @@ export default function ViewerDocumentPage() {
     return () => {
       cancelled = true
     }
-  }, [id, selectedPdfAttachment])
+  }, [id, selectedPreviewAttachment])
 
   if (docLoading) {
     return (
@@ -434,49 +467,35 @@ export default function ViewerDocumentPage() {
                   Loading version preview...
                 </div>
               </div>
-            ) : selectedPdfAttachment && pdfPreviewUrl ? (
-              <div className="flex h-[70vh] rounded-xl border border-slate-200 overflow-hidden">
-                <aside className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col">
-                  <div className="px-4 py-3 border-b border-slate-200 bg-white">
-                    <h3 className="text-sm font-semibold text-slate-800">Contents</h3>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    {pdfOutlineLoading ? (
-                      <div className="p-4 text-sm text-slate-500">Loading TOC...</div>
-                    ) : pdfOutlineItems.length > 0 ? (
-                      <nav className="p-2 space-y-1">
-                        {pdfOutlineItems.map((item) => {
-                          const pageStart = item.page_start || item.page
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => setPdfOutlinePage(pageStart)}
-                              className={`w-full text-left px-2 py-1.5 text-sm rounded hover:bg-sky-100 hover:text-sky-800 ${
-                                pdfOutlinePage === pageStart
-                                  ? 'bg-sky-100 text-sky-800 font-medium'
-                                  : 'text-slate-700'
-                              }`}
-                              style={{ paddingLeft: `${Math.max(0, item.level - 1) * 14 + 8}px` }}
-                            >
-                              <span className="truncate block">{item.title}</span>
-                            </button>
-                          )
-                        })}
-                      </nav>
-                    ) : (
-                      <div className="p-4 text-sm text-slate-500">
-                        {pdfOutlineError || 'No TOC available'}
-                      </div>
-                    )}
-                  </div>
-                </aside>
-                <iframe
-                  key={`${selectedVersion.id}-${selectedPdfAttachment.id}`}
-                  src={pdfPreviewSrc || undefined}
-                  className="flex-1 h-full"
-                  title={`${document.title} PDF Preview`}
-                />
+            ) : selectedPreviewAttachment && pdfPreviewUrl ? (
+              <PdfPreviewPanel
+                tocItems={pdfTocItems}
+                tocLoading={pdfOutlineLoading}
+                tocError={pdfOutlineError}
+                selectedPage={pdfOutlinePage}
+                onSelectItem={(item) => setPdfOutlinePage(item.pageStart)}
+                iframeSrc={pdfPreviewSrc}
+                iframeKey={`${selectedVersion.id}-${selectedPreviewAttachment.id}-${pdfOutlinePage || 'base'}`}
+                iframeTitle={`${document.title} PDF Preview`}
+                containerClassName="rounded-xl border border-slate-200 overflow-hidden"
+              />
+            ) : pendingPreviewAttachment ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+                <p className="text-slate-700 font-medium">
+                  Generating PDF preview for this version...
+                </p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Reader and TOC will be available once preview generation completes.
+                </p>
+              </div>
+            ) : failedPreviewAttachment ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+                <p className="text-rose-900 font-medium">
+                  PDF preview generation failed for the selected version.
+                </p>
+                <p className="text-sm text-rose-700 mt-1">
+                  {failedPreviewAttachment.preview_pdf_error || 'Unable to build preview PDF.'}
+                </p>
               </div>
             ) : showTextMode && content ? (
               isHtmlContent ? (

@@ -16,11 +16,11 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Zip B Style Header */}
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+      {/* Intel-like Header */}
       {!isFullscreen && (
-      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
-        <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
             <NavLink to="/dashboard" className="flex items-center gap-3">
@@ -28,8 +28,8 @@ export default function Layout() {
                 DP
               </div>
               <div>
-                <div className="text-sm text-slate-500">Management</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Documentation Platform</div>
+                <div className="text-xs uppercase tracking-widest text-slate-500">Internal Portal</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </NavLink>
           </div>
@@ -43,8 +43,8 @@ export default function Layout() {
                 className={({ isActive }) =>
                   `px-4 py-2 rounded-full transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-white text-sky-800 font-semibold border border-sky-200'
+                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
                   }`
                 }
               >
@@ -58,13 +58,13 @@ export default function Layout() {
           <div className="flex items-center gap-3 text-sm">
             <div className="hidden md:flex items-center gap-2">
               <span className="text-slate-500">{user?.full_name}</span>
-              <span className="pill capitalize">{user?.role}</span>
+              <span className="pill capitalize bg-white border-sky-200">{user?.role}</span>
             </div>
 
             {isSystemAdmin && (
               <NavLink
                 to="/docs"
-                className="btn-secondary"
+                className="btn-secondary text-xs"
               >
                 Viewer Portal
               </NavLink>
@@ -85,17 +85,17 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1">
-        <div className={`${isFullscreen ? 'px-0 py-0' : 'container mx-auto px-4 py-8'}`}>
+        <div className={`${isFullscreen ? 'px-0 py-0' : 'max-w-7xl mx-auto px-4 py-8'}`}>
           <Outlet />
         </div>
       </main>
 
       {/* Footer */}
       {!isFullscreen && (
-      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
-          <p>Documentation Platform</p>
-          <p className="text-xs mt-1">Built with React + FastAPI</p>
+      <footer className="border-t border-slate-200 bg-white/85 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
+          <p>Developer Portal</p>
+          <p className="text-xs mt-1">Internal documentation workspace</p>
         </div>
       </footer>
       )}
