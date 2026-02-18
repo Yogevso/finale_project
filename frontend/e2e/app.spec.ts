@@ -170,12 +170,11 @@ test.describe('Documents CRUD', () => {
 
     if ((await firstDocLink.count()) > 0) {
       await firstDocLink.click();
-      await expect(page).toHaveURL(/\/documents\/\d+\/fullscreen/, { timeout: 15000 });
     } else {
-      test.skip(true, 'No existing documents available to validate detail view.');
-      return;
+      await createDocument(page, `E2E Detail View ${Date.now()}`);
     }
 
+    await expect(page).toHaveURL(/\/documents\/\d+\/fullscreen/, { timeout: 15000 });
     await expect(page.getByRole('button', { name: /versions/i })).toBeVisible();
   });
 });
