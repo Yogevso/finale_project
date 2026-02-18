@@ -1045,6 +1045,7 @@ function DocumentPreview({
   const [readerError, setReaderError] = useState<string | null>(null)
   const [pdfPreviewMode, setPdfPreviewMode] = useState<PdfPreviewMode>('original')
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
+  const [pdfPreviewUnavailableError, setPdfPreviewUnavailableError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isReaderLoading, setIsReaderLoading] = useState(false)
@@ -1221,7 +1222,11 @@ function DocumentPreview({
 
   const isSelectedPdf = hasPreviewPdf(selectedAttachment)
   const showingReaderView = isSelectedPdf && pdfPreviewMode === 'reader'
+  const showingOriginalPdf = isSelectedPdf && pdfPreviewMode === 'original'
   const activeHtmlContent = showingReaderView ? readerHtmlContent : htmlContent
+  const shouldRenderHtmlPreview = showingReaderView
+    ? !!activeHtmlContent
+    : !isSelectedPdf && !!activeHtmlContent
 
   const mapOutlineItemsToSections = useCallback((items: AttachmentOutlineItem[] = []): TocSection[] => {
     return items
@@ -1519,6 +1524,7 @@ function DocumentPreview({
     if (!isSelectedPdf) {
       readerSyncNeededRef.current = false
       setPdfPreviewMode('original')
+      setPdfPreviewUnavailableError(null)
       setReaderStatus(null)
       setReaderHtmlContent(null)
       setReaderError(null)
@@ -1535,6 +1541,7 @@ function DocumentPreview({
 
     readerSyncNeededRef.current = false
     setPdfPreviewMode('original')
+    setPdfPreviewUnavailableError(null)
     setReaderStatus(selectedAttachment?.reader_html_status ?? null)
     setReaderHtmlContent(null)
     setReaderError(null)
@@ -1716,6 +1723,12 @@ function DocumentPreview({
       }
     }
   }, [documentId, previewableAttachments, processHtmlWithSections, selectedAttachment])
+
+  useEffect(() => {
+    if (!showingOriginalPdf || !previewUrl || !selectedAttachment) {
+      setPdfPreviewUnavailableError(null)
+    }
+  }, [previewUrl, selectedAttachment, showingOriginalPdf])
 
   useEffect(() => {
     if (!showingReaderView || !selectedAttachment) return
@@ -1967,6 +1980,10 @@ function DocumentPreview({
     [resolveSectionPageStart],
   )
 
+  const handlePdfIframeError = useCallback(() => {
+    setPdfPreviewUnavailableError('PDF preview unavailable. Please download original.')
+  }, [])
+
   // Show content if we have inline content OR attachments
   if (attachments.length === 0 && !hasInlineContent && !activeHtmlContent) {
     return (
@@ -2140,11 +2157,11 @@ function DocumentPreview({
               )}
             </div>
           </div>
-        ) : activeHtmlContent ? (
+        ) : shouldRenderHtmlPreview ? (
           // Word document rendered as HTML (read-only) with TOC sidebar
           <div className="flex h-[70vh]">
             {/* Table of Contents Sidebar */}
-            <div className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-64'} flex-shrink-0`}>
+            <div className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-56'} flex-shrink-0`}>
               <div className="sticky top-0">
                 {/* TOC Header */}
                 <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-white">
@@ -2262,14 +2279,14 @@ function DocumentPreview({
               {/* Document content with text selection for inline comments */}
               <div
                 ref={previewPaneRef}
-                className="flex-1 relative overflow-auto document-preview-pane"
+                className="flex-1 relative overflow-y-auto overflow-x-hidden document-preview-pane"
                 onScroll={handleScroll}
               >
                 <div className={documentPaperClass}>
                   <div 
                     id="document-content-area"
                     className={`document-preview-content ${showingReaderView ? 'document-preview-content--reader' : ''}`}
-                    dangerouslySetInnerHTML={{ __html: activeHtmlContent }}
+                    dangerouslySetInnerHTML={{ __html: activeHtmlContent || '' }}
                     onMouseUp={handleMouseUp}
                   />
                 </div>
@@ -2402,7 +2419,16 @@ function DocumentPreview({
               </p>
             </div>
           </div>
-        ) : previewUrl ? (
+        ) : showingOriginalPdf && pdfPreviewUnavailableError ? (
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="text-center max-w-lg">
+              <div className="text-4xl mb-2">⚠️</div>
+              <p className="text-rose-700 font-medium mb-1">
+                PDF preview unavailable. Please download original.
+              </p>
+            </div>
+          </div>
+        ) : showingOriginalPdf && previewUrl ? (
           <PdfPreviewPanel
             tocItems={pdfTocItems}
             tocLoading={pdfOutlineLoading}
@@ -2412,6 +2438,7 @@ function DocumentPreview({
             iframeSrc={pdfPreviewSrc}
             iframeKey={`${selectedAttachment?.id || 'preview'}-${effectivePdfPage || 'base'}`}
             iframeTitle="Document Preview"
+            onIframeError={handlePdfIframeError}
           />
         ) : selectedAttachment && isPreviewPending(selectedAttachment) ? (
           <div className="absolute inset-0 flex items-center justify-center px-6">

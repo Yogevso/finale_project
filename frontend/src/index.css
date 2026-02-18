@@ -110,7 +110,25 @@
     @apply relative border-t border-slate-200 transition-colors;
   }
 
-  .admin-table-row::before {
+  .admin-table-row:nth-child(even) .admin-table-cell {
+    background-color: rgba(248, 250, 252, 0.58);
+  }
+
+  .admin-table-row:hover .admin-table-cell {
+    background-color: rgba(224, 242, 254, 0.38);
+  }
+
+  .admin-table-cell {
+    @apply px-5 py-3.5 align-top;
+    overflow-wrap: anywhere;
+    transition: background-color 180ms ease;
+  }
+
+  .admin-table-cell:first-child {
+    @apply pl-6 relative;
+  }
+
+  .admin-table-cell:first-child::before {
     content: "";
     position: absolute;
     left: 0;
@@ -122,26 +140,8 @@
     transition: background-color 180ms ease;
   }
 
-  .admin-table-row:nth-child(even) .admin-table-cell {
-    background-color: rgba(248, 250, 252, 0.58);
-  }
-
-  .admin-table-row:hover .admin-table-cell {
-    background-color: rgba(224, 242, 254, 0.38);
-  }
-
-  .admin-table-row:hover::before {
+  .admin-table-row:hover .admin-table-cell:first-child::before {
     background: rgba(14, 165, 233, 0.55);
-  }
-
-  .admin-table-cell {
-    @apply px-5 py-3.5 align-top;
-    overflow-wrap: anywhere;
-    transition: background-color 180ms ease;
-  }
-
-  .admin-table-cell:first-child {
-    @apply pl-6;
   }
 
   .admin-table-cell:last-child {
@@ -510,6 +510,13 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.68;
 }
 
+.document-preview-content--reader,
+.document-preview-content--reader p,
+.document-preview-content--reader li {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
 .document-preview-content .pdf-table-wrap {
   margin: 1.2rem 0;
   overflow-x: auto;
@@ -531,11 +538,23 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+.document-preview-content--reader table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.document-preview-content--reader .pdf-table-wrap table {
+  width: 100%;
+  min-width: 100%;
+}
+
 .document-preview-content--reader th,
 .document-preview-content--reader td {
   white-space: normal;
-  min-width: 8rem;
-  overflow-wrap: break-word;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
 }
 
 .document-preview-content th,
@@ -595,6 +614,12 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.84rem;
   line-height: 1.5;
   tab-size: 4;
+}
+
+.document-preview-content--reader .pdf-table-fallback pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: visible;
 }
 
 .document-preview-content code {

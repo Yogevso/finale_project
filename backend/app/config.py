@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite:///./data/portal.db"
+    SQL_ECHO: bool = False
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]

@@ -236,8 +236,8 @@ export default function DocumentsPage() {
             <table className="admin-table">
               <thead className="admin-table-head">
                 <tr>
-                  <th>Document</th>
-                  <th>Status</th>
+                  <th className="w-[40%]">Document</th>
+                  <th className="w-[14%]">Status</th>
                   <th>Visibility</th>
                   <th>Category</th>
                   <th>Created</th>
@@ -260,7 +260,7 @@ export default function DocumentsPage() {
                 ) : (
                   data?.items.map((doc) => (
                     <tr key={doc.id} className="admin-table-row">
-                      <td className="admin-table-cell">
+                      <td className="admin-table-cell w-[40%]">
                         <a
                           href={`/documents/${doc.id}/fullscreen`}
                           className="block hover:text-sky-700"
@@ -269,9 +269,9 @@ export default function DocumentsPage() {
                           <div className="text-sm text-slate-500">{doc.document_number}</div>
                         </a>
                       </td>
-                      <td className="admin-table-cell">
+                      <td className="admin-table-cell w-[14%]">
                         <span
-                          className={`pill ${
+                          className={`pill whitespace-nowrap ${
                             doc.status === 'active'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : doc.status === 'approved'
@@ -310,26 +310,20 @@ export default function DocumentsPage() {
                         )}
                       </td>
                       <td className="admin-table-cell text-slate-500">{doc.category || '-'}</td>
-                      <td className="admin-table-cell text-slate-500">
+                      <td className="admin-table-cell text-slate-500 whitespace-nowrap">
                         {new Date(doc.created_at).toLocaleDateString()}
                       </td>
-                      <td className="admin-table-cell text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <a
-                            href={`/documents/${doc.id}/fullscreen`}
-                            className="text-sky-700 hover:text-sky-800 font-semibold text-xs uppercase tracking-wide"
+                      <td className="admin-table-cell text-right whitespace-nowrap">
+                        {isEditor ? (
+                          <button
+                            onClick={() => handleDelete(doc.id, doc.title)}
+                            className="text-rose-600 hover:text-rose-700 font-semibold text-xs uppercase tracking-wide"
                           >
-                            View
-                          </a>
-                          {isEditor && (
-                            <button
-                              onClick={() => handleDelete(doc.id, doc.title)}
-                              className="text-rose-600 hover:text-rose-700 font-semibold text-xs uppercase tracking-wide"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
+                            Delete
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
                       </td>
                     </tr>
                   ))

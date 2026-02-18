@@ -86,6 +86,7 @@ class TestAttachments:
             headers=auth_headers,
         )
         assert preview_response.status_code == 200
+        assert preview_response.headers["content-type"].startswith("application/pdf")
         assert "inline;" in preview_response.headers["content-disposition"]
         assert hashlib.sha256(preview_response.content).hexdigest() == expected_sha
 
@@ -94,6 +95,8 @@ class TestAttachments:
             f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/preview?token={query_token}"
         )
         assert preview_via_query_response.status_code == 200
+        assert preview_via_query_response.headers["content-type"].startswith("application/pdf")
+        assert "inline;" in preview_via_query_response.headers["content-disposition"]
         assert hashlib.sha256(preview_via_query_response.content).hexdigest() == expected_sha
 
     def test_reader_view_endpoint_returns_status(

@@ -16,6 +16,7 @@ interface PdfPreviewPanelProps {
   iframeTitle: string
   heightClassName?: string
   containerClassName?: string
+  onIframeError?: () => void
 }
 
 export default function PdfPreviewPanel({
@@ -29,6 +30,7 @@ export default function PdfPreviewPanel({
   iframeTitle,
   heightClassName = 'h-[70vh]',
   containerClassName = '',
+  onIframeError,
 }: PdfPreviewPanelProps) {
   return (
     <div className={`flex ${heightClassName} ${containerClassName}`.trim()}>
@@ -62,7 +64,13 @@ export default function PdfPreviewPanel({
           )}
         </div>
       </aside>
-      <iframe key={iframeKey} src={iframeSrc || undefined} className="flex-1 h-full" title={iframeTitle} />
+      <iframe
+        key={iframeKey}
+        src={iframeSrc || undefined}
+        className="flex-1 h-full"
+        title={iframeTitle}
+        onError={onIframeError}
+      />
     </div>
   )
 }
