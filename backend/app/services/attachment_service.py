@@ -1,7 +1,7 @@
 """Attachment Service - Business logic for file attachments"""
 
-import html
 import hashlib
+import html
 import io
 import json
 import logging

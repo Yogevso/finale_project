@@ -7,7 +7,6 @@ import { api } from '@/lib/api'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type {
   Attachment,
-  AttachmentOutlineResponse,
   AttachmentOutlineItem,
   Comment,
   Document,
@@ -155,10 +154,6 @@ export default function ViewerDocumentPage() {
   const pendingPreviewAttachment = effectiveAttachments.find((attachment) =>
     attachment.preview_pdf_status === 'pending' || attachment.preview_pdf_status === 'processing',
   )
-  const pdfPreviewUrl =
-    selectedPdfAttachment && id
-      ? `/api/v1/viewer/documents/${id}/attachments/${selectedPdfAttachment.id}/preview`
-      : null
   const failedPreviewAttachment = effectiveAttachments.find(
     (attachment) => attachment.preview_pdf_status === 'failed',
   )
@@ -209,13 +204,6 @@ export default function ViewerDocumentPage() {
     setPdfOutlineError(null)
     setPdfOutlinePage(null)
 
-    fetch(`/api/v1/viewer/documents/${id}/attachments/${selectedPdfAttachment.id}/outline`)
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('Failed to load TOC')
-        }
-        return (await response.json()) as AttachmentOutlineResponse
-      })
     api.getAttachmentOutline(Number(id), selectedPreviewAttachment.id)
       .then((payload) => {
         if (cancelled) return

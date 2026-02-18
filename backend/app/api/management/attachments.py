@@ -137,7 +137,7 @@ def _stream_preview_pdf(
     preview_filename = f"{base_name}.pdf"
 
     headers = {
-        "Content-Disposition": _build_content_disposition(preview_filename, inline=inline),
+        "Content-Disposition": build_content_disposition(preview_filename, inline=inline),
         "Content-Length": str(content_length),
     }
     if attachment.preview_pdf_sha256:
