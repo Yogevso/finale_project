@@ -619,6 +619,17 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const [tags, setTags] = useState('')
   const [error, setError] = useState('')
   const [dragActive, setDragActive] = useState(false)
+  const allowedMimeTypes = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ])
+  const allowedExtensions = new Set([
+    '.pdf',
+    '.doc',
+    '.docx',
+  ])
+  const acceptedFileTypes = '.pdf,.doc,.docx'
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -641,13 +652,12 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   })
 
   const handleFileSelect = (file: File) => {
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ]
+    const mime = (file.type || '').toLowerCase()
+    const extensionMatch = file.name.toLowerCase().match(/\.[^.]+$/)
+    const extension = extensionMatch ? extensionMatch[0] : ''
+    const isSupported = allowedMimeTypes.has(mime) || allowedExtensions.has(extension)
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!isSupported) {
       setError('Only PDF and Word documents are allowed')
       return
     }
@@ -704,7 +714,7 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.doc,.docx"
+              accept={acceptedFileTypes}
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
             />
