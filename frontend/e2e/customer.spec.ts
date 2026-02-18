@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * CUSTOMER Role Tests
@@ -27,20 +28,7 @@ import { test, expect, Page } from '@playwright/test';
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
 
 async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', credentials.username);
-  await page.fill('input#password', credentials.password);
-  await page.click('button[type="submit"]');
-  // Wait for redirect or navigation
-  await page.waitForTimeout(3000);
-  // Customer should be redirected to portal
-  if (page.url().includes('/login')) {
-    // Login may have failed, try waiting more
-    await page.waitForURL(/portal|dashboard/, { timeout: 5000 }).catch(() => {});
-  }
+  await loginByApi(page, credentials, /\/(portal|dashboard)/, '/portal');
 }
 
 test.describe('Customer Role', () => {
@@ -73,6 +61,11 @@ test.describe('Customer Role', () => {
 
     test('should view portal dashboard', async ({ page }) => {
       await page.goto('/portal');
+      if (page.url().includes('/login')) {
+        await loginAsCustomer(page);
+        await page.goto('/portal');
+      }
+      await expect(page).toHaveURL(/\/portal/, { timeout: 15000 });
       await expect(page.locator('body')).toContainText(/dashboard|welcome|portal/i);
     });
 

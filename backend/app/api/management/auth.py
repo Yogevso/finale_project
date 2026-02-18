@@ -22,6 +22,7 @@ from app.schemas import (
 from app.security import get_current_active_user, get_password_hash
 from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
+from app.utils.request_ip import get_client_ip
 
 router = APIRouter()
 
@@ -54,17 +55,6 @@ class ForgotPasswordRequest(BaseModel):
     identifier: str = Field(..., min_length=1, max_length=255, description="Username or email")
 
 
-def _get_client_ip(request: Request) -> str:
-    """Extract request client IP with proxy header support."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return request.client.host if request.client else "unknown"
-
-
 def _rate_limited_response(detail: str, retry_after: int) -> JSONResponse:
     """Standardized auth rate-limit response payload."""
     safe_retry_after = max(int(retry_after), 1)
@@ -79,6 +69,13 @@ def _rate_limited_response(detail: str, retry_after: int) -> JSONResponse:
     )
 
 
+def _is_e2e_bypass_request(request: Request) -> bool:
+    """Allow bypassing auth-rate limits for explicit E2E traffic outside production."""
+    if settings.APP_ENV.lower() == "production":
+        return False
+    return request.headers.get("x-e2e-test", "").strip() == "1"
+
+
 @router.post("/auth/login", response_model=TokenResponse)
 def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
@@ -86,10 +83,10 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
 
     Returns JWT access token and refresh token.
     """
-    client_ip = _get_client_ip(request)
+    client_ip = get_client_ip(request)
     username = (credentials.username or "").strip()
 
-    if settings.RATE_LIMIT_ENABLED:
+    if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
         allowed, retry_after = AuthRateLimitService.check_login_allowed(client_ip, username)
         if not allowed:
             return _rate_limited_response(
@@ -100,7 +97,11 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
     try:
         token_response = AuthService.login(db, credentials.username, credentials.password)
     except HTTPException as exc:
-        if settings.RATE_LIMIT_ENABLED and exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        if (
+            settings.RATE_LIMIT_ENABLED
+            and not _is_e2e_bypass_request(request)
+            and exc.status_code == status.HTTP_401_UNAUTHORIZED
+        ):
             retry_after = AuthRateLimitService.record_login_failure(client_ip, username)
             if retry_after > 0:
                 return _rate_limited_response(
@@ -109,7 +110,7 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
                 )
         raise
 
-    if settings.RATE_LIMIT_ENABLED:
+    if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
         AuthRateLimitService.record_login_success(client_ip, username)
 
     return token_response
@@ -126,10 +127,10 @@ def forgot_password(
 
     The response is intentionally generic to avoid user enumeration.
     """
-    client_ip = _get_client_ip(request)
+    client_ip = get_client_ip(request)
     identifier = payload.identifier.strip()
 
-    if settings.RATE_LIMIT_ENABLED:
+    if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
         allowed, retry_after = AuthRateLimitService.check_forgot_password_allowed(
             client_ip, identifier
         )

@@ -315,7 +315,10 @@ class AttachmentService:
 
     @staticmethod
     def get_attachment(
-        db: Session, document_id: int, attachment_id: int, current_user: User
+        db: Session,
+        document_id: int,
+        attachment_id: int,
+        current_user: Optional[User] = None,
     ) -> Attachment:
         """Get a specific attachment"""
         attachment = (
@@ -1482,7 +1485,7 @@ class AttachmentService:
         db: Session,
         document_id: int,
         attachment_id: int,
-        current_user: User,
+        current_user: Optional[User] = None,
     ) -> dict:
         """Extract PDF outline/bookmarks for an attachment preview TOC."""
         attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
@@ -1664,7 +1667,10 @@ class AttachmentService:
 
     @staticmethod
     def open_original_stream(
-        db: Session, document_id: int, attachment_id: int, current_user: User
+        db: Session,
+        document_id: int,
+        attachment_id: int,
+        current_user: Optional[User] = None,
     ) -> tuple[Attachment, Iterator[bytes]]:
         """Open a byte-preserving stream for the original uploaded file."""
         attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)

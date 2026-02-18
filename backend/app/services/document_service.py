@@ -174,14 +174,13 @@ class DocumentService:
                     status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found"
                 )
 
-        platform = self._get_or_create_platform(
-            platform_name=document_data.platform, platform_id=document_data.platform_id
-        )
-
         # Create document with retry in case of document_number collision
         attempts = 0
         while True:
             attempts += 1
+            platform = self._get_or_create_platform(
+                platform_name=document_data.platform, platform_id=document_data.platform_id
+            )
             document = Document(
                 title=document_data.title,
                 document_number=document_number,

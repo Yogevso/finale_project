@@ -3,6 +3,7 @@
 import time
 from unittest.mock import MagicMock
 
+from app.config import settings
 from app.middleware.rate_limit import RateLimitInfo, RateLimitMiddleware
 
 
@@ -37,8 +38,10 @@ class TestRateLimitMiddleware:
         ip = middleware._get_client_ip(request)
         assert ip == "192.168.1.1"
 
-    def test_get_client_ip_forwarded(self):
+    def test_get_client_ip_forwarded(self, monkeypatch):
         """Get IP from X-Forwarded-For header"""
+        monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+        monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", ["192.168.1.1"])
         middleware = RateLimitMiddleware(app=MagicMock(), max_requests=10, window_seconds=60)
 
         request = MagicMock()
@@ -49,8 +52,10 @@ class TestRateLimitMiddleware:
         ip = middleware._get_client_ip(request)
         assert ip == "10.0.0.1"
 
-    def test_get_client_ip_real_ip(self):
+    def test_get_client_ip_real_ip(self, monkeypatch):
         """Get IP from X-Real-IP header"""
+        monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+        monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", ["192.168.1.1"])
         middleware = RateLimitMiddleware(app=MagicMock(), max_requests=10, window_seconds=60)
 
         request = MagicMock()

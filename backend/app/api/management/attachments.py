@@ -1,7 +1,6 @@
 """Attachments API Routes"""
 
 from typing import List, Optional
-from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -28,6 +27,7 @@ from app.schemas import (
 )
 from app.security import get_current_active_user, verify_token
 from app.services.attachment_service import AttachmentService
+from app.utils.http_headers import build_content_disposition
 
 router = APIRouter()
 
@@ -90,13 +90,6 @@ def _get_current_active_user_or_token(
     return user
 
 
-def _build_content_disposition(filename: str, inline: bool = False) -> str:
-    disposition_type = "inline" if inline else "attachment"
-    safe_filename = filename.replace('"', "").replace("\\", "_") or "download"
-    utf8_filename = quote(filename or "download")
-    return f"{disposition_type}; filename=\"{safe_filename}\"; filename*=UTF-8''{utf8_filename}"
-
-
 def _stream_original_attachment(
     db: Session,
     document_id: int,
@@ -110,7 +103,7 @@ def _stream_original_attachment(
     )
     filename = attachment.original_filename or attachment.filename or "download"
     headers = {
-        "Content-Disposition": _build_content_disposition(filename, inline=inline),
+        "Content-Disposition": build_content_disposition(filename, inline=inline),
     }
     size_bytes = attachment.size_bytes or attachment.file_size
     if size_bytes is not None:

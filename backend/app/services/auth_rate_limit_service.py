@@ -49,6 +49,13 @@ class AuthRateLimitService:
             bucket.attempts.popleft()
 
     @classmethod
+    def _clear_expired_lock(cls, bucket: AuthRateBucket, now_ts: float) -> None:
+        if bucket.locked_until > 0 and bucket.locked_until <= now_ts:
+            # Start a fresh window after lock expiry so lock duration is honored.
+            bucket.locked_until = 0.0
+            bucket.attempts.clear()
+
+    @classmethod
     def _cleanup_stale_buckets(cls, now_ts: float, stale_after_seconds: int) -> None:
         cls._cleanup_counter += 1
         if cls._cleanup_counter < 200:
@@ -76,16 +83,12 @@ class AuthRateLimitService:
         with cls._lock:
             bucket = cls._buckets[key]
             cls._prune_bucket(bucket, now_ts, window_seconds)
+            cls._clear_expired_lock(bucket, now_ts)
 
             if bucket.locked_until > now_ts:
                 retry_after = int(math.ceil(bucket.locked_until - now_ts))
                 cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
                 return False, max(retry_after, 1)
-
-            if len(bucket.attempts) >= max_attempts:
-                bucket.locked_until = now_ts + lock_seconds
-                cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
-                return False, lock_seconds
 
             cls._cleanup_stale_buckets(now_ts, max(window_seconds, lock_seconds) * 2)
             return True, 0
@@ -103,6 +106,7 @@ class AuthRateLimitService:
         with cls._lock:
             bucket = cls._buckets[key]
             cls._prune_bucket(bucket, now_ts, window_seconds)
+            cls._clear_expired_lock(bucket, now_ts)
             bucket.attempts.append(now_ts)
 
             if len(bucket.attempts) >= max_attempts:

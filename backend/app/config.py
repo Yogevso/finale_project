@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 100  # requests per window
     RATE_LIMIT_WINDOW: int = 60  # seconds
+    TRUST_PROXY_HEADERS: bool = False
+    TRUSTED_PROXY_IPS: list[str] = []
 
     # Database
     DATABASE_URL: str = "sqlite:///./data/portal.db"

@@ -99,6 +99,28 @@ class TestAttachments:
         assert "inline;" in preview_via_query_response.headers["content-disposition"]
         assert hashlib.sha256(preview_via_query_response.content).hexdigest() == expected_sha
 
+    def test_download_with_non_latin_filename_returns_200(
+        self, client: TestClient, auth_headers: dict, test_document
+    ):
+        """Non-latin filenames should not break Content-Disposition encoding."""
+        uploaded_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
+        upload_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("מדריך-2026.pdf", io.BytesIO(uploaded_bytes), "application/pdf")},
+        )
+        assert upload_response.status_code == 201
+        attachment_id = upload_response.json()["id"]
+
+        response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/download",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        content_disposition = response.headers["content-disposition"]
+        assert "filename*=" in content_disposition
+        assert "UTF-8''" in content_disposition
+
     def test_reader_view_endpoint_returns_status(
         self, client: TestClient, auth_headers: dict, test_document
     ):

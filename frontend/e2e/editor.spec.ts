@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * EDITOR Role Tests
@@ -29,17 +30,7 @@ import { test, expect, Page } from '@playwright/test';
 const EDITOR = { username: 'editor', password: 'editor123' };
 
 async function loginAsEditor(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', EDITOR.username);
-  await page.fill('input#password', EDITOR.password);
-  await page.click('button[type="submit"]');
-  // Wait for navigation away from login page
-  await page.waitForURL(/dashboard|documents/, { timeout: 15000 }).catch(() => {});
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
+  await loginByApi(page, EDITOR, /\/(dashboard|documents)/, '/dashboard');
 }
 
 test.describe('Editor Role', () => {
@@ -84,10 +75,13 @@ test.describe('Editor Role', () => {
       await page.goto('/documents');
       await page.waitForTimeout(1000);
       
-      const docLink = page.locator('table tbody tr a, [class*="card"] a').first();
+      const docLink = page
+        .locator('a[href*="/documents/"][href*="/fullscreen"], table tbody tr a[href*="/documents/"], [class*="card"] a[href*="/documents/"]')
+        .first();
       if (await docLink.count() > 0) {
         await docLink.click();
-        await expect(page.locator('body')).toContainText(/detail|version|content/i);
+        await expect(page).toHaveURL(/\/documents\/\d+/, { timeout: 15000 });
+        await expect(page.locator('body')).toContainText(/version|content|attachments|comments/i);
       }
     });
 
@@ -199,7 +193,7 @@ test.describe('Editor Role', () => {
           await editBtn.click();
           await page.waitForTimeout(500);
           // Edit flow now opens content edit chooser instead of a generic form/dialog.
-          await expect(page.locator('body')).toContainText(/edit content options|choose whether to edit/i);
+          await expect(page.locator('body')).toContainText(/edit content|choose whether to edit/i);
         }
       }
     });
