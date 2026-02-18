@@ -21,7 +21,4 @@ def build_content_disposition(filename: str, inline: bool = False) -> str:
     cleaned = (filename or "download").replace("\r", "").replace("\n", "")
     ascii_filename = _ascii_filename_fallback(cleaned)
     utf8_filename = quote(cleaned, safe="")
-    return (
-        f'{disposition_type}; filename="{ascii_filename}"; '
-        f"filename*=UTF-8''{utf8_filename}"
-    )
+    return f"{disposition_type}; filename=\"{ascii_filename}\"; filename*=UTF-8''{utf8_filename}"

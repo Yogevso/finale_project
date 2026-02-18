@@ -624,7 +624,9 @@ class AttachmentService:
                 preview_artifact.sha256 = attachment.sha256
                 preview_artifact.error = None
                 preview_artifact.generated_at = datetime.utcnow()
-                AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
+                AttachmentService._apply_preview_artifact_to_attachment(
+                    attachment, preview_artifact
+                )
                 db.commit()
             else:
                 original_bytes = AttachmentService._load_original_bytes_for_attachment(attachment)
@@ -651,7 +653,9 @@ class AttachmentService:
                 preview_artifact.sha256 = hashlib.sha256(preview_pdf_bytes).hexdigest()
                 preview_artifact.error = None
                 preview_artifact.generated_at = datetime.utcnow()
-                AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
+                AttachmentService._apply_preview_artifact_to_attachment(
+                    attachment, preview_artifact
+                )
                 db.commit()
 
             AttachmentService.generate_pdf_reader_artifact(attachment.id, force=force)
@@ -669,7 +673,9 @@ class AttachmentService:
                 preview_artifact.generated_at = datetime.utcnow()
                 if not reader_artifact.status:
                     reader_artifact.status = AttachmentService.READER_STATUS_FAILED
-                AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
+                AttachmentService._apply_preview_artifact_to_attachment(
+                    attachment, preview_artifact
+                )
                 AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
                 db.commit()
         finally:
@@ -817,7 +823,9 @@ class AttachmentService:
         return AttachmentService._convert_html_to_pdf_bytes(html_content, title=filename)
 
     @staticmethod
-    def _convert_office_to_pdf_bytes(content: bytes, *, filename: str, mime_type: str = "") -> bytes:
+    def _convert_office_to_pdf_bytes(
+        content: bytes, *, filename: str, mime_type: str = ""
+    ) -> bytes:
         soffice = AttachmentService._resolve_soffice_binary()
         if not soffice:
             if AttachmentService._is_word_source(mime_type, filename):
@@ -897,6 +905,7 @@ class AttachmentService:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
         try:
             from bs4 import BeautifulSoup
         except ImportError:
@@ -1072,7 +1081,9 @@ class AttachmentService:
 
         for raw_line in lines:
             line = raw_line or ""
-            wrapped = [line[i : i + max_chars_per_line] for i in range(0, len(line), max_chars_per_line)]
+            wrapped = [
+                line[i : i + max_chars_per_line] for i in range(0, len(line), max_chars_per_line)
+            ]
             if not wrapped:
                 wrapped = [""]
 
@@ -1089,9 +1100,7 @@ class AttachmentService:
         return buffer.getvalue()
 
     @staticmethod
-    def _convert_non_pdf_to_preview_pdf(
-        *, content: bytes, mime_type: str, filename: str
-    ) -> bytes:
+    def _convert_non_pdf_to_preview_pdf(*, content: bytes, mime_type: str, filename: str) -> bytes:
         normalized_mime = (mime_type or "").lower()
         suffix = Path(filename or "").suffix.lower()
 
@@ -1138,7 +1147,10 @@ class AttachmentService:
             local_path = AttachmentService._resolve_local_attachment_path(
                 attachment, attachment.document_id
             )
-            if preview_key == (attachment.storage_key or attachment.storage_path or "") and local_path:
+            if (
+                preview_key == (attachment.storage_key or attachment.storage_path or "")
+                and local_path
+            ):
                 with open(local_path, "rb") as file_obj:
                     return file_obj.read()
 
@@ -1272,8 +1284,10 @@ class AttachmentService:
                 db.commit()
                 return
 
-            if not (preview_artifact.mime_type or "application/pdf").lower().startswith(
-                "application/pdf"
+            if (
+                not (preview_artifact.mime_type or "application/pdf")
+                .lower()
+                .startswith("application/pdf")
             ):
                 reader_artifact.status = AttachmentService.READER_STATUS_FAILED
                 reader_artifact.error = "Preview artifact is not a PDF"
@@ -1430,12 +1444,9 @@ class AttachmentService:
             db.commit()
             db.refresh(reader_artifact)
             db.refresh(attachment)
-        elif (
-            (not reader_artifact.status)
-            or (
-                reader_artifact.status == AttachmentService.READER_STATUS_PENDING
-                and not reader_artifact.content_text
-            )
+        elif (not reader_artifact.status) or (
+            reader_artifact.status == AttachmentService.READER_STATUS_PENDING
+            and not reader_artifact.content_text
         ):
             reader_artifact.status = AttachmentService.READER_STATUS_PENDING
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
@@ -1618,10 +1629,7 @@ class AttachmentService:
             logger.info(f"Deleted attachment from storage: {storage_ref}")
             if attachment.storage_path != storage_ref:
                 storage.delete(attachment.storage_path)
-            if (
-                preview_ref
-                and preview_ref not in {storage_ref, attachment.storage_path}
-            ):
+            if preview_ref and preview_ref not in {storage_ref, attachment.storage_path}:
                 storage.delete(preview_ref)
         except Exception as e:
             logger.warning(f"Failed to delete from storage: {e}")
@@ -1761,7 +1769,12 @@ class AttachmentService:
 
         if local_path:
             size = preview_artifact.size_bytes or attachment.size_bytes or attachment.file_size
-            return attachment, AttachmentService._stream_file(local_path), "application/pdf", int(size)
+            return (
+                attachment,
+                AttachmentService._stream_file(local_path),
+                "application/pdf",
+                int(size),
+            )
 
         try:
             storage = get_storage_backend()

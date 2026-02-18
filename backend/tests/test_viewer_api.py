@@ -409,7 +409,9 @@ class TestViewerAttachments:
         db.commit()
         db.refresh(attachment)
 
-        response = client.get(f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/outline")
+        response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/outline"
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["attachment_id"] == attachment.id

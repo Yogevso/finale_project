@@ -90,11 +90,5 @@ def test_contents_fallback_extracts_entries_and_maps_pages(monkeypatch):
 def test_outline_source_normalization_contract():
     assert AttachmentService._normalize_outline_source("outline") == "bookmarks"
     assert AttachmentService._normalize_outline_source("bookmarks") == "bookmarks"
-    assert (
-        AttachmentService._normalize_outline_source("contents_page")
-        == "contents-fallback"
-    )
-    assert (
-        AttachmentService._normalize_outline_source("heuristic")
-        == "contents-fallback"
-    )
+    assert AttachmentService._normalize_outline_source("contents_page") == "contents-fallback"
+    assert AttachmentService._normalize_outline_source("heuristic") == "contents-fallback"

@@ -65,7 +65,9 @@ def _set_job_pending(job: AttachmentConversionJob, *, force: bool) -> None:
     job.next_run_at = None
 
 
-def _load_preview_artifact_status(db: Session, attachment_id: int) -> tuple[Optional[str], Optional[str]]:
+def _load_preview_artifact_status(
+    db: Session, attachment_id: int
+) -> tuple[Optional[str], Optional[str]]:
     artifact = (
         db.query(AttachmentArtifact)
         .filter(
@@ -127,7 +129,11 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
     except Exception as exc:
         logger.exception("Conversion job %s failed unexpectedly", job_id)
         try:
-            job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
+            job = (
+                db.query(AttachmentConversionJob)
+                .filter(AttachmentConversionJob.id == job_id)
+                .first()
+            )
             if job:
                 job.last_error = str(exc)
                 if int(job.attempts or 0) < int(job.max_attempts or 3):

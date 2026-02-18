@@ -16,12 +16,8 @@ logger = logging.getLogger(__name__)
 
 HEADING_NUMBER_RE = re.compile(r"^(\d+(?:\.\d+)*)[.)]?\s+\S+")
 UPPERCASE_HEADING_RE = re.compile(r"^[A-Z0-9][A-Z0-9\s\-_/]{3,}$")
-TOC_HEADER_RE = re.compile(
-    r"\b(table\s+of\s+contents|contents)\b", re.IGNORECASE
-)
-TOC_ENTRY_RE = re.compile(
-    r"^(?P<title>.+?)(?:\s*[.\u2022·_-]{2,}\s*|\s{2,}|\t+)(?P<page>\d{1,4})$"
-)
+TOC_HEADER_RE = re.compile(r"\b(table\s+of\s+contents|contents)\b", re.IGNORECASE)
+TOC_ENTRY_RE = re.compile(r"^(?P<title>.+?)(?:\s*[.\u2022·_-]{2,}\s*|\s{2,}|\t+)(?P<page>\d{1,4})$")
 TOC_INLINE_PAGE_RE = re.compile(r"^(?P<title>.+?)\s+(?P<page>\d{1,4})$")
 TOC_PAGE_ONLY_RE = re.compile(r"^(?:p(?:age)?\s*)?(?P<page>\d{1,4})$", re.IGNORECASE)
 LIST_BULLET_RE = re.compile(r"^(?:[\u2022\u2023\u25E6\u2043\u2219•\-*])\s+(?P<text>.+)$")
@@ -325,7 +321,9 @@ def _parse_list_item(line_text: str) -> Optional[tuple[str, str]]:
     return None
 
 
-def _extract_table_fallback_pre_blocks(page, page_number: int) -> tuple[list[dict[str, Any]], list[tuple[float, float, float, float]]]:
+def _extract_table_fallback_pre_blocks(
+    page, page_number: int
+) -> tuple[list[dict[str, Any]], list[tuple[float, float, float, float]]]:
     lines = _collect_pdf_lines(page, [])
     if not lines:
         return [], []
@@ -714,12 +712,16 @@ def _collect_pdf_visual_blocks(
             line_items.append(
                 {
                     "text": line_text,
-                    "raw_text": " ".join(part.replace("\n", " ") for part in span_raw_parts).rstrip()
+                    "raw_text": " ".join(
+                        part.replace("\n", " ") for part in span_raw_parts
+                    ).rstrip()
                     or line_text,
                     "html": " ".join(span_html_parts).strip(),
                     "size": max_size if max_size > 0 else 12.0,
                     "is_bold": (bold_count / total_count) >= 0.5 if total_count > 0 else False,
-                    "is_monospace": (monospace_count / total_count) >= 0.5 if total_count > 0 else False,
+                    "is_monospace": (monospace_count / total_count) >= 0.5
+                    if total_count > 0
+                    else False,
                     "bbox": line_bbox,
                     "y0": line_bbox[1],
                     "x0": line_bbox[0],
@@ -762,7 +764,9 @@ def _collect_pdf_visual_blocks(
                 "y0": block_bbox[1],
                 "text": _normalize_text(" ".join(deduped_line_texts)),
                 "line_texts": deduped_line_texts,
-                "line_html": [str(line.get("html") or "") for line in line_items if line.get("html")],
+                "line_html": [
+                    str(line.get("html") or "") for line in line_items if line.get("html")
+                ],
                 "line_items": line_items,
                 "avg_size": avg_size,
                 "max_size": max_size,
@@ -1252,7 +1256,7 @@ def _parse_toc_entry_line(raw_text: str) -> Optional[tuple[str, int]]:
 
 
 def _build_heading_page_index(
-    headings_by_page: dict[int, list[dict[str, Any]]]
+    headings_by_page: dict[int, list[dict[str, Any]]],
 ) -> dict[str, list[int]]:
     index: dict[str, list[int]] = {}
     for page_number, headings in headings_by_page.items():
@@ -1445,7 +1449,9 @@ def _extract_contents_page_toc(
 
     best_offset = 0
     if offset_votes:
-        best_offset, best_votes = max(offset_votes.items(), key=lambda pair: (pair[1], -abs(pair[0])))
+        best_offset, best_votes = max(
+            offset_votes.items(), key=lambda pair: (pair[1], -abs(pair[0]))
+        )
         if best_votes < 2:
             best_offset = 0
 
