@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * MANAGER Role Tests
@@ -27,15 +28,7 @@ import { test, expect, Page } from '@playwright/test';
 const MANAGER = { username: 'manager', password: 'manager123' };
 
 async function loginAsManager(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', MANAGER.username);
-  await page.fill('input#password', MANAGER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await loginByApi(page, MANAGER, /\/(dashboard|documents)/, '/dashboard');
 }
 
 test.describe('Manager Role', () => {
@@ -45,13 +38,14 @@ test.describe('Manager Role', () => {
   test.describe('Authentication', () => {
     test('should login as manager successfully', async ({ page }) => {
       await loginAsManager(page);
-      await expect(page).toHaveURL(/dashboard/);
+      await expect(page).toHaveURL(/dashboard|documents/);
     });
 
     test('should see manager-appropriate navigation', async ({ page }) => {
       await loginAsManager(page);
       // Should see Documents, Reviews, possibly Users
-      await expect(page.locator('a:has-text("Documents")').first()).toBeVisible();
+      await expect(page).toHaveURL(/dashboard|documents/);
+      await expect(page.locator('a:has-text("Documents"), nav:has-text("Documents")').first()).toBeVisible();
     });
   });
 

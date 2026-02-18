@@ -3,17 +3,21 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Attachment, Comment, Document, DocumentStatus, Version
 from app.schemas import (
+    AttachmentOutlineResponse,
     AttachmentResponse,
     CommentResponse,
     DocumentListResponse,
     DocumentResponse,
     VersionResponse,
 )
+from app.services.attachment_service import AttachmentService
+from app.utils.http_headers import build_content_disposition
 
 router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
 
@@ -180,6 +184,78 @@ def get_document_attachments(
     )
 
     return [AttachmentResponse.model_validate(a) for a in attachments]
+
+
+def _stream_public_attachment(
+    db: Session,
+    document_id: int,
+    attachment_id: int,
+    *,
+    inline: bool,
+) -> StreamingResponse:
+    attachment, content_stream = AttachmentService.open_original_stream(
+        db,
+        document_id,
+        attachment_id,
+        current_user=None,
+    )
+    filename = attachment.original_filename or attachment.filename or "download"
+    headers = {
+        "Content-Disposition": build_content_disposition(filename, inline=inline),
+    }
+    size_bytes = attachment.size_bytes or attachment.file_size
+    if size_bytes is not None:
+        headers["Content-Length"] = str(size_bytes)
+    if attachment.sha256:
+        headers["X-Checksum-SHA256"] = attachment.sha256
+
+    return StreamingResponse(
+        content=content_stream,
+        media_type=attachment.mime_type or "application/octet-stream",
+        headers=headers,
+    )
+
+
+@router.get("/{document_id}/attachments/{attachment_id}/download")
+def download_attachment(
+    document_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+):
+    """Download a published document attachment without authentication."""
+    _get_active_document_or_404(db, document_id)
+    return _stream_public_attachment(db, document_id, attachment_id, inline=False)
+
+
+@router.get("/{document_id}/attachments/{attachment_id}/preview")
+def preview_attachment(
+    document_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+):
+    """Preview a published document attachment inline without authentication."""
+    _get_active_document_or_404(db, document_id)
+    return _stream_public_attachment(db, document_id, attachment_id, inline=True)
+
+
+@router.get(
+    "/{document_id}/attachments/{attachment_id}/outline",
+    response_model=AttachmentOutlineResponse,
+)
+def get_attachment_outline(
+    document_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get PDF outline metadata for a published document attachment."""
+    _get_active_document_or_404(db, document_id)
+    payload = AttachmentService.get_pdf_outline(
+        db,
+        document_id,
+        attachment_id,
+        current_user=None,
+    )
+    return AttachmentOutlineResponse(**payload)
 
 
 @router.get("/{document_id}/comments", response_model=list[CommentResponse])

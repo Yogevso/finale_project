@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.utils.request_ip import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +54,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._cleanup_counter = 0
 
     def _get_client_ip(self, request: Request) -> str:
-        """Extract client IP from request"""
-        # Check for forwarded header first (behind proxy)
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        # Check x-real-ip header
-        real_ip = request.headers.get("x-real-ip")
-        if real_ip:
-            return real_ip
-        # Fall back to direct client
-        return request.client.host if request.client else "unknown"
+        """Compatibility shim for tests and internal callers."""
+        return get_client_ip(request)
 
     def _cleanup_old_entries(self):
         """Periodically clean up expired rate limit entries"""
@@ -107,10 +99,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         reset_time = int(info.window_start + self.window_seconds)
         return False, remaining, reset_time
 
+    @staticmethod
+    def _is_e2e_bypass_request(request: Request) -> bool:
+        """Allow bypassing limits for explicit E2E traffic in non-production envs."""
+        if settings.APP_ENV.lower() == "production":
+            return False
+        return request.headers.get("x-e2e-test", "").strip() == "1"
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request with rate limiting"""
         # Skip if rate limiting is disabled
         if not settings.RATE_LIMIT_ENABLED:
+            return await call_next(request)
+
+        # Skip explicit E2E traffic outside production.
+        if self._is_e2e_bypass_request(request):
             return await call_next(request)
 
         # Skip excluded paths
@@ -119,7 +122,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Get client IP
-        client_ip = self._get_client_ip(request)
+        client_ip = get_client_ip(request)
 
         # Check rate limit
         is_limited, remaining, reset_time = self._is_rate_limited(client_ip)

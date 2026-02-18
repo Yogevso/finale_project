@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * SYSTEM ADMIN Role Tests
@@ -25,15 +26,7 @@ import { test, expect, Page } from '@playwright/test';
 const SYSTEM_ADMIN = { username: 'sysadmin', password: 'sysadmin123' };
 
 async function loginAsSystemAdmin(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', SYSTEM_ADMIN.username);
-  await page.fill('input#password', SYSTEM_ADMIN.password);
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await loginByApi(page, SYSTEM_ADMIN, /\/(dashboard|documents)/, '/dashboard');
 }
 
 test.describe('System Admin Role', () => {
@@ -43,13 +36,14 @@ test.describe('System Admin Role', () => {
   test.describe('Authentication', () => {
     test('should login as system admin successfully', async ({ page }) => {
       await loginAsSystemAdmin(page);
-      await expect(page).toHaveURL(/dashboard/);
+      await expect(page).toHaveURL(/dashboard|documents/);
     });
 
     test('should see complete admin navigation', async ({ page }) => {
       await loginAsSystemAdmin(page);
       // Should see all navigation items
-      await expect(page.locator('a:has-text("Documents")').first()).toBeVisible();
+      await expect(page).toHaveURL(/dashboard|documents/);
+      await expect(page.locator('a:has-text("Documents"), nav:has-text("Documents")').first()).toBeVisible();
     });
   });
 

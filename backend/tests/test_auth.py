@@ -230,3 +230,35 @@ def test_forgot_password_rate_limited(client, monkeypatch):
     assert payload["error_code"] == "RATE_LIMITED"
     assert payload["retry_after"] >= 1
     assert int(limited_response.headers.get("Retry-After", "0")) >= 1
+
+
+def test_forgot_password_lock_expires_cleanly(client, monkeypatch):
+    """After lock expires, next request should be allowed before any new lock."""
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(AuthRateLimitService, "FORGOT_MAX_ATTEMPTS", 3)
+    monkeypatch.setattr(AuthRateLimitService, "FORGOT_WINDOW_SECONDS", 60)
+    monkeypatch.setattr(AuthRateLimitService, "FORGOT_LOCK_SECONDS", 5)
+    AuthRateLimitService.reset()
+
+    fake_now = {"value": 1000.0}
+    monkeypatch.setattr("app.services.auth_rate_limit_service.time.time", lambda: fake_now["value"])
+
+    for _ in range(AuthRateLimitService.FORGOT_MAX_ATTEMPTS - 1):
+        response = client.post(
+            "/api/v1/auth/forgot-password",
+            json={"identifier": "test@example.com"},
+        )
+        assert response.status_code == 200
+
+    locked_response = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"identifier": "test@example.com"},
+    )
+    assert locked_response.status_code == 429
+
+    fake_now["value"] += AuthRateLimitService.FORGOT_LOCK_SECONDS + 0.1
+    first_after_lock = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"identifier": "test@example.com"},
+    )
+    assert first_after_lock.status_code == 200

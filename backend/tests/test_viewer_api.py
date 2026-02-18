@@ -332,3 +332,85 @@ class TestViewerAttachments:
         second_ids = {item["id"] for item in second_response.json()}
         assert attachment_one.id in second_ids
         assert attachment_two.id in second_ids
+
+    def test_public_attachment_download_and_preview(self, client, db, test_user, tmp_path):
+        """Public viewer should stream attachment bytes without auth."""
+        doc = Document(
+            title="Viewer Stream Doc",
+            document_number=f"DOC-VSD-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        file_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
+        file_path = tmp_path / "viewer-stream.pdf"
+        file_path.write_bytes(file_bytes)
+
+        attachment = Attachment(
+            document_id=doc.id,
+            filename="viewer-stream.pdf",
+            original_filename="viewer-stream.pdf",
+            file_size=len(file_bytes),
+            size_bytes=len(file_bytes),
+            mime_type="application/pdf",
+            storage_path=str(file_path),
+            storage_key=str(file_path),
+            uploaded_by=test_user.id,
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+
+        preview_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/preview"
+        )
+        assert preview_response.status_code == 200
+        assert "inline;" in preview_response.headers["content-disposition"]
+        assert preview_response.content == file_bytes
+
+        download_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/download"
+        )
+        assert download_response.status_code == 200
+        assert "attachment;" in download_response.headers["content-disposition"]
+        assert download_response.content == file_bytes
+
+    def test_public_attachment_outline(self, client, db, test_user, tmp_path):
+        """Public viewer should expose outline payload for PDF attachments."""
+        doc = Document(
+            title="Viewer Outline Doc",
+            document_number=f"DOC-VOD-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        file_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
+        file_path = tmp_path / "viewer-outline.pdf"
+        file_path.write_bytes(file_bytes)
+
+        attachment = Attachment(
+            document_id=doc.id,
+            filename="viewer-outline.pdf",
+            original_filename="viewer-outline.pdf",
+            file_size=len(file_bytes),
+            size_bytes=len(file_bytes),
+            mime_type="application/pdf",
+            storage_path=str(file_path),
+            storage_key=str(file_path),
+            uploaded_by=test_user.id,
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+
+        response = client.get(f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/outline")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["attachment_id"] == attachment.id
+        assert "items" in payload

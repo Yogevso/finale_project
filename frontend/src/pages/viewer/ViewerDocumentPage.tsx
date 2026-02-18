@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
-import { api } from '@/lib/api'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
-import type { Attachment, AttachmentOutlineItem, Comment, Document, Version } from '@/types'
+import type {
+  Attachment,
+  AttachmentOutlineResponse,
+  AttachmentOutlineItem,
+  Comment,
+  Document,
+  Version,
+} from '@/types'
 
 export default function ViewerDocumentPage() {
   const { id } = useParams<{ id: string }>()
@@ -134,9 +140,10 @@ export default function ViewerDocumentPage() {
   const selectedPdfAttachment = effectiveAttachments.find((attachment) =>
     (attachment.mime_type || '').startsWith('application/pdf'),
   )
-  const pdfPreviewUrl = selectedPdfAttachment && id
-    ? `${api.getAttachmentPreviewUrl(Number(id), selectedPdfAttachment.id)}&version=${selectedVersionId || 'none'}`
-    : null
+  const pdfPreviewUrl =
+    selectedPdfAttachment && id
+      ? `/api/v1/viewer/documents/${id}/attachments/${selectedPdfAttachment.id}/preview`
+      : null
   const pdfPreviewSrc =
     pdfPreviewUrl && pdfOutlinePage ? `${pdfPreviewUrl}#page=${pdfOutlinePage}` : pdfPreviewUrl
 
@@ -165,7 +172,13 @@ export default function ViewerDocumentPage() {
     setPdfOutlineError(null)
     setPdfOutlinePage(null)
 
-    api.getAttachmentOutline(Number(id), selectedPdfAttachment.id)
+    fetch(`/api/v1/viewer/documents/${id}/attachments/${selectedPdfAttachment.id}/outline`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load TOC')
+        }
+        return (await response.json()) as AttachmentOutlineResponse
+      })
       .then((payload) => {
         if (cancelled) return
         setPdfOutlineItems(payload.items || [])
@@ -542,7 +555,11 @@ export default function ViewerDocumentPage() {
                     </div>
                   </div>
                   <a
-                    href={id ? api.getAttachmentDownloadUrl(Number(id), attachment.id) : '#'}
+                    href={
+                      id
+                        ? `/api/v1/viewer/documents/${id}/attachments/${attachment.id}/download`
+                        : '#'
+                    }
                     className="btn-primary text-sm"
                   >
                     Download
