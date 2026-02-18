@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
+import PageHeader from '@/components/PageHeader'
 
 const NOTIFICATIONS_QUERY_KEY = ['notifications', 'all-page'] as const
 
@@ -183,49 +184,51 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Notifications</h1>
-          <p className="text-slate-600">Review updates and manage read status.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        title="Notifications"
+        subtitle="Review updates and manage read status."
+        meta={
           <span className="pill bg-sky-100 text-sky-800 border-sky-200">
             {unreadCount} unread
           </span>
-          <button
-            onClick={() => refetch()}
-            className="btn-ghost inline-flex items-center gap-2"
-            disabled={isFetching}
-          >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          {unreadCount > 0 && (
+        }
+        actions={
+          <>
             <button
-              onClick={() => markAllReadMutation.mutate()}
-              className="btn-secondary inline-flex items-center gap-2"
-              disabled={anyActionPending}
+              onClick={() => refetch()}
+              className="btn-ghost inline-flex items-center gap-2"
+              disabled={isFetching}
             >
-              <CheckCheck className="w-4 h-4" />
-              Mark all read
+              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
-          )}
-          {hasReadNotifications && (
-            <button
-              onClick={() => {
-                if (confirm('Delete all read notifications?')) {
-                  deleteReadMutation.mutate()
-                }
-              }}
-              className="btn-ghost inline-flex items-center gap-2 text-rose-600 hover:text-rose-700"
-              disabled={anyActionPending}
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete read
-            </button>
-          )}
-        </div>
-      </div>
+            {unreadCount > 0 && (
+              <button
+                onClick={() => markAllReadMutation.mutate()}
+                className="btn-secondary inline-flex items-center gap-2"
+                disabled={anyActionPending}
+              >
+                <CheckCheck className="w-4 h-4" />
+                Mark all read
+              </button>
+            )}
+            {hasReadNotifications && (
+              <button
+                onClick={() => {
+                  if (confirm('Delete all read notifications?')) {
+                    deleteReadMutation.mutate()
+                  }
+                }}
+                className="btn-ghost inline-flex items-center gap-2 text-rose-600 hover:text-rose-700"
+                disabled={anyActionPending}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete read
+              </button>
+            )}
+          </>
+        }
+      />
 
       <div className="surface-card rounded-2xl overflow-hidden">
         {isLoading ? (

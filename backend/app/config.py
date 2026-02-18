@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "sqlite:///./data/portal.db"
+    SQL_ECHO: bool = False
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
@@ -56,6 +57,7 @@ class Settings(BaseSettings):
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: set[str] = {".pdf", ".doc", ".docx", ".txt"}
+    LIBREOFFICE_BIN: Optional[str] = None
 
     # Logging
     LOG_LEVEL: str = "INFO"

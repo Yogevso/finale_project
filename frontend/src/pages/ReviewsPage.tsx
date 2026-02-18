@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import type { ReviewRequest, ReviewStatus } from '@/types'
 import ReviewDialog from '@/components/ReviewDialog'
+import PageHeader from '@/components/PageHeader'
 
 type TabType = 'pending' | 'my-submissions'
 
@@ -95,13 +96,10 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Reviews</h1>
-          <p className="text-slate-600">Review and approve submissions. Publishing is a separate step.</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Reviews"
+        subtitle="Review and approve submissions. Publishing is a separate step."
+      />
 
       {/* Tabs */}
       <div className="border-b border-slate-200">

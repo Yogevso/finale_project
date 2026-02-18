@@ -60,27 +60,40 @@ export default function PublicPlatformDetailPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-14">
+        <div className="max-w-7xl mx-auto px-6 py-9">
           <div className="max-w-3xl">
-            <div className="text-xs uppercase tracking-widest text-slate-300 mb-3">Platform</div>
-            <h1 className="text-4xl font-display font-bold mb-3">
+            <div className="text-xs uppercase tracking-widest text-slate-300 mb-2">
+              <Link to="/platforms" className="hover:text-white/90">
+                Platforms
+              </Link>
+              <span className="mx-2 text-white/40">/</span>
+              Platform
+            </div>
+            <h1 className="text-3xl font-display font-bold mb-2">
               {data?.platform || 'Platform Documents'}
             </h1>
             <p className="text-slate-200">
               Full document table for this platform release line.
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-slate-100">
+              <span className="font-semibold">{data?.total || 0}</span>
+              documents
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="surface-card rounded-3xl p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="surface-card rounded-3xl overflow-hidden">
+          <div className="px-6 pt-6 pb-4 border-b border-slate-200">
             <div>
               <h2 className="text-2xl font-display font-semibold text-slate-900">Documents</h2>
               <p className="text-sm text-slate-500 mt-1">{data?.total || 0} documents</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          </div>
+
+          <div className="sticky top-2 z-20 border-b border-slate-200 bg-white/95 backdrop-blur px-6 py-3">
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
               <input
                 type="text"
                 value={searchTerm}
@@ -114,19 +127,20 @@ export default function PublicPlatformDetailPage() {
 
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-widest text-slate-400">
-                  <th className="py-3 px-4">Document Name</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Version</th>
-                  <th className="py-3 px-4">Published</th>
-                  <th className="py-3 px-4">Status</th>
+              <thead className="bg-slate-50/90">
+                <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
+                  <th className="py-3.5 px-4">Document Name</th>
+                  <th className="py-3.5 px-4">Category</th>
+                  <th className="py-3.5 px-4">Version</th>
+                  <th className="py-3.5 px-4">Published</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-right">Open</th>
                 </tr>
               </thead>
               <tbody>
                 {data?.items.map((doc) => (
-                  <tr key={doc.id} className="border-t border-slate-200">
-                    <td className="py-3 px-4 font-medium text-slate-900">
+                  <tr key={doc.id} className="group border-t border-slate-200 hover:bg-sky-50/60 transition-colors">
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">
                       <Link to={`/doc/${doc.id}?fullscreen=1`} className="hover:text-sky-700">
                         {doc.title}
                       </Link>
@@ -141,26 +155,39 @@ export default function PublicPlatformDetailPage() {
                     <td className="py-3 px-4 text-slate-600">
                       {formatDateOrDash(doc.published_at || doc.updated_at)}
                     </td>
-                    <td className="py-3 px-4 text-slate-600">{formatStatus(doc.status)}</td>
+                    <td className="py-3 px-4 text-slate-600">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        {formatStatus(doc.status)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Link
+                        to={`/doc/${doc.id}?fullscreen=1`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800"
+                      >
+                        Open
+                        <span aria-hidden>→</span>
+                      </Link>
+                    </td>
                   </tr>
                 ))}
                 {!isLoading && !data?.items.length && !error && (
                   <tr>
-                    <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
+                    <td colSpan={6} className="py-8 px-4 text-center text-slate-400">
                       No documents found for this platform.
                     </td>
                   </tr>
                 )}
                 {isLoading && (
                   <tr>
-                    <td colSpan={5} className="py-6 px-4 text-center text-slate-400">
+                    <td colSpan={6} className="py-8 px-4 text-center text-slate-400">
                       Loading platform documents...
                     </td>
                   </tr>
                 )}
                 {error && (
                   <tr>
-                    <td colSpan={5} className="py-6 px-4 text-center text-rose-500">
+                    <td colSpan={6} className="py-8 px-4 text-center text-rose-500">
                       Failed to load platform documents.
                     </td>
                   </tr>

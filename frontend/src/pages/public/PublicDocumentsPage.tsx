@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FileText, Folder, ChevronLeft, ChevronRight, Grid, List, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
 type LatestPlatformRelease = {
@@ -20,15 +20,21 @@ type PlatformReleasePreview = {
 }
 
 const normalizePlatformName = (value: string) => value.trim().toLowerCase()
+const TOP_CATEGORIES_LIMIT = 8
 
 export default function PublicDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [localSearch, setLocalSearch] = useState('')
+  const [showAllCategories, setShowAllCategories] = useState(false)
 
   const page = parseInt(searchParams.get('page') || '1')
   const category = searchParams.get('category') || undefined
   const search = searchParams.get('search') || undefined
+
+  useEffect(() => {
+    setLocalSearch(search || '')
+  }, [search])
 
   // Fetch documents
   const { data: docs, isLoading: docsLoading } = useQuery({
@@ -99,6 +105,34 @@ export default function PublicDocumentsPage() {
 
   const getTags = (tags?: string) =>
     tags ? tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 3) : []
+
+  const sortedCategories = useMemo(() => {
+    const items = categories?.items || []
+    return [...items].sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      return a.category.localeCompare(b.category)
+    })
+  }, [categories?.items])
+
+  const totalCategoryDocuments = useMemo(
+    () => sortedCategories.reduce((sum, item) => sum + item.count, 0),
+    [sortedCategories],
+  )
+
+  const visibleCategories = useMemo(() => {
+    if (showAllCategories) return sortedCategories
+
+    const top = sortedCategories.slice(0, TOP_CATEGORIES_LIMIT)
+    if (!category) return top
+
+    const selected = sortedCategories.find((item) => item.category === category)
+    if (!selected) return top
+    if (top.some((item) => item.category === selected.category)) return top
+
+    return [...top, selected]
+  }, [showAllCategories, sortedCategories, category])
+
+  const hiddenCategoryCount = Math.max(sortedCategories.length - visibleCategories.length, 0)
 
   const latestPlatformReleases = useMemo<PlatformReleasePreview[]>(() => {
     if (!platformHistory?.items) return []
@@ -173,7 +207,7 @@ export default function PublicDocumentsPage() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
-          <aside className="lg:w-64 flex-shrink-0">
+          <aside className="lg:w-72 lg:sticky lg:top-6 lg:self-start flex-shrink-0">
             {/* Search */}
             <form onSubmit={handleLocalSearch} className="mb-6">
               <div className="relative">
@@ -190,21 +224,27 @@ export default function PublicDocumentsPage() {
 
             {/* Categories */}
             <div className="surface-card rounded-2xl p-4">
-              <h3 className="font-display font-semibold text-slate-900 mb-3">Categories</h3>
+              <div className="mb-3">
+                <h3 className="font-display font-semibold text-slate-900">Categories</h3>
+                <p className="text-xs text-slate-500 mt-1">Filter by documentation domain</p>
+              </div>
               <ul className="space-y-1">
                 <li>
                   <button
                     onClick={() => handleCategoryClick(null)}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition-colors ${
+                    className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex justify-between items-center ${
                       !category
                         ? 'bg-sky-50 text-sky-700 font-medium'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
-                    All Categories
+                    <span>All Categories</span>
+                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                      {totalCategoryDocuments}
+                    </span>
                   </button>
                 </li>
-                {categories?.items?.map((cat) => (
+                {visibleCategories.map((cat) => (
                   <li key={cat.category}>
                     <button
                       onClick={() => handleCategoryClick(cat.category)}
@@ -222,6 +262,17 @@ export default function PublicDocumentsPage() {
                   </li>
                 ))}
               </ul>
+              {sortedCategories.length > TOP_CATEGORIES_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCategories((prev) => !prev)}
+                  className="mt-3 w-full text-xs font-semibold text-sky-700 hover:text-sky-800 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2"
+                >
+                  {showAllCategories
+                    ? 'Show top categories only'
+                    : `Show ${hiddenCategoryCount} more categories`}
+                </button>
+              )}
             </div>
           </aside>
 
@@ -282,38 +333,83 @@ export default function PublicDocumentsPage() {
             )}
 
             {/* Toolbar */}
-            <div className="flex justify-between items-center mb-6">
-            <div className="text-sm text-slate-500">
-              {docs?.total || 0} documents found
-              {category && <span> in <strong>{category}</strong></span>}
-              {search && <span> matching "<strong>{search}</strong>"</span>}
+            <div className="surface-card rounded-2xl px-4 py-3 mb-6">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="text-sm text-slate-600">
+                  <span className="font-semibold text-slate-900">{docs?.total || 0}</span> documents found
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Link to="/platforms" className="btn-secondary text-xs">
+                    Explore Platforms
+                  </Link>
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-2 rounded-lg ${
+                        viewMode === 'grid'
+                          ? 'bg-sky-100 text-sky-700'
+                          : 'text-slate-400 hover:bg-slate-100'
+                      }`}
+                      aria-label="Grid view"
+                    >
+                      <Grid className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-2 rounded-lg ${
+                        viewMode === 'list'
+                          ? 'bg-sky-100 text-sky-700'
+                          : 'text-slate-400 hover:bg-slate-100'
+                      }`}
+                      aria-label="List view"
+                    >
+                      <List className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {(category || search) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {category && (
+                    <button
+                      type="button"
+                      onClick={() => handleCategoryClick(null)}
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700"
+                    >
+                      Category: {category}
+                      <span aria-hidden>×</span>
+                    </button>
+                  )}
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams)
+                        params.delete('search')
+                        params.set('page', '1')
+                        setSearchParams(params)
+                        setLocalSearch('')
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                    >
+                      Search: {search}
+                      <span aria-hidden>×</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchParams({})
+                      setLocalSearch('')
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex gap-2 items-center">
-              <Link to="/platforms" className="btn-secondary text-xs">
-                Explore Platforms
-              </Link>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-xl ${
-                  viewMode === 'grid'
-                    ? 'bg-sky-100 text-sky-600'
-                    : 'text-slate-400 hover:bg-slate-100'
-                }`}
-              >
-                <Grid className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-xl ${
-                  viewMode === 'list'
-                    ? 'bg-sky-100 text-sky-600'
-                    : 'text-slate-400 hover:bg-slate-100'
-                }`}
-              >
-                <List className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
 
             {/* Documents */}
             {docsLoading ? (

@@ -13,15 +13,16 @@ services:
       - APP_ENV=development
       - SECRET_KEY=docker-dev-secret-key-change-in-prod
       - DEBUG=true
+      - SQL_ECHO=false
       - DATABASE_URL=sqlite:///./data/portal.db
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:80"]
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:8000/health >/dev/null || exit 1"]
       interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   frontend:

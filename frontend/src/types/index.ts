@@ -191,6 +191,11 @@ export interface Attachment {
   size_bytes?: number
   mime_type: string
   sha256?: string
+  preview_pdf_status?: 'pending' | 'processing' | 'ready' | 'failed' | null
+  preview_pdf_mime_type?: string | null
+  preview_pdf_size_bytes?: number | null
+  preview_pdf_sha256?: string | null
+  preview_pdf_error?: string | null
   reader_html_status?: 'pending' | 'processing' | 'ready' | 'failed' | null
   reader_toc_source?: 'outline' | 'heuristic' | 'none' | string | null
   uploaded_by: number

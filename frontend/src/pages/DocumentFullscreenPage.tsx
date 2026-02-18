@@ -350,7 +350,7 @@ export default function DocumentFullscreenPage() {
         )
         
         if (wordAttachment) {
-          const blob = await api.getAttachmentBlob(Number(id), wordAttachment.id)
+          const blob = await api.getAttachmentOriginalBlob(Number(id), wordAttachment.id)
           const arrayBuffer = await blob.arrayBuffer()
           const result = await mammoth.convertToHtml({ arrayBuffer })
           

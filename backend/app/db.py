@@ -11,7 +11,7 @@ from app.config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     connect_args={"check_same_thread": False},  # Needed for SQLite
-    echo=settings.DEBUG,
+    echo=settings.SQL_ECHO,
 )
 
 # Session factory
@@ -174,6 +174,13 @@ def _run_lightweight_migrations() -> None:
             "size_bytes": "ALTER TABLE attachments ADD COLUMN size_bytes INTEGER",
             "storage_key": "ALTER TABLE attachments ADD COLUMN storage_key VARCHAR(500)",
             "sha256": "ALTER TABLE attachments ADD COLUMN sha256 VARCHAR(64)",
+            "preview_pdf_status": "ALTER TABLE attachments ADD COLUMN preview_pdf_status VARCHAR(20)",
+            "preview_pdf_storage_key": "ALTER TABLE attachments ADD COLUMN preview_pdf_storage_key VARCHAR(500)",
+            "preview_pdf_mime_type": "ALTER TABLE attachments ADD COLUMN preview_pdf_mime_type VARCHAR(100)",
+            "preview_pdf_size_bytes": "ALTER TABLE attachments ADD COLUMN preview_pdf_size_bytes INTEGER",
+            "preview_pdf_sha256": "ALTER TABLE attachments ADD COLUMN preview_pdf_sha256 VARCHAR(64)",
+            "preview_pdf_error": "ALTER TABLE attachments ADD COLUMN preview_pdf_error TEXT",
+            "preview_pdf_generated_at": "ALTER TABLE attachments ADD COLUMN preview_pdf_generated_at DATETIME",
             "reader_html_status": "ALTER TABLE attachments ADD COLUMN reader_html_status VARCHAR(20)",
             "reader_html_content": "ALTER TABLE attachments ADD COLUMN reader_html_content TEXT",
             "reader_toc_json": "ALTER TABLE attachments ADD COLUMN reader_toc_json TEXT",
@@ -192,6 +199,24 @@ def _run_lightweight_migrations() -> None:
         )
         conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_attachments_sha256 ON attachments (sha256)")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_status "
+                "ON attachments (preview_pdf_status)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_storage_key "
+                "ON attachments (preview_pdf_storage_key)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_sha256 "
+                "ON attachments (preview_pdf_sha256)"
+            )
         )
         conn.execute(
             text(
@@ -218,6 +243,242 @@ def _run_lightweight_migrations() -> None:
                 SET storage_key = storage_path
                 WHERE storage_key IS NULL
                   AND storage_path IS NOT NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE attachments
+                SET preview_pdf_status = CASE
+                    WHEN LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%' THEN 'ready'
+                    WHEN preview_pdf_status IS NULL THEN 'pending'
+                    ELSE preview_pdf_status
+                END
+                WHERE preview_pdf_status IS NULL
+                   OR LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE attachments
+                SET preview_pdf_storage_key = storage_key
+                WHERE (preview_pdf_storage_key IS NULL OR TRIM(preview_pdf_storage_key) = '')
+                  AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
+                  AND storage_key IS NOT NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE attachments
+                SET preview_pdf_mime_type = 'application/pdf'
+                WHERE preview_pdf_mime_type IS NULL
+                  AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE attachments
+                SET preview_pdf_size_bytes = COALESCE(size_bytes, file_size)
+                WHERE preview_pdf_size_bytes IS NULL
+                  AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE attachments
+                SET preview_pdf_sha256 = sha256
+                WHERE preview_pdf_sha256 IS NULL
+                  AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
+                """
+            )
+        )
+
+        # Normalized artifacts table (source of truth for derived renditions/statuses).
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS attachment_artifacts (
+                    id INTEGER PRIMARY KEY,
+                    attachment_id INTEGER NOT NULL,
+                    kind VARCHAR(40) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    mime_type VARCHAR(100),
+                    storage_key VARCHAR(500),
+                    size_bytes INTEGER,
+                    sha256 VARCHAR(64),
+                    content_text TEXT,
+                    content_json TEXT,
+                    source VARCHAR(40),
+                    error TEXT,
+                    generated_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY(attachment_id) REFERENCES attachments(id),
+                    UNIQUE(attachment_id, kind)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_attachment_artifacts_attachment_id
+                ON attachment_artifacts (attachment_id)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_attachment_artifacts_kind
+                ON attachment_artifacts (kind)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_attachment_artifacts_status
+                ON attachment_artifacts (status)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO attachment_artifacts (
+                    attachment_id,
+                    kind,
+                    status,
+                    mime_type,
+                    storage_key,
+                    size_bytes,
+                    sha256,
+                    error,
+                    generated_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    a.id,
+                    'preview_pdf',
+                    COALESCE(a.preview_pdf_status,
+                        CASE
+                            WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN 'ready'
+                            ELSE 'pending'
+                        END
+                    ),
+                    COALESCE(a.preview_pdf_mime_type,
+                        CASE
+                            WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN 'application/pdf'
+                            ELSE NULL
+                        END
+                    ),
+                    COALESCE(a.preview_pdf_storage_key,
+                        CASE
+                            WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN COALESCE(a.storage_key, a.storage_path)
+                            ELSE NULL
+                        END
+                    ),
+                    COALESCE(a.preview_pdf_size_bytes, a.size_bytes, a.file_size),
+                    COALESCE(a.preview_pdf_sha256, a.sha256),
+                    a.preview_pdf_error,
+                    a.preview_pdf_generated_at,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                FROM attachments a
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM attachment_artifacts aa
+                    WHERE aa.attachment_id = a.id
+                      AND aa.kind = 'preview_pdf'
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO attachment_artifacts (
+                    attachment_id,
+                    kind,
+                    status,
+                    content_text,
+                    content_json,
+                    source,
+                    error,
+                    generated_at,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    a.id,
+                    'reader_html',
+                    COALESCE(a.reader_html_status, 'pending'),
+                    a.reader_html_content,
+                    a.reader_toc_json,
+                    a.reader_toc_source,
+                    a.reader_html_error,
+                    a.reader_html_generated_at,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                FROM attachments a
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM attachment_artifacts aa
+                    WHERE aa.attachment_id = a.id
+                      AND aa.kind = 'reader_html'
+                )
+                """
+            )
+        )
+
+        # Durable conversion jobs queue.
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS attachment_conversion_jobs (
+                    id INTEGER PRIMARY KEY,
+                    attachment_id INTEGER NOT NULL,
+                    job_type VARCHAR(40) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    force BOOLEAN NOT NULL DEFAULT 0,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    last_error TEXT,
+                    started_at DATETIME,
+                    finished_at DATETIME,
+                    next_run_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY(attachment_id) REFERENCES attachments(id),
+                    UNIQUE(attachment_id, job_type)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_attachment_conversion_jobs_status
+                ON attachment_conversion_jobs (status)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_attachment_conversion_jobs_next_run_at
+                ON attachment_conversion_jobs (next_run_at)
                 """
             )
         )

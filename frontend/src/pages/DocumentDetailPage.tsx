@@ -1,10 +1,11 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
 import type {
   Attachment,
   AttachmentOutlineItem,
@@ -29,7 +30,6 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
-import mammoth from 'mammoth'
 
 type TabType = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
 type PdfPreviewMode = 'original' | 'reader'
@@ -75,6 +75,15 @@ export default function DocumentDetailPage() {
     queryKey: ['attachments', id],
     queryFn: () => api.getAttachments(Number(id)),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const items = (query.state.data as Attachment[] | undefined) ?? []
+      const hasPendingPreview = items.some(
+        (attachment) =>
+          attachment.preview_pdf_status === 'pending' ||
+          attachment.preview_pdf_status === 'processing',
+      )
+      return hasPendingPreview ? 2500 : false
+    },
   })
   const attachments = useMemo(() => attachmentsData ?? [], [attachmentsData])
 
@@ -1036,6 +1045,7 @@ function DocumentPreview({
   const [readerError, setReaderError] = useState<string | null>(null)
   const [pdfPreviewMode, setPdfPreviewMode] = useState<PdfPreviewMode>('original')
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
+  const [pdfPreviewUnavailableError, setPdfPreviewUnavailableError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isReaderLoading, setIsReaderLoading] = useState(false)
@@ -1045,6 +1055,7 @@ function DocumentPreview({
   const [pdfOutlineLoading, setPdfOutlineLoading] = useState(false)
   const [pdfOutlineError, setPdfOutlineError] = useState<string | null>(null)
   const [pdfOutlinePage, setPdfOutlinePage] = useState<number | null>(null)
+  const [readerCurrentPage, setReaderCurrentPage] = useState<number | null>(null)
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ show: boolean; x: number; y: number; text: string }>({ show: false, x: 0, y: 0, text: '' })
@@ -1058,6 +1069,8 @@ function DocumentPreview({
   const [isPrivateComment, setIsPrivateComment] = useState(false)
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [handledContentEditToken, setHandledContentEditToken] = useState(0)
+  const previewPaneRef = useRef<HTMLDivElement | null>(null)
+  const readerSyncNeededRef = useRef(false)
   
   // Comment mutation
   const createCommentMutation = useMutation({
@@ -1146,10 +1159,19 @@ function DocumentPreview({
     const container = e.currentTarget
     const scrollTop = container.scrollTop
     const scrollHeight = container.scrollHeight - container.clientHeight
+    const containerRect = container.getBoundingClientRect()
     
     if (scrollHeight > 0) {
       const progress = Math.min(100, Math.round((scrollTop / scrollHeight) * 100))
       onScrollProgress?.(progress)
+    }
+
+    if (showingReaderView) {
+      const visiblePage = getVisibleReaderPage(container)
+      if (visiblePage && visiblePage !== readerCurrentPage) {
+        setReaderCurrentPage(visiblePage)
+        setPdfOutlinePage((previous) => (previous === visiblePage ? previous : visiblePage))
+      }
     }
     
     // Update active heading based on scroll position
@@ -1160,7 +1182,6 @@ function DocumentPreview({
     
     headings.forEach((heading) => {
       const rect = heading.getBoundingClientRect()
-      const containerRect = container.getBoundingClientRect()
       if (rect.top <= containerRect.top + 100) {
         currentActive = heading.id
       }
@@ -1171,16 +1192,9 @@ function DocumentPreview({
     }
   }
 
-  // Find previewable attachments (PDF, images, or Word docs)
+  // All attachments participate in preview-pdf pipeline.
   const previewableAttachments = useMemo(
-    () =>
-      attachments.filter(
-        (a) =>
-          a.mime_type.startsWith('application/pdf') ||
-          a.mime_type.startsWith('image/') ||
-          a.mime_type === 'application/msword' ||
-          a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      ),
+    () => attachments,
     [attachments],
   )
 
@@ -1190,14 +1204,29 @@ function DocumentPreview({
            att.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
 
-  const isPdfAttachment = (att: Attachment | null) => {
+  const hasPreviewPdf = (att: Attachment | null) => {
     if (!att) return false
+    if (att.preview_pdf_status === 'ready') return true
     return att.mime_type.startsWith('application/pdf')
   }
 
-  const isSelectedPdf = isPdfAttachment(selectedAttachment)
+  const isPreviewPending = (att: Attachment | null) => {
+    if (!att) return false
+    return att.preview_pdf_status === 'pending' || att.preview_pdf_status === 'processing'
+  }
+
+  const isPreviewFailed = (att: Attachment | null) => {
+    if (!att) return false
+    return att.preview_pdf_status === 'failed'
+  }
+
+  const isSelectedPdf = hasPreviewPdf(selectedAttachment)
   const showingReaderView = isSelectedPdf && pdfPreviewMode === 'reader'
+  const showingOriginalPdf = isSelectedPdf && pdfPreviewMode === 'original'
   const activeHtmlContent = showingReaderView ? readerHtmlContent : htmlContent
+  const shouldRenderHtmlPreview = showingReaderView
+    ? !!activeHtmlContent
+    : !isSelectedPdf && !!activeHtmlContent
 
   const mapOutlineItemsToSections = useCallback((items: AttachmentOutlineItem[] = []): TocSection[] => {
     return items
@@ -1216,6 +1245,85 @@ function DocumentPreview({
       })
       .filter((item) => item.text.trim().length > 0)
   }, [])
+
+  const parsePageFromAnchorId = useCallback((anchorId?: string | null): number | null => {
+    if (!anchorId) return null
+    const pdfPageMatch = anchorId.match(/^pdf-page-(\d+)$/i)
+    if (pdfPageMatch) {
+      const parsed = Number(pdfPageMatch[1])
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+    }
+    const readerPageMatch = anchorId.match(/^reader-p(\d+)-/i)
+    if (readerPageMatch) {
+      const parsed = Number(readerPageMatch[1])
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+    }
+    return null
+  }, [])
+
+  const resolveSectionPageStart = useCallback(
+    (item: TocSection): number | null => {
+      const explicitPage = Number(item.pageStart || 0)
+      if (Number.isFinite(explicitPage) && explicitPage > 0) {
+        return explicitPage
+      }
+      return parsePageFromAnchorId(item.anchorId)
+    },
+    [parsePageFromAnchorId],
+  )
+
+  const getVisibleReaderPage = useCallback((container: HTMLElement): number | null => {
+    const pageSections = Array.from(
+      container.querySelectorAll<HTMLElement>('section.pdf-reader-page[data-page]'),
+    )
+    if (pageSections.length === 0) {
+      return null
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const thresholdTop = containerRect.top + 110
+    let currentPage: number | null = null
+
+    pageSections.forEach((section) => {
+      const pageValue = Number(section.dataset.page || '')
+      if (!Number.isFinite(pageValue) || pageValue <= 0) return
+      const rect = section.getBoundingClientRect()
+      if (rect.top <= thresholdTop) {
+        currentPage = pageValue
+      } else if (currentPage === null) {
+        currentPage = pageValue
+      }
+    })
+
+    return currentPage
+  }, [])
+
+  const navigateReaderToSection = useCallback(
+    (item: TocSection, behavior: ScrollBehavior = 'smooth') => {
+      const anchorId = item.anchorId || `heading-${item.index}`
+      const pageStart = resolveSectionPageStart(item)
+      const pageAnchorId = pageStart ? `pdf-page-${pageStart}` : null
+      const targetElement =
+        document.getElementById(anchorId) ||
+        (pageAnchorId ? document.getElementById(pageAnchorId) : null)
+
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior, block: 'start' })
+      }
+
+      if (pageStart) {
+        setPdfOutlinePage(pageStart)
+        setReaderCurrentPage(pageStart)
+      }
+
+      if (targetElement?.id) {
+        setActiveHeading(targetElement.id)
+      } else if (anchorId) {
+        setActiveHeading(anchorId)
+      }
+    },
+    [resolveSectionPageStart],
+  )
 
   const isSyntheticUploadPlaceholder = (content?: string | null) => {
     if (!content) return false
@@ -1398,14 +1506,25 @@ function DocumentPreview({
   useEffect(() => {
     if (previewableAttachments.length === 0 || selectedAttachment) return
     const preferred =
+      previewableAttachments.find((att) => att.preview_pdf_status === 'ready') ||
       previewableAttachments.find((att) => att.mime_type.startsWith('application/pdf')) ||
       previewableAttachments[0]
     setSelectedAttachment(preferred)
   }, [previewableAttachments, selectedAttachment])
 
   useEffect(() => {
+    if (!selectedAttachment) return
+    const refreshed = previewableAttachments.find((att) => att.id === selectedAttachment.id)
+    if (refreshed && refreshed !== selectedAttachment) {
+      setSelectedAttachment(refreshed)
+    }
+  }, [previewableAttachments, selectedAttachment])
+
+  useEffect(() => {
     if (!isSelectedPdf) {
+      readerSyncNeededRef.current = false
       setPdfPreviewMode('original')
+      setPdfPreviewUnavailableError(null)
       setReaderStatus(null)
       setReaderHtmlContent(null)
       setReaderError(null)
@@ -1415,16 +1534,22 @@ function DocumentPreview({
       setPdfOutlineLoading(false)
       setPdfOutlineError(null)
       setPdfOutlinePage(null)
+      setReaderCurrentPage(null)
+      setActiveHeading(null)
       return
     }
 
+    readerSyncNeededRef.current = false
     setPdfPreviewMode('original')
+    setPdfPreviewUnavailableError(null)
     setReaderStatus(selectedAttachment?.reader_html_status ?? null)
     setReaderHtmlContent(null)
     setReaderError(null)
     setIsReaderLoading(false)
     setReaderReloadToken(0)
     setPdfOutlinePage(null)
+    setReaderCurrentPage(null)
+    setActiveHeading(null)
   }, [isSelectedPdf, selectedAttachment?.id, selectedAttachment?.reader_html_status])
 
   // State to track if we have inline content (no attachment needed)
@@ -1477,28 +1602,50 @@ function DocumentPreview({
       setError(null)
       
       try {
-        if (!selectedAttachment) {
-          const defaultPdfAttachment = previewableAttachments.find(
-            (att) => att.mime_type.startsWith('application/pdf')
-          )
-          if (defaultPdfAttachment) {
-            setSelectedAttachment(defaultPdfAttachment)
+        if (previewableAttachments.length > 0) {
+          if (!selectedAttachment) {
+            const preferredAttachment =
+              previewableAttachments.find((att) => att.preview_pdf_status === 'ready') ||
+              previewableAttachments.find((att) => att.mime_type.startsWith('application/pdf')) ||
+              previewableAttachments[0]
+            if (preferredAttachment) {
+              setSelectedAttachment(preferredAttachment)
+              setIsLoading(false)
+              return
+            }
+          }
+
+          if (selectedAttachment && hasPreviewPdf(selectedAttachment)) {
             setHasInlineContent(false)
             setHtmlContent(null)
             setSections([])
-            setPreviewUrl(api.getAttachmentPreviewUrl(documentId, defaultPdfAttachment.id))
+            setPreviewUrl(api.getAttachmentPreviewUrl(documentId, selectedAttachment.id))
             setIsLoading(false)
             return
           }
-        }
 
-        if (selectedAttachment && isPdfAttachment(selectedAttachment)) {
-          setHasInlineContent(false)
-          setHtmlContent(null)
-          setSections([])
-          setPreviewUrl(api.getAttachmentPreviewUrl(documentId, selectedAttachment.id))
-          setIsLoading(false)
-          return
+          if (selectedAttachment && isPreviewPending(selectedAttachment)) {
+            setHasInlineContent(false)
+            setPreviewUrl(null)
+            setHtmlContent(null)
+            setSections([])
+            setError(null)
+            setIsLoading(false)
+            return
+          }
+
+          if (selectedAttachment && isPreviewFailed(selectedAttachment)) {
+            setHasInlineContent(false)
+            setPreviewUrl(null)
+            setHtmlContent(null)
+            setSections([])
+            setError(
+              selectedAttachment.preview_pdf_error ||
+                'Preview PDF generation failed for this attachment.',
+            )
+            setIsLoading(false)
+            return
+          }
         }
 
         // First, check if there's version content (published preferred, else latest draft)
@@ -1543,7 +1690,7 @@ function DocumentPreview({
 
         const versionContent = getUsableVersionContent(versionToShow?.content)
         if (versionContent) {
-          // Render reader preview directly from version content when no PDF is selected.
+          // Created-in-app document fallback: no attachments available.
           const processedHtml = processHtmlWithSections(versionContent)
           setHtmlContent(processedHtml)
           setPreviewUrl(null)
@@ -1552,39 +1699,11 @@ function DocumentPreview({
           return
         }
         
-        // No published version, fall back to attachment-based preview
+        // No inline content and no ready preview artifact.
         setHasInlineContent(false)
-        
-        if (!selectedAttachment) {
-          setPreviewUrl(null)
-          setHtmlContent(null)
-          setSections([])
-          setIsLoading(false)
-          return
-        }
-        const attachment = selectedAttachment
-        
-        // No published version found, try to load from attachment
-        if (isWordDoc(attachment)) {
-          // Convert Word doc to HTML using mammoth (fallback if no version)
-          const blob = await api.getAttachmentBlob(documentId, attachment.id)
-          const arrayBuffer = await blob.arrayBuffer()
-          const result = await mammoth.convertToHtml({ arrayBuffer })
-          const processedHtml = processHtmlWithSections(result.value)
-          setHtmlContent(processedHtml)
-          setPreviewUrl(null)
-        } else if (isPdfAttachment(attachment)) {
-          // Always stream original PDF bytes from the preview endpoint.
-          setPreviewUrl(api.getAttachmentPreviewUrl(documentId, attachment.id))
-          setHtmlContent(null)
-        } else {
-          // For images and other files, create object URL for display
-          const blob = await api.getAttachmentBlob(documentId, attachment.id)
-          const url = URL.createObjectURL(blob)
-          setPreviewUrl(url)
-          setHtmlContent(null)
-          setSections([])
-        }
+        setPreviewUrl(null)
+        setHtmlContent(null)
+        setSections([])
       } catch (e) {
         console.error('Preview load error:', e)
         setError('Failed to load preview')
@@ -1604,6 +1723,12 @@ function DocumentPreview({
       }
     }
   }, [documentId, previewableAttachments, processHtmlWithSections, selectedAttachment])
+
+  useEffect(() => {
+    if (!showingOriginalPdf || !previewUrl || !selectedAttachment) {
+      setPdfPreviewUnavailableError(null)
+    }
+  }, [previewUrl, selectedAttachment, showingOriginalPdf])
 
   useEffect(() => {
     if (!showingReaderView || !selectedAttachment) return
@@ -1727,6 +1852,52 @@ function DocumentPreview({
     showingReaderView && sections.length === 0 ? pdfOutlineSections : sections
 
   useEffect(() => {
+    if (!showingReaderView || !activeHtmlContent) return
+    if (!readerSyncNeededRef.current) return
+
+    readerSyncNeededRef.current = false
+    const pageFromActiveHeading = parsePageFromAnchorId(activeHeading)
+    const fallbackTocPage =
+      tocSectionsForHtml.length > 0 ? resolveSectionPageStart(tocSectionsForHtml[0]) : null
+    const targetPage = pdfOutlinePage || pageFromActiveHeading || fallbackTocPage || null
+    const targetAnchorId = activeHeading || (targetPage ? `pdf-page-${targetPage}` : null)
+
+    const rafId = window.requestAnimationFrame(() => {
+      const pane = previewPaneRef.current
+      const targetElement =
+        (targetAnchorId ? document.getElementById(targetAnchorId) : null) ||
+        (targetPage ? document.getElementById(`pdf-page-${targetPage}`) : null)
+
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'auto', block: 'start' })
+        if (targetElement.id) {
+          setActiveHeading(targetElement.id)
+        }
+      }
+
+      const visiblePage = pane ? getVisibleReaderPage(pane) : null
+      const resolvedPage = targetPage || visiblePage
+      if (resolvedPage) {
+        setReaderCurrentPage(resolvedPage)
+        setPdfOutlinePage((previous) => (previous === resolvedPage ? previous : resolvedPage))
+      }
+    })
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  }, [
+    activeHeading,
+    activeHtmlContent,
+    getVisibleReaderPage,
+    parsePageFromAnchorId,
+    pdfOutlinePage,
+    resolveSectionPageStart,
+    showingReaderView,
+    tocSectionsForHtml,
+  ])
+
+  useEffect(() => {
     if (!contentEditRequestToken || contentEditRequestToken === handledContentEditToken) {
       return
     }
@@ -1758,6 +1929,60 @@ function DocumentPreview({
     showingReaderView,
     tocSectionsForHtml,
   ])
+
+  const handleSwitchToOriginalPdf = useCallback(() => {
+    readerSyncNeededRef.current = false
+    setPdfPreviewMode('original')
+  }, [])
+
+  const handleSwitchToReaderView = useCallback(() => {
+    readerSyncNeededRef.current = true
+    const fallbackPage =
+      pdfOutlinePage ||
+      readerCurrentPage ||
+      parsePageFromAnchorId(activeHeading) ||
+      (pdfOutlineSections.length > 0 ? resolveSectionPageStart(pdfOutlineSections[0]) : null)
+
+    if (fallbackPage) {
+      setPdfOutlinePage(fallbackPage)
+      setReaderCurrentPage(fallbackPage)
+      if (!activeHeading) {
+        setActiveHeading(`pdf-page-${fallbackPage}`)
+      }
+    }
+    setPdfPreviewMode('reader')
+  }, [
+    activeHeading,
+    parsePageFromAnchorId,
+    pdfOutlinePage,
+    pdfOutlineSections,
+    readerCurrentPage,
+    resolveSectionPageStart,
+  ])
+
+  const handleReaderTocClick = useCallback(
+    (item: TocSection) => {
+      navigateReaderToSection(item, 'smooth')
+    },
+    [navigateReaderToSection],
+  )
+
+  const handlePdfTocClick = useCallback(
+    (item: TocSection) => {
+      const pageStart = resolveSectionPageStart(item)
+      const anchorId = item.anchorId || (pageStart ? `pdf-page-${pageStart}` : `heading-${item.index}`)
+      if (pageStart) {
+        setPdfOutlinePage(pageStart)
+        setReaderCurrentPage(pageStart)
+      }
+      setActiveHeading(anchorId)
+    },
+    [resolveSectionPageStart],
+  )
+
+  const handlePdfIframeError = useCallback(() => {
+    setPdfPreviewUnavailableError('PDF preview unavailable. Please download original.')
+  }, [])
 
   // Show content if we have inline content OR attachments
   if (attachments.length === 0 && !hasInlineContent && !activeHtmlContent) {
@@ -1816,7 +2041,32 @@ function DocumentPreview({
 
   const documentPaperClass =
     widthMode === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'
-  const pdfPreviewSrc = previewUrl && pdfOutlinePage ? `${previewUrl}#page=${pdfOutlinePage}` : previewUrl
+  const effectivePdfPage = pdfOutlinePage || readerCurrentPage
+  const pdfPreviewSrc = previewUrl && effectivePdfPage ? `${previewUrl}#page=${effectivePdfPage}` : previewUrl
+  const pdfTocItems: PdfTocItem[] = pdfOutlineSections
+    .map((item) => {
+      const pageStart = resolveSectionPageStart(item)
+      if (!pageStart) return null
+      return {
+        id: item.id,
+        title: item.text,
+        level: Math.max(1, item.level || 1),
+        pageStart,
+      }
+    })
+    .filter((item): item is PdfTocItem => item !== null)
+
+  const handlePdfPreviewPanelSelect = (item: PdfTocItem) => {
+    const matched = pdfOutlineSections.find((section) => section.id === item.id)
+    if (matched) {
+      handlePdfTocClick(matched)
+      return
+    }
+
+    setPdfOutlinePage(item.pageStart)
+    setReaderCurrentPage(item.pageStart)
+    setActiveHeading(`pdf-page-${item.pageStart}`)
+  }
 
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
@@ -1846,7 +2096,7 @@ function DocumentPreview({
               <div className="inline-flex rounded-xl border border-slate-300 bg-white p-1">
                 <button
                   type="button"
-                  onClick={() => setPdfPreviewMode('original')}
+                  onClick={handleSwitchToOriginalPdf}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                     pdfPreviewMode === 'original'
                       ? 'bg-sky-600 text-white shadow-sm'
@@ -1857,7 +2107,7 @@ function DocumentPreview({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPdfPreviewMode('reader')}
+                  onClick={handleSwitchToReaderView}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                     pdfPreviewMode === 'reader'
                       ? 'bg-sky-600 text-white shadow-sm'
@@ -1907,11 +2157,11 @@ function DocumentPreview({
               )}
             </div>
           </div>
-        ) : activeHtmlContent ? (
+        ) : shouldRenderHtmlPreview ? (
           // Word document rendered as HTML (read-only) with TOC sidebar
           <div className="flex h-[70vh]">
             {/* Table of Contents Sidebar */}
-            <div className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-64'} flex-shrink-0`}>
+            <div className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${tocCollapsed ? 'w-10' : 'w-56'} flex-shrink-0`}>
               <div className="sticky top-0">
                 {/* TOC Header */}
                 <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-white">
@@ -1941,44 +2191,44 @@ function DocumentPreview({
                       <p className="px-2 py-2 text-sm text-slate-500">No TOC available</p>
                     ) : (
                       <ul className="space-y-1">
-                        {tocSectionsForHtml.map((item) => (
-                          <li key={item.id} className="group">
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => {
-                                  const anchorId = item.anchorId || `heading-${item.index}`
-                                  const element = document.getElementById(anchorId)
-                                  if (element) {
-                                    element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                                    setActiveHeading(anchorId)
-                                  }
-                                }}
-                                className={`flex-1 text-left px-2 py-1.5 text-sm rounded-l transition-colors hover:bg-sky-50 hover:text-sky-700 ${
-                                  activeHeading === (item.anchorId || `heading-${item.index}`)
-                                    ? 'bg-sky-100 text-sky-700 font-medium'
-                                    : 'text-slate-600'
-                                }`}
-                                style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
-                              >
-                                <span className="flex items-center gap-2">
-                                  {item.level === 1 && <span className="text-sky-500">●</span>}
-                                  {item.level === 2 && <span className="text-slate-400">○</span>}
-                                  {item.level >= 3 && <span className="text-slate-300">-</span>}
-                                  <span className="truncate">{item.text}</span>
-                                </span>
-                              </button>
-                              {isEditor && !showingReaderView && (
+                        {tocSectionsForHtml.map((item) => {
+                          const anchorId = item.anchorId || `heading-${item.index}`
+                          const pageStart = resolveSectionPageStart(item)
+                          const isActiveItem =
+                            activeHeading === anchorId ||
+                            (!!pageStart && readerCurrentPage === pageStart)
+                          return (
+                            <li key={item.id} className="group">
+                              <div className="flex items-center gap-1">
                                 <button
-                                  onClick={() => setEditingSection(item)}
-                                  className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-sky-100 rounded text-sky-600 transition-opacity"
-                                  title="Edit section"
+                                  onClick={() => handleReaderTocClick(item)}
+                                  className={`flex-1 text-left px-2 py-1.5 text-sm rounded-l transition-colors hover:bg-sky-50 hover:text-sky-700 ${
+                                    isActiveItem
+                                      ? 'bg-sky-100 text-sky-700 font-medium'
+                                      : 'text-slate-600'
+                                  }`}
+                                  style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
                                 >
-                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span className="flex items-center gap-2">
+                                    {item.level === 1 && <span className="text-sky-500">●</span>}
+                                    {item.level === 2 && <span className="text-slate-400">○</span>}
+                                    {item.level >= 3 && <span className="text-slate-300">-</span>}
+                                    <span className="truncate">{item.text}</span>
+                                  </span>
                                 </button>
-                              )}
-                            </div>
-                          </li>
-                        ))}
+                                {isEditor && !showingReaderView && (
+                                  <button
+                                    onClick={() => setEditingSection(item)}
+                                    className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-sky-100 rounded text-sky-600 transition-opacity"
+                                    title="Edit section"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
                   </nav>
@@ -2011,6 +2261,11 @@ function DocumentPreview({
                       {tocSectionsForHtml.length} sections
                     </span>
                   )}
+                  {showingReaderView && readerCurrentPage && (
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded whitespace-nowrap">
+                      Page {readerCurrentPage}
+                    </span>
+                  )}
                   {isEditor && !showingReaderView ? (
                     <span className="text-xs bg-emerald-500/80 px-2 py-0.5 rounded whitespace-nowrap">Click section to edit</span>
                   ) : (
@@ -2022,12 +2277,16 @@ function DocumentPreview({
               </div>
               
               {/* Document content with text selection for inline comments */}
-              <div className="flex-1 relative overflow-auto document-preview-pane" onScroll={handleScroll}>
+              <div
+                ref={previewPaneRef}
+                className="flex-1 relative overflow-y-auto overflow-x-hidden document-preview-pane"
+                onScroll={handleScroll}
+              >
                 <div className={documentPaperClass}>
                   <div 
                     id="document-content-area"
                     className={`document-preview-content ${showingReaderView ? 'document-preview-content--reader' : ''}`}
-                    dangerouslySetInnerHTML={{ __html: activeHtmlContent }}
+                    dangerouslySetInnerHTML={{ __html: activeHtmlContent || '' }}
                     onMouseUp={handleMouseUp}
                   />
                 </div>
@@ -2160,60 +2419,46 @@ function DocumentPreview({
               </p>
             </div>
           </div>
-        ) : previewUrl && selectedAttachment?.mime_type.startsWith('application/pdf') ? (
-          <div className="flex h-[70vh]">
-            <aside className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col">
-              <div className="px-4 py-3 border-b border-slate-200 bg-white">
-                <h3 className="text-sm font-semibold text-slate-800">Contents</h3>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {pdfOutlineLoading ? (
-                  <div className="p-4 text-sm text-slate-500">Loading TOC...</div>
-                ) : pdfOutlineSections.length > 0 ? (
-                  <nav className="p-2 space-y-1">
-                    {pdfOutlineSections.map((item) => {
-                      const pageStart = item.pageStart || 1
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            setPdfOutlinePage(pageStart)
-                            setActiveHeading(item.anchorId || `pdf-page-${pageStart}`)
-                          }}
-                          className={`w-full text-left px-2 py-1.5 text-sm rounded hover:bg-sky-100 hover:text-sky-800 ${
-                            pdfOutlinePage === pageStart
-                              ? 'bg-sky-100 text-sky-800 font-medium'
-                              : 'text-slate-700'
-                          }`}
-                          style={{ paddingLeft: `${Math.max(0, item.level - 1) * 14 + 8}px` }}
-                        >
-                          <span className="truncate block">{item.text}</span>
-                        </button>
-                      )
-                    })}
-                  </nav>
-                ) : (
-                  <div className="p-4 text-sm text-slate-500">
-                    {pdfOutlineError || 'No TOC available'}
-                  </div>
-                )}
-              </div>
-            </aside>
-            <iframe
-              key={`${selectedAttachment.id}-${pdfOutlinePage || 'base'}`}
-              src={pdfPreviewSrc || undefined}
-              className="flex-1 h-full"
-              title="Document Preview"
-            />
+        ) : showingOriginalPdf && pdfPreviewUnavailableError ? (
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="text-center max-w-lg">
+              <div className="text-4xl mb-2">⚠️</div>
+              <p className="text-rose-700 font-medium mb-1">
+                PDF preview unavailable. Please download original.
+              </p>
+            </div>
           </div>
-        ) : previewUrl && selectedAttachment?.mime_type.startsWith('image/') ? (
-          <div className="p-4 flex items-center justify-center">
-            <img
-              src={previewUrl}
-              alt={selectedAttachment.filename}
-              className="max-w-full max-h-[600px] object-contain"
-            />
+        ) : showingOriginalPdf && previewUrl ? (
+          <PdfPreviewPanel
+            tocItems={pdfTocItems}
+            tocLoading={pdfOutlineLoading}
+            tocError={pdfOutlineError}
+            selectedPage={effectivePdfPage}
+            onSelectItem={handlePdfPreviewPanelSelect}
+            iframeSrc={pdfPreviewSrc}
+            iframeKey={`${selectedAttachment?.id || 'preview'}-${effectivePdfPage || 'base'}`}
+            iframeTitle="Document Preview"
+            onIframeError={handlePdfIframeError}
+          />
+        ) : selectedAttachment && isPreviewPending(selectedAttachment) ? (
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="text-center max-w-lg">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600 mx-auto mb-3"></div>
+              <p className="text-slate-700 font-medium mb-1">Generating PDF preview...</p>
+              <p className="text-sm text-slate-500">
+                The original file is preserved. Preview, TOC and Reader will appear once conversion finishes.
+              </p>
+            </div>
+          </div>
+        ) : selectedAttachment && isPreviewFailed(selectedAttachment) ? (
+          <div className="absolute inset-0 flex items-center justify-center px-6">
+            <div className="text-center max-w-lg">
+              <div className="text-4xl mb-2">⚠️</div>
+              <p className="text-rose-700 font-medium mb-1">Preview PDF generation failed</p>
+              <p className="text-sm text-rose-600">
+                {selectedAttachment.preview_pdf_error || 'Could not build a PDF preview for this attachment.'}
+              </p>
+            </div>
           </div>
         ) : null}
       </div>
@@ -2227,32 +2472,41 @@ function DocumentPreview({
               <span className="ml-2 text-xs text-sky-600">(Converted from Word)</span>
             )}
           </span>
-          <a
-            href={api.getAttachmentDownloadUrl(documentId, selectedAttachment.id)}
-            download
-            onClick={async (e) => {
-              e.preventDefault()
-              try {
-                const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                // Use document title for download filename, keeping original extension
-                const extension = selectedAttachment.filename.split('.').pop() || 'docx'
-                const downloadName = documentTitle ? `${documentTitle}.${extension}` : selectedAttachment.filename
-                a.download = downloadName
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
-                URL.revokeObjectURL(url)
-              } catch (err) {
-                console.error('Download failed:', err)
-              }
-            }}
-            className="btn-primary text-sm"
-          >
-            Download Original
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href={api.getAttachmentDownloadUrl(documentId, selectedAttachment.id)}
+              download
+              onClick={async (e) => {
+                e.preventDefault()
+                try {
+                  const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  const baseName = (documentTitle || selectedAttachment.filename || 'document').replace(
+                    /\.[^/.]+$/,
+                    '',
+                  )
+                  a.download = `${baseName}.pdf`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                } catch (err) {
+                  console.error('Download failed:', err)
+                }
+              }}
+              className="btn-primary text-sm"
+            >
+              Download PDF
+            </a>
+            <a
+              href={api.getAttachmentOriginalDownloadUrl(documentId, selectedAttachment.id)}
+              className="btn-secondary text-sm"
+            >
+              Download Original
+            </a>
+          </div>
         </div>
       )}
 

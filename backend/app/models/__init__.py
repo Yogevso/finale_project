@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
@@ -383,6 +384,13 @@ class Attachment(Base):
     storage_path = Column(String(500), nullable=False)  # S3 key or local path
     storage_key = Column(String(500), nullable=True, index=True)
     sha256 = Column(String(64), nullable=True, index=True)
+    preview_pdf_status = Column(String(20), nullable=True, index=True)
+    preview_pdf_storage_key = Column(String(500), nullable=True, index=True)
+    preview_pdf_mime_type = Column(String(100), nullable=True)
+    preview_pdf_size_bytes = Column(Integer, nullable=True)
+    preview_pdf_sha256 = Column(String(64), nullable=True, index=True)
+    preview_pdf_error = Column(Text, nullable=True)
+    preview_pdf_generated_at = Column(DateTime, nullable=True)
     reader_html_status = Column(String(20), nullable=True, index=True)
     reader_html_content = Column(Text, nullable=True)
     reader_toc_json = Column(Text, nullable=True)
@@ -395,6 +403,66 @@ class Attachment(Base):
     # Relationships
     document = relationship("Document", back_populates="attachments")
     uploaded_by_user = relationship("User")
+    artifacts = relationship(
+        "AttachmentArtifact", back_populates="attachment", cascade="all, delete-orphan"
+    )
+    conversion_jobs = relationship(
+        "AttachmentConversionJob", back_populates="attachment", cascade="all, delete-orphan"
+    )
+
+
+class AttachmentArtifact(Base):
+    """Derived artifact metadata and payload references per attachment."""
+
+    __tablename__ = "attachment_artifacts"
+    __table_args__ = (
+        UniqueConstraint("attachment_id", "kind", name="uq_attachment_artifacts_attachment_kind"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    attachment_id = Column(Integer, ForeignKey("attachments.id"), nullable=False, index=True)
+    kind = Column(String(40), nullable=False, index=True)  # e.g. preview_pdf, reader_html
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    mime_type = Column(String(100), nullable=True)
+    storage_key = Column(String(500), nullable=True, index=True)
+    size_bytes = Column(Integer, nullable=True)
+    sha256 = Column(String(64), nullable=True, index=True)
+    content_text = Column(Text, nullable=True)  # reader_html payload
+    content_json = Column(Text, nullable=True)  # reader_toc_json payload
+    source = Column(String(40), nullable=True)  # bookmarks / contents-fallback / etc.
+    error = Column(Text, nullable=True)
+    generated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    attachment = relationship("Attachment", back_populates="artifacts")
+
+
+class AttachmentConversionJob(Base):
+    """Durable async job queue row for conversion pipeline."""
+
+    __tablename__ = "attachment_conversion_jobs"
+    __table_args__ = (
+        UniqueConstraint("attachment_id", "job_type", name="uq_attachment_conversion_job"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    attachment_id = Column(Integer, ForeignKey("attachments.id"), nullable=False, index=True)
+    job_type = Column(String(40), nullable=False, index=True)  # preview_pdf
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    force = Column(Boolean, default=False, nullable=False)
+    attempts = Column(Integer, default=0, nullable=False)
+    max_attempts = Column(Integer, default=3, nullable=False)
+    last_error = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    next_run_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    attachment = relationship("Attachment", back_populates="conversion_jobs")
 
 
 class Comment(Base):
@@ -710,6 +778,8 @@ __all__ = [
     "Version",
     "Section",
     "Attachment",
+    "AttachmentArtifact",
+    "AttachmentConversionJob",
     "Comment",
     "AuditLog",
     "Notification",

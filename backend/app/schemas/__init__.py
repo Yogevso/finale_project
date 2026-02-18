@@ -253,6 +253,11 @@ class AttachmentResponse(BaseModel):
     size_bytes: Optional[int] = None
     mime_type: str
     sha256: Optional[str] = None
+    preview_pdf_status: Optional[str] = None
+    preview_pdf_mime_type: Optional[str] = None
+    preview_pdf_size_bytes: Optional[int] = None
+    preview_pdf_sha256: Optional[str] = None
+    preview_pdf_error: Optional[str] = None
     reader_html_status: Optional[str] = None
     reader_toc_source: Optional[str] = None
     uploaded_by: int

@@ -30,11 +30,11 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Zip B Style Header */}
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+      {/* Intel-like Header */}
       {!isFullscreen && (
-      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
-        <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
           <div className="flex items-center justify-between">
             <Link to="/portal/dashboard" className="flex items-center gap-3">
@@ -42,8 +42,8 @@ export default function CustomerLayout() {
                 DP
               </div>
               <div>
-                <div className="text-sm text-slate-500">Customer</div>
-                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Documentation Platform</div>
+                <div className="text-xs uppercase tracking-widest text-slate-500">Customer Portal</div>
+                <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </Link>
             
@@ -69,8 +69,8 @@ export default function CustomerLayout() {
                 className={({ isActive }) =>
                   `px-4 py-2 rounded-full transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-white text-sky-800 font-semibold border border-sky-200'
+                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
                   }`
                 }
               >
@@ -88,7 +88,7 @@ export default function CustomerLayout() {
               <input
                 type="search"
                 placeholder="Search documents..."
-                className="input-field pl-9 w-64"
+                className="input-field pl-9 w-64 bg-white"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const query = (e.target as HTMLInputElement).value
@@ -103,7 +103,7 @@ export default function CustomerLayout() {
             {/* User info */}
             <div className="flex items-center gap-2 text-sm">
               <span className="text-slate-500">{user?.full_name || user?.email}</span>
-              <span className="pill">Customer</span>
+              <span className="pill bg-white border-sky-200">Customer</span>
             </div>
             
             <button onClick={handleLogout} className="btn-ghost">
@@ -114,8 +114,8 @@ export default function CustomerLayout() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white">
-            <div className="container mx-auto px-4 py-4 space-y-2">
+          <div className="md:hidden border-t border-sky-200 bg-sky-50/90">
+            <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navigation.map((item) => (
                 <NavLink
                   key={item.href}
@@ -123,8 +123,8 @@ export default function CustomerLayout() {
                   className={({ isActive }) =>
                     `flex items-center px-4 py-2 rounded-xl transition-colors ${
                       isActive
-                        ? 'bg-sky-100 text-sky-800 font-medium'
-                        : 'text-slate-600 hover:bg-slate-100'
+                        ? 'bg-white text-sky-800 font-semibold'
+                        : 'text-slate-600 hover:bg-white'
                     }`
                   }
                   onClick={() => setMobileMenuOpen(false)}
@@ -165,16 +165,16 @@ export default function CustomerLayout() {
 
       {/* Main Content */}
       <main className="flex-1">
-        <div className="container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-8">
           <Outlet />
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white/80 backdrop-blur">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-slate-500">
+      <footer className="border-t border-slate-200 bg-white/85 backdrop-blur">
+        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
           <p>Customer Portal</p>
-          <p className="text-xs mt-1">© {new Date().getFullYear()} DocPortal. All rights reserved.</p>
+          <p className="text-xs mt-1">© {new Date().getFullYear()} Developer Portal</p>
         </div>
       </footer>
     </div>

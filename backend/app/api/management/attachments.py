@@ -118,6 +118,34 @@ def _stream_original_attachment(
     )
 
 
+def _stream_preview_pdf(
+    db: Session,
+    document_id: int,
+    attachment_id: int,
+    current_user: User,
+    *,
+    inline: bool = True,
+) -> StreamingResponse:
+    attachment, content_stream, media_type, content_length = AttachmentService.open_preview_stream(
+        db, document_id, attachment_id, current_user
+    )
+    original_name = attachment.original_filename or attachment.filename or "preview"
+    if "." in original_name:
+        base_name = original_name.rsplit(".", 1)[0]
+    else:
+        base_name = original_name
+    preview_filename = f"{base_name}.pdf"
+
+    headers = {
+        "Content-Disposition": _build_content_disposition(preview_filename, inline=inline),
+        "Content-Length": str(content_length),
+    }
+    if attachment.preview_pdf_sha256:
+        headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256
+
+    return StreamingResponse(content=content_stream, media_type=media_type, headers=headers)
+
+
 @router.get("/documents/{document_id}/attachments", response_model=List[AttachmentResponse])
 def list_attachments(
     document_id: int,
@@ -153,9 +181,9 @@ def download_attachment(
     current_user: User = Depends(_get_current_active_user_or_token),
 ):
     """
-    Download an attachment file.
+    Download preview PDF rendition for an attachment.
     """
-    return _stream_original_attachment(db, document_id, attachment_id, current_user, inline=False)
+    return _stream_preview_pdf(db, document_id, attachment_id, current_user, inline=False)
 
 
 @router.get("/documents/{document_id}/attachments/{attachment_id}/download-original")
@@ -179,9 +207,9 @@ def preview_attachment(
     current_user: User = Depends(_get_current_active_user_or_token),
 ):
     """
-    Stream the original bytes with inline content disposition for browser preview.
+    Stream preview PDF artifact bytes with inline content disposition.
     """
-    return _stream_original_attachment(db, document_id, attachment_id, current_user, inline=True)
+    return _stream_preview_pdf(db, document_id, attachment_id, current_user)
 
 
 @router.get(

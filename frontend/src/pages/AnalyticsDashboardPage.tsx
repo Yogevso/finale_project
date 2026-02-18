@@ -11,6 +11,7 @@ import {
   TenantSection,
 } from '@/components/analytics'
 import { useAuth } from '@/lib/auth'
+import PageHeader from '@/components/PageHeader'
 import type { TimeGranularity, AnalyticsQueryParams } from '@/types'
 
 type TabType = 'overview' | 'engagement' | 'users' | 'content' | 'feedback' | 'tenant'
@@ -100,21 +101,20 @@ export default function AnalyticsDashboardPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Analytics Dashboard</h1>
-          <p className="text-slate-500">Insights into your content and user engagement</p>
-        </div>
-        {activeTab !== 'tenant' && (
-          <ExportButton 
-            exportType={activeTab as 'overview' | 'engagement' | 'users' | 'content' | 'feedback'} 
-            startDate={startDate} 
-            endDate={endDate} 
-          />
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Analytics Dashboard"
+        subtitle="Insights into your content and user engagement"
+        actions={
+          activeTab !== 'tenant' ? (
+            <ExportButton
+              exportType={activeTab as 'overview' | 'engagement' | 'users' | 'content' | 'feedback'}
+              startDate={startDate}
+              endDate={endDate}
+            />
+          ) : undefined
+        }
+      />
 
       {/* Date Range Picker */}
       <DateRangePicker

@@ -1,36 +1,37 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import DocumentsPage from './pages/DocumentsPage'
-import DocumentDetailPage from './pages/DocumentDetailPage'
-import UsersPage from './pages/UsersPage'
-import CompaniesPage from './pages/CompaniesPage'
-import CompanyDetailPage from './pages/CompanyDetailPage'
-import ReviewsPage from './pages/ReviewsPage'
-import NotificationsPage from './pages/NotificationsPage'
-import FeedbackPage from './pages/admin/FeedbackPage'
-import SystemSetupPage from './pages/admin/SystemSetupPage'
-import AnalyticsDashboardPage from './pages/AnalyticsDashboardPage'
-import ViewerDocumentPage from './pages/viewer/ViewerDocumentPage'
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const DocumentsPage = lazy(() => import('./pages/DocumentsPage'))
+const DocumentDetailPage = lazy(() => import('./pages/DocumentDetailPage'))
+const UsersPage = lazy(() => import('./pages/UsersPage'))
+const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
+const CompanyDetailPage = lazy(() => import('./pages/CompanyDetailPage'))
+const ReviewsPage = lazy(() => import('./pages/ReviewsPage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
+const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
+const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
+const ViewerDocumentPage = lazy(() => import('./pages/viewer/ViewerDocumentPage'))
 // Public portal pages
 import PublicLayout from './layouts/PublicLayout'
-import PublicDocumentsPage from './pages/public/PublicDocumentsPage'
-import PublicPlatformsPage from './pages/public/PublicPlatformsPage'
-import PublicPlatformDetailPage from './pages/public/PublicPlatformDetailPage'
-import PublicDocumentPage from './pages/public/PublicDocumentPage'
-import PublicSearchPage from './pages/public/PublicSearchPage'
-import PublicToolsPage from './pages/public/PublicToolsPage'
-import PublicHelpPage from './pages/public/PublicHelpPage'
+const PublicDocumentsPage = lazy(() => import('./pages/public/PublicDocumentsPage'))
+const PublicPlatformsPage = lazy(() => import('./pages/public/PublicPlatformsPage'))
+const PublicPlatformDetailPage = lazy(() => import('./pages/public/PublicPlatformDetailPage'))
+const PublicDocumentPage = lazy(() => import('./pages/public/PublicDocumentPage'))
+const PublicSearchPage = lazy(() => import('./pages/public/PublicSearchPage'))
+const PublicToolsPage = lazy(() => import('./pages/public/PublicToolsPage'))
+const PublicHelpPage = lazy(() => import('./pages/public/PublicHelpPage'))
 // Customer portal pages
 import CustomerLayout from './layouts/CustomerLayout'
 import CustomerRoute from './components/guards/CustomerRoute'
-import CustomerDashboard from './pages/portal/CustomerDashboard'
-import CustomerDocumentsPage from './pages/portal/CustomerDocumentsPage'
-import CustomerDocumentPage from './pages/portal/CustomerDocumentPage'
-import MyFeedbackPage from './pages/portal/MyFeedbackPage'
+const CustomerDashboard = lazy(() => import('./pages/portal/CustomerDashboard'))
+const CustomerDocumentsPage = lazy(() => import('./pages/portal/CustomerDocumentsPage'))
+const CustomerDocumentPage = lazy(() => import('./pages/portal/CustomerDocumentPage'))
+const MyFeedbackPage = lazy(() => import('./pages/portal/MyFeedbackPage'))
 import AcceptInvitationPage from './pages/AcceptInvitationPage'
 // Route guards
 import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard } from './components/guards/RoleGuard'
@@ -74,10 +75,19 @@ function NotFoundPage() {
   )
 }
 
+function RouteLoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
+    </div>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
-      <Routes>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
         {/* ==================== PUBLIC PORTAL ==================== */}
         {/* No auth required - accessible to everyone */}
         <Route element={<PublicLayout />}>
@@ -243,7 +253,8 @@ function App() {
 
         {/* ==================== CATCH ALL ==================== */}
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </AuthProvider>
   )
 }

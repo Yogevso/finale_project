@@ -74,7 +74,7 @@ export default function DocumentEditor({
       setError(null)
 
       try {
-        const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
+        const blob = await api.getAttachmentOriginalBlob(documentId, selectedAttachment.id)
         
         if (
           selectedAttachment.mime_type === 'application/msword' ||

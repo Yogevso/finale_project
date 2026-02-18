@@ -4,7 +4,6 @@ import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import {
   Search,
-  Filter,
   Plus,
   User as UserIcon,
   Building2,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react'
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
+import PageHeader from '@/components/PageHeader'
 
 type UserCreateFormData = {
   email: string
@@ -142,38 +142,49 @@ export default function UsersPage() {
   }
 
   const roles: UserRole[] = ['system_admin', 'admin', 'manager', 'editor', 'viewer', 'customer']
+  const totalUsers = users?.length ?? 0
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-500 mt-1">Manage users in your organization</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowInviteDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700"
-          >
-            <Mail className="w-4 h-4" />
-            Invite User
-          </button>
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add User
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="User Management"
+        subtitle="Manage users in your organization"
+        actions={
+          <>
+            <button
+              onClick={() => setShowInviteDialog(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700"
+            >
+              <Mail className="w-4 h-4" />
+              Invite User
+            </button>
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add User
+            </button>
+          </>
+        }
+      />
 
       {/* Filters */}
-      <div className="surface-card rounded-2xl p-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Search */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
+      <div className="admin-sticky-toolbar">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span className="admin-summary-badge">
+              {isLoading ? 'Loading...' : `${totalUsers} users`}
+            </span>
+            {pendingInvitations.length > 0 && (
+              <span className="pill bg-amber-50 border-amber-200 text-amber-700">
+                {pendingInvitations.length} pending invites
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 xl:items-center">
+            <div className="relative sm:col-span-2 xl:col-span-1 min-w-[220px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
@@ -183,15 +194,10 @@ export default function UsersPage() {
                 className="input-field pl-10"
               />
             </div>
-          </div>
-
-          {/* Role Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value as UserRole | '')}
-              className="select-field"
+              className="select-field min-w-[150px]"
             >
               <option value="">All Roles</option>
               {roles.map((role) => (
@@ -200,139 +206,139 @@ export default function UsersPage() {
                 </option>
               ))}
             </select>
+
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value ? Number(e.target.value) : '')}
+              className="select-field min-w-[150px]"
+            >
+              <option value="">All Companies</option>
+              {companies.map((company: Company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={statusFilter === '' ? '' : statusFilter ? 'active' : 'inactive'}
+              onChange={(e) => {
+                if (e.target.value === '') setStatusFilter('')
+                else setStatusFilter(e.target.value === 'active')
+              }}
+              className="select-field min-w-[150px]"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
           </div>
-
-          {/* Company Filter */}
-          <select
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value ? Number(e.target.value) : '')}
-            className="select-field"
-          >
-            <option value="">All Companies</option>
-            {companies.map((company: Company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter === '' ? '' : statusFilter ? 'active' : 'inactive'}
-            onChange={(e) => {
-              if (e.target.value === '') setStatusFilter('')
-              else setStatusFilter(e.target.value === 'active')
-            }}
-            className="select-field"
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
         </div>
       </div>
 
       {/* Users table */}
-      <div className="surface-card rounded-2xl overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">User</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Company</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {isLoading ? (
+      <div className="admin-table-shell">
+        <div className="admin-table-scroll">
+          <table className="admin-table">
+            <thead className="admin-table-head">
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                  Loading users...
-                </td>
+                <th>User</th>
+                <th>Role</th>
+                <th>Company</th>
+                <th>Status</th>
+                <th className="text-right">Actions</th>
               </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-rose-500">
-                  Failed to load users
-                </td>
-              </tr>
-            ) : users?.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                  No users found
-                </td>
-              </tr>
-            ) : (
-              users?.map((user: User) => (
-                <tr key={user.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
-                        <UserIcon className="w-4 h-4 text-sky-600" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-slate-900">{user.full_name}</div>
-                        <div className="text-sm text-slate-500">{user.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`pill capitalize ${getRoleBadgeColor(user.role)}`}>
-                      {user.role.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {user.company_name ? (
-                      <div className="flex items-center gap-1 text-sm text-slate-600">
-                        <Building2 className="w-3 h-3" />
-                        {user.company_name}
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 text-sm">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`pill ${
-                      user.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                    }`}>
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setEditingUser(user)}
-                        className="p-1 text-slate-500 hover:text-sky-600"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {user.id !== currentUser?.id && (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Deactivate user ${user.full_name}?`)) {
-                              deleteMutation.mutate(user.id)
-                            }
-                          }}
-                          className="p-1 text-slate-500 hover:text-rose-600"
-                          title="Deactivate"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr className="admin-table-row">
+                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
+                    Loading users...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : error ? (
+                <tr className="admin-table-row">
+                  <td colSpan={5} className="px-5 py-10 text-center text-rose-500">
+                    Failed to load users
+                  </td>
+                </tr>
+              ) : users?.length === 0 ? (
+                <tr className="admin-table-row">
+                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
+                    No users found
+                  </td>
+                </tr>
+              ) : (
+                users?.map((user: User) => (
+                  <tr key={user.id} className="admin-table-row">
+                    <td className="admin-table-cell">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
+                          <UserIcon className="w-4 h-4 text-sky-600" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-slate-900">{user.full_name}</div>
+                          <div className="text-xs text-slate-500">{user.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="admin-table-cell">
+                      <span className={`pill capitalize ${getRoleBadgeColor(user.role)}`}>
+                        {user.role.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="admin-table-cell">
+                      {user.company_name ? (
+                        <div className="flex items-center gap-1 text-sm text-slate-600">
+                          <Building2 className="w-3 h-3" />
+                          {user.company_name}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="admin-table-cell">
+                      <span className={`pill ${
+                        user.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                      }`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="admin-table-cell text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditingUser(user)}
+                          className="admin-icon-action"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        {user.id !== currentUser?.id && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Deactivate user ${user.full_name}?`)) {
+                                deleteMutation.mutate(user.id)
+                              }
+                            }}
+                            className="admin-icon-action-danger"
+                            title="Deactivate"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Pending Invitations */}
       {pendingInvitations.length > 0 && (
-        <div className="surface-card rounded-2xl overflow-hidden">
+        <div className="admin-table-shell">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-600" />
@@ -342,77 +348,79 @@ export default function UsersPage() {
               </span>
             </div>
           </div>
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Company</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Invited By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Expires</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {pendingInvitations.map((invitation: Invitation) => (
-                <tr key={invitation.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-slate-400" />
-                      <span className="text-slate-900">{invitation.email}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`pill capitalize ${getRoleBadgeColor(invitation.role)}`}>
-                      {invitation.role.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    {invitation.tenant_name ? (
-                      <div className="flex items-center gap-1 text-sm text-slate-600">
-                        <Building2 className="w-3 h-3" />
-                        {invitation.tenant_name}
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 text-sm">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
-                    {invitation.inviter_name || '-'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-slate-500">
-                      {new Date(invitation.expires_at).toLocaleDateString()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => resendInvitationMutation.mutate(invitation.id)}
-                        disabled={resendInvitationMutation.isPending}
-                        className="p-1 text-slate-500 hover:text-sky-600"
-                        title="Resend Invitation"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Cancel invitation for ${invitation.email}?`)) {
-                            cancelInvitationMutation.mutate(invitation.id)
-                          }
-                        }}
-                        disabled={cancelInvitationMutation.isPending}
-                        className="p-1 text-slate-500 hover:text-rose-600"
-                        title="Cancel Invitation"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+          <div className="admin-table-scroll">
+            <table className="admin-table">
+              <thead className="admin-table-head">
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Company</th>
+                  <th>Invited By</th>
+                  <th>Expires</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pendingInvitations.map((invitation: Invitation) => (
+                  <tr key={invitation.id} className="admin-table-row">
+                    <td className="admin-table-cell">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-slate-400" />
+                        <span className="text-slate-900">{invitation.email}</span>
+                      </div>
+                    </td>
+                    <td className="admin-table-cell">
+                      <span className={`pill capitalize ${getRoleBadgeColor(invitation.role)}`}>
+                        {invitation.role.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="admin-table-cell">
+                      {invitation.tenant_name ? (
+                        <div className="flex items-center gap-1 text-sm text-slate-600">
+                          <Building2 className="w-3 h-3" />
+                          {invitation.tenant_name}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="admin-table-cell text-sm text-slate-600">
+                      {invitation.inviter_name || '-'}
+                    </td>
+                    <td className="admin-table-cell">
+                      <span className="text-sm text-slate-500">
+                        {new Date(invitation.expires_at).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="admin-table-cell text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => resendInvitationMutation.mutate(invitation.id)}
+                          disabled={resendInvitationMutation.isPending}
+                          className="admin-icon-action"
+                          title="Resend Invitation"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Cancel invitation for ${invitation.email}?`)) {
+                              cancelInvitationMutation.mutate(invitation.id)
+                            }
+                          }}
+                          disabled={cancelInvitationMutation.isPending}
+                          className="admin-icon-action-danger"
+                          title="Cancel Invitation"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

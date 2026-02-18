@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { portalApi } from '../../lib/portalApi'
+import PageHeader from '@/components/PageHeader'
 import {
   FileText,
   MessageSquare,
@@ -36,15 +37,11 @@ export default function CustomerDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome header */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-display font-bold">
-          Welcome back, {user?.full_name || 'Customer'}!
-        </h1>
-        <p className="mt-1 text-slate-300">
-          Access your documents and resources from your personalized portal.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Customer Portal"
+        title={`Welcome back, ${user?.full_name || 'Customer'}!`}
+        subtitle="Access your documents and resources from your personalized portal."
+      />
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
