@@ -1,12 +1,5 @@
-# Testing dependencies
-pytest==7.4.4
-pytest-cov==4.1.0
-httpx==0.26.0
+# Testing dependencies (versions should match requirements.txt)
 faker==22.0.0
-
-# Linting & formatting
-ruff>=0.14.0
-mypy==1.8.0
 
 # Type stubs
 types-passlib==1.7.7.20240106
