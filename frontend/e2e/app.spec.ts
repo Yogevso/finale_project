@@ -154,9 +154,8 @@ test.describe('Documents CRUD', () => {
   });
 
   test('should display documents list', async ({ page }) => {
-    const hasTable = (await page.locator('table').count()) > 0;
-    const hasEmptyState = (await page.getByText(/no documents found/i).count()) > 0;
-    expect(hasTable || hasEmptyState).toBeTruthy();
+    // Wait for the table to be visible (it's always rendered on /documents)
+    await expect(page.locator('table')).toBeVisible({ timeout: 15000 });
   });
 
   test('should create new document', async ({ page }) => {
