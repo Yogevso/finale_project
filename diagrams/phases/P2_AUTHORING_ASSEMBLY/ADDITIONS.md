@@ -4,17 +4,17 @@
 
 | Priority | Addition | Why it matters | Suggested implementation |
 |---|---|---|---|
-| High | Content schema validation engine | Prevents malformed document payloads | Validate body/metadata against versioned JSON schema before persist |
-| High | Attachment malware scanning | Reduces security risk from uploads | Asynchronous scan pipeline with quarantine and verdict status |
-| High | Atomic document+version write transactions | Avoids partial state writes | Ensure create/update operations commit document and version as one unit |
-| Medium | Auto-save draft checkpoints | Minimizes authoring data loss | Save periodic draft checkpoints separate from semantic versions |
-| Medium | Rich diff and change summary generation | Improves review quality | Generate diff metadata per version transition |
-| Medium | Comment policy matrix by role | Clarifies visibility and moderation | Explicit rules for who can view/edit/resolve by role and ownership |
-| Low | Content quality linting | Catches style or structure issues early | Add lint hooks for title completeness, taxonomy coverage, dead links |
-| Low | PII/secret scanner for content and attachments | Compliance and safety | Pre-publish scans with remediation workflow |
+| High | Add tenant/document access guards to versions, attachments, and comments services | Several endpoints rely on auth/role checks without consistent tenant visibility enforcement | Reuse a shared document-access validator in all service entry points |
+| High | Standardize attachment delete policy | Current delete path is admin-only while other authoring mutations allow manager/system-admin | Align with explicit policy and enforce consistently in dependency + service layers |
+| High | Transactional import flow for `/documents/upload` with release-note child doc | Multi-step write can leave partial state on failures outside main attachment try block | Wrap document + attachment + optional child creation in atomic transaction/outbox |
+| High | Content schema validation for version content payloads | Arbitrary content structure can be persisted | Validate against versioned schema before create/update |
+| Medium | Attachment malware and secret scanning pipeline | Current validation checks type/size only | Asynchronous scan with quarantine status before download eligibility |
+| Medium | Comment authorization model hardening | Contributor-based visibility can be broader than intended | Move to explicit document access + role policy matrix |
+| Medium | Reader-view processing observability and retries | Async generation can fail without centralized operations view | Add job status metrics, retries, and dead-letter handling |
+| Low | Rich diff generation between versions | Improves downstream review quality | Persist semantic diff metadata per version transition |
 
 ## Coverage Notes
 
-1. Existing phase diagrams model core authoring endpoints and guards.
-2. Additions target integrity, security, and authoring productivity.
-3. Recommended before scaling large editor and reviewer populations.
+1. Core authoring endpoints are implemented and reflected in phase diagrams.
+2. Review-state gating on versions is already in place and linked to publish behavior.
+3. Highest-impact gaps are consistent scope enforcement and hardened attachment/content pipelines.

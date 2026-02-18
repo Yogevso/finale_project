@@ -2,32 +2,41 @@
 
 ```mermaid
 flowchart TD
-    A[System Admin opens governance console] --> B{System admin privileges present?}
-    B -- No --> B1[Stop with 403]
-    B -- Yes --> C[Load current RBAC policies]
-    C --> D[Edit policy matrix]
-    D --> E[Upsert policy rows]
-    E --> F[Publish active policies]
-    F --> G[Record governance audit event]
+    A[System admin opens governance controls] --> B{System admin authenticated?}
+    B -- No --> B1[403 forbidden]
+    B -- Yes --> C[Load RBAC policy rows]
+    C --> D[Update policy map role to permissions]
+    D --> E[Persist policy rows and publish dynamic permissions]
+    E --> F[Write system audit event rbac_policies_updated]
 
-    G --> H[Open system settings]
-    H --> I[Apply key/value updates]
-    I --> J[Upsert changed keys and remove deleted keys]
-    J --> K[Write settings audit event]
+    F --> G[Load system settings]
+    G --> H[Submit full settings payload]
+    H --> I[Upsert incoming keys and delete removed keys]
+    I --> J[Write system audit event system_settings_updated]
 
-    K --> L[Manage platform tenants]
-    L --> M{Tenant slug unique and constraints valid?}
-    M -- No --> M1[Reject request 400]
-    M -- Yes --> N[Persist tenant create/update/delete]
+    J --> K[Manage tenants]
+    K --> L{Slug unique and target tenant exists?}
+    L -- No --> L1[400 or 404]
+    L -- Yes --> M[Create or update tenant]
+    M --> N{Delete requested and tenant has users?}
+    N -- Yes --> N1[400 cannot delete tenant with users]
+    N -- No --> O[Delete tenant]
 
-    N --> O[Admin manages companies in tenant]
-    O --> P{Actor is admin or system admin?}
-    P -- No --> P1[Reject request 403]
-    P -- Yes --> Q[Persist company assignment and status]
+    O --> P[Admin manages companies]
+    P --> Q{Actor is admin or system admin?}
+    Q -- No --> Q1[403 forbidden]
+    Q -- Yes --> R[List, create, update, or soft-delete company]
+    R --> S{Attempt to delete own company?}
+    S -- Yes --> S1[400 rejected]
+    S -- No --> T[Persist company mutation]
 
-    Q --> R[Manager/Admin manages users]
-    R --> S{Target role allowed by hierarchy and scope?}
-    S -- No --> S1[Reject request 403]
-    S -- Yes --> T[Persist create/update/deactivate]
-    T --> U[Publish updated operational state]
+    T --> U[Admin manages company membership]
+    U --> V{User and company exist and self-removal constraints pass?}
+    V -- No --> V1[400 or 404]
+    V -- Yes --> W[Assign or unassign user tenant_id]
+
+    W --> X[Manager or admin manages users]
+    X --> Y{Role hierarchy and tenant scope checks pass?}
+    Y -- No --> Y1[403 or 404]
+    Y -- Yes --> Z[Create, update, or deactivate user]
 ```

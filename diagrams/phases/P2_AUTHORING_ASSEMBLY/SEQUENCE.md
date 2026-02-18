@@ -2,168 +2,208 @@
 
 ## Scope
 
-Phase `P2` covers internal content creation, metadata updates, version drafting, attachments, comments, and company assignment.
+Phase `P2` covers internal authoring operations: document lifecycle, version drafting/mutation, attachment handling, comments, and company assignment.
 
 ## Endpoint Inventory
 
 | Method | Endpoint | Primary Actors | Guard |
 |---|---|---|---|
-| `POST` | `/documents` | Editor+ | `require_editor` + tenant context |
-| `POST` | `/documents/upload` | Editor+ | file/type/size checks |
-| `POST` | `/documents/{id}/generate-word` | Editor+ | document access check |
-| `GET` | `/documents` | Internal user | `require_internal_user` |
-| `GET` | `/documents/{id}` | Internal user | tenant-scoped |
-| `PUT` | `/documents/{id}` | Editor+ | content update and versioning rules |
-| `POST` | `/documents/{id}/assign-companies` | Manager+ (permission) | `assign_companies` |
-| `DELETE` | `/documents/{id}/assign-companies/{company_id}` | Manager+ (permission) | `assign_companies` |
-| `POST` | `/documents/{id}/versions` | Editor+ | blocks if pending review exists |
-| `PATCH` | `/documents/{id}/versions/{version_id}` | Editor+ | cannot edit published/approved/pending-review version |
-| `POST` | `/documents/{id}/attachments` | Authenticated internal role with service checks | upload constraints |
-| `GET` | `/documents/{id}/attachments...` | Authenticated user | access and metadata checks |
-| `POST` | `/documents/{id}/comments` | Authenticated user | role-based visibility rules in service |
-| `PATCH` | `/documents/{id}/comments/{comment_id}` | Author or admin/editor for resolve | ownership/role checks |
-| `POST` | `/documents/{id}/comments/{comment_id}/resolve` | Admin/Editor | resolve-only operation |
+| `POST` | `/documents` | Editor+ | `require_editor` + tenant-context document scope |
+| `GET` | `/documents` | Internal users | `require_internal_user` + tenant-scoped query |
+| `GET` | `/documents/{id}` | Internal users | `require_internal_user` + tenant-scoped lookup |
+| `PUT` | `/documents/{id}` | Editor+ | `require_editor` + tenant-scoped access |
+| `DELETE` | `/documents/{id}` | Manager+ | `require_manager` + tenant-scoped access |
+| `POST` | `/documents/upload` | Editor+ | `require_editor`, upload validation, attachment write |
+| `POST` | `/documents/{id}/generate-word` | Editor+ | `require_editor` + document access check |
+| `GET` | `/documents/{id}/assigned-companies` | Internal users | `require_internal_user` |
+| `POST/DELETE` | `/documents/{id}/assign-companies...` | Permission holders | `require_permission(assign_companies)` |
+| `GET` | `/documents/{id}/versions`, `/documents/{id}/versions/{version_id}` | Authenticated users | Auth required (no explicit tenant guard in service) |
+| `POST` | `/documents/{id}/versions` | Editor+ | Role check + blocked while any review is pending |
+| `PATCH` | `/documents/{id}/versions/{version_id}` | Editor+ | Role check + cannot edit published/pending/approved version |
+| `POST` | `/documents/{id}/versions/{version_id}/publish` | Manager+ | Role check + approved review required |
+| `DELETE` | `/documents/{id}/versions/{version_id}` | Manager+ | Role check + unpublished only |
+| `GET` | `/documents/{id}/attachments...` | Authenticated users | Auth required (download also accepts `?token=` query token) |
+| `POST` | `/documents/{id}/attachments` | Admin, Manager, Editor, System Admin | Role check + type/size constraints |
+| `DELETE` | `/documents/{id}/attachments/{attachment_id}` | Admin | Admin-only delete in service |
+| `GET` | `/documents/{id}/comments...` | Authenticated users | Auth required + contributor-based visibility filtering |
+| `POST` | `/documents/{id}/comments` | Authenticated users | Document existence check |
+| `PATCH` | `/documents/{id}/comments/{comment_id}` | Author or admin/editor/manager | Content and resolve permission checks |
+| `POST` | `/documents/{id}/comments/{comment_id}/resolve` | Admin, Manager, Editor | Resolve via comment update service |
+| `DELETE` | `/documents/{id}/comments/{comment_id}` | Author, Admin, Manager, System Admin | Delete permission checks |
 
 ## Domain Class Diagram
 
 ```mermaid
 classDiagram
-    class DocumentController {
-        +createDocument(payload)
-        +listDocuments(filters)
-        +getDocument(id)
-        +updateDocument(id, payload)
-        +assignCompanies(id, companyIds)
-        +unassignCompany(id, companyId)
-        +generateWord(id)
-    }
-    class VersionController {
-        +createVersion(documentId, payload)
-        +updateVersion(documentId, versionId, payload)
-        +getVersions(documentId)
-    }
-    class AttachmentController {
-        +uploadAttachment(documentId, file)
-        +listAttachments(documentId)
-        +getAttachment(documentId, attachmentId)
-    }
-    class CommentController {
-        +createComment(documentId, payload)
-        +updateComment(documentId, commentId, payload)
-        +resolveComment(documentId, commentId)
-    }
-    class DocumentService {
-        +createDraft(actor, payload)
-        +updateDraft(actor, documentId, payload)
-        +validateVisibilityAndScope(actor, documentId)
-    }
-    class VersionService {
-        +createDraftVersion(actor, documentId)
-        +updateDraftVersion(actor, documentId, versionId, payload)
-        +assertVersionEditable(version)
-    }
-    class AttachmentService {
-        +storeFile(documentId, file)
-        +generateWordArtifact(documentId)
-        +buildDownloadReference(attachment)
-    }
-    class CommentService {
-        +createThreadEntry(actor, documentId, payload)
-        +updateThreadEntry(actor, commentId, payload)
-        +resolveThread(actor, commentId)
-    }
-    class PermissionService {
-        +requireEditor(actor)
-        +requireInternalUser(actor)
-        +requirePermission(actor, permission)
-    }
-    class Document {
-        +UUID id
-        +UUID tenant_id
-        +UUID company_id
-        +String title
-        +String status
-        +String visibility
-        +UUID created_by
-    }
-    class DocumentVersion {
-        +UUID id
-        +UUID document_id
-        +String version_label
-        +Boolean is_published
-        +String review_status
-        +UUID created_by
-    }
-    class Attachment {
-        +UUID id
-        +UUID document_id
-        +String storage_path
-        +String mime_type
-        +Integer size_bytes
-        +UUID uploaded_by
-    }
-    class Comment {
-        +UUID id
-        +UUID document_id
-        +UUID author_id
-        +UUID parent_id
-        +String body
-        +Boolean resolved
-    }
-    class DocumentCompanyAssignment {
-        +UUID document_id
-        +UUID company_id
-        +UUID assigned_by
+    class DocumentRouter {
+        +POST /documents
+        +GET /documents
+        +GET /documents/{document_id}
+        +PUT /documents/{document_id}
+        +DELETE /documents/{document_id}
+        +POST /documents/upload
+        +POST /documents/{document_id}/generate-word
+        +POST /documents/{document_id}/assign-companies
     }
 
-    DocumentController --> DocumentService
-    VersionController --> VersionService
-    AttachmentController --> AttachmentService
-    CommentController --> CommentService
-    DocumentService --> PermissionService
-    VersionService --> PermissionService
-    AttachmentService --> PermissionService
-    CommentService --> PermissionService
+    class VersionRouter {
+        +GET /documents/{document_id}/versions
+        +POST /documents/{document_id}/versions
+        +PATCH /documents/{document_id}/versions/{version_id}
+        +POST /documents/{document_id}/versions/{version_id}/publish
+        +DELETE /documents/{document_id}/versions/{version_id}
+    }
+
+    class AttachmentRouter {
+        +GET /documents/{document_id}/attachments
+        +GET /documents/{document_id}/attachments/{attachment_id}/download
+        +GET /documents/{document_id}/attachments/{attachment_id}/reader-view
+        +POST /documents/{document_id}/attachments
+        +DELETE /documents/{document_id}/attachments/{attachment_id}
+    }
+
+    class CommentRouter {
+        +GET /documents/{document_id}/comments
+        +POST /documents/{document_id}/comments
+        +PATCH /documents/{document_id}/comments/{comment_id}
+        +POST /documents/{document_id}/comments/{comment_id}/resolve
+        +DELETE /documents/{document_id}/comments/{comment_id}
+    }
+
+    class DocumentService {
+        +create_document(...)
+        +get_documents(...)
+        +get_document(...)
+        +update_document(...)
+        +delete_document(...)
+    }
+
+    class VersionService {
+        +create_version(...)
+        +update_version(...)
+        +publish_version(...)
+        +delete_version(...)
+    }
+
+    class AttachmentService {
+        +upload_attachment(...)
+        +create_attachment_from_bytes(...)
+        +get_reader_view(...)
+        +delete_attachment(...)
+    }
+
+    class CommentService {
+        +get_comments(...)
+        +create_comment(...)
+        +update_comment(...)
+        +delete_comment(...)
+    }
+
+    class Document {
+        +id: int
+        +tenant_id: int?
+        +document_number: str
+        +status: DocumentStatus
+        +visibility: DocumentVisibility
+    }
+
+    class Version {
+        +id: int
+        +document_id: int
+        +version_number: int
+        +semantic_version: str?
+        +is_published: bool
+    }
+
+    class ReviewRequest {
+        +document_id: int
+        +version_id: int?
+        +status: ReviewStatus
+    }
+
+    class Attachment {
+        +id: int
+        +document_id: int
+        +mime_type: str
+        +size_bytes: int?
+        +sha256: str?
+        +reader_html_status: str?
+    }
+
+    class Comment {
+        +id: int
+        +document_id: int
+        +user_id: int
+        +parent_id: int?
+        +is_private: bool
+        +is_resolved: bool
+    }
+
+    DocumentRouter --> DocumentService
+    VersionRouter --> VersionService
+    AttachmentRouter --> AttachmentService
+    CommentRouter --> CommentService
     DocumentService --> Document
-    VersionService --> DocumentVersion
+    VersionService --> Version
+    VersionService --> ReviewRequest
     AttachmentService --> Attachment
     CommentService --> Comment
-    Document "1" --> "0..*" DocumentVersion
+    Document "1" --> "0..*" Version
     Document "1" --> "0..*" Attachment
     Document "1" --> "0..*" Comment
-    Document "1" --> "0..*" DocumentCompanyAssignment
 ```
 
 ## Phase Flow Diagram
 
 ```mermaid
 flowchart TD
-    A[Editor starts authoring] --> B{Editor role and tenant scope valid?}
-    B -- No --> B1[Reject 403]
-    B -- Yes --> C[Create document shell + initial draft version]
-    C --> D[Update metadata, visibility, and structured content]
-    D --> E{Pending review already exists?}
-    E -- Yes --> E1[Block new version 409]
-    E -- No --> F[Create additional draft version]
-    F --> G{Version is published or in review terminal lock?}
-    G -- Yes --> G1[Block edits 400 or 409]
-    G -- No --> H[Persist version patch]
+    A[Editor creates document] --> B{Editor and tenant scope valid?}
+    B -- No --> B1[403 denied]
+    B -- Yes --> C[Persist document and initial version 1.0.0]
 
-    H --> I[Upload attachments]
-    I --> J{File type and size pass service rules?}
-    J -- No --> J1[Reject upload 400]
-    J -- Yes --> K[Persist blob and attachment metadata]
-    K --> L[Optional generated Word artifact]
+    C --> D[Editor updates document fields]
+    D --> E{Visibility changed by manager+?}
+    E -- No --> E1[403 if unauthorized visibility change]
+    E -- Yes --> F[Apply visibility mutation]
+    E1 --> G
+    F --> G
+    G --> H{Any tracked change applied?}
+    H -- Yes --> I[Create patch version row]
+    H -- No --> J[No version row created]
 
-    L --> M[Collaborators create comments/replies]
-    M --> N{Author or privileged actor editing/resolving?}
-    N -- No --> N1[Reject comment update 403]
-    N -- Yes --> O[Persist comment mutation and resolution flags]
+    I --> K[Version workflow]
+    J --> K
+    K --> L{Pending review exists for document?}
+    L -- Yes --> L1[Block new version 409]
+    L -- No --> M[Create next version]
+    M --> N{Update target version is published/pending/approved?}
+    N -- Yes --> N1[400 or 409]
+    N -- No --> O[Persist version mutation]
 
-    O --> P[Manager/Admin assigns document to companies]
-    P --> Q{assign_companies permission granted?}
-    Q -- No --> Q1[Reject assignment 403]
-    Q -- Yes --> R[Persist company linkage and access scope]
+    O --> P{Publish requested with approved review?}
+    P -- No --> Q[Keep draft workflow]
+    P -- Yes --> R[Mark version published and document active]
+
+    R --> S[Attachment flow]
+    Q --> S
+    S --> T{Upload role allowed and file valid?}
+    T -- No --> T1[403 or 400]
+    T -- Yes --> U[Store binary and metadata]
+    U --> V{PDF attachment?}
+    V -- Yes --> V1[Queue reader-view generation]
+    V -- No --> W[Skip reader artifact]
+    V1 --> W
+
+    W --> X[Comment flow]
+    X --> Y[Create thread or reply]
+    Y --> Z{Update/resolve permissions satisfied?}
+    Z -- No --> Z1[403 denied]
+    Z -- Yes --> AA[Persist comment change]
+
+    AA --> AB[Assign companies]
+    AB --> AC{assign_companies permission granted?}
+    AC -- No --> AC1[403 denied]
+    AC -- Yes --> AD[Persist company assignment links]
 ```
 
 ## Endpoint Sequence Diagram
@@ -173,82 +213,85 @@ sequenceDiagram
     autonumber
     actor Editor as Editor
     actor Manager as Manager or Admin
-    actor Internal as Internal Collaborator
+    actor User as Authenticated User
     participant FE as Frontend
-    participant DOCAPI as Documents and Versions APIs
+    participant DOC as Documents API
+    participant VER as Versions API
     participant ATT as Attachments API
     participant COM as Comments API
-    participant PERM as Permission and Tenant Guards
-    participant STORE as Storage Backend
+    participant SVC as Domain Services
     participant DB as Database
+    participant REV as Reviews API
 
-    Note over Editor,Internal: Draft document creation and metadata lifecycle
+    Note over Editor,User: Document creation and metadata lifecycle
     Editor->>FE: Create document
-    FE->>DOCAPI: POST /api/v1/documents
-    DOCAPI->>PERM: require_editor plus tenant context
-    DOCAPI->>DB: Insert document and initial version
-    DOCAPI-->>Editor: document created
+    FE->>DOC: POST /api/v1/documents
+    DOC->>SVC: DocumentService.create_document
+    SVC->>DB: Insert document and initial version
+    DOC-->>Editor: 201 document payload
 
-    Editor->>FE: Update document metadata/content
-    FE->>DOCAPI: PUT /api/v1/documents/{document_id}
-    DOCAPI->>PERM: require_editor plus document access
-    DOCAPI->>DB: Update document and version fields
-    DOCAPI-->>Editor: updated payload
+    Editor->>FE: Update document
+    FE->>DOC: PUT /api/v1/documents/{document_id}
+    DOC->>SVC: DocumentService.update_document
+    SVC->>DB: Update fields and create patch version when changed
+    DOC-->>Editor: updated document
 
-    Editor->>FE: Add draft version
-    FE->>DOCAPI: POST /api/v1/documents/{document_id}/versions
-    DOCAPI->>PERM: role must be editor or above
-    DOCAPI->>DB: Check pending review conflict
-    alt No pending review
-        DOCAPI->>DB: Insert next semantic/unpublished version
-        DOCAPI-->>Editor: created version
-    else Pending review exists
-        DOCAPI-->>Editor: 409 conflict
+    Note over Editor,User: Version workflow and review gating
+    Editor->>FE: Create version
+    FE->>VER: POST /api/v1/documents/{document_id}/versions
+    VER->>SVC: VersionService.create_version
+    SVC->>DB: Check pending review and insert next version
+    VER-->>Editor: created version or 409
+
+    Editor->>FE: Update version
+    FE->>VER: PATCH /api/v1/documents/{document_id}/versions/{version_id}
+    VER->>SVC: VersionService.update_version
+    SVC->>DB: Reject published/pending/approved states or persist update
+    VER-->>Editor: updated version or 400/409
+
+    Manager->>FE: Publish version
+    FE->>VER: POST /api/v1/documents/{document_id}/versions/{version_id}/publish
+    VER->>SVC: VersionService.publish_version
+    SVC->>DB: Require approved review for this version
+    alt Approved review exists
+        SVC->>DB: Mark version published and document status active
+        VER-->>Manager: published version
+    else Missing or invalid review state
+        VER-->>Manager: 409 conflict
     end
 
-    Editor->>FE: Modify version
-    FE->>DOCAPI: PATCH /api/v1/documents/{document_id}/versions/{version_id}
-    DOCAPI->>DB: Validate not published and not pending/approved review state
-    alt Editable
-        DOCAPI->>DB: Persist version changes
-        DOCAPI-->>Editor: updated version
-    else Blocked by immutability/workflow
-        DOCAPI-->>Editor: 400 or 409
-    end
-
-    Note over Editor,Internal: Attachments and generated artifacts
+    Note over Editor,User: Attachment processing
     Editor->>FE: Upload attachment
     FE->>ATT: POST /api/v1/documents/{document_id}/attachments
-    ATT->>PERM: authenticated access and service-level role checks
-    ATT->>STORE: Save file blob
-    STORE-->>ATT: storage path and metadata
-    ATT->>DB: Insert attachment row
-    ATT-->>Editor: upload response with download URL
+    ATT->>SVC: AttachmentService.upload_attachment
+    SVC->>DB: Validate role and create attachment metadata
+    SVC->>DB: Queue reader artifact generation for PDF
+    ATT-->>Editor: upload response with checksum
 
-    Editor->>FE: Generate Word attachment
-    FE->>DOCAPI: POST /api/v1/documents/{document_id}/generate-word
-    DOCAPI->>PERM: require_editor and document access
-    DOCAPI->>STORE: Persist generated docx bytes
-    DOCAPI->>DB: Insert generated attachment metadata
-    DOCAPI-->>Editor: generated attachment response
+    User->>FE: Download or preview attachment
+    FE->>ATT: GET /api/v1/documents/{document_id}/attachments/{attachment_id}/download
+    ATT->>SVC: open_original_stream
+    ATT-->>User: streamed original bytes
 
-    Note over Editor,Internal: Commenting and thread resolution
-    Internal->>FE: Add comment or reply
+    Note over Editor,User: Comments and assignments
+    User->>FE: Create comment
     FE->>COM: POST /api/v1/documents/{document_id}/comments
-    COM->>PERM: authenticated user
-    COM->>DB: Insert comment and visibility fields
-    COM-->>Internal: comment response
+    COM->>SVC: CommentService.create_comment
+    SVC->>DB: Insert comment or reply
+    COM-->>User: comment payload
 
-    Internal->>FE: Resolve or edit thread
+    User->>FE: Update or resolve comment
     FE->>COM: PATCH /api/v1/documents/{document_id}/comments/{comment_id}
-    COM->>DB: Validate author/edit/resolve privileges
-    COM->>DB: Persist update or resolution
-    COM-->>Internal: updated comment
+    COM->>SVC: CommentService.update_comment
+    SVC->>DB: Enforce author/admin rules then persist
+    COM-->>User: updated comment or 403
 
-    Note over Editor,Internal: Company assignment for company-visible docs
-    Manager->>FE: Assign companies to document
-    FE->>DOCAPI: POST /api/v1/documents/{document_id}/assign-companies
-    DOCAPI->>PERM: require_permission(assign_companies)
-    DOCAPI->>DB: Validate company ids and attach associations
-    DOCAPI-->>Manager: assignment success
+    Manager->>FE: Assign companies
+    FE->>DOC: POST /api/v1/documents/{document_id}/assign-companies
+    DOC->>DB: Validate company IDs and write assignments
+    DOC-->>Manager: assignment result
+
+    Editor->>FE: Submit review (outside P2 core but required for publish)
+    FE->>REV: POST /api/v1/reviews/documents/{document_id}/submit
+    REV-->>Editor: pending review
 ```

@@ -4,28 +4,28 @@
 
 | Use Case ID | Use Case | Endpoint(s) | Rule(s) / Guard(s) | Notes |
 |---|---|---|---|---|
-| UC1 | Read and update RBAC policies | `GET /rbac/policies`, `PUT /rbac/policies` | `require_system_admin` | Policy matrix management is system-admin only. |
-| UC2 | Publish active policy set | `POST /rbac/policies/publish` | System-admin publish guard | Pushes effective permission changes runtime-wide. |
-| UC3 | Manage system settings | `GET /system/settings`, `PUT /system/settings` | `require_system_admin` | Global config change control. |
-| UC4 | Manage tenants | `POST /tenants`, `GET /tenants`, `PUT /tenants/{id}`, `DELETE /tenants/{id}` | `require_system_admin` + validation constraints | Includes slug and dependency validations. |
-| UC5 | Manage companies | `GET /companies...`, `POST /companies...`, `PUT /companies...`, `DELETE /companies...` | Admin/system-admin role gates | Tenant-aware company operations. |
-| UC6 | Manage users in hierarchy bounds | `GET /users...`, `POST /users...`, `PUT /users...`, `DELETE /users...` | Role hierarchy + tenant scope | Prevents out-of-scope user operations. |
-| UC7 | Review governance audit effects | Audit writes from policy/settings/tenant/company/user mutations | Audit insertion on mutating operations | Read endpoint not explicitly listed in this phase inventory. |
+| UC1 | Read and update RBAC policies | `GET /rbac/policies`, `PUT /rbac/policies` | `require_system_admin` + service publish | `PUT` also writes a `SYSTEM` audit log entry. |
+| UC2 | Publish policy set | `POST /rbac/policies/publish` | `require_system_admin` | Loads persisted policy map into runtime permission store. |
+| UC3 | Manage system settings | `GET /system/settings`, `PUT /system/settings` | `require_system_admin` | `PUT` upserts keys and removes missing keys. |
+| UC4 | Manage tenants | `POST /tenants`, `GET /tenants`, `GET/PUT/DELETE /tenants/{id}`, `GET /tenants/{id}/users` | `require_system_admin` + slug and delete constraints | Delete is blocked if tenant still has users. |
+| UC5 | Manage companies | `GET/POST /companies`, `GET/PUT/DELETE /companies/{id}` | Local admin role check | Company rows are backed by `Tenant` model; delete is soft (`is_active=false`). |
+| UC6 | Manage company membership | `GET/POST /companies/{id}/users`, `DELETE /companies/{id}/users/{user_id}` | Local admin role check + cannot remove self | Membership maps to `user.tenant_id` assignment. |
+| UC7 | Manage users and self profile | `GET/POST /users`, `GET/PUT/DELETE /users/{id}` | Role hierarchy + tenant context checks | Self-profile read/update is allowed; delete is admin/system-admin only. |
 
 ## Extreme and Edge Case Mapping
 
 | Edge ID | Scenario | Endpoint(s) | Current Enforcement | Gap / Additional Control |
 |---|---|---|---|---|
-| EX1 | Policy publish causes access conflict | `POST /rbac/policies/publish` | Publish flow with admin gate | Add dry-run impact analysis + rollback (`ADDITIONS.md`). |
-| EX2 | Cross-tenant management attempt | `/tenants...`, `/companies...`, `/users...` | Tenant scope and role checks | Add explicit denied-action alerting for repeated attempts. |
-| EX3 | Manager creates user above allowed role | `POST /users...`, `PUT /users...` | Role hierarchy validation | Add clearer policy explanation payloads for clients. |
-| EX4 | Tenant delete with active dependencies | `DELETE /tenants/{id}` | Constraint validation | Add staged archive/delete lifecycle (`ADDITIONS.md`). |
-| EX5 | Concurrent policy/settings edits race | `PUT /rbac/policies`, `PUT /system/settings` | Upsert semantics | Add optimistic locking with version/etag (`ADDITIONS.md`). |
-| EX6 | Self-deactivation or admin lockout path | `DELETE /users/{id}` | Cannot delete self checks | Add break-glass mechanism (`ADDITIONS.md`). |
-| EX7 | Invalid settings key/type payload | `PUT /system/settings` | Current upsert behavior | Add strict schema registry enforcement (`ADDITIONS.md`). |
+| EX1 | Duplicate tenant/company slug | `/tenants...`, `/companies...` | Uniqueness checks before create/update | Add normalized slug reservation to avoid race collisions. |
+| EX2 | Tenant delete with active users | `DELETE /tenants/{tenant_id}` | User-count guard blocks deletion | Add document/dependency checks for full safety. |
+| EX3 | Role escalation beyond manager/admin limits | `POST /users`, `PUT /users/{user_id}`, `DELETE /users/{user_id}` | `can_manage_role` hierarchy checks | Add centralized policy-driven hierarchy. |
+| EX4 | Self-deactivation or self-delete | `PUT /users/{user_id}`, `DELETE /users/{user_id}` | Explicit self-protection checks | Add break-glass and delegated recovery controls. |
+| EX5 | Cross-tenant user visibility attempt | `GET /users`, `GET /users/{id}`, `DELETE /users/{id}` | Non-system users scoped by tenant context | Add explicit denied-attempt audit trail. |
+| EX6 | Admin deactivates own company | `DELETE /companies/{company_id}` | Explicit check against current user tenant | Add safeguard warnings in UI and API confirmation token. |
+| EX7 | Concurrent governance writes | `PUT /rbac/policies`, `PUT /system/settings` | Last-write-wins semantics | Add optimistic locking and version checks. |
 
 ## Coverage and Gap Link
 
-1. Endpoint coverage is mapped to `SEQUENCE.md`.
-2. Use case intent is defined in `USE_CASE.md`.
-3. Safety and governance improvements are in `ADDITIONS.md`.
+1. Endpoint coverage is mapped in `SEQUENCE.md`.
+2. Behavior and actors are summarized in `USE_CASE.md`.
+3. Operational hardening backlog is documented in `ADDITIONS.md`.

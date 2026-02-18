@@ -4,17 +4,17 @@
 
 | Priority | Addition | Why it matters | Suggested implementation |
 |---|---|---|---|
-| High | RBAC policy versioning with rollback | Safe recovery from bad policy publish | Keep immutable policy revisions and add rollback endpoint |
-| High | Policy impact dry-run | Prevent accidental lockouts | Simulate publish against sampled role/action matrix before commit |
-| High | Dual-approval for high-risk governance changes | Reduces single-admin blast radius | Require second approver for tenant delete and system-critical settings |
-| High | Strong optimistic locking on policy/settings writes | Prevents lost updates | Use version/etag checks on `PUT` endpoints |
-| Medium | Break-glass emergency admin process | Handles lockout incidents safely | Time-bound emergency role with mandatory audit and notification |
-| Medium | Tenant deletion archive workflow | Preserves compliance and forensics | Soft-delete then delayed purge after retention window |
-| Medium | Configuration schema validation registry | Avoids invalid setting payloads | Central schema for allowed keys, types, ranges |
-| Low | Governance change notifications to auditors | Improves visibility | Emit notifications/webhooks for policy and settings changes |
+| High | Enforce tenant scoping on company APIs for non-system admins | Current company routes rely only on role checks | Add tenant-context checks so admins cannot manage unrelated tenants |
+| High | Enforce tenant reassignment guard in user update path | Current `PUT /users/{id}` can reassign tenant without explicit non-system scope check | Require system-admin for cross-tenant reassignment |
+| High | Expand audit coverage beyond RBAC/settings | Tenant, company, and user mutations currently lack uniform audit writes | Add structured audit events for all governance mutations |
+| High | Optimistic locking for RBAC and settings updates | Current writes are last-write-wins | Add version or ETag checks to prevent silent overwrite |
+| Medium | Tenant deletion dependency checks for documents/assignments | Current delete guard checks users only | Block deletion when documents or assignments still reference tenant |
+| Medium | RBAC rollback and dry-run simulation | Bad policy updates can remove critical access | Add policy version history, dry-run, and rollback endpoint |
+| Medium | Dual-control for high-risk governance actions | Single admin action can have broad impact | Require second approver for tenant deletion and RBAC publish in strict mode |
+| Low | Settings schema registry and validation | Arbitrary values can be persisted | Validate key names, types, and ranges before upsert |
 
 ## Coverage Notes
 
-1. Existing phase diagrams cover core governance CRUD and policy publish.
-2. Additions focus on safety rails, approval controls, and recovery paths.
-3. These are especially important for multi-tenant production environments.
+1. Core governance CRUD and publishing flows are implemented.
+2. RBAC and settings write audit events exist; broader governance audit coverage is still a gap.
+3. The biggest risk areas are cross-tenant governance scope and concurrent update safety.

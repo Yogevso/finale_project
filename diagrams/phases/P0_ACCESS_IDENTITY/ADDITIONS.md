@@ -4,17 +4,17 @@
 
 | Priority | Addition | Why it matters | Suggested implementation |
 |---|---|---|---|
-| High | Invitation rate limiting per inviter and tenant | Prevent invitation abuse and email flooding | Add per-actor and per-tenant throttles on invitation endpoints |
-| High | Refresh token rotation with one-time-use enforcement | Reduces replay attack blast radius | Rotate refresh token on each refresh; revoke token family on replay detection |
-| High | Admin/manager step-up authentication | Protects privileged actions | Require MFA challenge for invitation creation to high-privilege roles |
-| High | Login anomaly detection | Detects compromised accounts | Store login metadata and trigger risk rules (geo, device, impossible travel) |
-| Medium | Account lockout and progressive delays | Slows brute-force attempts | Track failed login counter and exponential backoff by account/IP |
-| Medium | Password breach check | Improves account hygiene | Check new passwords against known compromised-password list |
-| Medium | Global session kill switch | Speeds incident response | Add endpoint for security/admin to revoke all sessions for a user |
-| Low | Invitation token binding option | Hardens invitation acceptance | Optionally bind invite acceptance to invited email identity proof |
+| High | Refresh token rotation and family revocation | Current refresh flow issues access tokens without rotating refresh tokens | Rotate refresh token on refresh and revoke token families on replay detection |
+| High | Scope refresh-token lookup by user/session identifier | Current hash verification scans all active refresh rows | Store token identifier and query a narrowed candidate set before hash compare |
+| High | Enforce server-side role constraints on `/auth/register` | Current endpoint accepts role from public payload | Restrict self-registration to safe default roles or require invitation for elevated roles |
+| High | Durable distributed auth rate limiting | Current limiter is in-memory per process | Move limiter state to Redis or equivalent shared backend |
+| Medium | Real password reset completion flow | `forgot-password` currently returns generic message only | Add reset token issue/verify endpoints with one-time token invalidation |
+| Medium | Invitation and auth denial audit trail | Invitation/auth paths currently do not emit audit logs | Persist structured audit events for sensitive allow/deny outcomes |
+| Medium | Session/device-level logout options | Logout invalidates all refresh tokens for a user | Add single-session/device logout and active-session listing |
+| Low | Invitation resend and expiry observability | Hard to detect invitation abuse patterns | Add metrics on resend volume, expiry rate, and acceptance funnel |
 
 ## Coverage Notes
 
-1. Existing diagrams cover invitation, login, refresh, and logout flows.
-2. The items above are security-hardening and operational controls not fully modeled yet.
-3. Add these controls before high-scale rollout or strict compliance onboarding.
+1. Core invitation and auth flows are implemented and represented in diagrams.
+2. Login and forgot-password rate limiting are already present, but in-memory only.
+3. Highest priority gaps are token lifecycle hardening and stronger server-side registration controls.

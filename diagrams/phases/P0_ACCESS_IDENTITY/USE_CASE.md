@@ -7,29 +7,28 @@
 - `Manager`
 - `Invitee`
 - `Authenticated User`
-- `Security Operations`
 
 ## Regular Use Cases
 
-1. Inviter creates invitation for target role.
-2. Inviter lists and tracks invitation status.
-3. Invitee validates invitation token from public link.
-4. Invitee accepts invitation and creates account.
-5. User logs in and receives access/refresh tokens.
-6. User refreshes access token with valid refresh token.
-7. User reads own profile and changes password.
-8. User logs out and invalidates active refresh sessions.
+1. Admin/manager creates and manages invitations.
+2. Invitee validates invitation token.
+3. Invitee accepts invitation and provisions account.
+4. Public user self-registers with unique email/username.
+5. User logs in and receives access and refresh tokens.
+6. User refreshes access token with a valid refresh token.
+7. User reads profile and changes password.
+8. User logs out and invalidates stored refresh sessions.
 
 ## Extreme and Edge Use Cases
 
-1. Expired, cancelled, or already-accepted invitation token is used.
-2. Inviter attempts role escalation outside role hierarchy.
-3. Username/email collision occurs during invitation acceptance.
-4. Brute-force login attempts trigger security controls.
-5. Replay attack attempts reuse consumed refresh token.
-6. Suspicious session pattern triggers forced logout.
-7. Password change attempts with incorrect current password.
-8. Cross-tenant invitation visibility attempt is blocked.
+1. Expired, cancelled, or used invitation token is submitted.
+2. Invitation acceptance fails due to existing email or username.
+3. Inviter attempts role escalation outside hierarchy bounds.
+4. Non-system actor attempts out-of-scope invitation operation.
+5. Repeated failed login attempts trigger rate limiting.
+6. Refresh token is invalid, expired, or already invalidated.
+7. Inactive account attempts login.
+8. Forgot-password endpoint receives abusive request volume.
 
 ```mermaid
 flowchart LR
@@ -38,42 +37,45 @@ flowchart LR
     MG[Manager]
     IV[Invitee]
     AU[Authenticated User]
-    SOC[Security Operations]
 
-    UC1((Create Invitation))
-    UC2((List Invitations))
-    UC3((Validate Invitation Token))
-    UC4((Accept Invitation))
+    UC1((Manage Invitations))
+    UC2((Validate Invitation Token))
+    UC3((Accept Invitation))
+    UC4((Self Register Account))
     UC5((Login))
     UC6((Refresh Access Token))
-    UC7((Change Password))
+    UC7((Read Profile and Change Password))
     UC8((Logout))
 
-    EX1((Handle Expired or Invalid Token))
-    EX2((Block Role Escalation))
-    EX3((Block Credential Stuffing))
-    EX4((Detect Refresh Replay))
-    EX5((Force Session Revocation))
+    EX1((Reject Invalid Invitation Token))
+    EX2((Reject Duplicate Identity Claims))
+    EX3((Block Role Escalation Invite))
+    EX4((Block Out Of Scope Invite Access))
+    EX5((Throttle Repeated Login Failures))
+    EX6((Reject Invalid Refresh Token))
+    EX7((Block Inactive User Login))
+    EX8((Throttle Forgot Password Abuse))
 
     SA --> UC1
     AD --> UC1
     MG --> UC1
-    SA --> UC2
-    AD --> UC2
-    MG --> UC2
+    IV --> UC2
     IV --> UC3
     IV --> UC4
     AU --> UC5
     AU --> UC6
     AU --> UC7
     AU --> UC8
-    SOC --> EX5
 
-    UC4 -. include .-> UC3
-    UC5 -. include .-> UC6
-    UC8 -. include .-> EX5
-    EX1 -. extend .-> UC3
-    EX2 -. extend .-> UC1
-    EX3 -. extend .-> UC5
-    EX4 -. extend .-> UC6
+    UC3 -. include .-> UC2
+    UC8 -. include .-> UC6
+
+    EX1 -. extend .-> UC2
+    EX2 -. extend .-> UC3
+    EX3 -. extend .-> UC1
+    EX4 -. extend .-> UC1
+    EX5 -. extend .-> UC5
+    EX6 -. extend .-> UC6
+    EX7 -. extend .-> UC5
+    EX8 -. extend .-> UC5
 ```
