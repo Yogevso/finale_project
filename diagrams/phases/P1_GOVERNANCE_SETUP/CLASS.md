@@ -2,105 +2,126 @@
 
 ```mermaid
 classDiagram
-    class GovernanceController {
-        +getPolicies()
-        +updatePolicies(payload)
-        +publishPolicies()
-        +getSystemSettings()
-        +updateSystemSettings(payload)
-    }
-    class TenantController {
-        +createTenant(payload)
-        +listTenants()
-        +updateTenant(id, payload)
-        +deleteTenant(id)
-    }
-    class CompanyController {
-        +createCompany(payload)
-        +listCompanies(filters)
-        +updateCompany(id, payload)
-        +deleteCompany(id)
-    }
-    class UserAdminController {
-        +createUser(payload)
-        +listUsers(filters)
-        +getUser(id)
-        +updateUser(id, payload)
-        +deactivateUser(id)
-    }
-    class RBACPolicyService {
-        +getPolicies()
-        +upsertPolicies(rows)
-        +publishPolicies()
-        +computeEffectivePermissions()
-    }
-    class SystemSettingsService {
-        +getSettings()
-        +upsertSettings(payload)
-        +deleteRemovedKeys(payload)
-    }
-    class TenantScopeGuard {
-        +requireSystemAdmin(actor)
-        +resolveTenantScope(actor)
-        +assertRoleHierarchy(actorRole, targetRole)
-    }
-    class Tenant {
-        +UUID id
-        +String slug
-        +String name
-        +Boolean is_active
-        +DateTime created_at
-    }
-    class Company {
-        +UUID id
-        +UUID tenant_id
-        +String name
-        +Boolean is_active
-    }
-    class PlatformUser {
-        +UUID id
-        +UUID tenant_id
-        +UUID company_id
-        +String role
-        +Boolean is_active
-    }
-    class RBACPolicy {
-        +UUID id
-        +String role
-        +String permission
-        +Boolean allowed
-        +Integer version
-    }
-    class SystemSetting {
-        +UUID id
-        +String setting_key
-        +String setting_value
-        +String value_type
-    }
-    class AuditEvent {
-        +UUID id
-        +UUID actor_id
-        +String action
-        +String resource_type
-        +UUID resource_id
+    class RbacPolicyRouter {
+        +list_policies()
+        +update_policies(payload)
+        +publish_policies()
     }
 
-    GovernanceController --> RBACPolicyService
-    GovernanceController --> SystemSettingsService
-    GovernanceController --> TenantScopeGuard
-    TenantController --> TenantScopeGuard
-    CompanyController --> TenantScopeGuard
-    UserAdminController --> TenantScopeGuard
-    RBACPolicyService --> RBACPolicy
+    class SystemSettingsRouter {
+        +get_system_settings()
+        +update_system_settings(payload)
+    }
+
+    class TenantRouter {
+        +create_tenant(payload)
+        +list_tenants()
+        +get_tenant(tenant_id)
+        +update_tenant(tenant_id, payload)
+        +delete_tenant(tenant_id)
+        +get_tenant_users(tenant_id)
+    }
+
+    class CompanyRouter {
+        +list_companies(filters)
+        +create_company(payload)
+        +get_company(company_id)
+        +update_company(company_id, payload)
+        +delete_company(company_id)
+        +list_company_users(company_id)
+        +add_user_to_company(company_id, payload)
+        +remove_user_from_company(company_id, user_id)
+        +list_company_documents(company_id)
+    }
+
+    class UserRouter {
+        +list_users(filters)
+        +create_user(payload)
+        +get_user(user_id)
+        +update_user(user_id, payload)
+        +delete_user(user_id)
+    }
+
+    class RbacService {
+        +get_policies(include_inactive=False)
+        +upsert_policies(policies, updated_by)
+        +publish_policies()
+    }
+
+    class SystemSettingsService {
+        +get_settings()
+        +upsert_settings(settings, updated_by)
+    }
+
+    class TenantContext {
+        +tenant_id: int?
+        +user_id: int
+        +user_role: UserRole
+        +is_system_admin: bool
+    }
+
+    class RbacPolicy {
+        +id: int
+        +role: UserRole
+        +permissions: str
+        +is_active: bool
+        +updated_by: int?
+        +published_at: datetime?
+    }
+
+    class SystemSetting {
+        +id: int
+        +key: str
+        +value: str?
+        +updated_by: int?
+    }
+
+    class Tenant {
+        +id: int
+        +name: str
+        +slug: str
+        +is_active: bool
+        +company_type: str
+    }
+
+    class User {
+        +id: int
+        +email: str
+        +username: str
+        +role: UserRole
+        +tenant_id: int?
+        +is_active: bool
+    }
+
+    class Document {
+        +id: int
+        +tenant_id: int?
+        +title: str
+        +status: DocumentStatus
+    }
+
+    class AuditLog {
+        +id: int
+        +user_id: int?
+        +action: ActionType
+        +details: str?
+    }
+
+    RbacPolicyRouter --> TenantContext : require_system_admin
+    RbacPolicyRouter --> RbacService
+    RbacPolicyRouter --> AuditLog
+    SystemSettingsRouter --> TenantContext : require_system_admin
+    SystemSettingsRouter --> SystemSettingsService
+    SystemSettingsRouter --> AuditLog
+    TenantRouter --> TenantContext : require_system_admin
+    TenantRouter --> Tenant
+    TenantRouter --> User
+    CompanyRouter --> Tenant
+    CompanyRouter --> User
+    CompanyRouter --> Document
+    UserRouter --> TenantContext : get_tenant_context
+    UserRouter --> User
+    UserRouter --> Tenant
+    RbacService --> RbacPolicy
     SystemSettingsService --> SystemSetting
-    TenantController --> Tenant
-    CompanyController --> Company
-    UserAdminController --> PlatformUser
-    Tenant "1" --> "0..*" Company
-    Tenant "1" --> "0..*" PlatformUser
-    Company "1" --> "0..*" PlatformUser
-    GovernanceController --> AuditEvent
-    TenantController --> AuditEvent
-    CompanyController --> AuditEvent
-    UserAdminController --> AuditEvent
 ```

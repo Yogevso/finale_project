@@ -2,163 +2,162 @@
 
 ## Scope
 
-Phase `P0` covers invitation lifecycle, account provisioning, login, token refresh, and session/logout behavior.
+Phase `P0` covers invitation management, invitation acceptance, account bootstrap, login/session lifecycle, and password self-service endpoints.
 
 ## Endpoint Inventory
 
 | Method | Endpoint | Primary Actors | Guard |
 |---|---|---|---|
-| `POST` | `/invitations` | System Admin, Admin, Manager | Authenticated role hierarchy checks |
-| `GET` | `/invitations` | System Admin, Admin, Manager | Tenant-scoped unless system admin |
-| `GET` | `/invitations/{id}` | System Admin, Admin, Manager | Tenant-scoped unless system admin |
-| `POST` | `/invitations/{id}/resend` | System Admin, Admin, Manager | Cannot resend accepted invite |
+| `POST` | `/invitations` | System Admin, Admin, Manager | Role hierarchy + role-specific tenant assignment rules + duplicate email/invite checks |
+| `GET` | `/invitations` | System Admin, Admin, Manager | Non-system-admin users are tenant-scoped |
+| `GET` | `/invitations/{id}` | System Admin, Admin, Manager | Non-system-admin users are tenant-scoped |
+| `POST` | `/invitations/{id}/resend` | System Admin, Admin, Manager | Cannot resend accepted invite; email must still be unregistered |
 | `DELETE` | `/invitations/{id}` | System Admin, Admin, Manager | Pending only |
-| `GET` | `/auth/invitation/{token}` | Public | Token validity/expiry check |
-| `POST` | `/auth/invitation/accept` | Public invitee | Token valid + email/username uniqueness |
-| `POST` | `/auth/login` | All users | Password + active status |
-| `POST` | `/auth/refresh` | All users | Valid non-expired refresh token hash |
-| `POST` | `/auth/logout` | Authenticated user | Marks refresh tokens used |
-| `GET` | `/auth/me` | Authenticated user | Active token required |
-| `POST` | `/auth/change-password` | Authenticated user | Old password must match |
+| `GET` | `/auth/invitation/{token}` | Public invitee | Token must exist, be pending, and not expired |
+| `POST` | `/auth/invitation/accept` | Public invitee | Token valid + username/email uniqueness |
+| `POST` | `/auth/register` | Public | Email/username uniqueness (role trusted from request payload) |
+| `POST` | `/auth/login` | All users | Optional auth rate limiting + credential and active checks |
+| `POST` | `/auth/forgot-password` | Public | Optional auth rate limiting + generic non-enumerating response |
+| `POST` | `/auth/refresh` | All users | Refresh token hash must match unused, non-expired record |
+| `POST` | `/auth/logout` | Authenticated user | Marks all user refresh records as used |
+| `GET` | `/auth/me` | Authenticated user | Active access token required |
+| `POST` | `/auth/change-password` | Authenticated user | Old password hash must match |
 
 ## Domain Class Diagram
 
 ```mermaid
 classDiagram
-    class InvitationController {
-        +createInvitation(payload)
-        +listInvitations(filters)
-        +getInvitation(id)
-        +resendInvitation(id)
-        +cancelInvitation(id)
-    }
-    class AuthController {
-        +validateInvitationToken(token)
-        +acceptInvitation(payload)
-        +login(credentials)
-        +refresh(refreshToken)
-        +logout(userId)
-        +me(userId)
-        +changePassword(userId, oldPassword, newPassword)
-    }
-    class InvitationService {
-        +issueInvitation(inviter, payload)
-        +validateToken(token)
-        +accept(token, registration)
-        +markAccepted(id, acceptedBy)
-        +markCancelled(id, cancelledBy)
-    }
-    class AuthService {
-        +authenticate(username, password)
-        +createSession(user)
-        +rotateAccessToken(refreshToken)
-        +invalidateSessions(userId)
-        +updatePassword(userId, oldPassword, newPassword)
-    }
-    class TenantScopeGuard {
-        +resolveActorScope(actor)
-        +assertInvitationScope(actor, tenantId)
-        +assertRoleHierarchy(actorRole, targetRole)
-    }
-    class TokenService {
-        +issueAccessToken(user)
-        +issueRefreshToken(user)
-        +hashRefreshToken(token)
-        +verifyRefreshToken(token, hash)
-    }
-    class PasswordHasher {
-        +hashPassword(raw)
-        +verifyPassword(raw, hash)
-    }
-    class Invitation {
-        +UUID id
-        +String email
-        +String role
-        +String token
-        +String status
-        +DateTime expires_at
-        +UUID invited_by
-        +UUID tenant_id
-        +UUID company_id
-    }
-    class User {
-        +UUID id
-        +String username
-        +String email
-        +String role
-        +Boolean is_active
-        +String hashed_password
-        +UUID tenant_id
-        +UUID company_id
-    }
-    class RefreshToken {
-        +UUID id
-        +UUID user_id
-        +String token_hash
-        +DateTime expires_at
-        +Boolean is_used
-        +DateTime used_at
-    }
-    class AuditEvent {
-        +UUID id
-        +String action
-        +UUID actor_id
-        +String target_type
-        +UUID target_id
-        +DateTime created_at
+    class AuthRouter {
+        +POST /auth/login
+        +POST /auth/forgot-password
+        +POST /auth/refresh
+        +POST /auth/logout
+        +POST /auth/register
+        +GET /auth/me
+        +POST /auth/change-password
+        +GET /auth/invitation/{token}
+        +POST /auth/invitation/accept
     }
 
-    InvitationController --> InvitationService
-    InvitationController --> TenantScopeGuard
-    AuthController --> AuthService
-    AuthController --> InvitationService
-    AuthService --> TokenService
-    AuthService --> PasswordHasher
-    InvitationService --> PasswordHasher
-    InvitationService --> Invitation
-    InvitationService --> User
+    class InvitationRouter {
+        +POST /invitations
+        +GET /invitations
+        +GET /invitations/{id}
+        +POST /invitations/{id}/resend
+        +DELETE /invitations/{id}
+    }
+
+    class AuthService {
+        +login(username, password)
+        +refresh_access_token(refresh_token)
+        +logout(user_id)
+        +register(user_data)
+        +change_password(user, old_password, new_password)
+    }
+
+    class AuthRateLimitService {
+        +check_login_allowed(ip, username)
+        +record_login_failure(ip, username)
+        +record_login_success(ip, username)
+        +check_forgot_password_allowed(ip, identifier)
+        +record_forgot_password_request(ip, identifier)
+    }
+
+    class TenantContext {
+        +tenant_id: int?
+        +user_id: int
+        +user_role: UserRole
+        +is_system_admin: bool
+    }
+
+    class User {
+        +id: int
+        +email: str
+        +username: str
+        +full_name: str
+        +hashed_password: str
+        +role: UserRole
+        +tenant_id: int?
+        +is_active: bool
+    }
+
+    class Invitation {
+        +id: int
+        +email: str
+        +token: str
+        +role: UserRole
+        +tenant_id: int?
+        +invited_by: int
+        +status: InvitationStatus
+        +expires_at: datetime
+        +accepted_at: datetime?
+        +created_user_id: int?
+    }
+
+    class PasswordReset {
+        +id: int
+        +user_id: int
+        +token_hash: str
+        +expires_at: datetime
+        +used_at: datetime?
+    }
+
+    class Tenant {
+        +id: int
+        +name: str
+        +slug: str
+    }
+
+    AuthRouter --> AuthService
+    AuthRouter --> AuthRateLimitService
+    InvitationRouter --> TenantContext
+    InvitationRouter --> Invitation
     AuthService --> User
-    AuthService --> RefreshToken
-    InvitationService --> AuditEvent
-    AuthService --> AuditEvent
-    Invitation "1" --> "0..1" User : accepted_by
-    User "1" --> "0..*" RefreshToken : sessions
+    AuthService --> PasswordReset
+    Invitation "0..1" --> "1" Tenant : tenant_id
 ```
 
 ## Phase Flow Diagram
 
 ```mermaid
 flowchart TD
-    A[Inviter chooses role and tenant/company] --> B{Actor has hierarchy permission?}
-    B -- No --> B1[Reject request 403]
-    B -- Yes --> C{Duplicate user or pending invite exists?}
-    C -- Yes --> C1[Reject request 400]
-    C -- No --> D[Create invitation token + expiry + audit]
-    D --> E[Invitee opens validation endpoint]
-    E --> F{Invitation token pending and not expired?}
-    F -- No --> F1[Return invalid token state]
-    F -- Yes --> G[Invitee submits registration payload]
-    G --> H{Username/email unique?}
-    H -- No --> H1[Reject request 400]
-    H -- Yes --> I[Hash password and create user]
-    I --> J[Mark invitation accepted]
-    J --> K[Issue access + refresh tokens]
-    K --> L[Session established]
+    A[Admin or manager submits invitation] --> B{Allowed to invite target role?}
+    B -- No --> B1[403 role hierarchy violation]
+    B -- Yes --> C{Tenant assignment valid for selected role rules?}
+    C -- No --> C1[403 role or scope rule violation]
+    C -- Yes --> D{Email already registered or pending invite exists?}
+    D -- Yes --> D1[400 conflict]
+    D -- No --> E[Create invitation token with 7-day expiry]
 
-    L --> M[User login attempts]
-    M --> N{Credentials valid and account active?}
-    N -- No --> N1[Return 401 or 403]
-    N -- Yes --> O[Create session token records]
-    O --> P[User accesses /auth/me and protected APIs]
-    P --> Q[Client calls refresh before access expiry]
-    Q --> R{Refresh token hash valid and unexpired?}
-    R -- No --> R1[Reject refresh and require login]
-    R -- Yes --> S[Issue new access token]
-    S --> T[Optional password change]
-    T --> U{Old password matches hash?}
-    U -- No --> U1[Reject change 400]
-    U -- Yes --> V[Persist new hash]
-    V --> W[Logout marks refresh tokens used]
+    E --> F[Invitee validates token]
+    F --> G{Token pending and unexpired?}
+    G -- No --> G1[Reject invalid or expired token]
+    G -- Yes --> H[Accept invitation and create user]
+    H --> I[Mark invitation accepted and link user]
+    I --> J[Immediate login issues access plus refresh token]
+
+    J --> K[User login]
+    K --> L{Rate limiter allows attempt?}
+    L -- No --> L1[429 Retry-After]
+    L -- Yes --> M{Credentials valid and user active?}
+    M -- No --> M1[401 or 403]
+    M -- Yes --> N[Persist hashed refresh token record]
+
+    N --> O[Forgot-password request]
+    O --> P{Rate limiter allows request?}
+    P -- No --> P1[429 Retry-After]
+    P -- Yes --> Q[Return generic success message]
+
+    Q --> R[Refresh access token]
+    R --> S{Refresh token matches unused unexpired hash?}
+    S -- No --> S1[401 invalid or expired refresh token]
+    S -- Yes --> T[Issue new access token only]
+
+    T --> U[Profile and password change]
+    U --> V{Old password matches?}
+    V -- No --> V1[400 incorrect current password]
+    V -- Yes --> W[Persist new password hash]
+    W --> X[Logout marks user refresh tokens used]
 ```
 
 ## Endpoint Sequence Diagram
@@ -166,82 +165,76 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Inviter as System Admin/Admin/Manager
-    actor Invitee as Invited User
+    actor AdminMgr as Admin or Manager
+    actor Invitee as Invitee
     actor User as Authenticated User
     participant FE as Frontend
-    participant API as Auth and Invitation API
-    participant TENANT as Tenant Context Rules
+    participant INV as Invitations API
+    participant AUTH as Auth API
+    participant RL as AuthRateLimitService
     participant DB as Database
-    participant HASH as Password and Token Hashing
 
-    Note over Inviter,User: Invitation issuance and management
-    Inviter->>FE: Create invitation
-    FE->>API: POST /api/v1/invitations
-    API->>TENANT: Validate role hierarchy and tenant scope
-    TENANT-->>API: Allowed or denied
-    alt Allowed
-        API->>DB: Check duplicate user and pending invite
-        API->>DB: Insert invitation with token and expires_at
-        API-->>Inviter: 201 invitation payload
-    else Denied or invalid
-        API-->>Inviter: 400 or 403
+    Note over AdminMgr,Invitee: Invitation lifecycle
+    AdminMgr->>FE: Create invitation
+    FE->>INV: POST /api/v1/invitations
+    INV->>DB: Enforce role hierarchy, role-specific tenant rules, duplicate checks
+    alt Valid request
+        INV->>DB: Insert pending invitation with token and 7-day expiry
+        INV-->>AdminMgr: 201 invitation payload
+    else Invalid role/scope/duplicate
+        INV-->>AdminMgr: 400 or 403
     end
 
-    Inviter->>FE: Inspect invitation status
-    FE->>API: GET /api/v1/invitations and GET /api/v1/invitations/{id}
-    API->>TENANT: Apply tenant filtering
-    API->>DB: Query invitations
-    API-->>Inviter: list/details
+    Invitee->>FE: Open invite link
+    FE->>AUTH: GET /api/v1/auth/invitation/{token}
+    AUTH->>DB: Lookup invitation and expiry/status
+    AUTH-->>Invitee: valid true or false
 
-    Note over Inviter,User: Public validation and acceptance
-    Invitee->>FE: Open invitation link
-    FE->>API: GET /api/v1/auth/invitation/{token}
-    API->>DB: Lookup invitation by token
-    alt Valid and pending
-        API-->>Invitee: valid true plus role and company metadata
-    else Expired/cancelled/accepted
-        API-->>Invitee: valid false
-    end
+    Invitee->>FE: Accept invitation
+    FE->>AUTH: POST /api/v1/auth/invitation/accept
+    AUTH->>DB: Re-check token + email/username uniqueness
+    AUTH->>DB: Create user and mark invitation accepted
+    AUTH->>DB: Store hashed refresh token via login flow
+    AUTH-->>Invitee: access_token and refresh_token
 
-    Invitee->>FE: Submit username/full_name/password
-    FE->>API: POST /api/v1/auth/invitation/accept
-    API->>DB: Re-validate invitation and uniqueness constraints
-    API->>HASH: Hash password
-    API->>DB: Create user and mark invitation accepted
-    API->>HASH: Create access token and refresh token hash record
-    API-->>Invitee: access_token and refresh_token
-
-    Note over Inviter,User: Session lifecycle
+    Note over User,Invitee: Session and recovery flows
     User->>FE: Login
-    FE->>API: POST /api/v1/auth/login
-    API->>DB: Load user by username
-    API->>HASH: Verify password hash
-    alt Auth success and active user
-        API->>HASH: Issue access token and refresh token hash
-        API->>DB: Persist refresh token hash record
-        API-->>User: access_token and refresh_token
-    else Invalid credentials or inactive
-        API-->>User: 401 or 403
+    FE->>AUTH: POST /api/v1/auth/login
+    AUTH->>RL: check_login_allowed(ip, username)
+    alt Rate-limited
+        AUTH-->>User: 429 Retry-After
+    else Allowed
+        AUTH->>DB: Verify credentials and active status
+        alt Invalid credentials
+            AUTH->>RL: record_login_failure(ip, username)
+            AUTH-->>User: 401
+        else Success
+            AUTH->>RL: record_login_success(ip, username)
+            AUTH->>DB: Store hashed refresh token record
+            AUTH-->>User: access_token and refresh_token
+        end
     end
 
-    User->>FE: Refresh token
-    FE->>API: POST /api/v1/auth/refresh
-    API->>DB: Query candidate refresh token hashes
-    API->>HASH: Compare provided token against hashes
-    alt Valid refresh token
-        API-->>User: new access_token
-    else Invalid or expired refresh token
-        API-->>User: 401
+    User->>FE: Request password reset instructions
+    FE->>AUTH: POST /api/v1/auth/forgot-password
+    AUTH->>RL: check and record forgot-password attempts
+    alt Rate-limited
+        AUTH-->>User: 429 Retry-After
+    else Allowed
+        AUTH-->>User: Generic success message
     end
 
-    User->>FE: Fetch profile and change password
-    FE->>API: GET /api/v1/auth/me and POST /api/v1/auth/change-password
-    API->>DB: Resolve user and update hashed_password when valid
-    API-->>User: profile and success message
+    User->>FE: Refresh session
+    FE->>AUTH: POST /api/v1/auth/refresh
+    AUTH->>DB: Match token against unused non-expired hashed records
+    alt Match found
+        AUTH-->>User: new access_token (no rotated refresh token)
+    else No match
+        AUTH-->>User: 401 invalid or expired refresh token
+    end
 
     User->>FE: Logout
-    FE->>API: POST /api/v1/auth/logout
-    API->>DB: Mark outstanding refresh tokens used
-    API-->>User: logged out
+    FE->>AUTH: POST /api/v1/auth/logout
+    AUTH->>DB: Mark all user refresh records used
+    AUTH-->>User: Logged out successfully
 ```
