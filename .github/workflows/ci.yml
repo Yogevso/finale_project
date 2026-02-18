@@ -149,10 +149,35 @@ jobs:
       - name: Run TypeScript type check
         run: npx tsc --noEmit
 
+  frontend-tests:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests
+        run: npm run test -- --run
+
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
-    needs: frontend-lint
+    needs: [frontend-lint, frontend-tests]
     defaults:
       run:
         working-directory: ./frontend
@@ -463,7 +488,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [backend-tests, collab-quality, e2e-core, e2e-roles, e2e-features]
+    needs: [backend-tests, frontend-tests, collab-quality, e2e-core, e2e-roles, e2e-features]
     if: always()
 
     steps:
@@ -474,6 +499,7 @@ jobs:
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Backend Tests | ${{ needs.backend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Unit Tests | ${{ needs.frontend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Collab Quality | ${{ needs.collab-quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Core | ${{ needs.e2e-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Roles | ${{ needs.e2e-roles.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -481,6 +507,10 @@ jobs:
           
           if [[ "${{ needs.backend-tests.result }}" != "success" ]]; then
             echo "❌ Backend tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.frontend-tests.result }}" != "success" ]]; then
+            echo "Frontend unit tests failed"
             exit 1
           fi
           if [[ "${{ needs.collab-quality.result }}" != "success" ]]; then
@@ -500,3 +530,4 @@ jobs:
             exit 1
           fi
           echo "✅ All CI checks passed!"
+
