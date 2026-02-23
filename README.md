@@ -9,6 +9,7 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 ## 🚀 Features
 
 ### Management Portal (Internal Users)
+
 - **🔐 Authentication & Authorization**
   - JWT-based authentication with refresh tokens
   - Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
@@ -95,6 +96,7 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Cross-tenant document sharing (future)
 
 ### Customer Portal (Authenticated Customers)
+
 - **🏢 Company-Based Access**
   - Customers see documents assigned to their company
   - Company visibility (COMPANY level) for targeted content
@@ -113,6 +115,7 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Self-service password reset
 
 ### Viewer Portal (Public)
+
 - **📖 Document Viewing**
   - Clean, distraction-free reading experience
   - Published version access only (PUBLIC visibility)
@@ -152,18 +155,18 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 
 ### Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor |
-| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette) |
-| **Real-time** | Hocuspocus (Yjs CRDT), WebSocket collaboration |
-| **Backend** | FastAPI 0.109+, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0 |
-| **Database** | SQLite (development), PostgreSQL (production ready) |
-| **Storage** | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem) |
-| **Email** | aiosmtplib (SMTP), HTML templates |
-| **Testing** | Pytest 262+ tests (backend), Vitest (frontend), Playwright 278 E2E tests (100% pass) |
-| **CI/CD** | GitHub Actions (lint, test, build, docker) |
-| **Deployment** | Docker Compose |
+| Layer             | Technology                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Frontend**      | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor                         |
+| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette)                |
+| **Real-time**     | Hocuspocus (Yjs CRDT), WebSocket collaboration                                       |
+| **Backend**       | FastAPI 0.109+, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0                           |
+| **Database**      | SQLite (development), PostgreSQL (production ready)                                  |
+| **Storage**       | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem)                          |
+| **Email**         | aiosmtplib (SMTP), HTML templates                                                    |
+| **Testing**       | Pytest 262+ tests (backend), Vitest (frontend), Playwright 278 E2E tests (100% pass) |
+| **CI/CD**         | GitHub Actions (lint, test, build, docker)                                           |
+| **Deployment**    | Docker Compose                                                                       |
 
 ---
 
@@ -258,98 +261,232 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 The frontend uses the **Zip B Design System** for a modern, cohesive visual experience.
 
 ### Typography
+
 - **Display Font**: Space Grotesk (headings)
 - **Body Font**: IBM Plex Sans (text, UI)
 
 ### Color Palette
-| Color | Usage |
-|-------|-------|
-| `slate-*` | Backgrounds, text, borders |
-| `sky-*` | Primary actions, links, focus |
-| `emerald-*` | Success, published, positive |
-| `amber-*` | Warning, draft, pending |
-| `rose-*` | Error, delete, destructive |
+
+| Color       | Usage                         |
+| ----------- | ----------------------------- |
+| `slate-*`   | Backgrounds, text, borders    |
+| `sky-*`     | Primary actions, links, focus |
+| `emerald-*` | Success, published, positive  |
+| `amber-*`   | Warning, draft, pending       |
+| `rose-*`    | Error, delete, destructive    |
 
 ### Component Classes
-| Class | Description |
-|-------|-------------|
-| `surface-card` | Card with border & shadow |
-| `btn-primary` | Primary action button |
-| `btn-secondary` | Secondary outline button |
-| `btn-ghost` | Transparent hover button |
-| `input-field` | Styled text input |
-| `select-field` | Styled dropdown |
-| `pill` | Rounded badge/tag |
+
+| Class           | Description               |
+| --------------- | ------------------------- |
+| `surface-card`  | Card with border & shadow |
+| `btn-primary`   | Primary action button     |
+| `btn-secondary` | Secondary outline button  |
+| `btn-ghost`     | Transparent hover button  |
+| `input-field`   | Styled text input         |
+| `select-field`  | Styled dropdown           |
+| `pill`          | Rounded badge/tag         |
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+This project supports three execution modes:
+
+1. Local Development (manual services)
+2. Docker Compose (Development stack)
+3. Docker Compose (Production stack)
+
+---
+
+## 📋 Prerequisites
+
 - Python 3.11+
 - Node.js 20+
-- Docker & Docker Compose (optional)
+- Docker & Docker Compose
 
-### Option 1: Local Development
+---
 
-**Backend:**
+# 🧪 Option 1: Local Development (Manual Services)
+
+### Backend (FastAPI)
+
 ```bash
 cd backend
 python -m venv venv
 
 # Windows
 venv\Scripts\activate
-# Linux/Mac
+
+# macOS / Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**Collaboration Server:**
+Backend:
+
+- http://localhost:8000
+- Swagger: http://localhost:8000/api/v1/docs
+
+---
+
+### Real-time Collaboration Server (Hocuspocus + Yjs)
+
 ```bash
 cd collab-server
 npm install
 npm run dev
 ```
 
-**Frontend:**
+- WebSocket: ws://localhost:8002
+- Health (dev): http://localhost:8003/health
+
+---
+
+### Frontend (React + Vite)
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-**Access:**
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- Collab Server: ws://localhost:8002
-- API Docs: http://localhost:8000/api/v1/docs
-
-### Option 2: Docker Compose
-
-```bash
-docker compose up -d
-```
-
-**Access:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- Collab Server: ws://localhost:8002
 
 ---
 
+### Local Access Summary
+
+| Service     | URL                               |
+| ----------- | --------------------------------- |
+| Frontend    | http://localhost:3000             |
+| Backend API | http://localhost:8000             |
+| API Docs    | http://localhost:8000/api/v1/docs |
+| Collab WS   | ws://localhost:8002               |
+
+---
+
+# 🐳 Option 2: Docker Compose (Development)
+
+```bash
+docker compose up -d --build
+```
+
+Services started:
+
+- Backend (8000)
+- Frontend (3000)
+- Collab Server (8002 + 8003)
+
+Access:
+
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+- Swagger: http://localhost:8000/api/v1/docs
+- Collab WS: ws://localhost:8002
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Reset database (⚠ deletes all data):
+
+```bash
+docker compose down -v
+```
+
+---
+
+# 🚀 Option 3: Docker Compose (Production)
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Services started:
+
+- Backend (container 8000 → exposed as 8001)
+- Frontend (80 / 443)
+- Collab Server (8002)
+- Optional Redis (profile: with-redis)
+
+Production access:
+
+| Service     | URL                |
+| ----------- | ------------------ |
+| Frontend    | http://<host>      |
+| Backend API | http://<host>:8001 |
+| Collab WS   | ws://<host>:8002   |
+
+Enable Redis scaling:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile with-redis up -d
+```
+
+Stop production:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+---
+
+# 🧪 Running Tests
+
+Backend:
+
+```bash
+cd backend
+pytest -v
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm test
+npm run test:e2e
+```
+
+---
+
+# 🩺 Health Endpoints
+
+Backend:
+
+- `/health` (development)
+- `/ready` (production)
+
+Collab Server:
+
+- `/health` (port 8003 in development)
+
+---
+
+# 📦 Persistent Docker Volumes
+
+- backend-data
+- backend-uploads
+- redis-data (if enabled)
+
+⚠ Use `docker compose down -v` only if you want to wipe all stored data.
+
 ## 🔑 Default Users
 
-| Username | Password | Role | Description |
-|----------|----------|------|-------------|
-| sysadmin | sysadmin123 | System Admin | Full system access, manage all admins |
-| admin | admin123 | Admin | Manage users, companies, settings |
-| manager | manager123 | Manager | Publish, delete, approve reviews |
-| editor | editor123 | Editor | Create, edit documents, comments |
-| viewer | viewer123 | Viewer | Read-only internal access |
-| customer1 | customer123 | Customer | Customer portal access (Company A) |
-| customer2 | customer123 | Customer | Customer portal access (Company B) |
+| Username  | Password    | Role         | Description                           |
+| --------- | ----------- | ------------ | ------------------------------------- |
+| sysadmin  | sysadmin123 | System Admin | Full system access, manage all admins |
+| admin     | admin123    | Admin        | Manage users, companies, settings     |
+| manager   | manager123  | Manager      | Publish, delete, approve reviews      |
+| editor    | editor123   | Editor       | Create, edit documents, comments      |
+| viewer    | viewer123   | Viewer       | Read-only internal access             |
+| customer1 | customer123 | Customer     | Customer portal access (Company A)    |
+| customer2 | customer123 | Customer     | Customer portal access (Company B)    |
 
 ---
 
@@ -392,6 +529,7 @@ FRONTEND_URL=http://localhost:3000
 ## 🧪 Testing
 
 ### Backend Tests (262+ tests)
+
 ```bash
 cd backend
 pytest -v                              # Run all tests
@@ -402,6 +540,7 @@ pytest tests/test_roles.py -v          # Role-based tests
 ```
 
 ### Frontend E2E Tests (278 tests - 100% pass rate)
+
 ```bash
 cd frontend
 npm test           # Unit tests (Vitest)
@@ -414,6 +553,7 @@ npx playwright test permissions.spec.ts
 ```
 
 ### Linting
+
 ```bash
 # Backend
 cd backend
@@ -430,47 +570,52 @@ npm run lint
 ## 📋 API Documentation
 
 ### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/login` | Login and get tokens |
-| POST | `/api/auth/logout` | Logout current session |
-| POST | `/api/auth/refresh` | Refresh access token |
-| POST | `/api/auth/password-reset/request` | Request password reset |
-| POST | `/api/auth/password-reset/reset` | Reset password with token |
+
+| Method | Endpoint                           | Description               |
+| ------ | ---------------------------------- | ------------------------- |
+| POST   | `/api/auth/login`                  | Login and get tokens      |
+| POST   | `/api/auth/logout`                 | Logout current session    |
+| POST   | `/api/auth/refresh`                | Refresh access token      |
+| POST   | `/api/auth/password-reset/request` | Request password reset    |
+| POST   | `/api/auth/password-reset/reset`   | Reset password with token |
 
 ### Documents
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/documents` | List documents |
-| POST | `/api/documents` | Create document |
-| GET | `/api/documents/{id}` | Get document |
-| PUT | `/api/documents/{id}` | Update document |
-| DELETE | `/api/documents/{id}` | Delete document |
-| POST | `/api/documents/upload` | Upload PDF/Word file |
+
+| Method | Endpoint                | Description          |
+| ------ | ----------------------- | -------------------- |
+| GET    | `/api/documents`        | List documents       |
+| POST   | `/api/documents`        | Create document      |
+| GET    | `/api/documents/{id}`   | Get document         |
+| PUT    | `/api/documents/{id}`   | Update document      |
+| DELETE | `/api/documents/{id}`   | Delete document      |
+| POST   | `/api/documents/upload` | Upload PDF/Word file |
 
 ### Versions
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/documents/{id}/versions` | List versions |
-| POST | `/api/documents/{id}/versions` | Create version |
-| POST | `/api/versions/{id}/publish` | Publish version |
+
+| Method | Endpoint                       | Description     |
+| ------ | ------------------------------ | --------------- |
+| GET    | `/api/documents/{id}/versions` | List versions   |
+| POST   | `/api/documents/{id}/versions` | Create version  |
+| POST   | `/api/versions/{id}/publish`   | Publish version |
 
 ### Comments
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/documents/{id}/comments` | List comments |
-| POST | `/api/documents/{id}/comments` | Add comment |
-| PUT | `/api/comments/{id}` | Update comment |
-| DELETE | `/api/comments/{id}` | Delete comment |
-| PUT | `/api/comments/{id}/resolve` | Resolve thread |
+
+| Method | Endpoint                       | Description    |
+| ------ | ------------------------------ | -------------- |
+| GET    | `/api/documents/{id}/comments` | List comments  |
+| POST   | `/api/documents/{id}/comments` | Add comment    |
+| PUT    | `/api/comments/{id}`           | Update comment |
+| DELETE | `/api/comments/{id}`           | Delete comment |
+| PUT    | `/api/comments/{id}/resolve`   | Resolve thread |
 
 ### Notifications
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/notifications` | List notifications |
-| GET | `/api/notifications/unread-count` | Get unread count |
-| POST | `/api/notifications/mark-read` | Mark as read |
-| DELETE | `/api/notifications` | Delete notifications |
+
+| Method | Endpoint                          | Description          |
+| ------ | --------------------------------- | -------------------- |
+| GET    | `/api/notifications`              | List notifications   |
+| GET    | `/api/notifications/unread-count` | Get unread count     |
+| POST   | `/api/notifications/mark-read`    | Mark as read         |
+| DELETE | `/api/notifications`              | Delete notifications |
 
 ### Full API documentation available at `/api/v1/docs` (Swagger UI) or `/api/v1/redoc` (ReDoc).
 
@@ -492,6 +637,7 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
 ## 📈 Roadmap
 
 ### Completed ✅
+
 - [x] User authentication & authorization
 - [x] Document CRUD with rich text
 - [x] Version control with publishing
@@ -502,15 +648,18 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
 - [x] Public viewer portal
 - [x] Search & saved searches
 - [x] Engagement tracking
-
-### Planned 🔜
 - [x] Customer Portal (company-based document access, feedback)
 - [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant sections)
-- [ ] Real-time collaboration (WebSocket, presence indicators)
+- [x] Real-time collaboration (TipTap + Yjs + Hocuspocus, presence, offline, snapshots)
+
+### Planned 🔜
+
 - [ ] Document templates
 - [ ] Workflow approvals
 - [ ] Mobile app (React Native)
 - [ ] AI-powered search and summaries
+
+> Implementation details: see REALTIME_COLLABORATION_PLAN.md
 
 ---
 
