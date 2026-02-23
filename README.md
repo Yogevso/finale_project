@@ -236,7 +236,9 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 │   │   │   ├── portal/           # Customer portal pages
 │   │   │   └── viewer/           # Public viewer pages
 │   │   ├── lib/
-│   │   │   ├── api.ts            # API client
+│   │   │   ├── api/              # Domain API modules + HTTP transport
+│   │   │   ├── api.ts            # Composed API facade
+│   │   │   ├── queryKeys.ts      # Centralized React Query keys
 │   │   │   └── auth.ts           # Auth context
 │   │   └── types/                # TypeScript definitions
 │   ├── e2e/                      # Playwright E2E tests (278 tests)
