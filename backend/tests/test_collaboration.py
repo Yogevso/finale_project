@@ -273,6 +273,70 @@ class TestCollaborationActivity:
         data = response.json()
         assert len(data["activities"]) <= 5
 
+    def test_log_activity_forbidden_without_document_access(
+        self, client, customer_2_headers, company_document
+    ):
+        """User cannot log activity for a document they cannot access."""
+        response = client.post(
+            "/api/v1/collaboration/activity",
+            headers=customer_2_headers,
+            json={
+                "document_id": company_document.id,
+                "activity_type": "cursor_moved",
+                "details": {"position": 1},
+            },
+        )
+
+        assert response.status_code == 403
+
+    def test_log_activity_rejects_other_users_session(
+        self, client, auth_headers, admin_headers, test_document
+    ):
+        """User cannot submit activity to another user's active session."""
+        start_response = client.post(
+            "/api/v1/collaboration/sessions/start",
+            headers=auth_headers,
+            json={"document_id": test_document.id},
+        )
+        session_id = start_response.json()["session_id"]
+
+        response = client.post(
+            "/api/v1/collaboration/activity",
+            headers=admin_headers,
+            json={
+                "document_id": test_document.id,
+                "session_id": session_id,
+                "activity_type": "cursor_moved",
+                "details": {"position": 9},
+            },
+        )
+
+        assert response.status_code == 403
+
+    def test_log_activity_rejects_session_document_mismatch(
+        self, client, auth_headers, test_document, internal_document
+    ):
+        """Session IDs are scoped to one document and cannot be reused across documents."""
+        start_response = client.post(
+            "/api/v1/collaboration/sessions/start",
+            headers=auth_headers,
+            json={"document_id": test_document.id},
+        )
+        session_id = start_response.json()["session_id"]
+
+        response = client.post(
+            "/api/v1/collaboration/activity",
+            headers=auth_headers,
+            json={
+                "document_id": internal_document.id,
+                "session_id": session_id,
+                "activity_type": "cursor_moved",
+                "details": {"position": 9},
+            },
+        )
+
+        assert response.status_code == 400
+
 
 class TestSnapshots:
     """Tests for collaboration snapshot system"""

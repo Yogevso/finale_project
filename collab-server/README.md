@@ -64,6 +64,7 @@ npm start
 | `HOST` | 0.0.0.0 | Server host |
 | `JWT_SECRET` | - | Must match FastAPI backend secret |
 | `BACKEND_URL` | http://localhost:8000 | FastAPI backend URL |
+| `BACKEND_API_PREFIX` | /api/v1 | FastAPI API prefix used for persistence endpoints |
 | `LOG_LEVEL` | info | Logging verbosity |
 | `REDIS_URL` | - | Optional Redis for horizontal scaling |
 

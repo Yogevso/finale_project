@@ -123,6 +123,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Migration scaffolding lives in `backend/alembic/` with configuration in `backend/alembic.ini`.
+
 ---
 
 ## ⚙️ Configuration
@@ -209,6 +211,21 @@ rm -f data/document_portal.db
 
 # Restart server to recreate
 uvicorn app.main:app --reload
+```
+
+### Managed Migrations (Alembic)
+
+Managed migrations now run on startup (with lightweight fallback for compatibility), and can be run manually:
+
+```bash
+# Apply all managed migrations
+alembic upgrade head
+
+# Show current revision
+alembic current
+
+# Show migration history
+alembic history
 ```
 
 ### Seed Sample Data
@@ -354,7 +371,7 @@ backend/
 │   │   ├── auth_service.py     # Authentication logic
 │   │   ├── document_service.py # Document operations
 │   │   ├── comment_service.py  # Comment operations
-│   │   ├── attachment_service.py# File handling
+│   │   ├── attachment_service/  # File handling (upload/artifacts/preview/reader/streams)
 │   │   ├── storage_service.py  # S3/local storage abstraction
 │   │   ├── email_service.py    # Email sending with templates
 │   │   └── base_service.py     # Base service with tenant isolation

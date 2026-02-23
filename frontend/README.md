@@ -85,7 +85,7 @@ Modern React SPA with TypeScript, Vite, TailwindCSS, TipTap rich text editor, an
 | Rich Text | TipTap 2 |
 | Real-Time Collab | Yjs + Hocuspocus (WebSocket) |
 | Charts | Recharts 2 |
-| HTTP Client | Fetch API |
+| HTTP Client | Axios (management/portal) + Fetch (public viewer APIs) |
 | Routing | React Router 6 |
 | Testing | Vitest + Playwright (278 E2E tests, 100% pass) |
 | Linting | ESLint + TypeScript ESLint |
@@ -257,7 +257,9 @@ frontend/
 │   │       └── ViewerDocumentPage.tsx
 │   │
 │   ├── lib/                     # Utilities
-│   │   ├── api.ts               # API client with auth
+│   │   ├── api/                 # Domain API modules + HTTP transport
+│   │   ├── api.ts               # Composed API facade (backward-compatible surface)
+│   │   ├── queryKeys.ts         # Centralized React Query keys
 │   │   ├── auth.ts              # Auth context & hooks
 │   │   └── utils.ts             # Helper functions
 │   │
@@ -403,25 +405,29 @@ The frontend uses the **Zip B Design System** with a modern, cohesive visual lan
 
 ## 📡 API Integration
 
-### API Client (`src/lib/api.ts`)
+### API Client (`src/lib/api.ts` + `src/lib/api/*`)
 
 ```typescript
 import { api } from './lib/api';
 
-// GET request
-const documents = await api.get('/documents');
+// List documents
+const documents = await api.getDocuments({ page: 1, page_size: 10 });
 
-// POST request
-const newDoc = await api.post('/documents', { title: 'New Doc' });
+// Create a document
+const newDoc = await api.createDocument({
+  title: 'New Doc',
+  content: '<p>Draft</p>',
+  category: 'General',
+});
 
-// PUT request
-await api.put(`/documents/${id}`, { title: 'Updated' });
+// Update a document
+await api.updateDocument(newDoc.id, { title: 'Updated' });
 
-// DELETE request
-await api.delete(`/documents/${id}`);
+// Delete a document
+await api.deleteDocument(newDoc.id);
 
 // File upload
-await api.upload(`/documents/${id}/attachments`, file);
+await api.uploadAttachment(newDoc.id, file);
 ```
 
 ### Authentication

@@ -1,11 +1,15 @@
 """Database Session Management"""
 
+import logging
 import re
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Create SQLite engine
 engine = create_engine(
@@ -33,10 +37,37 @@ def get_db():
 def init_db():
     """Initialize database - create all tables"""
     Base.metadata.create_all(bind=engine)
-    _run_lightweight_migrations()
+    managed_migrations_applied = _run_managed_migrations()
+    _run_lightweight_migrations(skip_versions_semantic_migration=managed_migrations_applied)
 
 
-def _run_lightweight_migrations() -> None:
+def _run_managed_migrations() -> bool:
+    """Run Alembic migrations when scaffolding is available."""
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+    alembic_dir = Path(__file__).resolve().parents[1] / "alembic"
+    if not alembic_ini.exists() or not alembic_dir.exists():
+        return False
+
+    try:
+        from alembic import command
+        from alembic.config import Config
+    except Exception as exc:
+        logger.warning("Alembic import unavailable; using lightweight migrations only: %s", exc)
+        return False
+
+    config = Config(str(alembic_ini))
+    config.set_main_option("script_location", str(alembic_dir))
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+    try:
+        command.upgrade(config, "head")
+        return True
+    except Exception as exc:
+        logger.warning("Managed migration upgrade failed; continuing with lightweight fallback: %s", exc)
+        return False
+
+
+def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = False) -> None:
     """Apply lightweight migrations for SQLite without Alembic."""
 
     def slugify(value: str) -> str:
@@ -483,43 +514,46 @@ def _run_lightweight_migrations() -> None:
             )
         )
 
-        # Add missing columns to versions table for semantic version workflow.
-        version_columns = conn.execute(text("PRAGMA table_info(versions)")).fetchall()
-        existing_version_columns = {row[1] for row in version_columns}
-        required_version_columns = {
-            "semantic_version": "ALTER TABLE versions ADD COLUMN semantic_version VARCHAR(32)",
-            "bump_type": "ALTER TABLE versions ADD COLUMN bump_type VARCHAR(10) DEFAULT 'PATCH' NOT NULL",
-            "published_by": "ALTER TABLE versions ADD COLUMN published_by INTEGER",
-        }
-        for column_name, ddl in required_version_columns.items():
-            if column_name not in existing_version_columns:
-                conn.execute(text(ddl))
+        if not skip_versions_semantic_migration:
+            # Add missing columns to versions table for semantic version workflow.
+            version_columns = conn.execute(text("PRAGMA table_info(versions)")).fetchall()
+            existing_version_columns = {row[1] for row in version_columns}
+            required_version_columns = {
+                "semantic_version": "ALTER TABLE versions ADD COLUMN semantic_version VARCHAR(32)",
+                "bump_type": (
+                    "ALTER TABLE versions ADD COLUMN bump_type VARCHAR(10) DEFAULT 'PATCH' NOT NULL"
+                ),
+                "published_by": "ALTER TABLE versions ADD COLUMN published_by INTEGER",
+            }
+            for column_name, ddl in required_version_columns.items():
+                if column_name not in existing_version_columns:
+                    conn.execute(text(ddl))
 
-        # Backfill semantic_version if missing on old rows.
-        if (
-            "semantic_version" in existing_version_columns
-            or "semantic_version" in required_version_columns
-        ):
+            # Backfill semantic_version if missing on old rows.
+            if (
+                "semantic_version" in existing_version_columns
+                or "semantic_version" in required_version_columns
+            ):
+                conn.execute(
+                    text(
+                        "UPDATE versions "
+                        "SET semantic_version = CASE "
+                        "WHEN version_number IS NULL OR version_number < 1 THEN '1.0.0' "
+                        "ELSE CAST(version_number AS TEXT) || '.0.0' END "
+                        "WHERE semantic_version IS NULL OR TRIM(semantic_version) = ''"
+                    )
+                )
+
+            # SQLAlchemy enums in this project persist enum member names (e.g. PATCH).
+            # Normalize legacy lowercase values that might exist from older writes.
             conn.execute(
                 text(
                     "UPDATE versions "
-                    "SET semantic_version = CASE "
-                    "WHEN version_number IS NULL OR version_number < 1 THEN '1.0.0' "
-                    "ELSE CAST(version_number AS TEXT) || '.0.0' END "
-                    "WHERE semantic_version IS NULL OR TRIM(semantic_version) = ''"
+                    "SET bump_type = CASE LOWER(COALESCE(bump_type, '')) "
+                    "WHEN 'major' THEN 'MAJOR' "
+                    "WHEN 'minor' THEN 'MINOR' "
+                    "WHEN 'patch' THEN 'PATCH' "
+                    "ELSE COALESCE(bump_type, 'PATCH') END"
                 )
             )
-
-        # SQLAlchemy enums in this project persist enum member names (e.g. PATCH).
-        # Normalize legacy lowercase values that might exist from older writes.
-        conn.execute(
-            text(
-                "UPDATE versions "
-                "SET bump_type = CASE LOWER(COALESCE(bump_type, '')) "
-                "WHEN 'major' THEN 'MAJOR' "
-                "WHEN 'minor' THEN 'MINOR' "
-                "WHEN 'patch' THEN 'PATCH' "
-                "ELSE COALESCE(bump_type, 'PATCH') END"
-            )
-        )
         conn.commit()

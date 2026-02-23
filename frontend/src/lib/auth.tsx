@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import type { User, LoginRequest, UserCreate, UserRole } from '@/types'
@@ -74,6 +74,7 @@ interface AuthContextType {
   login: (credentials: LoginRequest) => Promise<void>
   register: (userData: UserCreate) => Promise<void>
   logout: () => Promise<void>
+  refreshUser: () => Promise<User | null>
   // Role checks
   isSystemAdmin: boolean
   isAdmin: boolean
@@ -98,28 +99,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const queryClient = useQueryClient()
 
+  const refreshUser = useCallback(async (): Promise<User | null> => {
+    if (!api.hasToken()) {
+      setUser(null)
+      return null
+    }
+
+    try {
+      const currentUser = await api.getCurrentUser()
+      setUser(currentUser)
+      return currentUser
+    } catch {
+      api.clearTokens()
+      setUser(null)
+      return null
+    }
+  }, [])
+
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
-      if (api.hasToken()) {
-        try {
-          const currentUser = await api.getCurrentUser()
-          setUser(currentUser)
-        } catch {
-          api.clearTokens()
-        }
-      }
+      await refreshUser()
       setIsLoading(false)
     }
     checkAuth()
-  }, [])
+  }, [refreshUser])
 
   const login = async (credentials: LoginRequest) => {
     // Clear all cached queries before login to ensure fresh data for new user
     queryClient.clear()
     await api.login(credentials)
-    const currentUser = await api.getCurrentUser()
-    setUser(currentUser)
+    const currentUser = await refreshUser()
+    if (!currentUser) {
+      throw new Error('Failed to load user profile after login')
+    }
   }
 
   const register = async (userData: UserCreate) => {
@@ -164,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login, 
       register, 
       logout, 
+      refreshUser,
       isSystemAdmin,
       isAdmin, 
       isManager,

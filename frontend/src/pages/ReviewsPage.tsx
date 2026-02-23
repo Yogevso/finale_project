@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+import { useMySubmissionsQuery, usePendingReviewsQuery } from '@/hooks/useReviewQueries'
 import { Link } from 'react-router-dom'
 import { 
   Clock, 
@@ -49,25 +51,22 @@ export default function ReviewsPage() {
   const queryClient = useQueryClient()
 
   // Fetch pending reviews
-  const { data: pendingData, isLoading: pendingLoading } = useQuery({
-    queryKey: ['reviews', 'pending'],
-    queryFn: () => api.getPendingReviews({ per_page: 50 }),
-    enabled: activeTab === 'pending',
-  })
+  const { data: pendingData, isLoading: pendingLoading } = usePendingReviewsQuery(
+    activeTab === 'pending',
+  )
 
   // Fetch my submissions
-  const { data: submissionsData, isLoading: submissionsLoading } = useQuery({
-    queryKey: ['reviews', 'my-submissions', statusFilter],
-    queryFn: () => api.getMySubmissions({ per_page: 50, status: statusFilter || undefined }),
-    enabled: activeTab === 'my-submissions',
-  })
+  const { data: submissionsData, isLoading: submissionsLoading } = useMySubmissionsQuery(
+    statusFilter,
+    activeTab === 'my-submissions',
+  )
 
   // Approve mutation
   const approveMutation = useMutation({
     mutationFn: ({ reviewId, comments }: { reviewId: number; comments?: string }) =>
       api.approveReview(reviewId, { comments }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
       setSelectedReview(null)
     },
   })
@@ -77,7 +76,7 @@ export default function ReviewsPage() {
     mutationFn: ({ reviewId, comments }: { reviewId: number; comments: string }) =>
       api.rejectReview(reviewId, { comments }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
       setSelectedReview(null)
     },
   })
@@ -86,7 +85,7 @@ export default function ReviewsPage() {
   const cancelMutation = useMutation({
     mutationFn: (reviewId: number) => api.cancelReview(reviewId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
     },
   })
 

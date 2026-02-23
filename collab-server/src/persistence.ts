@@ -8,12 +8,35 @@ import * as Y from 'yjs';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+function normalizeApiPrefix(prefix: string): string {
+  if (!prefix) {
+    return '';
+  }
+  const withLeadingSlash = prefix.startsWith('/') ? prefix : `/${prefix}`;
+  return withLeadingSlash.replace(/\/+$/, '');
+}
+
+const BACKEND_API_PREFIX = normalizeApiPrefix(process.env.BACKEND_API_PREFIX || '/api/v1');
+const COLLAB_STATE_PATH = '/collaboration/documents';
+
 // In-memory cache for document states (for quick access)
 const documentCache = new Map<string, Uint8Array>();
 
 export interface PersistenceResult {
   success: boolean;
   error?: string;
+}
+
+export function buildDocumentStateUrl(
+  documentId: string,
+  options?: {
+    backendUrl?: string;
+    apiPrefix?: string;
+  }
+): string {
+  const backendUrl = (options?.backendUrl ?? BACKEND_URL).replace(/\/+$/, '');
+  const apiPrefix = normalizeApiPrefix(options?.apiPrefix ?? BACKEND_API_PREFIX);
+  return `${backendUrl}${apiPrefix}${COLLAB_STATE_PATH}/${documentId}/state`;
 }
 
 /**
@@ -32,7 +55,7 @@ export async function loadDocument(
 
   try {
     const response = await axios.get(
-      `${BACKEND_URL}/api/management/collaboration/documents/${documentId}/state`,
+      buildDocumentStateUrl(documentId),
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -73,7 +96,7 @@ export async function saveDocument(
 
   try {
     await axios.put(
-      `${BACKEND_URL}/api/management/collaboration/documents/${documentId}/state`,
+      buildDocumentStateUrl(documentId),
       state,
       {
         headers: {

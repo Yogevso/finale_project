@@ -172,69 +172,87 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 
 ## 📦 Project Structure
 
-.
-├── backend/ # FastAPI backend (API, auth, RBAC, tenants, analytics)
-│ ├── app/
-│ │ ├── api/ # Route groups (management / portal / public / viewer / health)
-│ │ ├── config.py # App settings & environment configuration
-│ │ ├── db.py # DB session/engine setup
-│ │ ├── dependencies/ # Auth, tenant context, permissions dependencies
-│ │ ├── middleware/ # CORS, logging, tenant isolation, security middleware
-│ │ ├── models/ # SQLAlchemy ORM models
-│ │ ├── schemas/ # Pydantic request/response schemas
-│ │ ├── security.py # Security utilities (JWT, hashing, guards)
-│ │ ├── services/ # Business logic layer
-│ │ ├── utils/ # Shared helpers (converters, validators, etc.)
-│ │ └── workers/ # Background jobs / async workers (if enabled)
-│ ├── tests/ # Pytest suite (auth, documents, collab, analytics, portals, etc.)
-│ ├── data/ # Local DB + uploads (dev)
-│ ├── Dockerfile
-│ ├── pyproject.toml
-│ └── requirements*.txt
-│
-├── collab-server/ # Hocuspocus (Yjs) real-time collaboration server
-│ ├── src/
-│ │ ├── index.ts # Server entry (WebSocket)
-│ │ ├── auth.ts # JWT auth hook
-│ │ ├── persistence.ts # Document persistence hook (store/load Yjs state)
-│ │ └── tests/ # Jest unit tests
-│ ├── Dockerfile
-│ └── package.json
-│
-├── frontend/ # React + Vite + TS + Tailwind + TipTap
-│ ├── src/
-│ │ ├── components/ # UI components (editor, collaboration UI, analytics widgets, etc.)
-│ │ ├── pages/ # App pages (admin, portal, public, viewer)
-│ │ ├── layouts/ # Layout wrappers for different portals
-│ │ ├── lib/ # API clients, auth context, collaboration hooks, utils
-│ │ ├── stores/ # Client state stores (e.g., collaboration store)
-│ │ └── types/ # Shared TS types
-│ ├── e2e/ # Playwright E2E tests (roles, workflows, collaboration)
-│ ├── Dockerfile / Dockerfile.dev
-│ └── nginx.conf
-│
-├── docs/ # Product + dev documentation
-│ ├── ARCHITECTURE.md
-│ ├── DEVELOPMENT.md
-│ ├── USER_GUIDE.md
-│ └── API_EXAMPLES.md
-│
-├── diagrams/ # System diagrams + phased architecture docs
-│ ├── phases/ # P0–P7 phase breakdown + traceability
-│ └── *.md
-│
-├── scripts/ # Dev/test/deploy helper scripts
-│ ├── dev.sh / dev.ps1
-│ ├── test.sh / test.ps1
-│ ├── stop.sh / stop.ps1
-│ └── load_test_collaboration.py
-│
-├── docker-compose.yml # Local development stack
-├── docker-compose.prod.yml # Production stack
-├── REALTIME_COLLABORATION_PLAN.md
-├── ANALYTICS_DASHBOARD_PLAN.md
-├── CUSTOMER_PORTAL_PLAN.md
-└── skills/ # Internal skills for agents (prompt-capability-builder)
+```
+├── .github/
+│   └── workflows/
+│       └── test.yml              # CI/CD pipeline
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── management/       # Admin API routes
+│   │   │   │   ├── auth.py       # Login, logout, password reset
+│   │   │   │   ├── documents.py  # Document CRUD
+│   │   │   │   ├── versions.py   # Version management
+│   │   │   │   ├── attachments.py# File uploads
+│   │   │   │   ├── comments.py   # Comments & threads
+│   │   │   │   ├── notifications.py # User notifications
+│   │   │   │   ├── engagement.py # Feedback, bookmarks, progress
+│   │   │   │   ├── search.py     # Search & saved searches
+│   │   │   │   ├── users.py      # User management
+│   │   │   │   └── tenants.py    # Tenant management
+│   │   │   ├── viewer/           # Public viewer routes
+│   │   │   │   └── documents.py  # Published documents
+│   │   │   └── health.py         # Health checks
+│   │   ├── models/               # SQLAlchemy ORM models
+│   │   ├── schemas/              # Pydantic request/response schemas
+│   │   ├── services/             # Business logic layer
+│   │   │   ├── auth_service.py
+│   │   │   ├── document_service.py
+│   │   │   ├── email_service.py
+│   │   │   ├── storage_service.py
+│   │   │   └── ...
+│   │   ├── dependencies/         # FastAPI dependencies
+│   │   ├── middleware/           # CORS, logging, tenant context
+│   │   ├── db.py                 # Database configuration
+│   │   └── main.py               # Application entrypoint
+│   ├── tests/                    # Pytest test suite
+│   ├── data/                     # SQLite database files
+│   ├── requirements.txt
+│   └── Dockerfile
+├── collab-server/                # Real-time collaboration
+│   ├── src/
+│   │   ├── index.ts              # Hocuspocus server entry
+│   │   ├── auth.ts               # JWT authentication
+│   │   ├── persistence.ts        # Document persistence
+│   │   └── types.ts              # TypeScript types
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── components/           # Reusable UI components
+│   │   │   ├── Layout.tsx        # Top header navigation
+│   │   │   ├── NotificationBell.tsx # Real-time notifications
+│   │   │   ├── DocumentEditor.tsx# Rich text editor
+│   │   │   ├── RichTextEditor.tsx# TipTap wrapper
+│   │   │   ├── CollaborativeEditor.tsx # Real-time collab
+│   │   │   ├── CommentsSection.tsx
+│   │   │   ├── VersionsSection.tsx
+│   │   │   ├── AttachmentsSection.tsx
+│   │   │   └── analytics/        # Dashboard components
+│   │   ├── pages/
+│   │   │   ├── LoginPage.tsx
+│   │   │   ├── DashboardPage.tsx
+│   │   │   ├── DocumentsPage.tsx
+│   │   │   ├── DocumentDetailPage.tsx
+│   │   │   ├── UsersPage.tsx
+│   │   │   ├── portal/           # Customer portal pages
+│   │   │   └── viewer/           # Public viewer pages
+│   │   ├── lib/
+│   │   │   ├── api/              # Domain API modules + HTTP transport
+│   │   │   ├── api.ts            # Composed API facade
+│   │   │   ├── queryKeys.ts      # Centralized React Query keys
+│   │   │   └── auth.ts           # Auth context
+│   │   └── types/                # TypeScript definitions
+│   ├── e2e/                      # Playwright E2E tests (278 tests)
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js        # Zip B design tokens
+│   └── Dockerfile
+├── docs/                         # Documentation
+├── docker-compose.yml            # Production deployment
+└── README.md
+```
 
 ---
 
