@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+import { useDocumentVersionsQuery } from '@/hooks/useDocumentQueries'
 import type { Version, VersionBumpType, VersionCreate } from '@/types'
 
 interface VersionsSectionProps {
@@ -40,15 +42,12 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [publishError, setPublishError] = useState<string | null>(null)
 
-  const { data: versionsData, isLoading } = useQuery({
-    queryKey: ['versions', documentId],
-    queryFn: () => api.getVersions(documentId),
-  })
+  const { data: versionsData, isLoading } = useDocumentVersionsQuery(documentId)
 
   const createMutation = useMutation({
     mutationFn: (data: VersionCreate) => api.createVersion(documentId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['versions', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
       setIsCreating(false)
       setNewVersion({ content: '', changes_summary: '', bump_type: 'patch' })
     },
@@ -58,7 +57,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
     mutationFn: (versionId: number) => api.publishVersion(documentId, versionId),
     onSuccess: () => {
       setPublishError(null)
-      queryClient.invalidateQueries({ queryKey: ['versions', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
     },
     onError: (error: unknown) => {
       const message =
@@ -71,7 +70,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
   const deleteMutation = useMutation({
     mutationFn: (versionId: number) => api.deleteVersion(documentId, versionId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['versions', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
     },
   })
 

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { queryKeys } from '@/lib/queryKeys'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import RichTextEditor from '@/components/RichTextEditor'
 import PageHeader from '@/components/PageHeader'
@@ -32,7 +33,12 @@ export default function DocumentsPage() {
   }, [isQuickCreateMode])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['documents', page, search, statusFilter],
+    queryKey: queryKeys.documents.list({
+      page,
+      page_size: 10,
+      search: search || undefined,
+      status: statusFilter || undefined,
+    }),
     queryFn: () =>
       api.getDocuments({
         page,
@@ -45,7 +51,7 @@ export default function DocumentsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteDocument(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     },
     onError: (error: unknown) => {
       const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
@@ -63,7 +69,7 @@ export default function DocumentsPage() {
         delete next[variables.id]
         return next
       })
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     },
     onError: (error: unknown, variables) => {
       const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
@@ -429,7 +435,7 @@ function CreateDocumentModal({ onClose }: { onClose: () => void }) {
       return doc
     },
     onSuccess: (doc) => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       onClose()
       // Navigate to fullscreen view to continue editing
       navigate(`/documents/${doc.id}/fullscreen`)
@@ -641,7 +647,7 @@ function UploadDocumentModal({ onClose }: { onClose: () => void }) {
         tags: tags || undefined,
       }),
     onSuccess: (doc) => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       onClose()
       navigate(`/documents/${doc.id}/fullscreen`)
     },

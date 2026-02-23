@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -14,10 +16,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  const { data: attachments = [], isLoading } = useQuery({
-    queryKey: ['attachments', documentId],
-    queryFn: () => api.getAttachments(documentId),
-  })
+  const { data: attachments = [], isLoading } = useDocumentAttachmentsQuery(documentId)
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -26,7 +25,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
       return api.uploadAttachment(documentId, file)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attachments', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.attachments.byDocument(documentId) })
       setIsUploading(false)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -41,7 +40,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   const deleteMutation = useMutation({
     mutationFn: (attachmentId: number) => api.deleteAttachment(documentId, attachmentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attachments', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.attachments.byDocument(documentId) })
     },
   })
 

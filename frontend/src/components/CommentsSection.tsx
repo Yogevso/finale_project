@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { queryKeys } from '@/lib/queryKeys'
+import { useDocumentCommentsQuery } from '@/hooks/useDocumentQueries'
 
 interface CommentUser {
   id: number
@@ -52,15 +54,12 @@ export default function CommentsSection({ documentId, pendingAnchor, onClearAnch
   const [editText, setEditText] = useState('')
   const [showResolved, setShowResolved] = useState(false)
 
-  const { data: comments = [], isLoading } = useQuery({
-    queryKey: ['comments', documentId],
-    queryFn: () => api.getComments(documentId),
-  })
+  const { data: comments = [], isLoading } = useDocumentCommentsQuery(documentId)
 
   const createMutation = useMutation({
     mutationFn: (data: CommentCreate) => api.createComment(documentId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['comments', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
       setNewComment('')
       setIsPrivate(false)
       setReplyingTo(null)
@@ -73,7 +72,7 @@ export default function CommentsSection({ documentId, pendingAnchor, onClearAnch
     mutationFn: ({ commentId, data }: { commentId: number; data: { content?: string; is_resolved?: boolean } }) =>
       api.updateComment(documentId, commentId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['comments', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
       setEditingId(null)
       setEditText('')
     },
@@ -82,7 +81,7 @@ export default function CommentsSection({ documentId, pendingAnchor, onClearAnch
   const deleteMutation = useMutation({
     mutationFn: (commentId: number) => api.deleteComment(documentId, commentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['comments', documentId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
     },
   })
 

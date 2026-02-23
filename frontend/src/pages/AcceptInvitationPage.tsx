@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import {
   CheckCircle2,
   XCircle,
@@ -18,6 +19,7 @@ export default function AcceptInvitationPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
+  const { refreshUser } = useAuth()
 
   const [formData, setFormData] = useState({
     username: '',
@@ -48,14 +50,12 @@ export default function AcceptInvitationPage() {
         full_name: formData.full_name,
         password: formData.password,
       }),
-    onSuccess: (data) => {
-      // Store tokens and redirect to dashboard
-      localStorage.setItem('access_token', data.access_token)
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token)
-      }
-      // Redirect to appropriate page based on the invitation role we already have
-      if (invitation?.role === 'customer') {
+    onSuccess: async (data) => {
+      api.setToken(data.access_token, data.refresh_token)
+      const currentUser = await refreshUser()
+
+      // Redirect to role-appropriate home after session bootstrap.
+      if (currentUser?.role === 'customer' || invitation?.role === 'customer') {
         navigate('/portal')
       } else {
         navigate('/')
