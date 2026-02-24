@@ -3,6 +3,10 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { ReadingWidth } from '@/lib/readingWidth'
 import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
+import {
+  getPreferredPreviewAttachment,
+  resolveSelectedAttachment,
+} from '@/lib/attachmentSelection'
 import type { Attachment } from '@/types'
 import {
   applyHighlights,
@@ -212,19 +216,13 @@ export function DocumentPreview({
   }, [activeHtmlContent, searchTerm])
 
   useEffect(() => {
-    if (previewableAttachments.length === 0 || selectedAttachment) return
-    const preferred =
-      previewableAttachments.find((att) => att.preview_pdf_status === 'ready') ||
-      previewableAttachments.find((att) => att.mime_type.startsWith('application/pdf')) ||
-      previewableAttachments[0]
-    setSelectedAttachment(preferred)
-  }, [previewableAttachments, selectedAttachment])
-
-  useEffect(() => {
-    if (!selectedAttachment) return
-    const refreshed = previewableAttachments.find((att) => att.id === selectedAttachment.id)
-    if (refreshed && refreshed !== selectedAttachment) {
-      setSelectedAttachment(refreshed)
+    const nextSelection = resolveSelectedAttachment(
+      previewableAttachments,
+      selectedAttachment,
+      getPreferredPreviewAttachment,
+    )
+    if (nextSelection !== selectedAttachment) {
+      setSelectedAttachment(nextSelection)
     }
   }, [previewableAttachments, selectedAttachment])
 
@@ -235,28 +233,28 @@ export function DocumentPreview({
       
       try {
         if (previewableAttachments.length > 0) {
-          if (!selectedAttachment) {
-            const preferredAttachment =
-              previewableAttachments.find((att) => att.preview_pdf_status === 'ready') ||
-              previewableAttachments.find((att) => att.mime_type.startsWith('application/pdf')) ||
-              previewableAttachments[0]
-            if (preferredAttachment) {
-              setSelectedAttachment(preferredAttachment)
-              setIsLoading(false)
-              return
-            }
-          }
+          const resolvedSelection = resolveSelectedAttachment(
+            previewableAttachments,
+            selectedAttachment,
+            getPreferredPreviewAttachment,
+          )
 
-          if (selectedAttachment && hasPreviewPdf(selectedAttachment)) {
-            setHasInlineContent(false)
-            setHtmlContent(null)
-            setSections([])
-            setPreviewUrl(api.getAttachmentPreviewUrl(documentId, selectedAttachment.id))
+          if (resolvedSelection !== selectedAttachment) {
+            setSelectedAttachment(resolvedSelection)
             setIsLoading(false)
             return
           }
 
-          if (selectedAttachment && isPreviewPending(selectedAttachment)) {
+          if (resolvedSelection && hasPreviewPdf(resolvedSelection)) {
+            setHasInlineContent(false)
+            setHtmlContent(null)
+            setSections([])
+            setPreviewUrl(api.getAttachmentPreviewUrl(documentId, resolvedSelection.id))
+            setIsLoading(false)
+            return
+          }
+
+          if (resolvedSelection && isPreviewPending(resolvedSelection)) {
             setHasInlineContent(false)
             setPreviewUrl(null)
             setHtmlContent(null)
@@ -266,13 +264,13 @@ export function DocumentPreview({
             return
           }
 
-          if (selectedAttachment && isPreviewFailed(selectedAttachment)) {
+          if (resolvedSelection && isPreviewFailed(resolvedSelection)) {
             setHasInlineContent(false)
             setPreviewUrl(null)
             setHtmlContent(null)
             setSections([])
             setError(
-              selectedAttachment.preview_pdf_error ||
+              resolvedSelection.preview_pdf_error ||
                 'Preview PDF generation failed for this attachment.',
             )
             setIsLoading(false)
@@ -348,13 +346,15 @@ export function DocumentPreview({
     }
 
     loadPreview()
+  }, [documentId, previewableAttachments, processHtmlWithSections, selectedAttachment])
 
+  useEffect(() => {
     return () => {
       if (previewUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }
     }
-  }, [documentId, previewableAttachments, processHtmlWithSections, selectedAttachment])
+  }, [previewUrl])
 
   useEffect(() => {
     if (!showingOriginalPdf || !previewUrl || !selectedAttachment) {
@@ -382,7 +382,7 @@ export function DocumentPreview({
       }
       setActiveHeading(anchorId)
     },
-    [resolveSectionPageStart],
+    [setActiveHeading, setPdfOutlinePage, setReaderCurrentPage],
   )
 
   const handlePdfIframeError = useCallback(() => {

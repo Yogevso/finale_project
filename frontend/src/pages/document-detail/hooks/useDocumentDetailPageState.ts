@@ -78,7 +78,7 @@ export function useDocumentDetailPageState() {
     id,
     !!id && document?.visibility === 'company',
   )
-  const assignedCompanies = assignedCompaniesData?.companies ?? []
+  const assignedCompanies = assignedCompaniesData ?? []
 
   const { data: reviewHistory } = useDocumentReviewHistoryQuery(id)
   const reviewHistoryItems = reviewHistory?.items ?? []
