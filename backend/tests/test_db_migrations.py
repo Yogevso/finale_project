@@ -15,7 +15,7 @@ from app.db import Base
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 ALEMBIC_DIR = BACKEND_DIR / "alembic"
-HEAD_REVISION = "20260223_0002"
+HEAD_REVISION = "20260224_0003"
 
 
 def _upgrade_to_head(sqlite_path: Path) -> None:
@@ -38,9 +38,13 @@ def test_managed_migration_fresh_db_boot_path(tmp_path: Path) -> None:
 
     inspector = inspect(engine)
     version_columns = {column["name"] for column in inspector.get_columns("versions")}
+    sequence_columns = {
+        column["name"] for column in inspector.get_columns("document_number_sequences")
+    }
 
     assert revision == HEAD_REVISION
     assert {"semantic_version", "bump_type", "published_by"}.issubset(version_columns)
+    assert {"date_key", "next_value", "created_at", "updated_at"}.issubset(sequence_columns)
 
 
 def test_managed_migration_existing_versions_table_upgrade_path(tmp_path: Path) -> None:
@@ -66,11 +70,16 @@ def test_managed_migration_existing_versions_table_upgrade_path(tmp_path: Path) 
             row[1]
             for row in connection.execute("PRAGMA table_info(versions)").fetchall()
         }
+        sequence_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(document_number_sequences)").fetchall()
+        }
         row = connection.execute(
             "SELECT semantic_version, bump_type, published_by FROM versions WHERE id = 1"
         ).fetchone()
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()[0]
 
     assert {"semantic_version", "bump_type", "published_by"}.issubset(columns)
+    assert {"date_key", "next_value", "created_at", "updated_at"}.issubset(sequence_columns)
     assert row == ("2.0.0", "PATCH", None)
     assert revision == HEAD_REVISION
