@@ -1,6 +1,9 @@
 """Tests for Versions API"""
 
 from fastapi.testclient import TestClient
+import uuid
+
+from app.models import Document, DocumentStatus, Tenant
 
 
 class TestVersionsAPI:
@@ -264,3 +267,79 @@ class TestVersionsAPI:
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}", headers=headers
         )
         assert response.status_code == 200
+
+    def test_create_version_keeps_active_public_document_available(
+        self,
+        client: TestClient,
+        db,
+        admin_token: str,
+        customer_headers: dict,
+        public_document: Document,
+    ):
+        """Creating a draft candidate should not unpublish an already active document."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+
+        before_public = client.get(f"/api/v1/public/documents/{public_document.id}")
+        assert before_public.status_code == 200
+        before_portal = client.get(
+            f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
+        )
+        assert before_portal.status_code == 200
+
+        create_resp = client.post(
+            f"/api/v1/documents/{public_document.id}/versions",
+            headers=headers,
+            json={"content": "Drafting next release", "changes_summary": "WIP vNext"},
+        )
+        assert create_resp.status_code == 201
+
+        db.refresh(public_document)
+        assert public_document.status == DocumentStatus.ACTIVE
+
+        after_public = client.get(f"/api/v1/public/documents/{public_document.id}")
+        assert after_public.status_code == 200
+        after_portal = client.get(
+            f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
+        )
+        assert after_portal.status_code == 200
+
+    def test_versions_endpoints_are_tenant_scoped(
+        self, client: TestClient, auth_headers: dict, db, test_user
+    ):
+        """Non-system users should not access versions of cross-tenant documents."""
+        tenant_a = Tenant(
+            name="Versions Tenant A",
+            slug=f"versions-tenant-a-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        tenant_b = Tenant(
+            name="Versions Tenant B",
+            slug=f"versions-tenant-b-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        test_user.tenant_id = tenant_a.id
+        db.commit()
+
+        cross_tenant_doc = Document(
+            title="Cross Tenant Version Doc",
+            document_number=f"DOC-XTV-{uuid.uuid4().hex[:6].upper()}",
+            description="Should be hidden by tenant scope",
+            status=DocumentStatus.DRAFT,
+            created_by=test_user.id,
+            tenant_id=tenant_b.id,
+        )
+        db.add(cross_tenant_doc)
+        db.commit()
+        db.refresh(cross_tenant_doc)
+
+        list_response = client.get(
+            f"/api/v1/documents/{cross_tenant_doc.id}/versions", headers=auth_headers
+        )
+        assert list_response.status_code == 404

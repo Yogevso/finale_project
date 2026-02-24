@@ -1,10 +1,13 @@
 """Document Service"""
 
 import re
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,14 +16,17 @@ from app.models import (
     ActionType,
     AuditLog,
     Document,
+    DocumentNumberSequence,
     DocumentStatus,
     Platform,
+    Topic,
     User,
     UserRole,
     Version,
     VersionBumpType,
 )
 from app.schemas import DocumentCreate, DocumentUpdate
+from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 
 class DocumentService:
@@ -50,34 +56,79 @@ class DocumentService:
                     status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
                 )
 
-    def generate_document_number(self) -> str:
-        """Generate unique document number (DOC-YYYYMMDD-XXXX)"""
-        from datetime import datetime
+    @staticmethod
+    def _extract_sequence_suffix(document_number: str, prefix: str) -> Optional[int]:
+        expected_prefix = f"{prefix}-"
+        if not document_number or not document_number.startswith(expected_prefix):
+            return None
 
-        today = datetime.utcnow().strftime("%Y%m%d")
-        prefix = f"DOC-{today}"
+        suffix = document_number[len(expected_prefix) :]
+        if not suffix.isdigit():
+            return None
+        return int(suffix)
 
-        # Find the next available sequence for today (global, since document_number is globally unique)
+    def _discover_max_existing_suffix(self, prefix: str) -> int:
         existing = (
-            self.db.query(Document)
+            self.db.query(Document.document_number)
             .filter(Document.document_number.like(f"{prefix}-%"))
-            .with_entities(Document.document_number)
             .all()
         )
+        max_suffix = 0
+        for (document_number,) in existing:
+            suffix = self._extract_sequence_suffix(document_number, prefix)
+            if suffix is not None and suffix > max_suffix:
+                max_suffix = suffix
+        return max_suffix
 
-        used_numbers = set()
-        for (doc_number,) in existing:
-            try:
-                suffix = int(doc_number.split("-")[-1])
-                used_numbers.add(suffix)
-            except (ValueError, IndexError):
-                continue
+    def _insert_sequence_row_if_missing(self, date_key: str, seed_sequence: int) -> None:
+        dialect_name = self.db.bind.dialect.name if self.db.bind else ""
+        values = {"date_key": date_key, "next_value": seed_sequence}
 
-        next_seq = 1
-        while next_seq in used_numbers:
-            next_seq += 1
+        if dialect_name == "sqlite":
+            stmt = sqlite_insert(DocumentNumberSequence).values(**values)
+            self.db.execute(stmt.on_conflict_do_nothing(index_elements=["date_key"]))
+            return
 
-        return f"{prefix}-{next_seq:04d}"
+        if dialect_name == "postgresql":
+            stmt = postgresql_insert(DocumentNumberSequence).values(**values)
+            self.db.execute(stmt.on_conflict_do_nothing(index_elements=["date_key"]))
+            return
+
+        try:
+            with self.db.begin_nested():
+                self.db.add(DocumentNumberSequence(**values))
+                self.db.flush()
+        except IntegrityError:
+            pass
+
+    def _reserve_document_sequence(self, date_key: str) -> int:
+        update_result = self.db.execute(
+            update(DocumentNumberSequence)
+            .where(DocumentNumberSequence.date_key == date_key)
+            .values(
+                next_value=DocumentNumberSequence.next_value + 1,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        if update_result.rowcount != 1:
+            raise RuntimeError("Failed to reserve a document number sequence value")
+
+        next_value = self.db.execute(
+            select(DocumentNumberSequence.next_value).where(DocumentNumberSequence.date_key == date_key)
+        ).scalar_one()
+        return int(next_value)
+
+    def generate_document_number(self) -> str:
+        """Generate unique document number (DOC-YYYYMMDD-XXXX)"""
+        date_key = datetime.utcnow().strftime("%Y%m%d")
+        prefix = f"DOC-{date_key}"
+
+        if self.db.get(DocumentNumberSequence, date_key) is None:
+            seed_sequence = self._discover_max_existing_suffix(prefix)
+            self._insert_sequence_row_if_missing(date_key, seed_sequence)
+
+        next_sequence = self._reserve_document_sequence(date_key)
+        return f"{prefix}-{next_sequence:04d}"
 
     @staticmethod
     def _parse_semver(
@@ -106,6 +157,18 @@ class DocumentService:
         if not name or not name.strip():
             return "Unspecified"
         return name.strip()
+
+    def _normalize_topic(self, raw_topic: Optional[str]) -> Optional[str]:
+        normalized = normalize_topic_to_slug(raw_topic)
+        if normalized is None:
+            return None
+
+        topics = self.db.query(Topic).all()
+        if not topics:
+            return normalized
+
+        topic_lookup = build_topic_lookup(topics)
+        return normalize_topic_to_slug(raw_topic, topic_lookup) or normalized
 
     def _get_or_create_platform(
         self, platform_name: Optional[str] = None, platform_id: Optional[int] = None
@@ -178,29 +241,55 @@ class DocumentService:
         attempts = 0
         while True:
             attempts += 1
-            platform = self._get_or_create_platform(
-                platform_name=document_data.platform, platform_id=document_data.platform_id
-            )
-            document = Document(
-                title=document_data.title,
-                document_number=document_number,
-                description=document_data.description,
-                version_label=document_data.version_label,
-                status=document_data.status,
-                category=document_data.category,
-                topic=document_data.topic,
-                platform=platform.name,
-                platform_id=platform.id,
-                release_branch=document_data.release_branch,
-                tags=document_data.tags,
-                created_by=user.id,
-                tenant_id=tenant_id,
-                parent_id=parent_id,
-            )
-
-            self.db.add(document)
             try:
+                platform = self._get_or_create_platform(
+                    platform_name=document_data.platform, platform_id=document_data.platform_id
+                )
+                document = Document(
+                    title=document_data.title,
+                    document_number=document_number,
+                    description=document_data.description,
+                    version_label=document_data.version_label,
+                    status=document_data.status,
+                    visibility=document_data.visibility,
+                    category=document_data.category,
+                    topic=self._normalize_topic(document_data.topic),
+                    platform=platform.name,
+                    platform_id=platform.id,
+                    release_branch=document_data.release_branch,
+                    tags=document_data.tags,
+                    created_by=user.id,
+                    tenant_id=tenant_id,
+                    parent_id=parent_id,
+                )
+                self.db.add(document)
+                self.db.flush()
+
+                # Create initial version placeholder. Real content is managed via explicit
+                # version edits/uploads, not the document description metadata field.
+                version = Version(
+                    document_id=document.id,
+                    version_number=1,
+                    semantic_version="1.0.0",
+                    bump_type=VersionBumpType.MAJOR,
+                    content="",
+                    changes_summary="Initial version",
+                    created_by=user.id,
+                )
+                self.db.add(version)
+
+                # Create audit log
+                audit = AuditLog(
+                    user_id=user.id,
+                    document_id=document.id,
+                    action=ActionType.CREATE,
+                    details=f"Created document: {document.title}",
+                )
+                self.db.add(audit)
+
                 self.db.commit()
+                self.db.refresh(document)
+                return document
             except IntegrityError as exc:
                 self.db.rollback()
                 if (
@@ -214,36 +303,9 @@ class DocumentService:
                     document_number = self.generate_document_number()
                     continue
                 raise
-            else:
-                self.db.refresh(document)
-                break
-
-        # Create initial version placeholder. Real content is managed via explicit
-        # version edits/uploads, not the document description metadata field.
-        version = Version(
-            document_id=document.id,
-            version_number=1,
-            semantic_version="1.0.0",
-            bump_type=VersionBumpType.MAJOR,
-            content="",
-            changes_summary="Initial version",
-            created_by=user.id,
-        )
-        self.db.add(version)
-
-        # Create audit log
-        audit = AuditLog(
-            user_id=user.id,
-            document_id=document.id,
-            action=ActionType.CREATE,
-            details=f"Created document: {document.title}",
-        )
-        self.db.add(audit)
-
-        self.db.commit()
-        self.db.refresh(document)
-
-        return document
+            except Exception:
+                self.db.rollback()
+                raise
 
     def get_document(self, document_id: int) -> Optional[Document]:
         """Get document by ID with tenant filtering"""
@@ -332,7 +394,7 @@ class DocumentService:
             document.category = document_data.category
 
         if document_data.topic is not None:
-            document.topic = document_data.topic
+            document.topic = self._normalize_topic(document_data.topic)
 
         if document_data.platform is not None or document_data.platform_id is not None:
             platform = self._get_or_create_platform(

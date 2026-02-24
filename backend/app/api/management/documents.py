@@ -1,5 +1,6 @@
 """Document Management API Routes"""
 
+import logging
 from math import ceil
 from typing import List, Optional
 
@@ -25,7 +26,7 @@ from app.dependencies.permissions import (
     require_permission,
 )
 from app.dependencies.tenant import TenantContext, get_tenant_context
-from app.models import Document, DocumentStatus, Tenant, User
+from app.models import Document, DocumentStatus, Tenant, User, UserRole
 from app.schemas import (
     AttachmentResponse,
     DocumentCreate,
@@ -41,6 +42,7 @@ from app.services.permissions import Permission
 from app.utils.html_to_docx import html_to_docx_bytes
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class CompanyAssignRequest(BaseModel):
@@ -218,6 +220,7 @@ async def upload_document(
     document_number: Optional[str] = Form(None),
     version_label: Optional[str] = Form(None),
     visibility: Optional[str] = Form(None),
+    upload_status: Optional[str] = Form(None, alias="status"),
     parent_id: Optional[int] = Form(None),
     topic: Optional[str] = Form(None),
     platform: Optional[str] = Form(None),
@@ -240,13 +243,39 @@ async def upload_document(
     # Use filename as title if not provided
     doc_title = title or file.filename.rsplit(".", 1)[0] if file.filename else "Uploaded Document"
 
+    allowed_visibility = {"public", "internal", "company"}
+    if visibility is not None and visibility not in allowed_visibility:
+        raise HTTPException(status_code=400, detail="Invalid visibility value")
+
+    allowed_status = {item.value for item in DocumentStatus}
+    if upload_status is not None and upload_status not in allowed_status:
+        raise HTTPException(status_code=400, detail="Invalid status value")
+
+    privileged_publish = current_user.role in {
+        UserRole.SYSTEM_ADMIN,
+        UserRole.ADMIN,
+        UserRole.MANAGER,
+    }
+    visibility_value = visibility or "internal"
+    status_value = upload_status or DocumentStatus.DRAFT.value
+
+    if visibility_value == "public" and not privileged_publish:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers and above can upload public documents",
+        )
+    if status_value == DocumentStatus.ACTIVE.value and not privileged_publish:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers and above can upload directly as active",
+        )
+
     # Create the document first
     service = DocumentService(db, tenant_ctx)
-    visibility_value = visibility if visibility in ["public", "internal", "company"] else "public"
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",
-        status="active",
+        status=status_value,
         visibility=visibility_value,
         category=category or "Uploaded",
         topic=topic,
@@ -258,9 +287,10 @@ async def upload_document(
         parent_id=parent_id,
     )
     document = service.create_document(document_data, current_user)
+    created_document_ids: list[int] = [document.id]
 
-    # Now attach the uploaded file
     try:
+        # Attach uploaded files to parent document.
         await AttachmentService.upload_attachment(
             db,
             document.id,
@@ -276,33 +306,46 @@ async def upload_document(
                 current_user,
                 background_tasks=background_tasks,
             )
-    except HTTPException as e:
-        # If attachment fails, delete the document and re-raise
-        service.delete_document(document.id, current_user)
-        raise e
 
-    # Optional release notes: create child document and attach release notes file
-    if release_notes:
-        release_doc_title = f"{doc_title} Release Notes"
-        release_data = DocumentCreate(
-            title=release_doc_title,
-            description=f"Release notes for {doc_title}",
-            status="draft",
-            visibility=visibility_value,
-            category="Release Notes",
-            tags="release-notes",
-            document_number=None,
-            version_label=version_label,
-            parent_id=document.id,
-        )
-        release_doc = service.create_document(release_data, current_user)
-        await AttachmentService.upload_attachment(
-            db,
-            release_doc.id,
-            release_notes,
-            current_user,
-            background_tasks=background_tasks,
-        )
+        # Optional release notes: create child document and attach release notes file.
+        if release_notes:
+            release_doc_title = f"{doc_title} Release Notes"
+            release_data = DocumentCreate(
+                title=release_doc_title,
+                description=f"Release notes for {doc_title}",
+                status=status_value,
+                visibility=visibility_value,
+                category="Release Notes",
+                tags="release-notes",
+                document_number=None,
+                version_label=version_label,
+                parent_id=document.id,
+            )
+            release_doc = service.create_document(release_data, current_user)
+            created_document_ids.append(release_doc.id)
+            await AttachmentService.upload_attachment(
+                db,
+                release_doc.id,
+                release_notes,
+                current_user,
+                background_tasks=background_tasks,
+            )
+    except Exception as exc:
+        # Roll back all created documents (child before parent) to avoid orphan rows.
+        for created_document_id in reversed(created_document_ids):
+            try:
+                service.delete_document(created_document_id, current_user)
+            except Exception as cleanup_error:
+                db.rollback()
+                logger.warning(
+                    "Failed upload rollback cleanup for document_id=%s: %s",
+                    created_document_id,
+                    cleanup_error,
+                )
+
+        if isinstance(exc, HTTPException):
+            raise
+        raise
 
     # Refresh to get updated data
     db.refresh(document)
@@ -335,27 +378,27 @@ def assign_companies(
     db: Session = Depends(get_db),
 ):
     """
-    Assign companies to a document.
+    Replace the companies assigned to a document.
     Manager+ access required.
     """
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Get companies
-    companies = db.query(Tenant).filter(Tenant.id.in_(request.company_ids)).all()
-    if len(companies) != len(request.company_ids):
-        raise HTTPException(status_code=400, detail="Some company IDs are invalid")
-
-    # Add companies (avoiding duplicates)
-    existing_ids = {c.id for c in document.assigned_companies}
-    for company in companies:
-        if company.id not in existing_ids:
-            document.assigned_companies.append(company)
+    requested_ids = list(dict.fromkeys(request.company_ids))
+    if requested_ids:
+        companies = db.query(Tenant).filter(Tenant.id.in_(requested_ids)).all()
+        company_by_id = {company.id: company for company in companies}
+        missing_ids = [company_id for company_id in requested_ids if company_id not in company_by_id]
+        if missing_ids:
+            raise HTTPException(status_code=400, detail="Some company IDs are invalid")
+        document.assigned_companies = [company_by_id[company_id] for company_id in requested_ids]
+    else:
+        document.assigned_companies = []
 
     db.commit()
 
-    return MessageResponse(message=f"Assigned {len(companies)} companies to document")
+    return MessageResponse(message=f"Assigned company set updated ({len(requested_ids)} total)")
 
 
 @router.delete(

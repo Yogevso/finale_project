@@ -19,12 +19,27 @@ from app.models import (
     VersionBumpType,
 )
 from app.schemas import VersionCreate, VersionUpdate
+from app.utils.async_tasks import run_async_task
 
 logger = logging.getLogger(__name__)
 
 
 class VersionService:
     """Service for managing document versions"""
+
+    @staticmethod
+    def _get_document_for_user(db: Session, document_id: int, current_user: User) -> Document:
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        if (
+            current_user.role != UserRole.SYSTEM_ADMIN
+            and document.tenant_id != current_user.tenant_id
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        return document
 
     @staticmethod
     def _parse_semver(
@@ -142,9 +157,7 @@ class VersionService:
     @staticmethod
     def get_versions(db: Session, document_id: int, current_user: User) -> List[dict]:
         """Get all versions for a document"""
-        document = db.query(Document).filter(Document.id == document_id).first()
-        if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        VersionService._get_document_for_user(db, document_id, current_user)
 
         versions = (
             db.query(Version)
@@ -164,6 +177,8 @@ class VersionService:
     @staticmethod
     def get_version(db: Session, document_id: int, version_id: int, current_user: User) -> dict:
         """Get a specific version"""
+        VersionService._get_document_for_user(db, document_id, current_user)
+
         version = (
             db.query(Version)
             .options(
@@ -185,9 +200,7 @@ class VersionService:
         db: Session, document_id: int, version_data: VersionCreate, current_user: User
     ) -> dict:
         """Create a new version for a document"""
-        document = db.query(Document).filter(Document.id == document_id).first()
-        if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        document = VersionService._get_document_for_user(db, document_id, current_user)
 
         if current_user.role not in [
             UserRole.SYSTEM_ADMIN,
@@ -243,7 +256,8 @@ class VersionService:
         )
 
         db.add(version)
-        if document.status != DocumentStatus.DRAFT:
+        # Keep already-published documents publicly available while drafting the next candidate.
+        if document.status not in [DocumentStatus.DRAFT, DocumentStatus.ACTIVE]:
             document.status = DocumentStatus.DRAFT
         db.commit()
 
@@ -267,6 +281,8 @@ class VersionService:
         current_user: User,
     ) -> dict:
         """Update an unpublished version"""
+        VersionService._get_document_for_user(db, document_id, current_user)
+
         version = (
             db.query(Version)
             .options(
@@ -323,6 +339,8 @@ class VersionService:
     @staticmethod
     def publish_version(db: Session, document_id: int, version_id: int, current_user: User) -> dict:
         """Publish a version (requires approval and makes it immutable)."""
+        VersionService._get_document_for_user(db, document_id, current_user)
+
         version = (
             db.query(Version)
             .options(
@@ -381,12 +399,11 @@ class VersionService:
             if document and settings.EMAIL_ENABLED:
                 author = db.query(User).filter(User.id == document.created_by).first()
                 if author and author.email:
-                    import asyncio
-
-                    asyncio.create_task(
+                    run_async_task(
                         email_service.send_document_published(
                             to_email=author.email,
                             document_title=document.title,
+                            document_number=document.document_number,
                             document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
                         )
                     )
@@ -409,6 +426,8 @@ class VersionService:
     @staticmethod
     def delete_version(db: Session, document_id: int, version_id: int, current_user: User) -> None:
         """Delete an unpublished version"""
+        VersionService._get_document_for_user(db, document_id, current_user)
+
         version = (
             db.query(Version)
             .filter(Version.id == version_id, Version.document_id == document_id)

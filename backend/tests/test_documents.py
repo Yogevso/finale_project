@@ -1,6 +1,27 @@
 """Document Tests"""
 
-from app.models import Document, DocumentStatus
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.db import Base
+from app.models import (
+    Document,
+    DocumentNumberSequence,
+    DocumentStatus,
+    DocumentVisibility,
+    Platform,
+    Tenant,
+    Topic,
+    User,
+    UserRole,
+)
+from app.schemas import DocumentCreate, DocumentUpdate
+from app.services.document_service import DocumentService
 
 
 def test_create_document(client, auth_headers):
@@ -229,3 +250,290 @@ def test_filter_by_status(client, auth_headers, db, test_user):
     data = response.json()
     assert data["total"] == 2
     assert all(item["status"] == "active" for item in data["items"])
+
+
+def test_create_document_rolls_back_when_initial_version_creation_fails(db, test_user, monkeypatch):
+    """Document row should not persist if initial version/audit creation fails."""
+    service = DocumentService(db)
+    document_data = DocumentCreate(
+        title="Atomic rollback doc",
+        description="Should rollback on failure",
+    )
+
+    original_add = db.add
+
+    def fail_on_version(instance):
+        from app.models import Version
+
+        if isinstance(instance, Version):
+            raise RuntimeError("forced version creation failure")
+        return original_add(instance)
+
+    monkeypatch.setattr(db, "add", fail_on_version)
+
+    with pytest.raises(RuntimeError, match="forced version creation failure"):
+        service.create_document(document_data, test_user)
+
+    assert db.query(Document).filter(Document.title == "Atomic rollback doc").count() == 0
+
+
+def test_generate_document_number_seeds_from_existing_daily_documents(db, test_user):
+    service = DocumentService(db)
+    today_key = datetime.utcnow().strftime("%Y%m%d")
+    prefix = f"DOC-{today_key}"
+
+    existing_numbers = [f"{prefix}-0001", f"{prefix}-0002", f"{prefix}-0003"]
+    for index, document_number in enumerate(existing_numbers, start=1):
+        db.add(
+            Document(
+                title=f"Existing {index}",
+                document_number=document_number,
+                status=DocumentStatus.DRAFT,
+                created_by=test_user.id,
+            )
+        )
+    db.commit()
+
+    generated_first = service.generate_document_number()
+    generated_second = service.generate_document_number()
+    db.commit()
+
+    assert generated_first == f"{prefix}-0004"
+    assert generated_second == f"{prefix}-0005"
+
+    sequence_row = db.get(DocumentNumberSequence, today_key)
+    assert sequence_row is not None
+    assert sequence_row.next_value == 5
+
+
+def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
+    sqlite_path = tmp_path / "doc_number_sequence_contention.db"
+    engine = create_engine(
+        f"sqlite:///{sqlite_path.as_posix()}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    today_key = datetime.utcnow().strftime("%Y%m%d")
+    prefix = f"DOC-{today_key}"
+
+    with SessionLocal() as setup_db:
+        user = User(
+            email="sequence@example.com",
+            username="sequence-user",
+            full_name="Sequence User",
+            hashed_password="not-used-in-test",
+            role=UserRole.EDITOR,
+            is_active=True,
+        )
+        platform = Platform(name="Unspecified", slug="unspecified")
+        setup_db.add(user)
+        setup_db.add(platform)
+        setup_db.flush()
+
+        user_id = user.id
+        platform_id = platform.id
+        for suffix in (1, 2, 3):
+            setup_db.add(
+                Document(
+                    title=f"Seeded {suffix}",
+                    document_number=f"{prefix}-{suffix:04d}",
+                    status=DocumentStatus.DRAFT,
+                    created_by=user_id,
+                    platform=platform.name,
+                    platform_id=platform_id,
+                )
+            )
+        setup_db.commit()
+
+    worker_count = 6
+    start_barrier = threading.Barrier(worker_count)
+
+    def create_document_in_worker(worker_index: int) -> str:
+        with SessionLocal() as worker_db:
+            service = DocumentService(worker_db)
+            worker_user = worker_db.query(User).filter(User.id == user_id).one()
+            start_barrier.wait(timeout=10)
+            created = service.create_document(
+                DocumentCreate(
+                    title=f"Concurrent Document {worker_index}",
+                    description="contention test",
+                    platform_id=platform_id,
+                ),
+                worker_user,
+            )
+            return created.document_number
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        generated_numbers = list(executor.map(create_document_in_worker, range(worker_count)))
+
+    assert len(generated_numbers) == worker_count
+    assert len(set(generated_numbers)) == worker_count
+    assert all(number.startswith(f"{prefix}-") for number in generated_numbers)
+
+    suffixes = sorted(int(number.split("-")[-1]) for number in generated_numbers)
+    assert suffixes == list(range(4, 4 + worker_count))
+
+    with SessionLocal() as verify_db:
+        sequence_row = verify_db.get(DocumentNumberSequence, today_key)
+        assert sequence_row is not None
+        assert sequence_row.next_value == 3 + worker_count
+
+
+def test_assign_companies_replaces_existing_set_on_each_request(
+    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+):
+    tenant_three = Tenant(
+        name="Assignment Tenant Three",
+        slug="assignment-tenant-three",
+        is_active=True,
+        company_type="customer",
+    )
+    db.add(tenant_three)
+    db.flush()
+
+    document = Document(
+        title="Set Semantics Document",
+        document_number="DOC-ASG-SET-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    db.refresh(tenant_three)
+
+    first_assign = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": [test_tenant.id, test_tenant_2.id]},
+    )
+    assert first_assign.status_code == 200
+
+    first_state = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert first_state.status_code == 200
+    assert sorted(company["id"] for company in first_state.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+
+    second_assign = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": [test_tenant_2.id, tenant_three.id]},
+    )
+    assert second_assign.status_code == 200
+
+    second_state = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert second_state.status_code == 200
+    assert sorted(company["id"] for company in second_state.json()) == sorted(
+        [test_tenant_2.id, tenant_three.id]
+    )
+
+
+def test_assign_companies_is_idempotent_and_supports_clear_set(
+    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+):
+    document = Document(
+        title="Set Semantics Idempotent Document",
+        document_number="DOC-ASG-SET-0002",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    assign_with_duplicates = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": [test_tenant.id, test_tenant.id, test_tenant_2.id]},
+    )
+    assert assign_with_duplicates.status_code == 200
+
+    state_after_first_assign = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert state_after_first_assign.status_code == 200
+    assert sorted(company["id"] for company in state_after_first_assign.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+
+    idempotent_assign = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": [test_tenant_2.id, test_tenant.id]},
+    )
+    assert idempotent_assign.status_code == 200
+
+    state_after_idempotent_assign = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert state_after_idempotent_assign.status_code == 200
+    assert sorted(company["id"] for company in state_after_idempotent_assign.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+
+    clear_assignments = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": []},
+    )
+    assert clear_assignments.status_code == 200
+
+    state_after_clear = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert state_after_clear.status_code == 200
+    assert state_after_clear.json() == []
+
+
+def test_create_document_normalizes_topic_to_canonical_slug(db, test_user):
+    db.add(Topic(name="SDKs & Tools", slug="sdk-tools"))
+    db.commit()
+
+    service = DocumentService(db)
+    created = service.create_document(
+        DocumentCreate(
+            title="Topic Normalized Create",
+            description="Topic should normalize to canonical slug",
+            topic="SDKs & Tools",
+        ),
+        test_user,
+    )
+
+    assert created.topic == "sdk-tools"
+
+
+def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
+    db.add(Topic(name="SDKs & Tools", slug="sdk-tools"))
+    db.commit()
+
+    service = DocumentService(db)
+    document = service.create_document(
+        DocumentCreate(
+            title="Topic Normalized Update",
+            description="Topic update normalization",
+            topic="platform",
+        ),
+        test_user,
+    )
+
+    updated = service.update_document(
+        document.id,
+        DocumentUpdate(topic="sdks-tools"),
+        test_user,
+    )
+
+    assert updated.topic == "sdk-tools"
