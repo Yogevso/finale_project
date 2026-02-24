@@ -289,6 +289,17 @@ class User(Base):
     )
 
 
+class DocumentNumberSequence(Base):
+    """Daily counter used for scalable document number allocation."""
+
+    __tablename__ = "document_number_sequences"
+
+    date_key = Column(String(8), primary_key=True)  # YYYYMMDD
+    next_value = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class Document(Base):
     """Document model"""
 

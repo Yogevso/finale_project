@@ -14,19 +14,25 @@ import type { UserRole, Company } from '@/types'
 interface InviteUserDialogProps {
   onClose: () => void
   currentUserRole: UserRole
+  currentUserTenantId?: number
   preselectedCompanyId?: number
 }
 
 export default function InviteUserDialog({
   onClose,
   currentUserRole,
+  currentUserTenantId,
   preselectedCompanyId,
 }: InviteUserDialogProps) {
   const queryClient = useQueryClient()
+  const initialTenantId =
+    preselectedCompanyId ??
+    (currentUserRole !== 'system_admin' ? (currentUserTenantId ?? '') : '')
+
   const [formData, setFormData] = useState({
     email: '',
     role: 'customer' as UserRole,
-    tenant_id: preselectedCompanyId || ('' as number | ''),
+    tenant_id: initialTenantId as number | '',
     message: '',
   })
   const [error, setError] = useState('')
@@ -37,15 +43,25 @@ export default function InviteUserDialog({
   })
 
   const companies = companiesData?.items || []
+  const selectableCompanies =
+    currentUserRole === 'system_admin'
+      ? companies
+      : companies.filter((company: Company) => company.id === currentUserTenantId)
 
   const inviteMutation = useMutation({
-    mutationFn: () =>
-      api.createInvitation({
+    mutationFn: () => {
+      const effectiveTenantId =
+        currentUserRole === 'system_admin'
+          ? formData.tenant_id || undefined
+          : (currentUserTenantId ?? formData.tenant_id) || undefined
+
+      return api.createInvitation({
         email: formData.email,
         role: formData.role,
-        tenant_id: formData.tenant_id || undefined,
+        tenant_id: effectiveTenantId,
         message: formData.message || undefined,
-      }),
+      })
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
       onClose()
@@ -69,13 +85,17 @@ export default function InviteUserDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    const effectiveTenantId =
+      currentUserRole === 'system_admin'
+        ? formData.tenant_id || undefined
+        : (currentUserTenantId ?? formData.tenant_id) || undefined
 
     if (!formData.email) {
       setError('Email is required')
       return
     }
 
-    if (formData.role === 'customer' && !formData.tenant_id) {
+    if (formData.role === 'customer' && !effectiveTenantId) {
       setError('Customers must be assigned to a company')
       return
     }
@@ -160,11 +180,11 @@ export default function InviteUserDialog({
                     })
                   }
                   required={formData.role === 'customer'}
-                  disabled={!!preselectedCompanyId}
+                  disabled={!!preselectedCompanyId || currentUserRole !== 'system_admin'}
                   className="select-field pl-10 appearance-none disabled:bg-slate-100"
                 >
                   <option value="">Select Company</option>
-                  {companies.map((company: Company) => (
+                  {selectableCompanies.map((company: Company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
                     </option>
@@ -174,6 +194,11 @@ export default function InviteUserDialog({
               {formData.role === 'customer' && (
                 <p className="text-xs text-slate-500 mt-1">
                   Customers must be assigned to a company
+                </p>
+              )}
+              {currentUserRole !== 'system_admin' && (
+                <p className="text-xs text-slate-500 mt-1">
+                  Invitations are scoped to your company.
                 </p>
               )}
             </div>

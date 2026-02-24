@@ -1,72 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
-import type { User, LoginRequest, UserCreate, UserRole } from '@/types'
-
-// Permission types matching backend
-type Permission = 
-  | 'view_public_docs'
-  | 'view_internal_docs'
-  | 'view_company_docs'
-  | 'create_document'
-  | 'edit_document'
-  | 'delete_document'
-  | 'submit_review'
-  | 'approve_review'
-  | 'approve_peer_review'
-  | 'publish_document'
-  | 'assign_companies'
-  | 'add_comments'
-  | 'submit_feedback'
-  | 'download_attachments'
-  | 'manage_users'
-  | 'manage_editors'
-  | 'manage_companies'
-  | 'system_settings'
-  | 'manage_admins'
-
-// Permission matrix
-const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  system_admin: [
-    'view_public_docs', 'view_internal_docs', 'view_company_docs',
-    'create_document', 'edit_document', 'delete_document',
-    'submit_review', 'approve_review', 'approve_peer_review',
-    'publish_document', 'assign_companies',
-    'add_comments', 'submit_feedback', 'download_attachments',
-    'manage_users', 'manage_editors', 'manage_companies',
-    'system_settings', 'manage_admins'
-  ],
-  admin: [
-    'view_public_docs', 'view_internal_docs', 'view_company_docs',
-    'create_document', 'edit_document', 'delete_document',
-    'submit_review', 'approve_review', 'approve_peer_review',
-    'publish_document', 'assign_companies',
-    'add_comments', 'submit_feedback', 'download_attachments',
-    'manage_users', 'manage_editors', 'manage_companies', 'system_settings'
-  ],
-  manager: [
-    'view_public_docs', 'view_internal_docs', 'view_company_docs',
-    'create_document', 'edit_document', 'delete_document',
-    'submit_review', 'approve_review', 'approve_peer_review',
-    'publish_document', 'assign_companies',
-    'add_comments', 'submit_feedback', 'download_attachments',
-    'manage_editors'
-  ],
-  editor: [
-    'view_public_docs', 'view_internal_docs', 'view_company_docs',
-    'create_document', 'edit_document',
-    'submit_review', 'approve_peer_review',
-    'add_comments', 'submit_feedback', 'download_attachments'
-  ],
-  viewer: [
-    'view_public_docs', 'view_internal_docs', 'view_company_docs',
-    'add_comments', 'submit_feedback', 'download_attachments'
-  ],
-  customer: [
-    'view_public_docs', 'view_company_docs',
-    'submit_feedback', 'download_attachments'
-  ]
-}
+import type { LoginRequest, Permission, User, UserCreate } from '@/types'
 
 interface AuthContextType {
   user: User | null
@@ -157,11 +92,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isCustomer = user?.role === 'customer'
   const isInternal = user !== null && user.role !== 'customer'
 
-  // Permission check function
+  const effectivePermissions = user?.permissions ?? []
+
+  // Permission checks are backend-driven via /auth/me effective permissions.
   const hasPermission = (permission: Permission): boolean => {
-    if (!user) return false
-    const permissions = ROLE_PERMISSIONS[user.role] || []
-    return permissions.includes(permission)
+    return effectivePermissions.includes(permission)
   }
 
   // Convenience permission checks

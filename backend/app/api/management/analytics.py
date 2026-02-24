@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from io import BytesIO, StringIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -26,6 +26,18 @@ from app.schemas.analytics import (
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+CSV_EXPORT_REPORTS = ("overview", "engagement", "users", "content", "feedback")
+PDF_EXPORT_REPORTS = ("overview", "engagement")
+
+
+def _validate_export_report(report: str, *, allowed: tuple[str, ...], format_name: str) -> None:
+    if report not in allowed:
+        allowed_list = ", ".join(allowed)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported {format_name} report '{report}'. Supported reports: {allowed_list}",
+        )
 
 
 def get_default_date_range() -> tuple[date, date]:
@@ -274,6 +286,8 @@ def export_csv(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
+    _validate_export_report(report, allowed=CSV_EXPORT_REPORTS, format_name="CSV")
+
     service = AnalyticsService(db, tenant_ctx)
 
     # Get data based on report type
@@ -342,9 +356,6 @@ def export_csv(
         for ftype, count in data["feedback_by_type"].items():
             rows.append({"metric": f"Feedback - {ftype}", "value": count})
 
-    else:
-        rows = [{"error": f"Unknown report type: {report}"}]
-
     # Generate CSV
     output = StringIO()
     if rows:
@@ -377,14 +388,14 @@ def export_pdf(
     Requires: MANAGER role or above.
     Note: Requires reportlab package to be installed.
     """
+    _validate_export_report(report, allowed=PDF_EXPORT_REPORTS, format_name="PDF")
+
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ImportError:
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=501,
             detail="PDF export requires reportlab package. Install with: pip install reportlab",
@@ -419,9 +430,6 @@ def export_pdf(
             ["Total Time Spent", f"{data['total_time_spent_minutes']} minutes"],
         ]
         title = "Engagement Analytics Report"
-    else:
-        table_data = [["Error"], [f"Unknown report type: {report}"]]
-        title = "Error"
 
     # Generate PDF
     buffer = BytesIO()

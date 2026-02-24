@@ -7,6 +7,7 @@ process restarts and can be handled by a dedicated worker process.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from typing import Optional
@@ -28,6 +29,10 @@ JOB_STATUS_FAILED = "failed"
 ARTIFACT_KIND_PREVIEW_PDF = "preview_pdf"
 ARTIFACT_STATUS_READY = "ready"
 ARTIFACT_STATUS_FAILED = "failed"
+PROCESSING_TIMEOUT_SECONDS = max(
+    30,
+    int(os.getenv("CONVERSION_JOB_PROCESSING_TIMEOUT_SECONDS", "300")),
+)
 
 
 def _get_or_create_job(
@@ -81,7 +86,85 @@ def _load_preview_artifact_status(
     return artifact.status, artifact.error
 
 
-def process_conversion_job(job_id: int, *, force: bool = False) -> None:
+def _recover_stale_processing_jobs(db: Session, now: datetime) -> int:
+    stale_before = now - timedelta(seconds=PROCESSING_TIMEOUT_SECONDS)
+    stale_jobs = (
+        db.query(AttachmentConversionJob)
+        .filter(
+            AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+            AttachmentConversionJob.status == JOB_STATUS_PROCESSING,
+            AttachmentConversionJob.started_at.isnot(None),
+            AttachmentConversionJob.started_at <= stale_before,
+        )
+        .all()
+    )
+
+    recovered_count = 0
+    for job in stale_jobs:
+        recovered_count += 1
+        job.started_at = None
+        job.next_run_at = now
+        job.last_error = "Recovered stale processing job after lease timeout"
+        if int(job.attempts or 0) >= int(job.max_attempts or 3):
+            job.status = JOB_STATUS_FAILED
+            job.finished_at = now
+            job.next_run_at = None
+        else:
+            job.status = JOB_STATUS_PENDING
+            job.finished_at = None
+
+    return recovered_count
+
+
+def _claim_job_by_id(db: Session, job_id: int, now: datetime) -> bool:
+    updated = (
+        db.query(AttachmentConversionJob)
+        .filter(
+            AttachmentConversionJob.id == job_id,
+            AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+            AttachmentConversionJob.status == JOB_STATUS_PENDING,
+            (AttachmentConversionJob.next_run_at.is_(None))
+            | (AttachmentConversionJob.next_run_at <= now),
+        )
+        .update(
+            {
+                AttachmentConversionJob.status: JOB_STATUS_PROCESSING,
+                AttachmentConversionJob.started_at: now,
+                AttachmentConversionJob.finished_at: None,
+                AttachmentConversionJob.next_run_at: None,
+                AttachmentConversionJob.last_error: None,
+                AttachmentConversionJob.attempts: AttachmentConversionJob.attempts + 1,
+            },
+            synchronize_session=False,
+        )
+    )
+    return updated == 1
+
+
+def _claim_next_runnable_job_id(db: Session, now: datetime, *, max_attempts: int = 5) -> Optional[int]:
+    for _ in range(max_attempts):
+        row = (
+            db.query(AttachmentConversionJob.id)
+            .filter(
+                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.status == JOB_STATUS_PENDING,
+                (AttachmentConversionJob.next_run_at.is_(None))
+                | (AttachmentConversionJob.next_run_at <= now),
+            )
+            .order_by(AttachmentConversionJob.created_at.asc(), AttachmentConversionJob.id.asc())
+            .first()
+        )
+        if not row:
+            return None
+
+        job_id = row[0]
+        if _claim_job_by_id(db, job_id, now):
+            return int(job_id)
+
+    return None
+
+
+def process_conversion_job(job_id: int, *, force: bool = False, claimed: bool = False) -> None:
     """Execute one persisted conversion job."""
     from app.services.attachment_service import AttachmentService
 
@@ -90,14 +173,26 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
         job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
         if not job:
             return
-        if job.status not in (JOB_STATUS_PENDING, JOB_STATUS_PROCESSING):
-            return
-
-        # Claim/refresh processing state before executing conversion.
-        job.status = JOB_STATUS_PROCESSING
-        job.started_at = datetime.utcnow()
-        job.attempts = int(job.attempts or 0) + 1
-        db.commit()
+        if claimed:
+            if job.status != JOB_STATUS_PROCESSING:
+                return
+        else:
+            now = datetime.utcnow()
+            recovered = _recover_stale_processing_jobs(db, now)
+            claimed_ok = _claim_job_by_id(db, job_id, now)
+            if recovered or claimed_ok:
+                db.commit()
+            else:
+                db.rollback()
+            if not claimed_ok:
+                return
+            job = (
+                db.query(AttachmentConversionJob)
+                .filter(AttachmentConversionJob.id == job_id)
+                .first()
+            )
+            if not job:
+                return
 
         AttachmentService.generate_preview_pdf_artifact(
             job.attachment_id,
@@ -116,6 +211,8 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
             if int(job.attempts or 0) < int(job.max_attempts or 3):
                 backoff_seconds = min(300, 10 * int(job.attempts or 1))
                 job.status = JOB_STATUS_PENDING
+                job.started_at = None
+                job.finished_at = None
                 job.next_run_at = datetime.utcnow() + timedelta(seconds=backoff_seconds)
             else:
                 job.status = JOB_STATUS_FAILED
@@ -123,6 +220,8 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
         else:
             # Conservative fallback: keep pending until artifact status resolves.
             job.status = JOB_STATUS_PENDING
+            job.started_at = None
+            job.finished_at = None
             job.next_run_at = datetime.utcnow() + timedelta(seconds=10)
 
         db.commit()
@@ -138,6 +237,8 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
                 job.last_error = str(exc)
                 if int(job.attempts or 0) < int(job.max_attempts or 3):
                     job.status = JOB_STATUS_PENDING
+                    job.started_at = None
+                    job.finished_at = None
                     job.next_run_at = datetime.utcnow() + timedelta(seconds=30)
                 else:
                     job.status = JOB_STATUS_FAILED
@@ -149,35 +250,31 @@ def process_conversion_job(job_id: int, *, force: bool = False) -> None:
         db.close()
 
 
-def _fetch_runnable_job_ids(db: Session, batch_size: int) -> list[int]:
-    now = datetime.utcnow()
-    rows = (
-        db.query(AttachmentConversionJob.id)
-        .filter(
-            AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
-            AttachmentConversionJob.status == JOB_STATUS_PENDING,
-            (AttachmentConversionJob.next_run_at.is_(None))
-            | (AttachmentConversionJob.next_run_at <= now),
-        )
-        .order_by(AttachmentConversionJob.created_at.asc(), AttachmentConversionJob.id.asc())
-        .limit(batch_size)
-        .all()
-    )
-    return [row[0] for row in rows]
-
-
 def process_pending_jobs_once(*, batch_size: int = 10, force: bool = False) -> int:
     """Process one batch of pending conversion jobs and return processed count."""
-    db = SessionLocal()
-    try:
-        job_ids = _fetch_runnable_job_ids(db, batch_size=batch_size)
-    finally:
-        db.close()
+    processed = 0
 
-    for job_id in job_ids:
-        process_conversion_job(job_id, force=force)
+    while processed < batch_size:
+        claimed_job_id: Optional[int] = None
+        db = SessionLocal()
+        try:
+            now = datetime.utcnow()
+            recovered = _recover_stale_processing_jobs(db, now)
+            claimed_job_id = _claim_next_runnable_job_id(db, now)
+            if recovered or claimed_job_id is not None:
+                db.commit()
+            else:
+                db.rollback()
+        finally:
+            db.close()
 
-    return len(job_ids)
+        if claimed_job_id is None:
+            break
+
+        process_conversion_job(claimed_job_id, force=force, claimed=True)
+        processed += 1
+
+    return processed
 
 
 def enqueue_conversion(

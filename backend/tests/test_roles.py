@@ -1,5 +1,10 @@
 """Tests for role-based access control across all endpoints"""
 
+import uuid
+
+from app.models import Tenant, User, UserRole
+from app.security import get_password_hash
+
 
 class TestSystemAdminAccess:
     """Test system admin has access to all endpoints"""
@@ -284,3 +289,58 @@ class TestRoleEscalationPrevention:
             json={"role": "admin"},
         )
         assert response.status_code in [400, 403]
+
+    def test_manager_cannot_deactivate_admin_via_non_role_update(
+        self, client, manager_headers, test_admin
+    ):
+        """Role hierarchy should also block status changes on higher-privilege users."""
+        response = client.put(
+            f"/api/v1/users/{test_admin.id}",
+            headers=manager_headers,
+            json={"is_active": False},
+        )
+        assert response.status_code == 403
+
+    def test_admin_cannot_reassign_user_to_other_tenant(
+        self, client, admin_headers, db, test_admin
+    ):
+        """Non-system admins should not reassign users across tenants."""
+        tenant_a = Tenant(
+            name="Role Tenant A",
+            slug=f"role-tenant-a-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        tenant_b = Tenant(
+            name="Role Tenant B",
+            slug=f"role-tenant-b-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        test_admin.tenant_id = tenant_a.id
+        db.commit()
+
+        target_user = User(
+            email=f"target-{uuid.uuid4().hex[:6]}@example.com",
+            username=f"target_{uuid.uuid4().hex[:6]}",
+            full_name="Tenant Scoped User",
+            hashed_password=get_password_hash("password123"),
+            role=UserRole.EDITOR,
+            tenant_id=tenant_a.id,
+            is_active=True,
+        )
+        db.add(target_user)
+        db.commit()
+        db.refresh(target_user)
+
+        response = client.put(
+            f"/api/v1/users/{target_user.id}",
+            headers=admin_headers,
+            json={"tenant_id": tenant_b.id},
+        )
+        assert response.status_code == 403

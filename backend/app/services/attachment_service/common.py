@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Attachment, AttachmentArtifact, Document, User, UserRole
+from app.services.permissions import (
+    Permission,
+    can_view_document,
+    has_permission,
+    is_internal_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,14 +160,34 @@ class AttachmentServiceCommonMixin:
 
     @staticmethod
     def _apply_existing_artifacts_to_attachment(db: Session, attachment: Attachment) -> None:
-        preview_artifact = AttachmentService._get_artifact_record(
-            db, attachment.id, AttachmentService.ARTIFACT_KIND_PREVIEW_PDF
+        AttachmentService._apply_existing_artifacts_to_attachments(db, [attachment])
+
+    @staticmethod
+    def _apply_existing_artifacts_to_attachments(
+        db: Session, attachments: List[Attachment]
+    ) -> None:
+        if not attachments:
+            return
+
+        attachment_ids = [attachment.id for attachment in attachments]
+        artifacts = (
+            db.query(AttachmentArtifact)
+            .filter(AttachmentArtifact.attachment_id.in_(attachment_ids))
+            .all()
         )
-        reader_artifact = AttachmentService._get_artifact_record(
-            db, attachment.id, AttachmentService.ARTIFACT_KIND_READER_HTML
-        )
-        AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
-        AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
+
+        artifact_map: dict[int, dict[str, AttachmentArtifact]] = {}
+        for artifact in artifacts:
+            artifact_map.setdefault(artifact.attachment_id, {})[artifact.kind] = artifact
+
+        for attachment in attachments:
+            by_kind = artifact_map.get(attachment.id, {})
+            AttachmentService._apply_preview_artifact_to_attachment(
+                attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_PREVIEW_PDF)
+            )
+            AttachmentService._apply_reader_artifact_to_attachment(
+                attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_READER_HTML)
+            )
 
     @staticmethod
     def _ensure_artifact_rows(
@@ -279,20 +305,60 @@ class AttachmentServiceCommonMixin:
         return None
 
     @staticmethod
-    def get_attachments(db: Session, document_id: int, current_user: User) -> List[Attachment]:
-        """Get all attachments for a document"""
-        # Check document exists
+    def _enforce_attachment_access(document: Document, current_user: Optional[User]) -> None:
+        """Enforce attachment access constraints through one code path."""
+        if current_user is None:
+            # Anonymous/public flows are governed by caller-specific route rules.
+            return
+
+        if not can_view_document(current_user, document):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to access this document",
+            )
+
+        # Internal users are tenant-scoped unless explicitly global.
+        if is_internal_user(current_user) and current_user.role != UserRole.SYSTEM_ADMIN:
+            if (
+                document.tenant_id is not None
+                and current_user.tenant_id is not None
+                and document.tenant_id != current_user.tenant_id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to access attachments for this tenant",
+                )
+
+        if not has_permission(current_user, Permission.DOWNLOAD_ATTACHMENTS):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to access attachments",
+            )
+
+    @staticmethod
+    def _get_document_for_attachment_access(
+        db: Session,
+        document_id: int,
+        current_user: Optional[User],
+    ) -> Document:
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+        AttachmentService._enforce_attachment_access(document, current_user)
+        return document
+
+    @staticmethod
+    def get_attachments(db: Session, document_id: int, current_user: User) -> List[Attachment]:
+        """Get all attachments for a document"""
+        AttachmentService._get_document_for_attachment_access(db, document_id, current_user)
         attachments = (
             db.query(Attachment)
             .filter(Attachment.document_id == document_id)
             .order_by(Attachment.uploaded_at.desc())
             .all()
         )
-        for attachment in attachments:
-            AttachmentService._apply_existing_artifacts_to_attachment(db, attachment)
+        AttachmentService._apply_existing_artifacts_to_attachments(db, attachments)
         return attachments
 
     @staticmethod
@@ -303,6 +369,8 @@ class AttachmentServiceCommonMixin:
         current_user: Optional[User] = None,
     ) -> Attachment:
         """Get a specific attachment"""
+        AttachmentService._get_document_for_attachment_access(db, document_id, current_user)
+
         attachment = (
             db.query(Attachment)
             .filter(Attachment.id == attachment_id, Attachment.document_id == document_id)

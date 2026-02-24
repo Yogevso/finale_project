@@ -22,6 +22,7 @@ from app.schemas import (
 from app.security import get_current_active_user, get_password_hash
 from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
+from app.services.permissions import get_user_permissions
 from app.utils.request_ip import get_client_ip
 
 router = APIRouter()
@@ -186,7 +187,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.get("/auth/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_active_user)):
     """Get current user information"""
-    return current_user
+    permissions = sorted((permission.value for permission in get_user_permissions(current_user)))
+    return UserResponse.model_validate(current_user).model_copy(update={"permissions": permissions})
 
 
 @router.post("/auth/change-password", response_model=MessageResponse)

@@ -30,6 +30,7 @@ export interface User {
   role: UserRole
   is_active: boolean
   tenant_id?: number
+  permissions?: Permission[]
   tenant?: Tenant
   company_name?: string
   company_slug?: string
@@ -311,18 +312,19 @@ export interface DocumentQueryParams {
 
 // Notification types
 export type NotificationType = 
-  | 'DOCUMENT_CREATED'
-  | 'DOCUMENT_UPDATED'
-  | 'DOCUMENT_PUBLISHED'
-  | 'COMMENT_ADDED'
-  | 'COMMENT_REPLY'
-  | 'VERSION_PUBLISHED'
-  | 'REVIEW_SUBMITTED'
-  | 'REVIEW_APPROVED'
-  | 'REVIEW_REJECTED'
-  | 'FEEDBACK_RECEIVED'
-  | 'FEEDBACK_RESPONDED'
-  | 'SYSTEM'
+  | 'document_created'
+  | 'document_updated'
+  | 'document_published'
+  | 'comment_added'
+  | 'comment_reply'
+  | 'version_published'
+  | 'review_submitted'
+  | 'review_approved'
+  | 'review_rejected'
+  | 'feedback_received'
+  | 'feedback_responded'
+  | 'invitation_sent'
+  | 'system'
 
 export interface Notification {
   id: number
@@ -415,6 +417,10 @@ export interface CompanyUser {
 
 export interface Company extends Tenant {
   user_count: number
+  owned_document_count: number
+  assigned_document_count: number
+  customer_visible_document_count: number
+  // Backward-compatible alias from API; mirrors assigned_document_count.
   document_count: number
   users?: CompanyUser[]
 }
@@ -465,6 +471,7 @@ export interface CompanyDocumentsResponse {
   page: number
   per_page: number
   pages: number
+  scope?: 'assigned' | 'owned' | 'customer_visible'
 }
 
 // Review types

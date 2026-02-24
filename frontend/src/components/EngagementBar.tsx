@@ -62,7 +62,7 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
         updateProgress.mutate(Math.round(scrollProgress))
       }
     }
-  }, [scrollProgress, progress?.progress_percent])
+  }, [isCustomer, progress?.progress_percent, scrollProgress, updateProgress])
 
   // Use scrollProgress if available, otherwise fall back to saved progress
   const displayProgress = scrollProgress !== undefined 

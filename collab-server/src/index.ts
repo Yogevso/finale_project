@@ -6,6 +6,7 @@
  */
 
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 import http from 'http';
 import { Server, Extension } from '@hocuspocus/server';
 import { Logger } from '@hocuspocus/extension-logger';
@@ -17,16 +18,20 @@ import { verifyCollabToken, extractToken, extractDocumentId, canWrite } from './
 import { loadDocument, saveDocument, yjsToHtml, clearDocumentCache } from './persistence.js';
 import type { ConnectionContext, AwarenessUser } from './types.js';
 import { getUserColor } from './types.js';
+import {
+  clearDocumentAuth,
+  getDocumentTokenForLoad,
+  getDocumentTokenForStore,
+  registerDocumentConnectionAuth,
+  unregisterDocumentConnectionAuth,
+} from './documentAuthStore.js';
 
 const PORT = parseInt(process.env.PORT || '8002', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const REDIS_URL = process.env.REDIS_URL || '';
 
-// Track active connections per document
+// Track active connections by unique connection ID per document.
 const activeConnections = new Map<string, Map<string, ConnectionContext>>();
-
-// Store first token per document for persistence operations
-const documentTokens = new Map<string, string>();
 
 /**
  * Build extensions array (conditionally includes Redis)
@@ -84,7 +89,7 @@ const server = Server.configure({
     new Database({
       fetch: async ({ documentName }) => {
         const documentId = extractDocumentId(documentName);
-        const token = documentTokens.get(documentId);
+        const token = getDocumentTokenForLoad(documentId);
         
         if (!token) {
           console.log(`[Database] No token available for document ${documentId}`);
@@ -97,10 +102,10 @@ const server = Server.configure({
 
       store: async ({ documentName, state }) => {
         const documentId = extractDocumentId(documentName);
-        const token = documentTokens.get(documentId);
+        const token = getDocumentTokenForStore(documentId);
         
         if (!token) {
-          console.error(`[Database] No token available to save document ${documentId}`);
+          console.error(`[Database] No write-capable token available to save document ${documentId}`);
           return;
         }
 
@@ -127,34 +132,41 @@ const server = Server.configure({
       throw new Error(authResult.error || 'Authentication failed');
     }
 
-    // Store token for persistence operations
-    documentTokens.set(documentId, token);
+    const writeCapable = canWrite(authResult.permissions || []);
 
     // Store user context for this connection
     const connectionContext: ConnectionContext = {
       ...authResult.user,
       documentId,
-      connectionId: connection.readOnly.toString(),
+      connectionId: randomUUID(),
+      canWrite: writeCapable,
       connectedAt: new Date(),
     };
 
     // Set read-only mode if user doesn't have write permission
-    if (!canWrite(authResult.permissions || [])) {
+    if (!writeCapable) {
       connection.readOnly = true;
     }
 
     console.log(`[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`);
 
-    // Track connection
+    // Track connection by unique connection ID (supports multi-tab/user sessions).
     if (!activeConnections.has(documentId)) {
       activeConnections.set(documentId, new Map());
     }
-    activeConnections.get(documentId)!.set(authResult.user.userId, connectionContext);
+    activeConnections.get(documentId)!.set(connectionContext.connectionId, connectionContext);
+    registerDocumentConnectionAuth({
+      documentId,
+      connectionId: connectionContext.connectionId,
+      token,
+      writeCapable,
+    });
 
     // Return user data for awareness
     return {
       user: authResult.user,
       permissions: authResult.permissions,
+      connectionId: connectionContext.connectionId,
     };
   },
 
@@ -208,18 +220,32 @@ const server = Server.configure({
   async onDisconnect({ documentName, context }) {
     const documentId = extractDocumentId(documentName);
     const user = context?.user;
+    const connectionId = context?.connectionId as string | undefined;
 
-    if (user) {
-      const docConnections = activeConnections.get(documentId);
-      if (docConnections) {
-        docConnections.delete(user.userId);
-        if (docConnections.size === 0) {
-          activeConnections.delete(documentId);
-          // Clean up token when last user leaves
-          documentTokens.delete(documentId);
-          clearDocumentCache(documentId);
+    const docConnections = activeConnections.get(documentId);
+    if (docConnections) {
+      if (connectionId) {
+        docConnections.delete(connectionId);
+        unregisterDocumentConnectionAuth(documentId, connectionId);
+      } else if (user?.userId) {
+        // Backward-compatible fallback for contexts created without connectionId.
+        for (const [id, tracked] of docConnections.entries()) {
+          if (tracked.userId === user.userId) {
+            docConnections.delete(id);
+            unregisterDocumentConnectionAuth(documentId, id);
+            break;
+          }
         }
       }
+
+      if (docConnections.size === 0) {
+        activeConnections.delete(documentId);
+        clearDocumentAuth(documentId);
+        clearDocumentCache(documentId);
+      }
+    }
+
+    if (user) {
       console.log(`[Disconnect] User ${user.username} left document ${documentId}`);
     }
   },

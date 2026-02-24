@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import mammoth from 'mammoth'
 import RichTextEditor from './RichTextEditor'
 import CollaborativeEditor from './CollaborativeEditor'
 import { api } from '@/lib/api'
+import {
+  getPreferredEditorAttachment,
+  resolveSelectedAttachment,
+} from '@/lib/attachmentSelection'
 import { useCollaboration } from '@/lib/useCollaboration'
 import { getUserColor } from '@/lib/userColors'
 import { useAuth } from '@/lib/auth'
@@ -46,26 +50,41 @@ export default function DocumentEditor({
   const userColor = getUserColor(user?.id || 0)
 
   // Find Word documents
-  const wordDocs = attachments.filter(
-    (a) =>
-      a.mime_type === 'application/msword' ||
-      a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const wordDocs = useMemo(
+    () =>
+      attachments.filter(
+        (a) =>
+          a.mime_type === 'application/msword' ||
+          a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    [attachments],
   )
 
-  // Find PDFs (read-only preview)
-  const pdfDocs = attachments.filter((a) => a.mime_type === 'application/pdf')
-
   useEffect(() => {
-    if (wordDocs.length > 0 && !selectedAttachment) {
-      setSelectedAttachment(wordDocs[0])
-    } else if (pdfDocs.length > 0 && !selectedAttachment) {
-      setSelectedAttachment(pdfDocs[0])
+    const nextSelection = resolveSelectedAttachment(
+      attachments,
+      selectedAttachment,
+      getPreferredEditorAttachment,
+    )
+    if (nextSelection !== selectedAttachment) {
+      setSelectedAttachment(nextSelection)
     }
-  }, [attachments])
+  }, [attachments, selectedAttachment])
 
   useEffect(() => {
     const loadDocument = async () => {
-      if (!selectedAttachment) {
+      const activeSelection = resolveSelectedAttachment(
+        attachments,
+        selectedAttachment,
+        getPreferredEditorAttachment,
+      )
+
+      if (activeSelection !== selectedAttachment) {
+        setSelectedAttachment(activeSelection)
+        return
+      }
+
+      if (!activeSelection) {
         setLoading(false)
         return
       }
@@ -74,11 +93,12 @@ export default function DocumentEditor({
       setError(null)
 
       try {
-        const blob = await api.getAttachmentOriginalBlob(documentId, selectedAttachment.id)
+        const blob = await api.getAttachmentOriginalBlob(documentId, activeSelection.id)
         
         if (
-          selectedAttachment.mime_type === 'application/msword' ||
-          selectedAttachment.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          activeSelection.mime_type === 'application/msword' ||
+          activeSelection.mime_type ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ) {
           // Convert Word to HTML using mammoth
           const arrayBuffer = await blob.arrayBuffer()
@@ -89,7 +109,7 @@ export default function DocumentEditor({
           if (result.messages.length > 0) {
             console.warn('Mammoth conversion messages:', result.messages)
           }
-        } else if (selectedAttachment.mime_type === 'application/pdf') {
+        } else if (activeSelection.mime_type === 'application/pdf') {
           // PDFs can't be edited - show message
           setContent('<p><em>PDF documents cannot be edited. Use the Preview tab to view.</em></p>')
           setOriginalContent('')
@@ -103,7 +123,7 @@ export default function DocumentEditor({
     }
 
     loadDocument()
-  }, [selectedAttachment, documentId])
+  }, [attachments, documentId, selectedAttachment])
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent)

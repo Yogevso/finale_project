@@ -55,6 +55,7 @@ export interface PortalAttachment {
   file_size: number
   mime_type?: string
   created_at: string
+  download_url?: string
 }
 
 export interface PortalDocumentListResponse {

@@ -88,10 +88,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 
-async def get_current_active_user(current_user=Depends(get_current_user)):
+async def get_current_active_user(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     """Dependency to get current active user"""
+    from app.models import Tenant, UserRole
+
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if current_user.role != UserRole.SYSTEM_ADMIN and current_user.tenant_id is not None:
+        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if tenant and not tenant.is_active:
+            raise HTTPException(status_code=403, detail="Company is inactive")
     return current_user
 
 

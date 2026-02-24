@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import Attachment, Comment, Document, User, UserRole, Version
-from app.schemas import CommentCreate, CommentUpdate
+from app.schemas import CommentAuthor, CommentCreate, CommentResponse, CommentUpdate
+from app.utils.async_tasks import run_async_task
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +110,41 @@ class CommentService:
         ]
 
     @staticmethod
+    def _to_comment_response(
+        comment: Comment,
+        *,
+        visible_replies: Optional[List[Comment]] = None,
+    ) -> CommentResponse:
+        """Build a detached response DTO without mutating ORM relationships."""
+        replies_source = visible_replies if visible_replies is not None else list(comment.replies or [])
+        reply_payload = [
+            CommentService._to_comment_response(reply, visible_replies=[])
+            for reply in replies_source
+        ]
+        author_payload = (
+            CommentAuthor.model_validate(comment.user) if getattr(comment, "user", None) else None
+        )
+        return CommentResponse(
+            id=comment.id,
+            document_id=comment.document_id,
+            user_id=comment.user_id,
+            parent_id=comment.parent_id,
+            content=comment.content,
+            is_private=comment.is_private,
+            anchor_text=comment.anchor_text,
+            anchor_id=comment.anchor_id,
+            is_resolved=comment.is_resolved,
+            created_at=comment.created_at,
+            updated_at=comment.updated_at,
+            user=author_payload,
+            replies=reply_payload,
+            reply_count=len(reply_payload),
+        )
+
+    @staticmethod
     def get_comments(
         db: Session, document_id: int, current_user: User, include_private: bool = True
-    ) -> List[Comment]:
+    ) -> List[CommentResponse]:
         """
         Get comments for a document with contributor-based visibility filtering.
 
@@ -144,20 +177,21 @@ class CommentService:
         visible_comments = []
         for comment in all_comments:
             if CommentService.can_view_comment(db, comment, current_user, contributors):
-                # Also filter replies
                 visible_replies = [
                     r
                     for r in comment.replies
                     if CommentService.can_view_comment(db, r, current_user, contributors)
                 ]
-                comment.replies = visible_replies
-                comment.reply_count = len(visible_replies)
-                visible_comments.append(comment)
+                visible_comments.append(
+                    CommentService._to_comment_response(comment, visible_replies=visible_replies)
+                )
 
         return visible_comments
 
     @staticmethod
-    def get_comment(db: Session, document_id: int, comment_id: int, current_user: User) -> Comment:
+    def get_comment(
+        db: Session, document_id: int, comment_id: int, current_user: User
+    ) -> CommentResponse:
         """Get a specific comment with its replies"""
         comment = (
             db.query(Comment)
@@ -177,14 +211,12 @@ class CommentService:
                 detail="You don't have permission to view this comment",
             )
 
-        # Filter replies based on visibility
-        comment.replies = [
+        visible_replies = [
             r
             for r in comment.replies
             if CommentService.can_view_comment(db, r, current_user, contributors)
         ]
-        comment.reply_count = len(comment.replies)
-        return comment
+        return CommentService._to_comment_response(comment, visible_replies=visible_replies)
 
     @staticmethod
     def create_comment(
@@ -250,8 +282,6 @@ class CommentService:
             if not settings.EMAIL_ENABLED:
                 return
 
-            import asyncio
-
             from app.services.email_service import email_service
 
             notified_users = set()
@@ -260,7 +290,7 @@ class CommentService:
             if parent_comment and parent_comment.user_id != current_user.id:
                 parent_author = db.query(User).filter(User.id == parent_comment.user_id).first()
                 if parent_author and parent_author.email:
-                    asyncio.create_task(
+                    run_async_task(
                         email_service.send_comment_reply(
                             to_email=parent_author.email,
                             replier_name=current_user.full_name or current_user.username,
@@ -281,7 +311,7 @@ class CommentService:
             ):
                 author = db.query(User).filter(User.id == document.created_by).first()
                 if author and author.email:
-                    asyncio.create_task(
+                    run_async_task(
                         email_service.send_new_comment(
                             to_email=author.email,
                             commenter_name=current_user.full_name or current_user.username,
@@ -316,7 +346,7 @@ class CommentService:
                 for admin in admins:
                     if admin.email:
                         comment_type = "private" if comment.is_private else "inline"
-                        asyncio.create_task(
+                        run_async_task(
                             email_service.send_new_comment(
                                 to_email=admin.email,
                                 commenter_name=current_user.full_name or current_user.username,

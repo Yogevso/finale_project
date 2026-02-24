@@ -64,6 +64,16 @@ class SnapshotListResponse(BaseModel):
     has_more: bool
 
 
+def _batch_snapshot_creator_usernames(
+    db: Session, snapshots: list
+) -> dict[int, str]:
+    creator_ids = {snapshot.created_by for snapshot in snapshots if snapshot.created_by}
+    if not creator_ids:
+        return {}
+    rows = db.query(User.id, User.username).filter(User.id.in_(creator_ids)).all()
+    return {row[0]: row[1] for row in rows}
+
+
 @router.post("/collaboration/documents/{document_id}/snapshots", response_model=SnapshotResponse)
 async def create_snapshot(
     document_id: int,
@@ -160,13 +170,9 @@ async def list_snapshots(
     )
 
     # Build response
+    usernames_by_id = _batch_snapshot_creator_usernames(db, snapshots)
     snapshot_responses = []
     for snapshot in snapshots:
-        username = None
-        if snapshot.created_by:
-            user = db.query(User).filter(User.id == snapshot.created_by).first()
-            username = user.username if user else None
-
         snapshot_responses.append(
             SnapshotResponse(
                 id=snapshot.id,
@@ -176,7 +182,7 @@ async def list_snapshots(
                 description=snapshot.description,
                 state_size=snapshot.state_size,
                 created_by=snapshot.created_by,
-                created_by_username=username,
+                created_by_username=usernames_by_id.get(snapshot.created_by),
                 session_id=snapshot.session_id,
                 is_pinned=snapshot.is_pinned,
                 expires_at=snapshot.expires_at,

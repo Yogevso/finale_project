@@ -60,6 +60,7 @@ class UserResponse(UserBase):
     role: UserRole
     is_active: bool
     tenant_id: Optional[int] = None
+    permissions: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

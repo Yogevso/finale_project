@@ -133,16 +133,20 @@ def create_user(
             detail=f"You cannot create users with role '{user_data.role.value}'",
         )
 
+    target_tenant_id = (
+        user_data.tenant_id if user_data.tenant_id is not None else tenant_ctx.tenant_id
+    )
+
     # Customers must have a company
-    if user_data.role == UserRole.CUSTOMER and not user_data.tenant_id:
+    if user_data.role == UserRole.CUSTOMER and not target_tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Customers must be assigned to a company",
         )
 
-    # Validate tenant exists if provided
-    if user_data.tenant_id:
-        tenant = db.query(Tenant).filter(Tenant.id == user_data.tenant_id).first()
+    # Validate tenant exists if provided/resolved
+    if target_tenant_id is not None:
+        tenant = db.query(Tenant).filter(Tenant.id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
         # Non-system admins can only assign to their own tenant
@@ -169,7 +173,7 @@ def create_user(
         full_name=user_data.full_name,
         hashed_password=get_password_hash(user_data.password),
         role=user_data.role,
-        tenant_id=user_data.tenant_id or tenant_ctx.tenant_id,
+        tenant_id=target_tenant_id,
         is_active=True,
     )
     db.add(user)
@@ -275,14 +279,29 @@ def update_user(
 
     is_self = user.id == current_user.id
     is_admin = current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]
+    tenant_id_provided = "tenant_id" in user_data.model_fields_set
+    has_privileged_update = (
+        user_data.role is not None
+        or user_data.is_active is not None
+        or tenant_id_provided
+    )
 
     # Non-admins can only update their own profile
     if not is_self and not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    if has_privileged_update and not is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     # Check tenant access for admins
     if not is_self and not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Role hierarchy applies to all privileged mutations, not just role updates.
+    if is_admin and not is_self and not can_manage_role(current_user.role, user.role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify users with higher roles",
+        )
 
     # Apply updates
     if user_data.email is not None:
@@ -297,8 +316,8 @@ def update_user(
     if user_data.full_name is not None:
         user.full_name = user_data.full_name
 
-    # Role change - only admins can do this
-    if user_data.role is not None and is_admin:
+    # Role change
+    if user_data.role is not None:
         if not can_manage_role(current_user.role, user_data.role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -311,8 +330,8 @@ def update_user(
             )
         user.role = user_data.role
 
-    # Active status - only admins can change
-    if user_data.is_active is not None and is_admin:
+    # Active status
+    if user_data.is_active is not None:
         # Can't deactivate yourself
         if is_self and not user_data.is_active:
             raise HTTPException(
@@ -320,21 +339,39 @@ def update_user(
             )
         user.is_active = user_data.is_active
 
-    # Tenant change - only admins can change
-    if user_data.tenant_id is not None and is_admin:
+    # Tenant change
+    if tenant_id_provided:
+        requested_tenant_id = user_data.tenant_id
         # Customers must have a company
-        if user.role == UserRole.CUSTOMER and not user_data.tenant_id:
+        if user.role == UserRole.CUSTOMER and not requested_tenant_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Customers must be assigned to a company",
             )
-        if user_data.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == user_data.tenant_id).first()
+        if requested_tenant_id:
+            tenant = db.query(Tenant).filter(Tenant.id == requested_tenant_id).first()
             if not tenant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
                 )
-        user.tenant_id = user_data.tenant_id
+            if not tenant_ctx.is_system_admin and requested_tenant_id != tenant_ctx.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot assign users to other companies",
+                )
+        elif not tenant_ctx.is_system_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot remove company assignment in this tenant scope",
+            )
+        user.tenant_id = requested_tenant_id
+
+    # Final invariant: customer users must belong to a company.
+    if user.role == UserRole.CUSTOMER and not user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Customers must be assigned to a company",
+        )
 
     db.commit()
     db.refresh(user)

@@ -143,7 +143,7 @@ export default function CompaniesPage() {
                 <th>Company</th>
                 <th>Type</th>
                 <th>Users</th>
-                <th>Documents</th>
+                <th>Assigned Docs</th>
                 <th>Status</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -195,7 +195,7 @@ export default function CompaniesPage() {
                     <td className="admin-table-cell">
                       <div className="flex items-center gap-2 text-slate-600">
                         <FileText className="w-4 h-4" />
-                        {company.document_count}
+                        {company.assigned_document_count}
                       </div>
                     </td>
                     <td className="admin-table-cell">

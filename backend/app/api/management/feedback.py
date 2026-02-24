@@ -25,7 +25,7 @@ from app.models import (
     UserRole,
     Version,
 )
-from app.security import get_current_user
+from app.security import get_current_active_user
 
 
 def get_document_contributors(db: Session, document_id: int) -> Set[int]:
@@ -148,7 +148,7 @@ class FeedbackStatusUpdate(BaseModel):
 router = APIRouter(prefix="/feedback", tags=["Feedback Management"])
 
 
-def require_admin_or_manager(current_user: User = Depends(get_current_user)) -> User:
+def require_admin_or_manager(current_user: User = Depends(get_current_active_user)) -> User:
     """Require admin or manager role"""
     if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
         raise HTTPException(
@@ -157,7 +157,7 @@ def require_admin_or_manager(current_user: User = Depends(get_current_user)) -> 
     return current_user
 
 
-def require_internal_staff(current_user: User = Depends(get_current_user)) -> User:
+def require_internal_staff(current_user: User = Depends(get_current_active_user)) -> User:
     """Require internal staff role (not customer)"""
     if current_user.role not in [
         UserRole.SYSTEM_ADMIN,

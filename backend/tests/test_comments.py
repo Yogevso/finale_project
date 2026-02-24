@@ -2,6 +2,9 @@
 
 from fastapi.testclient import TestClient
 
+from app.models import Comment, User
+from app.services.comment_service import CommentService
+
 
 class TestCommentsAPI:
     """Tests for comment management endpoints"""
@@ -125,3 +128,44 @@ class TestCommentsAPI:
         for reply in replies:
             if "parent_id" in reply:
                 assert reply["parent_id"] == parent_id or reply.get("parent_id") is None
+
+    def test_visibility_filtering_does_not_mutate_comment_relationships(
+        self, db, sample_document: dict, monkeypatch
+    ):
+        """Visibility shaping must not delete/unlink replies from ORM relationships."""
+        current_user = db.query(User).filter(User.id == 1).first()
+        assert current_user is not None
+
+        parent = Comment(
+            document_id=sample_document["id"],
+            user_id=current_user.id,
+            content="Parent comment",
+        )
+        db.add(parent)
+        db.commit()
+        db.refresh(parent)
+
+        reply = Comment(
+            document_id=sample_document["id"],
+            user_id=current_user.id,
+            content="Reply comment",
+            parent_id=parent.id,
+        )
+        db.add(reply)
+        db.commit()
+        db.refresh(reply)
+
+        def fake_can_view(_db, comment, _user, _contributors=None):
+            return comment.parent_id is None
+
+        monkeypatch.setattr(CommentService, "can_view_comment", staticmethod(fake_can_view))
+
+        comments = CommentService.get_comments(db, sample_document["id"], current_user)
+        assert len(comments) == 1
+        assert comments[0].id == parent.id
+        assert comments[0].reply_count == 0
+        assert comments[0].replies == []
+
+        persisted_reply = db.query(Comment).filter(Comment.id == reply.id).first()
+        assert persisted_reply is not None
+        assert persisted_reply.parent_id == parent.id

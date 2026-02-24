@@ -55,6 +55,10 @@ class CompanyResponse(BaseModel):
     company_logo: Optional[str] = None
     is_active: bool
     user_count: int = 0
+    owned_document_count: int = 0
+    assigned_document_count: int = 0
+    customer_visible_document_count: int = 0
+    # Backward-compatible alias; mirrors `assigned_document_count`.
     document_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -84,6 +88,10 @@ class CompanyDetailResponse(BaseModel):
     company_logo: Optional[str] = None
     is_active: bool
     user_count: int = 0
+    owned_document_count: int = 0
+    assigned_document_count: int = 0
+    customer_visible_document_count: int = 0
+    # Backward-compatible alias; mirrors `assigned_document_count`.
     document_count: int = 0
     users: List[CompanyUserInfo] = []
     created_at: datetime

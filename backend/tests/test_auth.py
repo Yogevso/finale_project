@@ -78,6 +78,8 @@ def test_get_current_user(client, auth_headers):
     data = response.json()
     assert data["username"] == "testuser"
     assert data["email"] == "test@example.com"
+    assert "permissions" in data
+    assert "edit_document" in data["permissions"]
 
 
 def test_get_current_user_unauthorized(client):

@@ -1,5 +1,9 @@
 """Tests for the Customer Portal API endpoints"""
 
+from uuid import uuid4
+
+from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Version
+
 
 class TestPortalDocumentsEndpoint:
     """Test /api/v1/portal/documents endpoint"""
@@ -94,6 +98,140 @@ class TestPortalDocumentDetailEndpoint:
         )
         assert response.status_code in [403, 404]
 
+    def test_document_detail_attachment_download_url_is_document_scoped(
+        self, client, db, customer_headers, public_document, test_admin
+    ):
+        """Attachment URLs in portal detail should match document-scoped download route."""
+        attachment = Attachment(
+            document_id=public_document.id,
+            filename="portal-test.pdf",
+            original_filename="portal-test.pdf",
+            file_size=128,
+            mime_type="application/pdf",
+            storage_path="/tmp/portal-test.pdf",
+            uploaded_by=test_admin.id,
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+
+        response = client.get(
+            f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
+        )
+        assert response.status_code == 200
+        attachments = response.json()["attachments"]
+        entry = next(item for item in attachments if item["id"] == attachment.id)
+        assert (
+            entry["download_url"]
+            == f"/api/v1/documents/{public_document.id}/attachments/{attachment.id}/download"
+        )
+
+    def test_list_and_detail_use_same_published_version_when_newer_draft_exists(
+        self, client, db, customer_headers, test_admin
+    ):
+        """Portal list/detail should both prefer latest published version over newer draft."""
+        document = Document(
+            title="Portal Version Consistency Published",
+            document_number=f"DOC-PORTAL-PUB-{uuid4().hex[:8]}",
+            description="Portal version consistency test",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_admin.id,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        db.add_all(
+            [
+                Version(
+                    document_id=document.id,
+                    version_number=1,
+                    content="published content",
+                    changes_summary="published",
+                    is_published=True,
+                    created_by=test_admin.id,
+                ),
+                Version(
+                    document_id=document.id,
+                    version_number=2,
+                    content="draft content",
+                    changes_summary="draft",
+                    is_published=False,
+                    created_by=test_admin.id,
+                ),
+            ]
+        )
+        db.commit()
+
+        list_response = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        assert list_response.status_code == 200
+        list_payload = list_response.json()
+        list_item = next(item for item in list_payload["items"] if item["id"] == document.id)
+        assert list_item["version"] == 1
+
+        detail_response = client.get(
+            f"/api/v1/portal/documents/{document.id}",
+            headers=customer_headers,
+        )
+        assert detail_response.status_code == 200
+        detail_payload = detail_response.json()
+        assert detail_payload["version"] == 1
+        assert detail_payload["content"] == "published content"
+
+    def test_list_and_detail_fallback_to_latest_when_no_published_version_exists(
+        self, client, db, customer_headers, test_admin
+    ):
+        """Portal list/detail should use latest available version for legacy unpublished-only docs."""
+        document = Document(
+            title="Portal Version Consistency Fallback",
+            document_number=f"DOC-PORTAL-DRF-{uuid4().hex[:8]}",
+            description="Portal version fallback test",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_admin.id,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        db.add_all(
+            [
+                Version(
+                    document_id=document.id,
+                    version_number=1,
+                    content="older draft content",
+                    changes_summary="older draft",
+                    is_published=False,
+                    created_by=test_admin.id,
+                ),
+                Version(
+                    document_id=document.id,
+                    version_number=2,
+                    content="latest draft content",
+                    changes_summary="latest draft",
+                    is_published=False,
+                    created_by=test_admin.id,
+                ),
+            ]
+        )
+        db.commit()
+
+        list_response = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        assert list_response.status_code == 200
+        list_payload = list_response.json()
+        list_item = next(item for item in list_payload["items"] if item["id"] == document.id)
+        assert list_item["version"] == 2
+
+        detail_response = client.get(
+            f"/api/v1/portal/documents/{document.id}",
+            headers=customer_headers,
+        )
+        assert detail_response.status_code == 200
+        detail_payload = detail_response.json()
+        assert detail_payload["version"] == 2
+        assert detail_payload["content"] == "latest draft content"
+
 
 class TestPortalFeedbackEndpoint:
     """Test /api/v1/portal/feedback endpoints"""
@@ -162,7 +300,52 @@ class TestPortalDashboardEndpoint:
         response = client.get("/api/v1/portal/dashboard/stats", headers=customer_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "document_count" in data or "total_documents" in data
+        assert "total_documents" in data
+
+    def test_dashboard_stats_match_visible_documents(
+        self,
+        client,
+        customer_headers,
+        public_document,
+        company_document,
+        internal_document,
+    ):
+        """Dashboard document counters should match the customer-visible list semantics."""
+        stats_response = client.get("/api/v1/portal/dashboard/stats", headers=customer_headers)
+        assert stats_response.status_code == 200
+        stats = stats_response.json()
+
+        list_response = client.get(
+            "/api/v1/portal/documents?per_page=100",
+            headers=customer_headers,
+        )
+        assert list_response.status_code == 200
+        payload = list_response.json()
+
+        visibility_counts: dict[str, int] = {}
+        for item in payload["items"]:
+            visibility = item.get("visibility") or "internal"
+            visibility_counts[visibility] = visibility_counts.get(visibility, 0) + 1
+
+        assert stats["total_documents"] == payload["total"]
+        assert stats["public_documents"] == visibility_counts.get("public", 0)
+        assert stats["company_documents"] == visibility_counts.get("company", 0)
+
+    def test_dashboard_stats_exclude_other_company_documents(
+        self,
+        client,
+        customer_2_headers,
+        public_document,
+        company_document,
+    ):
+        """A customer from another company should only count globally public documents."""
+        response = client.get("/api/v1/portal/dashboard/stats", headers=customer_2_headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_documents"] == 1
+        assert data["public_documents"] == 1
+        assert data["company_documents"] == 0
 
 
 class TestPortalSearchEndpoint:

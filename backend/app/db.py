@@ -35,9 +35,10 @@ def get_db():
 
 
 def init_db():
-    """Initialize database - create all tables"""
-    Base.metadata.create_all(bind=engine)
+    """Initialize database schema and apply startup migrations."""
     managed_migrations_applied = _run_managed_migrations()
+    if not managed_migrations_applied:
+        _bootstrap_schema_from_metadata()
     _run_lightweight_migrations(skip_versions_semantic_migration=managed_migrations_applied)
 
 
@@ -65,6 +66,12 @@ def _run_managed_migrations() -> bool:
     except Exception as exc:
         logger.warning("Managed migration upgrade failed; continuing with lightweight fallback: %s", exc)
         return False
+
+
+def _bootstrap_schema_from_metadata() -> None:
+    """Fallback bootstrap when managed migrations are unavailable."""
+    logger.warning("Managed migrations unavailable; bootstrapping schema via SQLAlchemy metadata.")
+    Base.metadata.create_all(bind=engine)
 
 
 def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = False) -> None:

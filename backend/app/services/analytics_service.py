@@ -431,34 +431,39 @@ class AnalyticsService:
         # Most active users
         activity_query = (
             self.db.query(
-                AuditLog.user_id,
+                User.id.label("user_id"),
+                User.username.label("username"),
+                User.full_name.label("full_name"),
+                User.role.label("role"),
                 func.count(AuditLog.id).label("count"),
                 func.max(AuditLog.created_at).label("last_active"),
             )
+            .join(User, User.id == AuditLog.user_id)
             .filter(AuditLog.created_at.between(start_dt, end_dt))
-            .group_by(AuditLog.user_id)
-            .order_by(func.count(AuditLog.id).desc())
+        )
+        if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
+            activity_query = activity_query.filter(User.tenant_id == self.tenant_ctx.tenant_id)
+        activity_query = (
+            activity_query.group_by(User.id, User.username, User.full_name, User.role)
+            .order_by(
+                func.count(AuditLog.id).desc(),
+                func.max(AuditLog.created_at).desc(),
+                User.id.asc(),
+            )
             .limit(10)
         )
 
-        most_active = []
-        for row in activity_query.all():
-            user = self.db.query(User).filter(User.id == row.user_id).first()
-            if user:
-                # Apply tenant filter
-                if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-                    if user.tenant_id != self.tenant_ctx.tenant_id:
-                        continue
-                most_active.append(
-                    UserActivityItem(
-                        user_id=user.id,
-                        username=user.username,
-                        full_name=user.full_name,
-                        role=user.role.value if user.role else "unknown",
-                        action_count=row.count,
-                        last_active=row.last_active.isoformat() if row.last_active else None,
-                    )
-                )
+        most_active = [
+            UserActivityItem(
+                user_id=row.user_id,
+                username=row.username,
+                full_name=row.full_name,
+                role=row.role.value if row.role else "unknown",
+                action_count=row.count,
+                last_active=row.last_active.isoformat() if row.last_active else None,
+            )
+            for row in activity_query.all()
+        ]
 
         return {
             "period_start": date_from,
@@ -503,11 +508,15 @@ class AnalyticsService:
             TimeSeriesPoint(date=str(row.date), value=row.value) for row in docs_query.all()
         ]
 
-        # Versions published over time
-        ver_date_trunc = self._get_date_trunc(granularity, Version.created_at)
+        # Versions published over time (publish date, not version creation date)
+        ver_date_trunc = self._get_date_trunc(granularity, Version.published_at)
         versions_query = (
             self.db.query(ver_date_trunc.label("date"), func.count(Version.id).label("value"))
-            .filter(Version.is_published.is_(True), Version.created_at.between(start_dt, end_dt))
+            .filter(
+                Version.is_published.is_(True),
+                Version.published_at.isnot(None),
+                Version.published_at.between(start_dt, end_dt),
+            )
             .group_by(ver_date_trunc)
             .order_by(ver_date_trunc)
         )
@@ -579,7 +588,9 @@ class AnalyticsService:
             total_docs = total_docs.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
 
         total_versions = self.db.query(Version).filter(
-            Version.is_published.is_(True), Version.created_at.between(start_dt, end_dt)
+            Version.is_published.is_(True),
+            Version.published_at.isnot(None),
+            Version.published_at.between(start_dt, end_dt),
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             total_versions = total_versions.join(Document).filter(

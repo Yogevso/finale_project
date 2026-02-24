@@ -306,7 +306,9 @@ export default function CustomerDocumentPage() {
                     </div>
                   </div>
                   <a
-                    href={`/api/v1/attachments/${attachment.id}/download`}
+                    href={
+                      attachment.download_url ?? `/api/v1/documents/${document.id}/attachments/${attachment.id}/download`
+                    }
                     className="ml-4 flex items-center px-3 py-2 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700"
                   >
                     <Download className="h-4 w-4 mr-1" />
