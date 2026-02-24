@@ -138,6 +138,144 @@ class TestPublicStatsEndpoint:
         assert "total_documents" in data
 
 
+class TestPublicTopicsEndpoint:
+    """Test /api/v1/public/topics endpoints with topic normalization."""
+
+    def test_list_public_topics_normalizes_legacy_topic_values(self, client, db, test_admin):
+        from app.models import Document, DocumentStatus, DocumentVisibility, Topic
+
+        db.add(Topic(name="SDKs & Tools", slug="sdk-tools", description="SDK and tooling docs"))
+        db.flush()
+
+        raw_topics = [
+            "sdk-tools",
+            "SDKs & Tools",
+            "sdks-tools",
+            " SDK-TOOLS ",
+        ]
+        for index, raw_topic in enumerate(raw_topics, start=1):
+            db.add(
+                Document(
+                    title=f"Topic Legacy {index}",
+                    document_number=f"DOC-TOPIC-{index:04d}",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic=raw_topic,
+                    created_by=test_admin.id,
+                )
+            )
+        db.commit()
+
+        response = client.get("/api/v1/public/topics")
+        assert response.status_code == 200
+        payload = response.json()
+
+        topic_row = next((item for item in payload["items"] if item["slug"] == "sdk-tools"), None)
+        assert topic_row is not None
+        assert topic_row["document_count"] == 4
+
+    def test_get_public_topic_count_matches_normalized_topic_values(self, client, db, test_admin):
+        from app.models import Document, DocumentStatus, DocumentVisibility, Topic
+
+        db.add(Topic(name="Design Systems", slug="design-systems"))
+        db.flush()
+
+        db.add_all(
+            [
+                Document(
+                    title="Design Canonical",
+                    document_number="DOC-TOPIC-DES-0001",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="design-systems",
+                    created_by=test_admin.id,
+                ),
+                Document(
+                    title="Design Name",
+                    document_number="DOC-TOPIC-DES-0002",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="Design Systems",
+                    created_by=test_admin.id,
+                ),
+                Document(
+                    title="Design Slugified Name",
+                    document_number="DOC-TOPIC-DES-0003",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="design-systems",
+                    created_by=test_admin.id,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/public/topics/design-systems")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["slug"] == "design-systems"
+        assert payload["document_count"] == 3
+
+    def test_list_public_documents_topic_filter_accepts_topic_slug_aliases(
+        self, client, db, test_admin
+    ):
+        from app.models import Document, DocumentStatus, DocumentVisibility, Topic
+
+        db.add(Topic(name="SDKs & Tools", slug="sdk-tools"))
+        db.flush()
+
+        db.add_all(
+            [
+                Document(
+                    title="Alias Match Slug",
+                    document_number="DOC-TOPIC-FLT-0001",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="sdk-tools",
+                    created_by=test_admin.id,
+                ),
+                Document(
+                    title="Alias Match Name",
+                    document_number="DOC-TOPIC-FLT-0002",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="SDKs & Tools",
+                    created_by=test_admin.id,
+                ),
+                Document(
+                    title="Alias Match Slugified Name",
+                    document_number="DOC-TOPIC-FLT-0003",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="sdks-tools",
+                    created_by=test_admin.id,
+                ),
+                Document(
+                    title="Other Topic",
+                    document_number="DOC-TOPIC-FLT-0004",
+                    status=DocumentStatus.ACTIVE,
+                    visibility=DocumentVisibility.PUBLIC,
+                    topic="platform",
+                    created_by=test_admin.id,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/public/documents?topic=sdk-tools")
+        assert response.status_code == 200
+        payload = response.json()
+        titles = {item["title"] for item in payload["items"]}
+
+        assert payload["total"] == 3
+        assert {
+            "Alias Match Slug",
+            "Alias Match Name",
+            "Alias Match Slugified Name",
+        }.issubset(titles)
+        assert "Other Topic" not in titles
+
+
 class TestPublicPlatformsEndpoints:
     """Test /api/v1/platforms endpoints"""
 

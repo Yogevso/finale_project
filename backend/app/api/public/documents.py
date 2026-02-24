@@ -14,7 +14,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Version
+from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Topic, Version
 from app.schemas.public import (
     PublicAttachmentInfo,
     PublicCategoriesResponse,
@@ -30,6 +30,7 @@ from app.schemas.public import (
     PublicSearchResponse,
     PublicSearchResult,
 )
+from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 router = APIRouter(prefix="/public", tags=["Public"])
 
@@ -44,6 +45,28 @@ def get_public_documents_query(db: Session):
     return db.query(Document).filter(
         Document.visibility == DocumentVisibility.PUBLIC, Document.status == DocumentStatus.ACTIVE
     )
+
+
+def _resolve_topic_aliases(db: Session, raw_topic: Optional[str]) -> set[str]:
+    normalized_without_lookup = normalize_topic_to_slug(raw_topic)
+    if not normalized_without_lookup:
+        return set()
+
+    topics = db.query(Topic).all()
+    topic_lookup = build_topic_lookup(topics)
+    canonical = normalize_topic_to_slug(raw_topic, topic_lookup) or normalized_without_lookup
+
+    aliases = {canonical}
+    aliases.update(alias for alias, mapped in topic_lookup.items() if mapped == canonical)
+    return aliases
+
+
+def _apply_topic_filter(query, db: Session, raw_topic: Optional[str]):
+    aliases = _resolve_topic_aliases(db, raw_topic)
+    if not aliases:
+        return query.filter(Document.id == -1)
+    normalized_topic = func.lower(func.trim(Document.topic))
+    return query.filter(normalized_topic.in_(aliases))
 
 
 @router.get("/documents", response_model=PublicDocumentListResponse)
@@ -74,7 +97,7 @@ def list_public_documents(
     if category:
         query = query.filter(Document.category == category)
     if topic:
-        query = query.filter(Document.topic == topic)
+        query = _apply_topic_filter(query, db, topic)
     if platform:
         query = query.filter(Document.platform == platform)
 
@@ -369,7 +392,7 @@ def search_public_documents(
     if category:
         query = query.filter(Document.category == category)
     if topic:
-        query = query.filter(Document.topic == topic)
+        query = _apply_topic_filter(query, db, topic)
     if platform:
         query = query.filter(Document.platform == platform)
 
