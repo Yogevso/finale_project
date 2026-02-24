@@ -1,6 +1,7 @@
 """Unit tests for Analytics API"""
 
-from datetime import date, timedelta
+import builtins
+from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -174,6 +175,157 @@ class TestUserAnalytics:
         response = client.get("/api/v1/analytics/users", headers=auth_headers)
         assert response.status_code == 403
 
+    def test_user_analytics_most_active_scopes_tenant_before_ranking_limit(
+        self,
+        client: TestClient,
+        db,
+        admin_headers,
+        test_admin,
+        test_tenant,
+        test_tenant_2,
+    ):
+        """Tenant filter must be applied in SQL before top-N ranking/limit."""
+        from app.models import ActionType, AuditLog, User, UserRole
+        from app.security import get_password_hash
+
+        test_admin.tenant_id = test_tenant.id
+        db.flush()
+
+        cross_tenant_users = []
+        for index in range(12):
+            user = User(
+                email=f"tenant-b-heavy-{index}@example.com",
+                username=f"tenant_b_heavy_{index}",
+                full_name=f"Tenant B Heavy {index}",
+                hashed_password=get_password_hash("tenant-b-pass"),
+                role=UserRole.EDITOR,
+                tenant_id=test_tenant_2.id,
+                is_active=True,
+            )
+            cross_tenant_users.append(user)
+            db.add(user)
+
+        tenant_top_user = User(
+            email="tenant-a-top@example.com",
+            username="tenant_a_top",
+            full_name="Tenant A Top",
+            hashed_password=get_password_hash("tenant-a-pass"),
+            role=UserRole.EDITOR,
+            tenant_id=test_tenant.id,
+            is_active=True,
+        )
+        tenant_second_user = User(
+            email="tenant-a-second@example.com",
+            username="tenant_a_second",
+            full_name="Tenant A Second",
+            hashed_password=get_password_hash("tenant-a-pass"),
+            role=UserRole.EDITOR,
+            tenant_id=test_tenant.id,
+            is_active=True,
+        )
+        db.add_all([tenant_top_user, tenant_second_user])
+        db.flush()
+
+        for user in cross_tenant_users:
+            for offset in range(5):
+                db.add(
+                    AuditLog(
+                        user_id=user.id,
+                        action=ActionType.VIEW,
+                        created_at=datetime(2026, 1, 20, 10, offset, 0),
+                    )
+                )
+
+        for offset in range(3):
+            db.add(
+                AuditLog(
+                    user_id=tenant_top_user.id,
+                    action=ActionType.VIEW,
+                    created_at=datetime(2026, 1, 21, 9, offset, 0),
+                )
+            )
+        for offset in range(2):
+            db.add(
+                AuditLog(
+                    user_id=tenant_second_user.id,
+                    action=ActionType.VIEW,
+                    created_at=datetime(2026, 1, 21, 8, offset, 0),
+                )
+            )
+        db.commit()
+
+        response = client.get(
+            "/api/v1/analytics/users",
+            headers=admin_headers,
+            params={"date_from": "2026-01-01", "date_to": "2026-01-31"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        most_active_user_ids = [item["user_id"] for item in payload["most_active_users"]]
+        assert most_active_user_ids == [tenant_top_user.id, tenant_second_user.id]
+
+    def test_user_analytics_most_active_uses_deterministic_tie_breakers(
+        self, client: TestClient, db, admin_headers, test_admin, test_tenant
+    ):
+        """Tie ordering should use last-active desc then user_id asc for stable results."""
+        from app.models import ActionType, AuditLog, User, UserRole
+        from app.security import get_password_hash
+
+        test_admin.tenant_id = test_tenant.id
+        db.flush()
+
+        tie_first = User(
+            email="tie-first@example.com",
+            username="tie_first",
+            full_name="Tie First",
+            hashed_password=get_password_hash("tie-pass"),
+            role=UserRole.EDITOR,
+            tenant_id=test_tenant.id,
+            is_active=True,
+        )
+        tie_second = User(
+            email="tie-second@example.com",
+            username="tie_second",
+            full_name="Tie Second",
+            hashed_password=get_password_hash("tie-pass"),
+            role=UserRole.EDITOR,
+            tenant_id=test_tenant.id,
+            is_active=True,
+        )
+        more_recent = User(
+            email="tie-recent@example.com",
+            username="tie_recent",
+            full_name="Tie Recent",
+            hashed_password=get_password_hash("tie-pass"),
+            role=UserRole.EDITOR,
+            tenant_id=test_tenant.id,
+            is_active=True,
+        )
+        db.add_all([tie_first, tie_second, more_recent])
+        db.flush()
+
+        tie_timestamps = [datetime(2026, 1, 20, 10, 0, 0), datetime(2026, 1, 20, 11, 0, 0)]
+        recent_timestamps = [datetime(2026, 1, 22, 10, 0, 0), datetime(2026, 1, 22, 11, 0, 0)]
+
+        for timestamp in tie_timestamps:
+            db.add(AuditLog(user_id=tie_first.id, action=ActionType.VIEW, created_at=timestamp))
+            db.add(AuditLog(user_id=tie_second.id, action=ActionType.VIEW, created_at=timestamp))
+        for timestamp in recent_timestamps:
+            db.add(AuditLog(user_id=more_recent.id, action=ActionType.VIEW, created_at=timestamp))
+        db.commit()
+
+        response = client.get(
+            "/api/v1/analytics/users",
+            headers=admin_headers,
+            params={"date_from": "2026-01-01", "date_to": "2026-01-31"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        most_active_user_ids = [item["user_id"] for item in payload["most_active_users"]]
+        assert most_active_user_ids[:3] == [more_recent.id, tie_first.id, tie_second.id]
+
 
 class TestContentAnalytics:
     """Tests for /analytics/content endpoint"""
@@ -194,6 +346,88 @@ class TestContentAnalytics:
         """Manager should be able to get content analytics"""
         response = client.get("/api/v1/analytics/content", headers=manager_headers)
         assert response.status_code == 200
+
+    def test_content_published_over_time_uses_published_at_dates(
+        self, client: TestClient, db, admin_headers, test_admin
+    ):
+        """Published-version buckets should be based on published_at, not created_at."""
+        from app.models import Document, DocumentStatus, Version
+
+        document = Document(
+            title="Publish Timestamp Source",
+            document_number="DOC-ANL-PUB-0001",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_admin.id,
+        )
+        db.add(document)
+        db.flush()
+
+        version = Version(
+            document_id=document.id,
+            version_number=1,
+            is_published=True,
+            created_by=test_admin.id,
+            created_at=datetime(2026, 1, 2, 8, 0, 0),
+            published_at=datetime(2026, 1, 12, 15, 30, 0),
+        )
+        db.add(version)
+        db.commit()
+
+        response = client.get(
+            "/api/v1/analytics/content",
+            headers=admin_headers,
+            params={
+                "date_from": "2026-01-12",
+                "date_to": "2026-01-12",
+                "granularity": "daily",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["total_versions_published"] == 1
+        assert payload["versions_published_over_time"] == [{"date": "2026-01-12", "value": 1}]
+
+    def test_content_published_over_time_excludes_published_without_published_at(
+        self, client: TestClient, db, admin_headers, test_admin
+    ):
+        """Rows missing published_at should not appear in published timeline aggregates."""
+        from app.models import Document, DocumentStatus, Version
+
+        document = Document(
+            title="Null Publish Timestamp",
+            document_number="DOC-ANL-PUB-0002",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_admin.id,
+        )
+        db.add(document)
+        db.flush()
+
+        version_missing_publish_ts = Version(
+            document_id=document.id,
+            version_number=1,
+            is_published=True,
+            created_by=test_admin.id,
+            created_at=datetime(2026, 1, 12, 9, 0, 0),
+            published_at=None,
+        )
+        db.add(version_missing_publish_ts)
+        db.commit()
+
+        response = client.get(
+            "/api/v1/analytics/content",
+            headers=admin_headers,
+            params={
+                "date_from": "2026-01-12",
+                "date_to": "2026-01-12",
+                "granularity": "daily",
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["total_versions_published"] == 0
+        assert payload["versions_published_over_time"] == []
 
 
 class TestFeedbackAnalytics:
@@ -300,19 +534,39 @@ class TestExportCSV:
         response = client.get("/api/v1/analytics/export/csv", headers=admin_headers)
         assert response.status_code == 422
 
+    def test_export_csv_invalid_report_returns_client_error(self, client: TestClient, admin_headers):
+        """Unknown report should return explicit client error status."""
+        response = client.get(
+            "/api/v1/analytics/export/csv",
+            headers=admin_headers,
+            params={"report": "unknown-report"},
+        )
+        assert response.status_code == 400
+        assert "Unsupported CSV report" in response.json()["detail"]
+
 
 class TestExportPDF:
     """Tests for /analytics/export/pdf endpoint"""
 
-    def test_export_overview_pdf_without_reportlab(self, client: TestClient, admin_headers):
+    def test_export_overview_pdf_without_reportlab(
+        self, client: TestClient, admin_headers, monkeypatch
+    ):
         """PDF export should gracefully handle missing reportlab"""
+        original_import = builtins.__import__
+
+        def import_without_reportlab(name, *args, **kwargs):
+            if name.startswith("reportlab"):
+                raise ImportError("reportlab intentionally unavailable for test")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", import_without_reportlab)
+
         response = client.get(
             "/api/v1/analytics/export/pdf",
             headers=admin_headers,
             params={"report": "overview"},
         )
-        # Either 200 (reportlab installed) or 501 (not installed)
-        assert response.status_code in [200, 501]
+        assert response.status_code == 501
 
     def test_export_pdf_as_editor(self, client: TestClient, auth_headers):
         """Editor should NOT be able to export PDF"""
@@ -322,6 +576,16 @@ class TestExportPDF:
             params={"report": "overview"},
         )
         assert response.status_code == 403
+
+    def test_export_pdf_invalid_report_returns_client_error(self, client: TestClient, admin_headers):
+        """Unknown report should return explicit client error status."""
+        response = client.get(
+            "/api/v1/analytics/export/pdf",
+            headers=admin_headers,
+            params={"report": "unknown-report"},
+        )
+        assert response.status_code == 400
+        assert "Unsupported PDF report" in response.json()["detail"]
 
 
 class TestAnalyticsDataIntegrity:
