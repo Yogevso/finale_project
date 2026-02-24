@@ -67,6 +67,7 @@ export const CompaniesApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       params?: {
         page?: number
         per_page?: number
+        scope?: 'assigned' | 'owned' | 'customer_visible'
       },
     ): Promise<CompanyDocumentsResponse> {
       const { data } = await this.client.get<CompanyDocumentsResponse>(

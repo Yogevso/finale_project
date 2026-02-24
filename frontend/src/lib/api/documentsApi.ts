@@ -93,8 +93,8 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return data
     }
 
-    async getAssignedCompanies(documentId: number): Promise<{ companies: Company[] }> {
-      const { data } = await this.client.get<{ companies: Company[] }>(
+    async getAssignedCompanies(documentId: number): Promise<Company[]> {
+      const { data } = await this.client.get<Company[]>(
         `/documents/${documentId}/assigned-companies`,
       )
       return data
@@ -103,8 +103,8 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     async assignCompanies(
       documentId: number,
       companyIds: number[],
-    ): Promise<{ message: string; assigned_count: number }> {
-      const { data } = await this.client.post<{ message: string; assigned_count: number }>(
+    ): Promise<MessageResponse> {
+      const { data } = await this.client.post<MessageResponse>(
         `/documents/${documentId}/assign-companies`,
         { company_ids: companyIds },
       )
