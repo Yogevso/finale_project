@@ -17,6 +17,7 @@ export interface DocumentContext {
 
 export interface ConnectionContext extends UserContext, DocumentContext {
   connectionId: string;
+  canWrite: boolean;
   connectedAt: Date;
 }
 
