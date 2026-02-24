@@ -15,7 +15,24 @@ from app.config import settings
 from app.models import (
     CollaborationSession,
     CollaborationSnapshot,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    Tenant,
+    User,
+    UserRole,
 )
+from app.security import get_password_hash
+
+
+def _login(client, username: str, password: str) -> dict:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 class TestCollabToken:
@@ -86,6 +103,113 @@ class TestCollabToken:
         data = response.json()
         assert "read" in data["permissions"]
         assert "write" not in data["permissions"]
+
+    def test_editor_receives_write_permission_when_standard_edit_policy_allows(
+        self, client, db
+    ):
+        """Collaboration write permissions should match core edit policy for same-tenant editors."""
+        tenant = Tenant(name="Collab Edit Tenant", slug="collab-edit-tenant")
+        db.add(tenant)
+        db.commit()
+        db.refresh(tenant)
+
+        owner = User(
+            email="collab-owner-2@example.com",
+            username="collab_owner_2",
+            full_name="Collab Owner Two",
+            hashed_password=get_password_hash("owner123"),
+            role=UserRole.ADMIN,
+            tenant_id=tenant.id,
+            is_active=True,
+        )
+        editor = User(
+            email="collab-editor-2@example.com",
+            username="collab_editor_2",
+            full_name="Collab Editor Two",
+            hashed_password=get_password_hash("editor123"),
+            role=UserRole.EDITOR,
+            tenant_id=tenant.id,
+            is_active=True,
+        )
+        db.add_all([owner, editor])
+        db.commit()
+        db.refresh(owner)
+        db.refresh(editor)
+
+        document = Document(
+            title="Collab edit parity doc",
+            document_number="DOC-COLLAB-EDIT-001",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            tenant_id=tenant.id,
+            created_by=owner.id,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        editor_headers = _login(client, "collab_editor_2", "editor123")
+        response = client.post(
+            "/api/v1/auth/collab-token",
+            headers=editor_headers,
+            json={"document_id": document.id},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "read" in data["permissions"]
+        assert "write" in data["permissions"]
+
+    def test_collab_token_denied_for_cross_tenant_internal_user(self, client, db):
+        """Cross-tenant internal users cannot obtain collaboration tokens."""
+        tenant_a = Tenant(name="Collab Tenant A", slug="collab-tenant-a")
+        tenant_b = Tenant(name="Collab Tenant B", slug="collab-tenant-b")
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        owner = User(
+            email="collab-owner@example.com",
+            username="collab_owner",
+            full_name="Collab Owner",
+            hashed_password=get_password_hash("owner123"),
+            role=UserRole.ADMIN,
+            tenant_id=tenant_a.id,
+            is_active=True,
+        )
+        outsider = User(
+            email="collab-outsider@example.com",
+            username="collab_outsider",
+            full_name="Collab Outsider",
+            hashed_password=get_password_hash("outsider123"),
+            role=UserRole.EDITOR,
+            tenant_id=tenant_b.id,
+            is_active=True,
+        )
+        db.add_all([owner, outsider])
+        db.commit()
+        db.refresh(owner)
+
+        document = Document(
+            title="Tenant-scoped collaboration doc",
+            document_number="DOC-COLLAB-TEN-001",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            tenant_id=tenant_a.id,
+            created_by=owner.id,
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        outsider_headers = _login(client, "collab_outsider", "outsider123")
+        response = client.post(
+            "/api/v1/auth/collab-token",
+            headers=outsider_headers,
+            json={"document_id": document.id},
+        )
+        assert response.status_code == 403
 
 
 class TestDocumentState:
@@ -395,6 +519,7 @@ class TestSnapshots:
         assert response.status_code == 200
         data = response.json()
         assert len(data["snapshots"]) >= 3
+        assert all(snapshot["created_by_username"] for snapshot in data["snapshots"])
 
     def test_get_snapshot(self, client, admin_headers, test_document, db):
         """Test getting a specific snapshot"""
@@ -532,3 +657,79 @@ class TestCollaborationPermissions:
         )
 
         assert response.status_code == 403
+
+    def test_cross_tenant_internal_user_denied_across_collaboration_endpoints(self, client, db):
+        """Cross-tenant internal access is denied for state/session/activity/snapshot endpoints."""
+        tenant_a = Tenant(name="Collab Access A", slug="collab-access-a")
+        tenant_b = Tenant(name="Collab Access B", slug="collab-access-b")
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        owner = User(
+            email="collab-access-owner@example.com",
+            username="collab_access_owner",
+            full_name="Collab Access Owner",
+            hashed_password=get_password_hash("owner123"),
+            role=UserRole.ADMIN,
+            tenant_id=tenant_a.id,
+            is_active=True,
+        )
+        outsider = User(
+            email="collab-access-outsider@example.com",
+            username="collab_access_outsider",
+            full_name="Collab Access Outsider",
+            hashed_password=get_password_hash("outsider123"),
+            role=UserRole.EDITOR,
+            tenant_id=tenant_b.id,
+            is_active=True,
+        )
+        db.add_all([owner, outsider])
+        db.commit()
+        db.refresh(owner)
+
+        document = Document(
+            title="Tenant collaboration access doc",
+            document_number="DOC-COLLAB-TEN-002",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            tenant_id=tenant_a.id,
+            created_by=owner.id,
+            yjs_state=b"\x01\x02\x03",
+        )
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+        outsider_headers = _login(client, "collab_access_outsider", "outsider123")
+
+        state_response = client.get(
+            f"/api/v1/collaboration/documents/{document.id}/state",
+            headers=outsider_headers,
+        )
+        assert state_response.status_code == 403
+
+        session_response = client.post(
+            "/api/v1/collaboration/sessions/start",
+            headers=outsider_headers,
+            json={"document_id": document.id},
+        )
+        assert session_response.status_code == 403
+
+        activity_response = client.post(
+            "/api/v1/collaboration/activity",
+            headers=outsider_headers,
+            json={
+                "document_id": document.id,
+                "activity_type": "cursor_moved",
+                "details": {"position": 7},
+            },
+        )
+        assert activity_response.status_code == 403
+
+        snapshot_response = client.get(
+            f"/api/v1/collaboration/documents/{document.id}/snapshots",
+            headers=outsider_headers,
+        )
+        assert snapshot_response.status_code == 403

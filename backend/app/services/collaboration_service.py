@@ -8,6 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Document, User, UserRole
+from app.services.permissions import can_edit_document as permission_can_edit_document
+from app.services.permissions import can_view_document as permission_can_view_document
+from app.services.permissions import is_internal_user
 
 # Collaboration token expiry (shorter than regular access tokens)
 COLLAB_TOKEN_EXPIRE_MINUTES = 60
@@ -15,6 +18,24 @@ COLLAB_TOKEN_EXPIRE_MINUTES = 60
 
 class CollaborationService:
     """Service for managing real-time collaboration"""
+
+    @staticmethod
+    def _tenant_boundary_allows(user: User, document: Document) -> bool:
+        role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
+        if role == UserRole.SYSTEM_ADMIN:
+            return True
+
+        # Customer access is assignment-based and already covered by view permissions.
+        if role == UserRole.CUSTOMER:
+            return True
+
+        if not is_internal_user(user):
+            return False
+
+        # Internal users are tenant-scoped for collaboration endpoints.
+        if document.tenant_id is None:
+            return True
+        return user.tenant_id == document.tenant_id
 
     @staticmethod
     def create_collab_token(
@@ -71,44 +92,24 @@ class CollaborationService:
     @staticmethod
     def can_view_document(user: User, document: Document) -> bool:
         """Check if user can view/collaborate on a document"""
-        role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
-
-        # System admins and admins can view all
-        if role in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
-            return True
-
-        # Managers and editors can view internal documents
-        if role in [UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
-            return True
-
-        # Customers can only view documents assigned to their company
-        if role == UserRole.CUSTOMER:
-            if user.tenant_id:
-                assigned_company_ids = [t.id for t in document.assigned_companies]
-                return user.tenant_id in assigned_company_ids
+        if not user or not user.is_active:
             return False
 
-        return False
+        if not permission_can_view_document(user, document):
+            return False
+
+        return CollaborationService._tenant_boundary_allows(user, document)
 
     @staticmethod
     def can_edit_document(user: User, document: Document) -> bool:
         """Check if user can edit a document in collaboration mode"""
-        role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
+        if not user or not user.is_active:
+            return False
 
-        # System admins and admins can edit all
-        if role in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
-            return True
+        if not permission_can_edit_document(user, document):
+            return False
 
-        # Managers can edit all documents
-        if role == UserRole.MANAGER:
-            return True
-
-        # Editors can only edit documents they created or drafts
-        if role == UserRole.EDITOR:
-            return document.created_by == user.id
-
-        # Viewers and customers cannot edit
-        return False
+        return CollaborationService._tenant_boundary_allows(user, document)
 
     @staticmethod
     def get_document_state(db: Session, document_id: int) -> Optional[bytes]:

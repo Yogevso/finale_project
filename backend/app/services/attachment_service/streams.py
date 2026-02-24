@@ -140,7 +140,7 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
 
     @staticmethod
     def open_preview_stream(
-        db: Session, document_id: int, attachment_id: int, current_user: User
+        db: Session, document_id: int, attachment_id: int, current_user: Optional[User] = None
     ) -> tuple[Attachment, Iterator[bytes], str, int]:
         """Open stream for the preview PDF artifact (always PDF-based)."""
         attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
