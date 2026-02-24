@@ -20,6 +20,7 @@ class PortalAttachment(BaseModel):
     file_size: int
     mime_type: Optional[str] = None
     created_at: datetime
+    download_url: Optional[str] = None
 
     class Config:
         from_attributes = True

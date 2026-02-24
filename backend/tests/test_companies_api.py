@@ -1,0 +1,181 @@
+"""Regression tests for company document semantics in management APIs."""
+
+from app.models import Document, DocumentStatus, DocumentVisibility
+
+
+def _create_document(
+    db,
+    *,
+    title: str,
+    document_number: str,
+    created_by: int,
+    status: DocumentStatus = DocumentStatus.ACTIVE,
+    visibility: DocumentVisibility = DocumentVisibility.INTERNAL,
+    tenant_id: int | None = None,
+) -> Document:
+    doc = Document(
+        title=title,
+        document_number=document_number,
+        description=f"{title} description",
+        status=status,
+        visibility=visibility,
+        created_by=created_by,
+        tenant_id=tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+class TestCompanyDocumentSemantics:
+    def test_company_detail_exposes_owned_assigned_and_customer_visible_counts(
+        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    ):
+        _create_document(
+            db,
+            title="Owned Internal Doc",
+            document_number="DOC-OWN-001",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            tenant_id=test_tenant.id,
+        )
+        assigned_active_doc = _create_document(
+            db,
+            title="Assigned Active Company Doc",
+            document_number="DOC-ASG-001",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+        assigned_draft_doc = _create_document(
+            db,
+            title="Assigned Draft Company Doc",
+            document_number="DOC-ASG-002",
+            created_by=test_admin.id,
+            status=DocumentStatus.DRAFT,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+        _create_document(
+            db,
+            title="Public Active Doc",
+            document_number="DOC-PUB-001",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            tenant_id=test_tenant_2.id,
+        )
+
+        assigned_active_doc.assigned_companies.append(test_tenant)
+        assigned_draft_doc.assigned_companies.append(test_tenant)
+        db.commit()
+
+        response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+
+        assert payload["owned_document_count"] == 1
+        assert payload["assigned_document_count"] == 2
+        # ACTIVE public + ACTIVE company assigned
+        assert payload["customer_visible_document_count"] == 2
+        # Backward-compatible alias maps to assigned semantics.
+        assert payload["document_count"] == payload["assigned_document_count"] == 2
+
+    def test_company_documents_default_scope_returns_assigned_documents(
+        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    ):
+        _create_document(
+            db,
+            title="Owned Only Doc",
+            document_number="DOC-OWN-010",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            tenant_id=test_tenant.id,
+        )
+        assigned_doc = _create_document(
+            db,
+            title="Assigned Doc",
+            document_number="DOC-ASG-010",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+        assigned_doc.assigned_companies.append(test_tenant)
+        db.commit()
+
+        response = client.get(f"/api/v1/companies/{test_tenant.id}/documents", headers=admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        titles = [item["title"] for item in payload["items"]]
+
+        assert payload["scope"] == "assigned"
+        assert "Assigned Doc" in titles
+        assert "Owned Only Doc" not in titles
+
+    def test_customer_visible_count_matches_portal_documents_total(
+        self,
+        client,
+        db,
+        admin_headers,
+        customer_headers,
+        test_admin,
+        test_tenant,
+        test_tenant_2,
+    ):
+        _create_document(
+            db,
+            title="Portal Public Doc",
+            document_number="DOC-PUB-100",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            tenant_id=test_tenant_2.id,
+        )
+        assigned_active_doc = _create_document(
+            db,
+            title="Portal Assigned Active Doc",
+            document_number="DOC-ASG-100",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+        assigned_draft_doc = _create_document(
+            db,
+            title="Portal Assigned Draft Doc",
+            document_number="DOC-ASG-101",
+            created_by=test_admin.id,
+            status=DocumentStatus.DRAFT,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+        other_company_assigned_doc = _create_document(
+            db,
+            title="Other Company Assigned Doc",
+            document_number="DOC-ASG-102",
+            created_by=test_admin.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.COMPANY,
+            tenant_id=test_tenant_2.id,
+        )
+
+        assigned_active_doc.assigned_companies.append(test_tenant)
+        assigned_draft_doc.assigned_companies.append(test_tenant)
+        other_company_assigned_doc.assigned_companies.append(test_tenant_2)
+        db.commit()
+
+        portal_response = client.get("/api/v1/portal/documents", headers=customer_headers)
+        assert portal_response.status_code == 200
+        portal_total = portal_response.json()["total"]
+
+        company_response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=admin_headers)
+        assert company_response.status_code == 200
+        company_payload = company_response.json()
+
+        assert portal_total == 2
+        assert company_payload["customer_visible_document_count"] == portal_total

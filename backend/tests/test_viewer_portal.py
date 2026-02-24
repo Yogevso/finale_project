@@ -2,7 +2,7 @@
 
 import uuid
 
-from app.models import Comment, Document, DocumentStatus, Version
+from app.models import Comment, Document, DocumentStatus, DocumentVisibility, Version
 
 
 class TestViewerDocuments:
@@ -16,6 +16,7 @@ class TestViewerDocuments:
             document_number=f"DOC-ACT-{uuid.uuid4().hex[:6].upper()}",
             description="This is an active document",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         # Create draft document (should not appear)
@@ -45,6 +46,7 @@ class TestViewerDocuments:
             document_number=f"DOC-SRC-{uuid.uuid4().hex[:6].upper()}",
             description="Contains unique keyword: xylophone123",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -62,6 +64,7 @@ class TestViewerDocuments:
             document_number=f"DOC-HR-{uuid.uuid4().hex[:6].upper()}",
             category="hr",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -81,6 +84,7 @@ class TestViewerDocuments:
                 title=f"Pagination Test Doc {i}",
                 document_number=f"DOC-PAG{i}-{uuid.uuid4().hex[:4].upper()}",
                 status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
                 created_by=test_user.id,
             )
             db.add(doc)
@@ -100,6 +104,7 @@ class TestViewerDocuments:
             document_number=f"DOC-SNG-{uuid.uuid4().hex[:6].upper()}",
             description="Document for single view test",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -142,6 +147,7 @@ class TestViewerVersions:
             title="Versioned Document",
             document_number=f"DOC-VER-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -174,6 +180,7 @@ class TestViewerAttachments:
             title="Document With Attachments",
             document_number=f"DOC-ATT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -195,6 +202,7 @@ class TestViewerComments:
             title="Document With Comments",
             document_number=f"DOC-CMT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -225,6 +233,7 @@ class TestViewerCategories:
             document_number=f"DOC-TCH-{uuid.uuid4().hex[:6].upper()}",
             category="technology",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         doc2 = Document(
@@ -232,6 +241,7 @@ class TestViewerCategories:
             document_number=f"DOC-HRD-{uuid.uuid4().hex[:6].upper()}",
             category="hr",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add_all([doc1, doc2])
@@ -240,3 +250,4 @@ class TestViewerCategories:
         response = client.get("/api/v1/viewer/categories")
         # May or may not be implemented
         assert response.status_code in [200, 404]
+

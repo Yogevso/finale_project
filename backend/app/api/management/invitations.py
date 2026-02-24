@@ -89,6 +89,29 @@ def generate_invitation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def resolve_invitation_tenant_id(
+    invitation_data: InvitationCreate, tenant_ctx: TenantContext
+) -> Optional[int]:
+    """
+    Resolve tenant assignment for a new invitation with one consistent rule:
+    - SYSTEM_ADMIN may target any tenant (or leave unset for non-customer roles).
+    - Non-system users are always constrained to their own tenant.
+    """
+    if tenant_ctx.is_system_admin:
+        return invitation_data.tenant_id
+
+    if invitation_data.tenant_id is None:
+        return tenant_ctx.tenant_id
+
+    if invitation_data.tenant_id != tenant_ctx.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot invite users to other companies",
+        )
+
+    return invitation_data.tenant_id
+
+
 @router.post("/invitations", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
 def create_invitation(
     invitation_data: InvitationCreate,
@@ -114,8 +137,10 @@ def create_invitation(
             detail=f"You cannot invite users with role '{invitation_data.role.value}'",
         )
 
+    target_tenant_id = resolve_invitation_tenant_id(invitation_data, tenant_ctx)
+
     # Customers must have a tenant
-    if invitation_data.role == UserRole.CUSTOMER and not invitation_data.tenant_id:
+    if invitation_data.role == UserRole.CUSTOMER and not target_tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Customers must be assigned to a company",
@@ -123,17 +148,10 @@ def create_invitation(
 
     # Validate tenant exists if provided
     tenant = None
-    if invitation_data.tenant_id:
-        tenant = db.query(Tenant).filter(Tenant.id == invitation_data.tenant_id).first()
+    if target_tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-        # Non-system admins can only assign to their own tenant (for non-customers)
-        if not tenant_ctx.is_system_admin and invitation_data.role != UserRole.CUSTOMER:
-            if tenant.id != tenant_ctx.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Cannot invite users to other companies",
-                )
 
     # Check if email is already registered
     if db.query(User).filter(User.email == invitation_data.email).first():
@@ -160,7 +178,7 @@ def create_invitation(
         email=invitation_data.email,
         token=generate_invitation_token(),
         role=invitation_data.role,
-        tenant_id=invitation_data.tenant_id or tenant_ctx.tenant_id,
+        tenant_id=target_tenant_id,
         invited_by=current_user.id,
         message=invitation_data.message,
         expires_at=datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS),

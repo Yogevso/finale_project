@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import PasswordReset, User
+from app.models import PasswordReset, Tenant, User, UserRole
 from app.schemas import TokenResponse, UserCreate
 from app.security import (
     create_access_token,
@@ -19,6 +19,18 @@ from app.security import (
 
 class AuthService:
     """Authentication service"""
+
+    @staticmethod
+    def _ensure_tenant_is_active(db: Session, user: User) -> None:
+        """Reject auth flows for users tied to inactive tenants."""
+        if user.role == UserRole.SYSTEM_ADMIN or user.tenant_id is None:
+            return
+        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        if tenant and not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Company is inactive",
+            )
 
     @staticmethod
     def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
@@ -49,6 +61,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
             )
+        AuthService._ensure_tenant_is_active(db, user)
 
         # Create access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -108,6 +121,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
             )
+        AuthService._ensure_tenant_is_active(db, user)
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

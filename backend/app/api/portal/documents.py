@@ -59,6 +59,21 @@ def get_customer_documents_query(db: Session, user: User):
     return query
 
 
+def get_portal_visible_version(document: Document):
+    """
+    Select the version shown in portal responses.
+
+    Prefer the latest published version; if none exist (legacy data),
+    fall back to the latest available version.
+    """
+    if not document.versions:
+        return None
+
+    published_versions = [version for version in document.versions if version.is_published]
+    candidate_versions = published_versions or document.versions
+    return max(candidate_versions, key=lambda version: version.version_number)
+
+
 @router.get("/documents", response_model=PortalDocumentListResponse)
 async def list_customer_documents(
     page: int = Query(1, ge=1),
@@ -105,10 +120,8 @@ async def list_customer_documents(
             db.query(func.count(Attachment.id)).filter(Attachment.document_id == doc.id).scalar()
         )
 
-        # Get latest version number
-        latest_version = (
-            max((v.version_number for v in doc.versions), default=1) if doc.versions else 1
-        )
+        visible_version = get_portal_visible_version(doc)
+        version_number = visible_version.version_number if visible_version else 1
 
         items.append(
             PortalDocumentSummary(
@@ -117,7 +130,7 @@ async def list_customer_documents(
                 description=doc.description,
                 category=doc.category,
                 visibility=doc.visibility.value if doc.visibility else "internal",
-                version=latest_version,
+                version=version_number,
                 updated_at=doc.updated_at,
                 has_attachments=attachment_count > 0,
             )
@@ -169,17 +182,9 @@ async def get_customer_document(
     if document.tags:
         tags = [t.strip() for t in document.tags.split(",") if t.strip()]
 
-    # Get latest published version
-    latest_version = None
-    if document.versions:
-        published_versions = [v for v in document.versions if v.is_published]
-        if published_versions:
-            latest_version = max(published_versions, key=lambda v: v.version_number)
-        else:
-            latest_version = max(document.versions, key=lambda v: v.version_number)
-
-    content = latest_version.content if latest_version else ""
-    version_number = latest_version.version_number if latest_version else 1
+    visible_version = get_portal_visible_version(document)
+    content = visible_version.content if visible_version else ""
+    version_number = visible_version.version_number if visible_version else 1
 
     return PortalDocumentDetail(
         id=document.id,
@@ -199,6 +204,9 @@ async def get_customer_document(
                 file_size=att.file_size,
                 mime_type=att.mime_type,
                 created_at=att.uploaded_at,
+                download_url=(
+                    f"/api/v1/documents/{document.id}/attachments/{att.id}/download"
+                ),
             )
             for att in attachments
         ],
@@ -250,7 +258,9 @@ async def get_customer_attachment(
         "filename": attachment.filename,
         "file_size": attachment.file_size,
         "mime_type": attachment.mime_type,
-        "download_url": f"/api/v1/attachments/{attachment.id}/download",
+        "download_url": (
+            f"/api/v1/documents/{document_id}/attachments/{attachment.id}/download"
+        ),
     }
 
 
@@ -285,16 +295,18 @@ async def get_customer_dashboard_stats(
     """
     from app.models import Feedback, FeedbackStatus
 
-    # Count accessible documents
-    base_query = db.query(Document).filter(
-        Document.tenant_id == current_user.tenant_id,
-        Document.status == DocumentStatus.PUBLISHED,
+    # Count documents using the same portal access rules as list/detail endpoints.
+    visible_documents_query = get_customer_documents_query(db, current_user)
+    visibility_counts = dict(
+        visible_documents_query.with_entities(
+            Document.visibility, func.count(Document.id)
+        )
+        .group_by(Document.visibility)
+        .all()
     )
 
-    public_count = base_query.filter(Document.visibility == DocumentVisibility.PUBLIC).count()
-
-    company_count = base_query.filter(Document.visibility == DocumentVisibility.COMPANY).count()
-
+    public_count = visibility_counts.get(DocumentVisibility.PUBLIC, 0)
+    company_count = visibility_counts.get(DocumentVisibility.COMPANY, 0)
     total_documents = public_count + company_count
 
     # Count feedback
@@ -365,14 +377,9 @@ async def search_customer_documents(
         # Create snippet from content (get from latest version)
         snippet = ""
         content = ""
-        if doc.versions:
-            published_versions = [v for v in doc.versions if v.is_published]
-            if published_versions:
-                latest_version = max(published_versions, key=lambda v: v.version_number)
-                content = latest_version.content or ""
-            elif doc.versions:
-                latest_version = max(doc.versions, key=lambda v: v.version_number)
-                content = latest_version.content or ""
+        visible_version = get_portal_visible_version(doc)
+        if visible_version:
+            content = visible_version.content or ""
 
         if content:
             content_lower = content.lower()

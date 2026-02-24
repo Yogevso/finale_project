@@ -3,14 +3,22 @@ Companies API - Admin management of companies/tenants
 """
 
 import re
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Document, Tenant, User, UserRole
+from app.models import (
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    Tenant,
+    User,
+    UserRole,
+    document_company_assignments,
+)
 from app.schemas.company import (
     CompanyCreate,
     CompanyDetailResponse,
@@ -41,15 +49,92 @@ def generate_slug(name: str) -> str:
     return slug.strip("-")
 
 
-def get_company_stats(db: Session, tenant_id: int) -> tuple:
-    """Get user and document counts for a company"""
-    user_count = db.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 0
+def _empty_company_stats() -> dict[str, int]:
+    return {
+        "user_count": 0,
+        "owned_document_count": 0,
+        "assigned_document_count": 0,
+        "customer_visible_document_count": 0,
+        "document_count": 0,
+    }
 
-    document_count = (
-        db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
+
+def get_company_stats_map(db: Session, tenant_ids: Sequence[int]) -> dict[int, dict[str, int]]:
+    """Get company stats in bulk keyed by tenant_id."""
+    unique_tenant_ids = list(dict.fromkeys(tenant_ids))
+    if not unique_tenant_ids:
+        return {}
+
+    user_counts = dict(
+        db.query(User.tenant_id, func.count(User.id))
+        .filter(User.tenant_id.in_(unique_tenant_ids))
+        .group_by(User.tenant_id)
+        .all()
     )
 
-    return user_count, document_count
+    owned_doc_counts = dict(
+        db.query(Document.tenant_id, func.count(Document.id))
+        .filter(Document.tenant_id.in_(unique_tenant_ids))
+        .group_by(Document.tenant_id)
+        .all()
+    )
+
+    assigned_doc_counts = dict(
+        db.query(
+            document_company_assignments.c.tenant_id,
+            func.count(document_company_assignments.c.document_id),
+        )
+        .filter(document_company_assignments.c.tenant_id.in_(unique_tenant_ids))
+        .group_by(document_company_assignments.c.tenant_id)
+        .all()
+    )
+
+    active_assigned_doc_counts = dict(
+        db.query(
+            document_company_assignments.c.tenant_id,
+            func.count(document_company_assignments.c.document_id),
+        )
+        .join(
+            Document,
+            Document.id == document_company_assignments.c.document_id,
+        )
+        .filter(
+            document_company_assignments.c.tenant_id.in_(unique_tenant_ids),
+            Document.status == DocumentStatus.ACTIVE,
+            Document.visibility == DocumentVisibility.COMPANY,
+        )
+        .group_by(document_company_assignments.c.tenant_id)
+        .all()
+    )
+
+    public_active_count = (
+        db.query(func.count(Document.id))
+        .filter(
+            Document.status == DocumentStatus.ACTIVE,
+            Document.visibility == DocumentVisibility.PUBLIC,
+        )
+        .scalar()
+        or 0
+    )
+
+    stats: dict[int, dict[str, int]] = {}
+    for tenant_id in unique_tenant_ids:
+        assigned_count = int(assigned_doc_counts.get(tenant_id, 0))
+        stats[tenant_id] = {
+            "user_count": int(user_counts.get(tenant_id, 0)),
+            "owned_document_count": int(owned_doc_counts.get(tenant_id, 0)),
+            "assigned_document_count": assigned_count,
+            "customer_visible_document_count": int(public_active_count)
+            + int(active_assigned_doc_counts.get(tenant_id, 0)),
+            # Backward-compatible alias now mapped to assigned semantics.
+            "document_count": assigned_count,
+        }
+    return stats
+
+
+def get_company_stats(db: Session, tenant_id: int) -> dict[str, int]:
+    """Get user and document stats for a single company."""
+    return get_company_stats_map(db, [tenant_id]).get(tenant_id, _empty_company_stats())
 
 
 @router.get("", response_model=CompanyListResponse)
@@ -94,11 +179,13 @@ async def list_companies(
 
     # Get companies
     companies = query.order_by(Tenant.name).offset(offset).limit(per_page).all()
+    company_ids = [company.id for company in companies]
+    stats_by_company_id = get_company_stats_map(db, company_ids)
 
     # Build response with stats
     items = []
     for company in companies:
-        user_count, document_count = get_company_stats(db, company.id)
+        stats = stats_by_company_id.get(company.id, _empty_company_stats())
         items.append(
             CompanyResponse(
                 id=company.id,
@@ -108,8 +195,11 @@ async def list_companies(
                 company_type=company.company_type or "customer",
                 company_logo=company.company_logo,
                 is_active=company.is_active,
-                user_count=user_count,
-                document_count=document_count,
+                user_count=stats["user_count"],
+                owned_document_count=stats["owned_document_count"],
+                assigned_document_count=stats["assigned_document_count"],
+                customer_visible_document_count=stats["customer_visible_document_count"],
+                document_count=stats["document_count"],
                 created_at=company.created_at,
                 updated_at=company.updated_at,
             )
@@ -165,6 +255,9 @@ async def create_company(
         company_logo=company.company_logo,
         is_active=company.is_active,
         user_count=0,
+        owned_document_count=0,
+        assigned_document_count=0,
+        customer_visible_document_count=0,
         document_count=0,
         created_at=company.created_at,
         updated_at=company.updated_at,
@@ -199,7 +292,7 @@ async def get_company(
         for u in users
     ]
 
-    user_count, document_count = get_company_stats(db, company_id)
+    stats = get_company_stats(db, company_id)
 
     return CompanyDetailResponse(
         id=company.id,
@@ -209,8 +302,11 @@ async def get_company(
         company_type=company.company_type or "customer",
         company_logo=company.company_logo,
         is_active=company.is_active,
-        user_count=user_count,
-        document_count=document_count,
+        user_count=stats["user_count"],
+        owned_document_count=stats["owned_document_count"],
+        assigned_document_count=stats["assigned_document_count"],
+        customer_visible_document_count=stats["customer_visible_document_count"],
+        document_count=stats["document_count"],
         users=user_infos,
         created_at=company.created_at,
         updated_at=company.updated_at,
@@ -250,7 +346,7 @@ async def update_company(
     db.commit()
     db.refresh(company)
 
-    user_count, document_count = get_company_stats(db, company_id)
+    stats = get_company_stats(db, company_id)
 
     return CompanyResponse(
         id=company.id,
@@ -260,8 +356,11 @@ async def update_company(
         company_type=company.company_type or "customer",
         company_logo=company.company_logo,
         is_active=company.is_active,
-        user_count=user_count,
-        document_count=document_count,
+        user_count=stats["user_count"],
+        owned_document_count=stats["owned_document_count"],
+        assigned_document_count=stats["assigned_document_count"],
+        customer_visible_document_count=stats["customer_visible_document_count"],
+        document_count=stats["document_count"],
         created_at=company.created_at,
         updated_at=company.updated_at,
     )
@@ -377,6 +476,12 @@ async def remove_user_from_company(
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself from a company")
 
+    if user.role == UserRole.CUSTOMER:
+        raise HTTPException(
+            status_code=400,
+            detail="Customers must be assigned to a company; reassign role before removal",
+        )
+
     # Remove from company
     user.tenant_id = None
     db.commit()
@@ -389,19 +494,34 @@ async def list_company_documents(
     company_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+    scope: str = Query("assigned", pattern="^(assigned|owned|customer_visible)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     """
-    List documents assigned to a company.
+    List company documents by scope:
+    - assigned: documents explicitly assigned to the company
+    - owned: documents owned by the company tenant
+    - customer_visible: documents visible in customer portal for the company
     Admin access required.
     """
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    # Get documents in this tenant
-    query = db.query(Document).filter(Document.tenant_id == company_id)
+    if scope == "owned":
+        query = db.query(Document).filter(Document.tenant_id == company_id)
+    elif scope == "customer_visible":
+        query = db.query(Document).filter(
+            Document.status == DocumentStatus.ACTIVE,
+            or_(
+                Document.visibility == DocumentVisibility.PUBLIC,
+                (Document.visibility == DocumentVisibility.COMPANY)
+                & (Document.assigned_companies.any(id=company_id)),
+            ),
+        )
+    else:
+        query = db.query(Document).filter(Document.assigned_companies.any(id=company_id))
 
     total = query.count()
     pages = (total + per_page - 1) // per_page
@@ -425,4 +545,5 @@ async def list_company_documents(
         "page": page,
         "per_page": per_page,
         "pages": pages,
+        "scope": scope,
     }
