@@ -453,6 +453,7 @@ export default function UsersPage() {
       {showInviteDialog && (
         <InviteUserDialog
           currentUserRole={currentUser?.role || 'viewer'}
+          currentUserTenantId={currentUser?.tenant_id}
           onClose={() => setShowInviteDialog(false)}
         />
       )}

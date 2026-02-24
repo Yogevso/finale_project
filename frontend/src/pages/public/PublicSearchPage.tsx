@@ -4,6 +4,10 @@ import { Search, FileText, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-r
 import { useState, useEffect } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export default function PublicSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '')
@@ -59,7 +63,9 @@ export default function PublicSearchPage() {
 
   const highlightQuery = (text: string) => {
     if (!query || !text) return text
-    const regex = new RegExp(`(${query})`, 'gi')
+    const escapedQuery = escapeRegExp(query)
+    if (!escapedQuery) return text
+    const regex = new RegExp(`(${escapedQuery})`, 'gi')
     return text.replace(regex, '<mark class="bg-amber-200">$1</mark>')
   }
 

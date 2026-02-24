@@ -37,7 +37,8 @@ export default function CompanyDetailPage() {
 
   const { data: documents } = useQuery({
     queryKey: ['company-documents', companyId, docPage],
-    queryFn: () => api.getCompanyDocuments(companyId, { page: docPage, per_page: 10 }),
+    queryFn: () =>
+      api.getCompanyDocuments(companyId, { page: docPage, per_page: 10, scope: 'assigned' }),
     enabled: isAdmin && !!companyId && activeTab === 'documents',
   })
 
@@ -152,7 +153,7 @@ export default function CompanyDetailPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="surface-card rounded-2xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center">
@@ -181,8 +182,19 @@ export default function CompanyDetailPage() {
               <FileText className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-slate-500">Documents</p>
-              <p className="font-semibold text-slate-900">{company.document_count}</p>
+              <p className="text-sm text-slate-500">Assigned Docs</p>
+              <p className="font-semibold text-slate-900">{company.assigned_document_count}</p>
+            </div>
+          </div>
+        </div>
+        <div className="surface-card rounded-2xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <FileText className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">Customer Visible</p>
+              <p className="font-semibold text-slate-900">{company.customer_visible_document_count}</p>
             </div>
           </div>
         </div>
@@ -252,7 +264,7 @@ export default function CompanyDetailPage() {
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
-            Documents ({company.document_count})
+            Assigned Documents ({company.assigned_document_count})
           </button>
         </nav>
       </div>

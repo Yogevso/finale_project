@@ -21,22 +21,22 @@ const NOTIFICATIONS_QUERY_KEY = ['notifications', 'all-page'] as const
 
 const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
-    case 'COMMENT_ADDED':
-    case 'COMMENT_REPLY':
+    case 'comment_added':
+    case 'comment_reply':
       return <MessageSquare className="w-4 h-4 text-sky-500" />
-    case 'DOCUMENT_CREATED':
-    case 'DOCUMENT_UPDATED':
-    case 'DOCUMENT_PUBLISHED':
-    case 'VERSION_PUBLISHED':
+    case 'document_created':
+    case 'document_updated':
+    case 'document_published':
+    case 'version_published':
       return <FileText className="w-4 h-4 text-emerald-500" />
-    case 'REVIEW_SUBMITTED':
-    case 'REVIEW_APPROVED':
-    case 'REVIEW_REJECTED':
+    case 'review_submitted':
+    case 'review_approved':
+    case 'review_rejected':
       return <ClipboardCheck className="w-4 h-4 text-amber-500" />
-    case 'FEEDBACK_RECEIVED':
-    case 'FEEDBACK_RESPONDED':
+    case 'feedback_received':
+    case 'feedback_responded':
       return <MessageSquare className="w-4 h-4 text-indigo-500" />
-    case 'SYSTEM':
+    case 'system':
     default:
       return <AlertCircle className="w-4 h-4 text-slate-500" />
   }
