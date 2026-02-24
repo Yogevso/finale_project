@@ -3,7 +3,15 @@
 import uuid
 from datetime import datetime, timedelta
 
-from app.models import Attachment, Comment, Document, DocumentStatus, Version
+from app.models import (
+    Attachment,
+    AttachmentArtifact,
+    Comment,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    Version,
+)
 
 
 class TestViewerDocuments:
@@ -17,6 +25,7 @@ class TestViewerDocuments:
             document_number=f"DOC-PUB-{uuid.uuid4().hex[:6].upper()}",
             description="A publicly viewable document",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -55,6 +64,7 @@ class TestViewerDocuments:
             document_number=f"DOC-SRC-{uuid.uuid4().hex[:6].upper()}",
             description="Contains unique searchterm123",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -70,6 +80,7 @@ class TestViewerDocuments:
             document_number=f"DOC-CAT-{uuid.uuid4().hex[:6].upper()}",
             category="policies",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -86,6 +97,7 @@ class TestViewerDocuments:
                 title=f"Pagination Test Doc {i}",
                 document_number=f"DOC-PAG{i}-{uuid.uuid4().hex[:4].upper()}",
                 status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
                 created_by=test_user.id,
             )
             db.add(doc)
@@ -103,6 +115,7 @@ class TestViewerDocuments:
             document_number=f"DOC-DTL-{uuid.uuid4().hex[:6].upper()}",
             description="Document for detail testing",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -134,6 +147,39 @@ class TestViewerDocuments:
         response = client.get("/api/v1/viewer/documents/99999")
         assert response.status_code == 404
 
+    def test_list_documents_excludes_internal_visibility(self, client, db, test_user):
+        """Active non-public documents should not appear in public viewer."""
+        internal_doc = Document(
+            title="Internal Active Doc",
+            document_number=f"DOC-INT-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            created_by=test_user.id,
+        )
+        db.add(internal_doc)
+        db.commit()
+
+        response = client.get("/api/v1/viewer/documents")
+        assert response.status_code == 200
+        titles = [item["title"] for item in response.json()["items"]]
+        assert "Internal Active Doc" not in titles
+
+    def test_get_internal_active_document_returns_404(self, client, db, test_user):
+        """Active internal documents should not be fetchable through public viewer detail."""
+        internal_doc = Document(
+            title="Internal Detail Doc",
+            document_number=f"DOC-INTD-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            created_by=test_user.id,
+        )
+        db.add(internal_doc)
+        db.commit()
+        db.refresh(internal_doc)
+
+        response = client.get(f"/api/v1/viewer/documents/{internal_doc.id}")
+        assert response.status_code == 404
+
 
 class TestViewerVersions:
     """Tests for viewer version endpoints"""
@@ -144,6 +190,7 @@ class TestViewerVersions:
             title="Version Test Doc",
             document_number=f"DOC-VER-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -172,6 +219,7 @@ class TestViewerVersions:
             title="Unpub Version Test",
             document_number=f"DOC-UVT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -205,6 +253,7 @@ class TestViewerComments:
             title="Comment Test Doc",
             document_number=f"DOC-CMT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -223,6 +272,41 @@ class TestViewerComments:
         data = response.json()
         assert isinstance(data, list)
 
+    def test_private_comments_are_not_exposed(self, client, db, test_user):
+        """Viewer comments should exclude private/internal comments."""
+        doc = Document(
+            title="Public Comment Privacy Doc",
+            document_number=f"DOC-PCP-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        public_comment = Comment(
+            document_id=doc.id,
+            content="Public comment",
+            user_id=test_user.id,
+            is_private=False,
+        )
+        private_comment = Comment(
+            document_id=doc.id,
+            content="Private comment",
+            user_id=test_user.id,
+            is_private=True,
+        )
+        db.add_all([public_comment, private_comment])
+        db.commit()
+
+        response = client.get(f"/api/v1/viewer/documents/{doc.id}/comments")
+        assert response.status_code == 200
+        payload = response.json()
+        contents = {item["content"] for item in payload}
+        assert "Public comment" in contents
+        assert "Private comment" not in contents
+
 
 class TestViewerAttachments:
     """Tests for viewer attachment endpoints"""
@@ -233,6 +317,7 @@ class TestViewerAttachments:
             title="Attachment Test Doc",
             document_number=f"DOC-ATT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -263,6 +348,7 @@ class TestViewerAttachments:
             title="Version Attachment Scope",
             document_number=f"DOC-VAS-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -339,6 +425,7 @@ class TestViewerAttachments:
             title="Viewer Stream Doc",
             document_number=f"DOC-VSD-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -384,6 +471,7 @@ class TestViewerAttachments:
             title="Viewer Outline Doc",
             document_number=f"DOC-VOD-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
         )
         db.add(doc)
@@ -416,3 +504,69 @@ class TestViewerAttachments:
         payload = response.json()
         assert payload["attachment_id"] == attachment.id
         assert "items" in payload
+
+    def test_preview_stream_prefers_preview_artifact_over_original(
+        self, client, db, test_user, tmp_path
+    ):
+        """Public preview endpoint should stream preview PDF artifact bytes."""
+        doc = Document(
+            title="Preview Artifact Preference",
+            document_number=f"DOC-PAP-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        original_bytes = b"ORIGINAL-DOCX-BYTES"
+        preview_bytes = b"%PDF-1.4\nPREVIEW\n%%EOF"
+
+        original_path = tmp_path / "source.docx"
+        preview_path = tmp_path / "source.preview.pdf"
+        original_path.write_bytes(original_bytes)
+        preview_path.write_bytes(preview_bytes)
+
+        attachment = Attachment(
+            document_id=doc.id,
+            filename="source.docx",
+            original_filename="source.docx",
+            file_size=len(original_bytes),
+            size_bytes=len(original_bytes),
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path=str(original_path),
+            storage_key=str(original_path),
+            uploaded_by=test_user.id,
+            preview_pdf_status="ready",
+            preview_pdf_storage_key=str(preview_path),
+            preview_pdf_size_bytes=len(preview_bytes),
+            preview_pdf_mime_type="application/pdf",
+        )
+        db.add(attachment)
+        db.commit()
+        db.refresh(attachment)
+
+        preview_artifact = AttachmentArtifact(
+            attachment_id=attachment.id,
+            kind="preview_pdf",
+            status="ready",
+            storage_key=str(preview_path),
+            mime_type="application/pdf",
+            size_bytes=len(preview_bytes),
+        )
+        db.add(preview_artifact)
+        db.commit()
+
+        preview_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/preview"
+        )
+        assert preview_response.status_code == 200
+        assert preview_response.content == preview_bytes
+
+        download_response = client.get(
+            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/download"
+        )
+        assert download_response.status_code == 200
+        assert download_response.content == original_bytes
+

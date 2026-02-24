@@ -1,8 +1,9 @@
 """Tests for Search API"""
 
+from datetime import datetime, timedelta
 import uuid
 
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, Tenant
 
 
 class TestSearch:
@@ -47,11 +48,100 @@ class TestSearch:
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
         )
-        db.add(doc)
+        other_doc = Document(
+            title="Engineering Policy Document",
+            document_number=f"DOC-ENG-{uuid.uuid4().hex[:6].upper()}",
+            description="Engineering policy notes",
+            category="engineering",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+        )
+        db.add_all([doc, other_doc])
         db.commit()
 
         response = client.get("/api/v1/search/?q=policy&category=security", headers=auth_headers)
         assert response.status_code == 200
+        items = response.json()["items"]
+        assert len(items) >= 1
+        assert all(item["category"] == "security" for item in items)
+
+    def test_search_with_date_filter(self, client, auth_headers, db, test_user):
+        """Date filters should apply in both FTS and fallback search paths."""
+        old_doc = Document(
+            title="Date Filter Old Doc",
+            document_number=f"DOC-OLD-{uuid.uuid4().hex[:6].upper()}",
+            description="release-notes filter target",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            created_at=datetime.utcnow() - timedelta(days=10),
+        )
+        recent_doc = Document(
+            title="Date Filter Recent Doc",
+            document_number=f"DOC-NEW-{uuid.uuid4().hex[:6].upper()}",
+            description="release-notes filter target",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            created_at=datetime.utcnow(),
+        )
+        db.add_all([old_doc, recent_doc])
+        db.commit()
+
+        date_from = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        response = client.get(
+            f"/api/v1/search/?q=release-notes&date_from={date_from}",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        titles = [item["title"] for item in response.json()["items"]]
+        assert "Date Filter Recent Doc" in titles
+        assert "Date Filter Old Doc" not in titles
+
+    def test_search_is_tenant_scoped_for_non_system_admin(self, client, auth_headers, db, test_user):
+        """Non-system-admin search should not return cross-tenant documents."""
+        tenant_one = Tenant(
+            name="Tenant One",
+            slug=f"tenant-one-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        tenant_two = Tenant(
+            name="Tenant Two",
+            slug=f"tenant-two-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        db.add_all([tenant_one, tenant_two])
+        db.commit()
+        db.refresh(tenant_one)
+        db.refresh(tenant_two)
+
+        test_user.tenant_id = tenant_one.id
+        db.commit()
+
+        visible_doc = Document(
+            title="Scoped Search Visible",
+            document_number=f"DOC-SVIS-{uuid.uuid4().hex[:6].upper()}",
+            description="tenant-scope-keyword",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=tenant_one.id,
+        )
+        hidden_doc = Document(
+            title="Scoped Search Hidden",
+            document_number=f"DOC-SHID-{uuid.uuid4().hex[:6].upper()}",
+            description="tenant-scope-keyword",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=tenant_two.id,
+        )
+        db.add_all([visible_doc, hidden_doc])
+        db.commit()
+
+        response = client.get("/api/v1/search/?q=tenant-scope-keyword", headers=auth_headers)
+        assert response.status_code == 200
+        titles = [item["title"] for item in response.json()["items"]]
+        assert "Scoped Search Visible" in titles
+        assert "Scoped Search Hidden" not in titles
 
     def test_search_pagination(self, client, auth_headers, db, test_user):
         """Test search with pagination"""

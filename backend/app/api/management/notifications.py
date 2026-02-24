@@ -9,9 +9,30 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Notification, NotificationType, User
-from app.security import get_current_user
+from app.security import get_current_active_user
 
 router = APIRouter()
+
+
+def _serialize_notification_type(raw_type: NotificationType | str) -> str:
+    """Return canonical snake_case notification type values for API responses."""
+    if isinstance(raw_type, NotificationType):
+        return raw_type.value
+
+    if isinstance(raw_type, str):
+        try:
+            return NotificationType(raw_type).value
+        except ValueError:
+            pass
+
+        try:
+            return NotificationType[raw_type].value
+        except KeyError:
+            pass
+
+        return raw_type.lower()
+
+    return str(raw_type)
 
 
 # Schemas
@@ -51,7 +72,7 @@ def get_notifications(
     unread_only: bool = False,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get notifications for current user"""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
@@ -72,7 +93,7 @@ def get_notifications(
         items=[
             NotificationResponse(
                 id=n.id,
-                type=n.type.value if isinstance(n.type, NotificationType) else n.type,
+                type=_serialize_notification_type(n.type),
                 title=n.title,
                 message=n.message,
                 link=n.link,
@@ -90,7 +111,7 @@ def get_notifications(
 @router.get("/notifications/count")
 def get_notification_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get unread notification count for current user"""
     unread_count = (
@@ -106,7 +127,7 @@ def get_notification_count(
 def mark_notifications_read(
     data: NotificationMarkRead,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Mark notifications as read"""
     query = db.query(Notification).filter(
@@ -129,7 +150,7 @@ def mark_notifications_read(
 def mark_notification_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Mark a single notification as read"""
     notification = (
@@ -153,7 +174,7 @@ def mark_notification_read(
 def mark_notification_unread(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Mark a single notification as unread"""
     notification = (
@@ -177,7 +198,7 @@ def mark_notification_unread(
 def delete_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Delete a notification"""
     notification = (
@@ -199,7 +220,7 @@ def delete_notification(
 def delete_all_notifications(
     read_only: bool = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Delete notifications (by default only read ones)"""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)

@@ -9,10 +9,23 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Document, SavedSearch, User
-from app.security import get_current_user
+from app.models import Document, SavedSearch, User, UserRole
+from app.security import get_current_active_user
 
 router = APIRouter(prefix="/search", tags=["Search"])
+
+
+def _is_system_admin(user: User) -> bool:
+    return user.role == UserRole.SYSTEM_ADMIN
+
+
+def _apply_document_tenant_scope(query, current_user: User):
+    """Apply tenant scoping to document ORM queries for non-system admins."""
+    if _is_system_admin(current_user):
+        return query
+    if current_user.tenant_id is None:
+        return query.filter(Document.tenant_id.is_(None))
+    return query.filter(Document.tenant_id == current_user.tenant_id)
 
 
 # Schemas
@@ -68,37 +81,64 @@ def search_documents(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Full-text search using SQLite FTS5"""
     offset = (page - 1) * page_size
 
     # Try FTS5 search first
     try:
-        fts_query = text("""
+        filters = ["documents_fts MATCH :query"]
+        params: dict[str, object] = {"query": q, "limit": page_size, "offset": offset}
+
+        if category:
+            filters.append("d.category = :category")
+            params["category"] = category
+        if date_from:
+            filters.append("d.created_at >= :date_from")
+            params["date_from"] = date_from
+        if date_to:
+            filters.append("d.created_at <= :date_to")
+            params["date_to"] = date_to
+
+        if not _is_system_admin(current_user):
+            if current_user.tenant_id is None:
+                filters.append("d.tenant_id IS NULL")
+            else:
+                filters.append("d.tenant_id = :tenant_id")
+                params["tenant_id"] = current_user.tenant_id
+
+        where_clause = " AND ".join(filters)
+        fts_query = text(
+            f"""
             SELECT d.*, bm25(documents_fts) as score
             FROM documents d
             JOIN documents_fts ON d.id = documents_fts.rowid
-            WHERE documents_fts MATCH :query
+            WHERE {where_clause}
             ORDER BY score
             LIMIT :limit OFFSET :offset
-        """)
-        result = db.execute(fts_query, {"query": q, "limit": page_size, "offset": offset})
+            """
+        )
+        result = db.execute(fts_query, params)
         docs = result.fetchall()
 
         # Count total
-        count_query = text("""
+        count_query = text(
+            f"""
             SELECT COUNT(*) FROM documents d
             JOIN documents_fts ON d.id = documents_fts.rowid
-            WHERE documents_fts MATCH :query
-        """)
-        total = db.execute(count_query, {"query": q}).scalar() or 0
+            WHERE {where_clause}
+            """
+        )
+        count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
+        total = db.execute(count_query, count_params).scalar() or 0
 
     except Exception:
         # Fallback to LIKE search if FTS5 fails
         query = db.query(Document).filter(
             (Document.title.ilike(f"%{q}%")) | (Document.description.ilike(f"%{q}%"))
         )
+        query = _apply_document_tenant_scope(query, current_user)
 
         if category:
             query = query.filter(Document.category == category)
@@ -126,7 +166,7 @@ def search_documents(
     ]
 
     # Get autocomplete suggestions
-    suggestions = get_autocomplete_suggestions(db, q)
+    suggestions = get_autocomplete_suggestions(db, q, current_user=current_user)
 
     return SearchResponse(items=items, total=total, query=q, suggestions=suggestions)
 
@@ -136,16 +176,25 @@ def autocomplete(
     q: str = Query(..., min_length=2, description="Partial search query"),
     limit: int = Query(10, ge=1, le=20),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get autocomplete suggestions for search"""
-    suggestions = get_autocomplete_suggestions(db, q, limit)
+    suggestions = get_autocomplete_suggestions(db, q, limit, current_user=current_user)
     return {"suggestions": suggestions}
 
 
-def get_autocomplete_suggestions(db: Session, q: str, limit: int = 5) -> List[str]:
+def get_autocomplete_suggestions(
+    db: Session,
+    q: str,
+    limit: int = 5,
+    *,
+    current_user: Optional[User] = None,
+) -> List[str]:
     """Get document title suggestions matching query prefix"""
-    docs = db.query(Document.title).filter(Document.title.ilike(f"%{q}%")).limit(limit).all()
+    query = db.query(Document.title).filter(Document.title.ilike(f"%{q}%"))
+    if current_user is not None:
+        query = _apply_document_tenant_scope(query, current_user)
+    docs = query.limit(limit).all()
 
     return [d.title for d in docs]
 
@@ -153,14 +202,18 @@ def get_autocomplete_suggestions(db: Session, q: str, limit: int = 5) -> List[st
 @router.get("/facets")
 def get_search_facets(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get facet counts for filtering"""
     # Category counts
-    categories = db.query(Document.category, text("COUNT(*)")).group_by(Document.category).all()
+    category_query = db.query(Document.category, text("COUNT(*)"))
+    category_query = _apply_document_tenant_scope(category_query, current_user)
+    categories = category_query.group_by(Document.category).all()
 
     # Status counts
-    statuses = db.query(Document.status, text("COUNT(*)")).group_by(Document.status).all()
+    status_query = db.query(Document.status, text("COUNT(*)"))
+    status_query = _apply_document_tenant_scope(status_query, current_user)
+    statuses = status_query.group_by(Document.status).all()
 
     return {
         "categories": [{"name": c[0] or "Uncategorized", "count": c[1]} for c in categories],
@@ -172,7 +225,7 @@ def get_search_facets(
 @router.get("/saved", response_model=List[SavedSearchResponse])
 def list_saved_searches(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List user's saved searches"""
     searches = (
@@ -189,7 +242,7 @@ def list_saved_searches(
 def create_saved_search(
     data: SavedSearchCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Save a search for quick access"""
     saved = SavedSearch(
@@ -210,7 +263,7 @@ def create_saved_search(
 def delete_saved_search(
     search_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Delete a saved search"""
     saved = (

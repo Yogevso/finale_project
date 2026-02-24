@@ -28,9 +28,17 @@ from app.schemas import (
     ReviewResponse,
     ReviewSubmit,
 )
-from app.security import get_current_user
+from app.security import get_current_active_user
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
+
+
+def _ensure_document_tenant_access(document: Document, user: User) -> None:
+    """Enforce tenant boundary for non-system-admin users."""
+    if user.role == UserRole.SYSTEM_ADMIN:
+        return
+    if document.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
 
 def can_submit_for_review(user: User) -> bool:
@@ -53,9 +61,14 @@ def can_approve(user: User, review: ReviewRequest) -> bool:
     if user.id == review.submitted_by:
         return False
 
-    # Editors can peer-review other editors
-    # Managers and above can approve anyone
-    return user.role in [UserRole.EDITOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]
+    if user.role in [UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]:
+        return True
+
+    if user.role == UserRole.EDITOR:
+        submitter = review.submitter
+        return bool(submitter and submitter.role == UserRole.EDITOR)
+
+    return False
 
 
 # ========== Submit for Review ==========
@@ -64,7 +77,7 @@ async def submit_for_review(
     document_id: int,
     data: ReviewSubmit,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Submit a document for review"""
     if not can_submit_for_review(current_user):
@@ -77,6 +90,7 @@ async def submit_for_review(
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    _ensure_document_tenant_access(document, current_user)
 
     # Check document status - must be draft
     if document.status != DocumentStatus.DRAFT:
@@ -169,8 +183,10 @@ async def submit_for_review(
                 ),
             )
         )
-        .all()
     )
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        reviewers = reviewers.filter(User.tenant_id == current_user.tenant_id)
+    reviewers = reviewers.all()
 
     for reviewer in reviewers:
         notification = Notification(
@@ -205,7 +221,7 @@ async def get_pending_reviews(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get reviews pending current user's action (excludes own submissions)"""
     if not can_review_documents(current_user):
@@ -217,6 +233,7 @@ async def get_pending_reviews(
     # Get pending reviews that user can review (not their own)
     query = (
         db.query(ReviewRequest)
+        .join(Document, ReviewRequest.document_id == Document.id)
         .options(
             joinedload(ReviewRequest.document),
             joinedload(ReviewRequest.submitter),
@@ -229,6 +246,8 @@ async def get_pending_reviews(
         )
         .order_by(ReviewRequest.submitted_at.desc())
     )
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        query = query.filter(Document.tenant_id == current_user.tenant_id)
 
     total = query.count()
     items = query.offset((page - 1) * per_page).limit(per_page).all()
@@ -249,17 +268,20 @@ async def get_my_submissions(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get reviews submitted by current user"""
     query = (
         db.query(ReviewRequest)
+        .join(Document, ReviewRequest.document_id == Document.id)
         .options(
             joinedload(ReviewRequest.document),
             joinedload(ReviewRequest.reviewer),
         )
         .filter(ReviewRequest.submitted_by == current_user.id)
     )
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        query = query.filter(Document.tenant_id == current_user.tenant_id)
 
     if status_filter:
         query = query.filter(ReviewRequest.status == status_filter)
@@ -283,7 +305,7 @@ async def get_my_submissions(
 async def get_review(
     review_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get review details"""
     review = (
@@ -299,6 +321,7 @@ async def get_review(
 
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    _ensure_document_tenant_access(review.document, current_user)
 
     # Check access - submitter, reviewer, or has review permissions
     if review.submitted_by != current_user.id and not can_review_documents(current_user):
@@ -316,7 +339,7 @@ async def approve_review(
     review_id: int,
     data: ReviewAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Approve a review request"""
     review = (
@@ -331,6 +354,7 @@ async def approve_review(
 
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    _ensure_document_tenant_access(review.document, current_user)
 
     if review.status != ReviewStatus.PENDING:
         raise HTTPException(
@@ -427,7 +451,7 @@ async def reject_review(
     review_id: int,
     data: ReviewReject,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Reject a review request (comments required)"""
     review = (
@@ -442,6 +466,7 @@ async def reject_review(
 
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    _ensure_document_tenant_access(review.document, current_user)
 
     if review.status != ReviewStatus.PENDING:
         raise HTTPException(
@@ -505,7 +530,7 @@ async def reject_review(
 async def cancel_review(
     review_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Cancel own review submission"""
     review = (
@@ -519,6 +544,7 @@ async def cancel_review(
 
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
+    _ensure_document_tenant_access(review.document, current_user)
 
     if review.submitted_by != current_user.id:
         raise HTTPException(
@@ -559,13 +585,14 @@ async def get_document_review_history(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get all reviews for a document"""
     # Verify document exists
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    _ensure_document_tenant_access(document, current_user)
 
     query = (
         db.query(ReviewRequest)

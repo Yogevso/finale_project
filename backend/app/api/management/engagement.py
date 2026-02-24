@@ -9,10 +9,32 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Bookmark, Document, Feedback, ReadingProgress, User
-from app.security import get_current_user
+from app.models import Bookmark, Document, Feedback, ReadingProgress, User, UserRole
+from app.security import get_current_active_user
 
 router = APIRouter(prefix="/engagement", tags=["Engagement"])
+
+
+def _is_system_admin(user: User) -> bool:
+    return user.role == UserRole.SYSTEM_ADMIN
+
+
+def _apply_document_tenant_scope(query, current_user: User):
+    """Apply tenant scoping to document queries for non-system admins."""
+    if _is_system_admin(current_user):
+        return query
+    if current_user.tenant_id is None:
+        return query.filter(Document.tenant_id.is_(None))
+    return query.filter(Document.tenant_id == current_user.tenant_id)
+
+
+def _get_scoped_document_or_404(db: Session, document_id: int, current_user: User) -> Document:
+    query = db.query(Document).filter(Document.id == document_id)
+    query = _apply_document_tenant_scope(query, current_user)
+    document = query.first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
 
 
 # ============ SCHEMAS ============
@@ -75,15 +97,16 @@ class ReadingProgressResponse(BaseModel):
 @router.get("/bookmarks", response_model=List[BookmarkResponse])
 def list_bookmarks(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List user's bookmarked documents"""
-    bookmarks = (
+    query = (
         db.query(Bookmark)
+        .join(Document, Bookmark.document_id == Document.id)
         .filter(Bookmark.user_id == current_user.id)
-        .order_by(Bookmark.created_at.desc())
-        .all()
     )
+    query = _apply_document_tenant_scope(query, current_user)
+    bookmarks = query.order_by(Bookmark.created_at.desc()).all()
 
     return [
         BookmarkResponse(
@@ -101,13 +124,11 @@ def list_bookmarks(
 def add_bookmark(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Bookmark a document"""
     # Check document exists
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = _get_scoped_document_or_404(db, document_id, current_user)
 
     # Check if already bookmarked
     existing = (
@@ -146,7 +167,7 @@ def add_bookmark(
 def remove_bookmark(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Remove a bookmark"""
     bookmark = (
@@ -167,7 +188,7 @@ def remove_bookmark(
 def check_bookmark_status(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Check if document is bookmarked"""
     bookmark = (
@@ -187,13 +208,11 @@ def submit_feedback(
     document_id: int,
     data: FeedbackCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Submit feedback for a document (helpful/not helpful)"""
     # Check document exists
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    _get_scoped_document_or_404(db, document_id, current_user)
 
     # Check if user already submitted feedback
     existing = (
@@ -230,8 +249,11 @@ def submit_feedback(
 def get_feedback_stats(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get feedback statistics for a document (public)"""
+    _get_scoped_document_or_404(db, document_id, current_user)
+
     helpful = (
         db.query(func.count(Feedback.id))
         .filter(Feedback.document_id == document_id, Feedback.is_helpful.is_(True))
@@ -262,9 +284,11 @@ def get_feedback_stats(
 def get_my_feedback(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get current user's feedback for a document"""
+    _get_scoped_document_or_404(db, document_id, current_user)
+
     feedback = (
         db.query(Feedback)
         .filter(Feedback.user_id == current_user.id, Feedback.document_id == document_id)
@@ -288,10 +312,15 @@ def get_my_feedback(
 def list_reading_progress(
     completed_only: bool = Query(False, description="Show only completed documents"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """List user's reading progress"""
-    query = db.query(ReadingProgress).filter(ReadingProgress.user_id == current_user.id)
+    query = (
+        db.query(ReadingProgress)
+        .join(Document, ReadingProgress.document_id == Document.id)
+        .filter(ReadingProgress.user_id == current_user.id)
+    )
+    query = _apply_document_tenant_scope(query, current_user)
 
     if completed_only:
         query = query.filter(ReadingProgress.completed_at.isnot(None))
@@ -316,7 +345,7 @@ def update_reading_progress(
     document_id: int,
     data: ReadingProgressUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Update reading progress for a document"""
     # Validate progress
@@ -324,9 +353,7 @@ def update_reading_progress(
         raise HTTPException(status_code=400, detail="Progress must be 0-100")
 
     # Check document exists
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = _get_scoped_document_or_404(db, document_id, current_user)
 
     # Find or create progress record
     progress = (
@@ -371,9 +398,11 @@ def update_reading_progress(
 def get_document_progress(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get reading progress for a specific document"""
+    _get_scoped_document_or_404(db, document_id, current_user)
+
     progress = (
         db.query(ReadingProgress)
         .filter(
@@ -400,7 +429,7 @@ def get_document_progress(
 @router.get("/stats")
 def get_engagement_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get engagement stats for current user"""
     bookmark_count = (

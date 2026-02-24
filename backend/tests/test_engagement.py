@@ -2,7 +2,7 @@
 
 import uuid
 
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, Tenant
 
 
 class TestBookmarks:
@@ -178,6 +178,46 @@ class TestFeedback:
         data = response.json()
         assert data["has_feedback"] is True
         assert data["is_helpful"] is True
+
+    def test_feedback_is_tenant_scoped(self, client, auth_headers, db, test_user):
+        """Submitting feedback for a cross-tenant document should be denied."""
+        tenant_a = Tenant(
+            name="Engagement Tenant A",
+            slug=f"engagement-tenant-a-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        tenant_b = Tenant(
+            name="Engagement Tenant B",
+            slug=f"engagement-tenant-b-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        test_user.tenant_id = tenant_a.id
+        db.commit()
+
+        hidden_doc = Document(
+            title="Hidden Engagement Doc",
+            document_number=f"DOC-HED-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=tenant_b.id,
+        )
+        db.add(hidden_doc)
+        db.commit()
+        db.refresh(hidden_doc)
+
+        response = client.post(
+            f"/api/v1/engagement/feedback/{hidden_doc.id}",
+            headers=auth_headers,
+            json={"is_helpful": True, "comment": "Should fail"},
+        )
+        assert response.status_code == 404
 
 
 class TestReadingProgress:

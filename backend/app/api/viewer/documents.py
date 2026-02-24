@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Attachment, Comment, Document, DocumentStatus, Version
+from app.models import Attachment, Comment, Document, DocumentStatus, DocumentVisibility, Version
 from app.schemas import (
     AttachmentOutlineResponse,
     AttachmentResponse,
@@ -28,6 +28,7 @@ def _get_active_document_or_404(db: Session, document_id: int) -> Document:
         .filter(
             Document.id == document_id,
             Document.status == DocumentStatus.ACTIVE,
+            Document.visibility == DocumentVisibility.PUBLIC,
         )
         .first()
     )
@@ -67,6 +68,7 @@ def list_published_documents(
     Only shows documents with status='active'.
     """
     query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
+    query = query.filter(Document.visibility == DocumentVisibility.PUBLIC)
 
     # Search by title or description
     if search:
@@ -102,6 +104,7 @@ def list_categories(db: Session = Depends(get_db)):
         db.query(Document.category)
         .filter(
             Document.status == DocumentStatus.ACTIVE,
+            Document.visibility == DocumentVisibility.PUBLIC,
             Document.category.isnot(None),
         )
         .distinct()
@@ -216,6 +219,34 @@ def _stream_public_attachment(
     )
 
 
+def _stream_public_preview_attachment(
+    db: Session,
+    document_id: int,
+    attachment_id: int,
+) -> StreamingResponse:
+    attachment, content_stream, media_type, content_length = AttachmentService.open_preview_stream(
+        db,
+        document_id,
+        attachment_id,
+        current_user=None,
+    )
+    original_name = attachment.original_filename or attachment.filename or "preview"
+    base_name = original_name.rsplit(".", 1)[0] if "." in original_name else original_name
+    preview_filename = f"{base_name}.pdf"
+    headers = {
+        "Content-Disposition": build_content_disposition(preview_filename, inline=True),
+        "Content-Length": str(content_length),
+    }
+    if attachment.preview_pdf_sha256:
+        headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256
+
+    return StreamingResponse(
+        content=content_stream,
+        media_type=media_type,
+        headers=headers,
+    )
+
+
 @router.get("/{document_id}/attachments/{attachment_id}/download")
 def download_attachment(
     document_id: int,
@@ -235,7 +266,7 @@ def preview_attachment(
 ):
     """Preview a published document attachment inline without authentication."""
     _get_active_document_or_404(db, document_id)
-    return _stream_public_attachment(db, document_id, attachment_id, inline=True)
+    return _stream_public_preview_attachment(db, document_id, attachment_id)
 
 
 @router.get(
@@ -268,7 +299,10 @@ def get_document_comments(
 
     comments = (
         db.query(Comment)
-        .filter(Comment.document_id == document_id)
+        .filter(
+            Comment.document_id == document_id,
+            Comment.is_private.is_(False),
+        )
         .order_by(Comment.created_at.asc())
         .all()
     )

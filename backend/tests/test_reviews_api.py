@@ -1,6 +1,9 @@
 """Tests for the Review/Approval Workflow API"""
 
 import pytest
+import uuid
+
+from app.models import Document, DocumentStatus, Tenant
 
 
 class TestSubmitForReview:
@@ -57,6 +60,47 @@ class TestSubmitForReview:
             f"/api/v1/reviews/documents/{test_document.id}/submit",
             headers=auth_headers,
             json={"version_id": 999999, "message": "Please review this exact version"},
+        )
+        assert response.status_code == 404
+
+    def test_submit_for_review_is_tenant_scoped(self, client, auth_headers, db, test_user):
+        """Non-system users should not submit reviews for documents in other tenants."""
+        tenant_a = Tenant(
+            name="Review Tenant A",
+            slug=f"review-tenant-a-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        tenant_b = Tenant(
+            name="Review Tenant B",
+            slug=f"review-tenant-b-{uuid.uuid4().hex[:6]}",
+            is_active=True,
+            company_type="customer",
+        )
+        db.add_all([tenant_a, tenant_b])
+        db.commit()
+        db.refresh(tenant_a)
+        db.refresh(tenant_b)
+
+        test_user.tenant_id = tenant_a.id
+        db.commit()
+
+        cross_tenant_doc = Document(
+            title="Cross Tenant Review Doc",
+            document_number=f"DOC-XTR-{uuid.uuid4().hex[:6].upper()}",
+            description="Should not be reviewable across tenant boundary",
+            status=DocumentStatus.DRAFT,
+            created_by=test_user.id,
+            tenant_id=tenant_b.id,
+        )
+        db.add(cross_tenant_doc)
+        db.commit()
+        db.refresh(cross_tenant_doc)
+
+        response = client.post(
+            f"/api/v1/reviews/documents/{cross_tenant_doc.id}/submit",
+            headers=auth_headers,
+            json={"message": "cross-tenant submit"},
         )
         assert response.status_code == 404
 
@@ -372,3 +416,32 @@ class TestPeerReview:
             json={"comments": "Peer approved!"},
         )
         assert response.status_code == 200
+
+    def test_editor_cannot_approve_manager_submission(
+        self, client, db, manager_headers, second_editor_headers, test_manager
+    ):
+        """Editor peer-review is limited to editor submitters only."""
+        manager_doc = Document(
+            title="Manager Submission Doc",
+            document_number=f"DOC-MGR-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.DRAFT,
+            created_by=test_manager.id,
+        )
+        db.add(manager_doc)
+        db.commit()
+        db.refresh(manager_doc)
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{manager_doc.id}/submit",
+            headers=manager_headers,
+            json={"message": "Manager submission"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        approve_response = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=second_editor_headers,
+            json={"comments": "Editor should not approve manager"},
+        )
+        assert approve_response.status_code == 403
