@@ -22,6 +22,18 @@ Fixes #
 - 
 - 
 
+## Architecture Impact
+<!-- Required when architecture boundaries/contracts/migration strategy are affected -->
+- [ ] This PR has architecture impact
+- [ ] This PR has no architecture impact
+
+ADR Link (required if architecture impact):
+- 
+
+Deprecation Impact (if any):
+- [ ] No deprecations introduced
+- [ ] Deprecation introduced and added to `docs/deprecations.md` with owner/removal target
+
 ## Screenshots (if applicable)
 <!-- Add screenshots for UI changes -->
 
@@ -38,6 +50,8 @@ Fixes #
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
+- [ ] I added/updated an ADR when required
+- [ ] I updated deprecation metadata if introducing deprecations
 - [ ] I have addressed or acknowledged all unresolved PR review comments
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix is effective or that my feature works

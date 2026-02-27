@@ -160,7 +160,7 @@ class TestCommentsAPI:
 
         monkeypatch.setattr(CommentService, "can_view_comment", staticmethod(fake_can_view))
 
-        comments = CommentService.get_comments(db, sample_document["id"], current_user)
+        comments = CommentService(db).get_comments(sample_document["id"], current_user)
         assert len(comments) == 1
         assert comments[0].id == parent.id
         assert comments[0].reply_count == 0

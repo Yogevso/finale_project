@@ -10,14 +10,45 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Header,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.application.commands.dependencies import (
+    get_assign_company_set_command_handler,
+    get_create_document_command_handler,
+    get_delete_document_command_handler,
+    get_update_document_command_handler,
+)
+from app.application.commands.document_commands import (
+    AssignCompanySetCommand,
+    AssignCompanySetCommandErrorCode,
+    AssignCompanySetCommandHandler,
+    CreateDocumentCommand,
+    CreateDocumentCommandHandler,
+    DeleteDocumentCommand,
+    DeleteDocumentCommandHandler,
+    DocumentCommandErrorCode,
+    UpdateDocumentCommand,
+    UpdateDocumentCommandHandler,
+)
+from app.application.process_managers import DocumentUploadProcessManager
+from app.application.queries.dependencies import (
+    get_document_query_handler,
+    get_list_documents_query_handler,
+)
+from app.application.queries.document_queries import (
+    GetDocumentQuery,
+    GetDocumentQueryHandler,
+    ListDocumentsQuery,
+    ListDocumentsQueryHandler,
+)
 from app.db import get_db
 from app.dependencies.permissions import (
     require_editor,
@@ -25,8 +56,9 @@ from app.dependencies.permissions import (
     require_manager,
     require_permission,
 )
-from app.dependencies.tenant import TenantContext, get_tenant_context
-from app.models import Document, DocumentStatus, Tenant, User, UserRole
+from app.dependencies.services import get_document_service
+from app.errors import NotFoundError, ValidationError
+from app.models import DocumentStatus, DocumentVisibility, Tenant, User, UserRole
 from app.schemas import (
     AttachmentResponse,
     DocumentCreate,
@@ -62,8 +94,9 @@ class GenerateWordRequest(BaseModel):
 def create_document(
     document_data: DocumentCreate,
     current_user: User = Depends(require_editor),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    create_document_command_handler: CreateDocumentCommandHandler = Depends(
+        get_create_document_command_handler
+    ),
 ):
     """
     Create a new document.
@@ -72,8 +105,16 @@ def create_document(
     Automatically generates document number and creates initial version.
     Document is assigned to the user's tenant.
     """
-    service = DocumentService(db, tenant_ctx)
-    return service.create_document(document_data, current_user)
+    result = create_document_command_handler.execute(
+        CreateDocumentCommand(document_data=document_data, current_user=current_user)
+    )
+    if result.is_err:
+        if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == DocumentCommandErrorCode.VALIDATION:
+            raise ValidationError(result.error.message)
+        raise HTTPException(status_code=500, detail="Unexpected document-create command error")
+    return result.value
 
 
 @router.post(
@@ -85,15 +126,14 @@ def generate_word_attachment(
     document_id: int,
     payload: GenerateWordRequest,
     current_user: User = Depends(require_editor),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    document_service: DocumentService = Depends(get_document_service),
     db: Session = Depends(get_db),
 ):
     """
     Generate a Word file from HTML content and attach it to the document.
     """
-    service = DocumentService(db, tenant_ctx)
-    document = service.get_document(document_id)
-    service._verify_access(document)
+    document = document_service.get_document(document_id)
+    document_service._verify_access(document)
 
     docx_bytes = html_to_docx_bytes(payload.html_content)
     safe_name = payload.filename or f"{document.title}.docx"
@@ -115,11 +155,13 @@ def list_documents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     status: Optional[DocumentStatus] = Query(None, description="Filter by status"),
+    visibility: Optional[DocumentVisibility] = Query(None, description="Filter by visibility"),
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search in title, description, tags"),
     current_user: User = Depends(require_internal_user),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    list_documents_query_handler: ListDocumentsQueryHandler = Depends(
+        get_list_documents_query_handler
+    ),
 ):
     """
     Get paginated list of documents with optional filters.
@@ -129,30 +171,37 @@ def list_documents(
     Supports:
     - Pagination (page, page_size)
     - Status filter
+    - Visibility filter
     - Category filter
     - Full-text search
     """
-    service = DocumentService(db, tenant_ctx)
     skip = (page - 1) * page_size
-    documents, total = service.get_documents(
-        skip=skip, limit=page_size, status=status, category=category, search=search
+    query_result = list_documents_query_handler.execute(
+        ListDocumentsQuery(
+            skip=skip,
+            limit=page_size,
+            status=status,
+            visibility=visibility,
+            category=category,
+            search=search,
+        )
     )
 
     return DocumentListResponse(
-        items=documents,
-        total=total,
+        items=query_result.items,
+        total=query_result.total,
         page=page,
         page_size=page_size,
-        pages=ceil(total / page_size) if total > 0 else 0,
+        pages=ceil(query_result.total / page_size) if query_result.total > 0 else 0,
     )
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
+    response: Response,
     current_user: User = Depends(require_internal_user),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    document_query_handler: GetDocumentQueryHandler = Depends(get_document_query_handler),
 ):
     """
     Get document by ID.
@@ -160,12 +209,11 @@ def get_document(
     Requires: Internal user (not customer).
     Document must belong to user's tenant.
     """
-    service = DocumentService(db, tenant_ctx)
-    document = service.get_document(document_id)
-
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
+    result = document_query_handler.execute(GetDocumentQuery(document_id=document_id))
+    if result.is_err:
+        raise NotFoundError(result.error.message)
+    document = result.value
+    response.headers["ETag"] = f"\"{document.etag}\""
     return document
 
 
@@ -173,9 +221,12 @@ def get_document(
 def update_document(
     document_id: int,
     document_data: DocumentUpdate,
+    response: Response,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_editor),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    update_document_command_handler: UpdateDocumentCommandHandler = Depends(
+        get_update_document_command_handler
+    ),
 ):
     """
     Update document.
@@ -184,16 +235,32 @@ def update_document(
     Creates new version if content changes.
     Only documents in user's tenant can be updated.
     """
-    service = DocumentService(db, tenant_ctx)
-    return service.update_document(document_id, document_data, current_user)
+    result = update_document_command_handler.execute(
+        UpdateDocumentCommand(
+            document_id=document_id,
+            document_data=document_data,
+            current_user=current_user,
+            if_match=if_match,
+        )
+    )
+    if result.is_err:
+        if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == DocumentCommandErrorCode.VALIDATION:
+            raise ValidationError(result.error.message)
+        raise HTTPException(status_code=500, detail="Unexpected document-update command error")
+    document = result.value
+    response.headers["ETag"] = f"\"{document.etag}\""
+    return document
 
 
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: int,
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    delete_document_command_handler: DeleteDocumentCommandHandler = Depends(
+        get_delete_document_command_handler
+    ),
 ):
     """
     Delete document.
@@ -202,8 +269,15 @@ def delete_document(
     Only documents in user's tenant can be deleted.
     Cascade deletes all versions, attachments, and comments.
     """
-    service = DocumentService(db, tenant_ctx)
-    service.delete_document(document_id, current_user)
+    result = delete_document_command_handler.execute(
+        DeleteDocumentCommand(document_id=document_id, current_user=current_user)
+    )
+    if result.is_err:
+        if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == DocumentCommandErrorCode.VALIDATION:
+            raise ValidationError(result.error.message)
+        raise HTTPException(status_code=500, detail="Unexpected document-delete command error")
     return MessageResponse(message="Document deleted successfully")
 
 
@@ -228,7 +302,7 @@ async def upload_document(
     release_notes: Optional[UploadFile] = File(None),
     content_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_editor),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    document_service: DocumentService = Depends(get_document_service),
     db: Session = Depends(get_db),
 ):
     """
@@ -270,8 +344,7 @@ async def upload_document(
             detail="Only managers and above can upload directly as active",
         )
 
-    # Create the document first
-    service = DocumentService(db, tenant_ctx)
+    # Build parent document payload.
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",
@@ -286,65 +359,40 @@ async def upload_document(
         version_label=version_label,
         parent_id=parent_id,
     )
-    document = service.create_document(document_data, current_user)
-    created_document_ids: list[int] = [document.id]
+    release_data = None
+    if release_notes:
+        release_doc_title = f"{doc_title} Release Notes"
+        release_data = DocumentCreate(
+            title=release_doc_title,
+            description=f"Release notes for {doc_title}",
+            status=status_value,
+            visibility=visibility_value,
+            category="Release Notes",
+            tags="release-notes",
+            document_number=None,
+            version_label=version_label,
+            parent_id=None,  # Set below after parent document creation.
+        )
+
+    upload_manager = DocumentUploadProcessManager(
+        db=db,
+        document_service=document_service,
+        attachment_uploader=AttachmentService.upload_attachment,
+        logger=logger,
+    )
 
     try:
-        # Attach uploaded files to parent document.
-        await AttachmentService.upload_attachment(
-            db,
-            document.id,
-            file,
-            current_user,
+        upload_result = await upload_manager.execute(
+            parent_document_data=document_data,
+            current_user=current_user,
             background_tasks=background_tasks,
+            primary_file=file,
+            content_file=content_file,
+            release_notes_file=release_notes,
+            release_notes_document_data=release_data,
         )
-        if content_file:
-            await AttachmentService.upload_attachment(
-                db,
-                document.id,
-                content_file,
-                current_user,
-                background_tasks=background_tasks,
-            )
-
-        # Optional release notes: create child document and attach release notes file.
-        if release_notes:
-            release_doc_title = f"{doc_title} Release Notes"
-            release_data = DocumentCreate(
-                title=release_doc_title,
-                description=f"Release notes for {doc_title}",
-                status=status_value,
-                visibility=visibility_value,
-                category="Release Notes",
-                tags="release-notes",
-                document_number=None,
-                version_label=version_label,
-                parent_id=document.id,
-            )
-            release_doc = service.create_document(release_data, current_user)
-            created_document_ids.append(release_doc.id)
-            await AttachmentService.upload_attachment(
-                db,
-                release_doc.id,
-                release_notes,
-                current_user,
-                background_tasks=background_tasks,
-            )
-    except Exception as exc:
-        # Roll back all created documents (child before parent) to avoid orphan rows.
-        for created_document_id in reversed(created_document_ids):
-            try:
-                service.delete_document(created_document_id, current_user)
-            except Exception as cleanup_error:
-                db.rollback()
-                logger.warning(
-                    "Failed upload rollback cleanup for document_id=%s: %s",
-                    created_document_id,
-                    cleanup_error,
-                )
-
-        if isinstance(exc, HTTPException):
-            raise
+        document = upload_result.document
+    except HTTPException:
         raise
 
     # Refresh to get updated data
@@ -356,16 +404,17 @@ async def upload_document(
 def get_assigned_companies(
     document_id: int,
     current_user: User = Depends(require_internal_user),
-    db: Session = Depends(get_db),
+    document_query_handler: GetDocumentQueryHandler = Depends(get_document_query_handler),
 ):
     """
     Get list of companies assigned to a document.
 
     Requires: Internal user.
     """
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    result = document_query_handler.execute(GetDocumentQuery(document_id=document_id))
+    if result.is_err:
+        raise NotFoundError(result.error.message)
+    document = result.value
 
     return [TenantSummary(id=c.id, name=c.name, slug=c.slug) for c in document.assigned_companies]
 
@@ -375,30 +424,26 @@ def assign_companies(
     document_id: int,
     request: CompanyAssignRequest,
     current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
-    db: Session = Depends(get_db),
+    assign_company_set_command_handler: AssignCompanySetCommandHandler = Depends(
+        get_assign_company_set_command_handler
+    ),
 ):
     """
     Replace the companies assigned to a document.
     Manager+ access required.
     """
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    result = assign_company_set_command_handler.execute(
+        AssignCompanySetCommand(document_id=document_id, company_ids=request.company_ids)
+    )
+    if result.is_err:
+        if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
+            raise ValidationError(result.error.message, error_code="invalid_company_set")
+        raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
 
-    requested_ids = list(dict.fromkeys(request.company_ids))
-    if requested_ids:
-        companies = db.query(Tenant).filter(Tenant.id.in_(requested_ids)).all()
-        company_by_id = {company.id: company for company in companies}
-        missing_ids = [company_id for company_id in requested_ids if company_id not in company_by_id]
-        if missing_ids:
-            raise HTTPException(status_code=400, detail="Some company IDs are invalid")
-        document.assigned_companies = [company_by_id[company_id] for company_id in requested_ids]
-    else:
-        document.assigned_companies = []
-
-    db.commit()
-
-    return MessageResponse(message=f"Assigned company set updated ({len(requested_ids)} total)")
+    assigned_count = result.value
+    return MessageResponse(message=f"Assigned company set updated ({assigned_count} total)")
 
 
 @router.delete(
@@ -408,13 +453,14 @@ def remove_company_assignment(
     document_id: int,
     company_id: int,
     current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
+    document_service: DocumentService = Depends(get_document_service),
     db: Session = Depends(get_db),
 ):
     """
     Remove a company from a document's assignments.
     Manager+ access required.
     """
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_service.get_document(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 

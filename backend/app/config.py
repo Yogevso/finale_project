@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"  # json or text
 
+    # Feature flags (architecture rollout safety)
+    FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE: bool = True
+    FEATURE_FLAG_PROJECTION_CACHE: bool = True
+
     class Config:
         env_file = ".env"
         case_sensitive = True

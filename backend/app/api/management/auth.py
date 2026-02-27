@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import Invitation, InvitationStatus, User
+from app.dependencies.services import (
+    get_auth_service,
+    get_collaboration_service,
+)
+from app.models import InvitationStatus, User
+from app.repositories import InvitationRepository, UserRepository
 from app.schemas import (
     LoginRequest,
     MessageResponse,
@@ -22,6 +27,7 @@ from app.schemas import (
 from app.security import get_current_active_user, get_password_hash
 from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
+from app.services.collaboration_service import CollaborationService
 from app.services.permissions import get_user_permissions
 from app.utils.request_ip import get_client_ip
 
@@ -78,7 +84,11 @@ def _is_e2e_bypass_request(request: Request) -> bool:
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(
+    credentials: LoginRequest,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """
     Login with username and password.
 
@@ -96,7 +106,7 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
             )
 
     try:
-        token_response = AuthService.login(db, credentials.username, credentials.password)
+        token_response = auth_service.login(credentials.username, credentials.password)
     except HTTPException as exc:
         if (
             settings.RATE_LIMIT_ENABLED
@@ -156,32 +166,41 @@ def forgot_password(
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)
-def refresh_token(token_data: RefreshTokenRequest, db: Session = Depends(get_db)):
+def refresh_token(
+    token_data: RefreshTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """
     Refresh access token using refresh token.
 
     Returns new JWT access token.
     """
-    return AuthService.refresh_access_token(db, token_data.refresh_token)
+    return auth_service.refresh_access_token(token_data.refresh_token)
 
 
 @router.post("/auth/logout", response_model=MessageResponse)
-def logout(current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+def logout(
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """
     Logout user and invalidate all refresh tokens.
     """
-    AuthService.logout(db, current_user.id)
+    auth_service.logout(current_user.id)
     return MessageResponse(message="Logged out successfully")
 
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
+def register(
+    user_data: UserCreate,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """
     Register a new user.
 
     Only admins can set role other than viewer (enforced in frontend).
     """
-    return AuthService.register(db, user_data)
+    return auth_service.register(user_data)
 
 
 @router.get("/auth/me", response_model=UserResponse)
@@ -195,11 +214,13 @@ def get_current_user_info(current_user: User = Depends(get_current_active_user))
 def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Change current user's password"""
-    AuthService.change_password(
-        db, current_user, password_data.old_password, password_data.new_password
+    auth_service.change_password(
+        current_user,
+        password_data.old_password,
+        password_data.new_password,
     )
     return MessageResponse(message="Password changed successfully")
 
@@ -215,7 +236,10 @@ def validate_invitation(token: str, db: Session = Depends(get_db)):
     This is a public endpoint - no authentication required.
     Returns invitation details if valid.
     """
-    invitation = db.query(Invitation).filter(Invitation.token == token).first()
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    invitation = invitation_repository.get_by_token(token)
 
     if not invitation:
         return InvitationValidateResponse(valid=False)
@@ -231,7 +255,7 @@ def validate_invitation(token: str, db: Session = Depends(get_db)):
         return InvitationValidateResponse(valid=False)
 
     # Get inviter info
-    inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+    inviter = user_repository.get_by_id(invitation.invited_by)
     inviter_name = inviter.full_name if inviter else "Unknown"
 
     # Get company name
@@ -255,14 +279,21 @@ def validate_invitation(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/auth/invitation/accept", response_model=TokenResponse)
-def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(get_db)):
+def accept_invitation(
+    request: AcceptInvitationRequest,
+    db: Session = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+):
     """
     Accept an invitation and create a new user account.
 
     This is a public endpoint - no authentication required.
     Returns JWT tokens for immediate login after account creation.
     """
-    invitation = db.query(Invitation).filter(Invitation.token == request.token).first()
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    invitation = invitation_repository.get_by_token(request.token)
 
     if not invitation:
         raise HTTPException(
@@ -285,13 +316,13 @@ def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(ge
         )
 
     # Check if email is already registered
-    if db.query(User).filter(User.email == invitation.email).first():
+    if user_repository.get_by_email(invitation.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
         )
 
     # Check if username is taken
-    if db.query(User).filter(User.username == request.username).first():
+    if user_repository.get_by_username(request.username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="This username is already taken"
         )
@@ -318,7 +349,7 @@ def accept_invitation(request: AcceptInvitationRequest, db: Session = Depends(ge
     db.refresh(user)
 
     # Generate tokens for immediate login
-    return AuthService.login(db, request.username, request.password)
+    return auth_service.login(request.username, request.password)
 
 
 # ========== Collaboration Token Endpoint ==========
@@ -345,6 +376,7 @@ def get_collab_token(
     request: CollabTokenRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
+    collab_service: CollaborationService = Depends(get_collaboration_service),
 ):
     """
     Get a collaboration token for real-time document editing.
@@ -353,7 +385,6 @@ def get_collab_token(
     It contains the user's permissions for the specific document.
     """
     from app.models import Document
-    from app.services.collaboration_service import CollaborationService
 
     # Get the document
     document = db.query(Document).filter(Document.id == request.document_id).first()
@@ -361,7 +392,7 @@ def get_collab_token(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collab_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

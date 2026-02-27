@@ -149,6 +149,8 @@ class DocumentResponse(DocumentBase):
     id: int
     document_number: str
     parent_id: Optional[int] = None
+    row_version: int = 1
+    etag: str
     status: DocumentStatus
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL
     created_by: int
@@ -204,6 +206,8 @@ class VersionResponse(VersionBase):
     version_number: int
     semantic_version: Optional[str] = None
     bump_type: VersionBumpType = VersionBumpType.PATCH
+    row_version: int = 1
+    etag: str
     is_published: bool = False
     published_at: Optional[datetime] = None
     published_by: Optional[int] = None

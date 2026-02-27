@@ -18,6 +18,17 @@
 | **Routing** | React Router | 6.21.2 |
 | **Testing** | pytest / Vitest | - |
 
+## Architecture Governance Artifacts
+
+- ADR workflow: `docs/adr/README.md`
+- Deprecation lifecycle policy: `docs/deprecation-policy.md`
+- Active deprecations register: `docs/deprecations.md`
+- Refactor wave playbooks: `docs/migrations/README.md`
+- Contract versioning policy: `docs/contracts/versioning.md`
+- Data ownership map: `docs/context-ownership.md`
+- Context map artifacts: `docs/context-map/README.md`
+- Architecture debt register: `docs/architecture-debt.md`
+
 ## System Architecture
 
 ```

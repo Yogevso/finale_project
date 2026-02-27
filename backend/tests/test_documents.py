@@ -10,6 +10,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import (
+    ActionType,
+    AuditLog,
     Document,
     DocumentNumberSequence,
     DocumentStatus,
@@ -21,7 +23,18 @@ from app.models import (
     UserRole,
 )
 from app.schemas import DocumentCreate, DocumentUpdate
+from app.security import get_password_hash
 from app.services.document_service import DocumentService
+
+
+def _login_headers(client, username: str, password: str) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_create_document(client, auth_headers):
@@ -139,9 +152,10 @@ def test_update_document(client, auth_headers, db, test_user):
     db.refresh(doc)
 
     # Update document
+    headers = {**auth_headers, "If-Match": doc.etag}
     response = client.put(
         f"/api/v1/documents/{doc.id}",
-        headers=auth_headers,
+        headers=headers,
         json={"title": "Updated Title", "status": "active"},
     )
 
@@ -252,6 +266,44 @@ def test_filter_by_status(client, auth_headers, db, test_user):
     assert all(item["status"] == "active" for item in data["items"])
 
 
+def test_filter_by_visibility(client, auth_headers, db, test_user):
+    """Test filtering documents by visibility"""
+    docs = [
+        Document(
+            title="Public document",
+            document_number="DOC-VIS-0001",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_user.id,
+        ),
+        Document(
+            title="Internal document",
+            document_number="DOC-VIS-0002",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            created_by=test_user.id,
+        ),
+        Document(
+            title="Company document",
+            document_number="DOC-VIS-0003",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.COMPANY,
+            created_by=test_user.id,
+        ),
+    ]
+    for doc in docs:
+        db.add(doc)
+    db.commit()
+
+    response = client.get("/api/v1/documents?visibility=company", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["visibility"] == "company"
+
+
 def test_create_document_rolls_back_when_initial_version_creation_fails(db, test_user, monkeypatch):
     """Document row should not persist if initial version/audit creation fails."""
     service = DocumentService(db)
@@ -304,6 +356,43 @@ def test_generate_document_number_seeds_from_existing_daily_documents(db, test_u
     sequence_row = db.get(DocumentNumberSequence, today_key)
     assert sequence_row is not None
     assert sequence_row.next_value == 5
+
+
+def test_delete_document_rolls_back_audit_when_delete_fails(db, test_admin, monkeypatch):
+    doc = Document(
+        title="Delete rollback document",
+        document_number="DOC-DEL-ROLLBACK-0001",
+        status=DocumentStatus.DRAFT,
+        created_by=test_admin.id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    service = DocumentService(db)
+    original_delete = db.delete
+
+    def fail_document_delete(instance):
+        if isinstance(instance, Document):
+            raise RuntimeError("forced delete failure")
+        return original_delete(instance)
+
+    monkeypatch.setattr(db, "delete", fail_document_delete)
+
+    with pytest.raises(RuntimeError, match="forced delete failure"):
+        service.delete_document(doc.id, test_admin)
+
+    db.expire_all()
+    assert db.query(Document).filter(Document.id == doc.id).count() == 1
+    assert (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.document_id == doc.id,
+            AuditLog.action == ActionType.DELETE,
+        )
+        .count()
+        == 0
+    )
 
 
 def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
@@ -499,6 +588,88 @@ def test_assign_companies_is_idempotent_and_supports_clear_set(
     assert state_after_clear.json() == []
 
 
+def test_assign_company_endpoints_require_document_in_same_tenant(client, db):
+    owner_tenant = Tenant(
+        name="Owner Tenant",
+        slug="owner-tenant",
+        is_active=True,
+        company_type="customer",
+    )
+    other_tenant = Tenant(
+        name="Other Tenant",
+        slug="other-tenant",
+        is_active=True,
+        company_type="customer",
+    )
+    db.add_all([owner_tenant, other_tenant])
+    db.flush()
+
+    owner_manager = User(
+        email="owner-manager@example.com",
+        username="owner_manager",
+        full_name="Owner Manager",
+        hashed_password=get_password_hash("ownerpass123"),
+        role=UserRole.MANAGER,
+        tenant_id=owner_tenant.id,
+        is_active=True,
+    )
+    other_manager = User(
+        email="other-manager@example.com",
+        username="other_manager",
+        full_name="Other Manager",
+        hashed_password=get_password_hash("otherpass123"),
+        role=UserRole.MANAGER,
+        tenant_id=other_tenant.id,
+        is_active=True,
+    )
+    other_viewer = User(
+        email="other-viewer@example.com",
+        username="other_viewer",
+        full_name="Other Viewer",
+        hashed_password=get_password_hash("viewpass123"),
+        role=UserRole.VIEWER,
+        tenant_id=other_tenant.id,
+        is_active=True,
+    )
+    db.add_all([owner_manager, other_manager, other_viewer])
+    db.flush()
+
+    document = Document(
+        title="Tenant scoped assignment document",
+        document_number="DOC-ASG-SCOPE-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=owner_manager.id,
+        tenant_id=owner_tenant.id,
+    )
+    document.assigned_companies = [owner_tenant]
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    other_manager_headers = _login_headers(client, "other_manager", "otherpass123")
+    other_viewer_headers = _login_headers(client, "other_viewer", "viewpass123")
+
+    assign_response = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=other_manager_headers,
+        json={"company_ids": [other_tenant.id]},
+    )
+    assert assign_response.status_code == 404
+
+    list_response = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=other_viewer_headers,
+    )
+    assert list_response.status_code == 404
+
+    remove_response = client.delete(
+        f"/api/v1/documents/{document.id}/assign-companies/{owner_tenant.id}",
+        headers=other_manager_headers,
+    )
+    assert remove_response.status_code == 404
+
+
 def test_create_document_normalizes_topic_to_canonical_slug(db, test_user):
     db.add(Topic(name="SDKs & Tools", slug="sdk-tools"))
     db.commit()
@@ -534,6 +705,7 @@ def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
         document.id,
         DocumentUpdate(topic="sdks-tools"),
         test_user,
+        if_match=document.etag,
     )
 
     assert updated.topic == "sdk-tools"

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
@@ -134,9 +135,8 @@ class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
 
     @staticmethod
     def _convert_word_to_pdf_fallback_bytes(content: bytes, *, filename: str) -> bytes:
-        from app.utils.document_converter import convert_word_to_html
-
-        html_content = (convert_word_to_html(content) or "").strip()
+        wrapper = get_document_converter_wrapper()
+        html_content = (wrapper.convert_word_to_html(content) or "").strip()
         if AttachmentService._is_conversion_error_html(html_content):
             raise ValueError(
                 "LibreOffice headless is required for Office conversion (Word fallback unavailable)"
@@ -449,9 +449,8 @@ class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
         }:
             return AttachmentService._convert_text_to_pdf_bytes(content, title=filename)
 
-        from app.utils.document_converter import convert_document_to_html
-
-        html_content = convert_document_to_html(content, mime_type, filename) or ""
+        wrapper = get_document_converter_wrapper()
+        html_content = wrapper.convert_document_to_html(content, mime_type, filename) or ""
         normalized_html = html_content.strip()
         if not normalized_html:
             raise ValueError("Content conversion produced empty output")

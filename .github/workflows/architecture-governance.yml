@@ -1,0 +1,41 @@
+name: Architecture Governance Checks
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'plan'
+      - 'CONTRIBUTING.md'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'scripts/architecture_debt_checks/**'
+      - '.github/workflows/architecture-governance.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - 'plan'
+      - 'CONTRIBUTING.md'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'scripts/architecture_debt_checks/**'
+      - '.github/workflows/architecture-governance.yml'
+
+jobs:
+  governance:
+    name: Governance register checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate architecture debt register
+        run: python scripts/architecture_debt_checks/check_architecture_debt.py docs/architecture-debt.md
+
+      - name: Validate deprecations register
+        run: python scripts/architecture_debt_checks/check_deprecations_register.py docs/deprecations.md

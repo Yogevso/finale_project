@@ -30,13 +30,14 @@ from app.schemas.analytics import (
     TimeSeriesPoint,
     UserActivityItem,
 )
+from app.services.base_service import SessionService
 
 
-class AnalyticsService:
+class AnalyticsService(SessionService):
     """Service for computing analytics metrics with tenant isolation"""
 
     def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None):
-        self.db = db
+        super().__init__(db)
         self.tenant_ctx = tenant_ctx
 
     def _get_tenant_filter(self, model):

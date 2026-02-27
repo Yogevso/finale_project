@@ -5,73 +5,38 @@ Portal Documents API - Customer authenticated document access
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
 
-from app.db import get_db
-from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, User, UserRole
+from app.application.queries.dependencies import get_portal_documents_query_handler
+from app.application.queries.portal_queries import (
+    GetPortalAttachmentQuery,
+    GetPortalDocumentQuery,
+    ListPortalCategoriesQuery,
+    ListPortalDocumentsQuery,
+    PortalDashboardStatsQuery,
+    PortalDocumentsQueryHandler,
+    SearchPortalDocumentsQuery,
+)
+from app.domain.specifications import RoleAccessSpec
+from app.models import User
 from app.schemas.portal import (
-    PortalAttachment,
     PortalDashboardStats,
     PortalDocumentDetail,
     PortalDocumentListResponse,
-    PortalDocumentSummary,
 )
 from app.security import get_current_active_user
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
+CUSTOMER_ROLE_ACCESS_SPEC = RoleAccessSpec.customer_only()
 
 
 def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
     """Dependency to ensure user is a customer"""
-    if current_user.role != UserRole.CUSTOMER:
+    if not CUSTOMER_ROLE_ACCESS_SPEC.is_satisfied_by(current_user):
         raise HTTPException(
             status_code=403,
             detail="This endpoint is only for customer users. Use /api/v1/documents for internal access.",
         )
     return current_user
-
-
-def get_customer_documents_query(db: Session, user: User):
-    """
-    Build query for documents visible to customer:
-    - All PUBLIC documents (regardless of tenant)
-    - COMPANY documents assigned to customer's tenant
-    - Includes only published (ACTIVE) documents
-    """
-    query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
-
-    # Customer can see:
-    # 1. PUBLIC docs (available to everyone)
-    # 2. COMPANY docs that are assigned to their tenant
-    from sqlalchemy import and_
-
-    query = query.filter(
-        or_(
-            Document.visibility == DocumentVisibility.PUBLIC,
-            and_(
-                Document.visibility == DocumentVisibility.COMPANY,
-                Document.assigned_companies.any(id=user.tenant_id),
-            ),
-        )
-    )
-
-    return query
-
-
-def get_portal_visible_version(document: Document):
-    """
-    Select the version shown in portal responses.
-
-    Prefer the latest published version; if none exist (legacy data),
-    fall back to the latest available version.
-    """
-    if not document.versions:
-        return None
-
-    published_versions = [version for version in document.versions if version.is_published]
-    candidate_versions = published_versions or document.versions
-    return max(candidate_versions, key=lambda version: version.version_number)
 
 
 @router.get("/documents", response_model=PortalDocumentListResponse)
@@ -80,136 +45,42 @@ async def list_customer_documents(
     per_page: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     List documents accessible to the customer.
     Includes PUBLIC published docs and COMPANY docs assigned to their company.
     """
-    query = get_customer_documents_query(db, current_user)
-
-    # Apply filters
-    if category:
-        query = query.filter(Document.category == category)
-
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                Document.title.ilike(search_term),
-                Document.description.ilike(search_term),
-                Document.tags.ilike(search_term),
-            )
+    return portal_documents_query_handler.execute_list_documents(
+        ListPortalDocumentsQuery(
+            page=page,
+            per_page=per_page,
+            category=category,
+            search=search,
+            current_user=current_user,
         )
-
-    # Get total count
-    total = query.count()
-
-    # Calculate pagination
-    pages = (total + per_page - 1) // per_page
-    offset = (page - 1) * per_page
-
-    # Get documents
-    documents = query.order_by(Document.updated_at.desc()).offset(offset).limit(per_page).all()
-
-    # Build response
-    items = []
-    for doc in documents:
-        attachment_count = (
-            db.query(func.count(Attachment.id)).filter(Attachment.document_id == doc.id).scalar()
-        )
-
-        visible_version = get_portal_visible_version(doc)
-        version_number = visible_version.version_number if visible_version else 1
-
-        items.append(
-            PortalDocumentSummary(
-                id=doc.id,
-                title=doc.title,
-                description=doc.description,
-                category=doc.category,
-                visibility=doc.visibility.value if doc.visibility else "internal",
-                version=version_number,
-                updated_at=doc.updated_at,
-                has_attachments=attachment_count > 0,
-            )
-        )
-
-    return PortalDocumentListResponse(
-        items=items,
-        total=total,
-        page=page,
-        per_page=per_page,
-        pages=pages,
     )
 
 
 @router.get("/documents/{document_id}", response_model=PortalDocumentDetail)
 async def get_customer_document(
     document_id: int,
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     Get a specific document if accessible to the customer.
     """
-    # Get document
-    document = db.query(Document).filter(Document.id == document_id).first()
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Only published documents are available in customer portal
-    if document.status != DocumentStatus.ACTIVE:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Check visibility - must be PUBLIC or COMPANY assigned to customer's tenant
-    if document.visibility == DocumentVisibility.INTERNAL:
-        raise HTTPException(status_code=403, detail="You don't have access to this document")
-
-    if document.visibility == DocumentVisibility.COMPANY:
-        # Check if document is assigned to customer's company
-        company_ids = [c.id for c in document.assigned_companies]
-        if current_user.tenant_id not in company_ids:
-            raise HTTPException(status_code=403, detail="You don't have access to this document")
-
-    # Get attachments
-    attachments = db.query(Attachment).filter(Attachment.document_id == document_id).all()
-
-    # Parse tags
-    tags = []
-    if document.tags:
-        tags = [t.strip() for t in document.tags.split(",") if t.strip()]
-
-    visible_version = get_portal_visible_version(document)
-    content = visible_version.content if visible_version else ""
-    version_number = visible_version.version_number if visible_version else 1
-
-    return PortalDocumentDetail(
-        id=document.id,
-        title=document.title,
-        description=document.description,
-        content=content,
-        category=document.category,
-        tags=tags,
-        visibility=document.visibility.value if document.visibility else "internal",
-        version=version_number,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        attachments=[
-            PortalAttachment(
-                id=att.id,
-                filename=att.filename,
-                file_size=att.file_size,
-                mime_type=att.mime_type,
-                created_at=att.uploaded_at,
-                download_url=(
-                    f"/api/v1/documents/{document.id}/attachments/{att.id}/download"
-                ),
-            )
-            for att in attachments
-        ],
+    return portal_documents_query_handler.execute_get_document(
+        GetPortalDocumentQuery(
+            document_id=document_id,
+            current_user=current_user,
+        )
     )
 
 
@@ -217,123 +88,50 @@ async def get_customer_document(
 async def get_customer_attachment(
     document_id: int,
     attachment_id: int,
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     Get attachment info for download (customer must have document access).
     """
-    # First verify document access
-    document = db.query(Document).filter(Document.id == document_id).first()
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    if document.status not in [DocumentStatus.PUBLISHED, DocumentStatus.ACTIVE]:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    if document.visibility == DocumentVisibility.INTERNAL:
-        raise HTTPException(status_code=403, detail="You don't have access to this document")
-
-    if document.visibility == DocumentVisibility.COMPANY:
-        company_ids = [c.id for c in document.assigned_companies]
-        if current_user.tenant_id not in company_ids:
-            raise HTTPException(status_code=403, detail="You don't have access to this document")
-
-    # Get attachment
-    attachment = (
-        db.query(Attachment)
-        .filter(
-            Attachment.id == attachment_id,
-            Attachment.document_id == document_id,
+    return portal_documents_query_handler.execute_get_attachment(
+        GetPortalAttachmentQuery(
+            document_id=document_id,
+            attachment_id=attachment_id,
+            current_user=current_user,
         )
-        .first()
     )
-
-    if not attachment:
-        raise HTTPException(status_code=404, detail="Attachment not found")
-
-    return {
-        "id": attachment.id,
-        "filename": attachment.filename,
-        "file_size": attachment.file_size,
-        "mime_type": attachment.mime_type,
-        "download_url": (
-            f"/api/v1/documents/{document_id}/attachments/{attachment.id}/download"
-        ),
-    }
 
 
 @router.get("/categories")
 async def get_customer_categories(
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     Get categories with document counts for customer-accessible documents.
     """
-    query = get_customer_documents_query(db, current_user)
-
-    # Group by category
-    results = (
-        query.with_entities(Document.category, func.count(Document.id).label("count"))
-        .filter(Document.category.isnot(None), Document.category != "")
-        .group_by(Document.category)
-        .all()
+    return portal_documents_query_handler.execute_categories(
+        ListPortalCategoriesQuery(current_user=current_user)
     )
-
-    return [{"category": cat, "count": count} for cat, count in results if cat]
 
 
 @router.get("/dashboard/stats", response_model=PortalDashboardStats)
 async def get_customer_dashboard_stats(
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     Get dashboard statistics for customer portal.
     """
-    from app.models import Feedback, FeedbackStatus
-
-    # Count documents using the same portal access rules as list/detail endpoints.
-    visible_documents_query = get_customer_documents_query(db, current_user)
-    visibility_counts = dict(
-        visible_documents_query.with_entities(
-            Document.visibility, func.count(Document.id)
-        )
-        .group_by(Document.visibility)
-        .all()
-    )
-
-    public_count = visibility_counts.get(DocumentVisibility.PUBLIC, 0)
-    company_count = visibility_counts.get(DocumentVisibility.COMPANY, 0)
-    total_documents = public_count + company_count
-
-    # Count feedback
-    pending_feedback = (
-        db.query(Feedback)
-        .filter(
-            Feedback.user_id == current_user.id,
-            Feedback.status == FeedbackStatus.PENDING,
-        )
-        .count()
-    )
-
-    responded_feedback = (
-        db.query(Feedback)
-        .filter(
-            Feedback.user_id == current_user.id,
-            Feedback.status == FeedbackStatus.RESPONDED,
-        )
-        .count()
-    )
-
-    return PortalDashboardStats(
-        total_documents=total_documents,
-        public_documents=public_count,
-        company_documents=company_count,
-        pending_feedback=pending_feedback,
-        responded_feedback=responded_feedback,
+    return portal_documents_query_handler.execute_dashboard_stats(
+        PortalDashboardStatsQuery(current_user=current_user)
     )
 
 
@@ -343,75 +141,20 @@ async def search_customer_documents(
     category: Optional[str] = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
 ):
     """
     Search documents accessible to the customer.
     """
-    query = get_customer_documents_query(db, current_user)
-
-    # Apply search
-    search_term = f"%{q}%"
-    query = query.filter(
-        or_(
-            Document.title.ilike(search_term),
-            Document.description.ilike(search_term),
-            Document.tags.ilike(search_term),
+    return portal_documents_query_handler.execute_search_documents(
+        SearchPortalDocumentsQuery(
+            q=q,
+            category=category,
+            page=page,
+            per_page=per_page,
+            current_user=current_user,
         )
     )
-
-    if category:
-        query = query.filter(Document.category == category)
-
-    # Get total
-    total = query.count()
-    pages = (total + per_page - 1) // per_page
-    offset = (page - 1) * per_page
-
-    # Get results
-    documents = query.order_by(Document.updated_at.desc()).offset(offset).limit(per_page).all()
-
-    results = []
-    for doc in documents:
-        # Create snippet from content (get from latest version)
-        snippet = ""
-        content = ""
-        visible_version = get_portal_visible_version(doc)
-        if visible_version:
-            content = visible_version.content or ""
-
-        if content:
-            content_lower = content.lower()
-            q_lower = q.lower()
-            pos = content_lower.find(q_lower)
-            if pos >= 0:
-                start = max(0, pos - 50)
-                end = min(len(content), pos + len(q) + 100)
-                snippet = content[start:end]
-                if start > 0:
-                    snippet = "..." + snippet
-                if end < len(content):
-                    snippet = snippet + "..."
-            else:
-                snippet = content[:150] + "..." if len(content) > 150 else content
-
-        results.append(
-            {
-                "id": doc.id,
-                "title": doc.title,
-                "description": doc.description,
-                "category": doc.category,
-                "snippet": snippet,
-                "updated_at": doc.updated_at.isoformat(),
-            }
-        )
-
-    return {
-        "query": q,
-        "results": results,
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "pages": pages,
-    }

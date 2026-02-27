@@ -13,9 +13,9 @@ from app.models import (
     CollaborationActivity,
     CollaborationActivityType,
     CollaborationSession,
-    Document,
     User,
 )
+from app.repositories import DocumentRepository, UserRepository
 from app.security import get_current_active_user
 from app.services.collaboration_service import CollaborationService
 
@@ -63,6 +63,9 @@ async def log_activity(
 
     Used for tracking edits, cursor movements, and other activities.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Validate activity type
     try:
         activity_type = CollaborationActivityType(request.activity_type)
@@ -73,11 +76,11 @@ async def log_activity(
         ) from err
 
     # Ensure document exists and user can access it.
-    document = db.query(Document).filter(Document.id == request.document_id).first()
+    document = document_repository.get_by_id(request.document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -141,13 +144,17 @@ async def get_activity_feed(
 
     Returns recent collaboration activities for display in the activity feed.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+    user_repository = UserRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -164,10 +171,7 @@ async def get_activity_feed(
     total = query.count()
     activities = query.offset(offset).limit(limit).all()
     user_ids = list({activity.user_id for activity in activities})
-    user_map = {}
-    if user_ids:
-        user_rows = db.query(User.id, User.username).filter(User.id.in_(user_ids)).all()
-        user_map = {user_id: username for user_id, username in user_rows}
+    user_map = {user.id: user.username for user in user_repository.list_by_ids(user_ids)}
 
     # Build response with usernames
     activity_responses = []

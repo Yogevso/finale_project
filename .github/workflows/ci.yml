@@ -28,9 +28,47 @@ jobs:
   # ============================================
   # Backend Tests & Quality Checks
   # ============================================
+  migration-safety:
+    name: Migration Safety
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run migration safety framework
+        run: python ../scripts/migration_safety/run_migration_safety.py
+
+      - name: Upload migration safety evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-safety-evidence
+          path: |
+            docs/migrations/evidence/latest-migration-safety.json
+            docs/migrations/evidence/latest-dry-run.sql
+          retention-days: 30
+
   backend-lint:
     name: Backend Lint & Type Check
     runs-on: ubuntu-latest
+    needs: migration-safety
     defaults:
       run:
         working-directory: ./backend
@@ -488,7 +526,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-tests, collab-quality, e2e-core, e2e-roles, e2e-features]
+    needs: [migration-safety, backend-tests, frontend-tests, collab-quality, e2e-core, e2e-roles, e2e-features]
     if: always()
 
     steps:
@@ -498,6 +536,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Migration Safety | ${{ needs.migration-safety.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Backend Tests | ${{ needs.backend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend Unit Tests | ${{ needs.frontend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Collab Quality | ${{ needs.collab-quality.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -505,6 +544,10 @@ jobs:
           echo "| E2E Roles | ${{ needs.e2e-roles.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Features | ${{ needs.e2e-features.result }} |" >> $GITHUB_STEP_SUMMARY
           
+          if [[ "${{ needs.migration-safety.result }}" != "success" ]]; then
+            echo "Migration safety checks failed"
+            exit 1
+          fi
           if [[ "${{ needs.backend-tests.result }}" != "success" ]]; then
             echo "❌ Backend tests failed"
             exit 1
@@ -530,4 +573,3 @@ jobs:
             exit 1
           fi
           echo "✅ All CI checks passed!"
-

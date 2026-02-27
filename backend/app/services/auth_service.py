@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import PasswordReset, Tenant, User, UserRole
+from app.repositories import UserRepository
 from app.schemas import TokenResponse, UserCreate
 from app.security import (
     create_access_token,
@@ -15,27 +15,30 @@ from app.security import (
     get_password_hash,
     verify_password,
 )
+from app.services.base_service import SessionService
 
 
-class AuthService:
+class AuthService(SessionService):
     """Authentication service"""
 
-    @staticmethod
-    def _ensure_tenant_is_active(db: Session, user: User) -> None:
+    def __init__(self, db):
+        super().__init__(db)
+        self.user_repository = UserRepository(db)
+
+    def _ensure_tenant_is_active(self, user: User) -> None:
         """Reject auth flows for users tied to inactive tenants."""
         if user.role == UserRole.SYSTEM_ADMIN or user.tenant_id is None:
             return
-        tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+        tenant = self.db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
         if tenant and not tenant.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Company is inactive",
             )
 
-    @staticmethod
-    def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """Authenticate user by username and password"""
-        user = db.query(User).filter(User.username == username).first()
+        user = self.user_repository.get_by_username(username)
 
         if not user:
             return None
@@ -45,10 +48,9 @@ class AuthService:
 
         return user
 
-    @staticmethod
-    def login(db: Session, username: str, password: str) -> TokenResponse:
+    def login(self, username: str, password: str) -> TokenResponse:
         """Login user and return JWT token with refresh token"""
-        user = AuthService.authenticate_user(db, username, password)
+        user = self.authenticate_user(username, password)
 
         if not user:
             raise HTTPException(
@@ -61,7 +63,7 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
             )
-        AuthService._ensure_tenant_is_active(db, user)
+        self._ensure_tenant_is_active(user)
 
         # Create access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -83,20 +85,19 @@ class AuthService:
         refresh_record = PasswordReset(
             user_id=user.id, token_hash=token_hash, expires_at=expires_at
         )
-        db.add(refresh_record)
-        db.commit()
+        self.db.add(refresh_record)
+        self.db.commit()
 
         return TokenResponse(
             access_token=access_token, refresh_token=refresh_token, token_type="bearer"
         )
 
-    @staticmethod
-    def refresh_access_token(db: Session, refresh_token: str) -> TokenResponse:
+    def refresh_access_token(self, refresh_token: str) -> TokenResponse:
         """Generate new access token using refresh token"""
         # Find all non-expired refresh tokens
         now = datetime.utcnow()
         refresh_records = (
-            db.query(PasswordReset)
+            self.db.query(PasswordReset)
             .filter(PasswordReset.expires_at > now, PasswordReset.used_at.is_(None))
             .all()
         )
@@ -116,12 +117,12 @@ class AuthService:
             )
 
         # Get user
-        user = db.query(User).filter(User.id == valid_record.user_id).first()
+        user = self.user_repository.get_by_id(valid_record.user_id)
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
             )
-        AuthService._ensure_tenant_is_active(db, user)
+        self._ensure_tenant_is_active(user)
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -137,27 +138,25 @@ class AuthService:
 
         return TokenResponse(access_token=access_token, token_type="bearer")
 
-    @staticmethod
-    def logout(db: Session, user_id: int) -> None:
+    def logout(self, user_id: int) -> None:
         """Invalidate all refresh tokens for user"""
         now = datetime.utcnow()
-        db.query(PasswordReset).filter(
+        self.db.query(PasswordReset).filter(
             PasswordReset.user_id == user_id, PasswordReset.used_at.is_(None)
         ).update({"used_at": now})
-        db.commit()
+        self.db.commit()
 
-    @staticmethod
-    def register(db: Session, user_data: UserCreate) -> User:
+    def register(self, user_data: UserCreate) -> User:
         """Register a new user"""
         # Check if username already exists
-        existing_user = db.query(User).filter(User.username == user_data.username).first()
+        existing_user = self.user_repository.get_by_username(user_data.username)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
             )
 
         # Check if email already exists
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
+        existing_email = self.user_repository.get_by_email(user_data.email)
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
@@ -173,14 +172,13 @@ class AuthService:
             is_active=True,
         )
 
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
 
         return user
 
-    @staticmethod
-    def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
+    def change_password(self, user: User, old_password: str, new_password: str) -> None:
         """Change user password"""
         # Verify old password
         if not verify_password(old_password, user.hashed_password):
@@ -190,4 +188,4 @@ class AuthService:
 
         # Update password
         user.hashed_password = get_password_hash(new_password)
-        db.commit()
+        self.db.commit()

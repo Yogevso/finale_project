@@ -38,6 +38,7 @@ export default function DocumentsPage() {
       page_size: 10,
       search: search || undefined,
       status: statusFilter || undefined,
+      visibility: visibilityFilter || undefined,
     }),
     queryFn: () =>
       api.getDocuments({
@@ -45,6 +46,7 @@ export default function DocumentsPage() {
         page_size: 10,
         search: search || undefined,
         status: statusFilter || undefined,
+        visibility: visibilityFilter || undefined,
       }),
   })
 
@@ -61,8 +63,9 @@ export default function DocumentsPage() {
   })
 
   const visibilityMutation = useMutation({
-    mutationFn: ({ id, visibility }: { id: number; visibility: DocumentVisibility }) =>
-      api.updateDocument(id, { visibility }),
+    mutationFn: (
+      { id, visibility, ifMatch }: { id: number; visibility: DocumentVisibility; ifMatch: string },
+    ) => api.updateDocument(id, { visibility }, ifMatch),
     onSuccess: (_, variables) => {
       setVisibilityOverrides((prev) => {
         const next = { ...prev }
@@ -83,6 +86,9 @@ export default function DocumentsPage() {
   })
 
   const handleDelete = (id: number, title: string) => {
+    if (!isManager) {
+      return
+    }
     if (confirm(`Are you sure you want to delete "${title}"?`)) {
       deleteMutation.mutate(id)
     }
@@ -303,7 +309,11 @@ export default function DocumentsPage() {
                             onChange={(e) => {
                               const nextVisibility = e.target.value as DocumentVisibility
                               setVisibilityOverrides((prev) => ({ ...prev, [doc.id]: nextVisibility }))
-                              visibilityMutation.mutate({ id: doc.id, visibility: nextVisibility })
+                              visibilityMutation.mutate({
+                                id: doc.id,
+                                visibility: nextVisibility,
+                                ifMatch: doc.etag || String(doc.row_version || ''),
+                              })
                             }}
                             className="select-field w-40 min-w-[9.5rem]"
                           >
@@ -320,7 +330,7 @@ export default function DocumentsPage() {
                         {new Date(doc.created_at).toLocaleDateString()}
                       </td>
                       <td className="admin-table-cell text-right whitespace-nowrap">
-                        {isEditor ? (
+                        {isManager ? (
                           <button
                             onClick={() => handleDelete(doc.id, doc.title)}
                             className="text-rose-600 hover:text-rose-700 font-semibold text-xs uppercase tracking-wide"

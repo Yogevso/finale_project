@@ -5,7 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Document, User
+from app.models import User
+from app.repositories import DocumentRepository
 from app.security import get_current_active_user
 from app.services.collaboration_service import CollaborationService
 
@@ -43,13 +44,16 @@ async def get_document_state(
     This endpoint is called by the Hocuspocus server to load document state.
     Returns binary data (application/octet-stream).
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "read" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -83,13 +87,16 @@ async def save_document_state(
     This endpoint is called by the Hocuspocus server to persist document state.
     Expects binary data (application/octet-stream).
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -100,7 +107,7 @@ async def save_document_state(
     state = await request.body()
 
     # Save the state
-    success = CollaborationService.save_document_state(db, document_id, state)
+    success = collaboration_service.save_document_state_for_document(db, document_id, state)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -121,13 +128,16 @@ async def clear_document_state(
 
     This resets the document's collaboration state. Use with caution.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions - only admins and managers can clear state
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -135,7 +145,7 @@ async def clear_document_state(
         )
 
     # Clear the state
-    success = CollaborationService.clear_document_state(db, document_id)
+    success = collaboration_service.clear_document_state_for_document(db, document_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -158,13 +168,16 @@ async def get_collaboration_status(
 
     Returns information about active collaborators and document state.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -172,7 +185,7 @@ async def get_collaboration_status(
         )
 
     # Get active collaborators (would query Hocuspocus in production)
-    collaborators = CollaborationService.get_active_collaborators(document_id)
+    collaborators = collaboration_service.get_active_collaborators(document_id)
 
     return CollaborationStatusResponse(
         document_id=document_id,

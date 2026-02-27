@@ -1,13 +1,14 @@
 """Topic normalization helpers shared across write and public-read paths."""
 
-import re
 from collections.abc import Iterable, Mapping
 from typing import Optional
+
+from app.domain.value_objects import TopicSlug
 
 
 def slugify_topic(value: str) -> str:
     """Convert a topic-like label to a slug token."""
-    return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return TopicSlug.slugify(value)
 
 
 def build_topic_lookup(topics: Iterable[object]) -> dict[str, str]:
@@ -15,16 +16,18 @@ def build_topic_lookup(topics: Iterable[object]) -> dict[str, str]:
     lookup: dict[str, str] = {}
     for topic in topics:
         slug = str(getattr(topic, "slug", "") or "").strip()
-        if not slug:
+        canonical_slug = TopicSlug.from_raw(slug)
+        if canonical_slug is None:
             continue
 
-        canonical = slug
+        canonical = canonical_slug.value
+        lookup[canonical] = canonical
         lookup[slug.lower()] = canonical
 
         name = str(getattr(topic, "name", "") or "").strip()
         if name:
             lookup[name.lower()] = canonical
-            name_slug = slugify_topic(name)
+            name_slug = TopicSlug.slugify(name)
             if name_slug:
                 lookup[name_slug] = canonical
 
@@ -35,22 +38,5 @@ def normalize_topic_to_slug(
     raw_topic: Optional[str], topic_lookup: Optional[Mapping[str, str]] = None
 ) -> Optional[str]:
     """Normalize incoming topic value into canonical slug form."""
-    if raw_topic is None:
-        return None
-
-    value = raw_topic.strip()
-    if not value:
-        return None
-
-    lowered = value.lower()
-    if topic_lookup and lowered in topic_lookup:
-        return topic_lookup[lowered]
-
-    slugified = slugify_topic(value)
-    if not slugified:
-        return None
-
-    if topic_lookup and slugified in topic_lookup:
-        return topic_lookup[slugified]
-
-    return slugified
+    normalized = TopicSlug.normalize(raw_topic, topic_lookup)
+    return normalized.value if normalized else None

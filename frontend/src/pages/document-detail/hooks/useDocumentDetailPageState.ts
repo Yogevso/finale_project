@@ -84,7 +84,13 @@ export function useDocumentDetailPageState() {
   const reviewHistoryItems = reviewHistory?.items ?? []
 
   const updateMutation = useMutation({
-    mutationFn: (data: DocumentUpdate) => api.updateDocument(documentId, data),
+    mutationFn: (data: DocumentUpdate) => {
+      const ifMatch = document?.etag || (document?.row_version ? String(document.row_version) : '')
+      if (!ifMatch) {
+        throw new Error('Document is missing a concurrency token; refresh and try again.')
+      }
+      return api.updateDocument(documentId, data, ifMatch)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
       setIsEditing(false)

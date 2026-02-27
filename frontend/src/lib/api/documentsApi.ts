@@ -15,6 +15,7 @@ import type {
   VersionListResponse,
   VersionUpdate,
 } from '@/types'
+import { isFrontendFeatureEnabled } from '@/config/featureFlags'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -38,8 +39,16 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return data
     }
 
-    async updateDocument(id: number, document: DocumentUpdate): Promise<Document> {
-      const { data } = await this.client.put<Document>(`/documents/${id}`, document)
+    async updateDocument(
+      id: number,
+      document: DocumentUpdate,
+      ifMatch?: string,
+    ): Promise<Document> {
+      const headers =
+        ifMatch && isFrontendFeatureEnabled('optimisticConcurrencyHeaders')
+          ? { 'If-Match': ifMatch }
+          : undefined
+      const { data } = await this.client.put<Document>(`/documents/${id}`, document, { headers })
       return data
     }
 
@@ -133,10 +142,20 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return data
     }
 
-    async updateVersion(documentId: number, versionId: number, version: VersionUpdate): Promise<Version> {
+    async updateVersion(
+      documentId: number,
+      versionId: number,
+      version: VersionUpdate,
+      ifMatch?: string,
+    ): Promise<Version> {
+      const headers =
+        ifMatch && isFrontendFeatureEnabled('optimisticConcurrencyHeaders')
+          ? { 'If-Match': ifMatch }
+          : undefined
       const { data } = await this.client.patch<Version>(
         `/documents/${documentId}/versions/${versionId}`,
         version,
+        { headers },
       )
       return data
     }

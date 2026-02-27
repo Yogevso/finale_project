@@ -3,9 +3,8 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.dependencies.services import get_comment_service
 from app.models import User
 from app.schemas import (
     CommentCreate,
@@ -22,7 +21,7 @@ router = APIRouter()
 @router.get("/documents/{document_id}/comments", response_model=List[CommentResponse])
 def list_comments(
     document_id: int,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -31,32 +30,32 @@ def list_comments(
     Returns top-level comments with their replies.
     Private comments are only visible to admins/editors or the comment author.
     """
-    return CommentService.get_comments(db, document_id, current_user)
+    return comment_service.get_comments(document_id, current_user)
 
 
 @router.get("/documents/{document_id}/comments/stats")
 def get_comment_stats(
     document_id: int,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Get comment statistics for a document.
     """
-    return CommentService.get_comment_count(db, document_id, current_user)
+    return comment_service.get_comment_count(document_id, current_user)
 
 
 @router.get("/documents/{document_id}/comments/{comment_id}", response_model=CommentResponse)
 def get_comment(
     document_id: int,
     comment_id: int,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a specific comment with its replies.
     """
-    return CommentService.get_comment(db, document_id, comment_id, current_user)
+    return comment_service.get_comment(document_id, comment_id, current_user)
 
 
 @router.post(
@@ -67,7 +66,7 @@ def get_comment(
 def create_comment(
     document_id: int,
     comment_data: CommentCreate,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -77,7 +76,7 @@ def create_comment(
     - Use `is_private` to make a private comment (only visible to admins/editors)
     - Use `anchor_text` and `anchor_id` for inline comments on specific content
     """
-    return CommentService.create_comment(db, document_id, comment_data, current_user)
+    return comment_service.create_comment(document_id, comment_data, current_user)
 
 
 @router.patch("/documents/{document_id}/comments/{comment_id}", response_model=CommentResponse)
@@ -85,7 +84,7 @@ def update_comment(
     document_id: int,
     comment_id: int,
     comment_data: CommentUpdate,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -94,7 +93,7 @@ def update_comment(
     - Only the comment author can update content
     - Only admins/editors can resolve comments
     """
-    return CommentService.update_comment(db, document_id, comment_id, comment_data, current_user)
+    return comment_service.update_comment(document_id, comment_id, comment_data, current_user)
 
 
 @router.post(
@@ -103,15 +102,15 @@ def update_comment(
 def resolve_comment(
     document_id: int,
     comment_id: int,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Mark a comment thread as resolved.
     Only admins and editors can resolve comments.
     """
-    return CommentService.update_comment(
-        db, document_id, comment_id, CommentUpdate(is_resolved=True), current_user
+    return comment_service.update_comment(
+        document_id, comment_id, CommentUpdate(is_resolved=True), current_user
     )
 
 
@@ -119,7 +118,7 @@ def resolve_comment(
 def delete_comment(
     document_id: int,
     comment_id: int,
-    db: Session = Depends(get_db),
+    comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
@@ -127,5 +126,5 @@ def delete_comment(
 
     Only the comment author or admin can delete.
     """
-    CommentService.delete_comment(db, document_id, comment_id, current_user)
+    comment_service.delete_comment(document_id, comment_id, current_user)
     return MessageResponse(message="Comment deleted successfully")

@@ -7,12 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
 
+from app.application.commands.dependencies import get_approve_review_command_handler
+from app.application.commands.review_commands import (
+    ApproveReviewCommand,
+    ApproveReviewCommandErrorCode,
+    ApproveReviewCommandHandler,
+)
+from app.application.policies import DocumentAccessPolicy, ReviewPolicy
 from app.db import get_db
+from app.domain.aggregates import DocumentAggregate, ReviewAggregate
+from app.errors import ConflictError, PermissionDeniedError
 from app.models import (
     ActionType,
     AuditLog,
     Document,
-    DocumentStatus,
     Notification,
     NotificationType,
     ReviewRequest,
@@ -29,26 +37,27 @@ from app.schemas import (
     ReviewSubmit,
 )
 from app.security import get_current_active_user
+from app.services.permissions import Permission, has_permission
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
+review_policy = ReviewPolicy()
+document_access_policy = DocumentAccessPolicy()
 
 
 def _ensure_document_tenant_access(document: Document, user: User) -> None:
     """Enforce tenant boundary for non-system-admin users."""
-    if user.role == UserRole.SYSTEM_ADMIN:
-        return
-    if document.tenant_id != user.tenant_id:
+    if not document_access_policy.can_access_document_tenant(user, document):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
 
 def can_submit_for_review(user: User) -> bool:
     """Check if user can submit documents for review (editors+)"""
-    return user.role in [UserRole.EDITOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]
+    return review_policy.can_submit_for_review(user)
 
 
 def can_review_documents(user: User) -> bool:
     """Check if user can review/approve documents (editors+ for peer review, managers+ for final approval)"""
-    return user.role in [UserRole.EDITOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]
+    return review_policy.can_review_documents(user)
 
 
 def can_approve(user: User, review: ReviewRequest) -> bool:
@@ -57,18 +66,12 @@ def can_approve(user: User, review: ReviewRequest) -> bool:
     - Editors can peer-review (approve other editors' work)
     - Managers+ can approve anyone's work
     """
-    # Cannot approve own submission
-    if user.id == review.submitted_by:
-        return False
-
-    if user.role in [UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]:
-        return True
-
-    if user.role == UserRole.EDITOR:
-        submitter = review.submitter
-        return bool(submitter and submitter.role == UserRole.EDITOR)
-
-    return False
+    return review_policy.can_approve_review(
+        reviewer=user,
+        submitter=review.submitter,
+        has_approve_permission=has_permission(user, Permission.APPROVE_REVIEW),
+        has_peer_approve_permission=has_permission(user, Permission.APPROVE_PEER_REVIEW),
+    )
 
 
 # ========== Submit for Review ==========
@@ -91,13 +94,9 @@ async def submit_for_review(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     _ensure_document_tenant_access(document, current_user)
+    document_aggregate = DocumentAggregate(document)
 
-    # Check document status - must be draft
-    if document.status != DocumentStatus.DRAFT:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Document must be in draft status to submit for review. Current status: {document.status.value}",
-        )
+    document_aggregate.ensure_submittable_for_review()
 
     # Check for existing pending review
     existing = (
@@ -111,10 +110,7 @@ async def submit_for_review(
         .first()
     )
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This document already has a pending review",
-        )
+        raise ConflictError("This document already has a pending review")
 
     # Validate explicit version or attach latest version automatically
     version_id = data.version_id
@@ -159,7 +155,7 @@ async def submit_for_review(
     db.flush()
 
     # Update document status
-    document.status = DocumentStatus.PENDING_REVIEW
+    document_aggregate.transition_to_pending_review()
 
     # Audit event
     db.add(
@@ -338,111 +334,33 @@ async def get_review(
 async def approve_review(
     review_id: int,
     data: ReviewAction,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    approve_review_command_handler: ApproveReviewCommandHandler = Depends(
+        get_approve_review_command_handler
+    ),
 ):
     """Approve a review request"""
-    review = (
-        db.query(ReviewRequest)
-        .options(
-            joinedload(ReviewRequest.document),
-            joinedload(ReviewRequest.submitter),
+    result = approve_review_command_handler.execute(
+        ApproveReviewCommand(
+            review_id=review_id,
+            comments=data.comments,
+            current_user=current_user,
         )
-        .filter(ReviewRequest.id == review_id)
-        .first()
     )
-
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
-    _ensure_document_tenant_access(review.document, current_user)
-
-    if review.status != ReviewStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Review is not pending. Current status: {review.status.value}",
-        )
-
-    if not can_approve(current_user, review):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot approve this review (cannot approve own submission)",
-        )
-
-    # Prevent approving stale version reviews if a newer version exists
-    if review.version_id:
-        review_version = (
-            db.query(Version)
-            .filter(Version.id == review.version_id, Version.document_id == review.document_id)
-            .first()
-        )
-        if not review_version:
+    if result.is_err:
+        if result.error.code == ApproveReviewCommandErrorCode.NOT_FOUND:
+            detail = result.error.message
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Review refers to a version that no longer exists",
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
             )
-        latest_version = (
-            db.query(Version)
-            .filter(Version.document_id == review.document_id)
-            .order_by(Version.version_number.desc())
-            .first()
-        )
-        if latest_version and latest_version.id != review.version_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot approve outdated review because a newer version exists",
-            )
-        if review_version.is_published:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Version is already published",
-            )
+        if result.error.code == ApproveReviewCommandErrorCode.PERMISSION_DENIED:
+            raise PermissionDeniedError(result.error.message)
+        if result.error.code == ApproveReviewCommandErrorCode.CONFLICT:
+            raise ConflictError(result.error.message)
+        raise HTTPException(status_code=500, detail="Unexpected approve-review command error")
 
-    # Approve the review
-
-    review.status = ReviewStatus.APPROVED
-    review.reviewed_by = current_user.id
-    review.review_comments = data.comments
-    review.reviewed_at = datetime.utcnow()
-
-    # Approved is a pre-publish state; publishing is a separate step.
-    review.document.status = DocumentStatus.APPROVED
-
-    # Audit event
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            document_id=review.document_id,
-            action=ActionType.UPDATE,
-            details=f"Approved review #{review.id} for version {review.version_id or 'n/a'}",
-        )
-    )
-
-    # Notify submitter
-    notification = Notification(
-        user_id=review.submitted_by,
-        type=NotificationType.REVIEW_APPROVED,
-        title="Document approved",
-        message=f"Your document '{review.document.title}' has been approved by {current_user.full_name}",
-        link=f"/documents/{review.document_id}",
-    )
-    db.add(notification)
-
-    db.commit()
-    db.refresh(review)
-
-    # Reload with relationships
-    review = (
-        db.query(ReviewRequest)
-        .options(
-            joinedload(ReviewRequest.document),
-            joinedload(ReviewRequest.submitter),
-            joinedload(ReviewRequest.reviewer),
-        )
-        .filter(ReviewRequest.id == review.id)
-        .first()
-    )
-
-    return review
+    return result.value
 
 
 # ========== Reject Review ==========
@@ -467,27 +385,24 @@ async def reject_review(
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
     _ensure_document_tenant_access(review.document, current_user)
+    review_aggregate = ReviewAggregate(review)
+    document_aggregate = DocumentAggregate(review.document)
 
-    if review.status != ReviewStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Review is not pending. Current status: {review.status.value}",
-        )
+    review_aggregate.ensure_pending()
 
     if not can_approve(current_user, review):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="You cannot reject this review"
-        )
+        raise PermissionDeniedError("You cannot reject this review")
 
     # Reject the review
 
-    review.status = ReviewStatus.REJECTED
-    review.reviewed_by = current_user.id
-    review.review_comments = data.comments
-    review.reviewed_at = datetime.utcnow()
+    review_aggregate.reject(
+        reviewer_id=current_user.id,
+        comments=data.comments,
+        reviewed_at=datetime.utcnow(),
+    )
 
     # Return document to draft
-    review.document.status = DocumentStatus.DRAFT
+    document_aggregate.transition_to_draft()
 
     # Notify submitter
     notification = Notification(
@@ -545,24 +460,17 @@ async def cancel_review(
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
     _ensure_document_tenant_access(review.document, current_user)
+    review_aggregate = ReviewAggregate(review)
+    document_aggregate = DocumentAggregate(review.document)
 
-    if review.submitted_by != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="You can only cancel your own submissions"
-        )
-
-    if review.status != ReviewStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot cancel review with status: {review.status.value}",
-        )
+    review_aggregate.ensure_submitter(current_user.id)
+    review_aggregate.ensure_pending()
 
     # Cancel the review
-    review.status = ReviewStatus.CANCELLED
-    review.reviewed_at = datetime.utcnow()
+    review_aggregate.cancel(reviewed_at=datetime.utcnow())
 
     # Return document to draft
-    review.document.status = DocumentStatus.DRAFT
+    document_aggregate.transition_to_draft()
     db.add(
         AuditLog(
             user_id=current_user.id,

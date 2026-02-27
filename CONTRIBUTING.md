@@ -90,6 +90,22 @@ Use the PR comment triage script before requesting re-review:
 python scripts/fetch_pr_comments.py
 ```
 
+## Architecture Governance (Wave E+)
+
+For architecture-impacting changes, update governance artifacts in the same PR.
+
+- ADR workflow and template: `docs/adr/`
+- Deprecation policy and active register: `docs/deprecation-policy.md`, `docs/deprecations.md`
+- Migration playbooks: `docs/migrations/`
+- Contract versioning policy: `docs/contracts/versioning.md`
+- Data ownership and context map: `docs/context-ownership.md`, `docs/context-map/`
+- Architecture debt register: `docs/architecture-debt.md`
+
+### ADR requirement
+
+Create or update an ADR when a PR changes architecture boundaries, compatibility
+rules, or wave migration strategy. Add the ADR link in the PR template.
+
 ## Pull Request Checklist
 
 - [ ] Code follows project style guidelines
@@ -97,6 +113,8 @@ python scripts/fetch_pr_comments.py
 - [ ] Unresolved PR review comments are addressed or acknowledged
 - [ ] New features have tests
 - [ ] Documentation updated if needed
+- [ ] ADR added/updated if architecture-impacting change
+- [ ] Deprecation register updated (owner + removal target) if introducing deprecations
 - [ ] No console.log or print statements left
 - [ ] Branch is up to date with `develop`
 
