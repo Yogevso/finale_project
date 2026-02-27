@@ -1,7 +1,7 @@
 """Tests for Search API"""
 
-from datetime import datetime, timedelta
 import uuid
+from datetime import datetime, timedelta
 
 from app.models import Document, DocumentStatus, Tenant
 

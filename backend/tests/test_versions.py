@@ -1,9 +1,10 @@
 """Tests for Versions API"""
 
-from fastapi.testclient import TestClient
 import uuid
 
-from app.models import Document, DocumentStatus, Tenant
+from fastapi.testclient import TestClient
+
+from app.models import Document, DocumentStatus, Tenant, Version
 
 
 class TestVersionsAPI:
@@ -302,6 +303,33 @@ class TestVersionsAPI:
             f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
         )
         assert after_portal.status_code == 200
+
+    def test_create_version_uses_version_number_fallback_for_invalid_semver(
+        self, client: TestClient, db, admin_token: str, sample_document: dict
+    ):
+        """Malformed semantic versions should fall back to version_number.0.0 before bumping."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+
+        existing = (
+            db.query(Version)
+            .filter(Version.document_id == sample_document["id"])
+            .order_by(Version.version_number.desc())
+            .first()
+        )
+        assert existing is not None
+        existing.version_number = 3
+        existing.semantic_version = "bad-value"
+        db.commit()
+
+        response = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=headers,
+            json={"content": "Fallback semver content", "changes_summary": "fallback"},
+        )
+        assert response.status_code == 201
+        payload = response.json()
+        assert payload["version_number"] == 4
+        assert payload["semantic_version"] == "3.0.1"
 
     def test_versions_endpoints_are_tenant_scoped(
         self, client: TestClient, auth_headers: dict, db, test_user
