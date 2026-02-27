@@ -1,0 +1,192 @@
+"""Central policy objects for document/review/invitation access decisions."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from app.dependencies.tenant import TenantContext
+from app.models import Document, DocumentStatus, DocumentVisibility, User, UserRole
+
+
+class DocumentAccessPolicy:
+    """Policy object for document access and tenant-boundary checks."""
+
+    @staticmethod
+    def _role(user: Optional[User]) -> Optional[UserRole]:
+        if not user:
+            return None
+        if isinstance(user.role, UserRole):
+            return user.role
+        return UserRole(user.role)
+
+    def is_internal_user(self, user: Optional[User]) -> bool:
+        role = self._role(user)
+        if role is None:
+            return False
+        return role != UserRole.CUSTOMER
+
+    def _same_tenant_or_unscoped(self, user: User, document: Document) -> bool:
+        role = self._role(user)
+        if role == UserRole.SYSTEM_ADMIN:
+            return True
+        if document.tenant_id and user.tenant_id:
+            return document.tenant_id == user.tenant_id
+        return True
+
+    def can_access_document_tenant(self, user: Optional[User], document: Document) -> bool:
+        """Tenant-only boundary check (without permission/visibility rules)."""
+        if not user:
+            return False
+        role = self._role(user)
+        if role == UserRole.SYSTEM_ADMIN:
+            return True
+        return document.tenant_id == user.tenant_id
+
+    def can_view_document(self, user: Optional[User], document: Document) -> bool:
+        """Document read access, including anonymous access for public active docs."""
+        if document.visibility == DocumentVisibility.PUBLIC:
+            if document.status == DocumentStatus.ACTIVE:
+                return True
+            if user and self.is_internal_user(user):
+                return True
+            return False
+
+        if not user or not user.is_active:
+            return False
+
+        if document.visibility == DocumentVisibility.INTERNAL:
+            return self.is_internal_user(user)
+
+        if document.visibility == DocumentVisibility.COMPANY:
+            if self.is_internal_user(user):
+                return True
+
+            if self._role(user) == UserRole.CUSTOMER and user.tenant_id:
+                assigned_tenant_ids = [tenant.id for tenant in document.assigned_companies]
+                return user.tenant_id in assigned_tenant_ids
+            return False
+
+        return False
+
+    def can_edit_document(self, user: User, document: Document, has_edit_permission: bool) -> bool:
+        if not user or not user.is_active or not has_edit_permission:
+            return False
+        return self._same_tenant_or_unscoped(user, document)
+
+    def can_delete_document(
+        self, user: User, document: Document, has_delete_permission: bool
+    ) -> bool:
+        if not user or not user.is_active or not has_delete_permission:
+            return False
+        return self._same_tenant_or_unscoped(user, document)
+
+    def can_publish_document(
+        self, user: User, document: Document, has_publish_permission: bool
+    ) -> bool:
+        if not user or not user.is_active or not has_publish_permission:
+            return False
+        return self._same_tenant_or_unscoped(user, document)
+
+    def collaboration_tenant_boundary_allows(self, user: User, document: Document) -> bool:
+        """Stricter tenant boundary applied for collaboration endpoints."""
+        role = self._role(user)
+        if role == UserRole.SYSTEM_ADMIN:
+            return True
+        if role == UserRole.CUSTOMER:
+            return True
+        if not self.is_internal_user(user):
+            return False
+        if document.tenant_id is None:
+            return True
+        return user.tenant_id == document.tenant_id
+
+
+class ReviewPolicy:
+    """Policy object for review submission/approval permissions."""
+
+    @staticmethod
+    def _role(user: Optional[User]) -> Optional[UserRole]:
+        if not user:
+            return None
+        if isinstance(user.role, UserRole):
+            return user.role
+        return UserRole(user.role)
+
+    def can_submit_for_review(self, user: Optional[User]) -> bool:
+        role = self._role(user)
+        return role in {
+            UserRole.EDITOR,
+            UserRole.MANAGER,
+            UserRole.ADMIN,
+            UserRole.SYSTEM_ADMIN,
+        }
+
+    def can_review_documents(self, user: Optional[User]) -> bool:
+        return self.can_submit_for_review(user)
+
+    def can_approve_review(
+        self,
+        reviewer: Optional[User],
+        submitter: Optional[User],
+        *,
+        has_approve_permission: bool,
+        has_peer_approve_permission: bool,
+    ) -> bool:
+        if not reviewer or not reviewer.is_active:
+            return False
+
+        if submitter and reviewer.id == submitter.id:
+            return False
+
+        if has_approve_permission:
+            return True
+
+        if has_peer_approve_permission and submitter:
+            return self._role(submitter) == UserRole.EDITOR
+
+        return False
+
+
+class InvitationPolicy:
+    """Policy object for invitation role and tenant assignment decisions."""
+
+    @staticmethod
+    def can_invite_role(inviter_role: UserRole, target_role: UserRole) -> bool:
+        if inviter_role == UserRole.SYSTEM_ADMIN:
+            return True
+        if inviter_role == UserRole.ADMIN:
+            return target_role != UserRole.SYSTEM_ADMIN
+        if inviter_role == UserRole.MANAGER:
+            return target_role in [UserRole.EDITOR, UserRole.VIEWER, UserRole.CUSTOMER]
+        return False
+
+    @staticmethod
+    def can_manage_invitations(user: Optional[User]) -> bool:
+        if not user or not user.is_active:
+            return False
+        role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
+        return role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]
+
+    @staticmethod
+    def resolve_invitation_tenant_id(
+        requested_tenant_id: Optional[int],
+        tenant_ctx: TenantContext,
+    ) -> Optional[int]:
+        if tenant_ctx.is_system_admin:
+            return requested_tenant_id
+
+        if requested_tenant_id is None:
+            return tenant_ctx.tenant_id
+
+        if requested_tenant_id != tenant_ctx.tenant_id:
+            return None
+        return requested_tenant_id
+
+    @staticmethod
+    def can_access_invitation_tenant(
+        invitation_tenant_id: Optional[int],
+        tenant_ctx: TenantContext,
+    ) -> bool:
+        if tenant_ctx.is_system_admin:
+            return True
+        return invitation_tenant_id == tenant_ctx.tenant_id

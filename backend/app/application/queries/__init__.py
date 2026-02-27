@@ -1,0 +1,73 @@
+"""Application query handlers and dependency providers."""
+
+from app.application.queries.analytics_queries import (
+    AnalyticsOverviewQuery,
+    AnalyticsQueryHandler,
+    ContentAnalyticsQuery,
+    EngagementAnalyticsQuery,
+    FeedbackAnalyticsQuery,
+    RecentActivityQuery,
+    TenantAnalyticsQuery,
+    TopDocumentsQuery,
+    UserAnalyticsQuery,
+)
+from app.application.queries.document_queries import (
+    GetDocumentQuery,
+    GetDocumentQueryError,
+    GetDocumentQueryErrorCode,
+    GetDocumentQueryHandler,
+    ListDocumentsQuery,
+    ListDocumentsQueryHandler,
+    ListDocumentsQueryResult,
+)
+from app.application.queries.portal_queries import (
+    GetPortalAttachmentQuery,
+    GetPortalDocumentQuery,
+    ListPortalCategoriesQuery,
+    ListPortalDocumentsQuery,
+    PortalDashboardStatsQuery,
+    PortalDocumentsQueryHandler,
+    SearchPortalDocumentsQuery,
+)
+from app.application.queries.search_queries import (
+    ListSavedSearchesQuery,
+    SearchAutocompleteQuery,
+    SearchDocumentReadModel,
+    SearchDocumentsQuery,
+    SearchDocumentsQueryResult,
+    SearchFacetsQuery,
+    SearchQueryHandler,
+)
+
+__all__ = [
+    "AnalyticsOverviewQuery",
+    "AnalyticsQueryHandler",
+    "ContentAnalyticsQuery",
+    "EngagementAnalyticsQuery",
+    "FeedbackAnalyticsQuery",
+    "GetDocumentQuery",
+    "GetDocumentQueryError",
+    "GetDocumentQueryErrorCode",
+    "GetDocumentQueryHandler",
+    "ListDocumentsQuery",
+    "ListDocumentsQueryHandler",
+    "ListDocumentsQueryResult",
+    "ListPortalCategoriesQuery",
+    "ListPortalDocumentsQuery",
+    "ListSavedSearchesQuery",
+    "PortalDashboardStatsQuery",
+    "PortalDocumentsQueryHandler",
+    "RecentActivityQuery",
+    "SearchAutocompleteQuery",
+    "SearchDocumentReadModel",
+    "SearchDocumentsQuery",
+    "SearchDocumentsQueryResult",
+    "SearchFacetsQuery",
+    "SearchPortalDocumentsQuery",
+    "SearchQueryHandler",
+    "GetPortalDocumentQuery",
+    "GetPortalAttachmentQuery",
+    "TenantAnalyticsQuery",
+    "TopDocumentsQuery",
+    "UserAnalyticsQuery",
+]
