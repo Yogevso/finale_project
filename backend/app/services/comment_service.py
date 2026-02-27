@@ -4,18 +4,33 @@ import logging
 from typing import List, Optional, Set
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Attachment, Comment, Document, User, UserRole, Version
+from app.models import Attachment, Comment, Document, User, UserRole
+from app.repositories import (
+    CommentRepository,
+    DocumentRepository,
+    UserRepository,
+    VersionRepository,
+)
 from app.schemas import CommentAuthor, CommentCreate, CommentResponse, CommentUpdate
+from app.services.base_service import SessionService
+from app.services.uow import UnitOfWork
 from app.utils.async_tasks import run_async_task
 
 logger = logging.getLogger(__name__)
 
 
-class CommentService:
+class CommentService(SessionService):
     """Service for managing document comments with visibility controls"""
+
+    def __init__(self, db: Session):
+        super().__init__(db)
+        self.document_repository = DocumentRepository(db)
+        self.comment_repository = CommentRepository(db)
+        self.version_repository = VersionRepository(db)
+        self.user_repository = UserRepository(db)
 
     @staticmethod
     def is_internal_staff(user: User) -> bool:
@@ -41,16 +56,14 @@ class CommentService:
         contributors: Set[int] = set()
 
         # Get document creator
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = DocumentRepository(db).get_by_id(document_id)
         if document:
             contributors.add(document.created_by)
 
         # Get version creators
-        versions = (
-            db.query(Version.created_by).filter(Version.document_id == document_id).distinct().all()
-        )
-        for (user_id,) in versions:
-            contributors.add(user_id)
+        versions = VersionRepository(db).list_for_document(document_id)
+        for version in versions:
+            contributors.add(version.created_by)
 
         # Get attachment uploaders
         attachments = (
@@ -63,10 +76,8 @@ class CommentService:
             contributors.add(user_id)
 
         # Get commenters (they've also engaged with the document)
-        comments = (
-            db.query(Comment.user_id).filter(Comment.document_id == document_id).distinct().all()
-        )
-        for (user_id,) in comments:
+        comments = CommentRepository(db).list_distinct_user_ids_for_document(document_id)
+        for user_id in comments:
             contributors.add(user_id)
 
         return contributors
@@ -141,10 +152,7 @@ class CommentService:
             reply_count=len(reply_payload),
         )
 
-    @staticmethod
-    def get_comments(
-        db: Session, document_id: int, current_user: User, include_private: bool = True
-    ) -> List[CommentResponse]:
+    def get_comments(self, document_id: int, current_user: User) -> List[CommentResponse]:
         """
         Get comments for a document with contributor-based visibility filtering.
 
@@ -154,33 +162,24 @@ class CommentService:
         - System admins
         """
         # Check document exists
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = self.document_repository.get_by_id(document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         # Get all contributors to this document for visibility checks
-        contributors = CommentService.get_document_contributors(db, document_id)
+        contributors = CommentService.get_document_contributors(self.db, document_id)
 
         # Base query - get all top-level comments
-        all_comments = (
-            db.query(Comment)
-            .filter(
-                Comment.document_id == document_id,
-                Comment.parent_id == None,  # noqa: E711
-            )
-            .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
-            .order_by(Comment.created_at.desc())
-            .all()
-        )
+        all_comments = self.comment_repository.list_top_level_with_replies(document_id)
 
         # Filter comments based on visibility rules
         visible_comments = []
         for comment in all_comments:
-            if CommentService.can_view_comment(db, comment, current_user, contributors):
+            if CommentService.can_view_comment(self.db, comment, current_user, contributors):
                 visible_replies = [
                     r
                     for r in comment.replies
-                    if CommentService.can_view_comment(db, r, current_user, contributors)
+                    if CommentService.can_view_comment(self.db, r, current_user, contributors)
                 ]
                 visible_comments.append(
                     CommentService._to_comment_response(comment, visible_replies=visible_replies)
@@ -188,24 +187,22 @@ class CommentService:
 
         return visible_comments
 
-    @staticmethod
     def get_comment(
-        db: Session, document_id: int, comment_id: int, current_user: User
+        self, document_id: int, comment_id: int, current_user: User
     ) -> CommentResponse:
         """Get a specific comment with its replies"""
-        comment = (
-            db.query(Comment)
-            .filter(Comment.id == comment_id, Comment.document_id == document_id)
-            .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
-            .first()
+        comment = self.comment_repository.get_by_id_for_document(
+            comment_id,
+            document_id,
+            include_replies=True,
         )
 
         if not comment:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
 
         # Check visibility using new contributor-based rules
-        contributors = CommentService.get_document_contributors(db, document_id)
-        if not CommentService.can_view_comment(db, comment, current_user, contributors):
+        contributors = CommentService.get_document_contributors(self.db, document_id)
+        if not CommentService.can_view_comment(self.db, comment, current_user, contributors):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to view this comment",
@@ -214,17 +211,16 @@ class CommentService:
         visible_replies = [
             r
             for r in comment.replies
-            if CommentService.can_view_comment(db, r, current_user, contributors)
+            if CommentService.can_view_comment(self.db, r, current_user, contributors)
         ]
         return CommentService._to_comment_response(comment, visible_replies=visible_replies)
 
-    @staticmethod
     def create_comment(
-        db: Session, document_id: int, comment_data: CommentCreate, current_user: User
+        self, document_id: int, comment_data: CommentCreate, current_user: User
     ) -> Comment:
         """Create a new comment with visibility and anchor support"""
         # Check document exists
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = self.document_repository.get_by_id(document_id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
@@ -234,9 +230,7 @@ class CommentService:
         parent_comment = None
         if parent_id:
             parent_comment = (
-                db.query(Comment)
-                .filter(Comment.id == parent_id, Comment.document_id == document_id)
-                .first()
+                self.comment_repository.get_by_id_for_document(parent_id, document_id)
             )
             if not parent_comment:
                 raise HTTPException(
@@ -254,24 +248,23 @@ class CommentService:
             anchor_id=comment_data.anchor_id,
         )
 
-        db.add(comment)
-        db.commit()
-        db.refresh(comment)
+        with UnitOfWork(self.db) as uow:
+            self.db.add(comment)
+            uow.flush()
+
+        self.db.refresh(comment)
 
         # Load user relationship
-        db.refresh(comment, ["user"])
+        self.db.refresh(comment, ["user"])
 
         # Send notifications
-        CommentService._send_comment_notifications(
-            db, document, comment, current_user, parent_comment
-        )
+        self._send_comment_notifications(document, comment, current_user, parent_comment)
 
         comment.reply_count = 0
         return comment
 
-    @staticmethod
     def _send_comment_notifications(
-        db: Session,
+        self,
         document: Document,
         comment: Comment,
         current_user: User,
@@ -288,7 +281,7 @@ class CommentService:
 
             # If this is a reply, notify the parent comment author
             if parent_comment and parent_comment.user_id != current_user.id:
-                parent_author = db.query(User).filter(User.id == parent_comment.user_id).first()
+                parent_author = self.user_repository.get_by_id(parent_comment.user_id)
                 if parent_author and parent_author.email:
                     run_async_task(
                         email_service.send_comment_reply(
@@ -309,7 +302,7 @@ class CommentService:
                 and document.created_by != current_user.id
                 and document.created_by not in notified_users
             ):
-                author = db.query(User).filter(User.id == document.created_by).first()
+                author = self.user_repository.get_by_id(document.created_by)
                 if author and author.email:
                     run_async_task(
                         email_service.send_new_comment(
@@ -325,22 +318,15 @@ class CommentService:
 
             # For private comments or inline comments, notify all admins/editors
             if comment.is_private or comment.anchor_text:
-                admins = (
-                    db.query(User)
-                    .filter(
-                        User.role.in_(
-                            [
-                                UserRole.SYSTEM_ADMIN,
-                                UserRole.ADMIN,
-                                UserRole.MANAGER,
-                                UserRole.EDITOR,
-                            ]
-                        ),
-                        User.id != current_user.id,
-                        User.id.notin_(notified_users),
-                        User.is_active == True,  # noqa: E712
-                    )
-                    .all()
+                admins = self.user_repository.list_active_by_roles(
+                    [
+                        UserRole.SYSTEM_ADMIN,
+                        UserRole.ADMIN,
+                        UserRole.MANAGER,
+                        UserRole.EDITOR,
+                    ],
+                    exclude_user_id=current_user.id,
+                    exclude_user_ids=notified_users,
                 )
 
                 for admin in admins:
@@ -361,20 +347,18 @@ class CommentService:
             # Don't fail comment creation if email fails
             logger.warning(f"Failed to send comment notification: {e}")
 
-    @staticmethod
     def update_comment(
-        db: Session,
+        self,
         document_id: int,
         comment_id: int,
         comment_data: CommentUpdate,
         current_user: User,
     ) -> Comment:
         """Update a comment"""
-        comment = (
-            db.query(Comment)
-            .filter(Comment.id == comment_id, Comment.document_id == document_id)
-            .options(joinedload(Comment.user))
-            .first()
+        comment = self.comment_repository.get_by_id_for_document(
+            comment_id,
+            document_id,
+            include_replies=True,
         )
 
         if not comment:
@@ -390,37 +374,32 @@ class CommentService:
         is_author = comment.user_id == current_user.id
 
         # Only author can update content
-        if comment_data.content is not None:
-            if not is_author and not is_admin:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only the comment author can update the content",
-                )
-            comment.content = comment_data.content
+        with UnitOfWork(self.db):
+            if comment_data.content is not None:
+                if not is_author and not is_admin:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only the comment author can update the content",
+                    )
+                comment.content = comment_data.content
 
-        # Only admins/editors/managers can resolve comments
-        if comment_data.is_resolved is not None:
-            if not is_admin:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only admins, managers and editors can resolve comments",
-                )
-            comment.is_resolved = comment_data.is_resolved
+            # Only admins/editors/managers can resolve comments
+            if comment_data.is_resolved is not None:
+                if not is_admin:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Only admins, managers and editors can resolve comments",
+                    )
+                comment.is_resolved = comment_data.is_resolved
 
-        db.commit()
-        db.refresh(comment)
+        self.db.refresh(comment)
 
         comment.reply_count = len(comment.replies) if comment.replies else 0
         return comment
 
-    @staticmethod
-    def delete_comment(db: Session, document_id: int, comment_id: int, current_user: User) -> None:
+    def delete_comment(self, document_id: int, comment_id: int, current_user: User) -> None:
         """Delete a comment and its replies"""
-        comment = (
-            db.query(Comment)
-            .filter(Comment.id == comment_id, Comment.document_id == document_id)
-            .first()
-        )
+        comment = self.comment_repository.get_by_id_for_document(comment_id, document_id)
 
         if not comment:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
@@ -433,14 +412,13 @@ class CommentService:
                 detail="Only the comment author, admin or manager can delete this comment",
             )
 
-        # Delete replies first
-        db.query(Comment).filter(Comment.parent_id == comment_id).delete()
-        db.delete(comment)
-        db.commit()
+        with UnitOfWork(self.db):
+            # Delete replies first
+            self.comment_repository.delete_replies_for_parent(comment_id)
+            self.db.delete(comment)
 
-    @staticmethod
     def get_comment_count(
-        db: Session, document_id: int, current_user: Optional[User] = None
+        self, document_id: int, current_user: Optional[User] = None
     ) -> dict:
         """
         Get comment counts for a document.
@@ -452,15 +430,15 @@ class CommentService:
             return {"total": 0, "threads": 0, "private": 0, "unresolved": 0}
 
         # Get contributors for visibility checks
-        contributors = CommentService.get_document_contributors(db, document_id)
+        contributors = CommentService.get_document_contributors(self.db, document_id)
 
         # Get all comments and filter by visibility
-        all_comments = db.query(Comment).filter(Comment.document_id == document_id).all()
+        all_comments = self.comment_repository.list_for_document(document_id)
 
         visible_comments = [
             c
             for c in all_comments
-            if CommentService.can_view_comment(db, c, current_user, contributors)
+            if CommentService.can_view_comment(self.db, c, current_user, contributors)
         ]
 
         # Calculate counts from visible comments

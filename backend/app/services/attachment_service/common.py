@@ -5,12 +5,13 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator, List, Optional
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.domain.value_objects import SemanticVersion
 from app.models import Attachment, AttachmentArtifact, Document, User, UserRole
 from app.services.permissions import (
     Permission,
@@ -103,20 +104,11 @@ class AttachmentServiceCommonMixin:
         upload_dir.mkdir(parents=True, exist_ok=True)
         return upload_dir
 
-    def _parse_semver(
-        raw_value: Optional[str], fallback_version_number: int
-    ) -> Tuple[int, int, int]:
-        if raw_value:
-            parts = raw_value.strip().split(".")
-            if len(parts) == 3 and all(part.isdigit() for part in parts):
-                return int(parts[0]), int(parts[1]), int(parts[2])
-        base = fallback_version_number if fallback_version_number > 0 else 1
-        return base, 0, 0
-
     @staticmethod
     def _next_patch_semver(raw_value: Optional[str], fallback_version_number: int) -> str:
-        major, minor, patch = AttachmentService._parse_semver(raw_value, fallback_version_number)
-        return f"{major}.{minor}.{patch + 1}"
+        return str(
+            SemanticVersion.from_raw(raw_value, fallback_version_number).bump_patch()
+        )
 
     @staticmethod
     def _get_artifact_record(

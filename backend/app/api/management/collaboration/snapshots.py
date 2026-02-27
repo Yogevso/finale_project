@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Document, SnapshotType, User
+from app.models import SnapshotType, User
+from app.repositories import DocumentRepository, UserRepository
 from app.security import get_current_active_user
 from app.services.collaboration_service import CollaborationService
 from app.services.snapshot_service import SnapshotService
@@ -70,8 +71,8 @@ def _batch_snapshot_creator_usernames(
     creator_ids = {snapshot.created_by for snapshot in snapshots if snapshot.created_by}
     if not creator_ids:
         return {}
-    rows = db.query(User.id, User.username).filter(User.id.in_(creator_ids)).all()
-    return {row[0]: row[1] for row in rows}
+    users = UserRepository(db).list_by_ids(list(creator_ids))
+    return {user.id: user.username for user in users}
 
 
 @router.post("/collaboration/documents/{document_id}/snapshots", response_model=SnapshotResponse)
@@ -87,13 +88,16 @@ async def create_snapshot(
     Snapshots are point-in-time saves during collaboration.
     They are NOT the same as Versions (which are for releases).
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -147,13 +151,16 @@ async def list_snapshots(
     """
     List all snapshots for a document.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -211,13 +218,17 @@ async def get_snapshot(
     """
     Get details of a specific snapshot.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+    user_repository = UserRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -231,7 +242,7 @@ async def get_snapshot(
 
     username = None
     if snapshot.created_by:
-        user = db.query(User).filter(User.id == snapshot.created_by).first()
+        user = user_repository.get_by_id(snapshot.created_by)
         username = user.username if user else None
 
     return SnapshotResponse(
@@ -264,13 +275,16 @@ async def restore_snapshot(
     This will create a backup snapshot of the current state before restoring.
     Active collaborators will need to refresh to see the restored content.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions - only users with write access can restore
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -317,13 +331,17 @@ async def update_snapshot(
     """
     Update snapshot metadata (name, description, pinned status).
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+    user_repository = UserRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -346,7 +364,7 @@ async def update_snapshot(
 
     username = None
     if updated_snapshot.created_by:
-        user = db.query(User).filter(User.id == updated_snapshot.created_by).first()
+        user = user_repository.get_by_id(updated_snapshot.created_by)
         username = user.username if user else None
 
     return SnapshotResponse(
@@ -375,13 +393,16 @@ async def delete_snapshot(
     """
     Delete a snapshot.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if "write" not in permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -416,8 +437,10 @@ async def create_auto_snapshot(
     This endpoint is called periodically by the frontend during collaboration.
     Returns whether a snapshot was created.
     """
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 

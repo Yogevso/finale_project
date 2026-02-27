@@ -6,9 +6,27 @@ for the document portal system.
 """
 
 from enum import Enum
-from typing import Optional, Set
+from typing import Optional, Sequence, Set
 
-from app.models import Document, DocumentVisibility, User, UserRole
+from app.application.policies import (
+    DocumentAccessPolicy,
+    InvitationPolicy,
+    ReviewPolicy,
+)
+from app.domain.capabilities import (
+    AnyPermissionCapability,
+    CanAssignCompanies,
+    CanPublish,
+    CustomerUserCapability,
+    DocumentAccessCapability,
+    InternalUserCapability,
+    ManageUserCapability,
+    PermissionCapability,
+    ReviewApprovalCapability,
+    RoleCapability,
+)
+from app.models import Document, User, UserRole
+from app.policy import AuthorizationDecision, PolicyDecisionPoint
 
 
 class Permission(str, Enum):
@@ -144,6 +162,9 @@ ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
 
 # Dynamic RBAC policies (published by CMS/ACL)
 _DYNAMIC_ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {}
+_DOCUMENT_ACCESS_POLICY = DocumentAccessPolicy()
+_REVIEW_POLICY = ReviewPolicy()
+_INVITATION_POLICY = InvitationPolicy()
 
 
 def set_dynamic_role_permissions(role_permissions: dict[UserRole, Set[Permission]]) -> None:
@@ -165,6 +186,201 @@ def _effective_permissions(role: UserRole) -> Set[Permission]:
     return ROLE_PERMISSIONS.get(role, set())
 
 
+_PDP = PolicyDecisionPoint(
+    document_policy=_DOCUMENT_ACCESS_POLICY,
+    review_policy=_REVIEW_POLICY,
+    invitation_policy=_INVITATION_POLICY,
+    permission_resolver=_effective_permissions,
+)
+
+
+def _permission_capability_name(permission: Permission) -> str:
+    return "Can" + "".join(part.capitalize() for part in permission.value.split("_"))
+
+
+def _build_permission_capability(permission: Permission) -> PermissionCapability:
+    if permission == Permission.PUBLISH_DOCUMENT:
+        return CanPublish(permission)
+    if permission == Permission.ASSIGN_COMPANIES:
+        return CanAssignCompanies(permission)
+    return PermissionCapability(
+        name=_permission_capability_name(permission),
+        permission=permission,
+    )
+
+
+_PERMISSION_CAPABILITIES: dict[Permission, PermissionCapability] = {
+    permission: _build_permission_capability(permission)
+    for permission in Permission
+}
+
+
+def _with_capability_metadata(
+    decision: AuthorizationDecision, capability_name: str
+) -> AuthorizationDecision:
+    metadata = dict(decision.metadata)
+    metadata.setdefault("capability", capability_name)
+    return AuthorizationDecision(
+        allowed=decision.allowed,
+        action=decision.action,
+        reason_code=decision.reason_code,
+        metadata=metadata,
+    )
+
+
+def resolve_permission_capability(permission: Permission) -> PermissionCapability:
+    """Resolve a permission to a reusable capability object."""
+    return _PERMISSION_CAPABILITIES[permission]
+
+
+def evaluate_permission_capability(
+    user: Optional[User], capability: PermissionCapability
+) -> AuthorizationDecision:
+    """Evaluate a single-permission capability."""
+    decision = _PDP.permission(user, capability.permission)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def get_policy_decision_point() -> PolicyDecisionPoint:
+    """Get the shared policy decision point instance."""
+    return _PDP
+
+
+def evaluate_permission(user: Optional[User], permission: Permission) -> AuthorizationDecision:
+    """Return structured permission decision for user/permission pair."""
+    return evaluate_permission_capability(user, resolve_permission_capability(permission))
+
+
+def evaluate_any_permission(
+    user: Optional[User], permissions: Sequence[Permission]
+) -> AuthorizationDecision:
+    """Return structured decision for "any of these permissions" checks."""
+    capability = AnyPermissionCapability(
+        name="CanAnyPermission",
+        permissions=tuple(permissions),
+    )
+    decision = _PDP.any_permission(user, capability.permissions)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_role_membership(user: Optional[User], roles: Sequence[UserRole]) -> AuthorizationDecision:
+    """Return structured decision for role membership checks."""
+    capability = RoleCapability(
+        name="CanMatchRoleMembership",
+        roles=tuple(roles),
+    )
+    decision = _PDP.role_membership(user, capability.roles)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_internal_user(user: Optional[User]) -> AuthorizationDecision:
+    """Return structured decision for internal-user gate checks."""
+    capability = InternalUserCapability()
+    decision = _PDP.internal_user(user)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_customer(user: Optional[User]) -> AuthorizationDecision:
+    """Return structured decision for customer-only gate checks."""
+    capability = CustomerUserCapability()
+    decision = _PDP.customer_user(user)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_admin_or_above(user: Optional[User]) -> AuthorizationDecision:
+    """Return structured decision for admin-or-above checks."""
+    capability = RoleCapability(
+        name="CanAdminOrAbove",
+        roles=(UserRole.SYSTEM_ADMIN, UserRole.ADMIN),
+    )
+    decision = _PDP.role_membership(user, capability.roles)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_manager_or_above(user: Optional[User]) -> AuthorizationDecision:
+    """Return structured decision for manager-or-above checks."""
+    capability = RoleCapability(
+        name="CanManagerOrAbove",
+        roles=(UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER),
+    )
+    decision = _PDP.role_membership(user, capability.roles)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_editor_or_above(user: Optional[User]) -> AuthorizationDecision:
+    """Return structured decision for editor-or-above checks."""
+    capability = RoleCapability(
+        name="CanEditorOrAbove",
+        roles=(UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR),
+    )
+    decision = _PDP.role_membership(user, capability.roles)
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_document_access(
+    user: Optional[User], document: Optional[Document], access_type: str
+) -> AuthorizationDecision:
+    """Return structured decision for document view/edit/delete/publish gates."""
+    normalized_access_type = (
+        access_type if access_type in {"view", "edit", "delete", "publish"} else "view"
+    )
+    capability_name = {
+        "view": "CanViewDocument",
+        "edit": "CanEditDocument",
+        "delete": "CanDeleteDocument",
+        "publish": "CanPublishDocument",
+    }[normalized_access_type]
+    capability = DocumentAccessCapability(
+        name=capability_name,
+        access_type=access_type,
+        edit_permission=Permission.EDIT_DOCUMENT,
+        delete_permission=Permission.DELETE_DOCUMENT,
+        publish_permission=Permission.PUBLISH_DOCUMENT,
+    )
+    decision = _PDP.document_access(
+        user,
+        document,
+        access_type=capability.access_type,
+        edit_permission=capability.edit_permission,
+        delete_permission=capability.delete_permission,
+        publish_permission=capability.publish_permission,
+    )
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_review_approval(
+    user: Optional[User], submitter: Optional[User]
+) -> AuthorizationDecision:
+    """Return structured decision for review-approval checks."""
+    capability = ReviewApprovalCapability(
+        name="CanApproveReview",
+        approve_permission=Permission.APPROVE_REVIEW,
+        peer_approve_permission=Permission.APPROVE_PEER_REVIEW,
+    )
+    decision = _PDP.review_approval(
+        reviewer=user,
+        submitter=submitter,
+        approve_permission=capability.approve_permission,
+        peer_approve_permission=capability.peer_approve_permission,
+    )
+    return _with_capability_metadata(decision, capability.name)
+
+
+def evaluate_manage_user(
+    current_user: Optional[User],
+    target_user: Optional[User] = None,
+    target_role: Optional[UserRole] = None,
+) -> AuthorizationDecision:
+    """Return structured decision for user-management checks."""
+    capability = ManageUserCapability()
+    decision = _PDP.manage_user(
+        current_user,
+        target_user=target_user,
+        target_role=target_role,
+    )
+    return _with_capability_metadata(decision, capability.name)
+
+
 def has_permission(user: User, permission: Permission) -> bool:
     """
     Check if a user has a specific permission.
@@ -176,11 +392,7 @@ def has_permission(user: User, permission: Permission) -> bool:
     Returns:
         True if user has the permission, False otherwise
     """
-    if not user or not user.is_active:
-        return False
-
-    user_permissions = _effective_permissions(user.role)
-    return permission in user_permissions
+    return evaluate_permission(user, permission).allowed
 
 
 def get_user_permissions(user: User) -> Set[Permission]:
@@ -209,10 +421,7 @@ def is_internal_user(user: User) -> bool:
     Returns:
         True if user is internal staff, False if customer or invalid
     """
-    if not user:
-        return False
-
-    return user.role != UserRole.CUSTOMER
+    return evaluate_internal_user(user).allowed
 
 
 def is_admin_or_above(user: User) -> bool:
@@ -225,10 +434,7 @@ def is_admin_or_above(user: User) -> bool:
     Returns:
         True if user is admin or system_admin
     """
-    if not user:
-        return False
-
-    return user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN)
+    return evaluate_admin_or_above(user).allowed
 
 
 def is_manager_or_above(user: User) -> bool:
@@ -241,10 +447,7 @@ def is_manager_or_above(user: User) -> bool:
     Returns:
         True if user is manager or above
     """
-    if not user:
-        return False
-
-    return user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER)
+    return evaluate_manager_or_above(user).allowed
 
 
 def is_editor_or_above(user: User) -> bool:
@@ -257,10 +460,7 @@ def is_editor_or_above(user: User) -> bool:
     Returns:
         True if user is editor or above
     """
-    if not user:
-        return False
-
-    return user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR)
+    return evaluate_editor_or_above(user).allowed
 
 
 def can_view_document(user: Optional[User], document: Document) -> bool:
@@ -279,46 +479,7 @@ def can_view_document(user: Optional[User], document: Document) -> bool:
     Returns:
         True if user can view the document
     """
-    # PUBLIC documents can be viewed by anyone
-    if document.visibility == DocumentVisibility.PUBLIC:
-        # But document must also be ACTIVE (published)
-        from app.models import DocumentStatus
-
-        if document.status == DocumentStatus.ACTIVE:
-            return True
-        # If not active, only internal users can see drafts
-        if user and is_internal_user(user):
-            return True
-        return False
-
-    # For INTERNAL and COMPANY, user must be logged in
-    if not user:
-        return False
-
-    # Check if user is active
-    if not user.is_active:
-        return False
-
-    # INTERNAL documents: only internal staff
-    if document.visibility == DocumentVisibility.INTERNAL:
-        return is_internal_user(user)
-
-    # COMPANY documents: internal staff OR customers from assigned companies
-    if document.visibility == DocumentVisibility.COMPANY:
-        # Internal users can always view company docs
-        if is_internal_user(user):
-            return True
-
-        # Customers can view if their company is assigned
-        if user.role == UserRole.CUSTOMER and user.tenant_id:
-            # Check if user's tenant is in assigned companies
-            assigned_tenant_ids = [t.id for t in document.assigned_companies]
-            return user.tenant_id in assigned_tenant_ids
-
-        return False
-
-    # Default deny
-    return False
+    return evaluate_document_access(user, document, "view").allowed
 
 
 def can_edit_document(user: User, document: Document) -> bool:
@@ -332,23 +493,7 @@ def can_edit_document(user: User, document: Document) -> bool:
     Returns:
         True if user can edit the document
     """
-    if not user or not user.is_active:
-        return False
-
-    # Must have edit permission
-    if not has_permission(user, Permission.EDIT_DOCUMENT):
-        return False
-
-    # For multi-tenant: check if user belongs to same tenant or is super admin
-    if user.role == UserRole.SYSTEM_ADMIN:
-        return True  # System admin can edit any document
-
-    # Other users can only edit documents in their tenant
-    if document.tenant_id and user.tenant_id:
-        return document.tenant_id == user.tenant_id
-
-    # If no tenant restriction, allow edit
-    return True
+    return evaluate_document_access(user, document, "edit").allowed
 
 
 def can_delete_document(user: User, document: Document) -> bool:
@@ -362,21 +507,7 @@ def can_delete_document(user: User, document: Document) -> bool:
     Returns:
         True if user can delete the document
     """
-    if not user or not user.is_active:
-        return False
-
-    # Must have delete permission (admin, manager, or above)
-    if not has_permission(user, Permission.DELETE_DOCUMENT):
-        return False
-
-    # For multi-tenant: check tenant restriction
-    if user.role == UserRole.SYSTEM_ADMIN:
-        return True  # System admin can delete any document
-
-    if document.tenant_id and user.tenant_id:
-        return document.tenant_id == user.tenant_id
-
-    return True
+    return evaluate_document_access(user, document, "delete").allowed
 
 
 def can_publish_document(user: User, document: Document) -> bool:
@@ -390,21 +521,7 @@ def can_publish_document(user: User, document: Document) -> bool:
     Returns:
         True if user can publish the document
     """
-    if not user or not user.is_active:
-        return False
-
-    # Must have publish permission
-    if not has_permission(user, Permission.PUBLISH_DOCUMENT):
-        return False
-
-    # Tenant check
-    if user.role == UserRole.SYSTEM_ADMIN:
-        return True
-
-    if document.tenant_id and user.tenant_id:
-        return document.tenant_id == user.tenant_id
-
-    return True
+    return evaluate_document_access(user, document, "publish").allowed
 
 
 def can_review_document(user: User, document: Document, submitter: User) -> bool:
@@ -424,24 +541,22 @@ def can_review_document(user: User, document: Document, submitter: User) -> bool
     Returns:
         True if user can review the document
     """
-    if not user or not user.is_active:
-        return False
+    return evaluate_review_approval(user, submitter).allowed
 
-    # Cannot review own submission
-    if user.id == submitter.id:
-        return False
 
-    # Managers and above can review anyone
-    if has_permission(user, Permission.APPROVE_REVIEW):
-        return True
+def get_document_access_policy() -> DocumentAccessPolicy:
+    """Get the shared document access policy instance."""
+    return _DOCUMENT_ACCESS_POLICY
 
-    # Editors can peer-review other editors
-    if has_permission(user, Permission.APPROVE_PEER_REVIEW):
-        # Only if submitter is also an editor (not manager/admin)
-        if submitter.role == UserRole.EDITOR:
-            return True
 
-    return False
+def get_review_policy() -> ReviewPolicy:
+    """Get the shared review policy instance."""
+    return _REVIEW_POLICY
+
+
+def get_invitation_policy() -> InvitationPolicy:
+    """Get the shared invitation policy instance."""
+    return _INVITATION_POLICY
 
 
 def can_manage_user(
@@ -463,24 +578,4 @@ def can_manage_user(
     Returns:
         True if current_user can manage the target
     """
-    if not current_user or not current_user.is_active:
-        return False
-
-    role_to_check = target_role if target_role else (target_user.role if target_user else None)
-
-    if current_user.role == UserRole.SYSTEM_ADMIN:
-        return True  # Can manage anyone
-
-    if current_user.role == UserRole.ADMIN:
-        # Cannot manage system_admins or other admins
-        if role_to_check in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN):
-            return False
-        return True
-
-    if current_user.role == UserRole.MANAGER:
-        # Can only manage editors and viewers
-        if role_to_check in (UserRole.EDITOR, UserRole.VIEWER):
-            return True
-        return False
-
-    return False
+    return evaluate_manage_user(current_user, target_user, target_role).allowed

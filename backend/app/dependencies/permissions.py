@@ -4,6 +4,7 @@ Permission Dependencies for FastAPI
 This module provides FastAPI dependencies for permission-based access control.
 """
 
+import logging
 from typing import Callable, List, Optional
 
 from fastapi import Depends, HTTPException, status
@@ -11,19 +12,37 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Document, User, UserRole
+from app.policy import AuthorizationDecision, explain_decision
 from app.security import get_current_active_user
 from app.services.permissions import (
     Permission,
-    can_delete_document,
-    can_edit_document,
-    can_publish_document,
-    can_view_document,
-    has_permission,
-    is_admin_or_above,
-    is_editor_or_above,
-    is_internal_user,
-    is_manager_or_above,
+    evaluate_admin_or_above,
+    evaluate_any_permission,
+    evaluate_customer,
+    evaluate_document_access,
+    evaluate_editor_or_above,
+    evaluate_internal_user,
+    evaluate_manager_or_above,
+    evaluate_permission_capability,
+    evaluate_role_membership,
+    resolve_permission_capability,
 )
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _raise_forbidden_with_explanation(
+    decision: AuthorizationDecision,
+    *,
+    summary: str,
+) -> None:
+    explanation = explain_decision(decision, summary=summary)
+    LOGGER.info("Authorization denied", extra=explanation.to_log_context())
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=explanation.message,
+        headers=explanation.to_http_headers(),
+    )
 
 
 def require_permission(permission: Permission) -> Callable:
@@ -43,10 +62,12 @@ def require_permission(permission: Permission) -> Callable:
     """
 
     async def dependency(current_user: User = Depends(get_current_active_user)) -> User:
-        if not has_permission(current_user, permission):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {permission.value}",
+        capability = resolve_permission_capability(permission)
+        decision = evaluate_permission_capability(current_user, capability)
+        if not decision.allowed:
+            _raise_forbidden_with_explanation(
+                decision,
+                summary=f"Permission denied: {permission.value}",
             )
         return current_user
 
@@ -69,13 +90,13 @@ def require_any_permission(*permissions: Permission) -> Callable:
     """
 
     async def dependency(current_user: User = Depends(get_current_active_user)) -> User:
-        for permission in permissions:
-            if has_permission(current_user, permission):
-                return current_user
+        decision = evaluate_any_permission(current_user, permissions)
+        if decision.allowed:
+            return current_user
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission denied: requires one of {[p.value for p in permissions]}",
+        _raise_forbidden_with_explanation(
+            decision,
+            summary=f"Permission denied: requires one of {[p.value for p in permissions]}",
         )
 
     return dependency
@@ -94,10 +115,11 @@ def require_any_role(roles: List[UserRole]) -> Callable:
     """
 
     async def dependency(current_user: User = Depends(get_current_active_user)) -> User:
-        if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied: requires role {[r.value for r in roles]}",
+        decision = evaluate_role_membership(current_user, roles)
+        if not decision.allowed:
+            _raise_forbidden_with_explanation(
+                decision,
+                summary=f"Access denied: requires role {[r.value for r in roles]}",
             )
         return current_user
 
@@ -114,9 +136,11 @@ async def require_internal_user(current_user: User = Depends(get_current_active_
         async def dashboard(user: User = Depends(require_internal_user)):
             ...
     """
-    if not is_internal_user(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: internal users only"
+    decision = evaluate_internal_user(current_user)
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: internal users only",
         )
     return current_user
 
@@ -131,9 +155,11 @@ async def require_customer(current_user: User = Depends(get_current_active_user)
         async def my_docs(user: User = Depends(require_customer)):
             ...
     """
-    if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: customers only"
+    decision = evaluate_customer(current_user)
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: customers only",
         )
     return current_user
 
@@ -147,9 +173,11 @@ async def require_admin(current_user: User = Depends(get_current_active_user)) -
         async def create_user(user: User = Depends(require_admin)):
             ...
     """
-    if not is_admin_or_above(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: admin privileges required"
+    decision = evaluate_admin_or_above(current_user)
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: admin privileges required",
         )
     return current_user
 
@@ -163,10 +191,11 @@ async def require_system_admin(current_user: User = Depends(get_current_active_u
         async def update_system(user: User = Depends(require_system_admin)):
             ...
     """
-    if current_user.role != UserRole.SYSTEM_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: system administrator privileges required",
+    decision = evaluate_role_membership(current_user, [UserRole.SYSTEM_ADMIN])
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: system administrator privileges required",
         )
     return current_user
 
@@ -180,10 +209,11 @@ async def require_manager(current_user: User = Depends(get_current_active_user))
         async def publish_doc(user: User = Depends(require_manager)):
             ...
     """
-    if not is_manager_or_above(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: manager privileges required",
+    decision = evaluate_manager_or_above(current_user)
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: manager privileges required",
         )
     return current_user
 
@@ -197,10 +227,11 @@ async def require_editor(current_user: User = Depends(get_current_active_user)) 
         async def create_doc(user: User = Depends(require_editor)):
             ...
     """
-    if not is_editor_or_above(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: editor privileges required",
+    decision = evaluate_editor_or_above(current_user)
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: editor privileges required",
         )
     return current_user
 
@@ -239,24 +270,13 @@ class DocumentAccessChecker:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
         # Check access based on type
-        access_granted = False
-
-        if self.access_type == "view":
-            access_granted = can_view_document(current_user, document)
-        elif self.access_type == "edit":
-            access_granted = can_edit_document(current_user, document)
-        elif self.access_type == "delete":
-            access_granted = can_delete_document(current_user, document)
-        elif self.access_type == "publish":
-            access_granted = can_publish_document(current_user, document)
-        else:
-            # Default to view
-            access_granted = can_view_document(current_user, document)
+        decision = evaluate_document_access(current_user, document, self.access_type)
+        access_granted = decision.allowed
 
         if not access_granted:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied: cannot {self.access_type} this document",
+            _raise_forbidden_with_explanation(
+                decision,
+                summary=f"Access denied: cannot {self.access_type} this document",
             )
 
         return document
@@ -292,10 +312,11 @@ async def get_document_if_accessible(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    if not can_view_document(current_user, document):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: you cannot view this document",
+    decision = evaluate_document_access(current_user, document, "view")
+    if not decision.allowed:
+        _raise_forbidden_with_explanation(
+            decision,
+            summary="Access denied: you cannot view this document",
         )
 
     return document

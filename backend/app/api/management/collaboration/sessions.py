@@ -15,9 +15,9 @@ from app.models import (
     CollaborationActivity,
     CollaborationActivityType,
     CollaborationSession,
-    Document,
     User,
 )
+from app.repositories import DocumentRepository, UserRepository
 from app.security import get_current_active_user
 from app.services.collaboration_service import CollaborationService
 
@@ -67,13 +67,16 @@ async def start_collaboration_session(
 
     Called when a user joins a document for collaborative editing.
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == request.document_id).first()
+    document = document_repository.get_by_id(request.document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -187,13 +190,17 @@ async def get_active_sessions(
 
     Returns all currently active sessions (users editing the document).
     """
+    collaboration_service = CollaborationService()
+    document_repository = DocumentRepository(db)
+    user_repository = UserRepository(db)
+
     # Get the document
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = document_repository.get_by_id(document_id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
     # Check permissions
-    permissions = CollaborationService.get_user_permissions(current_user, document)
+    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -210,10 +217,7 @@ async def get_active_sessions(
         .all()
     )
     session_user_ids = list({session.user_id for session in sessions})
-    user_map = {}
-    if session_user_ids:
-        user_rows = db.query(User.id, User.username).filter(User.id.in_(session_user_ids)).all()
-        user_map = {user_id: username for user_id, username in user_rows}
+    user_map = {user.id: user.username for user in user_repository.list_by_ids(session_user_ids)}
 
     # Build response
     session_responses = []

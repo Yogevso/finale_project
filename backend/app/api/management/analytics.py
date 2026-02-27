@@ -7,11 +7,23 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.application.queries.analytics_queries import (
+    AnalyticsOverviewQuery,
+    AnalyticsQueryHandler,
+    ContentAnalyticsQuery,
+    EngagementAnalyticsQuery,
+    FeedbackAnalyticsQuery,
+    RecentActivityQuery,
+    TenantAnalyticsQuery,
+    TopDocumentsQuery,
+    UserAnalyticsQuery,
+)
+from app.application.queries.dependencies import (
+    get_analytics_query_handler,
+    get_system_analytics_query_handler,
+)
 from app.dependencies.permissions import require_admin, require_manager, require_system_admin
-from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import User
 from app.schemas.analytics import (
     AnalyticsOverview,
@@ -23,7 +35,6 @@ from app.schemas.analytics import (
     TopDocuments,
     UserAnalytics,
 )
-from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -56,8 +67,7 @@ def get_analytics_overview(
     date_from: Optional[date] = Query(None, description="Start date (default: 30 days ago)"),
     date_to: Optional[date] = Query(None, description="End date (default: today)"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get overview analytics.
@@ -71,16 +81,16 @@ def get_analytics_overview(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_overview(date_from, date_to)
+    return analytics_query_handler.execute_overview(
+        AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
+    )
 
 
 @router.get("/recent-activity")
 def get_recent_activity(
     limit: int = Query(10, ge=1, le=50, description="Number of items to return"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get recent activity feed.
@@ -88,8 +98,7 @@ def get_recent_activity(
     Requires: MANAGER role or above.
     Returns the most recent actions in the system.
     """
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_recent_activity(limit)
+    return analytics_query_handler.execute_recent_activity(RecentActivityQuery(limit=limit))
 
 
 # ============================================================================
@@ -103,8 +112,7 @@ def get_engagement_analytics(
     date_to: Optional[date] = Query(None, description="End date"),
     granularity: Optional[TimeGranularity] = Query(None, description="Time granularity"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get engagement analytics.
@@ -117,8 +125,13 @@ def get_engagement_analytics(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_engagement(date_from, date_to, granularity)
+    return analytics_query_handler.execute_engagement(
+        EngagementAnalyticsQuery(
+            date_from=date_from,
+            date_to=date_to,
+            granularity=granularity,
+        )
+    )
 
 
 @router.get("/engagement/top-documents", response_model=TopDocuments)
@@ -127,8 +140,7 @@ def get_top_documents(
     date_to: Optional[date] = Query(None, description="End date"),
     limit: int = Query(10, ge=1, le=50, description="Number of documents"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get top documents by views and downloads.
@@ -140,8 +152,9 @@ def get_top_documents(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_top_documents(date_from, date_to, limit)
+    return analytics_query_handler.execute_top_documents(
+        TopDocumentsQuery(date_from=date_from, date_to=date_to, limit=limit)
+    )
 
 
 # ============================================================================
@@ -155,8 +168,7 @@ def get_user_analytics(
     date_to: Optional[date] = Query(None, description="End date"),
     granularity: Optional[TimeGranularity] = Query(None, description="Time granularity"),
     current_user: User = Depends(require_admin),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get user analytics.
@@ -169,8 +181,9 @@ def get_user_analytics(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_user_analytics(date_from, date_to, granularity)
+    return analytics_query_handler.execute_user_analytics(
+        UserAnalyticsQuery(date_from=date_from, date_to=date_to, granularity=granularity)
+    )
 
 
 # ============================================================================
@@ -184,8 +197,7 @@ def get_content_analytics(
     date_to: Optional[date] = Query(None, description="End date"),
     granularity: Optional[TimeGranularity] = Query(None, description="Time granularity"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get content production analytics.
@@ -198,8 +210,9 @@ def get_content_analytics(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_content_analytics(date_from, date_to, granularity)
+    return analytics_query_handler.execute_content_analytics(
+        ContentAnalyticsQuery(date_from=date_from, date_to=date_to, granularity=granularity)
+    )
 
 
 # ============================================================================
@@ -213,8 +226,7 @@ def get_feedback_analytics(
     date_to: Optional[date] = Query(None, description="End date"),
     granularity: Optional[TimeGranularity] = Query(None, description="Time granularity"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get feedback analytics.
@@ -227,8 +239,9 @@ def get_feedback_analytics(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-    return service.get_feedback_analytics(date_from, date_to, granularity)
+    return analytics_query_handler.execute_feedback_analytics(
+        FeedbackAnalyticsQuery(date_from=date_from, date_to=date_to, granularity=granularity)
+    )
 
 
 # ============================================================================
@@ -241,7 +254,7 @@ def get_tenant_analytics(
     date_from: Optional[date] = Query(None, description="Start date"),
     date_to: Optional[date] = Query(None, description="End date"),
     current_user: User = Depends(require_system_admin),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_system_analytics_query_handler),
 ):
     """
     Get cross-tenant analytics.
@@ -254,9 +267,9 @@ def get_tenant_analytics(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    # System admin context (no tenant filtering)
-    service = AnalyticsService(db, None)
-    return service.get_tenant_analytics(date_from, date_to)
+    return analytics_query_handler.execute_tenant_analytics(
+        TenantAnalyticsQuery(date_from=date_from, date_to=date_to)
+    )
 
 
 # ============================================================================
@@ -272,8 +285,7 @@ def export_csv(
     date_from: Optional[date] = Query(None, description="Start date"),
     date_to: Optional[date] = Query(None, description="End date"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Export analytics data as CSV.
@@ -288,11 +300,11 @@ def export_csv(
 
     _validate_export_report(report, allowed=CSV_EXPORT_REPORTS, format_name="CSV")
 
-    service = AnalyticsService(db, tenant_ctx)
-
     # Get data based on report type
     if report == "overview":
-        data = service.get_overview(date_from, date_to)
+        data = analytics_query_handler.execute_overview(
+            AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
+        )
         rows = [
             {"metric": "Total Documents", "value": data["total_documents"]},
             {"metric": "Total Users", "value": data["total_users"]},
@@ -307,7 +319,9 @@ def export_csv(
             rows.append({"metric": f"Documents - {status}", "value": count})
 
     elif report == "engagement":
-        data = service.get_engagement(date_from, date_to)
+        data = analytics_query_handler.execute_engagement(
+            EngagementAnalyticsQuery(date_from=date_from, date_to=date_to)
+        )
         rows = [
             {"metric": "Unique Visitors", "value": data["unique_visitors"]},
             {"metric": "Avg Reading Progress (%)", "value": data["avg_reading_progress"]},
@@ -319,7 +333,9 @@ def export_csv(
             rows.append({"metric": f"Views - {point['date']}", "value": point["value"]})
 
     elif report == "users":
-        data = service.get_user_analytics(date_from, date_to)
+        data = analytics_query_handler.execute_user_analytics(
+            UserAnalyticsQuery(date_from=date_from, date_to=date_to)
+        )
         rows = [
             {"metric": "Total Users", "value": data["total_users"]},
             {"metric": "Active Users", "value": data["active_users"]},
@@ -329,7 +345,9 @@ def export_csv(
             rows.append({"metric": f"Users - {role}", "value": count})
 
     elif report == "content":
-        data = service.get_content_analytics(date_from, date_to)
+        data = analytics_query_handler.execute_content_analytics(
+            ContentAnalyticsQuery(date_from=date_from, date_to=date_to)
+        )
         rows = [
             {"metric": "Documents Created", "value": data["total_documents_created"]},
             {"metric": "Versions Published", "value": data["total_versions_published"]},
@@ -342,7 +360,9 @@ def export_csv(
         ]
 
     elif report == "feedback":
-        data = service.get_feedback_analytics(date_from, date_to)
+        data = analytics_query_handler.execute_feedback_analytics(
+            FeedbackAnalyticsQuery(date_from=date_from, date_to=date_to)
+        )
         rows = [
             {"metric": "Total Feedback", "value": data["total_feedback"]},
             {"metric": "Pending Feedback", "value": data["pending_feedback"]},
@@ -379,8 +399,7 @@ def export_pdf(
     date_from: Optional[date] = Query(None, description="Start date"),
     date_to: Optional[date] = Query(None, description="End date"),
     current_user: User = Depends(require_manager),
-    tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Export analytics data as PDF.
@@ -406,11 +425,11 @@ def export_pdf(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    service = AnalyticsService(db, tenant_ctx)
-
     # Get data
     if report == "overview":
-        data = service.get_overview(date_from, date_to)
+        data = analytics_query_handler.execute_overview(
+            AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
+        )
         table_data = [
             ["Metric", "Value"],
             ["Total Documents", str(data["total_documents"])],
@@ -421,7 +440,9 @@ def export_pdf(
         ]
         title = "Analytics Overview Report"
     elif report == "engagement":
-        data = service.get_engagement(date_from, date_to)
+        data = analytics_query_handler.execute_engagement(
+            EngagementAnalyticsQuery(date_from=date_from, date_to=date_to)
+        )
         table_data = [
             ["Metric", "Value"],
             ["Unique Visitors", str(data["unique_visitors"])],

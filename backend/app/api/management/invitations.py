@@ -8,21 +8,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
+from app.application.policies import InvitationPolicy
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
+from app.domain.aggregates import InvitationAggregate
+from app.domain.factories import InvitationFactory
 from app.models import (
-    Invitation,
     InvitationStatus,
     Tenant,
     User,
     UserRole,
 )
+from app.repositories import InvitationRepository, UserRepository
 from app.security import get_current_active_user
 
 router = APIRouter()
 
 # Invitation expiration in days
 INVITATION_EXPIRY_DAYS = 7
+invitation_policy = InvitationPolicy()
 
 
 # ========== Schemas ==========
@@ -62,28 +66,6 @@ class InvitationListResponse(BaseModel):
     has_more: bool
 
 
-# Role hierarchy for permission checks
-ROLE_HIERARCHY = {
-    UserRole.SYSTEM_ADMIN: 6,
-    UserRole.ADMIN: 5,
-    UserRole.MANAGER: 4,
-    UserRole.EDITOR: 3,
-    UserRole.VIEWER: 2,
-    UserRole.CUSTOMER: 1,
-}
-
-
-def can_invite_role(inviter_role: UserRole, target_role: UserRole) -> bool:
-    """Check if an inviter can invite users with the target role"""
-    if inviter_role == UserRole.SYSTEM_ADMIN:
-        return True
-    if inviter_role == UserRole.ADMIN:
-        return target_role != UserRole.SYSTEM_ADMIN
-    if inviter_role == UserRole.MANAGER:
-        return target_role in [UserRole.EDITOR, UserRole.VIEWER, UserRole.CUSTOMER]
-    return False
-
-
 def generate_invitation_token() -> str:
     """Generate a secure random token for invitation"""
     return secrets.token_urlsafe(32)
@@ -97,19 +79,16 @@ def resolve_invitation_tenant_id(
     - SYSTEM_ADMIN may target any tenant (or leave unset for non-customer roles).
     - Non-system users are always constrained to their own tenant.
     """
-    if tenant_ctx.is_system_admin:
-        return invitation_data.tenant_id
-
-    if invitation_data.tenant_id is None:
-        return tenant_ctx.tenant_id
-
-    if invitation_data.tenant_id != tenant_ctx.tenant_id:
+    target_tenant_id = invitation_policy.resolve_invitation_tenant_id(
+        invitation_data.tenant_id,
+        tenant_ctx,
+    )
+    if invitation_data.tenant_id is not None and target_tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot invite users to other companies",
         )
-
-    return invitation_data.tenant_id
+    return target_tenant_id
 
 
 @router.post("/invitations", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
@@ -126,12 +105,15 @@ def create_invitation(
     - Managers can only invite editors, viewers, and customers
     - Customers MUST have a tenant assigned
     """
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
     # Only admins, managers, and system_admins can invite
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+    if not invitation_policy.can_manage_invitations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
     # Check role hierarchy
-    if not can_invite_role(current_user.role, invitation_data.role):
+    if not invitation_policy.can_invite_role(current_user.role, invitation_data.role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"You cannot invite users with role '{invitation_data.role.value}'",
@@ -139,12 +121,7 @@ def create_invitation(
 
     target_tenant_id = resolve_invitation_tenant_id(invitation_data, tenant_ctx)
 
-    # Customers must have a tenant
-    if invitation_data.role == UserRole.CUSTOMER and not target_tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Customers must be assigned to a company",
-        )
+    InvitationAggregate.ensure_customer_has_tenant(invitation_data.role, target_tenant_id)
 
     # Validate tenant exists if provided
     tenant = None
@@ -154,27 +131,20 @@ def create_invitation(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
     # Check if email is already registered
-    if db.query(User).filter(User.email == invitation_data.email).first():
+    if user_repository.get_by_email(invitation_data.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
         )
 
     # Check for existing pending invitation
-    existing = (
-        db.query(Invitation)
-        .filter(
-            Invitation.email == invitation_data.email, Invitation.status == InvitationStatus.PENDING
-        )
-        .first()
-    )
+    existing = invitation_repository.get_pending_by_email(invitation_data.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An invitation is already pending for this email",
         )
 
-    # Create invitation
-    invitation = Invitation(
+    invitation = InvitationFactory.create_invitation(
         email=invitation_data.email,
         token=generate_invitation_token(),
         role=invitation_data.role,
@@ -182,7 +152,6 @@ def create_invitation(
         invited_by=current_user.id,
         message=invitation_data.message,
         expires_at=datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS),
-        status=InvitationStatus.PENDING,
     )
     db.add(invitation)
     db.commit()
@@ -226,34 +195,28 @@ def list_invitations(
     - Admins see invitations for their tenant
     - System admins see all invitations
     """
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    if not invitation_policy.can_manage_invitations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    query = db.query(Invitation)
-
-    # Filter by tenant unless system admin
-    if not tenant_ctx.is_system_admin:
-        query = query.filter(Invitation.tenant_id == tenant_ctx.tenant_id)
-
-    # Apply status filter
-    if status_filter:
-        query = query.filter(Invitation.status == status_filter)
-
-    # Get total
-    total = query.count()
-
-    # Paginate
-    invitations = (
-        query.order_by(Invitation.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
+    invitations, total = invitation_repository.list_paginated(
+        tenant_id=tenant_ctx.tenant_id,
+        is_system_admin=tenant_ctx.is_system_admin,
+        status_filter=status_filter,
+        page=page,
+        per_page=per_page,
     )
 
     # Build response
+    inviter_ids = sorted({inv.invited_by for inv in invitations})
+    inviters = user_repository.list_by_ids(inviter_ids)
+    inviter_map = {user.id: user for user in inviters}
+
     items = []
     for inv in invitations:
-        inviter = db.query(User).filter(User.id == inv.invited_by).first()
+        inviter = inviter_map.get(inv.invited_by)
         tenant_name = None
         if inv.tenant_id:
             tenant = db.query(Tenant).filter(Tenant.id == inv.tenant_id).first()
@@ -294,18 +257,21 @@ def get_invitation(
     db: Session = Depends(get_db),
 ):
     """Get a specific invitation"""
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    if not invitation_policy.can_manage_invitations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    invitation = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+    invitation = invitation_repository.get_by_id(invitation_id)
     if not invitation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     # Check tenant access
-    if not tenant_ctx.is_system_admin and invitation.tenant_id != tenant_ctx.tenant_id:
+    if not invitation_policy.can_access_invitation_tenant(invitation.tenant_id, tenant_ctx):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
-    inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+    inviter = user_repository.get_by_id(invitation.invited_by)
     tenant_name = None
     if invitation.tenant_id:
         tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
@@ -336,23 +302,20 @@ def cancel_invitation(
     db: Session = Depends(get_db),
 ):
     """Cancel a pending invitation"""
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+    invitation_repository = InvitationRepository(db)
+
+    if not invitation_policy.can_manage_invitations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    invitation = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+    invitation = invitation_repository.get_by_id(invitation_id)
     if not invitation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     # Check tenant access
-    if not tenant_ctx.is_system_admin and invitation.tenant_id != tenant_ctx.tenant_id:
+    if not invitation_policy.can_access_invitation_tenant(invitation.tenant_id, tenant_ctx):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
-    if invitation.status != InvitationStatus.PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Can only cancel pending invitations"
-        )
-
-    invitation.status = InvitationStatus.CANCELLED
+    InvitationAggregate(invitation).cancel()
     db.commit()
 
     return None
@@ -368,36 +331,35 @@ def resend_invitation(
     """
     Resend an invitation by generating a new token and extending expiration.
     """
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    if not invitation_policy.can_manage_invitations(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-    invitation = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+    invitation = invitation_repository.get_by_id(invitation_id)
     if not invitation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     # Check tenant access
-    if not tenant_ctx.is_system_admin and invitation.tenant_id != tenant_ctx.tenant_id:
+    if not invitation_policy.can_access_invitation_tenant(invitation.tenant_id, tenant_ctx):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
-    if invitation.status == InvitationStatus.ACCEPTED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot resend an accepted invitation"
-        )
-
     # Check if user already exists
-    if db.query(User).filter(User.email == invitation.email).first():
+    if user_repository.get_by_email(invitation.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
         )
 
     # Generate new token and extend expiration
-    invitation.token = generate_invitation_token()
-    invitation.expires_at = datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS)
-    invitation.status = InvitationStatus.PENDING
+    InvitationAggregate(invitation).resend(
+        new_token=generate_invitation_token(),
+        new_expires_at=datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS),
+    )
     db.commit()
     db.refresh(invitation)
 
-    inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+    inviter = user_repository.get_by_id(invitation.invited_by)
     tenant_name = None
     if invitation.tenant_id:
         tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()

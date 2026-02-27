@@ -2,9 +2,8 @@
 
 import re
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -12,60 +11,49 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
+from app.domain.aggregates import DocumentAggregate
+from app.domain.factories import DocumentFactory
+from app.domain.value_objects import DocumentNumber
+from app.errors import NotFoundError, ValidationError
 from app.models import (
     ActionType,
     AuditLog,
     Document,
     DocumentNumberSequence,
     DocumentStatus,
+    DocumentVisibility,
     Platform,
+    Tenant,
     Topic,
     User,
-    UserRole,
     Version,
-    VersionBumpType,
 )
 from app.schemas import DocumentCreate, DocumentUpdate
+from app.services.base_service import TenantAwareService
+from app.services.uow import UnitOfWork
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 
-class DocumentService:
+class DocumentService(TenantAwareService[Document]):
     """Document CRUD service with multi-tenancy support"""
 
+    model = Document
+
     def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None):
-        self.db = db
-        self.tenant_ctx = tenant_ctx
+        super().__init__(db, tenant_ctx)
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
-        query = self.db.query(Document)
-
-        if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            query = query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-
-        return query
+        return super()._base_query(Document)
 
     def _verify_access(self, document: Document) -> None:
         """Verify current user can access this document"""
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             if document.tenant_id != self.tenant_ctx.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-                )
-
-    @staticmethod
-    def _extract_sequence_suffix(document_number: str, prefix: str) -> Optional[int]:
-        expected_prefix = f"{prefix}-"
-        if not document_number or not document_number.startswith(expected_prefix):
-            return None
-
-        suffix = document_number[len(expected_prefix) :]
-        if not suffix.isdigit():
-            return None
-        return int(suffix)
+                raise NotFoundError("Document not found")
 
     def _discover_max_existing_suffix(self, prefix: str) -> int:
         existing = (
@@ -75,7 +63,7 @@ class DocumentService:
         )
         max_suffix = 0
         for (document_number,) in existing:
-            suffix = self._extract_sequence_suffix(document_number, prefix)
+            suffix = DocumentNumber.extract_sequence_suffix(document_number, prefix)
             if suffix is not None and suffix > max_suffix:
                 max_suffix = suffix
         return max_suffix
@@ -121,30 +109,14 @@ class DocumentService:
     def generate_document_number(self) -> str:
         """Generate unique document number (DOC-YYYYMMDD-XXXX)"""
         date_key = datetime.utcnow().strftime("%Y%m%d")
-        prefix = f"DOC-{date_key}"
+        prefix = DocumentNumber.prefix_for_date_key(date_key)
 
         if self.db.get(DocumentNumberSequence, date_key) is None:
             seed_sequence = self._discover_max_existing_suffix(prefix)
             self._insert_sequence_row_if_missing(date_key, seed_sequence)
 
         next_sequence = self._reserve_document_sequence(date_key)
-        return f"{prefix}-{next_sequence:04d}"
-
-    @staticmethod
-    def _parse_semver(
-        raw_value: Optional[str], fallback_version_number: int
-    ) -> Tuple[int, int, int]:
-        if raw_value:
-            parts = raw_value.strip().split(".")
-            if len(parts) == 3 and all(part.isdigit() for part in parts):
-                return int(parts[0]), int(parts[1]), int(parts[2])
-        base = fallback_version_number if fallback_version_number > 0 else 1
-        return base, 0, 0
-
-    @staticmethod
-    def _next_patch_version(raw_value: Optional[str], fallback_version_number: int) -> str:
-        major, minor, patch = DocumentService._parse_semver(raw_value, fallback_version_number)
-        return f"{major}.{minor}.{patch + 1}"
+        return str(DocumentNumber.from_date_key(date_key, next_sequence))
 
     @staticmethod
     def _slugify_platform(name: str) -> str:
@@ -176,10 +148,7 @@ class DocumentService:
         if platform_id is not None:
             platform = self.db.query(Platform).filter(Platform.id == platform_id).first()
             if not platform:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Platform {platform_id} not found",
-                )
+                raise NotFoundError(f"Platform {platform_id} not found")
             return platform
 
         normalized_name = self._normalize_platform_name(platform_name)
@@ -214,10 +183,7 @@ class DocumentService:
                 .first()
             )
             if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Document ID already exists",
-                )
+                raise ValidationError("Document ID already exists")
             document_number = document_data.document_number
         else:
             document_number = self.generate_document_number()
@@ -233,65 +199,55 @@ class DocumentService:
         if parent_id:
             parent = self._base_query().filter(Document.id == parent_id).first()
             if not parent:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found"
-                )
+                raise NotFoundError("Parent document not found")
 
         # Create document with retry in case of document_number collision
         attempts = 0
         while True:
             attempts += 1
             try:
-                platform = self._get_or_create_platform(
-                    platform_name=document_data.platform, platform_id=document_data.platform_id
-                )
-                document = Document(
-                    title=document_data.title,
-                    document_number=document_number,
-                    description=document_data.description,
-                    version_label=document_data.version_label,
-                    status=document_data.status,
-                    visibility=document_data.visibility,
-                    category=document_data.category,
-                    topic=self._normalize_topic(document_data.topic),
-                    platform=platform.name,
-                    platform_id=platform.id,
-                    release_branch=document_data.release_branch,
-                    tags=document_data.tags,
-                    created_by=user.id,
-                    tenant_id=tenant_id,
-                    parent_id=parent_id,
-                )
-                self.db.add(document)
-                self.db.flush()
+                with UnitOfWork(self.db) as uow:
+                    platform = self._get_or_create_platform(
+                        platform_name=document_data.platform, platform_id=document_data.platform_id
+                    )
+                    document = DocumentFactory.create_document(
+                        title=document_data.title,
+                        document_number=document_number,
+                        description=document_data.description,
+                        version_label=document_data.version_label,
+                        status=document_data.status,
+                        visibility=document_data.visibility,
+                        category=document_data.category,
+                        topic=self._normalize_topic(document_data.topic),
+                        platform_name=platform.name,
+                        platform_id=platform.id,
+                        release_branch=document_data.release_branch,
+                        tags=document_data.tags,
+                        created_by=user.id,
+                        tenant_id=tenant_id,
+                        parent_id=parent_id,
+                    )
+                    self.db.add(document)
+                    uow.flush()
 
-                # Create initial version placeholder. Real content is managed via explicit
-                # version edits/uploads, not the document description metadata field.
-                version = Version(
-                    document_id=document.id,
-                    version_number=1,
-                    semantic_version="1.0.0",
-                    bump_type=VersionBumpType.MAJOR,
-                    content="",
-                    changes_summary="Initial version",
-                    created_by=user.id,
-                )
-                self.db.add(version)
+                    # Create initial version placeholder. Real content is managed via explicit
+                    # version edits/uploads, not the document description metadata field.
+                    version = DocumentFactory.create_initial_version(
+                        document_id=document.id,
+                        created_by=user.id,
+                    )
+                    self.db.add(version)
 
-                # Create audit log
-                audit = AuditLog(
-                    user_id=user.id,
-                    document_id=document.id,
-                    action=ActionType.CREATE,
-                    details=f"Created document: {document.title}",
-                )
-                self.db.add(audit)
+                    audit = DocumentFactory.create_creation_audit(
+                        user_id=user.id,
+                        document_id=document.id,
+                        title=document.title,
+                    )
+                    self.db.add(audit)
 
-                self.db.commit()
                 self.db.refresh(document)
                 return document
             except IntegrityError as exc:
-                self.db.rollback()
                 if (
                     (
                         "documents.document_number" in str(exc)
@@ -302,9 +258,6 @@ class DocumentService:
                 ):
                     document_number = self.generate_document_number()
                     continue
-                raise
-            except Exception:
-                self.db.rollback()
                 raise
 
     def get_document(self, document_id: int) -> Optional[Document]:
@@ -317,6 +270,7 @@ class DocumentService:
         skip: int = 0,
         limit: int = 100,
         status: Optional[DocumentStatus] = None,
+        visibility: Optional[DocumentVisibility] = None,
         category: Optional[str] = None,
         search: Optional[str] = None,
     ) -> tuple[List[Document], int]:
@@ -326,6 +280,9 @@ class DocumentService:
         # Apply filters
         if status:
             query = query.filter(Document.status == status)
+
+        if visibility:
+            query = query.filter(Document.visibility == visibility)
 
         if category:
             query = query.filter(Document.category == category)
@@ -355,101 +312,87 @@ class DocumentService:
         """Update document with tenant verification"""
         document = self.get_document(document_id)
         self._verify_access(document)
+        document_aggregate = DocumentAggregate(document)
 
-        # Track changes
-        changes = []
+        with UnitOfWork(self.db):
+            # Track changes
+            changes = []
 
-        # Update fields
-        if document_data.title is not None:
-            if document.title != document_data.title:
-                changes.append(f"Title changed from '{document.title}' to '{document_data.title}'")
-            document.title = document_data.title
-
-        if document_data.description is not None:
-            document.description = document_data.description
-
-        if document_data.version_label is not None:
-            document.version_label = document_data.version_label
-
-        if document_data.status is not None:
-            if document.status != document_data.status:
-                changes.append(
-                    f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
-                )
-            document.status = document_data.status
-
-        if document_data.visibility is not None:
-            if document.visibility != document_data.visibility:
-                if user.role not in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Only managers can change document visibility",
+            # Update fields
+            if document_data.title is not None:
+                if document.title != document_data.title:
+                    changes.append(
+                        f"Title changed from '{document.title}' to '{document_data.title}'"
                     )
-                changes.append(
-                    f"Visibility changed from '{document.visibility.value}' to '{document_data.visibility.value}'"
+                document.title = document_data.title
+
+            if document_data.description is not None:
+                document.description = document_data.description
+
+            if document_data.version_label is not None:
+                document.version_label = document_data.version_label
+
+            if document_data.status is not None:
+                if document.status != document_data.status:
+                    changes.append(
+                        f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
+                    )
+                document.status = document_data.status
+
+            if document_data.visibility is not None:
+                if document.visibility != document_data.visibility:
+                    document_aggregate.ensure_visibility_change_allowed(user.role)
+                    changes.append(
+                        f"Visibility changed from '{document.visibility.value}' to '{document_data.visibility.value}'"
+                    )
+                document.visibility = document_data.visibility
+
+            if document_data.category is not None:
+                document.category = document_data.category
+
+            if document_data.topic is not None:
+                document.topic = self._normalize_topic(document_data.topic)
+
+            if document_data.platform is not None or document_data.platform_id is not None:
+                platform = self._get_or_create_platform(
+                    platform_name=document_data.platform, platform_id=document_data.platform_id
                 )
-            document.visibility = document_data.visibility
+                if document.platform_id != platform.id:
+                    changes.append(f"Platform changed to '{platform.name}'")
+                document.platform = platform.name
+                document.platform_id = platform.id
 
-        if document_data.category is not None:
-            document.category = document_data.category
+            if document_data.release_branch is not None:
+                document.release_branch = document_data.release_branch
 
-        if document_data.topic is not None:
-            document.topic = self._normalize_topic(document_data.topic)
+            if document_data.tags is not None:
+                document.tags = document_data.tags
 
-        if document_data.platform is not None or document_data.platform_id is not None:
-            platform = self._get_or_create_platform(
-                platform_name=document_data.platform, platform_id=document_data.platform_id
-            )
-            if document.platform_id != platform.id:
-                changes.append(f"Platform changed to '{platform.name}'")
-            document.platform = platform.name
-            document.platform_id = platform.id
+            # Create new version if there are changes
+            if changes:
+                latest_version = (
+                    self.db.query(Version)
+                    .filter(Version.document_id == document_id)
+                    .order_by(Version.version_number.desc())
+                    .first()
+                )
+                version = DocumentFactory.create_patch_version(
+                    document_id=document.id,
+                    latest_version=latest_version,
+                    changes_summary="; ".join(changes),
+                    created_by=user.id,
+                )
+                self.db.add(version)
 
-        if document_data.release_branch is not None:
-            document.release_branch = document_data.release_branch
-
-        if document_data.tags is not None:
-            document.tags = document_data.tags
-
-        # Create new version if there are changes
-        if changes:
-            latest_version = (
-                self.db.query(Version)
-                .filter(Version.document_id == document_id)
-                .order_by(Version.version_number.desc())
-                .first()
-            )
-
-            new_version_number = (latest_version.version_number + 1) if latest_version else 1
-            latest_content = (
-                latest_version.content if latest_version and latest_version.content else ""
-            )
-            next_semantic = self._next_patch_version(
-                latest_version.semantic_version if latest_version else None,
-                latest_version.version_number if latest_version else 1,
-            )
-
-            version = Version(
+            # Create audit log
+            audit = AuditLog(
+                user_id=user.id,
                 document_id=document.id,
-                version_number=new_version_number,
-                semantic_version=next_semantic,
-                bump_type=VersionBumpType.PATCH,
-                content=latest_content,
-                changes_summary="; ".join(changes),
-                created_by=user.id,
+                action=ActionType.UPDATE,
+                details="; ".join(changes) if changes else "Document updated",
             )
-            self.db.add(version)
+            self.db.add(audit)
 
-        # Create audit log
-        audit = AuditLog(
-            user_id=user.id,
-            document_id=document.id,
-            action=ActionType.UPDATE,
-            details="; ".join(changes) if changes else "Document updated",
-        )
-        self.db.add(audit)
-
-        self.db.commit()
         self.db.refresh(document)
 
         return document
@@ -459,16 +402,36 @@ class DocumentService:
         document = self.get_document(document_id)
         self._verify_access(document)
 
-        # Create audit log before deletion
-        audit = AuditLog(
-            user_id=user.id,
-            document_id=document.id,
-            action=ActionType.DELETE,
-            details=f"Deleted document: {document.title}",
-        )
-        self.db.add(audit)
-        self.db.commit()
+        with UnitOfWork(self.db):
+            # Keep audit + delete in one transaction to avoid partial writes.
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.DELETE,
+                details=f"Deleted document: {document.title}",
+            )
+            self.db.add(audit)
 
-        # Delete document (cascade will delete versions, attachments, comments)
-        self.db.delete(document)
-        self.db.commit()
+            # Delete document (cascade will delete versions, attachments, comments)
+            self.db.delete(document)
+
+    def assign_company_set(self, document_id: int, company_ids: List[int]) -> int:
+        """Replace the full assigned-company set for a document."""
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        requested_ids = list(dict.fromkeys(company_ids))
+        if requested_ids:
+            companies = self.db.query(Tenant).filter(Tenant.id.in_(requested_ids)).all()
+            company_by_id = {company.id: company for company in companies}
+            missing_ids = [company_id for company_id in requested_ids if company_id not in company_by_id]
+            if missing_ids:
+                raise ValidationError("Some company IDs are invalid")
+            assigned_companies = [company_by_id[company_id] for company_id in requested_ids]
+        else:
+            assigned_companies = []
+
+        with UnitOfWork(self.db):
+            document.assigned_companies = assigned_companies
+
+        return len(requested_ids)
