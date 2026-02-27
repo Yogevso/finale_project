@@ -3,21 +3,14 @@
  * Saves Yjs state to FastAPI backend
  */
 
-import axios, { AxiosError } from 'axios';
 import * as Y from 'yjs';
+import {
+  BackendDocumentStateTransportAdapter,
+  buildDocumentStateUrl,
+} from './adapters/backendDocumentStateTransportAdapter.js';
+import type { DocumentStateTransportPort } from './ports/documentStateTransportPort.js';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
-
-function normalizeApiPrefix(prefix: string): string {
-  if (!prefix) {
-    return '';
-  }
-  const withLeadingSlash = prefix.startsWith('/') ? prefix : `/${prefix}`;
-  return withLeadingSlash.replace(/\/+$/, '');
-}
-
-const BACKEND_API_PREFIX = normalizeApiPrefix(process.env.BACKEND_API_PREFIX || '/api/v1');
-const COLLAB_STATE_PATH = '/collaboration/documents';
+export { buildDocumentStateUrl };
 
 // In-memory cache for document states (for quick access)
 const documentCache = new Map<string, Uint8Array>();
@@ -27,24 +20,15 @@ export interface PersistenceResult {
   error?: string;
 }
 
-export function buildDocumentStateUrl(
-  documentId: string,
-  options?: {
-    backendUrl?: string;
-    apiPrefix?: string;
-  }
-): string {
-  const backendUrl = (options?.backendUrl ?? BACKEND_URL).replace(/\/+$/, '');
-  const apiPrefix = normalizeApiPrefix(options?.apiPrefix ?? BACKEND_API_PREFIX);
-  return `${backendUrl}${apiPrefix}${COLLAB_STATE_PATH}/${documentId}/state`;
-}
+const defaultTransport: DocumentStateTransportPort = new BackendDocumentStateTransportAdapter();
 
 /**
  * Load document state from FastAPI backend
  */
 export async function loadDocument(
   documentId: string,
-  token: string
+  token: string,
+  transport: DocumentStateTransportPort = defaultTransport,
 ): Promise<Uint8Array | null> {
   // Check cache first
   const cached = documentCache.get(documentId);
@@ -54,30 +38,15 @@ export async function loadDocument(
   }
 
   try {
-    const response = await axios.get(
-      buildDocumentStateUrl(documentId),
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        responseType: 'arraybuffer',
-      }
-    );
-
-    if (response.status === 200 && response.data) {
-      const state = new Uint8Array(response.data);
+    const state = await transport.loadDocumentState(documentId, token);
+    if (state) {
       documentCache.set(documentId, state);
       console.log(`[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`);
       return state;
     }
-
+    console.log(`[Persistence] Document ${documentId} has no existing state`);
     return null;
   } catch (error) {
-    if (error instanceof AxiosError && error.response?.status === 404) {
-      // Document exists but has no Yjs state yet - this is fine
-      console.log(`[Persistence] Document ${documentId} has no existing state`);
-      return null;
-    }
     console.error(`[Persistence] Failed to load document ${documentId}:`, error);
     return null;
   }
@@ -89,22 +58,14 @@ export async function loadDocument(
 export async function saveDocument(
   documentId: string,
   state: Uint8Array,
-  token: string
+  token: string,
+  transport: DocumentStateTransportPort = defaultTransport,
 ): Promise<PersistenceResult> {
   // Update cache
   documentCache.set(documentId, state);
 
   try {
-    await axios.put(
-      buildDocumentStateUrl(documentId),
-      state,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/octet-stream',
-        },
-      }
-    );
+    await transport.saveDocumentState(documentId, state, token);
 
     console.log(`[Persistence] Saved document ${documentId} to backend (${state.length} bytes)`);
     return { success: true };

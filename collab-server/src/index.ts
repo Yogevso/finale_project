@@ -30,6 +30,43 @@ const PORT = parseInt(process.env.PORT || '8002', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const REDIS_URL = process.env.REDIS_URL || '';
 
+type CollabRuntimeDependencies = {
+  verifyCollabToken: typeof verifyCollabToken;
+  extractToken: typeof extractToken;
+  extractDocumentId: typeof extractDocumentId;
+  canWrite: typeof canWrite;
+  loadDocument: typeof loadDocument;
+  saveDocument: typeof saveDocument;
+  clearDocumentCache: typeof clearDocumentCache;
+  clearDocumentAuth: typeof clearDocumentAuth;
+  getDocumentTokenForLoad: typeof getDocumentTokenForLoad;
+  getDocumentTokenForStore: typeof getDocumentTokenForStore;
+  registerDocumentConnectionAuth: typeof registerDocumentConnectionAuth;
+  unregisterDocumentConnectionAuth: typeof unregisterDocumentConnectionAuth;
+};
+
+function createRuntimeDependencies(
+  overrides: Partial<CollabRuntimeDependencies> = {}
+): CollabRuntimeDependencies {
+  return {
+    verifyCollabToken,
+    extractToken,
+    extractDocumentId,
+    canWrite,
+    loadDocument,
+    saveDocument,
+    clearDocumentCache,
+    clearDocumentAuth,
+    getDocumentTokenForLoad,
+    getDocumentTokenForStore,
+    registerDocumentConnectionAuth,
+    unregisterDocumentConnectionAuth,
+    ...overrides,
+  };
+}
+
+const runtime = createRuntimeDependencies();
+
 // Track active connections by unique connection ID per document.
 const activeConnections = new Map<string, Map<string, ConnectionContext>>();
 
@@ -88,28 +125,28 @@ const server = Server.configure({
     // Database persistence extension
     new Database({
       fetch: async ({ documentName }) => {
-        const documentId = extractDocumentId(documentName);
-        const token = getDocumentTokenForLoad(documentId);
+        const documentId = runtime.extractDocumentId(documentName);
+        const token = runtime.getDocumentTokenForLoad(documentId);
         
         if (!token) {
           console.log(`[Database] No token available for document ${documentId}`);
           return null;
         }
 
-        const state = await loadDocument(documentId, token);
+        const state = await runtime.loadDocument(documentId, token);
         return state;
       },
 
       store: async ({ documentName, state }) => {
-        const documentId = extractDocumentId(documentName);
-        const token = getDocumentTokenForStore(documentId);
+        const documentId = runtime.extractDocumentId(documentName);
+        const token = runtime.getDocumentTokenForStore(documentId);
         
         if (!token) {
           console.error(`[Database] No write-capable token available to save document ${documentId}`);
           return;
         }
 
-        await saveDocument(documentId, state, token);
+        await runtime.saveDocument(documentId, state, token);
       },
     }),
   ],
@@ -118,21 +155,21 @@ const server = Server.configure({
    * Authentication hook - runs on every WebSocket connection
    */
   async onAuthenticate({ documentName, token: rawToken, requestParameters, connection }) {
-    const documentId = extractDocumentId(documentName);
-    const token = rawToken || extractToken(requestParameters);
+    const documentId = runtime.extractDocumentId(documentName);
+    const token = rawToken || runtime.extractToken(requestParameters);
 
     if (!token) {
       throw new Error('No authentication token provided');
     }
 
     // Verify the JWT token
-    const authResult = verifyCollabToken(token, documentId);
+    const authResult = runtime.verifyCollabToken(token, documentId);
 
     if (!authResult.success || !authResult.user) {
       throw new Error(authResult.error || 'Authentication failed');
     }
 
-    const writeCapable = canWrite(authResult.permissions || []);
+    const writeCapable = runtime.canWrite(authResult.permissions || []);
 
     // Store user context for this connection
     const connectionContext: ConnectionContext = {
@@ -155,7 +192,7 @@ const server = Server.configure({
       activeConnections.set(documentId, new Map());
     }
     activeConnections.get(documentId)!.set(connectionContext.connectionId, connectionContext);
-    registerDocumentConnectionAuth({
+    runtime.registerDocumentConnectionAuth({
       documentId,
       connectionId: connectionContext.connectionId,
       token,
@@ -174,7 +211,7 @@ const server = Server.configure({
    * Called when a document is loaded
    */
   async onLoadDocument({ document, documentName, context }) {
-    const documentId = extractDocumentId(documentName);
+    const documentId = runtime.extractDocumentId(documentName);
     console.log(`[Document] Loading document ${documentId}`);
 
     // If document is empty, we could initialize with content from backend
@@ -185,7 +222,7 @@ const server = Server.configure({
    * Called when document changes
    */
   async onChange({ documentName, document, context }) {
-    const documentId = extractDocumentId(documentName);
+    const documentId = runtime.extractDocumentId(documentName);
     
     // Generate HTML preview for potential indexing
     // const html = yjsToHtml(document);
@@ -196,7 +233,7 @@ const server = Server.configure({
    * Called when awareness (presence) updates
    */
   async onAwarenessUpdate({ documentName, awareness, states }) {
-    const documentId = extractDocumentId(documentName);
+    const documentId = runtime.extractDocumentId(documentName);
     const users: AwarenessUser[] = [];
 
     states.forEach((state, clientId) => {
@@ -218,7 +255,7 @@ const server = Server.configure({
    * Called when a client disconnects
    */
   async onDisconnect({ documentName, context }) {
-    const documentId = extractDocumentId(documentName);
+    const documentId = runtime.extractDocumentId(documentName);
     const user = context?.user;
     const connectionId = context?.connectionId as string | undefined;
 
@@ -226,13 +263,13 @@ const server = Server.configure({
     if (docConnections) {
       if (connectionId) {
         docConnections.delete(connectionId);
-        unregisterDocumentConnectionAuth(documentId, connectionId);
+        runtime.unregisterDocumentConnectionAuth(documentId, connectionId);
       } else if (user?.userId) {
         // Backward-compatible fallback for contexts created without connectionId.
         for (const [id, tracked] of docConnections.entries()) {
           if (tracked.userId === user.userId) {
             docConnections.delete(id);
-            unregisterDocumentConnectionAuth(documentId, id);
+            runtime.unregisterDocumentConnectionAuth(documentId, id);
             break;
           }
         }
@@ -240,8 +277,8 @@ const server = Server.configure({
 
       if (docConnections.size === 0) {
         activeConnections.delete(documentId);
-        clearDocumentAuth(documentId);
-        clearDocumentCache(documentId);
+        runtime.clearDocumentAuth(documentId);
+        runtime.clearDocumentCache(documentId);
       }
     }
 
@@ -254,7 +291,7 @@ const server = Server.configure({
    * Called when the document is closed (no more connections)
    */
   async onStoreDocument({ documentName, document }) {
-    const documentId = extractDocumentId(documentName);
+    const documentId = runtime.extractDocumentId(documentName);
     const state = Y.encodeStateAsUpdate(document);
     console.log(`[Store] Final save for document ${documentId} (${state.length} bytes)`);
   },
@@ -337,4 +374,4 @@ process.on('SIGTERM', async () => {
 });
 
 // Export for testing
-export { server, getServerInfo };
+export { createRuntimeDependencies, getServerInfo, server };
