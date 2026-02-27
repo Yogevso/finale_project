@@ -449,7 +449,7 @@ Acceptance criteria:
 Task 53: Domain events for side effects (P2)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Core write flows currently trigger notifications/email inline.
@@ -916,7 +916,7 @@ Acceptance criteria:
 Task 72: Outbox pattern for domain events (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Side effects can be lost or duplicated when transaction boundaries and dispatch timing diverge.
@@ -941,7 +941,7 @@ Acceptance criteria:
 Task 73: Saga/process-manager workflows (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Multi-step workflows currently rely on local try/except compensation logic.
@@ -1565,7 +1565,7 @@ Acceptance criteria:
 Task 99: Feature-toggle framework for architecture rollout (P5)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Large refactors need controlled release and fast rollback without redeploy risk.
@@ -1613,7 +1613,7 @@ Acceptance criteria:
 Task 101: Idempotency keys for write operations (P6)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Client retries can create duplicate writes and duplicated side effects.
@@ -1711,7 +1711,7 @@ Acceptance criteria:
 Task 105: Projection/caching architecture for heavy reads (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Analytics/search/portal reads remain query-heavy and expensive under growth.
@@ -1736,7 +1736,7 @@ Acceptance criteria:
 Task 106: Unified async job framework (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Async/background processing is fragmented across workflows.
@@ -1760,7 +1760,7 @@ Acceptance criteria:
 Task 107: Optimistic concurrency controls (P6)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Concurrent updates can overwrite each other without conflict detection.
@@ -1785,7 +1785,7 @@ Acceptance criteria:
 Task 108: Strangler wrappers for legacy modules (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - High-risk legacy modules are difficult to replace safely in one step.
@@ -2015,7 +2015,7 @@ Acceptance criteria:
 Task 118: Migration safety framework (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Schema/architecture migrations need stronger safety checks and rollback confidence.
@@ -2275,6 +2275,12 @@ For each task:
 ================================================
 
 2026-02-27:
+- Completed Task 118: introduced migration safety framework runner at `scripts/migration_safety/run_migration_safety.py` with preflight guards, dry-run validation (ephemeral upgrade + schema SQL dump artifact), rollback probe (`upgrade head -> downgrade -1 -> re-upgrade head`), and post-migration schema assertions.
+- Integrated migration safety enforcement into CI (`.github/workflows/ci.yml`) with dedicated `migration-safety` job, evidence artifact upload, and `ci-success` gate checks.
+- Published migration safety docs/playbook references (`scripts/migration_safety/README.md`, `docs/migrations/migration-safety-framework.md`) and linked migration evidence expectations in existing migration docs.
+- Task 118 validation run:
+- `docker compose run --rm -v "${PWD}:/workspace" backend sh -lc "python /workspace/scripts/migration_safety/run_migration_safety.py --backend-dir /workspace/backend --report-file /workspace/docs/migrations/evidence/latest-migration-safety.json --dry-run-sql-file /workspace/docs/migrations/evidence/latest-dry-run.sql"` (pass)
+- `docker compose run --rm -v "${PWD}:/workspace" backend sh -lc "ruff check /workspace/scripts/migration_safety/run_migration_safety.py"` (pass)
 - Completed Task 41: assign/remove/list company assignment endpoints now use tenant-scoped document lookup via tenant context.
 - Completed Task 42: visibility filter wired end-to-end (Documents page query key/request + backend documents list filter application).
 - Completed Task 43: Documents page delete action aligned to manager+ permissions to match backend authorization.
@@ -2490,6 +2496,100 @@ For each task:
 - Task 116 validation run:
 - `docker compose run --rm backend ruff check app/domain/workflows app/domain/__init__.py tests/workflows/test_workflow_models.py tests/workflows/__init__.py tests/test_workflows.py tests/test_states.py` (pass)
 - `docker compose run --rm backend pytest tests/workflows/test_workflow_models.py tests/test_workflows.py tests/test_states.py tests/test_versions.py tests/test_reviews_api.py -q` (pass)
+- Completed Task 53: introduced domain event package under `backend/app/domain/events/` with immutable event DTOs (`DocumentPublished`, `CommentCreated`) and in-process dispatcher for synchronous handler execution.
+- Added notification/email event handlers in `backend/app/services/domain_event_handlers.py` and dispatcher composition helper for service-layer usage.
+- Refactored write flows to emit domain events instead of orchestrating email side effects inline:
+- `VersionService.publish_version(...)` now dispatches `DocumentPublished`.
+- `CommentService.create_comment(...)` now dispatches `CommentCreated`.
+- Added regression coverage in `backend/tests/test_domain_events.py` for dispatcher fault-tolerance and event emission from version/comment services.
+- Task 53 validation run:
+- `docker compose run --rm backend ruff check app/domain/events app/domain/__init__.py app/services/domain_event_handlers.py app/services/version_service.py app/services/comment_service.py tests/test_domain_events.py` (pass)
+- `docker compose run --rm backend pytest tests/test_domain_events.py tests/test_versions.py tests/test_comments.py -q` (pass)
+- Completed Task 72: introduced durable outbox persistence model (`DomainEventOutbox`) and lightweight DB bootstrap migration for the outbox table/indexes (`backend/app/models/__init__.py`, `backend/app/db.py`).
+- Added outbox dispatcher + serializer + worker processing loop in `backend/app/services/outbox.py`, including retry/backoff state transitions and event-key idempotent enqueue semantics.
+- Added repository support for outbox claim/enqueue/runnable queries (`backend/app/repositories/outbox_repository.py`, `backend/app/repositories/__init__.py`).
+- Added standalone worker entrypoint for outbox processing (`backend/app/workers/outbox_worker.py`).
+- Wired core write flows to persist emitted events through outbox inside transaction boundaries (`backend/app/services/version_service.py`, `backend/app/services/comment_service.py`) while keeping side-effect handlers in `backend/app/services/domain_event_handlers.py`.
+- Added outbox reliability regression coverage in `backend/tests/test_outbox.py` (idempotent enqueue, dispatch success marking, retry/failure transitions) and updated event shape coverage in `backend/tests/test_domain_events.py`.
+- Task 72 validation run:
+- `docker compose run --rm backend ruff check app/domain/events app/models/__init__.py app/repositories/__init__.py app/repositories/outbox_repository.py app/services/domain_event_handlers.py app/services/outbox.py app/services/version_service.py app/services/comment_service.py app/db.py app/workers/outbox_worker.py tests/test_domain_events.py tests/test_outbox.py alembic/versions/20260227_0004_domain_event_outbox.py` (pass)
+- `docker compose run --rm backend pytest tests/test_outbox.py tests/test_domain_events.py tests/test_versions.py tests/test_comments.py -q` (pass)
+- Completed Task 73: introduced explicit process-manager workflows under `backend/app/application/process_managers/` for upload/release-notes orchestration and conversion job execution (`DocumentUploadProcessManager`, `PreviewConversionProcessManager`).
+- Refactored `/api/v1/documents/upload` to delegate multi-step create/attach/release-notes workflow and rollback compensation to `DocumentUploadProcessManager` (`backend/app/api/management/documents.py`) with deterministic execution/compensation traces.
+- Refactored conversion-job execution to delegate stage flow + retry/failure compensation semantics to `PreviewConversionProcessManager` while preserving durable queue behavior (`backend/app/services/conversion_jobs.py`).
+- Added process-manager coverage in `backend/tests/test_process_managers.py` plus integration validation against upload rollback and conversion queue suites.
+- Task 73 validation run:
+- `docker compose run --rm backend ruff check app/application/process_managers app/api/management/documents.py app/services/conversion_jobs.py tests/test_process_managers.py tests/test_upload_lifecycle_defaults.py tests/test_conversion_jobs.py` (pass)
+- `docker compose run --rm backend pytest tests/test_process_managers.py tests/test_upload_lifecycle_defaults.py tests/test_conversion_jobs.py tests/test_documents.py -q` (pass)
+- Completed Task 101: added durable idempotency-key persistence (`IdempotencyKeyRecord`) with schema bootstrap + managed Alembic migration (`backend/app/models/__init__.py`, `backend/app/db.py`, `backend/alembic/versions/20260227_0005_idempotency_keys.py`).
+- Implemented `IdempotencyMiddleware` for replay-safe dedupe on selected side-effecting write endpoints (publish, invite/resend, upload, comment create, review submit/approve/reject/cancel) with payload fingerprint conflict detection and in-progress guarding (`backend/app/middleware/idempotency.py`).
+- Wired idempotency middleware into app composition and middleware package exports (`backend/app/app_factory.py`, `backend/app/middleware/__init__.py`).
+- Added idempotency regression coverage in `backend/tests/test_idempotency.py` for duplicate replay behavior, payload-mismatch conflicts, and single-execution side-effect guarantees.
+- Task 101 validation run:
+- `docker compose run --rm backend ruff check app/middleware/idempotency.py app/middleware/__init__.py app/app_factory.py app/models/__init__.py app/db.py tests/test_idempotency.py alembic/versions/20260227_0005_idempotency_keys.py` (pass)
+- `docker compose run --rm backend pytest tests/test_idempotency.py tests/test_comments.py tests/test_versions.py tests/test_reviews_api.py tests/test_invitations_api.py -q` (pass)
+- Completed Task 107: added optimistic-concurrency metadata on mutable resources with `row_version` + computed `etag` for `Document` and `Version`, including auto-increment on ORM updates (`backend/app/models/__init__.py`) and migration/bootstrap support (`backend/alembic/versions/20260227_0006_optimistic_concurrency_row_versions.py`, `backend/app/db.py`).
+- Added reusable `If-Match` precondition enforcement helpers and explicit 428 precondition domain error (`backend/app/utils/concurrency.py`, `backend/app/errors.py`), then enforced checks in document/version update write paths (`backend/app/services/document_service.py`, `backend/app/services/version_service.py`, `backend/app/application/commands/document_commands.py`).
+- Surfaced concurrency tokens through API contracts/responses and headers (`backend/app/schemas/__init__.py`, `backend/app/api/management/documents.py`, `backend/app/api/management/versions.py`) with ETag response headers on document/version reads and writes.
+- Updated frontend API/types and document editing flows to send `If-Match` on mutable writes and preserve conflict visibility to users (`frontend/src/lib/api/documentsApi.ts`, `frontend/src/types/index.ts`, `frontend/src/pages/DocumentsPage.tsx`, `frontend/src/pages/document-detail/hooks/useContentEditingFlow.ts`, `frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.ts`).
+- Added optimistic-concurrency regression coverage in `backend/tests/test_optimistic_concurrency.py` and refreshed affected document/version/CQRS tests for precondition headers.
+- Task 107 validation run:
+- `docker compose run --rm backend ruff check app/errors.py app/utils/concurrency.py app/models/__init__.py app/db.py alembic/versions/20260227_0006_optimistic_concurrency_row_versions.py app/services/document_service.py app/services/version_service.py app/application/commands/document_commands.py app/api/management/documents.py app/api/management/versions.py app/schemas/__init__.py tests/test_optimistic_concurrency.py tests/test_documents.py tests/test_versions.py tests/test_cqrs_handlers.py` (pass)
+- `docker compose run --rm backend pytest tests/test_optimistic_concurrency.py tests/test_documents.py tests/test_versions.py tests/test_cqrs_handlers.py tests/test_security.py -q` (pass)
+- `cmd /c npm run build` (pass)
+- Completed Task 106: introduced shared async-job framework primitives under `backend/app/jobs/` with unified retry policy/backoff/DLQ decisions (`RetryPolicy`, poison-message classification), standardized batch observability reports, and a shared polling worker runtime loop.
+- Refactored durable outbox processing to use shared async-job policy/runtime semantics with explicit batch counters and structured retry vs DLQ transitions, while preserving compatibility wrappers (`backend/app/services/outbox.py`).
+- Refactored durable conversion-job processing to use shared async-job policy/runtime semantics and normalized outcome reporting, while preserving existing enqueue/worker APIs (`backend/app/services/conversion_jobs.py`).
+- Added operational DLQ tooling for visibility/recovery:
+- Service-level list/requeue helpers for conversion and outbox dead-letter entries.
+- New CLI admin tool `backend/app/workers/async_jobs_admin.py` for listing and requeueing failed jobs.
+- Added async-job framework and recovery regression coverage (`backend/tests/test_jobs_framework.py`) plus DLQ list/requeue tests in conversion/outbox suites (`backend/tests/test_conversion_jobs.py`, `backend/tests/test_outbox.py`).
+- Task 106 validation run:
+- `docker compose run --rm backend ruff check app/jobs app/services/conversion_jobs.py app/services/outbox.py app/workers/async_jobs_admin.py tests/test_jobs_framework.py tests/test_conversion_jobs.py tests/test_outbox.py` (pass)
+- `docker compose run --rm backend pytest tests/test_jobs_framework.py tests/test_conversion_jobs.py tests/test_outbox.py tests/test_process_managers.py tests/test_idempotency.py -q` (pass)
+- Completed Task 105: introduced projection/cache runtime primitives under `backend/app/projections/` with scoped read-through caching, TTL-based reuse, payload-shape consistency validation, and deterministic scoped invalidation hooks.
+- Added write-path invalidation baseline via SQLAlchemy session events (`after_flush` + `after_commit` + rollback cleanup) that map committed model mutations to read scopes (`analytics`, `search`, `portal`) and invalidate affected cached projections.
+- Wired heavy read query handlers to projection cache wrappers with fallback behavior:
+- `backend/app/application/queries/analytics_queries.py` now caches analytics overview/activity/engagement/top/users/content/feedback/tenant projections per tenant/system scope.
+- `backend/app/application/queries/search_queries.py` now caches document search/autocomplete/facets projections per visibility scope and query inputs.
+- `backend/app/application/queries/portal_queries.py` now caches customer portal list/detail/categories/dashboard/search projections per tenant/user scope.
+- Registered projection invalidation bootstrap in app composition (`backend/app/app_factory.py`) and added test cache isolation fixture (`backend/tests/conftest.py`) to prevent cross-test state leakage.
+- Added projection-specific regression coverage in `backend/tests/test_projection_cache.py` for cache-hit behavior, deterministic write-side invalidation, and explicit cache-path fallback handling.
+- Task 105 validation run:
+- `docker compose run --rm backend ruff check app/projections app/application/queries/analytics_queries.py app/application/queries/search_queries.py app/application/queries/portal_queries.py app/app_factory.py tests/conftest.py tests/test_projection_cache.py` (pass)
+- `docker compose run --rm backend pytest tests/test_projection_cache.py tests/test_read_query_handlers.py tests/test_search_api.py tests/test_portal_api.py tests/test_analytics.py tests/test_container.py tests/test_cqrs_handlers.py -q` (pass)
+- Completed Task 99: introduced a typed backend feature-flag framework (`backend/app/feature_flags.py`) backed by config env flags in `backend/app/config.py` for controlled architecture rollouts.
+- Added backend rollout toggles:
+- `FEATURE_FLAG_PROJECTION_CACHE` controls projection-cache execution in analytics/search/portal query handlers.
+- `FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE` controls whether idempotency middleware is mounted in app startup.
+- Wired app startup and read-path behavior to flags (`backend/app/app_factory.py`, `backend/app/application/queries/analytics_queries.py`, `backend/app/application/queries/search_queries.py`, `backend/app/application/queries/portal_queries.py`) so rollback can be done by config only.
+- Added frontend feature-flag framework (`frontend/src/config/featureFlags.ts`) with safe boolean parsing and typed flag resolution.
+- Wired frontend optimistic concurrency request headers behind `VITE_FF_OPTIMISTIC_CONCURRENCY_HEADERS` in `frontend/src/lib/api/documentsApi.ts`.
+- Added rollout/rollback runbook documentation in `docs/feature-rollout-flags.md` and environment examples in `.env.example`.
+- Added feature-toggle regression tests:
+- Backend: `backend/tests/test_feature_flags.py`.
+- Frontend: `frontend/src/config/featureFlags.test.ts`.
+- Task 99 validation run:
+- `docker compose run --rm backend ruff check app/feature_flags.py app/app_factory.py app/application/queries/analytics_queries.py app/application/queries/search_queries.py app/application/queries/portal_queries.py app/config.py tests/test_feature_flags.py tests/test_projection_cache.py` (pass)
+- `docker compose run --rm backend pytest tests/test_feature_flags.py tests/test_projection_cache.py tests/test_analytics.py tests/test_container.py tests/test_idempotency.py -q` (pass)
+- `cmd /c npm run test -- --run src/config/featureFlags.test.ts` (pass)
+- `cmd /c npm run build` (pass)
+- Completed Task 108: introduced explicit strangler wrapper boundaries under `backend/app/legacy_wrappers/` for legacy-heavy analytics and document-converter modules.
+- Added wrapper usage + migration-status tracking (`backend/app/legacy_wrappers/tracking.py`) with per-wrapper metadata (`legacy_module`, `migration_completion_percent`) and call-volume counters.
+- Added analytics wrapper boundary (`backend/app/legacy_wrappers/analytics.py`) and routed container analytics resolution through wrapper composition (`backend/app/container.py`) while preserving query-handler behavior.
+- Added document-converter wrapper boundary (`backend/app/legacy_wrappers/document_converter.py`) and routed attachment conversion/read-path call sites through wrappers:
+- `backend/app/services/attachment_service/artifacts.py`
+- `backend/app/services/attachment_service/reader_view.py`
+- `backend/app/services/attachment_service/upload.py`
+- Added migration/runbook docs in `docs/legacy-strangler-wrappers.md`.
+- Added strangler regression coverage in `backend/tests/test_legacy_wrappers.py` for:
+- container wrapper resolution,
+- call-volume tracking and migration metadata snapshots,
+- wrapper delegation behavior,
+- boundary enforcement that migration-target attachment modules no longer import converter utilities directly.
+- Task 108 validation run:
+- `docker compose run --rm backend ruff check app/legacy_wrappers app/container.py app/services/attachment_service/artifacts.py app/services/attachment_service/reader_view.py app/services/attachment_service/upload.py tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_attachments.py tests/test_container.py` (pass)
+- `docker compose run --rm backend pytest tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_attachments.py tests/test_container.py tests/test_analytics.py -q` (pass)
 
 2026-02-25:
 - Cleaned this plan file to open work only.
