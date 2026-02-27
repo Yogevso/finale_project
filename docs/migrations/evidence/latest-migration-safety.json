@@ -1,0 +1,105 @@
+{
+  "generated_at": "2026-02-27T22:34:19.937263+00:00",
+  "backend_dir": "backend",
+  "head_revision": "20260227_0006",
+  "high_risk_revisions": [
+    "20260223_0002",
+    "20260224_0003",
+    "20260227_0004",
+    "20260227_0005",
+    "20260227_0006"
+  ],
+  "preflight": {
+    "passed": true,
+    "head_revision": "20260227_0006",
+    "revision_count": 6,
+    "high_risk_revisions": [
+      "20260223_0002",
+      "20260224_0003",
+      "20260227_0004",
+      "20260227_0005",
+      "20260227_0006"
+    ],
+    "checks": [
+      {
+        "name": "exists:backend/alembic.ini",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "exists:backend/alembic/env.py",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "exists:backend/alembic/versions",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "single-head",
+        "passed": true,
+        "details": "heads=['20260227_0006']"
+      },
+      {
+        "name": "has-managed-revisions",
+        "passed": true,
+        "details": "count=6"
+      },
+      {
+        "name": "unique-revision-ids",
+        "passed": true,
+        "details": "unique=6 total=6"
+      },
+      {
+        "name": "high-risk-migrations-detected",
+        "passed": true,
+        "details": "5 revisions: ['20260223_0002', '20260224_0003', '20260227_0004', '20260227_0005', '20260227_0006']"
+      }
+    ]
+  },
+  "dry_run": {
+    "passed": true,
+    "sql_path": "docs/migrations/evidence/latest-dry-run.sql",
+    "sql_line_count": 547,
+    "details": "Dry-run upgrade and schema SQL dump succeeded."
+  },
+  "rollback_probe": {
+    "passed": true,
+    "revision_after_upgrade": "20260227_0006",
+    "revision_after_downgrade": "20260227_0005",
+    "revision_after_reupgrade": "20260227_0006",
+    "details": "Rollback probe succeeded."
+  },
+  "post_assertions": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "table:document_number_sequences",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "table:domain_event_outbox",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "table:idempotency_keys",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "column:documents.row_version",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "column:versions.row_version",
+        "passed": true,
+        "details": "present"
+      }
+    ]
+  },
+  "overall_passed": true
+}

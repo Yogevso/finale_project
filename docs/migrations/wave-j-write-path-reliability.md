@@ -24,12 +24,16 @@
 - [ ] Lint/type checks pass for touched modules.
 - [ ] Contract compatibility expectations are documented.
 - [ ] Manual smoke checks (where applicable) are completed.
+- [ ] Migration safety runner passes:
+  `python scripts/migration_safety/run_migration_safety.py`.
 
 ## Rollback checklist
 
 - [ ] Identify feature flags/toggles or fallback paths before rollout.
 - [ ] Keep migration notes for reversal order.
 - [ ] Confirm observability signals can detect failed rollout quickly.
+- [ ] Rollback probe evidence captured in
+  `docs/migrations/evidence/latest-migration-safety.json`.
 
 ## References
 

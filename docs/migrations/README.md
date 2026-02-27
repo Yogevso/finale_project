@@ -33,3 +33,4 @@ For each wave:
 - Context map: `docs/context-map/README.md`
 - Contract versioning: `docs/contracts/versioning.md`
 - Architecture debt register: `docs/architecture-debt.md`
+- Migration safety framework: `docs/migrations/migration-safety-framework.md`
