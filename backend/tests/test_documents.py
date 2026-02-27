@@ -152,9 +152,10 @@ def test_update_document(client, auth_headers, db, test_user):
     db.refresh(doc)
 
     # Update document
+    headers = {**auth_headers, "If-Match": doc.etag}
     response = client.put(
         f"/api/v1/documents/{doc.id}",
-        headers=auth_headers,
+        headers=headers,
         json={"title": "Updated Title", "status": "active"},
     )
 
@@ -704,6 +705,7 @@ def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
         document.id,
         DocumentUpdate(topic="sdks-tools"),
         test_user,
+        if_match=document.etag,
     )
 
     assert updated.topic == "sdk-tools"

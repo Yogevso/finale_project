@@ -31,6 +31,7 @@ from app.models import (
 from app.schemas import DocumentCreate, DocumentUpdate
 from app.services.base_service import TenantAwareService
 from app.services.uow import UnitOfWork
+from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 
@@ -307,11 +308,22 @@ class DocumentService(TenantAwareService[Document]):
         return documents, total
 
     def update_document(
-        self, document_id: int, document_data: DocumentUpdate, user: User
+        self,
+        document_id: int,
+        document_data: DocumentUpdate,
+        user: User,
+        *,
+        if_match: str | None = None,
     ) -> Document:
         """Update document with tenant verification"""
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
         document_aggregate = DocumentAggregate(document)
 
         with UnitOfWork(self.db):

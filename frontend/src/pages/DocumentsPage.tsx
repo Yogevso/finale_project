@@ -63,8 +63,9 @@ export default function DocumentsPage() {
   })
 
   const visibilityMutation = useMutation({
-    mutationFn: ({ id, visibility }: { id: number; visibility: DocumentVisibility }) =>
-      api.updateDocument(id, { visibility }),
+    mutationFn: (
+      { id, visibility, ifMatch }: { id: number; visibility: DocumentVisibility; ifMatch: string },
+    ) => api.updateDocument(id, { visibility }, ifMatch),
     onSuccess: (_, variables) => {
       setVisibilityOverrides((prev) => {
         const next = { ...prev }
@@ -308,7 +309,11 @@ export default function DocumentsPage() {
                             onChange={(e) => {
                               const nextVisibility = e.target.value as DocumentVisibility
                               setVisibilityOverrides((prev) => ({ ...prev, [doc.id]: nextVisibility }))
-                              visibilityMutation.mutate({ id: doc.id, visibility: nextVisibility })
+                              visibilityMutation.mutate({
+                                id: doc.id,
+                                visibility: nextVisibility,
+                                ifMatch: doc.etag || String(doc.row_version || ''),
+                              })
                             }}
                             className="select-field w-40 min-w-[9.5rem]"
                           >

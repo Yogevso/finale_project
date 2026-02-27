@@ -109,10 +109,20 @@ def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = Fals
             "version_label": "ALTER TABLE documents ADD COLUMN version_label VARCHAR(50)",
             "parent_id": "ALTER TABLE documents ADD COLUMN parent_id INTEGER",
             "release_branch": "ALTER TABLE documents ADD COLUMN release_branch VARCHAR(100)",
+            "row_version": "ALTER TABLE documents ADD COLUMN row_version INTEGER NOT NULL DEFAULT 1",
         }
         for column_name, ddl in required_document_columns.items():
             if column_name not in existing:
                 conn.execute(text(ddl))
+        conn.execute(
+            text(
+                """
+                UPDATE documents
+                SET row_version = 1
+                WHERE row_version IS NULL OR row_version < 1
+                """
+            )
+        )
         conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_documents_platform_id ON documents (platform_id)")
         )
@@ -521,6 +531,127 @@ def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = Fals
             )
         )
 
+        # Durable domain-event outbox for reliable side-effect delivery.
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS domain_event_outbox (
+                    id INTEGER PRIMARY KEY,
+                    event_type VARCHAR(120) NOT NULL,
+                    event_key VARCHAR(255),
+                    payload_json TEXT NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 5,
+                    next_attempt_at DATETIME,
+                    last_error TEXT,
+                    claimed_at DATETIME,
+                    processed_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_domain_event_outbox_event_key
+                ON domain_event_outbox (event_key)
+                WHERE event_key IS NOT NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_domain_event_outbox_status
+                ON domain_event_outbox (status)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_domain_event_outbox_next_attempt_at
+                ON domain_event_outbox (next_attempt_at)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_domain_event_outbox_event_type
+                ON domain_event_outbox (event_type)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_domain_event_outbox_created_at
+                ON domain_event_outbox (created_at)
+                """
+            )
+        )
+
+        # Request idempotency key records for retry-safe write endpoints.
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS idempotency_keys (
+                    id INTEGER PRIMARY KEY,
+                    idempotency_key VARCHAR(255) NOT NULL,
+                    method VARCHAR(10) NOT NULL,
+                    path VARCHAR(500) NOT NULL,
+                    user_scope VARCHAR(64) NOT NULL,
+                    user_id INTEGER,
+                    request_hash VARCHAR(64) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'processing',
+                    response_status INTEGER,
+                    response_body TEXT,
+                    response_content_type VARCHAR(120),
+                    processing_started_at DATETIME,
+                    last_error TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_idempotency_scope
+                ON idempotency_keys (idempotency_key, method, path, user_scope)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_idempotency_keys_status
+                ON idempotency_keys (status)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_idempotency_keys_user_id
+                ON idempotency_keys (user_id)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS ix_idempotency_keys_created_at
+                ON idempotency_keys (created_at)
+                """
+            )
+        )
+
         if not skip_versions_semantic_migration:
             # Add missing columns to versions table for semantic version workflow.
             version_columns = conn.execute(text("PRAGMA table_info(versions)")).fetchall()
@@ -531,10 +662,20 @@ def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = Fals
                     "ALTER TABLE versions ADD COLUMN bump_type VARCHAR(10) DEFAULT 'PATCH' NOT NULL"
                 ),
                 "published_by": "ALTER TABLE versions ADD COLUMN published_by INTEGER",
+                "row_version": "ALTER TABLE versions ADD COLUMN row_version INTEGER NOT NULL DEFAULT 1",
             }
             for column_name, ddl in required_version_columns.items():
                 if column_name not in existing_version_columns:
                     conn.execute(text(ddl))
+            conn.execute(
+                text(
+                    """
+                    UPDATE versions
+                    SET row_version = 1
+                    WHERE row_version IS NULL OR row_version < 1
+                    """
+                )
+            )
 
             # Backfill semantic_version if missing on old rows.
             if (

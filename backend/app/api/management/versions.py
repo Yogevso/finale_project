@@ -1,6 +1,6 @@
 """Versions API Routes"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 
 from app.application.commands.dependencies import get_publish_approved_version_command_handler
 from app.application.commands.version_commands import (
@@ -41,13 +41,16 @@ def list_versions(
 def get_version(
     document_id: int,
     version_id: int,
+    response: Response,
     version_service: VersionService = Depends(get_version_service),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Get a specific version.
     """
-    return version_service.get_version(document_id, version_id, current_user)
+    version = version_service.get_version(document_id, version_id, current_user)
+    response.headers["ETag"] = f"\"{version['etag']}\""
+    return version
 
 
 @router.post(
@@ -58,6 +61,7 @@ def get_version(
 def create_version(
     document_id: int,
     version_data: VersionCreate,
+    response: Response,
     version_service: VersionService = Depends(get_version_service),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -66,7 +70,9 @@ def create_version(
 
     Only admins and editors can create versions.
     """
-    return version_service.create_version(document_id, version_data, current_user)
+    version = version_service.create_version(document_id, version_data, current_user)
+    response.headers["ETag"] = f"\"{version['etag']}\""
+    return version
 
 
 @router.patch("/documents/{document_id}/versions/{version_id}", response_model=VersionResponse)
@@ -74,6 +80,8 @@ def update_version(
     document_id: int,
     version_id: int,
     version_data: VersionUpdate,
+    response: Response,
+    if_match: str | None = Header(None, alias="If-Match"),
     version_service: VersionService = Depends(get_version_service),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -82,7 +90,15 @@ def update_version(
 
     Published versions are immutable and cannot be modified.
     """
-    return version_service.update_version(document_id, version_id, version_data, current_user)
+    version = version_service.update_version(
+        document_id,
+        version_id,
+        version_data,
+        current_user,
+        if_match=if_match,
+    )
+    response.headers["ETag"] = f"\"{version['etag']}\""
+    return version
 
 
 @router.post(
@@ -91,6 +107,7 @@ def update_version(
 def publish_version(
     document_id: int,
     version_id: int,
+    response: Response,
     current_user: User = Depends(get_current_active_user),
     publish_approved_version_command_handler: PublishApprovedVersionCommandHandler = Depends(
         get_publish_approved_version_command_handler
@@ -119,6 +136,7 @@ def publish_version(
         if result.error.code == PublishApprovedVersionCommandErrorCode.CONFLICT:
             raise ConflictError(result.error.message)
         raise HTTPException(status_code=500, detail="Unexpected publish command error")
+    response.headers["ETag"] = f"\"{result.value['etag']}\""
     return result.value
 
 

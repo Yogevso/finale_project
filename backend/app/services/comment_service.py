@@ -1,36 +1,38 @@
 """Comment Service - Business logic for document comments with visibility and threading"""
 
-import logging
 from typing import List, Optional, Set
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.domain.events import CommentCreated, InProcessDomainEventDispatcher
 from app.models import Attachment, Comment, Document, User, UserRole
 from app.repositories import (
     CommentRepository,
     DocumentRepository,
-    UserRepository,
     VersionRepository,
 )
 from app.schemas import CommentAuthor, CommentCreate, CommentResponse, CommentUpdate
 from app.services.base_service import SessionService
+from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
-from app.utils.async_tasks import run_async_task
-
-logger = logging.getLogger(__name__)
 
 
 class CommentService(SessionService):
     """Service for managing document comments with visibility controls"""
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        event_dispatcher: InProcessDomainEventDispatcher | None = None,
+    ):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.comment_repository = CommentRepository(db)
         self.version_repository = VersionRepository(db)
-        self.user_repository = UserRepository(db)
+        self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     @staticmethod
     def is_internal_staff(user: User) -> bool:
@@ -251,101 +253,38 @@ class CommentService(SessionService):
         with UnitOfWork(self.db) as uow:
             self.db.add(comment)
             uow.flush()
+            self._publish_comment_created_event(document, comment, current_user, parent_comment)
 
         self.db.refresh(comment)
 
         # Load user relationship
         self.db.refresh(comment, ["user"])
 
-        # Send notifications
-        self._send_comment_notifications(document, comment, current_user, parent_comment)
-
         comment.reply_count = 0
         return comment
 
-    def _send_comment_notifications(
+    def _publish_comment_created_event(
         self,
         document: Document,
         comment: Comment,
         current_user: User,
         parent_comment: Optional[Comment] = None,
-    ):
-        """Send notifications for new comments"""
-        try:
-            if not settings.EMAIL_ENABLED:
-                return
-
-            from app.services.email_service import email_service
-
-            notified_users = set()
-
-            # If this is a reply, notify the parent comment author
-            if parent_comment and parent_comment.user_id != current_user.id:
-                parent_author = self.user_repository.get_by_id(parent_comment.user_id)
-                if parent_author and parent_author.email:
-                    run_async_task(
-                        email_service.send_comment_reply(
-                            to_email=parent_author.email,
-                            replier_name=current_user.full_name or current_user.username,
-                            document_title=document.title,
-                            original_comment=parent_comment.content[:100],
-                            reply_content=comment.content[:200],
-                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
-                        )
-                    )
-                    notified_users.add(parent_author.id)
-                    logger.info(f"Queued reply notification to {parent_author.email}")
-
-            # Notify document author if not already notified
-            if (
-                document.created_by
-                and document.created_by != current_user.id
-                and document.created_by not in notified_users
-            ):
-                author = self.user_repository.get_by_id(document.created_by)
-                if author and author.email:
-                    run_async_task(
-                        email_service.send_new_comment(
-                            to_email=author.email,
-                            commenter_name=current_user.full_name or current_user.username,
-                            document_title=document.title,
-                            comment_text=comment.content[:200],
-                            document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
-                        )
-                    )
-                    notified_users.add(author.id)
-                    logger.info("Queued comment notification to document author")
-
-            # For private comments or inline comments, notify all admins/editors
-            if comment.is_private or comment.anchor_text:
-                admins = self.user_repository.list_active_by_roles(
-                    [
-                        UserRole.SYSTEM_ADMIN,
-                        UserRole.ADMIN,
-                        UserRole.MANAGER,
-                        UserRole.EDITOR,
-                    ],
-                    exclude_user_id=current_user.id,
-                    exclude_user_ids=notified_users,
-                )
-
-                for admin in admins:
-                    if admin.email:
-                        comment_type = "private" if comment.is_private else "inline"
-                        run_async_task(
-                            email_service.send_new_comment(
-                                to_email=admin.email,
-                                commenter_name=current_user.full_name or current_user.username,
-                                document_title=document.title,
-                                comment_text=f"[{comment_type.upper()}] {comment.content[:200]}",
-                                document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
-                            )
-                        )
-                        logger.info(f"Queued {comment_type} comment notification to {admin.email}")
-
-        except Exception as e:
-            # Don't fail comment creation if email fails
-            logger.warning(f"Failed to send comment notification: {e}")
+    ) -> None:
+        self.event_dispatcher.dispatch(
+            CommentCreated(
+                document_id=document.id,
+                document_title=document.title,
+                document_url=f"{settings.BASE_URL}/documents/{document.id}?tab=comments&comment={comment.id}",
+                document_author_id=document.created_by,
+                comment_id=comment.id,
+                comment_content=comment.content,
+                commenter_user_id=current_user.id,
+                commenter_display_name=current_user.full_name or current_user.username,
+                parent_comment_author_id=parent_comment.user_id if parent_comment else None,
+                is_private=comment.is_private,
+                has_anchor=bool(comment.anchor_text),
+            )
+        )
 
     def update_comment(
         self,

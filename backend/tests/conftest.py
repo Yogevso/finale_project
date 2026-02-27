@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import Base, get_db
 from app.main import app
 from app.models import User, UserRole
+from app.projections import reset_projection_cache
 from app.security import get_password_hash
 
 # Disable rate limiting for tests
@@ -26,6 +27,14 @@ engine = create_engine(
 )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def projection_cache_isolation():
+    """Ensure global projection cache state does not leak across tests."""
+    reset_projection_cache()
+    yield
+    reset_projection_cache()
 
 
 @pytest.fixture(scope="function")

@@ -81,6 +81,7 @@ class UpdateDocumentCommand:
     document_id: int
     document_data: DocumentUpdate
     current_user: User
+    if_match: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +251,7 @@ class UpdateDocumentCommandHandler:
             command.document_id,
             command.document_data,
             command.current_user,
+            if_match=command.if_match,
         )
 
     def _publish(self, context: CommandContext[UpdateDocumentCommand], result: Document) -> None:

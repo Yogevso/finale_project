@@ -12,7 +12,13 @@ from app.config import settings
 from app.container import build_container
 from app.db import SessionLocal, init_db
 from app.errors import DomainError
-from app.middleware import LoggingMiddleware, RateLimitMiddleware
+from app.feature_flags import (
+    BackendFeatureFlag,
+    get_backend_feature_flags,
+    is_backend_feature_enabled,
+)
+from app.middleware import IdempotencyMiddleware, LoggingMiddleware, RateLimitMiddleware
+from app.projections import get_projection_cache, register_projection_invalidation_listeners
 from app.web.router_registry import register_routers
 
 logger = logging.getLogger(__name__)
@@ -31,6 +37,12 @@ def create_app() -> FastAPI:
 
     # Shared composition root.
     app.state.container = build_container()
+    app.state.feature_flags = get_backend_feature_flags()
+    if is_backend_feature_enabled(BackendFeatureFlag.PROJECTION_CACHE):
+        app.state.projection_cache = get_projection_cache()
+        register_projection_invalidation_listeners()
+    else:
+        app.state.projection_cache = None
 
     # Add middleware (order matters - first added is outermost).
     app.add_middleware(
@@ -39,6 +51,8 @@ def create_app() -> FastAPI:
         window_seconds=settings.RATE_LIMIT_WINDOW,
     )
     app.add_middleware(LoggingMiddleware)
+    if is_backend_feature_enabled(BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE):
+        app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -60,6 +74,11 @@ def create_app() -> FastAPI:
         """Initialize database and publish runtime RBAC policies."""
         logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
         logger.info("Environment: %s", settings.APP_ENV)
+        logger.info(
+            "Feature flags: projection_cache=%s, idempotency_middleware=%s",
+            app.state.feature_flags.projection_cache,
+            app.state.feature_flags.idempotency_middleware,
+        )
         init_db()
         try:
             from app.services.rbac_service import RbacService
@@ -84,4 +103,3 @@ def create_app() -> FastAPI:
 
     register_routers(app)
     return app
-

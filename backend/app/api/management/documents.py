@@ -10,8 +10,10 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Header,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
@@ -36,6 +38,7 @@ from app.application.commands.document_commands import (
     UpdateDocumentCommand,
     UpdateDocumentCommandHandler,
 )
+from app.application.process_managers import DocumentUploadProcessManager
 from app.application.queries.dependencies import (
     get_document_query_handler,
     get_list_documents_query_handler,
@@ -196,6 +199,7 @@ def list_documents(
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
+    response: Response,
     current_user: User = Depends(require_internal_user),
     document_query_handler: GetDocumentQueryHandler = Depends(get_document_query_handler),
 ):
@@ -208,13 +212,17 @@ def get_document(
     result = document_query_handler.execute(GetDocumentQuery(document_id=document_id))
     if result.is_err:
         raise NotFoundError(result.error.message)
-    return result.value
+    document = result.value
+    response.headers["ETag"] = f"\"{document.etag}\""
+    return document
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: int,
     document_data: DocumentUpdate,
+    response: Response,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_editor),
     update_document_command_handler: UpdateDocumentCommandHandler = Depends(
         get_update_document_command_handler
@@ -232,6 +240,7 @@ def update_document(
             document_id=document_id,
             document_data=document_data,
             current_user=current_user,
+            if_match=if_match,
         )
     )
     if result.is_err:
@@ -240,7 +249,9 @@ def update_document(
         if result.error.code == DocumentCommandErrorCode.VALIDATION:
             raise ValidationError(result.error.message)
         raise HTTPException(status_code=500, detail="Unexpected document-update command error")
-    return result.value
+    document = result.value
+    response.headers["ETag"] = f"\"{document.etag}\""
+    return document
 
 
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
@@ -333,7 +344,7 @@ async def upload_document(
             detail="Only managers and above can upload directly as active",
         )
 
-    # Create the document first
+    # Build parent document payload.
     document_data = DocumentCreate(
         title=doc_title,
         description=description or f"Uploaded from file: {file.filename}",
@@ -348,65 +359,40 @@ async def upload_document(
         version_label=version_label,
         parent_id=parent_id,
     )
-    document = document_service.create_document(document_data, current_user)
-    created_document_ids: list[int] = [document.id]
+    release_data = None
+    if release_notes:
+        release_doc_title = f"{doc_title} Release Notes"
+        release_data = DocumentCreate(
+            title=release_doc_title,
+            description=f"Release notes for {doc_title}",
+            status=status_value,
+            visibility=visibility_value,
+            category="Release Notes",
+            tags="release-notes",
+            document_number=None,
+            version_label=version_label,
+            parent_id=None,  # Set below after parent document creation.
+        )
+
+    upload_manager = DocumentUploadProcessManager(
+        db=db,
+        document_service=document_service,
+        attachment_uploader=AttachmentService.upload_attachment,
+        logger=logger,
+    )
 
     try:
-        # Attach uploaded files to parent document.
-        await AttachmentService.upload_attachment(
-            db,
-            document.id,
-            file,
-            current_user,
+        upload_result = await upload_manager.execute(
+            parent_document_data=document_data,
+            current_user=current_user,
             background_tasks=background_tasks,
+            primary_file=file,
+            content_file=content_file,
+            release_notes_file=release_notes,
+            release_notes_document_data=release_data,
         )
-        if content_file:
-            await AttachmentService.upload_attachment(
-                db,
-                document.id,
-                content_file,
-                current_user,
-                background_tasks=background_tasks,
-            )
-
-        # Optional release notes: create child document and attach release notes file.
-        if release_notes:
-            release_doc_title = f"{doc_title} Release Notes"
-            release_data = DocumentCreate(
-                title=release_doc_title,
-                description=f"Release notes for {doc_title}",
-                status=status_value,
-                visibility=visibility_value,
-                category="Release Notes",
-                tags="release-notes",
-                document_number=None,
-                version_label=version_label,
-                parent_id=document.id,
-            )
-            release_doc = document_service.create_document(release_data, current_user)
-            created_document_ids.append(release_doc.id)
-            await AttachmentService.upload_attachment(
-                db,
-                release_doc.id,
-                release_notes,
-                current_user,
-                background_tasks=background_tasks,
-            )
-    except Exception as exc:
-        # Roll back all created documents (child before parent) to avoid orphan rows.
-        for created_document_id in reversed(created_document_ids):
-            try:
-                document_service.delete_document(created_document_id, current_user)
-            except Exception as cleanup_error:
-                db.rollback()
-                logger.warning(
-                    "Failed upload rollback cleanup for document_id=%s: %s",
-                    created_document_id,
-                    cleanup_error,
-                )
-
-        if isinstance(exc, HTTPException):
-            raise
+        document = upload_result.document
+    except HTTPException:
         raise
 
     # Refresh to get updated data

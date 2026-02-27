@@ -12,6 +12,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment, AttachmentArtifact, User
 
 from .artifacts import AttachmentServiceArtifactsMixin
@@ -192,10 +193,9 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
 
-            from app.utils.document_converter import convert_pdf_to_reader_artifact
-
             pdf_bytes = AttachmentService._load_preview_pdf_bytes_for_attachment(attachment)
-            artifact = convert_pdf_to_reader_artifact(pdf_bytes)
+            wrapper = get_document_converter_wrapper()
+            artifact = wrapper.convert_pdf_to_reader_artifact(pdf_bytes)
             html_content = (artifact.get("html_content") or "").strip()
             toc_items = AttachmentService._normalize_toc_items(artifact.get("toc_items") or [])
             toc_source = str(artifact.get("toc_source") or "none")
@@ -439,10 +439,9 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             }
 
         try:
-            from app.utils.document_converter import extract_pdf_toc
-
+            wrapper = get_document_converter_wrapper()
             pdf_bytes = AttachmentService._load_preview_pdf_bytes_for_attachment(attachment)
-            toc_payload = extract_pdf_toc(pdf_bytes)
+            toc_payload = wrapper.extract_pdf_toc(pdf_bytes)
             normalized_items = AttachmentService._normalize_toc_items(
                 toc_payload.get("toc_items") or []
             )

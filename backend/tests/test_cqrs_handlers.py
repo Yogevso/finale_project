@@ -71,7 +71,7 @@ def test_create_document_command_handler_maps_validation_error(test_user):
 
 def test_update_document_command_handler_maps_not_found(test_user):
     class StubDocumentService:
-        def update_document(self, _document_id, _document_data, _user):
+        def update_document(self, _document_id, _document_data, _user, if_match=None):
             raise NotFoundError("Document not found")
 
     handler = UpdateDocumentCommandHandler(StubDocumentService())

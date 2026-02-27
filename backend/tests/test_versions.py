@@ -49,7 +49,9 @@ class TestVersionsAPI:
             headers=headers,
             json={"content": "Original", "changes_summary": "Initial"},
         )
-        version_id = create_resp.json()["id"]
+        created_payload = create_resp.json()
+        version_id = created_payload["id"]
+        headers = {**headers, "If-Match": created_payload["etag"]}
 
         # Update it
         response = client.patch(

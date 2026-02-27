@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment, User, Version, VersionBumpType
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
@@ -126,9 +127,12 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         if convert_to_html:
             try:
-                from app.utils.document_converter import convert_document_to_html
-
-                html_content = convert_document_to_html(content, content_type, original_filename)
+                wrapper = get_document_converter_wrapper()
+                html_content = wrapper.convert_document_to_html(
+                    content,
+                    content_type,
+                    original_filename,
+                )
 
                 if html_content:
                     existing_version = (

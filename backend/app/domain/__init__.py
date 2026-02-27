@@ -21,6 +21,12 @@ from app.domain.capabilities import (
     ReviewApprovalCapability,
     RoleCapability,
 )
+from app.domain.events import (
+    CommentCreated,
+    DocumentPublished,
+    DomainEvent,
+    InProcessDomainEventDispatcher,
+)
 from app.domain.factories import (
     DocumentFactory,
     InvitationFactory,
@@ -72,9 +78,11 @@ __all__ = [
     "CanAssignCompanies",
     "CanPublish",
     "CancelledReviewStage",
+    "CommentCreated",
     "CustomerInvitationTenantSpec",
     "CustomerUserCapability",
     "DateRangeSpec",
+    "DocumentPublished",
     "DocumentAggregate",
     "DocumentAccessCapability",
     "DocumentFactory",
@@ -98,6 +106,8 @@ __all__ = [
     "RejectedReviewStage",
     "RoleAccessSpec",
     "Result",
+    "DomainEvent",
+    "InProcessDomainEventDispatcher",
     "ReviewApprovalCapability",
     "ReviewAggregate",
     "ReviewApprovableVersionSpec",

@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.domain.aggregates import DocumentAggregate
+from app.domain.events import DocumentPublished, InProcessDomainEventDispatcher
 from app.domain.factories import VersionFactory
 from app.domain.states import version_review_stage_for
 from app.errors import ConflictError, InvalidStateError, NotFoundError, PermissionDeniedError
@@ -20,11 +21,12 @@ from app.models import (
     Version,
     VersionBumpType,
 )
-from app.repositories import DocumentRepository, UserRepository, VersionRepository
+from app.repositories import DocumentRepository, VersionRepository
 from app.schemas import VersionCreate, VersionUpdate
 from app.services.base_service import SessionService
+from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
-from app.utils.async_tasks import run_async_task
+from app.utils.concurrency import ensure_if_match_matches
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +34,16 @@ logger = logging.getLogger(__name__)
 class VersionService(SessionService):
     """Service for managing document versions"""
 
-    def __init__(self, db):
+    def __init__(
+        self,
+        db,
+        *,
+        event_dispatcher: InProcessDomainEventDispatcher | None = None,
+    ):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.version_repository = VersionRepository(db)
-        self.user_repository = UserRepository(db)
+        self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     def _get_document_for_user(self, document_id: int, current_user: User) -> Document:
         document = self.document_repository.get_by_id(document_id)
@@ -125,6 +132,8 @@ class VersionService(SessionService):
             "version_number": version.version_number,
             "semantic_version": version.semantic_version,
             "bump_type": version.bump_type,
+            "row_version": version.row_version,
+            "etag": version.etag,
             "content": version.content,
             "changes_summary": version.changes_summary,
             "is_published": version.is_published,
@@ -215,6 +224,8 @@ class VersionService(SessionService):
         version_id: int,
         version_data: VersionUpdate,
         current_user: User,
+        *,
+        if_match: str | None = None,
     ) -> dict:
         """Update an unpublished version"""
         self._get_document_for_user(document_id, current_user)
@@ -245,6 +256,12 @@ class VersionService(SessionService):
             UserRole.EDITOR,
         ]:
             raise PermissionDeniedError("Only admins, managers and editors can update versions")
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="version",
+            resource_id=version.id,
+            row_version=version.row_version,
+        )
 
         with UnitOfWork(self.db):
             if version_data.content is not None:
@@ -268,7 +285,7 @@ class VersionService(SessionService):
 
     def publish_version(self, document_id: int, version_id: int, current_user: User) -> dict:
         """Publish a version (requires approval and makes it immutable)."""
-        self._get_document_for_user(document_id, current_user)
+        document = self._get_document_for_user(document_id, current_user)
 
         version = self.version_repository.get_by_id_for_document(
             version_id,
@@ -295,29 +312,20 @@ class VersionService(SessionService):
             version.published_at = datetime.utcnow()
             version.published_by = current_user.id
 
-            document = self.document_repository.get_by_id(document_id)
-            if document:
-                DocumentAggregate(document).transition_to_active()
+            DocumentAggregate(document).transition_to_active()
+            self.event_dispatcher.dispatch(
+                DocumentPublished(
+                    document_id=document.id,
+                    version_id=version.id,
+                    document_title=document.title,
+                    document_number=document.document_number,
+                    document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
+                    document_author_id=document.created_by,
+                    published_by_user_id=current_user.id,
+                )
+            )
 
         self.db.refresh(version)
-
-        try:
-            from app.services.email_service import email_service
-
-            if document and settings.EMAIL_ENABLED:
-                author = self.user_repository.get_by_id(document.created_by)
-                if author and author.email:
-                    run_async_task(
-                        email_service.send_document_published(
-                            to_email=author.email,
-                            document_title=document.title,
-                            document_number=document.document_number,
-                            document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
-                        )
-                    )
-                    logger.info(f"Queued publish notification for document {document.id}")
-        except Exception as e:
-            logger.warning(f"Failed to send publish notification: {e}")
 
         version = self.version_repository.get_by_id_for_document(
             version_id,

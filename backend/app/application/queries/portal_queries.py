@@ -10,6 +10,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.domain.specifications import VisibilitySpec
+from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
     Attachment,
     Document,
@@ -20,6 +21,7 @@ from app.models import (
     User,
     Version,
 )
+from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
 from app.schemas.portal import (
     PortalAttachment,
@@ -86,8 +88,14 @@ class SearchPortalDocumentsQuery:
 class PortalDocumentsQueryHandler:
     """Read-handler facade for customer portal document queries."""
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        projection_cache: ProjectionCache | None = None,
+    ):
         self.db = db
+        self.projection_cache = projection_cache or get_projection_cache()
 
     @staticmethod
     def _customer_visibility_spec(user: User) -> VisibilitySpec:
@@ -104,6 +112,31 @@ class PortalDocumentsQueryHandler:
         return self._customer_visibility_spec(user).apply(repository.query(), Document)
 
     @staticmethod
+    def _tenant_scope(user: User) -> str:
+        return f"tenant:{user.tenant_id}"
+
+    def _execute_cached(
+        self,
+        *,
+        projection_name: str,
+        key_parts: tuple[object, ...],
+        loader,
+        ttl_seconds: int = 45,
+        validator=None,
+    ):
+        if not is_backend_feature_enabled(BackendFeatureFlag.PROJECTION_CACHE):
+            return loader()
+        return execute_cached_projection(
+            cache=self.projection_cache,
+            namespace=f"portal.{projection_name}",
+            key_parts=key_parts,
+            scopes={"portal"},
+            loader=loader,
+            ttl_seconds=ttl_seconds,
+            validator=validator,
+        )
+
+    @staticmethod
     def _portal_visible_version(document: Document) -> Version | None:
         if not document.versions:
             return None
@@ -113,93 +146,118 @@ class PortalDocumentsQueryHandler:
         return max(candidate_versions, key=lambda version: version.version_number)
 
     def execute_list_documents(self, query: ListPortalDocumentsQuery) -> PortalDocumentListResponse:
-        docs_query = self._customer_documents_query(query.current_user)
-        if query.category:
-            docs_query = docs_query.filter(Document.category == query.category)
-        if query.search:
-            search_term = f"%{query.search}%"
-            docs_query = docs_query.filter(
-                or_(
-                    Document.title.ilike(search_term),
-                    Document.description.ilike(search_term),
-                    Document.tags.ilike(search_term),
+        def load_projection() -> PortalDocumentListResponse:
+            docs_query = self._customer_documents_query(query.current_user)
+            if query.category:
+                docs_query = docs_query.filter(Document.category == query.category)
+            if query.search:
+                search_term = f"%{query.search}%"
+                docs_query = docs_query.filter(
+                    or_(
+                        Document.title.ilike(search_term),
+                        Document.description.ilike(search_term),
+                        Document.tags.ilike(search_term),
+                    )
                 )
+
+            total = docs_query.count()
+            pages = (total + query.per_page - 1) // query.per_page
+            offset = (query.page - 1) * query.per_page
+            documents = (
+                docs_query.order_by(Document.updated_at.desc())
+                .offset(offset)
+                .limit(query.per_page)
+                .all()
             )
 
-        total = docs_query.count()
-        pages = (total + query.per_page - 1) // query.per_page
-        offset = (query.page - 1) * query.per_page
-        documents = (
-            docs_query.order_by(Document.updated_at.desc())
-            .offset(offset)
-            .limit(query.per_page)
-            .all()
-        )
-
-        items: list[PortalDocumentSummary] = []
-        for doc in documents:
-            attachment_count = (
-                self.db.query(func.count(Attachment.id))
-                .filter(Attachment.document_id == doc.id)
-                .scalar()
-            )
-            visible_version = self._portal_visible_version(doc)
-            version_number = visible_version.version_number if visible_version else 1
-            items.append(
-                PortalDocumentSummary(
-                    id=doc.id,
-                    title=doc.title,
-                    description=doc.description,
-                    category=doc.category,
-                    visibility=doc.visibility.value if doc.visibility else "internal",
-                    version=version_number,
-                    updated_at=doc.updated_at,
-                    has_attachments=attachment_count > 0,
+            items: list[PortalDocumentSummary] = []
+            for doc in documents:
+                attachment_count = (
+                    self.db.query(func.count(Attachment.id))
+                    .filter(Attachment.document_id == doc.id)
+                    .scalar()
                 )
+                visible_version = self._portal_visible_version(doc)
+                version_number = visible_version.version_number if visible_version else 1
+                items.append(
+                    PortalDocumentSummary(
+                        id=doc.id,
+                        title=doc.title,
+                        description=doc.description,
+                        category=doc.category,
+                        visibility=doc.visibility.value if doc.visibility else "internal",
+                        version=version_number,
+                        updated_at=doc.updated_at,
+                        has_attachments=attachment_count > 0,
+                    )
+                )
+
+            return PortalDocumentListResponse(
+                items=items,
+                total=total,
+                page=query.page,
+                per_page=query.per_page,
+                pages=pages,
             )
 
-        return PortalDocumentListResponse(
-            items=items,
-            total=total,
-            page=query.page,
-            per_page=query.per_page,
-            pages=pages,
+        return self._execute_cached(
+            projection_name="documents.list",
+            key_parts=(
+                self._tenant_scope(query.current_user),
+                query.page,
+                query.per_page,
+                query.category,
+                query.search,
+            ),
+            loader=load_projection,
+            validator=lambda payload: isinstance(payload, PortalDocumentListResponse),
         )
 
     def execute_get_document(self, query: GetPortalDocumentQuery) -> PortalDocumentDetail:
-        document = self.db.query(Document).filter(Document.id == query.document_id).first()
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        self._ensure_customer_document_access(document, query.current_user)
+        def load_projection() -> PortalDocumentDetail:
+            document = self.db.query(Document).filter(Document.id == query.document_id).first()
+            if not document:
+                raise HTTPException(status_code=404, detail="Document not found")
+            self._ensure_customer_document_access(document, query.current_user)
 
-        attachments = self.db.query(Attachment).filter(Attachment.document_id == query.document_id).all()
-        tags = [tag.strip() for tag in (document.tags or "").split(",") if tag.strip()]
-        visible_version = self._portal_visible_version(document)
-        content = visible_version.content if visible_version else ""
-        version_number = visible_version.version_number if visible_version else 1
+            attachments = (
+                self.db.query(Attachment).filter(Attachment.document_id == query.document_id).all()
+            )
+            tags = [tag.strip() for tag in (document.tags or "").split(",") if tag.strip()]
+            visible_version = self._portal_visible_version(document)
+            content = visible_version.content if visible_version else ""
+            version_number = visible_version.version_number if visible_version else 1
 
-        return PortalDocumentDetail(
-            id=document.id,
-            title=document.title,
-            description=document.description,
-            content=content,
-            category=document.category,
-            tags=tags,
-            visibility=document.visibility.value if document.visibility else "internal",
-            version=version_number,
-            created_at=document.created_at,
-            updated_at=document.updated_at,
-            attachments=[
-                PortalAttachment(
-                    id=att.id,
-                    filename=att.filename,
-                    file_size=att.file_size,
-                    mime_type=att.mime_type,
-                    created_at=att.uploaded_at,
-                    download_url=f"/api/v1/documents/{document.id}/attachments/{att.id}/download",
-                )
-                for att in attachments
-            ],
+            return PortalDocumentDetail(
+                id=document.id,
+                title=document.title,
+                description=document.description,
+                content=content,
+                category=document.category,
+                tags=tags,
+                visibility=document.visibility.value if document.visibility else "internal",
+                version=version_number,
+                created_at=document.created_at,
+                updated_at=document.updated_at,
+                attachments=[
+                    PortalAttachment(
+                        id=att.id,
+                        filename=att.filename,
+                        file_size=att.file_size,
+                        mime_type=att.mime_type,
+                        created_at=att.uploaded_at,
+                        download_url=f"/api/v1/documents/{document.id}/attachments/{att.id}/download",
+                    )
+                    for att in attachments
+                ],
+            )
+
+        return self._execute_cached(
+            projection_name="documents.detail",
+            key_parts=(self._tenant_scope(query.current_user), query.document_id),
+            loader=load_projection,
+            ttl_seconds=30,
+            validator=lambda payload: isinstance(payload, PortalDocumentDetail),
         )
 
     def execute_get_attachment(self, query: GetPortalAttachmentQuery) -> dict:
@@ -230,6 +288,15 @@ class PortalDocumentsQueryHandler:
         }
 
     def execute_categories(self, query: ListPortalCategoriesQuery) -> list[dict]:
+        return self._execute_cached(
+            projection_name="categories",
+            key_parts=(self._tenant_scope(query.current_user),),
+            loader=lambda: self._load_categories(query),
+            ttl_seconds=60,
+            validator=lambda payload: isinstance(payload, list),
+        )
+
+    def _load_categories(self, query: ListPortalCategoriesQuery) -> list[dict]:
         docs_query = self._customer_documents_query(query.current_user)
         results = (
             docs_query.with_entities(Document.category, func.count(Document.id).label("count"))
@@ -240,6 +307,15 @@ class PortalDocumentsQueryHandler:
         return [{"category": category, "count": count} for category, count in results if category]
 
     def execute_dashboard_stats(self, query: PortalDashboardStatsQuery) -> PortalDashboardStats:
+        return self._execute_cached(
+            projection_name="dashboard.stats",
+            key_parts=(self._tenant_scope(query.current_user), query.current_user.id),
+            loader=lambda: self._load_dashboard_stats(query),
+            ttl_seconds=30,
+            validator=lambda payload: isinstance(payload, PortalDashboardStats),
+        )
+
+    def _load_dashboard_stats(self, query: PortalDashboardStatsQuery) -> PortalDashboardStats:
         visible_documents_query = self._customer_documents_query(query.current_user)
         visibility_counts = dict(
             visible_documents_query.with_entities(Document.visibility, func.count(Document.id))
@@ -277,6 +353,23 @@ class PortalDocumentsQueryHandler:
         )
 
     def execute_search_documents(self, query: SearchPortalDocumentsQuery) -> dict:
+        return self._execute_cached(
+            projection_name="documents.search",
+            key_parts=(
+                self._tenant_scope(query.current_user),
+                query.q,
+                query.category,
+                query.page,
+                query.per_page,
+            ),
+            loader=lambda: self._load_search_documents(query),
+            ttl_seconds=30,
+            validator=lambda payload: isinstance(payload, dict)
+            and "results" in payload
+            and "total" in payload,
+        )
+
+    def _load_search_documents(self, query: SearchPortalDocumentsQuery) -> dict:
         docs_query = self._customer_documents_query(query.current_user)
         search_term = f"%{query.q}%"
         docs_query = docs_query.filter(

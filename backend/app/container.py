@@ -36,6 +36,7 @@ from app.infrastructure.composition import (
     get_email_port,
     get_storage_port,
 )
+from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
@@ -88,8 +89,8 @@ class AppContainer:
         self,
         db: Session,
         tenant_ctx: TenantContext | None = None,
-    ) -> AnalyticsService:
-        return AnalyticsService(db, tenant_ctx)
+    ) -> AnalyticsServiceStranglerWrapper:
+        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx))
 
     def auth_service(self, db: Session) -> AuthService:
         return AuthService(db)

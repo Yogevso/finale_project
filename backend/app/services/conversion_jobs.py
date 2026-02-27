@@ -8,14 +8,22 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
+from app.application.process_managers import PreviewConversionProcessManager
 from app.db import SessionLocal
+from app.jobs import (
+    AsyncJobBatchReport,
+    AsyncJobDisposition,
+    RetryPolicy,
+    compute_retry_delay_seconds,
+    evaluate_retry,
+    run_polling_worker,
+)
 from app.models import AttachmentArtifact, AttachmentConversionJob
 
 logger = logging.getLogger(__name__)
@@ -33,6 +41,21 @@ PROCESSING_TIMEOUT_SECONDS = max(
     30,
     int(os.getenv("CONVERSION_JOB_PROCESSING_TIMEOUT_SECONDS", "300")),
 )
+CONVERSION_WORKER_NAME = "conversion"
+
+
+def _default_retry_policy() -> RetryPolicy:
+    base_delay = max(0, int(os.getenv("CONVERSION_JOB_RETRY_DELAY_SECONDS", "30")))
+    max_delay = max(base_delay * 10, int(os.getenv("CONVERSION_JOB_MAX_RETRY_DELAY_SECONDS", "300")))
+    multiplier = max(
+        1.0,
+        float(os.getenv("CONVERSION_JOB_RETRY_BACKOFF_MULTIPLIER", "2.0")),
+    )
+    return RetryPolicy(
+        base_delay_seconds=base_delay,
+        max_delay_seconds=max_delay,
+        backoff_multiplier=multiplier,
+    )
 
 
 def _get_or_create_job(
@@ -109,6 +132,10 @@ def _recover_stale_processing_jobs(db: Session, now: datetime) -> int:
             job.status = JOB_STATUS_FAILED
             job.finished_at = now
             job.next_run_at = None
+            job.last_error = (
+                f"[DLQ:attempt_limit_reached({int(job.attempts or 0)}/{int(job.max_attempts or 3)})] "
+                f"{job.last_error}"
+            )
         else:
             job.status = JOB_STATUS_PENDING
             job.finished_at = None
@@ -141,7 +168,9 @@ def _claim_job_by_id(db: Session, job_id: int, now: datetime) -> bool:
     return updated == 1
 
 
-def _claim_next_runnable_job_id(db: Session, now: datetime, *, max_attempts: int = 5) -> Optional[int]:
+def _claim_next_runnable_job_id(
+    db: Session, now: datetime, *, max_attempts: int = 5
+) -> Optional[int]:
     for _ in range(max_attempts):
         row = (
             db.query(AttachmentConversionJob.id)
@@ -164,18 +193,35 @@ def _claim_next_runnable_job_id(db: Session, now: datetime, *, max_attempts: int
     return None
 
 
-def process_conversion_job(job_id: int, *, force: bool = False, claimed: bool = False) -> None:
+def _job_disposition(job: AttachmentConversionJob) -> AsyncJobDisposition:
+    if job.status == JOB_STATUS_COMPLETED:
+        return AsyncJobDisposition.COMPLETED
+    if job.status == JOB_STATUS_FAILED:
+        return AsyncJobDisposition.DEAD_LETTER
+    if job.status == JOB_STATUS_PENDING:
+        return AsyncJobDisposition.RETRY
+    return AsyncJobDisposition.SKIPPED
+
+
+def process_conversion_job(
+    job_id: int,
+    *,
+    force: bool = False,
+    claimed: bool = False,
+    retry_policy: RetryPolicy | None = None,
+) -> AsyncJobDisposition:
     """Execute one persisted conversion job."""
     from app.services.attachment_service import AttachmentService
 
+    policy = retry_policy or _default_retry_policy()
     db = SessionLocal()
     try:
         job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
         if not job:
-            return
+            return AsyncJobDisposition.SKIPPED
         if claimed:
             if job.status != JOB_STATUS_PROCESSING:
-                return
+                return AsyncJobDisposition.SKIPPED
         else:
             now = datetime.utcnow()
             recovered = _recover_stale_processing_jobs(db, now)
@@ -185,96 +231,134 @@ def process_conversion_job(job_id: int, *, force: bool = False, claimed: bool = 
             else:
                 db.rollback()
             if not claimed_ok:
-                return
-            job = (
-                db.query(AttachmentConversionJob)
-                .filter(AttachmentConversionJob.id == job_id)
-                .first()
-            )
+                return AsyncJobDisposition.SKIPPED
+            job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
             if not job:
-                return
+                return AsyncJobDisposition.SKIPPED
 
-        AttachmentService.generate_preview_pdf_artifact(
-            job.attachment_id,
-            force=bool(force or job.force),
+        retry_delay_seconds = compute_retry_delay_seconds(
+            attempt_number=max(1, int(job.attempts or 1)),
+            policy=policy,
         )
 
-        preview_status, preview_error = _load_preview_artifact_status(db, job.attachment_id)
-        if preview_status == ARTIFACT_STATUS_READY:
-            job.status = JOB_STATUS_COMPLETED
-            job.last_error = None
-            job.force = False
-            job.finished_at = datetime.utcnow()
-            job.next_run_at = None
-        elif preview_status == ARTIFACT_STATUS_FAILED:
-            job.last_error = preview_error or "Preview conversion failed"
-            if int(job.attempts or 0) < int(job.max_attempts or 3):
-                backoff_seconds = min(300, 10 * int(job.attempts or 1))
-                job.status = JOB_STATUS_PENDING
-                job.started_at = None
-                job.finished_at = None
-                job.next_run_at = datetime.utcnow() + timedelta(seconds=backoff_seconds)
-            else:
-                job.status = JOB_STATUS_FAILED
-                job.finished_at = datetime.utcnow()
-        else:
-            # Conservative fallback: keep pending until artifact status resolves.
-            job.status = JOB_STATUS_PENDING
-            job.started_at = None
-            job.finished_at = None
-            job.next_run_at = datetime.utcnow() + timedelta(seconds=10)
+        workflow = PreviewConversionProcessManager(
+            preview_generator=lambda attachment_id: AttachmentService.generate_preview_pdf_artifact(
+                attachment_id,
+                force=bool(force or job.force),
+            ),
+            preview_status_loader=lambda attachment_id: _load_preview_artifact_status(
+                db,
+                attachment_id,
+            ),
+            status_ready=ARTIFACT_STATUS_READY,
+            status_failed=ARTIFACT_STATUS_FAILED,
+            job_status_pending=JOB_STATUS_PENDING,
+            job_status_completed=JOB_STATUS_COMPLETED,
+            job_status_failed=JOB_STATUS_FAILED,
+        )
+        trace = workflow.execute(
+            job,
+            retry_delay_seconds=retry_delay_seconds,
+            fallback_probe_delay_seconds=10,
+            status_failure_retry_delay_seconds=retry_delay_seconds,
+        )
+        if trace.error:
+            logger.exception(
+                "Conversion workflow failed for job %s at step %s: %s",
+                job_id,
+                trace.failed_step,
+                trace.error,
+            )
 
         db.commit()
+        return _job_disposition(job)
     except Exception as exc:
         logger.exception("Conversion job %s failed unexpectedly", job_id)
-        try:
-            job = (
-                db.query(AttachmentConversionJob)
-                .filter(AttachmentConversionJob.id == job_id)
-                .first()
-            )
-            if job:
-                job.last_error = str(exc)
-                if int(job.attempts or 0) < int(job.max_attempts or 3):
-                    job.status = JOB_STATUS_PENDING
-                    job.started_at = None
-                    job.finished_at = None
-                    job.next_run_at = datetime.utcnow() + timedelta(seconds=30)
-                else:
-                    job.status = JOB_STATUS_FAILED
-                    job.finished_at = datetime.utcnow()
-                db.commit()
-        except Exception:
-            logger.exception("Failed persisting conversion job failure state for %s", job_id)
+        db.rollback()
+        job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
+        if not job or job.status != JOB_STATUS_PROCESSING:
+            return AsyncJobDisposition.SKIPPED
+
+        decision = evaluate_retry(
+            attempts=int(job.attempts or 0),
+            max_attempts=int(job.max_attempts or 3),
+            error=str(exc),
+            policy=policy,
+        )
+        now = datetime.utcnow()
+        job.started_at = None
+        if decision.disposition == AsyncJobDisposition.DEAD_LETTER:
+            job.status = JOB_STATUS_FAILED
+            job.finished_at = now
+            job.next_run_at = None
+            job.last_error = f"[DLQ:{decision.reason}] {exc}"
+            db.commit()
+            return AsyncJobDisposition.DEAD_LETTER
+
+        job.status = JOB_STATUS_PENDING
+        job.finished_at = None
+        job.next_run_at = now + timedelta(seconds=max(0, int(decision.next_delay_seconds or 0)))
+        job.last_error = str(exc)
+        db.commit()
+        return AsyncJobDisposition.RETRY
     finally:
         db.close()
 
 
-def process_pending_jobs_once(*, batch_size: int = 10, force: bool = False) -> int:
-    """Process one batch of pending conversion jobs and return processed count."""
-    processed = 0
+def process_pending_jobs_batch(
+    *,
+    batch_size: int = 10,
+    force: bool = False,
+    retry_policy: RetryPolicy | None = None,
+) -> AsyncJobBatchReport:
+    """Process one batch of pending conversion jobs and return detailed counters."""
+    report = AsyncJobBatchReport(worker_name=CONVERSION_WORKER_NAME)
+    policy = retry_policy or _default_retry_policy()
+    handled = 0
 
-    while processed < batch_size:
+    while handled < max(1, int(batch_size)):
         claimed_job_id: Optional[int] = None
+        recovered_count = 0
         db = SessionLocal()
         try:
             now = datetime.utcnow()
-            recovered = _recover_stale_processing_jobs(db, now)
+            recovered_count = _recover_stale_processing_jobs(db, now)
             claimed_job_id = _claim_next_runnable_job_id(db, now)
-            if recovered or claimed_job_id is not None:
+            if recovered_count or claimed_job_id is not None:
                 db.commit()
             else:
                 db.rollback()
         finally:
             db.close()
 
+        report.recovered += recovered_count
         if claimed_job_id is None:
             break
 
-        process_conversion_job(claimed_job_id, force=force, claimed=True)
-        processed += 1
+        handled += 1
+        report.attempted += 1
+        disposition = process_conversion_job(
+            claimed_job_id,
+            force=force,
+            claimed=True,
+            retry_policy=policy,
+        )
+        if disposition == AsyncJobDisposition.COMPLETED:
+            report.completed += 1
+        elif disposition == AsyncJobDisposition.RETRY:
+            report.retried += 1
+        elif disposition == AsyncJobDisposition.DEAD_LETTER:
+            report.dead_lettered += 1
+        else:
+            report.skipped += 1
 
-    return processed
+    return report
+
+
+def process_pending_jobs_once(*, batch_size: int = 10, force: bool = False) -> int:
+    """Compatibility wrapper returning attempted conversion-job count."""
+    report = process_pending_jobs_batch(batch_size=batch_size, force=force)
+    return report.attempted
 
 
 def enqueue_conversion(
@@ -297,6 +381,68 @@ def enqueue_conversion(
         background_tasks.add_task(process_pending_jobs_once, batch_size=1, force=False)
 
 
+def list_dead_letter_conversion_jobs(
+    *,
+    limit: int = 100,
+    db: Session | None = None,
+) -> list[AttachmentConversionJob]:
+    """List conversion jobs currently parked in DLQ/failed state."""
+    owns_session = db is None
+    session = db or SessionLocal()
+    try:
+        return (
+            session.query(AttachmentConversionJob)
+            .filter(
+                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.status == JOB_STATUS_FAILED,
+            )
+            .order_by(AttachmentConversionJob.finished_at.desc(), AttachmentConversionJob.id.desc())
+            .limit(max(1, int(limit)))
+            .all()
+        )
+    finally:
+        if owns_session:
+            session.close()
+
+
+def requeue_dead_letter_conversion_job(
+    job_id: int,
+    *,
+    force: bool = False,
+    reset_attempts: bool = False,
+    db: Session | None = None,
+) -> bool:
+    """Requeue one failed conversion job for operator-driven recovery."""
+    owns_session = db is None
+    session = db or SessionLocal()
+    try:
+        job = (
+            session.query(AttachmentConversionJob)
+            .filter(
+                AttachmentConversionJob.id == job_id,
+                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.status == JOB_STATUS_FAILED,
+            )
+            .first()
+        )
+        if not job:
+            return False
+
+        job.status = JOB_STATUS_PENDING
+        job.force = bool(force or job.force)
+        job.started_at = None
+        job.finished_at = None
+        job.next_run_at = None
+        job.last_error = None
+        if reset_attempts:
+            job.attempts = 0
+        session.commit()
+        return True
+    finally:
+        if owns_session:
+            session.close()
+
+
 def run_conversion_worker(
     *,
     poll_interval_seconds: float = 2.0,
@@ -309,16 +455,16 @@ def run_conversion_worker(
     Intended entrypoint for a standalone process:
     `python -m app.workers.conversion_worker`
     """
-    logger.info(
-        "Starting durable conversion worker (poll=%ss batch=%s once=%s)",
-        poll_interval_seconds,
-        batch_size,
-        once,
+    policy = _default_retry_policy()
+    run_polling_worker(
+        worker_name=CONVERSION_WORKER_NAME,
+        logger=logger,
+        poll_interval_seconds=poll_interval_seconds,
+        batch_size=batch_size,
+        once=once,
+        process_batch=lambda size: process_pending_jobs_batch(
+            batch_size=size,
+            force=force,
+            retry_policy=policy,
+        ),
     )
-
-    while True:
-        processed = process_pending_jobs_once(batch_size=batch_size, force=force)
-        if once:
-            return
-        if processed == 0:
-            time.sleep(max(0.5, poll_interval_seconds))

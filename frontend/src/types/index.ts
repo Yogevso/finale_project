@@ -92,6 +92,8 @@ export interface Document {
   category: string | null
   tags: string | null
   parent_id?: number | null
+  row_version?: number
+  etag?: string
   created_by: number
   created_at: string
   updated_at: string
@@ -154,6 +156,8 @@ export interface Version {
   version_number: number
   semantic_version?: string | null
   bump_type?: VersionBumpType
+  row_version?: number
+  etag?: string
   content: string | null
   changes_summary: string | null
   is_published: boolean

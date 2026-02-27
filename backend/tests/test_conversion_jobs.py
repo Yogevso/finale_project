@@ -67,7 +67,7 @@ def test_process_pending_jobs_claims_unique_jobs(db, test_user, monkeypatch):
 
     claimed_job_ids = []
 
-    def fake_process(job_id, *, force=False, claimed=False):  # noqa: ARG001
+    def fake_process(job_id, *, force=False, claimed=False, retry_policy=None):  # noqa: ARG001
         claimed_job_ids.append((job_id, claimed))
         session = worker_session()
         try:
@@ -160,3 +160,32 @@ def test_job_failure_requeues_with_backoff(db, test_user, monkeypatch):
     assert job.started_at is None
     assert job.next_run_at is not None
     assert "forced conversion failure" in (job.last_error or "")
+
+
+def test_conversion_dead_letter_entries_are_listed_and_requeueable(db, test_user):
+    job = _create_job(
+        db,
+        test_user=test_user,
+        status=conversion_jobs.JOB_STATUS_FAILED,
+        attempts=3,
+        max_attempts=3,
+    )
+    job.last_error = "[DLQ:attempt_limit_reached(3/3)] failed permanently"
+    db.commit()
+
+    failed_jobs = conversion_jobs.list_dead_letter_conversion_jobs(db=db, limit=10)
+    assert len(failed_jobs) == 1
+    assert failed_jobs[0].id == job.id
+
+    requeued = conversion_jobs.requeue_dead_letter_conversion_job(
+        job.id,
+        db=db,
+        force=True,
+        reset_attempts=True,
+    )
+    assert requeued is True
+    db.refresh(job)
+    assert job.status == conversion_jobs.JOB_STATUS_PENDING
+    assert job.last_error is None
+    assert job.attempts == 0
+    assert job.force is True

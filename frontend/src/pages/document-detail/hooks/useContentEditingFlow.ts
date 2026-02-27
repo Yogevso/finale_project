@@ -166,7 +166,9 @@ export function useContentEditingFlow({
         changes_summary: changesSummary,
       })
 
-      await api.updateDocument(documentId, { status: 'draft' })
+      const latestDocument = await api.getDocument(documentId)
+      const ifMatch = latestDocument.etag || String(latestDocument.row_version || '')
+      await api.updateDocument(documentId, { status: 'draft' }, ifMatch)
 
       if (submitForReview) {
         const reviewActionLabel =

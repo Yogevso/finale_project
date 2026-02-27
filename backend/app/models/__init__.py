@@ -14,11 +14,13 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
 from app.db import Base
+from app.utils.concurrency import build_resource_etag
 
 
 # Enums
@@ -328,6 +330,7 @@ class Document(Base):
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
+    row_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -354,6 +357,10 @@ class Document(Base):
         "ReviewRequest", back_populates="document", cascade="all, delete-orphan"
     )
 
+    @property
+    def etag(self) -> str:
+        return build_resource_etag("document", int(self.id), int(self.row_version or 1))
+
 
 class Version(Base):
     """Document version model"""
@@ -371,6 +378,7 @@ class Version(Base):
     published_at = Column(DateTime, nullable=True)  # When version was published
     published_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    row_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -378,6 +386,10 @@ class Version(Base):
     created_by_user = relationship("User", foreign_keys=[created_by])
     published_by_user = relationship("User", foreign_keys=[published_by])
     sections = relationship("Section", back_populates="version", cascade="all, delete-orphan")
+
+    @property
+    def etag(self) -> str:
+        return build_resource_etag("version", int(self.id), int(self.row_version or 1))
 
 
 class Attachment(Base):
@@ -474,6 +486,57 @@ class AttachmentConversionJob(Base):
 
     # Relationships
     attachment = relationship("Attachment", back_populates="conversion_jobs")
+
+
+class DomainEventOutbox(Base):
+    """Persisted domain events for reliable side-effect delivery."""
+
+    __tablename__ = "domain_event_outbox"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(120), nullable=False, index=True)
+    event_key = Column(String(255), nullable=True, unique=True, index=True)
+    payload_json = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=5)
+    next_attempt_at = Column(DateTime, nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    processed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class IdempotencyKeyRecord(Base):
+    """Persisted request/response fingerprints for idempotent retries."""
+
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key",
+            "method",
+            "path",
+            "user_scope",
+            name="uq_idempotency_scope",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String(255), nullable=False, index=True)
+    method = Column(String(10), nullable=False)
+    path = Column(String(500), nullable=False)
+    user_scope = Column(String(64), nullable=False)
+    user_id = Column(Integer, nullable=True, index=True)
+    request_hash = Column(String(64), nullable=False)
+    status = Column(String(20), nullable=False, default="processing", index=True)
+    response_status = Column(Integer, nullable=True)
+    response_body = Column(Text, nullable=True)
+    response_content_type = Column(String(120), nullable=True)
+    processing_started_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
 class Comment(Base):
@@ -777,6 +840,16 @@ class CollaborationSnapshot(Base):
     created_by_user = relationship("User")
 
 
+@event.listens_for(Document, "before_update", propagate=True)
+def _bump_document_row_version(_mapper, _connection, target: Document) -> None:
+    target.row_version = int(target.row_version or 0) + 1
+
+
+@event.listens_for(Version, "before_update", propagate=True)
+def _bump_version_row_version(_mapper, _connection, target: Version) -> None:
+    target.row_version = int(target.row_version or 0) + 1
+
+
 # Export all models
 __all__ = [
     # Models
@@ -791,6 +864,8 @@ __all__ = [
     "Attachment",
     "AttachmentArtifact",
     "AttachmentConversionJob",
+    "DomainEventOutbox",
+    "IdempotencyKeyRecord",
     "Comment",
     "AuditLog",
     "Notification",

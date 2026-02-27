@@ -59,3 +59,9 @@ class InvalidStateError(DomainError):
     status_code = status.HTTP_400_BAD_REQUEST
     error_code = "invalid_state"
 
+
+class PreconditionRequiredError(DomainError):
+    """Caller omitted a required write precondition token."""
+
+    status_code = status.HTTP_428_PRECONDITION_REQUIRED
+    error_code = "precondition_required"
