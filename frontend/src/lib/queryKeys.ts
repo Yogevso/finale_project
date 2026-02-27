@@ -10,6 +10,7 @@ export const queryKeys = {
       page_size?: number
       search?: string
       status?: string
+      visibility?: string
     }) => ['documents', 'list', params ?? {}] as const,
     detail: (documentId: QueryEntityId) => ['documents', 'detail', normalizeId(documentId)] as const,
     assignedCompanies: (documentId: QueryEntityId) =>

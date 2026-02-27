@@ -38,6 +38,7 @@ export default function DocumentsPage() {
       page_size: 10,
       search: search || undefined,
       status: statusFilter || undefined,
+      visibility: visibilityFilter || undefined,
     }),
     queryFn: () =>
       api.getDocuments({
@@ -45,6 +46,7 @@ export default function DocumentsPage() {
         page_size: 10,
         search: search || undefined,
         status: statusFilter || undefined,
+        visibility: visibilityFilter || undefined,
       }),
   })
 
@@ -83,6 +85,9 @@ export default function DocumentsPage() {
   })
 
   const handleDelete = (id: number, title: string) => {
+    if (!isManager) {
+      return
+    }
     if (confirm(`Are you sure you want to delete "${title}"?`)) {
       deleteMutation.mutate(id)
     }
@@ -320,7 +325,7 @@ export default function DocumentsPage() {
                         {new Date(doc.created_at).toLocaleDateString()}
                       </td>
                       <td className="admin-table-cell text-right whitespace-nowrap">
-                        {isEditor ? (
+                        {isManager ? (
                           <button
                             onClick={() => handleDelete(doc.id, doc.title)}
                             className="text-rose-600 hover:text-rose-700 font-semibold text-xs uppercase tracking-wide"

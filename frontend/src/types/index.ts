@@ -306,6 +306,7 @@ export interface DocumentQueryParams {
   page?: number
   page_size?: number
   status?: DocumentStatus
+  visibility?: DocumentVisibility
   category?: string
   search?: string
 }
