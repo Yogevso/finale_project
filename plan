@@ -1,1172 +1,2264 @@
-Project Plan: Remaining Work Only
-Last updated: 2026-02-24
+Project Plan: Open Work Only
+Last updated: 2026-02-27
 Owner: Engineering
 
 ================================================
 0) Scope
 ================================================
 
-This file intentionally contains only open work.
-Completed phases/tasks were removed for clarity.
-History of completed work is available in git commits and PR history.
+This file contains only active work.
+Completed phases and detailed historical logs were removed for clarity.
+Full implementation history remains in git.
 
-Primary goal now:
-- Close all open security, correctness, performance, and maintainability findings from the 2026-02-24 four-pass review.
-- Execute fixes in dependency waves while preserving priority rules (all P0 first, then P1/P2 by dependency and impact).
+Primary goals now:
+- Close remaining correctness gaps found in the 2026-02-25 code review.
+- Improve code clarity and organization with an explicit OOP refactor track.
 
 Out of scope:
-- New features unrelated to current review findings.
-- UI redesign work.
+- New product features unrelated to the open findings below.
+- Visual redesign work.
 
 ================================================
 1) Priority Order
 ================================================
 
-P0 (blockers, fix first):
-1. Enforce attachment authorization at service layer.
-2. Fix collab-server persistence token strategy and connection tracking.
-3. Tighten collaboration authorization to enforce tenant boundaries.
-15. Prevent comment visibility filtering from mutating ORM relationships.
-16. Harden conversion job queue claim/stuck-processing behavior.
-20. Make document creation + initial version/audit atomic.
-31. Prevent upload defaults from bypassing draft/review lifecycle and unintended public visibility.
+P0 (fix first):
+41. Enforce tenant scope in assign-companies document endpoints.
 
 P1 (high priority):
-4. Align assigned-companies API contract (backend vs frontend).
-5. Remove remaining N+1 query patterns.
-6. Continue migration/frontend cleanup in touched modules.
-7. Fix public viewer visibility/privacy leaks.
-8. Enforce tenant scope in versions/reviews/search/engagement endpoints.
-9. Enforce active-user checks on protected routes.
-10. Prevent cross-tenant reassignment in user update flows.
-11. Fix portal attachment download path mismatch.
-12. Make notification dispatch safe in sync request handlers.
-13. Fix collaboration hook reconnect behavior on document changes.
-17. Fix viewer preview endpoint to stream preview artifact, not original bytes.
-18. Make search filters consistent between FTS and fallback code paths.
-19. Align notification enum/value contracts between backend and frontend.
-21. Ensure upload/release-notes workflow rolls back cleanly on downstream failure.
-26. Align company document semantics (owned vs assigned) across API/UI/stats.
-27. Enforce tenant-consistent invitation company assignment rules.
-28. Enforce customer-company invariant consistently across user/company flows.
-29. Enforce clear behavior for deactivated companies in auth/portal access.
-32. Enforce true peer-review approval constraints in reviews workflow.
-33. Enforce role hierarchy on all user-update mutations (not only role changes).
-34. Preserve published document availability while drafting next versions.
-37. Align collaboration edit permissions with core document edit policy.
-39. Harden public search highlight rendering against regex-special input crashes.
+42. Wire visibility filter end-to-end in documents list page.
+43. Align delete action permission UX with backend authorization.
+44. Make document delete + audit logging atomic.
 
-P2 (important, can run after P0/P1):
-14. Align portal dashboard stats with portal access rules.
-22. Align portal list/detail version selection rules.
-23. Fix attachment-selection refresh behavior in preview/editor components.
-24. Align frontend permission source with backend dynamic RBAC policies.
-25. Improve document number generation strategy for scale/contention.
-30. Align assign-companies behavior with selector semantics (set vs additive).
-35. Correct publish-time analytics metrics to use publish timestamps.
-36. Fix tenant-scoped "most active users" ranking query semantics.
-38. Normalize topic slug/document-topic semantics in public topic counts.
-40. Reject unknown analytics export report types with explicit 4xx responses.
+P2 (near-term architecture and organization):
+45. Standardize backend service architecture around OOP service objects.
+46. Split oversized backend modules into cohesive OOP components.
+47. Decompose DocumentsPage into feature components + controller hooks.
+48. Refactor collaboration server bootstrap into explicit classes/services.
+49. Simplify frontend API client composition and module boundaries.
+50. Introduce explicit access-policy classes for permission/tenant checks.
+51. Add repository classes for core aggregates and reduce direct route-level queries.
+52. Add Unit-of-Work transaction abstraction for multi-step write flows.
+53. Introduce domain events for decoupled side effects.
+54. Introduce value objects for core domain primitives.
+55. Model document/review lifecycle rules as workflow state machine classes.
+56. Apply CQRS-lite command/query handlers for core domains.
 
-Execution waves (start order):
-- Wave A (stability/security gate): 1, 2, 3, 15, 16, 20, 31.
-- Wave B (core business correctness): 4, 7, 8, 9, 10, 11, 12, 17, 18, 19, 21, 26, 27, 28, 29, 32, 33, 34, 37, 39.
-- Wave C (consistency/performance polish): 5, 6, 13, 14, 22, 23, 24, 25, 30, 35, 36, 38, 40.
+P3 (deeper OOP hardening):
+57. Refactor notification/email pipeline into channel + template objects.
+58. Encapsulate token/auth lifecycle into dedicated auth context services.
+59. Create FastAPI app factory + router registry object model.
+60. Refactor attachment conversion into strategy/pipeline classes.
+61. Extract collaboration backend managers into service objects.
+62. Introduce frontend feature controller/view-model objects across complex screens.
+63. Add typed API DTO mapper layer between transport and UI/domain.
+64. Introduce domain error hierarchy + centralized error mapping.
+65. Add backend/frontend test builders and fixture factories.
+66. Define bounded-context modules with explicit context-level APIs.
+67. Introduce aggregate roots with invariant methods.
+68. Adopt ports-and-adapters boundaries for infrastructure dependencies.
+69. Add specification objects for reusable authorization/filter query logic.
+70. Introduce command handler pipeline (validate/authorize/execute/publish).
+71. Expand query handlers/read models for analytics/search/portal reads.
 
-================================================
-1.1) Review Findings Mapping (2026-02-24)
-================================================
+P4 (strategic architecture and reliability):
+72. Implement outbox pattern for reliable domain-event delivery.
+73. Introduce saga/process-manager orchestration for multi-step workflows.
+74. Add typed `Result`/error algebra in application/domain layers.
+75. Add composition root / dependency container for service wiring.
+76. Introduce frontend feature modules with use-case services.
+77. Model frontend workflows with explicit state machines.
+78. Adopt contract-first generated API clients + DTO contracts.
+79. Add backend-frontend-collab contract tests for payload/token compatibility.
+80. Expand object-mother/scenario fixture patterns across all domains.
+81. Add architecture fitness tests (import/layer boundary enforcement in CI).
+82. Introduce class-based controller handlers per bounded context.
+83. Add domain factories for complex aggregate creation workflows.
+84. Introduce capability objects for authorization decisions.
+85. Add plugin registry system for extension points (converters/exporters/channels).
+86. Introduce anti-corruption layers for external integrations/contracts.
+87. Enforce immutable command/query DTOs across application boundaries.
+88. Introduce explicit workflow-stage state objects for lifecycle flows.
+89. Add use-case metrics/tracing objects for command/query observability.
 
-1. Public viewer endpoint leaks non-public documents.
-   - Location: backend/app/api/viewer/documents.py
-   - Plan mapping: Task 7.
-2. Public viewer returns private comments.
-   - Location: backend/app/api/viewer/documents.py
-   - Plan mapping: Task 7.
-3. Attachment service access checks do not consistently enforce permission boundaries.
-   - Location: backend/app/services/attachment_service/common.py
-   - Plan mapping: Task 1.
-4. Versions API reads are not consistently tenant-scoped.
-   - Location: backend/app/api/management/versions.py, backend/app/services/version_service.py
-   - Plan mapping: Task 8.
-5. Reviews workflow queries/mutations are not consistently tenant-scoped.
-   - Location: backend/app/api/management/reviews.py
-   - Plan mapping: Task 8.
-6. Search and engagement endpoints are not consistently tenant-scoped.
-   - Location: backend/app/api/management/search.py, backend/app/api/management/engagement.py
-   - Plan mapping: Task 8.
-7. Collaboration permission checks are broader than tenant boundaries allow.
-   - Location: backend/app/services/collaboration_service.py, backend/app/api/management/auth.py
-   - Plan mapping: Task 3.
-8. Collab-server token/connection tracking has multi-connection correctness bugs.
-   - Location: collab-server/src/index.ts
-   - Plan mapping: Task 2.
-9. Inactive users can access endpoints that should require active accounts.
-   - Location: backend/app/security.py and endpoints using get_current_user
-   - Plan mapping: Task 9.
-10. User update flow can reassign users across tenants.
-   - Location: backend/app/api/management/users.py
-   - Plan mapping: Task 10.
-11. Customer portal attachment download URL is inconsistent with backend route shape.
-   - Location: backend/app/api/portal/documents.py and frontend portal consumers
-   - Plan mapping: Task 11.
-12. Notification scheduling uses asyncio.create_task from sync paths.
-   - Location: backend/app/services/version_service.py, backend/app/services/comment_service.py
-   - Plan mapping: Task 12.
-13. Frontend collaboration hook can keep stale session when documentId changes.
-   - Location: frontend/src/lib/useCollaboration.ts
-   - Plan mapping: Task 13 (and Task 6 overlap).
-14. Portal dashboard stats are inconsistent with portal visibility rules.
-   - Location: backend/app/api/portal/documents.py
-   - Plan mapping: Task 14.
+P5 (long-horizon architecture):
+90. Evaluate and pilot selective event sourcing for high-complexity domains.
+91. Establish Architecture Decision Records (ADR) workflow for major refactors.
+92. Define deprecation lifecycle policy for APIs/modules/contracts.
+93. Split codebase into enforceable internal packages/layers (`domain`, `application`, `infrastructure`, `web`).
+94. Add refactor-budget CI gates (size/complexity deltas for touched files).
+95. Add fault-injection resilience tests for external adapters and integrations.
+96. Publish migration playbooks/checklists for each refactor wave.
+97. Define internal contract versioning policy for backend/frontend/collab payloads.
+98. Define use-case performance SLOs and monitor command/query p95/error budgets.
+99. Introduce feature-toggle framework for safe architectural rollouts.
+100. Enforce "no direct DB access in routes" rule with lint checks/codemod support.
 
-================================================
-1.2) Logic/Build Findings Mapping (2026-02-24 pass 2)
-================================================
+P6 (advanced architecture controls):
+102. Introduce centralized Policy Decision Point (PDP) authorization service.
+111. Define explicit use-case domain service interfaces (non-CRUD).
+112. Add invariant specification objects reusable at runtime and in tests.
+114. Add policy-explanation objects for authorization decisions.
+109. Enforce frontend feature-level dependency rules.
+101. Add idempotency-key support for write endpoints and side-effecting operations.
+107. Add optimistic concurrency controls (`version`/`etag`) for mutable resources.
+113. Introduce command bus + query bus middleware pipelines.
+116. Add formal executable workflow models + model-based tests for high-risk flows.
+117. Add consumer-driven contract testing (frontend/backed provider suite).
+103. Add tenant-isolation attack harness for endpoint-level security regression tests.
+121. Create architecture debt register with ownership/risk tracking.
 
-1. Comment visibility filtering mutates ORM relationship collections.
-   - Location: backend/app/services/comment_service.py
-   - Plan mapping: Task 15.
-2. Conversion jobs can stay stuck in `processing`; claim path is not robust under concurrency.
-   - Location: backend/app/services/conversion_jobs.py
-   - Plan mapping: Task 16.
-3. Viewer preview route streams original attachment bytes instead of preview-PDF artifact bytes.
-   - Location: backend/app/api/viewer/documents.py
-   - Plan mapping: Task 17.
-4. Search filters are applied only in fallback path, not in primary FTS path.
-   - Location: backend/app/api/management/search.py
-   - Plan mapping: Task 18.
-5. Notification type string contract differs between backend values and frontend expectations.
-   - Location: backend/app/models/__init__.py, frontend/src/types/index.ts, frontend notifications UI
-   - Plan mapping: Task 19.
-6. Document creation is committed before version/audit creation, allowing partial state on failures.
-   - Location: backend/app/services/document_service.py
-   - Plan mapping: Task 20.
-7. Release-notes upload path can leave orphaned child records when attachment upload fails.
-   - Location: backend/app/api/management/documents.py
-   - Plan mapping: Task 21.
-8. Portal list/detail use different version-selection rules and can show inconsistent version numbers.
-   - Location: backend/app/api/portal/documents.py
-   - Plan mapping: Task 22.
-9. Frontend attachment selection can remain stale after attachment list changes.
-   - Location: frontend/src/pages/document-detail/DocumentPreview.tsx, frontend/src/components/DocumentEditor.tsx
-   - Plan mapping: Task 23.
-10. Frontend uses hardcoded role-permission mapping while backend supports dynamic RBAC publish.
-   - Location: frontend/src/lib/auth.tsx, backend/app/services/permissions.py
-   - Plan mapping: Task 24.
-11. Document number generation is O(n) scan with retry-only contention handling.
-   - Location: backend/app/services/document_service.py
-   - Plan mapping: Task 25.
+P7 (platform and governance maturity):
+104. Publish data-ownership map per bounded context (single write-owner policy).
+115. Create context-map artifacts describing domain upstream/downstream dependencies.
+122. Add refactor scaffolding generators/templates for consistent patterns.
+108. Apply strangler wrappers for legacy-heavy modules.
+106. Build unified async job framework (retry/DLQ/poison handling/visibility).
+105. Implement projection/caching architecture with event-driven invalidation.
+110. Introduce Backend-for-Frontend (BFF) layer for complex UI orchestration.
+118. Build migration safety framework (dry-run/preflight/rollback probes/post-assertions).
+119. Add SLO burn-rate alerts tied to use-cases.
+120. Add chaos testing on adapter boundaries in staging pipeline.
+
+Execution waves:
+- Wave D (correctness fixes): 41, 42, 43, 44.
+- Wave E (governance and domain mapping prerequisites): 91, 92, 96, 97, 104, 115, 121.
+- Wave F (structural boundaries and enforcement baseline): 66, 93, 68, 81, 109, 100, 94.
+- Wave G (backend application core foundations): 45, 50, 51, 52, 111, 74, 64, 75, 102, 114.
+- Wave H (domain model hardening): 54, 67, 83, 112, 69, 84, 87.
+- Wave I (workflow and use-case orchestration): 55, 88, 70, 56, 71, 113, 116.
+- Wave J (write-path reliability and rollout safety): 53, 72, 73, 101, 107, 106, 105, 99, 108, 118.
+- Wave K (service and integration refactors): 59, 82, 48, 61, 58, 57, 60, 46, 85, 86.
+- Wave L (frontend architecture and contract alignment): 49, 63, 47, 62, 76, 77, 78, 110, 117, 79.
+- Wave M (testability and scaffolding acceleration): 65, 80, 122.
+- Wave N (security and resilience validation): 103, 95, 120.
+- Wave O (observability and long-horizon evolution): 89, 98, 119, 90.
+- Wave playbooks/checklists: docs/migrations/README.md
 
 ================================================
-1.3) Company Lifecycle Findings Mapping (2026-02-24 pass 3)
+2) Active Tasks
 ================================================
 
-1. Assigned-companies payload mismatch between backend and frontend hooks/UI.
-   - Location: backend/app/api/management/documents.py, frontend/src/lib/api/documentsApi.ts
-   - Plan mapping: Task 4.
-2. Company document counts/list use tenant ownership, not assignment semantics used by customer portal.
-   - Location: backend/app/api/management/companies.py, frontend/src/pages/CompanyDetailPage.tsx
-   - Plan mapping: Task 26.
-3. Portal dashboard stats use inconsistent query logic vs portal list/detail access rules.
-   - Location: backend/app/api/portal/documents.py
-   - Plan mapping: Task 14.
-4. Portal attachment download URL mismatches backend route shape.
-   - Location: backend/app/api/portal/documents.py, frontend/src/pages/portal/CustomerDocumentPage.tsx
-   - Plan mapping: Task 11.
-5. User update flow allows reassignment behavior inconsistent with create constraints.
-   - Location: backend/app/api/management/users.py
-   - Plan mapping: Task 10.
-6. Invitation flow permits cross-tenant customer invitation assignment for non-system admins.
-   - Location: backend/app/api/management/invitations.py
-   - Plan mapping: Task 27.
-7. Customer "must have company" invariant is inconsistent with remove-from-company and update/null handling.
-   - Location: backend/app/api/management/users.py, backend/app/api/management/companies.py
-   - Plan mapping: Task 28.
-8. Company deactivation does not enforce effective access disablement.
-   - Location: backend/app/api/management/companies.py, backend/app/security.py, backend/app/api/portal/*.py
-   - Plan mapping: Task 29.
-9. Assign-companies endpoint is additive-only while UI selector behaves as set-selection.
-   - Location: backend/app/api/management/documents.py, frontend/src/components/CompanySelector.tsx
-   - Plan mapping: Task 30.
-10. Company/user/portal flows contain additional N+1 query hotspots.
-   - Location: backend/app/api/management/companies.py, backend/app/api/management/users.py, backend/app/api/portal/documents.py
-   - Plan mapping: Task 5.
+Task 41: Tenant-scoped assign-companies endpoints (P0)
 
-================================================
-1.4) End-to-End Logic Findings Mapping (2026-02-24 pass 4)
-================================================
+Status:
+- Completed (2026-02-27).
 
-1. Upload route defaults to public visibility and active status, bypassing intended draft/review lifecycle.
-   - Location: backend/app/api/management/documents.py
-   - Plan mapping: Task 31.
-2. Review approval allows editors to approve non-editor submissions, violating peer-review constraint.
-   - Location: backend/app/api/management/reviews.py
-   - Plan mapping: Task 32.
-3. User update role hierarchy is not enforced for non-role mutations (deactivate/reassign).
-   - Location: backend/app/api/management/users.py
-   - Plan mapping: Task 33.
-4. Creating a new version forces active documents back to draft.
-   - Location: backend/app/services/version_service.py
-   - Plan mapping: Task 34.
-5. Published-over-time analytics use version `created_at` instead of publish timestamp.
-   - Location: backend/app/services/analytics_service.py
-   - Plan mapping: Task 35.
-6. Tenant-scoped most-active-users analytics applies tenant filtering after global limit.
-   - Location: backend/app/services/analytics_service.py
-   - Plan mapping: Task 36.
-7. Collaboration edit permission rules are stricter/different than normal document edit rules.
-   - Location: backend/app/services/collaboration_service.py, backend/app/api/management/documents.py
-   - Plan mapping: Task 37.
-8. Public topic counts/detail rely on topic slug matching document topic field semantics that may diverge.
-   - Location: backend/app/api/public/topics.py, backend/app/services/document_service.py
-   - Plan mapping: Task 38.
-9. Public search highlight code builds a raw regex from user query and can throw on special input.
-   - Location: frontend/src/pages/public/PublicSearchPage.tsx
-   - Plan mapping: Task 39.
-10. Analytics export endpoints return success payloads for unknown report types instead of validation errors.
-   - Location: backend/app/api/management/analytics.py
-   - Plan mapping: Task 40.
+Why:
+- Current assign/remove/list company assignment handlers fetch document by ID without tenant scoping.
+- Role permission checks alone are not enough for tenant isolation.
 
-================================================
-2) Remaining Tasks
-================================================
+Primary files:
+- backend/app/api/management/documents.py
+- backend/app/services/document_service.py
+- backend/app/dependencies/permissions.py
+- backend/tests/test_documents.py
 
-------------------------------------------------
-Task 1: Attachment authorization enforcement (P0)
-------------------------------------------------
-
-Problem:
-- Attachment retrieval/stream paths do not consistently enforce document-level access rules.
-
-Implementation steps:
-1. Add a single authorization check path in attachment service for:
-   - tenant scope,
-   - visibility rules,
-   - role-based access.
-2. Apply that check to:
-   - list attachments,
-   - get attachment metadata,
-   - original download stream,
-   - preview stream,
-   - reader/outline access paths.
-3. Keep token-based download flow, but enforce the same authorization rules.
-
-Files:
-- backend/app/services/attachment_service/common.py
-- backend/app/services/attachment_service/streams.py
-- backend/app/api/management/attachments.py (only if route-level updates are needed)
-
-Tests:
-1. Add denial tests for unauthorized/cross-tenant access to metadata and download endpoints.
-2. Keep existing attachment happy-path tests passing.
+Implementation plan:
+- Route all company-assignment read/write operations through tenant-aware document access.
+- Reuse a single access path for "document exists + user can access tenant" checks.
+- Add explicit negative tests for cross-tenant assignment attempts.
 
 Acceptance criteria:
-- Unauthorized users cannot read/list/download attachments outside allowed scope.
+- Non-system-admin users cannot assign/unassign/list companies for cross-tenant documents.
+- API returns not-found/forbidden consistently with tenant access policy.
+- Regression tests cover same-tenant success and cross-tenant denial.
 
 ------------------------------------------------
-Task 2: Collab-server persistence and connection correctness (P0)
+
+Task 42: Visibility filter wiring on Documents page (P1)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- UI has visibility filter controls, but query payload does not include visibility.
+- This makes filtering appear functional while returning unfiltered data.
+
+Primary files:
+- frontend/src/pages/DocumentsPage.tsx
+- frontend/src/lib/api/documentsApi.ts
+- backend/app/api/management/documents.py
+
+Implementation plan:
+- Add `visibility` to query key and API request payload.
+- Ensure backend list endpoint accepts and applies visibility filter.
+- Add/update frontend tests for filter behavior.
+
+Acceptance criteria:
+- Selecting visibility updates request params and list results.
+- Query cache keys vary correctly by visibility.
+- Existing status/search filters continue to work.
+
 ------------------------------------------------
 
-Problem:
-- Current persistence uses one token per document and can be overwritten by read-only users.
-- Connection tracking keyed by user ID is not safe for multiple tabs/connections.
+Task 43: Delete permission UX parity (P1)
 
-Implementation steps:
-1. Track active connections by unique connection ID.
-2. Keep per-document write-capable credential source for persistence writes.
-3. Prevent premature token/cache cleanup when one of many connections disconnects.
-4. Preserve existing token format and external behavior.
+Status:
+- Completed (2026-02-27).
 
-Files:
+Why:
+- Backend requires manager or above to delete.
+- Documents page currently shows delete action to broader roles.
+
+Primary files:
+- frontend/src/pages/DocumentsPage.tsx
+- frontend/src/lib/auth.tsx
+- backend/app/api/management/documents.py
+
+Implementation plan:
+- Restrict delete button rendering and action path to authorized roles only.
+- Keep backend authorization unchanged as source of truth.
+- Add UI-level permission tests.
+
+Acceptance criteria:
+- Unauthorized roles do not see or trigger delete action in UI.
+- Authorized roles keep existing delete flow.
+- No role-based regression in other document actions.
+
+------------------------------------------------
+
+Task 44: Atomic document delete transaction (P1)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Delete flow currently commits audit and delete in separate transactions.
+- Partial failure can leave inconsistent audit/state outcomes.
+
+Primary files:
+- backend/app/services/document_service.py
+- backend/tests/test_documents.py
+
+Implementation plan:
+- Wrap audit creation and document deletion in a single transaction boundary.
+- Ensure rollback-safe behavior if delete fails.
+- Add regression test for failure scenario consistency.
+
+Acceptance criteria:
+- Delete + audit either both commit or both rollback.
+- No duplicate/partial commits across retries.
+
+------------------------------------------------
+
+Task 45: Backend OOP service standardization (P2)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Service layer mixes instance-style services with large static utility classes.
+- Tenant-aware base service exists but is not consistently used.
+
+Primary files:
+- backend/app/services/base_service.py
+- backend/app/services/document_service.py
+- backend/app/services/version_service.py
+- backend/app/services/comment_service.py
+- backend/app/services/auth_service.py
+
+Implementation plan:
+- Define standard service shape: constructor-injected dependencies + instance methods.
+- Introduce domain services/repositories/policies for shared access and permission checks.
+- Incrementally migrate static-heavy services without changing external API behavior.
+
+Acceptance criteria:
+- Core services follow one consistent OOP style.
+- Direct route-level DB access is reduced in favor of service methods.
+- Shared tenant/permission logic is centralized and reused.
+
+------------------------------------------------
+
+Task 46: Split oversized backend modules (P2)
+
+Status:
+- Not started.
+
+Why:
+- Several modules are too large and combine unrelated responsibilities.
+
+Primary files:
+- backend/app/utils/document_converter.py
+- backend/app/services/analytics_service.py
+- backend/app/db.py
+
+Implementation plan:
+- Split converter into parser/heuristics/renderer modules with clear interfaces.
+- Split analytics into query components by dashboard section.
+- Move DB lightweight migration routines into dedicated migration helper modules.
+
+Acceptance criteria:
+- Module sizes and responsibilities are reduced and clearer.
+- Existing behavior and tests remain stable.
+- New internal interfaces are documented in code comments/docstrings.
+
+------------------------------------------------
+
+Task 47: Decompose DocumentsPage into components/hooks (P2)
+
+Status:
+- Not started.
+
+Why:
+- DocumentsPage contains list screen + modal forms + business flow logic in one file.
+- This makes reasoning, testing, and role-based behavior harder.
+
+Primary files:
+- frontend/src/pages/DocumentsPage.tsx
+- frontend/src/hooks/useDocumentQueries.ts
+- frontend/src/components/*
+
+Implementation plan:
+- Extract create/upload/quick-start modals into dedicated components.
+- Add controller hooks (`useDocumentsPageController`, `useCreateDocumentFlow`, `useUploadDocumentFlow`).
+- Keep page component focused on composition and layout.
+
+Acceptance criteria:
+- DocumentsPage is significantly smaller and primarily declarative.
+- Business logic is testable via hooks.
+- No behavior regressions in create/upload/delete/filters/pagination.
+
+------------------------------------------------
+
+Task 48: OOP refactor for collab-server bootstrap (P2)
+
+Status:
+- Not started.
+
+Why:
+- Server startup file currently owns config, connection state, auth hooks, persistence hooks, and health server setup.
+
+Primary files:
 - collab-server/src/index.ts
 - collab-server/src/persistence.ts
-- collab-server/src/types.ts (if needed)
+- collab-server/src/auth.ts
 
-Tests:
-1. Multiple concurrent connections by same user (multi-tab) should behave correctly.
-2. Mixed read/write users should still allow persistence saves.
-3. Existing auth/persistence tests must pass.
-
-Acceptance criteria:
-- No persistence failures due to token overwrite by read-only connections.
-- Presence/cleanup behavior remains correct under concurrent connections.
-
-------------------------------------------------
-Task 3: Tenant-aware collaboration authorization (P0)
-------------------------------------------------
-
-Problem:
-- Collaboration access checks are broader than intended for internal users.
-
-Implementation steps:
-1. Align collaboration access checks with tenant and visibility rules.
-2. Keep explicit global access only for intended elevated roles.
-3. Revalidate endpoint behavior for:
-   - collab token issuance,
-   - state endpoints,
-   - activity/session/snapshot endpoints.
-
-Files:
-- backend/app/services/collaboration_service.py
-- backend/app/api/management/auth.py
-- backend/app/api/management/collaboration/*.py (if needed)
-
-Tests:
-1. Add cross-tenant denial tests for collaboration access.
-2. Keep existing success-path collaboration tests passing.
+Implementation plan:
+- Introduce `CollabServerApp`, `ConnectionRegistry`, and `HealthServer` classes.
+- Keep hook handlers small and delegate behavior to services.
+- Preserve public runtime behavior and environment variables.
 
 Acceptance criteria:
-- Unauthorized tenant access to collaboration features is blocked.
+- `index.ts` becomes a thin bootstrap entrypoint.
+- Connection/auth/persistence concerns are separated into dedicated classes.
+- Existing collab-server tests continue passing with updated unit coverage as needed.
 
 ------------------------------------------------
-Task 4: Assigned-companies contract alignment (P1)
-------------------------------------------------
 
-Problem:
-- Backend and frontend expect different payload shapes for assigned companies.
+Task 49: Frontend API client composition cleanup (P2)
 
-Implementation steps:
-1. Choose one canonical shape and apply consistently.
-2. Update client/hook/page usage to match canonical shape.
-3. Update tests to assert one stable contract.
+Status:
+- Not started.
 
-Files:
-- frontend/src/lib/api/documentsApi.ts
-- frontend/src/hooks/useDocumentQueries.ts
-- frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.ts
-- backend/app/api/management/documents.py (only if backend contract changes)
+Why:
+- Deep mixin composition makes the API surface hard to navigate and evolve.
 
-Tests:
-1. Hook/page-state regression tests for assigned companies rendering path.
-2. Backend contract test if backend response shape is changed.
-
-Acceptance criteria:
-- Assigned companies load and render correctly without shape mismatch.
-
-------------------------------------------------
-Task 5: Remaining N+1 cleanup (P1)
-------------------------------------------------
-
-Problem:
-- Some snapshot and attachment paths still do per-row lookups.
-
-Implementation steps:
-1. Batch-load snapshot creator usernames in snapshot handlers.
-2. Replace per-attachment artifact lookup loops with bulk hydration.
-3. Keep response payloads unchanged.
-
-Files:
-- backend/app/api/management/collaboration/snapshots.py
-- backend/app/services/attachment_service/common.py
-
-Tests:
-1. Add regression tests validating username/artifact fields remain correct.
-
-Acceptance criteria:
-- Query count reduced on snapshot list and attachment list code paths.
-
-------------------------------------------------
-Task 6: Migration/frontend cleanup in touched areas (P1)
-------------------------------------------------
-
-Problem:
-- Startup path still mixes schema creation and migrations.
-- Frontend touched modules still carry typing/hook dependency debt.
-
-Implementation steps:
-1. Reduce startup reliance on `Base.metadata.create_all` in favor of managed migrations.
-2. Replace `any[]` constructor patterns in API mixins where possible.
-3. Fix high-risk hook dependency suppressions in touched modules.
-
-Files:
-- backend/app/db.py
+Primary files:
+- frontend/src/lib/api.ts
 - frontend/src/lib/api/httpClient.ts
-- frontend/src/lib/api/*.ts (targeted)
-- frontend/src/lib/useCollaboration.ts
-- frontend/src/pages/document-detail/DocumentPreview.tsx
-- frontend/src/components/DocumentEditor.tsx
-- frontend/src/components/EngagementBar.tsx
+- frontend/src/lib/api/*.ts
 
-Tests:
-1. Add/update tests for lifecycle behavior where hook dependencies are fixed.
-2. Keep lint/typecheck stable for modified files.
+Implementation plan:
+- Replace deep nested mixin chain with clearer module composition/factory structure.
+- Keep existing method signatures stable for callers.
+- Add small architecture notes in file headers.
 
 Acceptance criteria:
-- Safer migration startup behavior.
-- Improved typing and hook correctness in modified modules.
+- API client composition is easier to follow and extend.
+- No consumer changes required outside API module boundaries.
+- Typecheck/tests remain clean.
 
 ------------------------------------------------
-Task 7: Public viewer visibility/privacy hardening (P1)
-------------------------------------------------
 
-Problem:
-- Public viewer paths expose documents/comments outside intended public visibility.
+Task 50: Access-policy object model (P2)
 
-Implementation steps:
-1. Require `visibility=PUBLIC` (and active status as needed) for public viewer document access.
-2. Exclude private/internal comments from public viewer responses.
-3. Add explicit tests for private document/comment non-disclosure.
+Status:
+- Completed (2026-02-27).
 
-Files:
-- backend/app/api/viewer/documents.py
-- backend/tests (viewer/public access tests)
+Why:
+- Permission and tenant checks are duplicated across services, dependencies, and routes.
 
-Acceptance criteria:
-- Non-public documents/comments are never returned from public viewer endpoints.
-
-------------------------------------------------
-Task 8: Tenant scoping for management read APIs (P1)
-------------------------------------------------
-
-Problem:
-- Versions/reviews/search/engagement paths can operate beyond tenant boundaries.
-
-Implementation steps:
-1. Add consistent tenant filters (and role exceptions where explicitly intended) for:
-   - versions,
-   - reviews,
-   - search,
-   - engagement.
-2. Apply equivalent checks in both API and service-layer helper paths.
-3. Add cross-tenant denial coverage tests.
-
-Files:
-- backend/app/api/management/versions.py
-- backend/app/services/version_service.py
-- backend/app/api/management/reviews.py
-- backend/app/api/management/search.py
-- backend/app/api/management/engagement.py
-
-Acceptance criteria:
-- Cross-tenant reads/writes are blocked unless explicitly authorized.
-
-------------------------------------------------
-Task 9: Active-user authorization enforcement (P1)
-------------------------------------------------
-
-Problem:
-- Some protected routes use `get_current_user` and do not enforce `is_active`.
-
-Implementation steps:
-1. Inventory routes that should require active users.
-2. Migrate those routes to `get_current_active_user` (or equivalent centralized guard).
-3. Add regression tests for inactive-account denial.
-
-Files:
-- backend/app/security.py
-- backend/app/api/management/**/*.py (targeted)
-- backend/tests (auth/access tests)
-
-Acceptance criteria:
-- Inactive accounts cannot access endpoints that require active status.
-
-------------------------------------------------
-Task 10: User update tenant-boundary enforcement (P1)
-------------------------------------------------
-
-Problem:
-- User update paths can assign users across tenant boundaries without strict tenant-scope enforcement.
-- This task is tenant-scope focused; role-hierarchy completeness is covered by Task 33.
-
-Implementation steps:
-1. Enforce tenant-aware validation in update handlers.
-2. Restrict reassignment operations to the caller's permitted tenant scope.
-3. Add negative tests for cross-tenant reassignment attempts.
-
-Files:
-- backend/app/api/management/users.py
-- backend/tests (user management tests)
-
-Acceptance criteria:
-- Cross-tenant reassignment is rejected by default.
-
-------------------------------------------------
-Task 11: Portal attachment URL contract fix (P1)
-------------------------------------------------
-
-Problem:
-- Portal responses/frontend use `/api/v1/attachments/{id}/download`, but backend route requires document-scoped path.
-
-Implementation steps:
-1. Choose canonical download URL format.
-2. Align backend payload generation and frontend consumption.
-3. Add integration test for portal attachment download links.
-
-Files:
-- backend/app/api/portal/documents.py
-- frontend portal document/attachment consumers
-
-Acceptance criteria:
-- Portal attachment links resolve successfully end-to-end.
-
-------------------------------------------------
-Task 12: Safe notification dispatch from sync handlers (P1)
-------------------------------------------------
-
-Problem:
-- `asyncio.create_task(...)` in sync request paths can fail when no running event loop exists.
-
-Implementation steps:
-1. Replace direct `create_task` usage in sync handlers with a reliable dispatch strategy.
-2. Keep async behavior non-blocking for request latency.
-3. Add tests for notification path execution in normal API flows.
-
-Files:
-- backend/app/services/version_service.py
-- backend/app/services/comment_service.py
-- backend/tests (notification behavior tests)
-
-Acceptance criteria:
-- Notification enqueue/send paths do not raise event-loop runtime errors.
-
-------------------------------------------------
-Task 13: Collaboration hook document switch correctness (P1)
-------------------------------------------------
-
-Problem:
-- Collaboration hook reconnection logic can remain stale when `documentId` changes.
-
-Implementation steps:
-1. Fix effect dependencies/reconnect logic to reinitialize session on document switches.
-2. Ensure previous connections are closed cleanly.
-3. Add hook test for document switch behavior.
-
-Files:
-- frontend/src/lib/useCollaboration.ts
-- frontend tests for hook behavior
-
-Acceptance criteria:
-- Changing document IDs always reconnects to the correct collaboration session.
-
-------------------------------------------------
-Task 14: Portal dashboard stats consistency (P2)
-------------------------------------------------
-
-Problem:
-- Portal dashboard stats query logic is inconsistent with customer document visibility logic.
-
-Implementation steps:
-1. Align dashboard aggregation filters with portal document-access filters.
-2. Add tests to assert count consistency between list and dashboard stats.
-
-Files:
-- backend/app/api/portal/documents.py
-- backend/tests (portal stats tests)
-
-Acceptance criteria:
-- Dashboard totals match documents actually visible to the customer user.
-
-------------------------------------------------
-Task 15: Comment visibility response shaping safety (P0)
-------------------------------------------------
-
-Problem:
-- Comment filtering mutates ORM relationship collections (`comment.replies = ...`) and can cause unintended persistence side effects.
-
-Implementation steps:
-1. Stop mutating SQLAlchemy relationship attributes during response shaping.
-2. Build response DTOs or detached structures for visible replies/counts.
-3. Add regression tests ensuring visibility filtering never deletes/unlinks replies.
-
-Files:
-- backend/app/services/comment_service.py
-- backend/tests (comment visibility/thread integrity tests)
-
-Acceptance criteria:
-- Visibility filtering is read-only with no ORM mutation side effects.
-
-------------------------------------------------
-Task 16: Conversion queue claim/stuck-state hardening (P0)
-------------------------------------------------
-
-Problem:
-- Job processing can leave rows stuck in `processing` and current claim flow is not safe for concurrent workers.
-
-Implementation steps:
-1. Implement atomic claim/lease strategy for runnable jobs.
-2. Add stale `processing` recovery policy (timeout + retry transition).
-3. Add tests for multi-worker behavior and crash-recovery semantics.
-
-Files:
-- backend/app/services/conversion_jobs.py
-- backend/tests (conversion queue concurrency/recovery tests)
-
-Acceptance criteria:
-- No permanent stuck jobs; duplicate processing risk is controlled under concurrency.
-
-------------------------------------------------
-Task 17: Viewer preview stream contract correction (P1)
-------------------------------------------------
-
-Problem:
-- Viewer preview endpoint streams original bytes instead of preview-PDF bytes.
-
-Implementation steps:
-1. Switch viewer preview route to use preview artifact stream path.
-2. Keep original-file behavior only in explicit original-download path.
-3. Add tests for preview behavior with non-PDF originals and generated preview PDFs.
-
-Files:
-- backend/app/api/viewer/documents.py
-- backend/tests (viewer preview/download contract tests)
-
-Acceptance criteria:
-- Viewer preview endpoint always returns preview artifact bytes/content type.
-
-------------------------------------------------
-Task 18: Search filter consistency (P1)
-------------------------------------------------
-
-Problem:
-- FTS primary path ignores category/date filters that fallback path applies.
-
-Implementation steps:
-1. Apply category/date constraints in the FTS query path.
-2. Keep response ordering/scoring behavior stable.
-3. Add tests covering FTS-enabled and fallback-equivalent filter semantics.
-
-Files:
-- backend/app/api/management/search.py
-- backend/tests (search filter behavior tests)
-
-Acceptance criteria:
-- Identical filter semantics regardless of FTS availability.
-
-------------------------------------------------
-Task 19: Notification type contract alignment (P1)
-------------------------------------------------
-
-Problem:
-- Backend enum values are lowercase strings while frontend typing/switch logic assumes uppercase constants.
-
-Implementation steps:
-1. Select one canonical notification-type representation for API payloads.
-2. Align backend serializer and frontend `NotificationType` declarations/handlers.
-3. Add tests for icon/type rendering coverage across all notification variants.
-
-Files:
-- backend/app/models/__init__.py
-- backend/app/api/management/notifications.py
-- frontend/src/types/index.ts
-- frontend/src/pages/NotificationsPage.tsx
-- frontend/src/components/NotificationBell.tsx
-
-Acceptance criteria:
-- Notification type values are contract-consistent and UI mapping is correct.
-
-------------------------------------------------
-Task 20: Atomic document creation transaction (P0)
-------------------------------------------------
-
-Problem:
-- Document row is committed before initial version/audit creation, risking partial state.
-
-Implementation steps:
-1. Wrap document + initial version + audit creation in one transaction boundary.
-2. Preserve unique-collision retry behavior for document number generation.
-3. Add tests for rollback behavior when version/audit creation fails.
-
-Files:
-- backend/app/services/document_service.py
-- backend/tests (document creation transactional integrity tests)
-
-Acceptance criteria:
-- No partially initialized documents from mid-flow failures.
-
-------------------------------------------------
-Task 21: Upload flow rollback integrity (P1)
-------------------------------------------------
-
-Problem:
-- Release-notes child creation/upload path can fail after child creation and leave inconsistent state.
-
-Implementation steps:
-1. Apply cleanup/rollback strategy around release-notes child creation + attachment upload.
-2. Ensure parent upload path and child upload path have symmetric failure handling.
-3. Add tests for failure injection in each upload step.
-
-Files:
-- backend/app/api/management/documents.py
-- backend/tests (upload workflow failure tests)
-
-Acceptance criteria:
-- No orphaned child documents/attachments after upload failures.
-
-------------------------------------------------
-Task 22: Portal list/detail version consistency (P2)
-------------------------------------------------
-
-Problem:
-- Portal list and detail endpoints can show different effective version numbers for the same document.
-
-Implementation steps:
-1. Use one shared version-selection rule (published-preferred with explicit fallback policy).
-2. Reuse helper in both list and detail paths.
-3. Add tests asserting list/detail version parity.
-
-Files:
-- backend/app/api/portal/documents.py
-- backend/tests (portal version parity tests)
-
-Acceptance criteria:
-- List and detail surfaces report consistent version metadata.
-
-------------------------------------------------
-Task 23: Frontend attachment selection refresh correctness (P2)
-------------------------------------------------
-
-Problem:
-- Selected attachment state can become stale when attachment lists mutate (delete/reorder/reload).
-
-Implementation steps:
-1. Reconcile selected attachment against current list and reset when missing.
-2. Keep deterministic fallback selection policy.
-3. Add tests for delete/reload scenarios in preview/editor flows.
-
-Files:
-- frontend/src/pages/document-detail/DocumentPreview.tsx
-- frontend/src/components/DocumentEditor.tsx
-- frontend tests for attachment-selection flows
-
-Acceptance criteria:
-- Selected attachment always points to an existing item after list updates.
-
-------------------------------------------------
-Task 24: Frontend-backend RBAC source alignment (P2)
-------------------------------------------------
-
-Problem:
-- Frontend uses static role permission matrix, while backend supports dynamic RBAC publish.
-
-Implementation steps:
-1. Decide canonical source for permission checks in UI (server-driven preferred).
-2. Align `hasPermission` behavior with backend-effective permissions.
-3. Add tests covering dynamic policy changes reflected in frontend behavior.
-
-Files:
-- frontend/src/lib/auth.tsx
-- backend/app/services/permissions.py (if API helper additions are needed)
-- backend/app/api/management/rbac.py (if read endpoint enrichment is needed)
-
-Acceptance criteria:
-- UI permission gating matches backend-effective RBAC policies.
-
-------------------------------------------------
-Task 25: Document number generation scalability (P2)
-------------------------------------------------
-
-Problem:
-- Current same-day O(n) scan strategy degrades with volume and handles contention mainly via retry loops.
-
-Implementation steps:
-1. Replace scan-heavy sequence discovery with a more scalable allocation strategy.
-2. Preserve current public format (`DOC-YYYYMMDD-XXXX`) unless explicitly changed.
-3. Add contention tests for concurrent create paths.
-
-Files:
-- backend/app/services/document_service.py
-- backend/tests (concurrent document number generation tests)
-
-Acceptance criteria:
-- Faster number generation with reliable behavior under concurrent creates.
-
-------------------------------------------------
-Task 26: Company document semantics alignment (P1)
-------------------------------------------------
-
-Problem:
-- Company detail/listing surfaces use tenant-owned document logic where product intent is company-assigned visibility for customer access.
-
-Implementation steps:
-1. Define canonical semantics for each company metric:
-   - owned documents (Document.tenant_id),
-   - assigned documents (Document.assigned_companies),
-   - customer-visible documents (published + visibility constraints).
-2. Update `companies` APIs and frontend labels/tabs to use the intended metric(s).
-3. Avoid ambiguous "assigned" wording when data is owner-based.
-4. Add tests asserting parity with portal visibility model where required.
-
-Files:
-- backend/app/api/management/companies.py
-- frontend/src/pages/CompanyDetailPage.tsx
-- frontend/src/types/index.ts (if response contracts change)
-- backend/tests (company/portal parity tests)
-
-Acceptance criteria:
-- Company dashboard/detail metrics match documented business semantics and UI labels.
-
-------------------------------------------------
-Task 27: Invitation tenant-assignment consistency (P1)
-------------------------------------------------
-
-Problem:
-- Non-system admins can currently invite customer users to other companies, diverging from tenant-scoped admin behavior.
-
-Implementation steps:
-1. Enforce a single tenant-assignment rule across invitation create/update flows.
-2. If exceptions are desired, codify explicitly and document (not implicit by role branch).
-3. Align frontend invite-company selector constraints with backend-enforced policy.
-4. Add negative tests for forbidden cross-tenant invitation assignment.
-
-Files:
-- backend/app/api/management/invitations.py
-- frontend/src/components/InviteUserDialog.tsx (if UX constraints need alignment)
-- backend/tests (invitation scope tests)
-
-Acceptance criteria:
-- Invitation assignment behavior is consistent with tenant-scoped management policy.
-
-------------------------------------------------
-Task 28: Customer-company invariant enforcement (P1)
-------------------------------------------------
-
-Problem:
-- System declares customers must belong to a company, but remove/update flows can violate or inconsistently enforce that invariant.
-
-Implementation steps:
-1. Enforce invariant in all write paths:
-   - user create/update,
-   - company user remove/reassign,
-   - role transitions to/from customer.
-2. Normalize null/omitted `tenant_id` handling so API behavior is deterministic.
-3. Add tests for edge cases (role change + tenant change in same request).
-
-Files:
-- backend/app/api/management/users.py
-- backend/app/api/management/companies.py
-- backend/app/schemas/__init__.py (if update payload semantics need refinement)
-- backend/tests (user/company invariant tests)
-
-Acceptance criteria:
-- No customer user can end in an invalid no-company state unless explicitly allowed by policy.
-
-------------------------------------------------
-Task 29: Deactivated-company access policy enforcement (P1)
-------------------------------------------------
-
-Problem:
-- Deactivating a company currently sets a flag but does not reliably affect login/access behavior for associated customer users.
-
-Implementation steps:
-1. Define expected policy for deactivated companies (login blocked, portal blocked, or read-only fallback).
-2. Enforce policy consistently in auth and portal access checks.
-3. Add tests for deactivation/reactivation transitions.
-
-Files:
-- backend/app/api/management/companies.py
-- backend/app/security.py
-- backend/app/api/portal/documents.py
-- backend/app/api/portal/feedback.py
-- backend/tests (deactivation behavior tests)
-
-Acceptance criteria:
-- Deactivated company state has concrete, test-verified runtime effect on access.
-
-------------------------------------------------
-Task 30: Assign-companies operation semantics (P2)
-------------------------------------------------
-
-Problem:
-- Backend assignment endpoint is additive-only, while UI selector implies full set replacement semantics.
-
-Implementation steps:
-1. Choose canonical assignment operation model:
-   - additive API + explicit remove actions, or
-   - set-replace API.
-2. Align backend endpoint contract and frontend selector behavior to that model.
-3. Add tests for idempotency and "remove by omission" behavior (if set-based).
-
-Files:
-- backend/app/api/management/documents.py
-- frontend/src/pages/document-detail/components/DocumentDetailsView.tsx
-- frontend/src/components/CompanySelector.tsx
-- frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.ts
-- backend/frontend tests for assignment semantics
-
-Acceptance criteria:
-- Document-company assignment behavior matches UI expectations and is deterministic.
-
-------------------------------------------------
-Task 31: Upload lifecycle/visibility default safety (P0)
-------------------------------------------------
-
-Problem:
-- Upload flow currently defaults to `status=active` and fallback `visibility=public`, which can bypass draft/review lifecycle and unintentionally expose content.
-
-Implementation steps:
-1. Change upload defaults to safe internal workflow defaults (draft + non-public visibility).
-2. Require explicit privileged action for direct publish behavior (if still supported).
-3. Ensure release-notes child creation uses the same lifecycle/visibility policy.
-4. Add regression tests for omitted visibility/status and explicit privileged overrides.
-
-Files:
-- backend/app/api/management/documents.py
-- backend/app/schemas/__init__.py (if upload payload semantics are formalized)
-- backend/tests (upload lifecycle default tests)
-
-Acceptance criteria:
-- New uploads cannot become publicly visible/published by default when visibility/status are omitted.
-
-------------------------------------------------
-Task 32: Peer-review approval rule enforcement (P1)
-------------------------------------------------
-
-Problem:
-- Review approval logic allows editors to approve any non-self submission, not only peer editor submissions.
-
-Implementation steps:
-1. Enforce submitter-role checks for editor approvals (editor -> editor only).
-2. Keep manager/admin/system_admin approval behavior unchanged per policy.
-3. Prefer centralizing decision logic with shared permission helpers to avoid drift.
-4. Add tests for editor attempts to approve manager/admin submissions (should fail).
-
-Files:
-- backend/app/api/management/reviews.py
-- backend/app/services/permissions.py (if shared helper is used)
-- backend/tests/test_reviews_api.py
-
-Acceptance criteria:
-- Editor approvals are limited to allowed peer-review scope and cannot approve disallowed roles.
-
-------------------------------------------------
-Task 33: User-update hierarchy enforcement completeness (P1)
-------------------------------------------------
-
-Problem:
-- User update flow applies hierarchy checks mainly to role changes; non-role updates (deactivate/reassign) can bypass intended role boundaries.
-- This task extends Task 10 by enforcing role-hierarchy constraints after tenant-scope constraints.
-
-Implementation steps:
-1. Apply role-hierarchy checks to all privileged user mutations:
-   - role changes,
-   - active status changes,
-   - tenant reassignment.
-2. Define explicit policy for manager operations on admin/manager targets and enforce uniformly.
-3. Add tests for forbidden manager updates to higher roles across non-role fields.
-
-Files:
-- backend/app/api/management/users.py
-- backend/tests (user update hierarchy tests)
-
-Acceptance criteria:
-- No non-system user can mutate higher-privilege accounts through non-role update paths.
-
-------------------------------------------------
-Task 34: Preserve published availability during next-version drafting (P1)
-------------------------------------------------
-
-Problem:
-- Creating a new version forces document status back to draft, which can hide currently published documents while next version is in progress.
-
-Implementation steps:
-1. Define status transition policy for "published doc + new draft version".
-2. Prevent unconditional status downgrade on version creation when a published release is already live.
-3. Keep review/publish gates intact for the new candidate version.
-4. Add portal/public regression tests confirming live availability is preserved during drafting.
-
-Files:
-- backend/app/services/version_service.py
-- backend/app/api/portal/documents.py (if status gating needs adjustment)
-- backend/app/api/public/documents.py (if status gating needs adjustment)
-- backend/tests/test_versions.py
-
-Acceptance criteria:
-- New draft version creation does not unexpectedly remove an already published document from public/portal consumption.
-
-------------------------------------------------
-Task 35: Publish-time analytics timestamp correctness (P2)
-------------------------------------------------
-
-Problem:
-- Content analytics counts published versions using `created_at`, which distorts publish timeline metrics.
-
-Implementation steps:
-1. Use publish timestamps (`published_at`) for publish-time metrics and time-series buckets.
-2. Exclude unpublished/null-publish rows from publish timeline aggregations.
-3. Add unit tests validating expected bucket assignment by publish date.
-
-Files:
-- backend/app/services/analytics_service.py
-- backend/tests/test_analytics.py
-
-Acceptance criteria:
-- Published-version analytics reflect actual publish dates, not version creation dates.
-
-------------------------------------------------
-Task 36: Tenant-scoped most-active ranking query correctness (P2)
-------------------------------------------------
-
-Problem:
-- Most-active-users analytics currently limits globally before tenant filtering, producing tenant-biased results.
-
-Implementation steps:
-1. Apply tenant scoping in SQL before ranking/limit.
-2. Keep deterministic ordering for ties.
-3. Add cross-tenant fixture tests to prove tenant-local top users are returned.
-
-Files:
-- backend/app/services/analytics_service.py
-- backend/tests/test_analytics.py
-
-Acceptance criteria:
-- Tenant-scoped most-active-users output is ranked within tenant scope, not globally truncated.
-
-------------------------------------------------
-Task 37: Collaboration edit-policy alignment with core edit policy (P1)
-------------------------------------------------
-
-Problem:
-- Collaboration edit permission logic diverges from standard document edit policy, causing inconsistent behavior between collaborative and regular editing paths.
-
-Implementation steps:
-1. Define canonical edit policy source (shared permission layer).
-2. Align collaboration token/edit permission checks with that policy.
-3. Add tests for parity across key roles and document ownership/tenant cases.
-
-Files:
-- backend/app/services/collaboration_service.py
+Primary files:
 - backend/app/services/permissions.py
-- backend/app/api/management/auth.py (collab token endpoint behavior)
-- backend/tests/test_collaboration.py
+- backend/app/dependencies/permissions.py
+- backend/app/services/collaboration_service.py
+- backend/app/api/management/*
+
+Implementation plan:
+- Add policy classes (`DocumentAccessPolicy`, `ReviewPolicy`, `InvitationPolicy`).
+- Inject policy objects into services instead of ad-hoc helper calls.
+- Keep compatibility wrappers during migration.
 
 Acceptance criteria:
-- Users who can edit via normal policy have consistent edit rights in collaboration mode (and vice versa).
+- Access decisions for each domain are centralized and testable.
+- Route/service-level permission duplication is reduced.
 
 ------------------------------------------------
-Task 38: Public topic slug/document-topic semantic normalization (P2)
+
+Task 51: Repository layer for core aggregates (P2)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Direct ORM query usage is scattered across routers and services.
+
+Primary files:
+- backend/app/services/*
+- backend/app/api/management/*
+- backend/app/api/portal/*
+- backend/app/repositories/* (new)
+
+Implementation plan:
+- Add repositories for `Document`, `Version`, `User`, `Comment`, `Invitation`.
+- Move common query patterns (tenant scope, eager loading, filtering) into repositories.
+- Migrate targeted modules incrementally.
+
+Acceptance criteria:
+- Targeted routes stop performing direct aggregate fetch queries.
+- Query behavior is reusable and consistent across endpoints.
+
 ------------------------------------------------
 
-Problem:
-- Public topic counts/detail rely on topic slug matching document topic field semantics that may be stored differently, causing inaccurate counts.
+Task 52: Unit-of-Work transaction abstraction (P2)
 
-Implementation steps:
-1. Define canonical document-topic storage format (slug or controlled key).
-2. Normalize topic assignment in document write paths.
-3. Update public topic aggregation queries to use canonical mapping.
-4. Add tests for mixed legacy/non-canonical topic values and correct count behavior.
+Status:
+- Completed (2026-02-27).
 
-Files:
+Why:
+- Multi-step writes still risk partial commits when logic is distributed.
+
+Primary files:
+- backend/app/db.py
 - backend/app/services/document_service.py
-- backend/app/api/management/documents.py
-- backend/app/api/public/topics.py
-- backend/tests (public topic count tests)
+- backend/app/services/version_service.py
+- backend/app/services/comment_service.py
+- backend/app/services/uow.py (new)
+
+Implementation plan:
+- Introduce a Unit-of-Work helper to control commit/rollback boundaries.
+- Migrate high-risk write flows first (create/update/delete/publish/upload chains).
 
 Acceptance criteria:
-- Public topic list/detail counts remain correct and stable across topic/document data variations.
+- Multi-step write use-cases are wrapped in explicit transaction scopes.
+- Rollback semantics are deterministic and covered by tests.
 
 ------------------------------------------------
-Task 39: Public search highlight regex robustness (P1)
-------------------------------------------------
 
-Problem:
-- Frontend public search highlight builds a raw regex from query text and can crash rendering for regex-special user input.
+Task 53: Domain events for side effects (P2)
 
-Implementation steps:
-1. Escape user query before regex construction (or replace regex-based highlighting approach).
-2. Add tests for special-character queries (e.g., `(`, `[`, `\`, `*`, `?`).
-3. Ensure highlight behavior remains correct for normal alphanumeric queries.
+Status:
+- Not started.
 
-Files:
-- frontend/src/pages/public/PublicSearchPage.tsx
-- frontend tests for public search rendering/highlight behavior
+Why:
+- Core write flows currently trigger notifications/email inline.
+
+Primary files:
+- backend/app/services/version_service.py
+- backend/app/services/comment_service.py
+- backend/app/services/email_service.py
+- backend/app/domain/events/* (new)
+
+Implementation plan:
+- Emit domain events (`DocumentPublished`, `CommentCreated`, etc.).
+- Dispatch side effects via event handlers.
+- Keep in-process dispatcher initially; design for outbox extension.
 
 Acceptance criteria:
-- Public search page does not crash for regex-special input and still highlights matches correctly.
+- Core domain operations do not directly orchestrate side effects.
+- Event handlers own notification/email dispatch.
 
 ------------------------------------------------
-Task 40: Analytics export unknown-report error semantics (P2)
+
+Task 54: Value objects for domain primitives (P2)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Semantic versioning, document numbering, and topic normalization are currently string-heavy utility logic.
+
+Primary files:
+- backend/app/services/document_service.py
+- backend/app/services/version_service.py
+- backend/app/utils/topic_normalization.py
+- backend/app/domain/value_objects/* (new)
+
+Implementation plan:
+- Add `DocumentNumber`, `SemanticVersion`, `TopicSlug` value objects.
+- Replace ad-hoc parse/format logic with value object methods.
+
+Acceptance criteria:
+- Domain primitive validation/parsing lives in dedicated value object classes.
+- Duplicate parsing logic is removed from services.
+
 ------------------------------------------------
 
-Problem:
-- Analytics export endpoints return HTTP 200 with error payload/body for unknown report types instead of explicit validation errors.
+Task 55: Workflow state-machine classes (P2)
 
-Implementation steps:
-1. Return explicit 4xx errors (`400`/`422`) for unsupported `report` values.
-2. Keep known report behavior unchanged.
-3. Add tests asserting non-success status for invalid report values on CSV and PDF endpoints.
+Status:
+- Completed (2026-02-27).
 
-Files:
+Why:
+- Lifecycle transitions are enforced by conditionals spread across services.
+
+Primary files:
+- backend/app/models/__init__.py
+- backend/app/services/version_service.py
+- backend/app/api/management/reviews.py
+- backend/app/domain/workflows/* (new)
+
+Implementation plan:
+- Add workflow classes for document and review status transitions.
+- Expose explicit transition methods (`can_transition`, `transition`).
+
+Acceptance criteria:
+- Invalid transitions are blocked by centralized workflow logic.
+- Transition rules are testable without HTTP-layer coupling.
+
+------------------------------------------------
+
+Task 56: CQRS-lite command/query handlers (P2)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Services currently mix read aggregation and write orchestration responsibilities.
+
+Primary files:
+- backend/app/services/analytics_service.py
+- backend/app/services/document_service.py
 - backend/app/api/management/analytics.py
-- backend/tests/test_analytics.py
+- backend/app/api/management/documents.py
+- backend/app/application/commands/* (new)
+- backend/app/application/queries/* (new)
+
+Implementation plan:
+- Introduce command handlers for write use-cases and query handlers for read models.
+- Start with analytics and document management domains.
 
 Acceptance criteria:
-- Invalid analytics export report requests fail with clear client-error status and message.
+- Read models and write workflows are separated by handler type.
+- Modules become easier to reason about and test independently.
+
+------------------------------------------------
+
+Task 57: Notification/email channel-template objects (P3)
+
+Status:
+- Not started.
+
+Why:
+- Email message rendering, subject creation, and transport are tightly coupled.
+
+Primary files:
+- backend/app/services/email_service.py
+- backend/app/services/version_service.py
+- backend/app/services/comment_service.py
+- backend/app/notifications/* (new)
+
+Implementation plan:
+- Split into template objects, message objects, and delivery channels.
+- Add a notification dispatcher facade used by domain-event handlers.
+
+Acceptance criteria:
+- Message templates and channel delivery are independently testable.
+- Adding channels (e.g., in-app/webhook) does not require touching domain logic.
+
+------------------------------------------------
+
+Task 58: Auth context services (P3)
+
+Status:
+- Not started.
+
+Why:
+- Access, refresh, and collaboration token logic is split across multiple modules.
+
+Primary files:
+- backend/app/services/auth_service.py
+- backend/app/security.py
+- backend/app/services/collaboration_service.py
+- collab-server/src/auth.ts
+
+Implementation plan:
+- Introduce `TokenService`, `RefreshTokenService`, and `CollaborationAuthService`.
+- Centralize token payload contracts and validation rules.
+
+Acceptance criteria:
+- Token issuance/validation responsibilities are cleanly separated.
+- Token contract changes require edits in a single bounded area.
+
+------------------------------------------------
+
+Task 59: FastAPI app factory and router registry (P3)
+
+Status:
+- Not started.
+
+Why:
+- Application bootstrap and router wiring are concentrated in one large module.
+
+Primary files:
+- backend/app/main.py
+- backend/app/app_factory.py (new)
+- backend/app/router_registry.py (new)
+
+Implementation plan:
+- Move app creation to `create_app()` with configurable wiring.
+- Register routers through a registry object and explicit modules.
+
+Acceptance criteria:
+- `main.py` becomes a thin entrypoint.
+- Middleware/router startup wiring is modular and testable.
+
+------------------------------------------------
+
+Task 60: Attachment conversion strategy pipeline (P3)
+
+Status:
+- Not started.
+
+Why:
+- Conversion logic currently mixes format detection, extraction, and rendering in giant utilities.
+
+Primary files:
+- backend/app/utils/document_converter.py
+- backend/app/services/attachment_service/reader_view.py
+- backend/app/services/attachment_service/preview_pdf.py
+- backend/app/conversion/* (new)
+
+Implementation plan:
+- Implement converter strategies (`PdfConverter`, `WordConverter`, `TextConverter`).
+- Add pipeline coordinator for fallback and artifact assembly.
+
+Acceptance criteria:
+- Conversion behavior is expressed via strategy classes and shared interfaces.
+- New formats can be added without editing a monolithic converter file.
+
+------------------------------------------------
+
+Task 61: Collaboration backend managers (P3)
+
+Status:
+- Not started.
+
+Why:
+- Collaboration endpoints and service methods blend state, permissions, and session concerns.
+
+Primary files:
+- backend/app/api/management/collaboration/*
+- backend/app/services/collaboration_service.py
+- backend/app/services/snapshot_service.py
+- backend/app/collaboration/* (new)
+
+Implementation plan:
+- Add `CollabStateManager`, `SessionManager`, `SnapshotManager`.
+- Keep API handlers thin and delegate workflow logic.
+
+Acceptance criteria:
+- Collaboration domain responsibilities are split into focused manager classes.
+- Endpoint handlers mostly orchestrate input/output only.
+
+------------------------------------------------
+
+Task 62: Frontend feature controllers/view-models (P3)
+
+Status:
+- Not started.
+
+Why:
+- Large page components still mix UI rendering and orchestration logic.
+
+Primary files:
+- frontend/src/pages/DocumentsPage.tsx
+- frontend/src/pages/document-detail/*
+- frontend/src/lib/useCollaboration.ts
+- frontend/src/features/* (new)
+
+Implementation plan:
+- Create per-feature controllers/view-model hooks.
+- Move business decisions from page components to feature-level controller modules.
+
+Acceptance criteria:
+- Complex pages are composition-oriented and significantly smaller.
+- Feature logic is unit-testable without rendering full pages.
+
+------------------------------------------------
+
+Task 63: Typed DTO mapper layer (P3)
+
+Status:
+- Not started.
+
+Why:
+- UI and services frequently consume transport payloads directly.
+
+Primary files:
+- frontend/src/lib/api/*.ts
+- frontend/src/types/index.ts
+- backend/app/schemas/*
+- backend/app/domain/dto_mappers/* (new)
+
+Implementation plan:
+- Add explicit transport-to-domain mappers and reverse mappers where needed.
+- Standardize response shape adaptation in one layer.
+
+Acceptance criteria:
+- API transport details are isolated from domain/UI models.
+- Schema evolution requires fewer broad changes.
+
+------------------------------------------------
+
+Task 64: Domain error hierarchy and result objects (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Service layer relies heavily on `HTTPException`, coupling domain logic to transport layer.
+
+Primary files:
+- backend/app/services/*
+- backend/app/main.py
+- backend/app/errors.py (new)
+
+Implementation plan:
+- Add domain exceptions (`DomainError`, `PermissionDeniedError`, etc.).
+- Map domain exceptions to HTTP responses in centralized handlers.
+
+Acceptance criteria:
+- Domain services avoid direct HTTP error construction where practical.
+- Error-to-response mapping is centralized and consistent.
+
+------------------------------------------------
+
+Task 65: Test builders/factories for domain setup (P3)
+
+Status:
+- Not started.
+
+Why:
+- Tests repeat heavy setup logic that obscures behavior under test.
+
+Primary files:
+- backend/tests/conftest.py
+- backend/tests/factories/* (new)
+- frontend/src/test/*
+- collab-server/src/__tests__/*
+
+Implementation plan:
+- Add object builders/factories for common entities and workflows.
+- Use scenario-style fixtures for multi-step flows.
+
+Acceptance criteria:
+- Test setup boilerplate is reduced in targeted suites.
+- Test intent is clearer and easier to maintain.
+
+------------------------------------------------
+
+Task 66: Bounded-context module boundaries (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Domain concerns are spread across broad `services/api` modules with implicit coupling.
+
+Primary files:
+- backend/app/api/*
+- backend/app/services/*
+- backend/app/models/__init__.py
+- frontend/src/pages/*
+- frontend/src/lib/*
+
+Implementation plan:
+- Define explicit context boundaries (documents, reviews, collaboration, tenants, notifications).
+- Add context-level public APIs/facades for cross-context calls.
+- Restrict cross-context imports to public interfaces.
+
+Acceptance criteria:
+- Context boundaries are explicit and documented in module structure.
+- Cross-context dependencies go through stable interfaces.
+
+------------------------------------------------
+
+Task 67: Aggregate roots and invariants (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Core invariants are enforced through scattered service conditionals instead of domain objects.
+
+Primary files:
+- backend/app/models/__init__.py
+- backend/app/domain/aggregates/* (new)
+- backend/app/services/document_service.py
+- backend/app/services/version_service.py
+- backend/app/services/comment_service.py
+
+Implementation plan:
+- Introduce aggregate root classes (`DocumentAggregate`, `ReviewAggregate`, `InvitationAggregate`).
+- Move invariant checks and state transitions into aggregate methods.
+- Keep persistence mapping in repositories/services.
+
+Acceptance criteria:
+- Invariant logic is centralized in aggregate methods.
+- Service layer orchestration code is reduced.
+
+------------------------------------------------
+
+Task 68: Ports and adapters architecture (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Domain/application logic is still tightly coupled to concrete infrastructure libraries.
+
+Primary files:
+- backend/app/services/email_service.py
+- backend/app/services/storage_service.py
+- backend/app/services/collaboration_service.py
+- collab-server/src/persistence.ts
+- backend/app/ports/* (new)
+- backend/app/adapters/* (new)
+
+Implementation plan:
+- Define ports for email, storage, collaboration state, and persistence interactions.
+- Implement concrete adapters for SMTP/S3/local/hocuspocus integrations.
+- Inject ports into services via constructors/factories.
+
+Acceptance criteria:
+- Domain/application services depend on interfaces, not concrete adapters.
+- Infrastructure replacements require minimal domain-layer changes.
+
+------------------------------------------------
+
+Task 69: Specification pattern for reusable queries (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Tenant, visibility, and role-based filters are duplicated across queries.
+
+Primary files:
+- backend/app/repositories/* (new)
+- backend/app/services/permissions.py
+- backend/app/api/management/search.py
+- backend/app/api/portal/documents.py
+
+Implementation plan:
+- Add specification objects (`TenantScopeSpec`, `VisibilitySpec`, `RoleAccessSpec`, `DateRangeSpec`).
+- Compose specifications in repositories/query handlers.
+- Replace repeated inline filter blocks in target endpoints.
+
+Acceptance criteria:
+- Core filter logic is reusable/composable and tested once.
+- Query duplication drops in targeted modules.
+
+------------------------------------------------
+
+Task 70: Command handler pipeline (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Write use-cases repeat the same orchestration steps in inconsistent order.
+
+Primary files:
+- backend/app/application/commands/* (new)
+- backend/app/application/pipeline/* (new)
+- backend/app/api/management/documents.py
+- backend/app/api/management/reviews.py
+
+Implementation plan:
+- Create command pipeline stages: validate -> authorize -> execute -> publish events.
+- Wrap core write use-cases in command handlers.
+- Keep HTTP handlers as thin adapters to commands.
+
+Acceptance criteria:
+- Command execution flow is standardized and traceable.
+- Write endpoints share common pipeline behavior.
+
+------------------------------------------------
+
+Task 71: Query handlers and read models (P3)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Read complexity (analytics/search/portal) is mixed into service and route layers.
+
+Primary files:
+- backend/app/application/queries/* (new)
+- backend/app/services/analytics_service.py
+- backend/app/api/management/analytics.py
+- backend/app/api/management/search.py
+- backend/app/api/portal/documents.py
+
+Implementation plan:
+- Move high-complexity reads into dedicated query handlers/read-model classes.
+- Keep write-oriented services focused on command-side behavior.
+
+Acceptance criteria:
+- Read logic is separated from write orchestration in target domains.
+- Query handlers are independently testable.
+
+------------------------------------------------
+
+Task 72: Outbox pattern for domain events (P4)
+
+Status:
+- Not started.
+
+Why:
+- Side effects can be lost or duplicated when transaction boundaries and dispatch timing diverge.
+
+Primary files:
+- backend/app/models/__init__.py
+- backend/alembic/versions/* (new)
+- backend/app/workers/*
+- backend/app/domain/events/*
+
+Implementation plan:
+- Add outbox table and dispatcher worker.
+- Persist events in the same transaction as domain state changes.
+- Implement idempotent event processing and retries.
+
+Acceptance criteria:
+- Event delivery is reliable across process failures/restarts.
+- Side-effect handlers run from persisted outbox records.
+
+------------------------------------------------
+
+Task 73: Saga/process-manager workflows (P4)
+
+Status:
+- Not started.
+
+Why:
+- Multi-step workflows currently rely on local try/except compensation logic.
+
+Primary files:
+- backend/app/api/management/documents.py
+- backend/app/services/conversion_jobs.py
+- backend/app/services/attachment_service/*
+- backend/app/application/process_managers/* (new)
+
+Implementation plan:
+- Introduce process managers for upload/conversion/release-notes workflows.
+- Define explicit steps, compensation actions, and failure states.
+
+Acceptance criteria:
+- Long-running multi-step flows have explicit orchestration state.
+- Compensation behavior is deterministic and observable.
+
+------------------------------------------------
+
+Task 74: Typed Result/error algebra in domain/application layers (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Expected business failures are still often represented via exceptions.
+
+Primary files:
+- backend/app/domain/result.py (new)
+- backend/app/services/*
+- backend/app/application/commands/*
+- backend/app/application/queries/*
+
+Implementation plan:
+- Introduce `Result[T, E]` for expected domain/application outcomes.
+- Use exception mapping only at transport boundaries for unexpected failures.
+- Align with Task 64 error taxonomy.
+
+Acceptance criteria:
+- Selected command/query handlers return typed results for expected failures.
+- Error handling paths are explicit and typed in core flows.
+
+------------------------------------------------
+
+Task 75: Composition root / dependency container (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Service construction/wiring remains distributed across routes/modules.
+
+Primary files:
+- backend/app/main.py
+- backend/app/app_factory.py
+- backend/app/container.py (new)
+- collab-server/src/index.ts
+
+Implementation plan:
+- Add central composition root for constructing repositories/services/policies.
+- Route/dependency layers resolve dependencies through a shared container.
+
+Acceptance criteria:
+- Dependency wiring is centralized and auditable.
+- Constructor injection becomes consistent across major services.
+
+------------------------------------------------
+
+Task 76: Frontend feature modules and use-case services (P4)
+
+Status:
+- Not started.
+
+Why:
+- Business orchestration is still mostly colocated with page-level UI code.
+
+Primary files:
+- frontend/src/features/* (new)
+- frontend/src/pages/*
+- frontend/src/lib/api/*
+
+Implementation plan:
+- Organize frontend by feature modules with explicit use-case service layer.
+- Keep page components focused on layout/composition.
+- Share use-case logic between pages/components where relevant.
+
+Acceptance criteria:
+- Complex features expose reusable use-case services.
+- Page components in targeted features become thinner and easier to test.
+
+------------------------------------------------
+
+Task 77: Frontend workflow state machines (P4)
+
+Status:
+- Not started.
+
+Why:
+- Multi-state flows rely on many boolean flags that are hard to reason about.
+
+Primary files:
+- frontend/src/lib/useCollaboration.ts
+- frontend/src/pages/document-detail/hooks/*
+- frontend/src/features/*/state/* (new)
+
+Implementation plan:
+- Model collaboration and document editing/review flows as explicit state machines.
+- Encode legal transitions and side effects through machine actions.
+
+Acceptance criteria:
+- Workflow transitions are explicit and constrained.
+- Regression risk from invalid UI state combinations is reduced.
+
+------------------------------------------------
+
+Task 78: Contract-first generated API clients (P4)
+
+Status:
+- Not started.
+
+Why:
+- Transport contracts are partially hand-maintained, increasing drift risk.
+
+Primary files:
+- backend/app/main.py
+- frontend/src/lib/api/*
+- frontend/src/types/index.ts
+- scripts/* (client generation tooling)
+
+Implementation plan:
+- Generate typed API clients/DTOs from OpenAPI contracts.
+- Integrate generation into build/test flow.
+- Keep mapper layer (Task 63) for transport-domain adaptation.
+
+Acceptance criteria:
+- Core API DTO types are generated from contract source.
+- Contract drift between backend and frontend is reduced.
+
+------------------------------------------------
+
+Task 79: Cross-service contract tests (P4)
+
+Status:
+- Not started.
+
+Why:
+- Token/payload compatibility across backend, frontend, and collab-server relies on implicit assumptions.
+
+Primary files:
+- backend/tests/contracts/* (new)
+- frontend/src/test/contracts/* (new)
+- collab-server/src/__tests__/*
+
+Implementation plan:
+- Add contract tests for auth token claims, collaboration payloads, and key API response shapes.
+- Run contract suite in CI across all three applications.
+
+Acceptance criteria:
+- Breaking contract changes are caught by automated tests before merge.
+- Shared payload assumptions are explicitly versioned/tested.
+
+------------------------------------------------
+
+Task 80: Scenario object mothers and cross-domain fixture packs (P4)
+
+Status:
+- Not started.
+
+Why:
+- Task 65 adds base builders; advanced cross-domain scenarios still need reusable high-level fixtures.
+
+Primary files:
+- backend/tests/factories/*
+- backend/tests/scenarios/* (new)
+- frontend/src/test/scenarios/* (new)
+- collab-server/src/__tests__/scenarios/* (new)
+
+Implementation plan:
+- Add scenario-level object mothers for common end-to-end domain setups.
+- Standardize fixture packs for tenant/user/document/review/collaboration combinations.
+
+Acceptance criteria:
+- Multi-domain tests can be written with minimal setup noise.
+- Scenario fixtures encode business intent clearly.
+
+------------------------------------------------
+
+Task 81: Architecture fitness tests in CI (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Planned OOP boundaries can regress without automated structural checks.
+
+Primary files:
+- backend/ (import/layer checks)
+- frontend/ (feature boundary checks)
+- collab-server/ (module boundary checks)
+- .github/workflows/*
+
+Implementation plan:
+- Add architecture tests for forbidden imports and layer rules.
+- Run them in CI as required checks.
+
+Acceptance criteria:
+- Boundary violations fail CI deterministically.
+- Layer/context import rules are versioned and documented.
+
+------------------------------------------------
+
+Task 82: Class-based controller handlers by context (P4)
+
+Status:
+- Not started.
+
+Why:
+- Route handlers still mix transport adaptation with use-case orchestration.
+
+Primary files:
+- backend/app/api/management/*
+- backend/app/api/portal/*
+- backend/app/controllers/* (new)
+
+Implementation plan:
+- Introduce controller classes per context (documents, reviews, users, portal).
+- Keep route modules thin and delegate to controller methods.
+
+Acceptance criteria:
+- Controllers own orchestration; routes primarily map HTTP I/O.
+- Repeated endpoint logic is reduced in targeted contexts.
+
+------------------------------------------------
+
+Task 83: Domain factories for complex creation flows (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Multi-object creation flows are repeated across services and routes.
+
+Primary files:
+- backend/app/services/document_service.py
+- backend/app/services/version_service.py
+- backend/app/services/invitations* (where applicable)
+- backend/app/domain/factories/* (new)
+
+Implementation plan:
+- Add factories for complex aggregate initialization.
+- Use factories from command handlers/services instead of ad-hoc constructor logic.
+
+Acceptance criteria:
+- Complex object graph creation is centralized and reusable.
+- Initialization invariants are enforced in one place.
+
+------------------------------------------------
+
+Task 84: Capability objects for authorization (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Authorization logic is currently role/permission-string heavy and spread across modules.
+
+Primary files:
+- backend/app/services/permissions.py
+- backend/app/dependencies/permissions.py
+- backend/app/security.py
+- backend/app/domain/capabilities/* (new)
+
+Implementation plan:
+- Represent authorization as capability objects (`CanPublish`, `CanAssignCompanies`, etc.).
+- Resolve capabilities from role/policy context, then consume in handlers/services.
+
+Acceptance criteria:
+- Core authorization checks use capability objects instead of scattered raw role checks.
+- Capability mapping and decisions are unit-tested.
+
+------------------------------------------------
+
+Task 85: Plugin registry for extension points (P4)
+
+Status:
+- Not started.
+
+Why:
+- Adding converters/exporters/channels currently requires direct edits in core modules.
+
+Primary files:
+- backend/app/utils/document_converter.py
+- backend/app/api/management/analytics.py
+- backend/app/services/email_service.py
+- backend/app/plugins/* (new)
+
+Implementation plan:
+- Create plugin registry and plugin interfaces for converters/exporters/notification channels.
+- Replace hardcoded switch paths with registry lookups.
+
+Acceptance criteria:
+- New plugin implementations can be registered without core-logic edits.
+- Registry lifecycle (load/validate/select) is tested.
+
+------------------------------------------------
+
+Task 86: Anti-corruption layers for external contracts (P4)
+
+Status:
+- Not started.
+
+Why:
+- External payload/token schemas can leak directly into domain/application layers.
+
+Primary files:
+- collab-server/src/auth.ts
+- collab-server/src/persistence.ts
+- backend/app/services/collaboration_service.py
+- backend/app/adapters/* (new)
+
+Implementation plan:
+- Add anti-corruption mappers/adapters at external boundaries (collab, SMTP, storage, generated clients).
+- Keep domain models independent from external contract drift.
+
+Acceptance criteria:
+- External schema changes are absorbed in adapter layers.
+- Domain/application contracts remain stable.
+
+------------------------------------------------
+
+Task 87: Immutable command/query DTOs (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Mutable payload objects increase accidental state mutation risk in orchestration flows.
+
+Primary files:
+- backend/app/application/commands/*
+- backend/app/application/queries/*
+- backend/app/schemas/*
+- frontend/src/features/* (if shared command models exist)
+
+Implementation plan:
+- Use immutable DTO types for app-layer command/query payloads.
+- Enforce no in-place mutation in handler flows.
+
+Acceptance criteria:
+- Application command/query DTOs are immutable by construction.
+- Handler logic is updated to treat DTOs as read-only inputs.
+
+------------------------------------------------
+
+Task 88: Workflow-stage state objects (P4)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Enum + conditional chains are still common for lifecycle handling.
+
+Primary files:
+- backend/app/services/version_service.py
+- backend/app/api/management/reviews.py
+- frontend/src/pages/document-detail/hooks/*
+- backend/app/domain/states/* (new)
+
+Implementation plan:
+- Model lifecycle behavior with stage/state objects and transition methods.
+- Use stage objects in workflows that currently rely on conditional trees.
+
+Acceptance criteria:
+- Workflow logic uses explicit stage behavior objects.
+- Invalid transition paths are structurally harder to express.
+
+------------------------------------------------
+
+Task 89: Use-case metrics and tracing objects (P4)
+
+Status:
+- Not started.
+
+Why:
+- Observability is mostly log-based and not consistently tied to use-case boundaries.
+
+Primary files:
+- backend/app/application/commands/*
+- backend/app/application/queries/*
+- backend/app/observability/* (new)
+- collab-server/src/*
+
+Implementation plan:
+- Add use-case telemetry objects/interceptors for timing, outcome, and key dimensions.
+- Standardize trace/metric naming across services.
+
+Acceptance criteria:
+- Core command/query handlers emit consistent metrics/traces.
+- Failures and latency hotspots are attributable by use-case identifier.
+
+------------------------------------------------
+
+Task 90: Selective event-sourcing pilot (P5)
+
+Status:
+- Not started.
+
+Why:
+- Certain high-complexity workflows may benefit from immutable event history and replay.
+
+Primary files:
+- backend/app/domain/events/*
+- backend/app/models/__init__.py
+- backend/app/event_store/* (new)
+- backend/tests/*
+
+Implementation plan:
+- Run feasibility analysis and pilot one bounded domain (not whole system).
+- Define go/no-go criteria (complexity, performance, operational cost).
+- If approved, implement minimal event-store + projection path for pilot.
+
+Acceptance criteria:
+- Decision record exists with measured tradeoffs and recommendation.
+- Pilot implementation (if approved) has tests and rollback strategy.
+
+------------------------------------------------
+
+Task 91: Architecture Decision Record workflow (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Large OOP/design refactors need durable decision history and rationale.
+
+Primary files:
+- docs/adr/* (new)
+- CONTRIBUTING.md
+- .github/pull_request_template.md (or equivalent)
+
+Implementation plan:
+- Create ADR template and naming/versioning conventions.
+- Require ADRs for major architecture changes (waves E-O scope).
+- Add PR checklist item linking the relevant ADR.
+
+Acceptance criteria:
+- ADR directory and template exist.
+- Contribution/PR workflow documents when ADRs are required.
+- New architecture changes include ADR linkage.
+
+------------------------------------------------
+
+Task 92: Deprecation lifecycle policy (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Refactors across APIs/modules need controlled retirement path to avoid abrupt breaks.
+
+Primary files:
+- docs/deprecation-policy.md (new)
+- backend/app/api/*
+- frontend/src/lib/api/*
+- collab-server/src/*
+
+Implementation plan:
+- Define staged lifecycle: proposed -> deprecated -> warned -> removed.
+- Define owner, timeline, compatibility window, and communication rules.
+- Add runtime/CI deprecation markers where appropriate.
+
+Acceptance criteria:
+- Deprecation policy doc is published and referenced in CONTRIBUTING.
+- Deprecated paths have explicit owner and removal target.
+- CI/docs include visibility for active deprecations.
+
+------------------------------------------------
+
+Task 93: Internal package/layer split (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Physical structure still allows cross-layer coupling that contradicts target architecture.
+
+Primary files:
+- backend/app/*
+- frontend/src/*
+- collab-server/src/*
+
+Implementation plan:
+- Split code into explicit packages/layers (`domain`, `application`, `infrastructure`, `web`).
+- Move modules gradually behind stable interfaces.
+- Pair with architecture-fitness checks (Task 81) to enforce boundaries.
+
+Acceptance criteria:
+- Targeted modules live under explicit layer packages.
+- Cross-layer imports follow allowed dependency direction only.
+
+------------------------------------------------
+
+Task 94: Refactor-budget CI gates (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Large, risky changes can reintroduce complexity without guardrails.
+
+Primary files:
+- .github/workflows/*
+- scripts/*
+- backend/*
+- frontend/*
+
+Implementation plan:
+- Define budgets for touched files (max size delta, complexity delta, new warning thresholds).
+- Add CI checks and documented override workflow.
+
+Acceptance criteria:
+- PRs violating budgets fail with actionable feedback.
+- Exception path exists with explicit owner approval.
+
+------------------------------------------------
+
+Task 95: Fault-injection resilience tests for adapters (P5)
+
+Status:
+- Not started.
+
+Why:
+- External systems (SMTP/storage/collab APIs) fail in ways not fully covered by happy-path tests.
+
+Primary files:
+- backend/tests/*
+- collab-server/src/__tests__/*
+- backend/app/adapters/*
+
+Implementation plan:
+- Add failure-mode tests (timeouts, partial failures, malformed payloads, retries exhausted).
+- Validate fallback and compensation behavior for critical flows.
+
+Acceptance criteria:
+- Core adapter failure modes are reproducibly tested.
+- Recovery behavior is explicit and verified.
+
+------------------------------------------------
+
+Task 96: Wave migration playbooks/checklists (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Multi-wave architecture migration needs repeatable, low-risk execution steps.
+
+Primary files:
+- docs/migrations/* (new)
+- CONTRIBUTING.md
+- plan
+
+Implementation plan:
+- Publish per-wave playbooks (pre-checks, change steps, validation, rollback steps).
+- Link playbooks from plan and contributor docs.
+
+Acceptance criteria:
+- Each active wave has an associated migration checklist.
+- Teams can execute/refactor using documented procedure.
+
+------------------------------------------------
+
+Task 97: Internal contract versioning policy (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Payload/token contract changes across backend/frontend/collab need explicit versioning strategy.
+
+Primary files:
+- docs/contracts/versioning.md (new)
+- backend/app/*
+- frontend/src/lib/api/*
+- collab-server/src/*
+
+Implementation plan:
+- Define versioning rules, compatibility windows, and migration timelines.
+- Add contract version metadata and policy checks where applicable.
+
+Acceptance criteria:
+- Contract changes follow documented version policy.
+- Backward compatibility expectations are explicit per release.
+
+------------------------------------------------
+
+Task 98: Use-case performance SLOs (P5)
+
+Status:
+- Not started.
+
+Why:
+- Architectural improvements need measurable latency/reliability targets.
+
+Primary files:
+- docs/slo/*
+- backend/app/observability/*
+- .github/workflows/*
+
+Implementation plan:
+- Define SLOs for key use-cases (p95 latency, error budget).
+- Instrument command/query paths and publish dashboards/alerts.
+
+Acceptance criteria:
+- Named SLOs exist for critical use-cases.
+- Telemetry can show SLO compliance trends over time.
+
+------------------------------------------------
+
+Task 99: Feature-toggle framework for architecture rollout (P5)
+
+Status:
+- Not started.
+
+Why:
+- Large refactors need controlled release and fast rollback without redeploy risk.
+
+Primary files:
+- backend/app/config.py
+- backend/app/*
+- frontend/src/config/*
+- frontend/src/*
+
+Implementation plan:
+- Add feature-flag framework for backend/frontend architecture toggles.
+- Use flags to roll out new pathways gradually and revert safely.
+
+Acceptance criteria:
+- Refactor features can be enabled/disabled by config without code edits.
+- Rollout/rollback procedure is documented and tested.
+
+------------------------------------------------
+
+Task 100: No direct DB access in routes enforcement (P5)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Route-level ORM access bypasses service/repository abstractions and weakens OOP boundaries.
+
+Primary files:
+- backend/app/api/*
+- backend/app/services/*
+- backend/app/repositories/*
+- scripts/* (lint/codemod support)
+
+Implementation plan:
+- Add lint/check rule to detect direct `db.query` usage in route modules.
+- Provide codemod guidance/helpers for migration to services/repositories.
+
+Acceptance criteria:
+- New route code cannot introduce direct DB access.
+- Existing direct accesses are tracked and reduced over time with automated checks.
+
+------------------------------------------------
+
+Task 101: Idempotency keys for write operations (P6)
+
+Status:
+- Not started.
+
+Why:
+- Client retries can create duplicate writes and duplicated side effects.
+
+Primary files:
+- backend/app/api/management/*
+- backend/app/api/portal/*
+- backend/app/services/*
+- backend/app/models/__init__.py
+
+Implementation plan:
+- Add idempotency-key contract for selected POST/PUT/PATCH endpoints.
+- Persist request/result fingerprints and enforce replay-safe behavior.
+- Cover side-effecting flows (publish, invite, upload, comment/review actions).
+
+Acceptance criteria:
+- Duplicate requests with same idempotency key are safely deduplicated.
+- Side effects are not executed twice on retried requests.
+
+------------------------------------------------
+
+Task 102: Central Policy Decision Point service (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Authorization logic is still distributed across routes, dependencies, and services.
+
+Primary files:
+- backend/app/services/permissions.py
+- backend/app/dependencies/permissions.py
+- backend/app/security.py
+- backend/app/policy/* (new)
+
+Implementation plan:
+- Implement PDP service taking subject/action/resource/context.
+- Route authorization checks through PDP adapters in services/dependencies.
+- Return structured allow/deny + reason payload.
+
+Acceptance criteria:
+- Core authorization checks use centralized PDP decisions.
+- Permission behavior remains consistent across route and service layers.
+
+------------------------------------------------
+
+Task 103: Tenant isolation attack harness (P6)
+
+Status:
+- Not started.
+
+Why:
+- Multi-tenant regressions can slip in when new endpoints are added.
+
+Primary files:
+- backend/tests/tenant_isolation/* (new)
+- backend/tests/conftest.py
+- backend/app/api/*
+
+Implementation plan:
+- Build reusable tenant attack harness for common endpoint patterns.
+- Auto-generate/execute cross-tenant read/write attempts for protected routes.
+- Add CI gate for harness suite.
+
+Acceptance criteria:
+- New protected endpoints are covered by tenant isolation tests.
+- Cross-tenant access regressions are caught automatically.
+
+------------------------------------------------
+
+Task 104: Data ownership map by bounded context (P7)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Write ownership between contexts is implicit and can drift.
+
+Primary files:
+- docs/context-ownership.md (new)
+- docs/context-map/* (new)
+- backend/app/*
+
+Implementation plan:
+- Document single write-owner per aggregate/entity group.
+- Mark allowed read-only cross-context dependencies.
+- Align repository/application layers with documented ownership.
+
+Acceptance criteria:
+- Ownership map exists and is referenced in architecture docs.
+- Cross-context writes outside owner context are explicitly flagged.
+
+------------------------------------------------
+
+Task 105: Projection/caching architecture for heavy reads (P7)
+
+Status:
+- Not started.
+
+Why:
+- Analytics/search/portal reads remain query-heavy and expensive under growth.
+
+Primary files:
+- backend/app/api/management/analytics.py
+- backend/app/api/management/search.py
+- backend/app/api/portal/documents.py
+- backend/app/projections/* (new)
+
+Implementation plan:
+- Define read projections for heavy dashboards/search summaries.
+- Invalidate/update projections via domain events.
+- Add cache consistency checks and fallback behavior.
+
+Acceptance criteria:
+- Heavy read paths use projections/caches with deterministic invalidation.
+- Read latency and DB load improve in measured benchmarks.
+
+------------------------------------------------
+
+Task 106: Unified async job framework (P7)
+
+Status:
+- Not started.
+
+Why:
+- Async/background processing is fragmented across workflows.
+
+Primary files:
+- backend/app/workers/*
+- backend/app/services/conversion_jobs.py
+- backend/app/services/*
+- backend/app/jobs/* (new)
+
+Implementation plan:
+- Standardize job model (retry policy, DLQ, poison handling, observability).
+- Migrate key background flows to unified framework incrementally.
+
+Acceptance criteria:
+- Async workflows use shared retry/error/dead-letter semantics.
+- Failed jobs are visible and recoverable with clear operational tooling.
+
+------------------------------------------------
+
+Task 107: Optimistic concurrency controls (P6)
+
+Status:
+- Not started.
+
+Why:
+- Concurrent updates can overwrite each other without conflict detection.
+
+Primary files:
+- backend/app/models/__init__.py
+- backend/app/services/document_service.py
+- backend/app/services/version_service.py
+- frontend/src/lib/api/*
+
+Implementation plan:
+- Add version/etag fields for mutable resources.
+- Require precondition checks on updates (`If-Match` or version token).
+- Return conflict responses when stale writes are detected.
+
+Acceptance criteria:
+- Lost-update scenarios are detected and rejected.
+- UI/API flows surface actionable conflict handling.
+
+------------------------------------------------
+
+Task 108: Strangler wrappers for legacy modules (P7)
+
+Status:
+- Not started.
+
+Why:
+- High-risk legacy modules are difficult to replace safely in one step.
+
+Primary files:
+- backend/app/utils/document_converter.py
+- backend/app/services/analytics_service.py
+- backend/app/legacy_wrappers/* (new)
+
+Implementation plan:
+- Introduce wrapper interfaces around legacy modules.
+- Route new functionality through wrappers while gradually replacing internals.
+- Track migration completion and legacy call volume.
+
+Acceptance criteria:
+- Legacy-heavy modules are accessed through wrapper boundaries.
+- Incremental replacement can proceed with low regression risk.
+
+------------------------------------------------
+
+Task 109: Frontend feature-level dependency rules (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Cross-feature imports can bypass boundaries and create hidden coupling.
+
+Primary files:
+- frontend/src/features/*
+- frontend/eslint configuration
+- frontend/tsconfig.json
+
+Implementation plan:
+- Define allowed dependency graph between feature modules.
+- Enforce with lint/import rules and CI checks.
+
+Acceptance criteria:
+- Unauthorized cross-feature imports fail lint/CI.
+- Feature boundaries are explicit and stable.
+
+------------------------------------------------
+
+Task 110: Backend-for-Frontend (BFF) layer (P7)
+
+Status:
+- Not started.
+
+Why:
+- Complex UI pages orchestrate many backend calls and perform client-side joining.
+
+Primary files:
+- backend/app/api/bff/* (new)
+- frontend/src/pages/*
+- frontend/src/lib/api/*
+
+Implementation plan:
+- Add BFF endpoints for high-complexity pages first.
+- Shift orchestration and response shaping to server-side BFF handlers.
+
+Acceptance criteria:
+- Targeted pages use fewer API round-trips and less client orchestration logic.
+- BFF contracts remain aligned with core domain services.
+
+------------------------------------------------
+
+Task 111: Explicit use-case service interfaces (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Service contracts are still partly CRUD-shaped rather than business use-case shaped.
+
+Primary files:
+- backend/app/services/*
+- backend/app/application/interfaces/* (new)
+
+Implementation plan:
+- Define interfaces named by use-case intent (`PublishApprovedVersion`, `AssignCompanySet`, etc.).
+- Implement/adapt existing services behind use-case contracts.
+
+Acceptance criteria:
+- New app-layer calls target use-case interfaces instead of generic CRUD methods.
+- Use-case contracts improve readability and testability.
+
+------------------------------------------------
+
+Task 112: Reusable invariant specification objects (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Invariant logic is repeated across runtime checks and test assertions.
+
+Primary files:
+- backend/app/domain/specifications/*
+- backend/app/services/*
+- backend/tests/*
+
+Implementation plan:
+- Encode invariants as reusable specification objects.
+- Use the same specs in domain checks and test helpers.
+
+Acceptance criteria:
+- Core invariants are defined once and reused.
+- Divergence between implementation checks and tests is reduced.
+
+------------------------------------------------
+
+Task 113: Command/query bus middleware pipeline (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Cross-cutting concerns (validation/auth/tracing) are still manually repeated.
+
+Primary files:
+- backend/app/application/commands/*
+- backend/app/application/queries/*
+- backend/app/application/bus/* (new)
+
+Implementation plan:
+- Introduce command bus/query bus with middleware chain.
+- Move validation/auth/tracing concerns to middleware layers.
+
+Acceptance criteria:
+- Command/query handlers are thinner and focused on domain logic.
+- Cross-cutting concerns execute consistently via middleware.
+
+------------------------------------------------
+
+Task 114: Policy explanation objects (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Authorization failures often return opaque deny outcomes.
+
+Primary files:
+- backend/app/policy/*
+- backend/app/services/permissions.py
+- backend/app/dependencies/permissions.py
+
+Implementation plan:
+- Add structured explanation objects for allow/deny decisions.
+- Use explanations in API errors/audit logs where appropriate.
+
+Acceptance criteria:
+- Permission denials can expose consistent human-readable reason codes.
+- Audit/debug workflows can trace decision rationale.
+
+------------------------------------------------
+
+Task 115: Context map artifacts (P7)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Upstream/downstream domain relationships are not explicitly maintained.
+
+Primary files:
+- docs/context-map/* (new)
+- docs/adr/*
+- plan
+
+Implementation plan:
+- Produce context-map diagrams/documents for major bounded contexts.
+- Link context-map references in ADRs and migration playbooks.
+
+Acceptance criteria:
+- Context-map artifacts exist and are maintained with architecture changes.
+- Cross-context dependencies are easier to review and govern.
+
+------------------------------------------------
+
+Task 116: Executable workflow models + model-based tests (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- High-risk workflows remain partially defined by imperative condition chains.
+
+Primary files:
+- backend/app/domain/workflows/*
+- backend/tests/workflows/* (new)
+- frontend/src/features/*/state/*
+
+Implementation plan:
+- Model critical workflows as executable state machines.
+- Add model-based tests to verify transition completeness and invariants.
+
+Acceptance criteria:
+- Key workflows are represented by formal models with exhaustive transition tests.
+- Regression risk in lifecycle logic is reduced.
+
+------------------------------------------------
+
+Task 117: Consumer-driven contract tests (P6)
+
+Status:
+- Not started.
+
+Why:
+- Backend/provider changes can break consumer assumptions even with type checks.
+
+Primary files:
+- backend/tests/contracts/*
+- frontend/src/test/contracts/*
+- .github/workflows/*
+
+Implementation plan:
+- Define consumer contracts for critical frontend API usages.
+- Run provider verification in backend CI.
+
+Acceptance criteria:
+- Contract mismatches fail CI before integration regressions reach production.
+- Consumer/provider compatibility is explicitly versioned/tested.
+
+------------------------------------------------
+
+Task 118: Migration safety framework (P7)
+
+Status:
+- Not started.
+
+Why:
+- Schema/architecture migrations need stronger safety checks and rollback confidence.
+
+Primary files:
+- backend/alembic/*
+- scripts/migration_safety/* (new)
+- docs/migrations/*
+
+Implementation plan:
+- Add dry-run validation, preflight guards, rollback probes, post-migration assertions.
+- Integrate into release/migration pipeline.
+
+Acceptance criteria:
+- Migrations include safety checks and rollback validation steps.
+- High-risk migrations have reproducible safety evidence.
+
+------------------------------------------------
+
+Task 119: SLO burn-rate alerts by use-case (P7)
+
+Status:
+- Not started.
+
+Why:
+- Raw SLO metrics are less actionable without burn-rate based alerting.
+
+Primary files:
+- backend/app/observability/*
+- docs/slo/*
+- infra/alerting configs (where applicable)
+
+Implementation plan:
+- Define burn-rate alert thresholds tied to use-case SLO budgets.
+- Wire alerts and escalation runbooks.
+
+Acceptance criteria:
+- Burn-rate alerts exist for critical use-cases.
+- Alert runbooks are documented and tested.
+
+------------------------------------------------
+
+Task 120: Chaos testing for adapter boundaries (P7)
+
+Status:
+- Not started.
+
+Why:
+- Staging-level resilience under real fault patterns is not systematically validated.
+
+Primary files:
+- scripts/chaos/* (new)
+- backend/tests/*
+- collab-server/tests/*
+- CI/staging pipeline definitions
+
+Implementation plan:
+- Add controlled chaos scenarios for SMTP/storage/collab boundaries in staging.
+- Measure recovery and failure containment behavior.
+
+Acceptance criteria:
+- Staging chaos suite runs on schedule/release candidates.
+- Recovery behavior is measurable and within defined thresholds.
+
+------------------------------------------------
+
+Task 121: Architecture debt register (P6)
+
+Status:
+- Completed (2026-02-27).
+
+Why:
+- Architecture debt lacks standardized ownership and risk tracking.
+
+Primary files:
+- docs/architecture-debt.md (new)
+- scripts/architecture_debt_checks/* (new)
+- .github/workflows/*
+
+Implementation plan:
+- Track debt items with owner, risk score, due date, and mitigation plan.
+- Add CI reminder/reporting on overdue high-risk items.
+
+Acceptance criteria:
+- Debt register is maintained and linked from planning docs.
+- High-risk overdue items are visible in CI reporting.
+
+------------------------------------------------
+
+Task 122: Refactor scaffolding generators/templates (P7)
+
+Status:
+- Not started.
+
+Why:
+- Repeated architectural patterns are currently implemented manually and inconsistently.
+
+Primary files:
+- scripts/scaffold/* (new)
+- backend/app/*
+- frontend/src/*
+- collab-server/src/*
+
+Implementation plan:
+- Create generators/templates for new service/repository/policy/controller modules.
+- Include tests/docs stubs and boundary-compliant defaults.
+
+Acceptance criteria:
+- New architecture components can be scaffolded consistently.
+- Generated outputs follow agreed structure and quality baseline.
 
 ================================================
-3) Validation Matrix (Remaining Work)
+2.1) Impact x Effort Ranking (Tasks 101-122)
 ================================================
 
-Backend targeted tests:
-- backend/tests/test_collaboration.py
-- backend/tests/test_attachments.py
-- backend/tests/test_attachment_office_conversion.py
-- backend/tests/test_db_migrations.py
-- new tests for cross-tenant attachment/collaboration denial
-- new tests for comment visibility non-mutating behavior
-- new tests for conversion queue stuck/recovery/concurrency behavior
-- new tests for viewer preview-stream vs original-stream behavior
-- new tests for FTS/non-FTS search filter parity
-- new tests for transactional document-create and upload rollback paths
-- new tests for company-owned vs assigned-document metric semantics
-- new tests for invitation tenant-assignment constraints
-- new tests for customer-company invariant enforcement in user/company flows
-- new tests for deactivated-company auth/portal behavior
-- new tests for assign-companies operation semantics (additive vs set-based)
-- new tests for upload defaults (draft/non-public) and publish override behavior
-- new tests for editor peer-review constraints by submitter role
-- new tests for user-update hierarchy checks across status/tenant mutations
-- new tests for preserving published availability while drafting next version
-- new tests for analytics publish-time bucketing by `published_at`
-- new tests for tenant-scoped most-active ranking correctness
-- new tests for collaboration edit-policy parity with standard edit policy
-- new tests for topic slug/topic-value normalization in public topic counts
-- new tests for invalid analytics export report type returning 4xx
+Scoring model:
+- Impact: 1 (low) to 5 (very high).
+- Effort: 1 (low) to 5 (very high).
+- Priority score: Impact / Effort (higher = earlier execution value).
 
-Frontend targeted tests:
-- frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.test.tsx
-- frontend/src/lib/api/httpClient.test.ts
-- new/updated tests for assigned-companies contract
-- new tests for notification-type mapping contract
-- new tests for attachment selection refresh on list mutation
-- new tests for RBAC-driven permission gating behavior
-- new tests for company detail/document semantics labeling/data consistency
-- new tests for document assigned-company selector behavior against API semantics
-- new tests for public search highlighting with regex-special queries
+ROI ranking (efficiency signal only; not dependency order):
+1. Task 102 - Impact 5, Effort 2, Score 2.50.
+2. Task 109 - Impact 4, Effort 2, Score 2.00.
+3. Task 111 - Impact 4, Effort 2, Score 2.00.
+4. Task 112 - Impact 4, Effort 2, Score 2.00.
+5. Task 117 - Impact 4, Effort 2, Score 2.00.
+6. Task 101 - Impact 5, Effort 3, Score 1.67.
+7. Task 103 - Impact 5, Effort 3, Score 1.67.
+8. Task 107 - Impact 5, Effort 3, Score 1.67.
+9. Task 104 - Impact 3, Effort 2, Score 1.50.
+10. Task 114 - Impact 3, Effort 2, Score 1.50.
+11. Task 115 - Impact 3, Effort 2, Score 1.50.
+12. Task 121 - Impact 3, Effort 2, Score 1.50.
+13. Task 113 - Impact 4, Effort 3, Score 1.33.
+14. Task 105 - Impact 4, Effort 4, Score 1.00.
+15. Task 106 - Impact 4, Effort 4, Score 1.00.
+16. Task 108 - Impact 4, Effort 4, Score 1.00.
+17. Task 116 - Impact 4, Effort 4, Score 1.00.
+18. Task 118 - Impact 4, Effort 4, Score 1.00.
+19. Task 120 - Impact 4, Effort 4, Score 1.00.
+20. Task 119 - Impact 3, Effort 3, Score 1.00.
+21. Task 122 - Impact 3, Effort 3, Score 1.00.
+22. Task 110 - Impact 3, Effort 4, Score 0.75.
+
+Dependency-first execution order is defined by Waves D-O in section 1.
+
+================================================
+3) Validation Matrix
+================================================
+
+Backend tests:
+- backend/tests/test_documents.py
+- backend/tests/test_permissions.py
+- backend/tests/test_roles.py
+- Additional targeted tests for tenant-scoped company assignment and delete transaction rollback.
+- Additional policy/repository/unit-of-work tests for Tasks 50-52.
+- Additional domain-event/value-object/workflow tests for Tasks 53-56.
+- Additional notification/auth/conversion/collaboration architecture tests for Tasks 57-61.
+- Additional mapper/error/factory tests for Tasks 63-65.
+- Additional bounded-context/aggregate/ports/specification/command-query tests for Tasks 66-71.
+- Additional outbox/saga/result/container architecture tests for Tasks 72-75.
+- Additional generated-client/contract/scenario tests for Tasks 78-80.
+- Additional architecture-fitness/controller/factory/capability tests for Tasks 81-84.
+- Additional plugin/ACL/immutable-dto/state-object tests for Tasks 85-88.
+- Additional use-case telemetry tests and event-sourcing pilot validation for Tasks 89-90.
+- Additional ADR/deprecation policy compliance checks for Tasks 91-92.
+- Additional package-boundary and route-DB-enforcement checks for Tasks 93 and 100.
+- Additional fault-injection and resilience regression suites for Task 95.
+- Additional contract-versioning and SLO compliance checks for Tasks 97-98.
+- Additional idempotency and optimistic-concurrency tests for Tasks 101 and 107.
+- Additional PDP/policy-explanation/invariant tests for Tasks 102, 112, and 114.
+- Additional tenant-isolation attack-harness checks for Task 103.
+- Additional use-case interface and bus-pipeline tests for Tasks 111 and 113.
+- Additional executable workflow and model-based tests for Task 116.
+- Additional projection/cache, async-job, and strangler parity tests for Tasks 105, 106, and 108.
+- Additional migration safety, burn-rate alert, and chaos boundary tests for Tasks 118-120.
+- Additional scaffolding generator output checks for Task 122.
+
+Frontend tests:
+- Add/update tests for Documents page filters and role-gated actions.
+- Add tests for extracted hooks/components from Task 47.
+- Add controller/view-model tests for Task 62.
+- Add API DTO mapping tests for Task 63.
+- Add feature-module and workflow-machine tests for Tasks 76-77.
+- Add generated-client integration tests for Task 78.
+- Add architecture boundary checks and immutable DTO usage tests for Tasks 81 and 87.
+- Add feature-toggle behavior tests for Task 99.
+- Add feature-level dependency rule tests for Task 109.
+- Add BFF integration and DTO boundary tests for Task 110.
+- Add policy explanation rendering/handling tests for Task 114.
+- Add consumer-side contract tests for Task 117.
 
 Collab-server tests:
 - collab-server/src/__tests__/auth.test.ts
 - collab-server/src/__tests__/persistence.test.ts
-- new tests for multi-connection and mixed read/write persistence behavior
+- Additional tests for new connection-registry/bootstrap classes.
+- Additional auth contract tests for Task 58.
+- Additional cross-service contract tests for Task 79.
+- Additional anti-corruption and telemetry integration tests for Tasks 86 and 89.
+- Additional adapter fault-injection and contract-versioning tests for Tasks 95 and 97.
+- Additional provider contract checks for Task 117.
+- Additional BFF/collab payload compatibility tests for Task 110.
+- Additional chaos/partition recovery checks for Task 120.
 
 Manual smoke checklist:
-1. Auth/login and refresh behavior.
-2. Attachment list/download/preview authorization with different roles/tenants.
-3. Collaboration multi-user editing with read-only + write users.
-4. Assigned companies display and edit flow in document details.
-5. Public viewer document/comment privacy checks.
-6. Versions/reviews/search/engagement cross-tenant denial checks.
-7. Portal attachment download links and dashboard count parity.
-8. Viewer preview rendering for Office-origin attachments.
-9. Search filter consistency (category/date) with FTS enabled.
-10. Notification icons/actions across all notification types.
-11. Upload failure recovery (no orphan child/release-notes records).
-12. Attachment selection behavior after delete/reload in editor/preview.
-13. Company detail counts/tabs semantics vs portal-visible assignment behavior.
-14. Invite customer to non-owned tenant as admin/manager should follow policy.
-15. Remove/reassign customer company should preserve customer-company invariant.
-16. Deactivated company login/portal behavior should match defined policy.
-17. Assigned-company selector should persist exact intended assignment set.
-18. Upload without explicit visibility/status should remain draft and non-public by default.
-19. Editor should not approve manager/admin submissions in peer-review flow.
-20. Manager should not deactivate/reassign higher-privilege users through update path.
-21. Creating a new version on an active document should preserve public/portal availability.
-22. Content analytics published-over-time should match `published_at` dates.
-23. Tenant most-active-users analytics should reflect tenant-local ranking (not global pre-limit).
-24. Collaboration edit rights should match standard document edit policy for same user/doc.
-25. Public topic counts should remain correct when legacy/non-canonical topic values exist.
-26. Public search with regex-special input should not crash.
-27. Analytics export with invalid report should return explicit 4xx.
+1. Assigned-companies operations with same-tenant and cross-tenant users.
+2. Documents list filtering by search, status, and visibility together.
+3. Role-based delete availability and delete flow behavior.
+4. Document delete audit consistency under forced failure conditions.
+5. Collaboration server startup, health, connect/disconnect, and persistence behavior.
+6. Generated client compatibility with backend OpenAPI contract.
+7. Cross-service token/payload compatibility checks (backend/frontend/collab).
+8. Multi-step workflow recovery behavior under forced failures (outbox/saga flows).
+9. CI architecture fitness checks fail on intentional boundary violations.
+10. Plugin registration/dynamic resolution behavior for converters/exporters/channels.
+11. Capability-based authorization decisions match policy matrix behavior.
+12. Telemetry output includes per-use-case traces/metrics for core command/query paths.
+13. Event-sourcing pilot (if enabled) supports replay and projection consistency.
+14. ADR requirement is enforced for major architecture PRs.
+15. Deprecation lifecycle status is visible for deprecated APIs/modules.
+16. Package/layer boundaries are physically enforced and verified in CI.
+17. Fault-injection scenarios validate resilience for SMTP/storage/collab adapters.
+18. Contract versioning behavior remains compatible across backend/frontend/collab.
+19. SLO telemetry shows p95/error-budget status for key use-cases.
+20. Feature flags can safely enable/disable refactor pathways.
+21. Route-layer direct `db.query` calls are blocked by automated checks.
+22. Idempotent retries for write endpoints do not duplicate side effects.
+23. PDP authorization decisions and explanation payloads match policy expectations.
+24. Tenant-isolation attack harness shows no cross-tenant data access path.
+25. Concurrent update conflicts are detected and handled via version/etag checks.
+26. Frontend dependency rules block forbidden cross-feature imports.
+27. Command/query middleware ordering is traceable and deterministic.
+28. Workflow model-based tests pass for critical lifecycle flows.
+29. Projection/cache invalidation stays consistent after write operations.
+30. Async job retries, DLQ handling, and poison-message behavior are observable.
+31. Strangler wrappers preserve behavior parity with legacy module paths.
+32. BFF aggregation endpoints enforce permissions and contract shape correctly.
+33. Data ownership and context-map artifacts are up-to-date and reviewed.
+34. Migration dry-run/preflight/rollback probes pass before release.
+35. Burn-rate alerts fire under synthetic error-budget exhaustion.
+36. Adapter-boundary chaos scenarios recover within defined thresholds.
+37. Architecture debt register surfaces overdue high-risk items.
+38. Scaffold-generated modules compile and include baseline tests/docs stubs.
 
 ================================================
 4) Definition of Done
@@ -1174,206 +2266,240 @@ Manual smoke checklist:
 
 For each task:
 1. Code changes implemented.
-2. Tests added/updated.
-3. Lint/typecheck clean for touched files (or no new warnings introduced).
-4. Short update added below in Progress.
+2. Tests added or updated.
+3. Typecheck/lint clean for touched files (or no new warnings introduced).
+4. Progress note added below.
 
 ================================================
-5) Progress (Open Phase)
+5) Progress
 ================================================
 
-2026-02-23:
-- Plan reset to remaining work only.
-- No remaining tasks completed yet in this reduced plan.
+2026-02-27:
+- Completed Task 41: assign/remove/list company assignment endpoints now use tenant-scoped document lookup via tenant context.
+- Completed Task 42: visibility filter wired end-to-end (Documents page query key/request + backend documents list filter application).
+- Completed Task 43: Documents page delete action aligned to manager+ permissions to match backend authorization.
+- Completed Task 44: document delete and delete-audit logging are now atomic within a single transaction with rollback on failure.
+- Added/updated regression coverage in `backend/tests/test_documents.py` for visibility filtering, cross-tenant company-assignment denial, and delete rollback consistency.
+- Updated frontend e2e permission expectation in `frontend/e2e/permissions.spec.ts` (editor cannot see delete action in documents list).
+- Validation run:
+- `docker compose run --rm backend pytest tests/test_documents.py` (pass)
+- `docker compose run --rm backend ruff check app tests/test_documents.py` (pass)
+- `npm.cmd --prefix frontend run build` (pass)
+- Completed Task 91: established ADR workflow (`docs/adr/README.md`, template, and ADR-0001 baseline decision).
+- Completed Task 92: published deprecation lifecycle policy and active register (`docs/deprecation-policy.md`, `docs/deprecations.md`) with CI visibility checks.
+- Completed Task 96: published per-wave migration playbooks/checklists for Waves E-O under `docs/migrations/`.
+- Completed Task 97: published internal contract versioning policy at `docs/contracts/versioning.md`.
+- Completed Task 104: published bounded-context data ownership map at `docs/context-ownership.md` and linked from architecture docs.
+- Completed Task 115: published context-map artifacts in `docs/context-map/` and linked from ADR/migration guidance.
+- Completed Task 121: added architecture debt register (`docs/architecture-debt.md`) and CI reporting scripts/workflow (`scripts/architecture_debt_checks/*`, `.github/workflows/architecture-governance.yml`).
+- Updated contributor and PR workflows to require governance links/metadata for architecture-impacting changes (`CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`).
+- Completed Wave F:
+- Task 66: added bounded-context APIs under `backend/app/application/contexts/*` and explicit backend layer packages.
+- Task 68: added ports/adapters for email/storage/collaboration state and injected collaboration state persistence via adapter port.
+- Task 81: added architecture fitness checks and CI workflow (`scripts/architecture_checks/*`, `.github/workflows/architecture-fitness.yml`).
+- Task 93: added explicit layer/package scaffolding in backend/frontend/collab (`domain`, `application`, `infrastructure`, `web`).
+- Task 94: added refactor-budget guardrail script/config/override policy (`check_refactor_budget.py` + JSON configs).
+- Task 100: added route-level DB access enforcement with baseline tracking (`check_route_db_access.py`, baseline snapshot).
+- Task 109: added frontend feature dependency enforcement checks and feature-layer scaffolding.
+- Wave F validation run:
+- `docker compose run --rm backend pytest tests/test_documents.py` (pass)
+- `docker compose run --rm backend ruff check app` (pass)
+- `npm.cmd --prefix collab-server run typecheck` (pass)
+- `npm.cmd --prefix collab-server run test` (pass)
+- `npm.cmd --prefix frontend run build` (pass)
+- `python scripts/architecture_checks/check_backend_architecture.py` (pass via Docker workspace run)
+- `python scripts/architecture_checks/check_collab_architecture.py` (pass via Docker workspace run)
+- `python scripts/architecture_checks/check_frontend_feature_dependencies.py` (pass via Docker workspace run)
+- `python scripts/architecture_checks/check_route_db_access.py` (pass after baseline update; current=200, baseline=200)
+- `python scripts/architecture_checks/check_refactor_budget.py` (script validated; backend Docker image lacked `git`, CI runner expected to execute this check)
+- Completed Task 45: standardized backend core services around constructor-injected service objects.
+- Refactored `AuthService`, `CommentService`, and `VersionService` to instance-first APIs and updated route/context call-sites to instantiate service objects per request.
+- Reused shared service base types by introducing `SessionService` and wiring `DocumentService`/`AnalyticsService` to service-base inheritance for consistent structure.
+- Task 45 validation run:
+- `docker compose run --rm backend ruff check app/services/base_service.py app/services/auth_service.py app/services/comment_service.py app/services/version_service.py app/services/document_service.py app/api/management/auth.py app/api/management/comments.py app/api/management/versions.py app/application/contexts/reviews/api.py tests/test_comments.py` (pass)
+- `docker compose run --rm backend pytest tests/test_auth.py tests/test_comments.py tests/test_versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_documents.py` (pass)
+- Completed Task 50: introduced explicit access-policy classes (`DocumentAccessPolicy`, `ReviewPolicy`, `InvitationPolicy`) under `backend/app/application/policies/`.
+- Centralized permission/tenant decisions through policy objects in `app/services/permissions.py` with compatibility wrappers for existing callers.
+- Replaced ad-hoc review/invitation role+tenant checks with policy-based checks in `backend/app/api/management/reviews.py` and `backend/app/api/management/invitations.py`.
+- Updated collaboration service/endpoints to use constructor-injected document access policy decisions while preserving existing route behavior (`backend/app/services/collaboration_service.py`, collaboration API routes, auth collab-token endpoint).
+- Added policy unit coverage in `backend/tests/test_access_policies.py`.
+- Task 50 validation run:
+- `docker compose run --rm backend ruff check app/application/policies/__init__.py app/application/policies/access_policies.py app/services/permissions.py app/services/collaboration_service.py app/api/management/invitations.py app/api/management/reviews.py app/api/management/auth.py app/api/management/collaboration/state.py app/api/management/collaboration/snapshots.py app/api/management/collaboration/sessions.py app/api/management/collaboration/activity.py app/application/contexts/collaboration/api.py tests/test_access_policies.py` (pass)
+- `docker compose run --rm backend pytest tests/test_access_policies.py tests/test_permissions.py tests/test_invitations_api.py tests/test_reviews_api.py tests/test_collaboration.py` (pass)
+- Completed Task 51: added repository layer scaffolding under `backend/app/repositories/` for `Document`, `Version`, `User`, `Comment`, and `Invitation` aggregates.
+- Migrated common aggregate fetch/query paths to repositories in auth, version, comment, invitation, and collaboration modules to reduce direct route/service ORM fetch duplication.
+- Updated collaboration and invitation management endpoints to use repository-backed aggregate access patterns, including batched user lookups in list/feed/session responses.
+- Task 51 validation run:
+- `docker compose run --rm backend ruff check app/repositories/__init__.py app/repositories/base.py app/repositories/document_repository.py app/repositories/version_repository.py app/repositories/user_repository.py app/repositories/comment_repository.py app/repositories/invitation_repository.py app/services/auth_service.py app/services/version_service.py app/services/comment_service.py app/api/management/auth.py app/api/management/invitations.py app/api/management/collaboration/state.py app/api/management/collaboration/snapshots.py app/api/management/collaboration/sessions.py app/api/management/collaboration/activity.py` (pass)
+- `docker compose run --rm backend pytest tests/test_auth.py tests/test_comments.py tests/test_versions.py tests/test_invitations_api.py tests/test_reviews_api.py tests/test_collaboration.py` (pass)
+- Completed Task 52: introduced shared Unit-of-Work transaction helper at `backend/app/services/uow.py`.
+- Migrated multi-step write flows in `DocumentService`, `VersionService`, and `CommentService` to explicit Unit-of-Work scopes for deterministic commit/rollback handling.
+- Added Unit-of-Work tests in `backend/tests/test_uow.py` to validate auto-commit, rollback-on-exception, and explicit rollback behavior.
+- Task 52 validation run:
+- `docker compose run --rm backend ruff check app/services/uow.py app/services/document_service.py app/services/version_service.py app/services/comment_service.py tests/test_uow.py` (pass)
+- `docker compose run --rm backend pytest tests/test_uow.py tests/test_documents.py tests/test_versions.py tests/test_comments.py` (pass)
+- Completed Task 111: added explicit application use-case interfaces under `backend/app/application/interfaces/` for `PublishApprovedVersion` and `AssignCompanySet`.
+- Added FastAPI dependency providers that resolve intent-specific use-case contracts (`get_publish_approved_version_use_case`, `get_assign_company_set_use_case`) and refactored management routes to call these interfaces instead of direct generic CRUD-style paths.
+- Adapted existing services behind use-case contracts by adding `VersionService.publish_approved_version(...)` and `DocumentService.assign_company_set(...)`, and moved company-assignment validation/update logic into `DocumentService`.
+- Added targeted interface coverage in `backend/tests/test_use_case_interfaces.py` (contract/provider checks + intent-alias delegation + assignment set semantics).
+- Task 111 validation run:
+- `docker compose run --rm backend ruff check app/application/interfaces app/services/document_service.py app/services/version_service.py app/api/management/documents.py app/api/management/versions.py tests/test_use_case_interfaces.py` (pass)
+- `docker compose run --rm backend pytest tests/test_use_case_interfaces.py tests/test_versions.py tests/test_documents.py` (pass)
+- Completed Task 74: introduced typed result algebra with `Result[T, E]` in `backend/app/domain/result.py`.
+- Added app-layer command/query handlers using typed expected failures:
+- `backend/app/application/commands/document_commands.py` (`AssignCompanySetCommandHandler`)
+- `backend/app/application/commands/version_commands.py` (`PublishApprovedVersionCommandHandler`)
+- `backend/app/application/queries/document_queries.py` (`GetDocumentQueryHandler`)
+- Wired management routes to command/query handlers and explicit typed error-to-HTTP mapping for expected failures:
+- `backend/app/api/management/documents.py` (`GET /documents/{id}/assigned-companies`, `POST /documents/{id}/assign-companies`)
+- `backend/app/api/management/versions.py` (`POST /documents/{id}/versions/{id}/publish`)
+- Added typed-result regression coverage in `backend/tests/test_result_algebra.py`.
+- Task 74 validation run:
+- `docker compose run --rm backend ruff check app/domain/result.py app/domain/__init__.py app/application/commands app/application/queries app/api/management/documents.py app/api/management/versions.py tests/test_result_algebra.py` (pass)
+- `docker compose run --rm backend pytest tests/test_result_algebra.py tests/test_use_case_interfaces.py tests/test_versions.py tests/test_documents.py` (pass)
+- Completed Task 64: introduced domain error hierarchy in `backend/app/errors.py` (`DomainError`, `NotFoundError`, `PermissionDeniedError`, `ConflictError`, `ValidationError`, `InvalidStateError`).
+- Added centralized domain-error to HTTP mapping in `backend/app/main.py` via FastAPI exception handler (consistent status + `detail` + `error_code` payload).
+- Migrated core document/version service paths away from direct `HTTPException` usage to domain errors (`backend/app/services/document_service.py`, `backend/app/services/version_service.py`).
+- Updated Task 74 command adapters to classify expected failures from domain errors (while preserving legacy HTTPException compatibility fallback).
+- Updated management routes to raise domain errors for typed command/query failures so transport mapping stays centralized.
+- Added integration coverage for domain error mapping payloads in `backend/tests/test_domain_errors.py`.
+- Task 64 validation run:
+- `docker compose run --rm backend ruff check app/errors.py app/main.py app/services/document_service.py app/services/version_service.py app/application/commands/document_commands.py app/application/commands/version_commands.py app/api/management/documents.py app/api/management/versions.py tests/test_result_algebra.py tests/test_domain_errors.py` (pass)
+- `docker compose run --rm backend pytest tests/test_domain_errors.py tests/test_result_algebra.py tests/test_use_case_interfaces.py tests/test_versions.py tests/test_documents.py` (pass)
+- Completed Task 75: added backend composition root container and app factory (`backend/app/container.py`, `backend/app/app_factory.py`) and simplified `backend/app/main.py` to use `create_app()`.
+- Routed service/use-case/command/query dependency providers through the shared container (`backend/app/dependencies/services.py`, `backend/app/application/interfaces/dependencies.py`, `backend/app/application/commands/dependencies.py`, `backend/app/application/queries/dependencies.py`), with direct-call fallback for test invocation.
+- Updated management routes to consume container-backed dependencies (auth/comments/documents/versions) and aligned collab runtime bootstrap with explicit runtime dependency composition (`collab-server/src/index.ts`).
+- Added container coverage in `backend/tests/test_container.py` and updated interface import paths to avoid package-level circular import coupling.
+- Task 75 validation run:
+- `docker compose run --rm backend ruff check app/application/interfaces/dependencies.py app/application/commands/dependencies.py app/application/queries/dependencies.py app/dependencies/services.py tests/test_use_case_interfaces.py tests/test_container.py` (pass)
+- `docker compose run --rm backend pytest tests/test_container.py tests/test_use_case_interfaces.py tests/test_comments.py tests/test_documents.py` (pass)
+- Completed Task 102: added centralized Policy Decision Point service with structured authorization decisions (`backend/app/policy/pdp.py`, `backend/app/policy/__init__.py`).
+- Routed core permission decisions in service-layer helpers through the PDP while preserving existing public helper signatures (`backend/app/services/permissions.py`).
+- Updated FastAPI permission dependencies to enforce route-level authorization through PDP-backed decision adapters (`backend/app/dependencies/permissions.py`).
+- Added PDP-focused regression coverage for reason codes and role/document decision boundaries in `backend/tests/test_policy_pdp.py`.
+- Task 102 validation run:
+- `docker compose run --rm backend ruff check app/policy app/services/permissions.py app/dependencies/permissions.py tests/test_policy_pdp.py tests/test_permissions.py tests/test_dependencies_permissions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_policy_pdp.py tests/test_permissions.py tests/test_dependencies_permissions.py -q` (pass)
+- Completed Task 114: added structured policy explanation objects with stable reason-code mapping and transport/debug helpers (`backend/app/policy/explanations.py`).
+- Exported explanation API in policy package (`backend/app/policy/__init__.py`) and applied explanations to all permission dependency denials with consistent message format and `X-Policy-*` reason/action headers.
+- Added explanation-focused regression tests for reason-code/message/header/log-context behavior and dependency integration (`backend/tests/test_policy_explanations.py`).
+- Task 114 validation run:
+- `docker compose run --rm backend ruff check app/policy app/dependencies/permissions.py app/services/permissions.py tests/test_policy_explanations.py tests/test_policy_pdp.py tests/test_permissions.py tests/test_dependencies_permissions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_policy_explanations.py tests/test_policy_pdp.py tests/test_permissions.py tests/test_dependencies_permissions.py -q` (pass)
+- Completed Task 54: introduced domain value objects (`DocumentNumber`, `SemanticVersion`, `TopicSlug`) under `backend/app/domain/value_objects/` and exported them from the domain package.
+- Replaced ad-hoc document numbering and semantic-version parse/format logic in `backend/app/services/document_service.py` and `backend/app/services/version_service.py` with value-object operations.
+- Reworked topic normalization helpers to use `TopicSlug` canonicalization logic (`backend/app/utils/topic_normalization.py`) and aligned attachment semantic-version patch bump helper to `SemanticVersion` (`backend/app/services/attachment_service/common.py`).
+- Added value-object regression coverage in `backend/tests/test_value_objects.py` and expanded version API regression to verify fallback semantic-version behavior on malformed prior values (`backend/tests/test_versions.py`).
+- Task 54 validation run:
+- `docker compose run --rm backend ruff check app/domain/value_objects app/domain/__init__.py app/utils/topic_normalization.py app/services/document_service.py app/services/version_service.py app/services/attachment_service/common.py tests/test_value_objects.py tests/test_versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_value_objects.py tests/test_documents.py tests/test_versions.py tests/test_public_api.py -q` (pass)
+- `docker compose run --rm backend pytest tests/test_attachments.py -q` (pass)
+- Completed Task 67: introduced aggregate roots under `backend/app/domain/aggregates/` (`DocumentAggregate`, `ReviewAggregate`, `InvitationAggregate`) and exported them in the domain package.
+- Moved document lifecycle invariants and transitions into `DocumentAggregate` and consumed them from service/route orchestration (`backend/app/services/document_service.py`, `backend/app/services/version_service.py`, `backend/app/api/management/reviews.py`).
+- Moved review workflow pending/version freshness/transition invariants into `ReviewAggregate` and invitation lifecycle invariants into `InvitationAggregate`, consumed by review and invitation management routes.
+- Added aggregate-focused regression tests in `backend/tests/test_aggregates.py`.
+- Task 67 validation run:
+- `docker compose run --rm backend ruff check app/domain/aggregates app/domain/__init__.py app/services/document_service.py app/services/version_service.py app/api/management/reviews.py app/api/management/invitations.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_invitations_api.py tests/test_versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_aggregates.py tests/test_reviews_api.py tests/test_invitations_api.py tests/test_versions.py tests/test_documents.py -q` (pass)
+- Completed Task 83: added domain factories for complex object initialization under `backend/app/domain/factories/` (`DocumentFactory`, `VersionFactory`, `InvitationFactory`) and exported them through `backend/app/domain/__init__.py`.
+- Refactored document/version/invitation creation flows to use factory methods instead of repeated inline model construction (`backend/app/services/document_service.py`, `backend/app/services/version_service.py`, `backend/app/api/management/invitations.py`).
+- Added factory-focused regression coverage in `backend/tests/test_domain_factories.py` and validated integration against document/version/review/invitation APIs.
+- Task 83 validation run:
+- `docker compose run --rm backend ruff check app/domain/factories app/domain/__init__.py app/services/document_service.py app/services/version_service.py app/api/management/invitations.py tests/test_domain_factories.py tests/test_documents.py tests/test_versions.py tests/test_invitations_api.py tests/test_reviews_api.py` (pass)
+- `docker compose run --rm backend pytest tests/test_domain_factories.py tests/test_documents.py tests/test_versions.py tests/test_invitations_api.py tests/test_reviews_api.py -q` (pass)
+- Completed Task 112: added reusable invariant specification package exports under `backend/app/domain/specifications/__init__.py` and surfaced specs through `backend/app/domain/__init__.py` for shared runtime/test usage.
+- Refactored aggregate-root invariant enforcement to delegate to specification objects (`backend/app/domain/aggregates/document_aggregate.py`, `backend/app/domain/aggregates/review_aggregate.py`, `backend/app/domain/aggregates/invitation_aggregate.py`) while preserving existing error semantics/messages.
+- Added specification-focused regression coverage in `backend/tests/test_invariant_specifications.py` to exercise satisfiability and assertion behavior across document/review/invitation invariants.
+- Task 112 validation run:
+- `docker compose run --rm backend ruff check app/domain/specifications app/domain/aggregates/document_aggregate.py app/domain/aggregates/review_aggregate.py app/domain/aggregates/invitation_aggregate.py app/domain/__init__.py tests/test_invariant_specifications.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_invitations_api.py tests/test_versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_invariant_specifications.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_invitations_api.py tests/test_versions.py -q` (pass)
+- Completed Task 69: added reusable query/access specification objects under `backend/app/domain/specifications/queries.py` (`TenantScopeSpec`, `VisibilitySpec`, `RoleAccessSpec`, `DateRangeSpec`) and exported them through domain specification/domain package APIs.
+- Composed query specs in repository/query-handler paths by extending `DocumentRepository` with spec-backed scoped query builders (`scoped_query_for_user`, `portal_visible_query_for_customer`) and wiring management search filters through tenant/date specs in both FTS and ORM fallback paths (`backend/app/api/management/search.py`).
+- Replaced duplicated customer portal visibility/role filter logic with spec-driven gates in portal document routes (`backend/app/api/portal/documents.py`), including shared access checks for detail/attachment endpoints.
+- Added query-spec regression coverage in `backend/tests/test_query_specifications.py` and validated search/portal behavior parity with existing endpoint suites.
+- Task 69 validation run:
+- `docker compose run --rm backend ruff check app/domain/specifications app/repositories/document_repository.py app/api/management/search.py app/api/portal/documents.py app/domain/__init__.py tests/test_query_specifications.py tests/test_search_api.py tests/test_portal_api.py` (pass)
+- `docker compose run --rm backend pytest tests/test_query_specifications.py tests/test_search_api.py tests/test_portal_api.py tests/test_company_deactivation_access.py -q` (pass)
+- Completed Task 84: introduced domain capability objects under `backend/app/domain/capabilities/` including explicit `CanPublish` and `CanAssignCompanies` permission capabilities plus role/document/review/user-management capability types.
+- Refactored authorization evaluation flow in `backend/app/services/permissions.py` to resolve permissions into capability objects and attach capability metadata to PDP decisions while preserving existing reason-code/action semantics.
+- Updated route/security consumers to execute capability-backed checks (`backend/app/dependencies/permissions.py` now evaluates resolved permission capabilities; `backend/app/security.py` tenant-active guard now relies on capability-backed role-membership evaluation).
+- Added capability mapping/evaluation regression coverage in `backend/tests/test_capabilities.py`.
+- Task 84 validation run:
+- `docker compose run --rm backend ruff check app/domain/capabilities app/services/permissions.py app/dependencies/permissions.py app/security.py app/domain/__init__.py tests/test_capabilities.py tests/test_permissions.py tests/test_dependencies_permissions.py tests/test_policy_pdp.py tests/test_policy_explanations.py` (pass)
+- `docker compose run --rm backend pytest tests/test_capabilities.py tests/test_permissions.py tests/test_dependencies_permissions.py tests/test_policy_pdp.py tests/test_policy_explanations.py tests/test_company_deactivation_access.py -q` (pass)
+- Completed Task 87: enforced immutable command/query DTO boundaries in application handlers by adding immutable actor snapshots (`backend/app/application/dto.py`) and normalizing command payloads to immutable structures.
+- Refactored command/query DTOs to immutable slot-based dataclasses and removed mutable sequence leakage (`backend/app/application/commands/document_commands.py`, `backend/app/application/commands/version_commands.py`, `backend/app/application/queries/document_queries.py`).
+- Updated publish use-case interface typing to consume minimal user-actor shape for command boundaries (`backend/app/application/interfaces/use_cases.py`).
+- Added regression coverage for DTO immutability and snapshot behavior in `backend/tests/test_immutable_dtos.py`.
+- Task 87 validation run:
+- `docker compose run --rm backend ruff check app/application/dto.py app/application/interfaces/use_cases.py app/application/commands/document_commands.py app/application/commands/version_commands.py app/application/queries/document_queries.py tests/test_immutable_dtos.py tests/test_result_algebra.py app/api/management/documents.py app/api/management/versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_immutable_dtos.py tests/test_result_algebra.py tests/test_use_case_interfaces.py tests/test_versions.py tests/test_documents.py -q` (pass)
+- Completed Task 55: introduced explicit document/review workflow state-machine classes under `backend/app/domain/workflows/` (`DocumentWorkflow`, `ReviewWorkflow`) with centralized `can_transition` and `transition` APIs.
+- Wired aggregate lifecycle transitions to workflow engines so status mutations flow through centralized transition rules (`backend/app/domain/aggregates/document_aggregate.py`, `backend/app/domain/aggregates/review_aggregate.py`), including document status normalization for new version candidates.
+- Exported workflow classes through the domain package (`backend/app/domain/__init__.py`) for reuse by application/service layers and tests.
+- Added workflow-focused regression coverage in `backend/tests/test_workflows.py` for valid transitions, invalid transition blocking, and document candidate-status normalization behavior.
+- Task 55 validation run:
+- `docker compose run --rm backend ruff check app/domain/workflows app/domain/aggregates/document_aggregate.py app/domain/aggregates/review_aggregate.py app/domain/__init__.py tests/test_workflows.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_versions.py` (pass)
+- `docker compose run --rm backend pytest tests/test_workflows.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_versions.py tests/test_documents.py -q` (pass)
+- Completed Task 88: introduced explicit workflow-stage objects under `backend/app/domain/states/` for document lifecycle states (`DocumentStage` variants) and review lifecycle/version-gating states (`ReviewStage` variants + `NoReviewStage`).
+- Refactored `DocumentWorkflow` and `ReviewWorkflow` to delegate transition/normalization behavior to stage objects instead of enum transition tables, keeping existing transition semantics and error messages intact.
+- Refactored version publish/update review-status guards in `backend/app/services/version_service.py` to use stage behavior (`version_review_stage_for(...).ensure_*`) rather than inline conditional chains.
+- Exported stage objects through `backend/app/domain/states/__init__.py` and `backend/app/domain/__init__.py` for reuse by domain/application layers and tests.
+- Added stage-focused regression coverage in `backend/tests/test_states.py` for valid/invalid transitions and publish/update guard behavior across `None`, `pending`, `approved`, `rejected`, and `cancelled` review stages.
+- Task 88 validation run:
+- `docker compose run --rm backend ruff check app/domain/states app/domain/workflows/document_workflow.py app/domain/workflows/review_workflow.py app/services/version_service.py app/domain/__init__.py tests/test_states.py` (pass)
+- `docker compose run --rm backend pytest tests/test_states.py tests/test_workflows.py tests/test_aggregates.py tests/test_reviews_api.py tests/test_versions.py tests/test_domain_errors.py -q` (pass)
+- Completed Task 70: introduced reusable command pipeline primitives under `backend/app/application/pipeline/` with explicit `validate -> authorize -> execute -> publish` stage contracts and per-run execution traces.
+- Refactored existing write command handlers (`AssignCompanySetCommandHandler`, `PublishApprovedVersionCommandHandler`) to execute through the shared pipeline while preserving typed error mapping and endpoint behavior.
+- Added review approval command orchestration (`backend/app/application/commands/review_commands.py`) and wired `POST /api/v1/reviews/{review_id}/approve` through the new handler so route logic is a thin command adapter (`backend/app/api/management/reviews.py`).
+- Extended container/dependency wiring for the approve-review command handler (`backend/app/container.py`, `backend/app/application/commands/dependencies.py`) and exported new command types from command package API.
+- Added regression coverage for stage ordering and handler trace behavior in `backend/tests/test_command_pipeline.py` and updated container dependency resolution coverage for the new handler in `backend/tests/test_container.py`.
+- Task 70 validation run:
+- `docker compose run --rm backend ruff check app/application/pipeline app/application/commands app/container.py app/api/management/reviews.py tests/test_command_pipeline.py tests/test_container.py` (pass)
+- `docker compose run --rm backend pytest tests/test_command_pipeline.py tests/test_result_algebra.py tests/test_reviews_api.py tests/test_versions.py tests/test_domain_errors.py tests/test_container.py -q` (pass)
+- Completed Task 56: expanded CQRS-lite handler coverage across core analytics and document management domains.
+- Added analytics read-model query objects/handler facade under `backend/app/application/queries/analytics_queries.py` and wired analytics route endpoints (including CSV/PDF exports) through query handlers instead of direct service orchestration (`backend/app/api/management/analytics.py`).
+- Added document-list query handler (`ListDocumentsQueryHandler`) and wired document list/read paths through query handlers (`backend/app/application/queries/document_queries.py`, `backend/app/api/management/documents.py`).
+- Added document write command handlers for create/update/delete with typed error mapping and pipeline execution traces (`backend/app/application/commands/document_commands.py`), and wired document management write endpoints through command handlers (`backend/app/api/management/documents.py`).
+- Extended container/dependency providers for new CQRS handlers (`backend/app/container.py`, `backend/app/application/commands/dependencies.py`, `backend/app/application/queries/dependencies.py`) and exported new handler/query types through package APIs.
+- Added CQRS-lite unit coverage in `backend/tests/test_cqrs_handlers.py` and extended container dependency coverage for new handlers (`backend/tests/test_container.py`).
+- Task 56 validation run:
+- `docker compose run --rm backend ruff check app/application/queries app/application/commands app/api/management/analytics.py app/api/management/documents.py app/container.py tests/test_cqrs_handlers.py tests/test_container.py` (pass)
+- `docker compose run --rm backend pytest tests/test_cqrs_handlers.py tests/test_command_pipeline.py tests/test_result_algebra.py tests/test_analytics.py tests/test_documents.py tests/test_domain_errors.py tests/test_container.py -q` (pass)
+- Completed Task 71: moved high-complexity search and customer-portal reads into dedicated query handlers/read models.
+- Added management search query handler module (`backend/app/application/queries/search_queries.py`) with explicit query/read-model DTOs for full-text search, autocomplete, facets, and saved-search listing.
+- Added customer portal read-model query handler module (`backend/app/application/queries/portal_queries.py`) encapsulating portal document listing/detail, attachment metadata, categories, dashboard stats, and portal search snippet logic.
+- Refactored management search and portal document routes to thin adapters that delegate to query handlers (`backend/app/api/management/search.py`, `backend/app/api/portal/documents.py`) while preserving response semantics.
+- Extended query dependency/container wiring for search/portal handlers (`backend/app/application/queries/dependencies.py`, `backend/app/container.py`) and exported new query handler/DTO APIs (`backend/app/application/queries/__init__.py`).
+- Added direct query-handler regression tests (`backend/tests/test_read_query_handlers.py`) and extended container dependency coverage for new handlers (`backend/tests/test_container.py`).
+- Task 71 validation run:
+- `docker compose run --rm backend ruff check app/application/queries app/api/management/search.py app/api/portal/documents.py app/container.py tests/test_read_query_handlers.py tests/test_search_api.py tests/test_portal_api.py tests/test_container.py` (pass)
+- `docker compose run --rm backend pytest tests/test_read_query_handlers.py tests/test_search_api.py tests/test_portal_api.py tests/test_container.py -q` (pass)
+- Completed Task 113: introduced reusable command/query bus middleware under `backend/app/application/bus/` with validation, authorization, and tracing middleware plus dispatch trace metadata.
+- Wired container-backed command and query buses (`backend/app/container.py`) and routed dependency providers through bus adapters for command and query handlers (`backend/app/application/commands/dependencies.py`, `backend/app/application/queries/dependencies.py`).
+- Added backward-compatible query adapter behavior so existing `execute_*` handler call-sites dispatch through the bus without route churn (`backend/app/application/bus/bus.py`).
+- Added bus pipeline regression coverage in `backend/tests/test_bus_pipeline.py` for middleware ordering, authorization denial handling, adapter dispatch behavior, and trace capture.
+- Task 113 validation run:
+- `docker compose run --rm backend ruff check app/application/bus app/application/commands/dependencies.py app/application/queries/dependencies.py app/container.py tests/test_bus_pipeline.py` (pass)
+- `docker compose run --rm backend pytest tests/test_bus_pipeline.py tests/test_command_pipeline.py tests/test_cqrs_handlers.py tests/test_read_query_handlers.py tests/test_container.py tests/test_versions.py tests/test_reviews_api.py tests/test_documents.py tests/test_search_api.py tests/test_portal_api.py -q` (pass)
+- Completed Task 116: introduced reusable executable workflow model primitives under `backend/app/domain/workflows/models.py` to represent state graphs with reachability/path enumeration APIs.
+- Wired lifecycle workflows to expose explicit executable models (`DocumentWorkflow.model()`, `ReviewWorkflow.model()`) while preserving existing transition error semantics in `backend/app/domain/workflows/document_workflow.py` and `backend/app/domain/workflows/review_workflow.py`.
+- Exported workflow-model API through workflow/domain package boundaries (`backend/app/domain/workflows/__init__.py`, `backend/app/domain/__init__.py`).
+- Added model-based transition coverage under `backend/tests/workflows/test_workflow_models.py` with exhaustive transition-matrix assertions, terminal/reachability checks, and deterministic lifecycle path checks for document/review workflows.
+- Task 116 validation run:
+- `docker compose run --rm backend ruff check app/domain/workflows app/domain/__init__.py tests/workflows/test_workflow_models.py tests/workflows/__init__.py tests/test_workflows.py tests/test_states.py` (pass)
+- `docker compose run --rm backend pytest tests/workflows/test_workflow_models.py tests/test_workflows.py tests/test_states.py tests/test_versions.py tests/test_reviews_api.py -q` (pass)
 
-2026-02-24:
-- Added full findings map from project-wide logic/bug review.
-- Added Tasks 7-14 to track newly identified security/correctness gaps.
-- Added second-pass logic/build findings map (11 items).
-- Added Tasks 15-25 for non-security correctness/architecture issues.
-- Added third-pass company-lifecycle findings map (10 items).
-- Added Tasks 26-30 for company-domain logic consistency and lifecycle enforcement.
-- Added fourth-pass end-to-end logic consistency findings map (10 items).
-- Added Tasks 31-40 for lifecycle defaults, approval/hierarchy correctness, analytics semantics, and robustness gaps.
-- Normalized plan mappings (`Task X` format), clarified Task 10 vs Task 33 boundaries, and added dependency-driven execution waves.
-- Corrected Task 20 header priority to P0 to match blocker ordering in section 1.
-- Wave A implementation started and completed in order:
-  - Task 1: centralized attachment access checks (document visibility + tenant boundary + permission) and added cross-tenant denial tests for metadata/token-download.
-  - Task 2: refactored collab-server token/connection tracking to unique connection IDs with write-token preservation; added `documentAuthStore` tests.
-  - Task 3: tightened collaboration authorization with tenant-boundary enforcement in token/state/session/activity/snapshot paths; added cross-tenant denial tests.
-  - Task 15: replaced ORM relationship mutation during comment visibility filtering with detached response DTO shaping; added regression test for reply linkage integrity.
-  - Task 16: implemented atomic conversion-job claim path plus stale `processing` recovery policy; added queue concurrency/recovery tests.
-  - Task 20: made document create + initial version + audit atomic in one commit with rollback-safe retry behavior; added rollback regression test.
-  - Task 31: changed upload defaults to `draft` + `internal`, gated explicit direct-publish/public overrides to manager+, and aligned release-notes child defaults.
-- Validation:
-  - `collab-server`: `npm run typecheck` passed.
-  - `collab-server`: focused Jest suites passed (`documentAuthStore`, `auth`, `persistence`, `types`).
-  - Backend targeted Wave A suite passed in Docker:
-    `tests/test_attachments.py tests/test_collaboration.py tests/test_comments.py tests/test_documents.py tests/test_conversion_jobs.py tests/test_upload_lifecycle_defaults.py tests/test_viewer_api.py` (`84 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`492 passed`).
-- Follow-up fix from test run:
-  - Persisted `Document.visibility` in `DocumentService.create_document` to make explicit upload visibility overrides effective.
-- Wave B implementation batch completed:
-  - Task 4: aligned assigned-companies contract on frontend to canonical backend list shape.
-  - Task 7: hardened viewer to public-only visibility and filtered private comments from public responses.
-  - Task 8: enforced tenant scoping across versions/reviews/search/engagement read/write paths.
-  - Task 9: moved management routes off `get_current_user` to active-user enforcement.
-  - Task 10: blocked cross-tenant user reassignment for non-system admins in update flow.
-  - Task 11: fixed portal attachment download URL contract to document-scoped route shape.
-  - Task 12: replaced unsafe `asyncio.create_task` usage in sync handlers with safe async task dispatch helper.
-  - Task 17: updated viewer preview endpoint to stream preview artifact bytes (not original upload bytes).
-  - Task 18: applied category/date/tenant filters consistently in both FTS and fallback search paths.
-  - Task 32: enforced editor peer-review constraint to editor-submitter approvals only.
-  - Task 33: applied role hierarchy checks to non-role privileged user mutations (status/tenant updates).
-- Validation:
-  - Backend targeted Wave B suite passed in Docker:
-    `tests/test_viewer_api.py tests/test_viewer_portal.py tests/test_search_api.py tests/test_reviews_api.py tests/test_versions.py tests/test_engagement.py tests/test_roles.py tests/test_portal_api.py` (`146 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`505 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-  - Frontend full build could not complete in sandbox due host `esbuild` spawn permission error (`spawn EPERM` in Vite config load).
-- Wave B follow-up completed:
-  - Task 19: aligned notification type contract to canonical snake_case values across backend API serialization and frontend type/UI handling.
-  - Added notifications API regression coverage for type value contract and unread count behavior.
-- Validation:
-  - Backend notifications suite passed in Docker: `tests/test_notifications_api.py` (`2 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`507 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-- Wave B follow-up completed:
-  - Task 21: unified upload and release-notes workflow rollback, ensuring child and parent documents are cleaned up on downstream failure (child-first cleanup order).
-  - Added release-notes failure regression coverage to prevent orphan document rows.
-- Validation:
-  - Backend targeted upload/document suite passed in Docker:
-    `tests/test_upload_lifecycle_defaults.py tests/test_documents.py` (`16 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`508 passed`).
-- Wave B follow-up completed:
-  - Task 26: aligned company document semantics with explicit owned/assigned/customer-visible counts in management APIs, mapped legacy `document_count` to assigned semantics for compatibility, and fixed `/companies/{id}/documents` default behavior to truly return assigned documents.
-  - Updated admin company list/detail UI labels and counters to use assigned/customer-visible semantics.
-  - Added scope support on company documents API (`assigned|owned|customer_visible`) for deterministic behavior.
-- Validation:
-  - Backend targeted company/portal suite passed in Docker:
-    `tests/test_companies_api.py tests/test_portal_api.py` (`23 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`511 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-- Wave B follow-up completed:
-  - Task 27: enforced tenant-consistent invitation assignment so non-system admins/managers cannot invite customer users to cross-tenant companies; aligned invite dialog company selection/request payload to tenant-scoped policy.
-  - Task 28: enforced customer-company invariant across user/company flows by normalizing tenant update semantics (`tenant_id` null vs omitted), allowing safe role-transition edge cases, and blocking company-removal for customer-role users.
-  - Task 29: enforced deactivated-company access policy in auth and protected-route dependencies (login, refresh-token, and active-session access now reject users tied to inactive companies).
-  - Task 34: preserved published document availability during next-version drafting by avoiding status downgrade from `active` to `draft` on version creation.
-  - Task 37: aligned collaboration write permissions with canonical document edit policy (`permissions.can_edit_document`) while retaining collaboration tenant-boundary enforcement.
-  - Task 39: hardened public-search highlight rendering by escaping regex-special query input and added frontend regression tests for special-character and alphanumeric highlight behavior.
-- Validation:
-  - Backend targeted invitation + roles suite passed in Docker:
-    `tests/test_invitations_api.py tests/test_roles.py` (`38 passed`).
-  - Backend targeted customer-company invariant suite passed in Docker:
-    `tests/test_user_company_invariants.py tests/test_roles.py tests/test_invitations_api.py` (`43 passed`).
-  - Backend targeted deactivation/auth/portal suite passed in Docker:
-    `tests/test_company_deactivation_access.py tests/test_auth.py tests/test_portal_api.py` (`40 passed`).
-  - Backend targeted published-availability suite passed in Docker:
-    `tests/test_versions.py tests/test_public_api.py tests/test_portal_api.py` (`51 passed`).
-  - Backend collaboration suite passed in Docker:
-    `tests/test_collaboration.py` (`31 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`526 passed`).
-  - Frontend full test suite passed: `npm test -- --run` (`8` files, `18` tests).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-- Wave C implementation continued in order:
-  - Task 5: removed remaining N+1 lookups in collaboration snapshots and attachment artifact hydration via batched queries; added regression coverage for snapshot creator usernames and artifact field hydration.
-  - Task 6: changed DB init to prefer managed migrations and only use SQLAlchemy metadata bootstrap as fallback; added startup-flow tests for managed-vs-fallback behavior; fixed high-risk hook dependency behavior in collaboration/editor engagement paths; retained required mixin constructor signatures after confirming TypeScript mixin constraints.
-  - Task 13: fixed collaboration hook document-switch lifecycle so provider/session cleanup and reconnect behavior track `documentId` changes; added hook regression test asserting previous provider teardown and new-session connect.
-- Validation:
-  - Backend targeted Wave C suite passed in Docker:
-    `tests/test_db_init.py tests/test_db_migrations.py tests/test_collaboration.py tests/test_attachments.py` (`49 passed`).
-  - Frontend targeted hook/client tests passed:
-    `npm test -- --run src/lib/useCollaboration.test.ts src/lib/api/httpClient.test.ts` (`3 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-  - Frontend targeted lint passed:
-    `npx eslint src/lib/useCollaboration.ts src/components/DocumentEditor.tsx src/components/EngagementBar.tsx src/lib/useCollaboration.test.ts`.
-- Wave C follow-up completed:
-  - Task 14: aligned portal dashboard stats aggregation with the same customer visibility rules used by portal list/detail (public active + company-assigned active), removing tenant-owned/published-only mismatch.
-  - Added portal dashboard regression assertions to enforce parity between dashboard counters and customer-visible document list semantics, including cross-tenant exclusion for company documents.
-- Validation:
-  - Backend portal suite passed in Docker:
-    `tests/test_portal_api.py` (`22 passed`).
-- Wave C follow-up completed:
-  - Task 22: aligned portal list/detail/search version selection to a single shared policy (latest published version preferred; latest available fallback for legacy no-published records), eliminating version-number/content mismatches across endpoints.
-  - Added portal regression tests that assert list/detail consistency for both "published + newer draft" and "no published versions" scenarios.
-- Validation:
-  - Backend targeted portal/version/public suite passed in Docker:
-    `tests/test_portal_api.py tests/test_versions.py tests/test_public_api.py` (`55 passed`).
-- Wave C follow-up completed:
-  - Task 23: fixed stale attachment-selection refresh behavior by introducing shared selection-resolution helpers and applying them to preview/editor flows so removed/replaced attachments reselect deterministically and avoid stale-id usage.
-  - Added frontend unit coverage for preview/editor selection priority and stale-selection remapping behavior.
-- Validation:
-  - Frontend targeted tests passed:
-    `npm test -- --run src/lib/attachmentSelection.test.ts src/lib/useCollaboration.test.ts src/lib/api/httpClient.test.ts` (`8 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-  - Frontend targeted lint passed:
-    `npx eslint src/pages/document-detail/DocumentPreview.tsx src/components/DocumentEditor.tsx src/lib/attachmentSelection.ts src/lib/attachmentSelection.test.ts`.
-- Wave C follow-up completed:
-  - Task 24: aligned frontend permission gating with backend-effective RBAC by returning computed permission values from `/auth/me` and changing `useAuth.hasPermission` to use server-provided permissions instead of static role matrices.
-  - Added backend regression checks for `/auth/me` permission payload and dynamic policy reflection, plus frontend auth-provider test coverage for server-driven permission gating behavior.
-- Validation:
-  - Backend targeted auth/RBAC suite passed in Docker:
-    `tests/test_auth.py tests/test_rbac_policies.py` (`18 passed`).
-  - Frontend targeted auth + Wave C regression tests passed:
-    `npm test -- --run src/lib/auth.test.tsx src/lib/useCollaboration.test.ts src/lib/api/httpClient.test.ts src/lib/attachmentSelection.test.ts` (`9 passed`).
-  - Frontend static typecheck passed: `npx tsc --noEmit`.
-  - Frontend targeted lint passed with existing warning:
-    `npx eslint src/lib/auth.tsx src/lib/auth.test.tsx src/types/index.ts` (`react-refresh/only-export-components` warning in `auth.tsx`, no new errors).
-- Wave C follow-up completed:
-  - Task 25: replaced scan-per-create document number generation with a daily sequence allocator table (`document_number_sequences`) and atomic increment reservation in `DocumentService`, while preserving public `DOC-YYYYMMDD-XXXX` format and collision retry behavior.
-  - Added managed migration `20260224_0003` for the new sequence table and updated migration regression assertions.
-  - Added backend regression coverage for seed-from-existing daily numbering and concurrent create-path contention to verify unique, monotonic allocations under load.
-- Validation:
-  - Backend targeted document+migration suite passed in Docker:
-    `tests/test_documents.py tests/test_db_migrations.py` (`15 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`536 passed`).
-- Wave C follow-up completed:
-  - Task 30: aligned `/documents/{id}/assign-companies` to set-replace semantics so each request defines the full assignment set (including remove-by-omission), with duplicate company IDs normalized for idempotent behavior.
-  - Aligned frontend documents API contract for `assignCompanies` to backend `MessageResponse`.
-  - Added regression coverage for set replacement, idempotent duplicate handling, and clearing assignments via empty list payload.
-- Validation:
-  - Backend targeted documents suite passed in Docker:
-    `tests/test_documents.py` (`15 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`538 passed`).
-  - Frontend static typecheck passed: `npx --no-install tsc --noEmit`.
-  - Frontend targeted test could not run in sandbox due host `esbuild` spawn permission error (`spawn EPERM` in Vite config load).
-- Wave C follow-up completed:
-  - Task 35: corrected content analytics publish metrics to use `Version.published_at` for both totals and time-series bucketing (instead of `Version.created_at`).
-  - Excluded null publish timestamps from published-version analytics aggregations to prevent false timeline entries.
-  - Added analytics regression coverage for publish-date bucket assignment and null-`published_at` exclusion behavior.
-- Validation:
-  - Backend targeted analytics suite passed in Docker:
-    `tests/test_analytics.py` (`39 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`540 passed`).
-- Wave C follow-up completed:
-  - Task 36: fixed tenant-scoped `most_active_users` ranking to apply tenant filtering in SQL before grouping/ranking/limit, removing global-top truncation bias.
-  - Added deterministic tie-breaking for user activity ranking: action count desc, last activity desc, then user ID asc.
-  - Removed N+1 lookups in `most_active_users` assembly by selecting user identity fields directly in the aggregate query.
-  - Added analytics regression coverage for tenant-before-limit ranking and deterministic tie ordering behavior.
-- Validation:
-  - Backend targeted analytics suite passed in Docker:
-    `tests/test_analytics.py` (`41 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`542 passed`).
-- Wave C follow-up completed:
-  - Task 38: normalized document topic handling to canonical slug semantics by adding shared topic-normalization utilities and applying them in document create/update write paths.
-  - Updated public topic aggregation/detail counting to map mixed legacy topic values (slug/name/slugified-name variants) into canonical topic slugs before counting.
-  - Aligned public document/search `topic` filters to accept canonical topic slug aliases so topic detail views remain consistent with normalized counts.
-  - Added regression coverage for topic normalization on write paths plus public topic count/filter behavior across mixed legacy/non-canonical topic values.
-- Validation:
-  - Backend targeted documents+public suite passed in Docker:
-    `tests/test_documents.py tests/test_public_api.py` (`39 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`547 passed`).
-  - Backend targeted lint passed:
-    `ruff check app/services/document_service.py app/api/public/topics.py app/api/public/documents.py app/utils/topic_normalization.py tests/test_documents.py tests/test_public_api.py`.
-- Wave C follow-up completed:
-  - Task 40: changed analytics export endpoints to reject unsupported `report` values with explicit HTTP 400 client errors instead of returning HTTP 200 payloads containing error rows.
-  - Added shared export-report validation for CSV and PDF handlers with clear supported-report messaging.
-  - Made PDF-export “no reportlab installed” regression deterministic in tests by simulating missing `reportlab`, preventing environment-specific runtime crashes while preserving 501 behavior coverage.
-  - Added regression tests asserting invalid `report` values return client errors for both CSV and PDF export routes.
-- Validation:
-  - Backend targeted analytics suite passed in Docker:
-    `tests/test_analytics.py` (`43 passed`).
-  - Backend full regression passed in Docker: `pytest -q` (`549 passed`).
-  - Backend targeted lint passed:
-    `ruff check app/api/management/analytics.py tests/test_analytics.py`.
-
+2026-02-25:
+- Cleaned this plan file to open work only.
+- Added Tasks 41-49 from latest clarity/OOP review.
+- Added Tasks 50-65 with additional OOP opportunities across backend, frontend, and collab-server.
+- Added Tasks 66-80 (additional design/OOP architecture options) with priorities and waves.
+- Added Tasks 81-90 (additional OOP/design architecture options) with priorities and waves.
+- Added Tasks 91-92 (ADR workflow and deprecation lifecycle governance).
+- Added Tasks 93-100 (remaining architecture governance and operational hardening ideas).
+- Added Tasks 101-122, plus ROI ranking and validation/smoke coverage updates.
+- Reordered Tasks 101-122 into dependency-first logical sequencing.
+- Reordered all execution waves (D-O) to strict logic/dependency sequencing across Tasks 41-122.
+- No new tasks completed yet.

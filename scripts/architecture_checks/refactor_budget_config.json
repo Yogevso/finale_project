@@ -1,0 +1,14 @@
+{
+  "max_total_line_changes": 5000,
+  "max_touched_code_files": 120,
+  "max_per_file_line_changes": 900,
+  "max_branching_line_additions": 250,
+  "code_extensions": [
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx"
+  ]
+}
+

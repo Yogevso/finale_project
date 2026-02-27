@@ -1,0 +1,54 @@
+name: Architecture Fitness
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'collab-server/**'
+      - 'scripts/architecture_checks/**'
+      - '.github/workflows/architecture-fitness.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'collab-server/**'
+      - 'scripts/architecture_checks/**'
+      - '.github/workflows/architecture-fitness.yml'
+
+jobs:
+  architecture-fitness:
+    name: Layer and Boundary Checks
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      GITHUB_BEFORE_SHA: ${{ github.event.before }}
+      GITHUB_HEAD_SHA: ${{ github.sha }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Backend architecture checks
+        run: python scripts/architecture_checks/check_backend_architecture.py
+
+      - name: Collab architecture checks
+        run: python scripts/architecture_checks/check_collab_architecture.py
+
+      - name: Frontend dependency checks
+        run: python scripts/architecture_checks/check_frontend_feature_dependencies.py
+
+      - name: Route DB access baseline check
+        run: python scripts/architecture_checks/check_route_db_access.py
+
+      - name: Refactor budget check
+        run: python scripts/architecture_checks/check_refactor_budget.py
