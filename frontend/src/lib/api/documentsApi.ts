@@ -16,6 +16,29 @@ import type {
   VersionUpdate,
 } from '@/types'
 import { isFrontendFeatureEnabled } from '@/config/featureFlags'
+import {
+  type CommentDto,
+  type DocumentCreateDto,
+  type DocumentDto,
+  type DocumentListResponseDto,
+  type DocumentUpdateDto,
+  type MessageResponseDto,
+  type VersionCreateDto,
+  type VersionDto,
+  type VersionListResponseDto,
+  type VersionUpdateDto,
+  mapCommentDto,
+  mapCommentsDto,
+  mapDocumentDto,
+  mapDocumentListResponseDto,
+  mapMessageResponseDto,
+  mapVersionDto,
+  mapVersionListResponseDto,
+  toDocumentCreateDto,
+  toDocumentUpdateDto,
+  toVersionCreateDto,
+  toVersionUpdateDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -25,18 +48,19 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     }
 
     async getDocuments(params?: DocumentQueryParams): Promise<DocumentListResponse> {
-      const { data } = await this.client.get<DocumentListResponse>('/documents', { params })
-      return data
+      const { data } = await this.client.get<DocumentListResponseDto>('/documents', { params })
+      return mapDocumentListResponseDto(data)
     }
 
     async getDocument(id: number): Promise<Document> {
-      const { data } = await this.client.get<Document>(`/documents/${id}`)
-      return data
+      const { data } = await this.client.get<DocumentDto>(`/documents/${id}`)
+      return mapDocumentDto(data)
     }
 
     async createDocument(document: DocumentCreate): Promise<Document> {
-      const { data } = await this.client.post<Document>('/documents', document)
-      return data
+      const payload = toDocumentCreateDto(document)
+      const { data } = await this.client.post<DocumentDto>('/documents', payload as DocumentCreateDto)
+      return mapDocumentDto(data)
     }
 
     async updateDocument(
@@ -44,17 +68,22 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       document: DocumentUpdate,
       ifMatch?: string,
     ): Promise<Document> {
+      const payload = toDocumentUpdateDto(document)
       const headers =
         ifMatch && isFrontendFeatureEnabled('optimisticConcurrencyHeaders')
           ? { 'If-Match': ifMatch }
           : undefined
-      const { data } = await this.client.put<Document>(`/documents/${id}`, document, { headers })
-      return data
+      const { data } = await this.client.put<DocumentDto>(
+        `/documents/${id}`,
+        payload as DocumentUpdateDto,
+        { headers },
+      )
+      return mapDocumentDto(data)
     }
 
     async deleteDocument(id: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(`/documents/${id}`)
-      return data
+      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}`)
+      return mapMessageResponseDto(data)
     }
 
     async generateWordAttachment(documentId: number, htmlContent: string, filename?: string) {
@@ -96,10 +125,10 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       if (metadata?.release_notes) formData.append('release_notes', metadata.release_notes)
       if (metadata?.content_file) formData.append('content_file', metadata.content_file)
 
-      const { data } = await this.client.post<Document>('/documents/upload', formData, {
+      const { data } = await this.client.post<DocumentDto>('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      return data
+      return mapDocumentDto(data)
     }
 
     async getAssignedCompanies(documentId: number): Promise<Company[]> {
@@ -113,33 +142,39 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       documentId: number,
       companyIds: number[],
     ): Promise<MessageResponse> {
-      const { data } = await this.client.post<MessageResponse>(
+      const { data } = await this.client.post<MessageResponseDto>(
         `/documents/${documentId}/assign-companies`,
         { company_ids: companyIds },
       )
-      return data
+      return mapMessageResponseDto(data)
     }
 
     async removeCompanyAssignment(documentId: number, companyId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(
+      const { data } = await this.client.delete<MessageResponseDto>(
         `/documents/${documentId}/assign-companies/${companyId}`,
       )
-      return data
+      return mapMessageResponseDto(data)
     }
 
     async getVersions(documentId: number): Promise<VersionListResponse> {
-      const { data } = await this.client.get<VersionListResponse>(`/documents/${documentId}/versions`)
-      return data
+      const { data } = await this.client.get<VersionListResponseDto>(
+        `/documents/${documentId}/versions`,
+      )
+      return mapVersionListResponseDto(data)
     }
 
     async getVersion(documentId: number, versionId: number): Promise<Version> {
-      const { data } = await this.client.get<Version>(`/documents/${documentId}/versions/${versionId}`)
-      return data
+      const { data } = await this.client.get<VersionDto>(`/documents/${documentId}/versions/${versionId}`)
+      return mapVersionDto(data)
     }
 
     async createVersion(documentId: number, version: VersionCreate): Promise<Version> {
-      const { data } = await this.client.post<Version>(`/documents/${documentId}/versions`, version)
-      return data
+      const payload = toVersionCreateDto(version)
+      const { data } = await this.client.post<VersionDto>(
+        `/documents/${documentId}/versions`,
+        payload as VersionCreateDto,
+      )
+      return mapVersionDto(data)
     }
 
     async updateVersion(
@@ -148,61 +183,66 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       version: VersionUpdate,
       ifMatch?: string,
     ): Promise<Version> {
+      const payload = toVersionUpdateDto(version)
       const headers =
         ifMatch && isFrontendFeatureEnabled('optimisticConcurrencyHeaders')
           ? { 'If-Match': ifMatch }
           : undefined
-      const { data } = await this.client.patch<Version>(
+      const { data } = await this.client.patch<VersionDto>(
         `/documents/${documentId}/versions/${versionId}`,
-        version,
+        payload as VersionUpdateDto,
         { headers },
       )
-      return data
+      return mapVersionDto(data)
     }
 
     async publishVersion(documentId: number, versionId: number): Promise<Version> {
-      const { data } = await this.client.post<Version>(
+      const { data } = await this.client.post<VersionDto>(
         `/documents/${documentId}/versions/${versionId}/publish`,
       )
-      return data
+      return mapVersionDto(data)
     }
 
     async deleteVersion(documentId: number, versionId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(
+      const { data } = await this.client.delete<MessageResponseDto>(
         `/documents/${documentId}/versions/${versionId}`,
       )
-      return data
+      return mapMessageResponseDto(data)
     }
 
     async getComments(documentId: number, parentId?: number): Promise<Comment[]> {
       const params = parentId !== undefined ? { parent_id: parentId } : {}
-      const { data } = await this.client.get<Comment[]>(`/documents/${documentId}/comments`, { params })
-      return data
+      const { data } = await this.client.get<CommentDto[]>(`/documents/${documentId}/comments`, {
+        params,
+      })
+      return mapCommentsDto(data)
     }
 
     async getComment(documentId: number, commentId: number): Promise<Comment> {
-      const { data } = await this.client.get<Comment>(`/documents/${documentId}/comments/${commentId}`)
-      return data
+      const { data } = await this.client.get<CommentDto>(
+        `/documents/${documentId}/comments/${commentId}`,
+      )
+      return mapCommentDto(data)
     }
 
     async createComment(documentId: number, comment: CommentCreate): Promise<Comment> {
-      const { data } = await this.client.post<Comment>(`/documents/${documentId}/comments`, comment)
-      return data
+      const { data } = await this.client.post<CommentDto>(`/documents/${documentId}/comments`, comment)
+      return mapCommentDto(data)
     }
 
     async updateComment(documentId: number, commentId: number, comment: CommentUpdate): Promise<Comment> {
-      const { data } = await this.client.patch<Comment>(
+      const { data } = await this.client.patch<CommentDto>(
         `/documents/${documentId}/comments/${commentId}`,
         comment,
       )
-      return data
+      return mapCommentDto(data)
     }
 
     async deleteComment(documentId: number, commentId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(
+      const { data } = await this.client.delete<MessageResponseDto>(
         `/documents/${documentId}/comments/${commentId}`,
       )
-      return data
+      return mapMessageResponseDto(data)
     }
   }
 

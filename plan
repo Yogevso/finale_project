@@ -691,7 +691,7 @@ Acceptance criteria:
 Task 63: Typed DTO mapper layer (P3)
 
 Status:
-- Not started.
+- In progress (2026-02-28).
 
 Why:
 - UI and services frequently consume transport payloads directly.
@@ -2671,6 +2671,8 @@ For each task:
 - Completed Task 49: replaced deep nested API mixin composition with explicit module-list factory composition using typed helper (`frontend/src/lib/api/composition.ts`, `frontend/src/lib/api.ts`).
 - Preserved existing API call surface (`api.<method>`) while making composition order declarative and easier to extend.
 - Added file-level architecture note in `frontend/src/lib/api.ts` describing the composition intent.
+- Started Task 63: introduced explicit API transport DTO contracts and mapper layer (`frontend/src/lib/api/dto/contracts.ts`, `frontend/src/lib/api/dto/mappers.ts`) and wired auth/users/documents API modules through mappers.
+- Preserved existing API method signatures while centralizing transport-to-domain adaptation in one boundary layer (`frontend/src/lib/api/authApi.ts`, `frontend/src/lib/api/usersApi.ts`, `frontend/src/lib/api/documentsApi.ts`).
 - Task 49 validation run:
 - `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
 - `npm.cmd --prefix frontend run build` (fails in sandbox: esbuild `spawn EPERM`)
