@@ -1,4 +1,12 @@
 import type { MessageResponse, NotificationCountResponse, NotificationListResponse } from '@/types'
+import {
+  type MessageResponseDto,
+  type NotificationCountResponseDto,
+  type NotificationListResponseDto,
+  mapMessageResponseDto,
+  mapNotificationCountResponseDto,
+  mapNotificationListResponseDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const NotificationsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -11,44 +19,46 @@ export const NotificationsApiMixin = <TBase extends Constructor<ApiHttpClient>>(
       unreadOnly: boolean = false,
       limit: number = 50,
     ): Promise<NotificationListResponse> {
-      const { data } = await this.client.get<NotificationListResponse>('/notifications', {
+      const { data } = await this.client.get<NotificationListResponseDto>('/notifications', {
         params: { unread_only: unreadOnly, limit },
       })
-      return data
+      return mapNotificationListResponseDto(data)
     }
 
     async getNotificationCount(): Promise<NotificationCountResponse> {
-      const { data } = await this.client.get<NotificationCountResponse>('/notifications/count')
-      return data
+      const { data } = await this.client.get<NotificationCountResponseDto>('/notifications/count')
+      return mapNotificationCountResponseDto(data)
     }
 
     async markNotificationRead(notificationId: number): Promise<MessageResponse> {
-      const { data } = await this.client.post<MessageResponse>(`/notifications/${notificationId}/read`)
-      return data
+      const { data } = await this.client.post<MessageResponseDto>(`/notifications/${notificationId}/read`)
+      return mapMessageResponseDto(data)
     }
 
     async markNotificationUnread(notificationId: number): Promise<MessageResponse> {
-      const { data } = await this.client.post<MessageResponse>(`/notifications/${notificationId}/unread`)
-      return data
+      const { data } = await this.client.post<MessageResponseDto>(
+        `/notifications/${notificationId}/unread`,
+      )
+      return mapMessageResponseDto(data)
     }
 
     async markAllNotificationsRead(notificationIds?: number[]): Promise<MessageResponse> {
-      const { data } = await this.client.post<MessageResponse>('/notifications/read', {
+      const { data } = await this.client.post<MessageResponseDto>('/notifications/read', {
         notification_ids: notificationIds || null,
       })
-      return data
+      return mapMessageResponseDto(data)
     }
 
     async deleteNotification(notificationId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(`/notifications/${notificationId}`)
-      return data
+      const { data } = await this.client.delete<MessageResponseDto>(`/notifications/${notificationId}`)
+      return mapMessageResponseDto(data)
     }
 
     async deleteAllNotifications(readOnly: boolean = true): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>('/notifications', {
+      const { data } = await this.client.delete<MessageResponseDto>('/notifications', {
         params: { read_only: readOnly },
       })
-      return data
+      return mapMessageResponseDto(data)
     }
   }
 

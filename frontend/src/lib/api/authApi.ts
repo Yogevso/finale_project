@@ -12,11 +12,19 @@ import type {
 } from '@/types'
 import {
   type MessageResponseDto,
+  type RbacPoliciesResponseDto,
+  type RbacPoliciesUpdateDto,
+  type SystemSettingsResponseDto,
+  type SystemSettingsUpdateDto,
   type TokenResponseDto,
   type UserDto,
   mapMessageResponseDto,
+  mapRbacPoliciesResponseDto,
+  mapSystemSettingsResponseDto,
   mapTokenResponseDto,
   mapUserDto,
+  toRbacPoliciesUpdateDto,
+  toSystemSettingsUpdateDto,
 } from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
@@ -58,23 +66,31 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
     }
 
     async getSystemSettings(): Promise<SystemSettingsResponse> {
-      const { data } = await this.client.get<SystemSettingsResponse>('/system/settings')
-      return data
+      const { data } = await this.client.get<SystemSettingsResponseDto>('/system/settings')
+      return mapSystemSettingsResponseDto(data)
     }
 
     async updateSystemSettings(payload: SystemSettingsUpdate): Promise<SystemSettingsResponse> {
-      const { data } = await this.client.put<SystemSettingsResponse>('/system/settings', payload)
-      return data
+      const requestDto = toSystemSettingsUpdateDto(payload)
+      const { data } = await this.client.put<SystemSettingsResponseDto>(
+        '/system/settings',
+        requestDto as SystemSettingsUpdateDto,
+      )
+      return mapSystemSettingsResponseDto(data)
     }
 
     async getRbacPolicies(): Promise<RbacPoliciesResponse> {
-      const { data } = await this.client.get<RbacPoliciesResponse>('/rbac/policies')
-      return data
+      const { data } = await this.client.get<RbacPoliciesResponseDto>('/rbac/policies')
+      return mapRbacPoliciesResponseDto(data)
     }
 
     async updateRbacPolicies(payload: RbacPoliciesUpdate): Promise<RbacPoliciesResponse> {
-      const { data } = await this.client.put<RbacPoliciesResponse>('/rbac/policies', payload)
-      return data
+      const requestDto = toRbacPoliciesUpdateDto(payload)
+      const { data } = await this.client.put<RbacPoliciesResponseDto>(
+        '/rbac/policies',
+        requestDto as RbacPoliciesUpdateDto,
+      )
+      return mapRbacPoliciesResponseDto(data)
     }
   }
 

@@ -9,6 +9,24 @@ import type {
   TopDocuments,
   UserAnalytics,
 } from '@/types'
+import {
+  type AnalyticsOverviewDto,
+  type ContentAnalyticsDto,
+  type EngagementAnalyticsDto,
+  type FeedbackAnalyticsDto,
+  type RecentActivityDto,
+  type TenantAnalyticsDto,
+  type TopDocumentsDto,
+  type UserAnalyticsDto,
+  mapAnalyticsOverviewDto,
+  mapContentAnalyticsDto,
+  mapEngagementAnalyticsDto,
+  mapFeedbackAnalyticsDto,
+  mapRecentActivitiesDto,
+  mapTenantAnalyticsDto,
+  mapTopDocumentsDto,
+  mapUserAnalyticsDto,
+} from './dto'
 import { API_BASE_URL } from './httpClient'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
@@ -19,45 +37,47 @@ export const AnalyticsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     }
 
     async getAnalyticsOverview(params?: AnalyticsQueryParams): Promise<AnalyticsOverview> {
-      const { data } = await this.client.get<AnalyticsOverview>('/analytics/overview', { params })
-      return data
+      const { data } = await this.client.get<AnalyticsOverviewDto>('/analytics/overview', { params })
+      return mapAnalyticsOverviewDto(data)
     }
 
     async getRecentActivity(limit: number = 10): Promise<RecentActivity[]> {
-      const { data } = await this.client.get<RecentActivity[]>('/analytics/recent-activity', {
+      const { data } = await this.client.get<RecentActivityDto[]>('/analytics/recent-activity', {
         params: { limit },
       })
-      return data
+      return mapRecentActivitiesDto(data)
     }
 
     async getEngagementAnalytics(params?: AnalyticsQueryParams): Promise<EngagementAnalytics> {
-      const { data } = await this.client.get<EngagementAnalytics>('/analytics/engagement', { params })
-      return data
+      const { data } = await this.client.get<EngagementAnalyticsDto>('/analytics/engagement', { params })
+      return mapEngagementAnalyticsDto(data)
     }
 
     async getTopDocuments(params?: AnalyticsQueryParams & { limit?: number }): Promise<TopDocuments> {
-      const { data } = await this.client.get<TopDocuments>('/analytics/engagement/top-documents', { params })
-      return data
+      const { data } = await this.client.get<TopDocumentsDto>('/analytics/engagement/top-documents', {
+        params,
+      })
+      return mapTopDocumentsDto(data)
     }
 
     async getUserAnalytics(params?: AnalyticsQueryParams): Promise<UserAnalytics> {
-      const { data } = await this.client.get<UserAnalytics>('/analytics/users', { params })
-      return data
+      const { data } = await this.client.get<UserAnalyticsDto>('/analytics/users', { params })
+      return mapUserAnalyticsDto(data)
     }
 
     async getContentAnalytics(params?: AnalyticsQueryParams): Promise<ContentAnalytics> {
-      const { data } = await this.client.get<ContentAnalytics>('/analytics/content', { params })
-      return data
+      const { data } = await this.client.get<ContentAnalyticsDto>('/analytics/content', { params })
+      return mapContentAnalyticsDto(data)
     }
 
     async getFeedbackAnalytics(params?: AnalyticsQueryParams): Promise<FeedbackAnalytics> {
-      const { data } = await this.client.get<FeedbackAnalytics>('/analytics/feedback', { params })
-      return data
+      const { data } = await this.client.get<FeedbackAnalyticsDto>('/analytics/feedback', { params })
+      return mapFeedbackAnalyticsDto(data)
     }
 
     async getTenantAnalytics(params?: AnalyticsQueryParams): Promise<TenantAnalytics> {
-      const { data } = await this.client.get<TenantAnalytics>('/analytics/tenants', { params })
-      return data
+      const { data } = await this.client.get<TenantAnalyticsDto>('/analytics/tenants', { params })
+      return mapTenantAnalyticsDto(data)
     }
 
     getAnalyticsExportUrl(

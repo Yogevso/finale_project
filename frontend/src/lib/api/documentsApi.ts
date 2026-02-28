@@ -18,6 +18,7 @@ import type {
 import { isFrontendFeatureEnabled } from '@/config/featureFlags'
 import {
   type CommentDto,
+  type CompanyDto,
   type DocumentCreateDto,
   type DocumentDto,
   type DocumentListResponseDto,
@@ -29,6 +30,7 @@ import {
   type VersionUpdateDto,
   mapCommentDto,
   mapCommentsDto,
+  mapCompanyDto,
   mapDocumentDto,
   mapDocumentListResponseDto,
   mapMessageResponseDto,
@@ -132,10 +134,10 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     }
 
     async getAssignedCompanies(documentId: number): Promise<Company[]> {
-      const { data } = await this.client.get<Company[]>(
+      const { data } = await this.client.get<CompanyDto[]>(
         `/documents/${documentId}/assigned-companies`,
       )
-      return data
+      return data.map(mapCompanyDto)
     }
 
     async assignCompanies(

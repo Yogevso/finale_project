@@ -1,4 +1,36 @@
 import type { MessageResponse } from '@/types'
+import {
+  type BookmarkDto,
+  type BookmarkStatusDto,
+  type DocumentProgressDto,
+  type EngagementStatsDto,
+  type FeedbackStatsDto,
+  type FeedbackSubmissionDto,
+  type MessageResponseDto,
+  type MyFeedbackDto,
+  type ReadingProgressDto,
+  type SavedSearchCreateDto,
+  type SavedSearchDto,
+  type SearchAutocompleteResponseDto,
+  type SearchFacetsResponseDto,
+  type SearchResponseDto,
+  mapBookmarkStatusDto,
+  mapBookmarksDto,
+  mapDocumentProgressDto,
+  mapEngagementStatsDto,
+  mapFeedbackStatsDto,
+  mapFeedbackSubmissionDto,
+  mapMessageResponseDto,
+  mapMyFeedbackDto,
+  mapReadingProgressListDto,
+  mapReadingProgressDto,
+  mapSavedSearchDto,
+  mapSavedSearchesDto,
+  mapSearchAutocompleteResponseDto,
+  mapSearchFacetsResponseDto,
+  mapSearchResponseDto,
+  toSavedSearchCreateDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -7,95 +39,129 @@ export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient
       super(...args)
     }
 
-    async search(query: string, options?: { category?: string; page?: number; pageSize?: number }) {
+    async search(
+      query: string,
+      options?: { category?: string; page?: number; pageSize?: number },
+    ): Promise<SearchResponseDto> {
       const params = { q: query, ...options }
-      const { data } = await this.client.get('/search', { params })
-      return data
+      const { data } = await this.client.get<SearchResponseDto>('/search', { params })
+      return mapSearchResponseDto(data)
     }
 
-    async getAutocomplete(query: string) {
-      const { data } = await this.client.get('/search/autocomplete', { params: { q: query } })
-      return data
+    async getAutocomplete(query: string): Promise<SearchAutocompleteResponseDto> {
+      const { data } = await this.client.get<SearchAutocompleteResponseDto>('/search/autocomplete', {
+        params: { q: query },
+      })
+      return mapSearchAutocompleteResponseDto(data)
     }
 
-    async getSearchFacets() {
-      const { data } = await this.client.get('/search/facets')
-      return data
+    async getSearchFacets(): Promise<SearchFacetsResponseDto> {
+      const { data } = await this.client.get<SearchFacetsResponseDto>('/search/facets')
+      return mapSearchFacetsResponseDto(data)
     }
 
-    async getSavedSearches() {
-      const { data } = await this.client.get('/search/saved')
-      return data
+    async getSavedSearches(): Promise<SavedSearchDto[]> {
+      const { data } = await this.client.get<SavedSearchDto[]>('/search/saved')
+      return mapSavedSearchesDto(data)
     }
 
-    async createSavedSearch(search: { name: string; query?: string; category?: string }) {
-      const { data } = await this.client.post('/search/saved', search)
-      return data
+    async createSavedSearch(search: {
+      name: string
+      query?: string
+      category?: string
+    }): Promise<SavedSearchDto> {
+      const payload = toSavedSearchCreateDto(search as SavedSearchCreateDto)
+      const { data } = await this.client.post<SavedSearchDto>(
+        '/search/saved',
+        payload as SavedSearchCreateDto,
+      )
+      return mapSavedSearchDto(data)
     }
 
     async deleteSavedSearch(searchId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(`/search/saved/${searchId}`)
-      return data
+      const { data } = await this.client.delete<MessageResponseDto>(`/search/saved/${searchId}`)
+      return mapMessageResponseDto(data)
     }
 
-    async getBookmarks() {
-      const { data } = await this.client.get('/engagement/bookmarks')
-      return data
+    async getBookmarks(): Promise<BookmarkDto[]> {
+      const { data } = await this.client.get<BookmarkDto[]>('/engagement/bookmarks')
+      return mapBookmarksDto(data)
     }
 
-    async addBookmark(documentId: number) {
-      const { data } = await this.client.post(`/engagement/bookmarks/${documentId}`)
-      return data
+    async addBookmark(documentId: number): Promise<MessageResponse> {
+      const { data } = await this.client.post<BookmarkDto | MessageResponseDto>(
+        `/engagement/bookmarks/${documentId}`,
+      )
+      if (typeof (data as MessageResponseDto).message === 'string') {
+        return mapMessageResponseDto(data as MessageResponseDto)
+      }
+      return { message: 'Bookmark added' }
     }
 
     async removeBookmark(documentId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(`/engagement/bookmarks/${documentId}`)
-      return data
+      const { data } = await this.client.delete<MessageResponseDto>(
+        `/engagement/bookmarks/${documentId}`,
+      )
+      return mapMessageResponseDto(data)
     }
 
-    async checkBookmarkStatus(documentId: number) {
-      const { data } = await this.client.get(`/engagement/bookmarks/${documentId}/status`)
-      return data
+    async checkBookmarkStatus(documentId: number): Promise<BookmarkStatusDto> {
+      const { data } = await this.client.get<BookmarkStatusDto>(
+        `/engagement/bookmarks/${documentId}/status`,
+      )
+      return mapBookmarkStatusDto(data)
     }
 
-    async submitFeedback(documentId: number, isHelpful: boolean, comment?: string) {
-      const { data } = await this.client.post(`/engagement/feedback/${documentId}`, {
+    async submitFeedback(
+      documentId: number,
+      isHelpful: boolean,
+      comment?: string,
+    ): Promise<FeedbackSubmissionDto> {
+      const { data } = await this.client.post<FeedbackSubmissionDto>(
+        `/engagement/feedback/${documentId}`,
+        {
         is_helpful: isHelpful,
         comment,
-      })
-      return data
+        },
+      )
+      return mapFeedbackSubmissionDto(data)
     }
 
-    async getFeedbackStats(documentId: number) {
-      const { data } = await this.client.get(`/engagement/feedback/${documentId}/stats`)
-      return data
+    async getFeedbackStats(documentId: number): Promise<FeedbackStatsDto> {
+      const { data } = await this.client.get<FeedbackStatsDto>(
+        `/engagement/feedback/${documentId}/stats`,
+      )
+      return mapFeedbackStatsDto(data)
     }
 
-    async getMyFeedback(documentId: number) {
-      const { data } = await this.client.get(`/engagement/feedback/${documentId}/my`)
-      return data
+    async getMyFeedback(documentId: number): Promise<MyFeedbackDto> {
+      const { data } = await this.client.get<MyFeedbackDto>(`/engagement/feedback/${documentId}/my`)
+      return mapMyFeedbackDto(data)
     }
 
-    async getReadingProgress() {
-      const { data } = await this.client.get('/engagement/progress')
-      return data
+    async getReadingProgress(): Promise<ReadingProgressDto[]> {
+      const { data } = await this.client.get<ReadingProgressDto[]>('/engagement/progress')
+      return mapReadingProgressListDto(data)
     }
 
-    async updateReadingProgress(documentId: number, progressPercent: number) {
-      const { data } = await this.client.put(`/engagement/progress/${documentId}`, {
+    async updateReadingProgress(
+      documentId: number,
+      progressPercent: number,
+    ): Promise<ReadingProgressDto> {
+      const { data } = await this.client.put<ReadingProgressDto>(`/engagement/progress/${documentId}`, {
         progress_percent: progressPercent,
       })
-      return data
+      return mapReadingProgressDto(data)
     }
 
-    async getDocumentProgress(documentId: number) {
-      const { data } = await this.client.get(`/engagement/progress/${documentId}`)
-      return data
+    async getDocumentProgress(documentId: number): Promise<DocumentProgressDto> {
+      const { data } = await this.client.get<DocumentProgressDto>(`/engagement/progress/${documentId}`)
+      return mapDocumentProgressDto(data)
     }
 
-    async getEngagementStats() {
-      const { data } = await this.client.get('/engagement/stats')
-      return data
+    async getEngagementStats(): Promise<EngagementStatsDto> {
+      const { data } = await this.client.get<EngagementStatsDto>('/engagement/stats')
+      return mapEngagementStatsDto(data)
     }
   }
 
