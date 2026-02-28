@@ -349,7 +349,7 @@ Acceptance criteria:
 Task 49: Frontend API client composition cleanup (P2)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Deep mixin composition makes the API surface hard to navigate and evolve.
@@ -2668,6 +2668,13 @@ For each task:
 - `docker compose run --rm backend pytest tests/test_plugin_registries.py tests/test_collaboration_contract_adapter.py tests/test_conversion_pipeline.py tests/test_notifications_pipeline.py tests/test_domain_events.py tests/test_analytics.py tests/test_collaboration.py -q` (pass)
 - `npm.cmd --prefix collab-server run typecheck` (pass)
 - `npm.cmd --prefix collab-server run test -- --runInBand src/__tests__/auth.test.ts src/__tests__/persistence.test.ts src/__tests__/collaborationTokenContractAdapter.test.ts src/__tests__/documentStateContractAdapter.test.ts` (pass)
+- Completed Task 49: replaced deep nested API mixin composition with explicit module-list factory composition using typed helper (`frontend/src/lib/api/composition.ts`, `frontend/src/lib/api.ts`).
+- Preserved existing API call surface (`api.<method>`) while making composition order declarative and easier to extend.
+- Added file-level architecture note in `frontend/src/lib/api.ts` describing the composition intent.
+- Task 49 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run build` (fails in sandbox: esbuild `spawn EPERM`)
+- `npm.cmd run test -- src/lib/api/httpClient.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
 
 2026-02-25:
 - Cleaned this plan file to open work only.
