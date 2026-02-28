@@ -1,12 +1,9 @@
 """Analytics API Endpoints"""
 
-import csv
 from datetime import date, timedelta
-from io import BytesIO, StringIO
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
 
 from app.application.queries.analytics_queries import (
     AnalyticsOverviewQuery,
@@ -25,6 +22,7 @@ from app.application.queries.dependencies import (
 )
 from app.dependencies.permissions import require_admin, require_manager, require_system_admin
 from app.models import User
+from app.plugins.exporters import get_analytics_export_plugin_registry
 from app.schemas.analytics import (
     AnalyticsOverview,
     ContentAnalytics,
@@ -38,8 +36,9 @@ from app.schemas.analytics import (
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-CSV_EXPORT_REPORTS = ("overview", "engagement", "users", "content", "feedback")
-PDF_EXPORT_REPORTS = ("overview", "engagement")
+_EXPORT_PLUGIN_REGISTRY = get_analytics_export_plugin_registry()
+CSV_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("csv").supported_reports
+PDF_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("pdf").supported_reports
 
 
 def _validate_export_report(report: str, *, allowed: tuple[str, ...], format_name: str) -> None:
@@ -49,6 +48,16 @@ def _validate_export_report(report: str, *, allowed: tuple[str, ...], format_nam
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported {format_name} report '{report}'. Supported reports: {allowed_list}",
         )
+
+
+def _resolve_exporter(format_name: str):
+    try:
+        return _EXPORT_PLUGIN_REGISTRY.resolve(format_name)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
 
 
 def get_default_date_range() -> tuple[date, date]:
@@ -293,103 +302,19 @@ def export_csv(
     Requires: MANAGER role or above.
     Supported reports: overview, engagement, users, content, feedback.
     """
+    exporter = _resolve_exporter("csv")
+
     if not date_from or not date_to:
         default_from, default_to = get_default_date_range()
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    _validate_export_report(report, allowed=CSV_EXPORT_REPORTS, format_name="CSV")
-
-    # Get data based on report type
-    if report == "overview":
-        data = analytics_query_handler.execute_overview(
-            AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
-        )
-        rows = [
-            {"metric": "Total Documents", "value": data["total_documents"]},
-            {"metric": "Total Users", "value": data["total_users"]},
-            {"metric": "Total Views", "value": data["total_views"]},
-            {"metric": "Total Downloads", "value": data["total_downloads"]},
-            {"metric": "Pending Reviews", "value": data["pending_reviews"]},
-            {"metric": "Views Today", "value": data["views_today"]},
-            {"metric": "New Docs This Week", "value": data["new_docs_this_week"]},
-        ]
-        # Add status breakdown
-        for status, count in data["documents_by_status"].items():
-            rows.append({"metric": f"Documents - {status}", "value": count})
-
-    elif report == "engagement":
-        data = analytics_query_handler.execute_engagement(
-            EngagementAnalyticsQuery(date_from=date_from, date_to=date_to)
-        )
-        rows = [
-            {"metric": "Unique Visitors", "value": data["unique_visitors"]},
-            {"metric": "Avg Reading Progress (%)", "value": data["avg_reading_progress"]},
-            {"metric": "Completion Rate (%)", "value": data["completion_rate"]},
-            {"metric": "Total Time Spent (min)", "value": data["total_time_spent_minutes"]},
-        ]
-        # Add time series data
-        for point in data["views_over_time"]:
-            rows.append({"metric": f"Views - {point['date']}", "value": point["value"]})
-
-    elif report == "users":
-        data = analytics_query_handler.execute_user_analytics(
-            UserAnalyticsQuery(date_from=date_from, date_to=date_to)
-        )
-        rows = [
-            {"metric": "Total Users", "value": data["total_users"]},
-            {"metric": "Active Users", "value": data["active_users"]},
-            {"metric": "Inactive Users", "value": data["inactive_users"]},
-        ]
-        for role, count in data["users_by_role"].items():
-            rows.append({"metric": f"Users - {role}", "value": count})
-
-    elif report == "content":
-        data = analytics_query_handler.execute_content_analytics(
-            ContentAnalyticsQuery(date_from=date_from, date_to=date_to)
-        )
-        rows = [
-            {"metric": "Documents Created", "value": data["total_documents_created"]},
-            {"metric": "Versions Published", "value": data["total_versions_published"]},
-            {"metric": "Total Comments", "value": data["total_comments"]},
-            {"metric": "Approval Rate (%)", "value": data["approval_rate"]},
-            {
-                "metric": "Avg Review Turnaround (hrs)",
-                "value": data["avg_review_turnaround_hours"] or "N/A",
-            },
-        ]
-
-    elif report == "feedback":
-        data = analytics_query_handler.execute_feedback_analytics(
-            FeedbackAnalyticsQuery(date_from=date_from, date_to=date_to)
-        )
-        rows = [
-            {"metric": "Total Feedback", "value": data["total_feedback"]},
-            {"metric": "Pending Feedback", "value": data["pending_feedback"]},
-            {"metric": "Responded Feedback", "value": data["responded_feedback"]},
-            {"metric": "Helpfulness Rate (%)", "value": data["helpfulness_rate"]},
-            {
-                "metric": "Avg Response Time (hrs)",
-                "value": data["avg_response_time_hours"] or "N/A",
-            },
-        ]
-        for ftype, count in data["feedback_by_type"].items():
-            rows.append({"metric": f"Feedback - {ftype}", "value": count})
-
-    # Generate CSV
-    output = StringIO()
-    if rows:
-        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
-
-    output.seek(0)
-    filename = f"analytics_{report}_{date_to.isoformat()}.csv"
-
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    _validate_export_report(report, allowed=exporter.supported_reports, format_name="CSV")
+    return exporter.export(
+        report=report,
+        date_from=date_from,
+        date_to=date_to,
+        analytics_query_handler=analytics_query_handler,
     )
 
 
@@ -407,85 +332,17 @@ def export_pdf(
     Requires: MANAGER role or above.
     Note: Requires reportlab package to be installed.
     """
-    _validate_export_report(report, allowed=PDF_EXPORT_REPORTS, format_name="PDF")
-
-    try:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    except ImportError:
-        raise HTTPException(
-            status_code=501,
-            detail="PDF export requires reportlab package. Install with: pip install reportlab",
-        ) from None
+    exporter = _resolve_exporter("pdf")
+    _validate_export_report(report, allowed=exporter.supported_reports, format_name="PDF")
 
     if not date_from or not date_to:
         default_from, default_to = get_default_date_range()
         date_from = date_from or default_from
         date_to = date_to or default_to
 
-    # Get data
-    if report == "overview":
-        data = analytics_query_handler.execute_overview(
-            AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
-        )
-        table_data = [
-            ["Metric", "Value"],
-            ["Total Documents", str(data["total_documents"])],
-            ["Total Users", str(data["total_users"])],
-            ["Total Views", str(data["total_views"])],
-            ["Total Downloads", str(data["total_downloads"])],
-            ["Pending Reviews", str(data["pending_reviews"])],
-        ]
-        title = "Analytics Overview Report"
-    elif report == "engagement":
-        data = analytics_query_handler.execute_engagement(
-            EngagementAnalyticsQuery(date_from=date_from, date_to=date_to)
-        )
-        table_data = [
-            ["Metric", "Value"],
-            ["Unique Visitors", str(data["unique_visitors"])],
-            ["Avg Reading Progress", f"{data['avg_reading_progress']}%"],
-            ["Completion Rate", f"{data['completion_rate']}%"],
-            ["Total Time Spent", f"{data['total_time_spent_minutes']} minutes"],
-        ]
-        title = "Engagement Analytics Report"
-
-    # Generate PDF
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    elements = []
-
-    styles = getSampleStyleSheet()
-    elements.append(Paragraph(title, styles["Title"]))
-    elements.append(Paragraph(f"Period: {date_from} to {date_to}", styles["Normal"]))
-    elements.append(Spacer(1, 20))
-
-    table = Table(table_data)
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 12),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                ("GRID", (0, 0), (-1, -1), 1, colors.black),
-            ]
-        )
-    )
-    elements.append(table)
-
-    doc.build(elements)
-    buffer.seek(0)
-
-    filename = f"analytics_{report}_{date_to.isoformat()}.pdf"
-
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    return exporter.export(
+        report=report,
+        date_from=date_from,
+        date_to=date_to,
+        analytics_query_handler=analytics_query_handler,
     )
