@@ -1,7 +1,6 @@
 # Refactor Wave Migration Playbooks
 
-These playbooks provide repeatable execution checklists for active architecture
-waves.
+These playbooks provide repeatable execution checklists for architecture waves.
 
 ## Playbooks
 
@@ -17,20 +16,24 @@ waves.
 - [Wave N - Security and Resilience Validation](./wave-n-security-resilience-validation.md)
 - [Wave O - Observability and Long-Horizon Evolution](./wave-o-observability-evolution.md)
 
-## Checklist usage
+## Completion Snapshot
+
+As of 2026-02-28, planned waves `E` through `O` are complete.
+
+## Checklist Usage
 
 For each wave:
 
-1. Complete pre-checks before implementation.
-2. Track changes against listed task IDs.
-3. Run validation checklist before merge.
-4. Confirm rollback readiness for high-risk steps.
+1. complete pre-checks before implementation
+2. track changes against listed task IDs
+3. run validation checklist before merge
+4. confirm rollback readiness for high-risk steps
 
-## Shared references
+## Shared References
 
 - ADR workflow: `docs/adr/README.md`
-- Context ownership: `docs/context-ownership.md`
-- Context map: `docs/context-map/README.md`
-- Contract versioning: `docs/contracts/versioning.md`
-- Architecture debt register: `docs/architecture-debt.md`
-- Migration safety framework: `docs/migrations/migration-safety-framework.md`
+- context ownership: `docs/context-ownership.md`
+- context map: `docs/context-map/README.md`
+- contract versioning: `docs/contracts/versioning.md`
+- architecture debt register: `docs/architecture-debt.md`
+- migration safety framework: `docs/migrations/migration-safety-framework.md`

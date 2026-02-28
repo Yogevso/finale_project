@@ -1,35 +1,36 @@
-﻿# Wave O - Observability and Long-Horizon Evolution
+# Wave O - Observability and Long-Horizon Evolution
 
 ## Scope
 
 - Task IDs: 89, 98, 119, 90
 - Reference plan: plan
+- Status: completed (2026-02-28)
 
 ## Pre-checks
 
-- [ ] Confirm linked ADRs exist or are updated for architecture-impacting changes.
-- [ ] Confirm ownership and dependency impact in docs/context-ownership.md and docs/context-map/.
-- [ ] Confirm any compatibility/deprecation implications in policy docs.
-- [ ] Confirm architecture debt implications are recorded in docs/architecture-debt.md.
+- [x] Confirm linked ADRs exist or are updated for architecture-impacting changes.
+- [x] Confirm ownership and dependency impact in docs/context-ownership.md and docs/context-map/.
+- [x] Confirm any compatibility/deprecation implications in policy docs.
+- [x] Confirm architecture debt implications are recorded in docs/architecture-debt.md.
 
 ## Change steps
 
-- [ ] Implement tasks in dependency order listed for this wave.
-- [ ] Keep changes behind clear module/service boundaries.
-- [ ] Update tests and CI checks for touched architecture boundaries.
+- [x] Implement tasks in dependency order listed for this wave.
+- [x] Keep changes behind clear module/service boundaries.
+- [x] Update tests and CI checks for touched architecture boundaries.
 
 ## Validation checklist
 
-- [ ] Unit/integration tests for touched domains pass.
-- [ ] Lint/type checks pass for touched modules.
-- [ ] Contract compatibility expectations are documented.
-- [ ] Manual smoke checks (where applicable) are completed.
+- [x] Unit/integration tests for touched domains pass.
+- [x] Lint/type checks pass for touched modules.
+- [x] Contract compatibility expectations are documented.
+- [x] Manual smoke checks (where applicable) are completed.
 
 ## Rollback checklist
 
-- [ ] Identify feature flags/toggles or fallback paths before rollout.
-- [ ] Keep migration notes for reversal order.
-- [ ] Confirm observability signals can detect failed rollout quickly.
+- [x] Identify feature flags/toggles or fallback paths before rollout.
+- [x] Keep migration notes for reversal order.
+- [x] Confirm observability signals can detect failed rollout quickly.
 
 ## References
 
@@ -38,3 +39,5 @@
 - Context map artifacts: docs/context-map/README.md
 - Contract versioning policy: docs/contracts/versioning.md
 - Architecture debt register: docs/architecture-debt.md
+- Wave O ADR: docs/adr/ADR-0002-selective-event-sourcing-review-pilot.md
+- SLO report evidence: docs/slo/evidence/latest-slo-burn-rate-report.json

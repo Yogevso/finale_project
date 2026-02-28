@@ -1,5 +1,5 @@
 Project Plan: Open Work Only
-Last updated: 2026-02-27
+Last updated: 2026-02-28
 Owner: Engineering
 
 ================================================
@@ -1324,7 +1324,7 @@ Acceptance criteria:
 Task 89: Use-case metrics and tracing objects (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Observability is mostly log-based and not consistently tied to use-case boundaries.
@@ -1348,7 +1348,7 @@ Acceptance criteria:
 Task 90: Selective event-sourcing pilot (P5)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Certain high-complexity workflows may benefit from immutable event history and replay.
@@ -1472,7 +1472,7 @@ Acceptance criteria:
 Task 95: Fault-injection resilience tests for adapters (P5)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - External systems (SMTP/storage/collab APIs) fail in ways not fully covered by happy-path tests.
@@ -1542,7 +1542,7 @@ Acceptance criteria:
 Task 98: Use-case performance SLOs (P5)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Architectural improvements need measurable latency/reliability targets.
@@ -1663,7 +1663,7 @@ Acceptance criteria:
 Task 103: Tenant isolation attack harness (P6)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Multi-tenant regressions can slip in when new endpoints are added.
@@ -2038,7 +2038,7 @@ Acceptance criteria:
 Task 119: SLO burn-rate alerts by use-case (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Raw SLO metrics are less actionable without burn-rate based alerting.
@@ -2061,7 +2061,7 @@ Acceptance criteria:
 Task 120: Chaos testing for adapter boundaries (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Staging-level resilience under real fault patterns is not systematically validated.
@@ -2281,6 +2281,32 @@ For each task:
 - Task 122 validation run:
 - `node scripts/scaffold/check_scaffold_output.mjs` (pass)
 - `node scripts/scaffold/scaffold.mjs --target backend --kind service --name demo_sync --dry-run` (pass)
+- Completed Task 103: introduced reusable tenant-isolation attack harness under `backend/tests/tenant_isolation/` with generated cross-tenant read/write attack patterns.
+- Added shared owner/attacker scenario and actor-auth fixtures in `backend/tests/conftest.py` for endpoint-level tenant boundary regression suites.
+- Added protected endpoint coverage across documents, reviews, BFF detail bundle, collaboration state/session/activity/snapshot flows, and collaboration token issuance (`backend/tests/tenant_isolation/test_attack_harness.py`).
+- Added explicit CI gate before full backend suite: `pytest tests/tenant_isolation -v` in `.github/workflows/ci.yml`.
+- Completed Task 95: added fault-injection resilience coverage for adapter boundaries and external-transport failure modes.
+- Hardened backend infrastructure adapters against external transport failures:
+- `backend/app/infrastructure/adapters/email/smtp_email_adapter.py` now converts unexpected transport exceptions to `False`.
+- `backend/app/infrastructure/adapters/storage/storage_backend_adapter.py` now returns `False` for `delete/exists` transport exceptions.
+- `backend/app/infrastructure/adapters/collaboration/sqlalchemy_collaboration_state_adapter.py` now rolls back and returns `False` on commit failures for save/clear operations.
+- Added backend fault-injection regression suite in `backend/tests/test_adapter_resilience.py` covering timeout exceptions, bool fallbacks, and rollback compensation semantics.
+- Expanded collab-server persistence resilience coverage in `collab-server/src/__tests__/persistence.test.ts` for load timeouts, malformed state payloads, partial save failures with cache fallback, and repeated transport failure attempts.
+- Hardened collab-server state contract adapter malformed payload handling (`collab-server/src/adapters/documentStateContractAdapter.ts`).
+- Task 95 validation run:
+- `docker compose run --rm backend ruff check app/infrastructure/adapters/email/smtp_email_adapter.py app/infrastructure/adapters/storage/storage_backend_adapter.py app/infrastructure/adapters/collaboration/sqlalchemy_collaboration_state_adapter.py tests/test_adapter_resilience.py` (pass)
+- `docker compose run --rm backend pytest tests/test_adapter_resilience.py tests/test_collaboration_managers.py tests/test_storage.py -q` (pass)
+- `npm.cmd --prefix collab-server run typecheck` (pass)
+- `npm.cmd --prefix collab-server run test -- --runInBand src/__tests__/persistence.test.ts src/__tests__/documentStateContractAdapter.test.ts` (pass)
+- Completed Task 120: implemented adapter-boundary chaos orchestration with measurable recovery thresholds and pipeline gating.
+- Added reusable chaos runner script at `scripts/chaos/run_adapter_boundary_chaos.py` and usage docs in `scripts/chaos/README.md`.
+- Added scheduled + callable staging chaos workflow (`.github/workflows/staging-chaos.yml`) that runs backend/collab adapter fault-injection suites and publishes evidence artifacts.
+- Added CD staging chaos gate before production deploy (`.github/workflows/cd.yml`): production now depends on successful `staging-chaos` result when staging deploy runs.
+- Added evidence artifact path bootstrap (`docs/chaos/evidence/.gitkeep`).
+- Task 120 validation run:
+- `docker compose run --rm -v "${PWD}:/workspace" backend sh -lc "python /workspace/scripts/chaos/run_adapter_boundary_chaos.py --repo-root /workspace --skip-collab --report-file /workspace/docs/chaos/evidence/local-backend-chaos-report.json"` (pass)
+- `npm.cmd --prefix collab-server run test -- --runInBand src/__tests__/persistence.test.ts src/__tests__/documentStateContractAdapter.test.ts` (pass)
+- Completed Wave N (security and resilience validation): 103, 95, 120.
 
 2026-02-27:
 - Completed Task 60: introduced strategy-driven conversion package under `backend/app/conversion/`:
@@ -2801,6 +2827,24 @@ For each task:
 - `python -m pytest backend/tests/contracts/test_provider_consumer_contracts.py` (cannot run in this environment: `python.exe` inaccessible)
 - `docker compose run --rm backend pytest tests/contracts/test_provider_consumer_contracts.py -q` (cannot run in this environment: Docker pipe access denied)
 - Completed Wave L (frontend architecture and contract alignment): 49, 63, 47, 62, 76, 77, 78, 110, 117, 79.
+- Completed Task 89: added use-case observability primitives under `backend/app/observability/` (telemetry events/sink/timer, SLO evaluators, burn-rate evaluator) and instrumented command execution boundaries (`backend/app/application/pipeline/command_pipeline.py`, `backend/app/application/bus/bus.py`) with standardized use-case IDs, duration/outcome metadata, and failure attribution.
+- Added regression coverage for Task 89 and SLO primitives in:
+- `backend/tests/test_use_case_telemetry.py`
+- `backend/tests/test_observability_slo.py`
+- Completed Task 98: added concrete SLO artifacts under `docs/slo/` (`README.md`, `use-case-slos.json`, sample telemetry, evidence folder), plus script-based evaluation tooling in `scripts/observability/evaluate_slo_burn_rate.py` for p95 + success-ratio compliance reporting.
+- Completed Task 119: added threshold-window-aware burn-rate evaluation (`evaluate_burn_rate_alerts_for_slos`) and scheduled CI workflow `.github/workflows/slo-burn-rate.yml` with report artifact publishing + `--fail-on-critical` enforcement, plus burn-rate response runbook `docs/slo/runbook-burn-rate.md`.
+- Completed Task 90: implemented a selective event-sourcing pilot for review workflow lifecycle under `backend/app/event_store/` (append-only store, optimistic concurrency checks, replay projection, feature-flagged shadow pilot service), added tests in `backend/tests/test_event_store_pilot.py`, and documented go/no-go + rollback strategy in `docs/adr/ADR-0002-selective-event-sourcing-review-pilot.md`.
+- Updated rollout controls/documentation for pilot rollback:
+- `backend/app/config.py` (`FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT`)
+- `backend/app/feature_flags.py`
+- `backend/tests/test_feature_flags.py`
+- `.env.example`
+- `docs/feature-rollout-flags.md`
+- Wave O validation run:
+- `docker compose run --rm backend ruff check app/observability app/event_store tests/test_use_case_telemetry.py tests/test_observability_slo.py tests/test_event_store_pilot.py tests/test_feature_flags.py` (pass)
+- `docker compose run --rm backend pytest tests/test_use_case_telemetry.py tests/test_observability_slo.py tests/test_event_store_pilot.py tests/test_feature_flags.py -q` (pass)
+- `docker compose run --rm -v "${PWD}:/workspace" backend python /workspace/scripts/observability/evaluate_slo_burn_rate.py --telemetry-file /workspace/docs/slo/samples/sample-telemetry.json --slo-file /workspace/docs/slo/use-case-slos.json --report-file /workspace/docs/slo/evidence/latest-slo-burn-rate-report.json --fail-on-critical` (pass)
+- Completed Wave O (observability and long-horizon evolution): 89, 98, 119, 90.
 
 2026-02-25:
 - Cleaned this plan file to open work only.

@@ -1,27 +1,25 @@
 # Migration Safety Scripts
 
-This folder provides the migration safety framework for Task 118.
+Task 118 migration safety framework runner.
 
 ## Runner
 
 - `run_migration_safety.py`
 
-## What it checks
+## Checks
 
-1. Preflight guards
-2. Dry-run upgrade validation + schema SQL dump artifact generation
-3. Rollback probe (`upgrade head -> downgrade -1 -> upgrade head`)
-4. Post-migration schema assertions
+1. preflight guards
+2. dry-run upgrade validation + schema SQL artifact generation
+3. rollback probe (`upgrade head -> downgrade -1 -> upgrade head`)
+4. post-migration schema assertions
 
 ## Usage
-
-From repo root:
 
 ```bash
 python scripts/migration_safety/run_migration_safety.py
 ```
 
-Optional output paths:
+Custom output paths:
 
 ```bash
 python scripts/migration_safety/run_migration_safety.py \
@@ -29,9 +27,7 @@ python scripts/migration_safety/run_migration_safety.py \
   --dry-run-sql-file docs/migrations/evidence/latest-dry-run.sql
 ```
 
-## Evidence outputs
+## Evidence Outputs
 
 - JSON summary report
-- Generated schema SQL dump artifact
-
-These artifacts provide reproducible migration safety evidence for release checks.
+- generated schema SQL dump artifact

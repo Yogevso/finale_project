@@ -1,579 +1,82 @@
-# Documentation Platform - Backend
+# Backend
 
-FastAPI backend with SQLAlchemy 2.0, SQLite, and comprehensive document management features including customer portal with company-based access control.
+FastAPI backend for the Documentation Platform.
 
----
+## Highlights
 
-## 🚀 Features
+- Multi-tenant API surface (`management`, `portal`, `public`, `bff` routes)
+- Layered architecture (`domain`, `application`, `infrastructure`, `web`)
+- CQRS-lite handlers, command/query bus middleware, and process managers
+- Durable outbox, idempotency, optimistic concurrency, projection cache
+- Policy decision point and policy explanation model
+- Observability primitives (use-case telemetry, SLOs, burn-rate checks)
+- Selective event-sourcing pilot for review workflow (feature-flagged)
 
-### Authentication & Authorization
-- JWT-based authentication with access/refresh tokens
-- Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
-- Password reset with email verification
-- Secure password hashing with bcrypt
+## Important Paths
 
-### Multi-Tenancy
-- Complete tenant isolation
-- Super Admin can manage all tenants
-- Tenant-scoped queries for all resources
+- `app/api/`: FastAPI route modules
+- `app/application/`: command/query handlers, bus/pipeline orchestration
+- `app/domain/`: aggregates, value objects, specifications, workflows
+- `app/infrastructure/`: adapters and persistence-facing components
+- `app/observability/`: telemetry, SLO, burn-rate models
+- `app/event_store/`: event-sourcing pilot components
+- `tests/`: backend tests (unit/integration/contracts/security/resilience)
 
-### Document Management
-- Create, edit, and delete documents
-- Rich text editor with TipTap (headings, lists, tables, links)
-- Document categorization and tagging
-- Draft → Active → Archived workflow
-- Bulk document upload (PDF/Word)
-
-### Version Control
-- Immutable version history
-- Publish specific versions to viewer portal
-- Version comparison and change summaries
-- Rollback capability
-
-### File Attachments
-- Upload files to documents (PDF, Word, images, etc.)
-- S3-compatible storage (AWS S3, MinIO, Azure Blob)
-- Secure download URLs with expiration
-- File size limits (10MB default)
-
-### Comments & Collaboration
-- Threaded comments with replies
-- Private comments (admin/editor only)
-- Inline comments anchored to text
-- Comment resolution workflow
-- @mentions and notifications
-
-### Notifications
-- Real-time notification bell with unread count
-- Email notifications (document published, comments, replies)
-- Notification preferences per user
-- Mark as read / mark all as read
-
-### Engagement & Analytics
-- Document view tracking
-- Reading progress indicators
-- Helpful/Not helpful feedback
-- User bookmarks
-- Saved searches
-
-### Analytics Dashboard
-- Overview statistics with trend analysis
-- Engagement analytics (views, downloads, reading progress)
-- User analytics (role distribution, activity) - Admin+
-- Content production metrics (documents, versions, reviews)
-- Feedback analytics with response times
-- Tenant comparison (System Admin only)
-- Export reports (CSV/PDF)
-- Interactive charts with Recharts
-
-### Customer Portal
-- Customers see documents assigned to their company
-- Company visibility (COMPANY level) for targeted content
-- Public documents also visible
-- Secure authenticated access
-- Submit feedback on documents
-- View document versions
-- Download attachments
-- Search within accessible documents
-
-### Search
-- Full-text search across documents
-- Filter by category, status, date range
-- Save and reuse search filters
-- Recent documents quick access
-
----
-
-## 📦 Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Framework | FastAPI 0.109+ |
-| Python | 3.11+ |
-| ORM | SQLAlchemy 2.0 |
-| Database | SQLite (dev) / PostgreSQL (prod) |
-| Validation | Pydantic 2.0 |
-| Auth | python-jose (JWT) + passlib (bcrypt) |
-| Email | aiosmtplib |
-| Storage | boto3 (S3-compatible) |
-| Testing | pytest + pytest-asyncio (300+ tests, paired with 278 E2E tests) |
-| Linting | ruff |
-
----
-
-## 🛠️ Setup
-
-### Prerequisites
-- Python 3.11+
-- pip or pipenv
-
-### Installation
+## Setup
 
 ```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate (Windows)
 venv\Scripts\activate
-
-# Activate (Linux/Mac)
-source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-Migration scaffolding lives in `backend/alembic/` with configuration in `backend/alembic.ini`.
-
----
-
-## ⚙️ Configuration
-
-Create a `.env` file in the backend directory:
-
-```env
-# ===================
-# Application
-# ===================
-APP_ENV=development
-DEBUG=true
-
-# ===================
-# Security
-# ===================
-SECRET_KEY=your-super-secret-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-ALGORITHM=HS256
-
-# ===================
-# Database
-# ===================
-DATABASE_URL=sqlite:///./data/document_portal.db
-
-# ===================
-# Storage (S3-compatible)
-# ===================
-STORAGE_BACKEND=local              # Options: local, s3
-LOCAL_STORAGE_PATH=./data/uploads
-
-# For S3/MinIO:
-S3_BUCKET_NAME=document-portal
-S3_ACCESS_KEY=your-access-key
-S3_SECRET_KEY=your-secret-key
-S3_ENDPOINT_URL=http://localhost:9000  # MinIO
-S3_REGION=us-east-1
-
-# ===================
-# Email (SMTP)
-# ===================
-EMAIL_ENABLED=false
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-EMAIL_FROM=noreply@yourcompany.com
-EMAIL_FROM_NAME=Documentation Platform
-
-# ===================
-# Frontend URL (for email links)
-# ===================
-FRONTEND_URL=http://localhost:3000
-```
-
----
-
-## 🏃 Running
-
-### Development Server
+Run server:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Access Points
-- API: http://localhost:8000
-- Swagger UI: http://localhost:8000/api/v1/docs
-- ReDoc: http://localhost:8000/api/v1/redoc
-- Health Check: http://localhost:8000/health
+API docs:
 
----
+- `http://localhost:8000/api/v1/docs`
+- `http://localhost:8000/api/v1/redoc`
 
-## 🗃️ Database
+## Key Environment Flags
 
-### Initialize Database
+Architecture rollout and rollback flags:
 
-The database is automatically created on first run. To reset:
+- `FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE`
+- `FEATURE_FLAG_PROJECTION_CACHE`
+- `FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT`
 
-```bash
-# Delete existing database
-rm -f data/document_portal.db
+See full guidance: `../docs/feature-rollout-flags.md`.
 
-# Restart server to recreate
-uvicorn app.main:app --reload
-```
+## Quality Gates
 
-### Managed Migrations (Alembic)
-
-Managed migrations now run on startup (with lightweight fallback for compatibility), and can be run manually:
+Lint and format:
 
 ```bash
-# Apply all managed migrations
-alembic upgrade head
-
-# Show current revision
-alembic current
-
-# Show migration history
-alembic history
+ruff check app/ tests/
+ruff format app/ tests/ --check
 ```
 
-### Seed Sample Data
+Targeted Wave O checks:
 
 ```bash
-# Seed with all roles and companies
-python scripts/seed_multi_tenant.py
-
-# Or basic seed
-python seed_sample_data.py
+pytest tests/test_use_case_telemetry.py tests/test_observability_slo.py tests/test_event_store_pilot.py tests/test_feature_flags.py -q
 ```
 
-### Default Users
-
-| Username | Password | Role | Description |
-|----------|----------|------|-------------|
-| sysadmin | sysadmin123 | System Admin | Full system access |
-| admin | admin123 | Admin | Manage users, companies |
-| manager | manager123 | Manager | Publish, delete, reviews |
-| editor | editor123 | Editor | Create, edit documents |
-| viewer | viewer123 | Viewer | Read-only access |
-| customer1 | customer123 | Customer | Portal access (Company A) |
-| customer2 | customer123 | Customer | Portal access (Company B) |
-
----
-
-## 🧪 Testing
+Full backend tests:
 
 ```bash
-# Run all tests (300+ tests)
-pytest
-
-# Run with verbose output
-pytest -v
-
-# Run specific test file
-pytest tests/test_auth.py -v
-
-# Run customer portal tests
-pytest tests/test_portal_api.py -v
-
-# Run permission/role tests
-pytest tests/test_permissions.py tests/test_roles.py -v
-
-# Run with coverage report
-pytest --cov=app --cov-report=html
-
-# Run only unit tests (skip integration)
-pytest -m "not integration"
+pytest tests/ -v
 ```
 
-### Test Coverage
+## Related Docs
 
-| Test File | Tests | Description |
-|-----------|-------|-------------|
-| test_auth.py | 13 | Authentication & JWT |
-| test_documents.py | 9 | Document CRUD |
-| test_versions.py | 6 | Version management |
-| test_attachments.py | 7 | File uploads |
-| test_comments.py | 6 | Comments & threads |
-| test_engagement.py | 16 | Feedback, bookmarks |
-| test_portal_api.py | 19 | Customer portal |
-| test_public_api.py | 17 | Public viewer |
-| test_permissions.py | 20 | Permission matrix |
-| test_roles.py | 32 | Role-based access |
-| test_reviews_api.py | 17 | Peer reviews |
-| test_security.py | 25 | Security tests |
-| test_search_api.py | 10 | Search functionality |
-| test_viewer_api.py | 12 | Viewer portal |
-| test_viewer_portal.py | 11 | Viewer integration |
-| test_analytics.py | 37 | Analytics dashboard |
-| + others | 42 | Health, rate limit, storage |
-
----
-
-## 🔍 Code Quality
-
-```bash
-# Lint code
-ruff check app/
-
-# Auto-fix lint issues
-ruff check app/ --fix
-
-# Format code
-ruff format app/
-
-# Type checking (optional)
-mypy app/ --ignore-missing-imports
-```
-
----
-
-## 📁 Project Structure
-
-```
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI application entry
-│   ├── config.py               # Settings & environment variables
-│   ├── db.py                   # Database session & engine
-│   ├── security.py             # Password hashing & JWT utilities
-│   │
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── health.py           # Health check endpoints
-│   │   │
-│   │   ├── management/         # Internal user API routes
-│   │   │   ├── auth.py         # Login, logout, password reset
-│   │   │   ├── documents.py    # Document CRUD
-│   │   │   ├── versions.py     # Version management
-│   │   │   ├── attachments.py  # File upload/download
-│   │   │   ├── comments.py     # Comments & threads
-│   │   │   ├── notifications.py# User notifications
-│   │   │   ├── engagement.py   # Feedback, bookmarks, progress
-│   │   │   ├── reviews.py      # Peer review workflow
-│   │   │   ├── search.py       # Search & saved searches
-│   │   │   ├── users.py        # User management
-│   │   │   ├── companies.py    # Company management
-│   │   │   └── tenants.py      # Tenant management
-│   │   │
-│   │   ├── portal/             # Customer portal routes
-│   │   │   ├── documents.py    # Company-scoped documents
-│   │   │   └── feedback.py     # Customer feedback
-│   │   │
-│   │   └── viewer/             # Public viewer routes
-│   │       └── documents.py    # Published document access
-│   │
-│   ├── models/
-│   │   └── __init__.py         # SQLAlchemy ORM models
-│   │                           # - Tenant, User, Company, Document
-│   │                           # - Version, Section, Attachment
-│   │                           # - Comment, AuditLog, Notification
-│   │                           # - SavedSearch, Bookmark, Feedback
-│   │                           # - ReadingProgress, PasswordReset
-│   │                           # - Review (peer review workflow)
-│   │
-│   ├── schemas/
-│   │   └── __init__.py         # Pydantic request/response schemas
-│   │
-│   ├── services/               # Business logic layer
-│   │   ├── auth_service.py     # Authentication logic
-│   │   ├── document_service.py # Document operations
-│   │   ├── comment_service.py  # Comment operations
-│   │   ├── attachment_service/  # File handling (upload/artifacts/preview/reader/streams)
-│   │   ├── storage_service.py  # S3/local storage abstraction
-│   │   ├── email_service.py    # Email sending with templates
-│   │   └── base_service.py     # Base service with tenant isolation
-│   │
-│   ├── dependencies/           # FastAPI dependencies
-│   │   ├── auth.py             # get_current_user, require_role
-│   │   └── tenant.py           # get_tenant_context
-│   │
-│   ├── middleware/             # Custom middleware
-│   │   └── __init__.py         # CORS, logging, tenant context
-│   │
-│   └── utils/                  # Helper utilities
-│       └── __init__.py
-│
-├── tests/                      # Pytest test suite
-│   ├── conftest.py             # Test fixtures
-│   ├── test_auth.py
-│   ├── test_documents.py
-│   └── ...
-│
-├── data/                       # SQLite database & uploads
-│   ├── document_portal.db      # Database file (gitignored)
-│   └── uploads/                # Local file storage
-│
-├── requirements.txt            # Python dependencies
-├── Dockerfile                  # Docker image definition
-├── pytest.ini                  # Pytest configuration
-└── README.md
-```
-
----
-
-## 📋 API Endpoints
-
-### Authentication (`/api/auth`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/login` | Login with email/password |
-| POST | `/logout` | Logout current session |
-| POST | `/refresh` | Refresh access token |
-| GET | `/me` | Get current user profile |
-| POST | `/password-reset/request` | Request password reset email |
-| POST | `/password-reset/reset` | Reset password with token |
-
-### Documents (`/api/documents`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List documents (paginated) |
-| POST | `/` | Create new document |
-| GET | `/{id}` | Get document by ID |
-| PUT | `/{id}` | Update document |
-| DELETE | `/{id}` | Delete document |
-| POST | `/upload` | Upload PDF/Word file |
-
-### Versions (`/api/documents/{id}/versions`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List document versions |
-| POST | `/` | Create new version |
-| GET | `/{version_id}` | Get specific version |
-| POST | `/{version_id}/publish` | Publish version |
-
-### Attachments (`/api/documents/{id}/attachments`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List attachments |
-| POST | `/` | Upload attachment |
-| GET | `/{attachment_id}/download` | Download file |
-| DELETE | `/{attachment_id}` | Delete attachment |
-
-### Comments (`/api/documents/{id}/comments`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List comments (threaded) |
-| POST | `/` | Add comment |
-| PUT | `/{comment_id}` | Update comment |
-| DELETE | `/{comment_id}` | Delete comment |
-| PUT | `/{comment_id}/resolve` | Resolve thread |
-
-### Notifications (`/api/notifications`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List user notifications |
-| GET | `/unread-count` | Get unread count |
-| POST | `/mark-read` | Mark as read |
-| DELETE | `/` | Delete notifications |
-
-### Engagement (`/api/engagement`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/documents/{id}/bookmark` | Toggle bookmark |
-| POST | `/documents/{id}/feedback` | Submit feedback |
-| PUT | `/documents/{id}/progress` | Update reading progress |
-| GET | `/documents/{id}/stats` | Get engagement stats |
-
-### Search (`/api/search`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Search documents |
-| GET | `/saved` | List saved searches |
-| POST | `/saved` | Save a search |
-| DELETE | `/saved/{id}` | Delete saved search |
-
-### Users (`/api/users`) - Admin only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List users |
-| POST | `/` | Create user |
-| GET | `/{id}` | Get user |
-| PUT | `/{id}` | Update user |
-| DELETE | `/{id}` | Delete user |
-
-### Tenants (`/api/tenants`) - Super Admin only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List tenants |
-| POST | `/` | Create tenant |
-| GET | `/{id}` | Get tenant |
-| PUT | `/{id}` | Update tenant |
-| DELETE | `/{id}` | Delete tenant |
-
-### Customer Portal (`/api/portal`) - Customer role only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/documents` | List company-accessible documents |
-| GET | `/documents/{id}` | Get document (company or public) |
-| GET | `/documents/search` | Search within accessible docs |
-| GET | `/documents/{id}/versions` | List document versions |
-| GET | `/documents/{id}/attachments` | List attachments |
-| GET | `/attachments/{id}/download` | Download attachment |
-| POST | `/documents/{id}/feedback` | Submit feedback |
-| GET | `/feedback` | List user's feedback |
-
-### Companies (`/api/companies`) - Admin only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List companies |
-| POST | `/` | Create company |
-| GET | `/{id}` | Get company |
-| PUT | `/{id}` | Update company |
-| DELETE | `/{id}` | Delete company |
-| POST | `/{id}/users` | Assign users to company |
-
-### Reviews (`/api/reviews`) - Manager+ only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | List pending reviews |
-| POST | `/documents/{id}/submit` | Submit for review |
-| POST | `/{id}/approve` | Approve review |
-| POST | `/{id}/reject` | Reject review |
-
-### Viewer Portal (`/api/viewer`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/documents` | List public documents |
-| GET | `/documents/{id}` | Get public document |
-| GET | `/documents/search` | Search public documents |
-| GET | `/documents/{id}/versions` | List published versions |
-| GET | `/documents/{id}/attachments` | List attachments |
-
-### Analytics (`/api/analytics`) - Manager+ only
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/overview` | Summary stats, document counts |
-| GET | `/recent-activity` | Activity feed |
-| GET | `/engagement` | Views/downloads over time |
-| GET | `/engagement/top-documents` | Most viewed/downloaded |
-| GET | `/users` | User metrics (Admin only) |
-| GET | `/content` | Production metrics |
-| GET | `/feedback` | Feedback metrics |
-| GET | `/tenants` | Cross-tenant comparison (System Admin) |
-| GET | `/export/csv` | CSV export |
-| GET | `/export/pdf` | PDF export |
-
-### Health (`/health`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Basic health check |
-| GET | `/detailed` | Detailed health (DB, storage) |
-
----
-
-## 🐳 Docker
-
-### Build Image
-
-```bash
-docker build -t document-portal-backend:latest .
-```
-
-### Run Container
-
-```bash
-docker run -p 8000:8000 \
-  -e SECRET_KEY=your-secret \
-  -e DATABASE_URL=sqlite:///./data/portal.db \
-  -v $(pwd)/data:/app/data \
-  document-portal-backend:latest
-```
-
----
-
-## 📝 License
-
-MIT License - See [LICENSE](../LICENSE) for details.
+- `../docs/adr/`
+- `../docs/migrations/`
+- `../docs/slo/`
+- `../scripts/migration_safety/README.md`
+- `../scripts/chaos/README.md`
