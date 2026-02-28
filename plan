@@ -273,7 +273,7 @@ Acceptance criteria:
 Task 46: Split oversized backend modules (P2)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Several modules are too large and combine unrelated responsibilities.
@@ -324,7 +324,7 @@ Acceptance criteria:
 Task 48: OOP refactor for collab-server bootstrap (P2)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Server startup file currently owns config, connection state, auth hooks, persistence hooks, and health server setup.
@@ -548,7 +548,7 @@ Acceptance criteria:
 Task 57: Notification/email channel-template objects (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Email message rendering, subject creation, and transport are tightly coupled.
@@ -572,7 +572,7 @@ Acceptance criteria:
 Task 58: Auth context services (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Access, refresh, and collaboration token logic is split across multiple modules.
@@ -596,7 +596,7 @@ Acceptance criteria:
 Task 59: FastAPI app factory and router registry (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Application bootstrap and router wiring are concentrated in one large module.
@@ -619,7 +619,7 @@ Acceptance criteria:
 Task 60: Attachment conversion strategy pipeline (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Conversion logic currently mixes format detection, extraction, and rendering in giant utilities.
@@ -643,7 +643,7 @@ Acceptance criteria:
 Task 61: Collaboration backend managers (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Collaboration endpoints and service methods blend state, permissions, and session concerns.
@@ -1157,7 +1157,7 @@ Acceptance criteria:
 Task 82: Class-based controller handlers by context (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-27).
 
 Why:
 - Route handlers still mix transport adaptation with use-case orchestration.
@@ -1228,7 +1228,7 @@ Acceptance criteria:
 Task 85: Plugin registry for extension points (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Adding converters/exporters/channels currently requires direct edits in core modules.
@@ -1252,7 +1252,7 @@ Acceptance criteria:
 Task 86: Anti-corruption layers for external contracts (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - External payload/token schemas can leak directly into domain/application layers.
@@ -2275,6 +2275,62 @@ For each task:
 ================================================
 
 2026-02-27:
+- Completed Task 60: introduced strategy-driven conversion package under `backend/app/conversion/`:
+- `DocumentConversionPipeline` with explicit converter strategies (`PdfConverterStrategy`, `WordConverterStrategy`, `TextConverterStrategy`, `HtmlPassthroughStrategy`) and typed conversion requests.
+- `PreviewPdfConversionPipeline` with conversion strategies (`ImagePreviewPdfStrategy`, `OfficePreviewPdfStrategy`, `HtmlPreviewPdfStrategy`, `TextPreviewPdfStrategy`, `GenericDocumentPreviewPdfStrategy`) for non-PDF preview artifact generation.
+- Refactored document-converter wrapper to delegate through the new conversion pipeline boundary while preserving existing strangler-wrapper call tracking (`backend/app/legacy_wrappers/document_converter.py`).
+- Refactored attachment preview conversion orchestration to use strategy pipeline dispatch instead of inline MIME branching (`backend/app/services/attachment_service/artifacts.py`), preserving existing Office/Word fallback and error semantics.
+- Kept utility API compatibility by routing `convert_document_to_html(...)` through the new conversion pipeline (`backend/app/utils/document_converter.py`).
+- Added conversion pipeline regression coverage in `backend/tests/test_conversion_pipeline.py` and updated wrapper regression mocks in `backend/tests/test_legacy_wrappers.py`.
+- Task 60 validation run:
+- `docker compose run --rm backend ruff check app/conversion app/legacy_wrappers/document_converter.py app/services/attachment_service/artifacts.py app/utils/document_converter.py tests/test_conversion_pipeline.py tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_document_converter_reader.py tests/test_document_converter_toc.py tests/test_attachments.py` (pass)
+- `docker compose run --rm backend pytest tests/test_conversion_pipeline.py tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_document_converter_reader.py tests/test_document_converter_toc.py -q` (pass)
+- `docker compose run --rm backend pytest tests/test_attachments.py -q` (pass)
+- Completed Task 57: introduced notification pipeline object model under `backend/app/notifications/` with explicit message objects (`NotificationMessage`), template objects (`DocumentPublishedTemplate`, `NewCommentTemplate`, `CommentReplyTemplate`, `PasswordResetTemplate`, `WelcomeTemplate`), delivery channels (`EmailNotificationChannel`), and dispatcher facade (`NotificationDispatcher`).
+- Refactored `EmailService` to focus on transport concerns plus message dispatch wrappers, with subject/body rendering moved into template objects (`backend/app/services/email_service.py`).
+- Refactored domain-event side effects to use the notification dispatcher facade instead of direct template/transport calls (`backend/app/services/domain_event_handlers.py`), preserving recipient selection behavior.
+- Added notification pipeline regression coverage in `backend/tests/test_notifications_pipeline.py` and kept existing email/domain-event/outbox behavior tests passing.
+- Task 57 validation run:
+- `docker compose run --rm backend ruff check app/notifications app/services/email_service.py app/services/domain_event_handlers.py tests/test_notifications_pipeline.py tests/test_email.py tests/test_domain_events.py tests/test_outbox.py` (pass)
+- `docker compose run --rm backend pytest tests/test_notifications_pipeline.py tests/test_email.py tests/test_domain_events.py tests/test_outbox.py -q` (pass)
+- `docker compose run --rm backend pytest tests/test_comments.py tests/test_versions.py -q` (pass)
+- Completed Task 58: introduced dedicated auth context services under `backend/app/auth_context/` (`TokenService`, `RefreshTokenService`, `CollaborationAuthService`) plus centralized token payload contracts and shared password hashing helpers.
+- Refactored backend auth/token call sites to delegate lifecycle responsibilities to auth context services (`backend/app/services/auth_service.py`, `backend/app/security.py`, `backend/app/services/collaboration_service.py`, `backend/app/api/management/auth.py`, `backend/app/application/contexts/collaboration/api.py`) while preserving existing route contracts and compatibility wrappers.
+- Refactored collaboration server auth into explicit service + contract validation modules (`collab-server/src/authContext/collaborationAuthService.ts`, `collab-server/src/authContext/contracts.ts`) and kept `collab-server/src/auth.ts` as thin wrapper utilities for existing imports.
+- Added auth contract regression coverage in `backend/tests/test_auth_context_services.py`, extended collaboration token contract assertions in `backend/tests/test_collaboration.py`, and added collab-server token-type validation coverage in `collab-server/src/__tests__/auth.test.ts`.
+- Task 58 validation run:
+- `docker compose run --rm backend ruff check app/auth_context app/security.py app/services/auth_service.py app/services/collaboration_service.py app/api/management/auth.py app/application/contexts/collaboration/api.py tests/test_auth_context_services.py tests/test_auth.py tests/test_security.py tests/test_collaboration.py` (pass)
+- `docker compose run --rm backend pytest tests/test_auth_context_services.py tests/test_auth.py tests/test_security.py tests/test_collaboration.py -q` (pass)
+- `docker compose run --rm backend pytest tests/test_dependencies_permissions.py -q` (pass)
+- `npm.cmd --prefix collab-server run typecheck` (pass)
+- `npm.cmd --prefix collab-server run test -- --runInBand` (pass)
+- Completed Task 61: extracted collaboration backend responsibilities into focused manager service objects under `backend/app/collaboration/` (`CollabStateManager`, `SessionManager`, `SnapshotManager`) with shared access/permission checks.
+- Refactored collaboration API handlers to thin input/output adapters delegating workflow logic to managers (`backend/app/api/management/collaboration/state.py`, `sessions.py`, `activity.py`, `snapshots.py`).
+- Added manager-level unit coverage in `backend/tests/test_collaboration_managers.py` and preserved endpoint regression behavior in collaboration API suites.
+- Task 61 validation run:
+- `docker compose run --rm backend ruff check app/collaboration app/api/management/collaboration app/services/collaboration_service.py app/services/snapshot_service.py tests/test_collaboration.py tests/test_collaboration_managers.py` (pass)
+- `docker compose run --rm backend pytest tests/test_collaboration_managers.py tests/test_collaboration.py -q` (pass)
+- Completed Task 48: refactored `collab-server` bootstrap into explicit classes: `CollabServerApp`, `ConnectionRegistry`, and `HealthServer` (`collab-server/src/server/*`), with `src/index.ts` reduced to thin startup/shutdown wiring.
+- Kept auth/persistence hooks behavior and env-driven runtime configuration intact while moving connection/auth tracking and health endpoint lifecycle into dedicated service objects.
+- Added collab-server regression coverage for new class boundaries:
+- `collab-server/src/__tests__/connectionRegistry.test.ts`
+- `collab-server/src/__tests__/healthServer.test.ts`
+- `collab-server/src/__tests__/collabServerApp.test.ts`
+- Task 48 validation run:
+- `npm.cmd --prefix collab-server run typecheck` (pass)
+- `npm.cmd --prefix collab-server run test -- --runInBand` (pass)
+- Completed Task 82: added class-based HTTP controllers for management users and portal documents contexts (`backend/app/web/controllers/management/users_controller.py`, `backend/app/web/controllers/portal/documents_controller.py`).
+- Refactored route modules to thin transport adapters that delegate orchestration to controller methods while preserving endpoint contracts (`backend/app/api/management/users.py`, `backend/app/api/portal/documents.py`).
+- Added controller regression coverage in `backend/tests/test_web_controllers.py`.
+- Task 82 validation run:
+- `docker compose run --rm backend ruff check app/app_factory.py app/web/router_registry.py app/web/__init__.py app/api/management/users.py app/api/portal/documents.py app/web/controllers tests/test_app_factory_router_registry.py tests/test_web_controllers.py` (pass)
+- `docker compose run --rm backend pytest tests/test_app_factory_router_registry.py tests/test_web_controllers.py tests/test_roles.py tests/test_user_company_invariants.py tests/test_portal_api.py -q` (pass)
+- Completed Task 59: refactored FastAPI bootstrap into explicit object model with `FastAPIAppFactory` and declarative `FastAPIRouterRegistry` registration entries (`backend/app/app_factory.py`, `backend/app/web/router_registry.py`, `backend/app/web/__init__.py`).
+- Preserved backward-compatible `create_app()`/`register_routers()` entrypoints while moving composition responsibilities into class-based factory/registry methods.
+- Added Task 59 regression coverage in `backend/tests/test_app_factory_router_registry.py` for default registry entries and custom registry injection behavior.
+- Task 59 validation run:
+- `docker compose run --rm backend ruff check app/app_factory.py app/web/router_registry.py app/web/__init__.py tests/test_app_factory_router_registry.py` (pass)
+- `docker compose run --rm backend pytest tests/test_app_factory_router_registry.py tests/test_container.py tests/test_feature_flags.py -q` (pass)
 - Completed Task 118: introduced migration safety framework runner at `scripts/migration_safety/run_migration_safety.py` with preflight guards, dry-run validation (ephemeral upgrade + schema SQL dump artifact), rollback probe (`upgrade head -> downgrade -1 -> re-upgrade head`), and post-migration schema assertions.
 - Integrated migration safety enforcement into CI (`.github/workflows/ci.yml`) with dedicated `migration-safety` job, evidence artifact upload, and `ci-success` gate checks.
 - Published migration safety docs/playbook references (`scripts/migration_safety/README.md`, `docs/migrations/migration-safety-framework.md`) and linked migration evidence expectations in existing migration docs.
@@ -2590,6 +2646,28 @@ For each task:
 - Task 108 validation run:
 - `docker compose run --rm backend ruff check app/legacy_wrappers app/container.py app/services/attachment_service/artifacts.py app/services/attachment_service/reader_view.py app/services/attachment_service/upload.py tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_attachments.py tests/test_container.py` (pass)
 - `docker compose run --rm backend pytest tests/test_legacy_wrappers.py tests/test_attachment_office_conversion.py tests/test_attachments.py tests/test_container.py tests/test_analytics.py -q` (pass)
+- Completed Task 46: split oversized backend modules by converting `backend/app/services/analytics_service.py` into a facade over dashboard-section mixins in `backend/app/services/analytics/` and extracting DB migration logic out of `backend/app/db.py`.
+- Task 46 converter split objective remains satisfied via the strategy/pipeline extraction completed in Task 60 (`backend/app/conversion/*` + legacy wrapper boundary).
+- Added dedicated DB migration helper modules under `backend/app/infrastructure/db/` (`managed_migrations.py`, `lightweight_migrations.py`) and kept `app.db` compatibility wrappers (`_run_managed_migrations`, `_bootstrap_schema_from_metadata`, `_run_lightweight_migrations`) for existing runtime/tests.
+- Updated managed-migration regression tests to track Alembic head dynamically and keep legacy schema setup compatible with current head revisions (`backend/tests/test_db_migrations.py`).
+- Task 46 validation run:
+- `docker compose run --rm backend ruff check app/services/analytics_service.py app/services/analytics app/db.py app/infrastructure/db tests/test_db_init.py tests/test_db_migrations.py tests/test_analytics.py` (pass)
+- `docker compose run --rm backend pytest tests/test_db_init.py tests/test_db_migrations.py tests/test_analytics.py -q` (pass)
+- Completed Task 85: introduced extension plugin registries under `backend/app/plugins/` for converter strategies, analytics exporters, and notification channels with lifecycle checks (register/load/validate/select).
+- Replaced hardcoded selection paths with registry lookups:
+- `DocumentConversionPipeline` now resolves converter plugins via `DocumentConverterPluginRegistry`.
+- Analytics export endpoints now resolve format plugins via `AnalyticsExportPluginRegistry` (`csv`/`pdf`).
+- Notification event handler composition now resolves channels through `NotificationChannelPluginRegistry`.
+- Added plugin lifecycle regression coverage in `backend/tests/test_plugin_registries.py`.
+- Completed Task 86: introduced anti-corruption adapters for collaboration contracts on backend and collab-server boundaries.
+- Added backend collaboration ACL adapter package (`backend/app/adapters/collaboration/`) and wired `CollaborationService` token/permission payload normalization through `CollaborationContractAdapter`.
+- Added collab-server contract adapters (`collab-server/src/adapters/collaborationTokenContractAdapter.ts`, `collab-server/src/adapters/documentStateContractAdapter.ts`) and wired auth/persistence flows through them (`authContext/collaborationAuthService.ts`, `persistence.ts`).
+- Added adapter regression coverage in `backend/tests/test_collaboration_contract_adapter.py` and collab-server adapter tests (`collab-server/src/__tests__/collaborationTokenContractAdapter.test.ts`, `collab-server/src/__tests__/documentStateContractAdapter.test.ts`).
+- Task 85/86 validation run:
+- `docker compose run --rm backend ruff check app/plugins app/adapters app/conversion/document_pipeline.py app/api/management/analytics.py app/services/domain_event_handlers.py app/services/collaboration_service.py tests/test_plugin_registries.py tests/test_collaboration_contract_adapter.py` (pass)
+- `docker compose run --rm backend pytest tests/test_plugin_registries.py tests/test_collaboration_contract_adapter.py tests/test_conversion_pipeline.py tests/test_notifications_pipeline.py tests/test_domain_events.py tests/test_analytics.py tests/test_collaboration.py -q` (pass)
+- `npm.cmd --prefix collab-server run typecheck` (pass)
+- `npm.cmd --prefix collab-server run test -- --runInBand src/__tests__/auth.test.ts src/__tests__/persistence.test.ts src/__tests__/collaborationTokenContractAdapter.test.ts src/__tests__/documentStateContractAdapter.test.ts` (pass)
 
 2026-02-25:
 - Cleaned this plan file to open work only.
