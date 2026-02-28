@@ -1,0 +1,96 @@
+{
+  "generated_at": "2026-02-28T14:37:43.114988+00:00",
+  "telemetry_file": "/workspace/docs/slo/samples/sample-telemetry.json",
+  "slo_file": "/workspace/docs/slo/use-case-slos.json",
+  "summary": {
+    "slo_count": 3,
+    "event_count": 10,
+    "critical_alert_count": 0,
+    "warning_alert_count": 0
+  },
+  "evaluations": [
+    {
+      "use_case_id": "command.approvereviewcommand",
+      "sample_count": 3,
+      "success_ratio": 1.0,
+      "p95_latency_ms": 237.01,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 350.0,
+      "success_ratio_compliant": true,
+      "latency_compliant": true,
+      "overall_compliant": true
+    },
+    {
+      "use_case_id": "command.publishapprovedversioncommand",
+      "sample_count": 3,
+      "success_ratio": 1.0,
+      "p95_latency_ms": 406.0,
+      "target_success_ratio": 0.99,
+      "target_p95_latency_ms": 500.0,
+      "success_ratio_compliant": true,
+      "latency_compliant": true,
+      "overall_compliant": true
+    },
+    {
+      "use_case_id": "query.analyticsoverviewquery",
+      "sample_count": 4,
+      "success_ratio": 1.0,
+      "p95_latency_ms": 338.5,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 450.0,
+      "success_ratio_compliant": true,
+      "latency_compliant": true,
+      "overall_compliant": true
+    }
+  ],
+  "alerts": [
+    {
+      "use_case_id": "command.approvereviewcommand",
+      "window_minutes": 5,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 1,
+      "message": "Burn rate 0.0000 for command.approvereviewcommand (window=5m)"
+    },
+    {
+      "use_case_id": "command.approvereviewcommand",
+      "window_minutes": 60,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 3,
+      "message": "Burn rate 0.0000 for command.approvereviewcommand (window=60m)"
+    },
+    {
+      "use_case_id": "command.publishapprovedversioncommand",
+      "window_minutes": 5,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 2,
+      "message": "Burn rate 0.0000 for command.publishapprovedversioncommand (window=5m)"
+    },
+    {
+      "use_case_id": "command.publishapprovedversioncommand",
+      "window_minutes": 60,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 3,
+      "message": "Burn rate 0.0000 for command.publishapprovedversioncommand (window=60m)"
+    },
+    {
+      "use_case_id": "query.analyticsoverviewquery",
+      "window_minutes": 5,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 2,
+      "message": "Burn rate 0.0000 for query.analyticsoverviewquery (window=5m)"
+    },
+    {
+      "use_case_id": "query.analyticsoverviewquery",
+      "window_minutes": 60,
+      "burn_rate": 0.0,
+      "status": "ok",
+      "sample_count": 4,
+      "message": "Burn rate 0.0000 for query.analyticsoverviewquery (window=60m)"
+    }
+  ]
+}

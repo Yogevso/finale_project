@@ -1,4 +1,11 @@
+import CompanySelector from '@/components/CompanySelector'
 import RichTextEditor from '@/components/RichTextEditor'
+import {
+  applyAudiencePreset,
+  getAudienceDirtyHelperText,
+  getAudienceVisibilityHelperText,
+  listAudiencePresets,
+} from '@/features/documents'
 import { useCreateDocumentFlow } from '@/pages/documents/hooks/useCreateDocumentFlow'
 
 export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
@@ -6,11 +13,34 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     formData,
     setFormData,
     error,
+    setError,
     generateWord,
     setGenerateWord,
     createMutation,
+    audienceDirtyState,
     handleSubmit,
   } = useCreateDocumentFlow({ onClose })
+  const audiencePresets = listAudiencePresets()
+  const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
+  const visibilityHelperText = getAudienceVisibilityHelperText(formData.visibility || 'internal')
+
+  const handlePresetApply = (presetId: (typeof audiencePresets)[number]['id']) => {
+    setFormData((previous) => {
+      const nextAudience = applyAudiencePreset(
+        {
+          visibility: previous.visibility || 'internal',
+          company_ids: previous.company_ids || [],
+        },
+        presetId,
+      )
+      return {
+        ...previous,
+        visibility: nextAudience.visibility,
+        company_ids: nextAudience.company_ids,
+      }
+    })
+    setError('')
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -58,14 +88,71 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
-                <input
-                  type="text"
-                  value="Internal"
-                  disabled
-                  className="input-field disabled:opacity-70"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Audience Presets</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {audiencePresets.map((preset) => {
+                    const isActive = formData.visibility === preset.visibility
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handlePresetApply(preset.id)}
+                        className={`text-left px-3 py-2 rounded-xl border transition-colors ${
+                          isActive
+                            ? 'border-sky-500 bg-sky-50 text-sky-800'
+                            : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">{preset.label}</span>
+                        <span className="block text-xs text-slate-500">{preset.description}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
+                <select
+                  value={formData.visibility}
+                  onChange={(e) =>
+                    setFormData({ ...formData, visibility: e.target.value as typeof formData.visibility })
+                  }
+                  className="select-field"
+                >
+                  <option value="internal">Internal</option>
+                  <option value="public">Public</option>
+                  <option value="company">Company</option>
+                </select>
+                <p
+                  className="mt-1 text-xs text-slate-500"
+                >
+                  {visibilityHelperText}
+                </p>
+                <p
+                  className={`mt-1 text-xs ${
+                    audienceDirtyHelper.isChanged ? 'text-amber-700' : 'text-slate-500'
+                  }`}
+                >
+                  {audienceDirtyHelper.text}
+                </p>
+              </div>
+
+              {formData.visibility === 'company' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Target Companies
+                  </label>
+                  <CompanySelector
+                    selectedIds={formData.company_ids || []}
+                    onChange={(ids) => setFormData({ ...formData, company_ids: ids })}
+                    placeholder="Select target companies..."
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    {getAudienceVisibilityHelperText('company')}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
@@ -156,4 +243,3 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     </div>
   )
 }
-

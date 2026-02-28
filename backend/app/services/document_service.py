@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.dependencies.tenant import TenantContext
 from app.domain.aggregates import DocumentAggregate
 from app.domain.factories import DocumentFactory
+from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
 from app.errors import NotFoundError, ValidationError
 from app.models import (
@@ -39,6 +40,7 @@ class DocumentService(TenantAwareService[Document]):
     """Document CRUD service with multi-tenancy support"""
 
     model = Document
+    _company_visibility_assignment_spec = DocumentVisibilityCompanyAssignmentSpec()
 
     def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None):
         super().__init__(db, tenant_ctx)
@@ -173,8 +175,58 @@ class DocumentService(TenantAwareService[Document]):
         self.db.flush()
         return platform
 
+    @staticmethod
+    def _normalize_company_ids(company_ids: Optional[List[int]]) -> List[int]:
+        if not company_ids:
+            return []
+
+        normalized_ids = list(dict.fromkeys(company_ids))
+        if any(company_id <= 0 for company_id in normalized_ids):
+            raise ValidationError(
+                "Company IDs must be positive integers",
+                error_code="invalid_company_set",
+            )
+        return normalized_ids
+
+    def _resolve_assigned_companies(self, company_ids: List[int]) -> List[Tenant]:
+        if not company_ids:
+            return []
+
+        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
+        company_by_id = {company.id: company for company in companies}
+        missing_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
+        if missing_ids:
+            raise ValidationError("Some company IDs are invalid", error_code="invalid_company_set")
+
+        inactive_ids = [company.id for company in companies if not company.is_active]
+        if inactive_ids:
+            raise ValidationError(
+                "Inactive companies cannot be assigned to documents",
+                error_code="invalid_company_set",
+            )
+
+        return [company_by_id[company_id] for company_id in company_ids]
+
+    def _validate_company_visibility_assignment(
+        self,
+        *,
+        visibility: DocumentVisibility,
+        company_ids: List[int],
+    ) -> None:
+        self._company_visibility_assignment_spec.assert_satisfied(
+            visibility=visibility,
+            company_ids=company_ids,
+        )
+
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
         """Create a new document"""
+        normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
+        self._validate_company_visibility_assignment(
+            visibility=document_data.visibility,
+            company_ids=normalized_company_ids,
+        )
+        assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+
         # Use provided document number or generate one
         if document_data.document_number:
             # document_number is globally unique
@@ -230,6 +282,9 @@ class DocumentService(TenantAwareService[Document]):
                     )
                     self.db.add(document)
                     uow.flush()
+
+                    if assigned_companies:
+                        document.assigned_companies = assigned_companies
 
                     # Create initial version placeholder. Real content is managed via explicit
                     # version edits/uploads, not the document description metadata field.
@@ -329,6 +384,11 @@ class DocumentService(TenantAwareService[Document]):
         with UnitOfWork(self.db):
             # Track changes
             changes = []
+            previous_visibility = document.visibility
+            current_company_ids = [company.id for company in document.assigned_companies]
+            has_visibility_update = document_data.visibility is not None
+            has_company_assignment_update = document_data.company_ids is not None
+            normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
 
             # Update fields
             if document_data.title is not None:
@@ -358,6 +418,27 @@ class DocumentService(TenantAwareService[Document]):
                         f"Visibility changed from '{document.visibility.value}' to '{document_data.visibility.value}'"
                     )
                 document.visibility = document_data.visibility
+
+            target_visibility = document_data.visibility or document.visibility
+            if has_visibility_update or has_company_assignment_update:
+                if target_visibility == DocumentVisibility.COMPANY:
+                    target_company_ids = (
+                        normalized_company_ids if has_company_assignment_update else current_company_ids
+                    )
+                    document_aggregate.ensure_visibility_assignment_invariants(
+                        visibility=target_visibility,
+                        company_ids=target_company_ids,
+                    )
+                    document.assigned_companies = self._resolve_assigned_companies(target_company_ids)
+                elif has_company_assignment_update and normalized_company_ids:
+                    document_aggregate.ensure_visibility_assignment_invariants(
+                        visibility=target_visibility,
+                        company_ids=normalized_company_ids,
+                    )
+                elif previous_visibility == DocumentVisibility.COMPANY:
+                    document.assigned_companies = []
+                elif has_company_assignment_update:
+                    document.assigned_companies = []
 
             if document_data.category is not None:
                 document.category = document_data.category
@@ -427,23 +508,33 @@ class DocumentService(TenantAwareService[Document]):
             # Delete document (cascade will delete versions, attachments, comments)
             self.db.delete(document)
 
-    def assign_company_set(self, document_id: int, company_ids: List[int]) -> int:
+    def assign_company_set(
+        self,
+        document_id: int,
+        company_ids: List[int],
+        *,
+        if_match: str | None = None,
+    ) -> int:
         """Replace the full assigned-company set for a document."""
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
 
-        requested_ids = list(dict.fromkeys(company_ids))
-        if requested_ids:
-            companies = self.db.query(Tenant).filter(Tenant.id.in_(requested_ids)).all()
-            company_by_id = {company.id: company for company in companies}
-            missing_ids = [company_id for company_id in requested_ids if company_id not in company_by_id]
-            if missing_ids:
-                raise ValidationError("Some company IDs are invalid")
-            assigned_companies = [company_by_id[company_id] for company_id in requested_ids]
-        else:
-            assigned_companies = []
+        requested_ids = self._normalize_company_ids(company_ids)
+        if document.visibility == DocumentVisibility.COMPANY and not requested_ids:
+            raise ValidationError(
+                "Company visibility requires at least one assigned company",
+                error_code="missing_company_assignment",
+            )
+        assigned_companies = self._resolve_assigned_companies(requested_ids)
 
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
+            document.updated_at = datetime.utcnow()
 
         return len(requested_ids)

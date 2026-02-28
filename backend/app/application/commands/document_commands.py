@@ -44,6 +44,7 @@ class DocumentCommandError:
 
     code: DocumentCommandErrorCode
     message: str
+    error_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,7 @@ class AssignCompanySetCommandError:
 
     code: AssignCompanySetCommandErrorCode
     message: str
+    error_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +62,7 @@ class AssignCompanySetCommand:
 
     document_id: int
     company_ids: tuple[int, ...]
+    if_match: str | None = None
 
     def __post_init__(self) -> None:
         # Normalize inbound mutable sequences (e.g. request lists) to an immutable tuple.
@@ -117,7 +120,11 @@ class AssignCompanySetCommandHandler:
 
     def _execute_use_case(self, context: CommandContext[AssignCompanySetCommand]) -> int:
         command = context.command
-        return self.use_case.assign_company_set(command.document_id, command.company_ids)
+        return self.use_case.assign_company_set(
+            command.document_id,
+            command.company_ids,
+            if_match=command.if_match,
+        )
 
     def _publish(self, context: CommandContext[AssignCompanySetCommand], result: int) -> None:
         _ = (context, result)
@@ -141,6 +148,7 @@ class AssignCompanySetCommandHandler:
                 AssignCompanySetCommandError(
                     code=AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET,
                     message=exc.message,
+                    error_code=exc.error_code,
                 )
             )
         except HTTPException as exc:
@@ -156,6 +164,7 @@ class AssignCompanySetCommandHandler:
                     AssignCompanySetCommandError(
                         code=AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET,
                         message=str(exc.detail),
+                        error_code="invalid_company_set",
                     )
                 )
             raise
@@ -202,7 +211,11 @@ class CreateDocumentCommandHandler:
             )
         except ValidationError as exc:
             return Result.err(
-                DocumentCommandError(code=DocumentCommandErrorCode.VALIDATION, message=exc.message)
+                DocumentCommandError(
+                    code=DocumentCommandErrorCode.VALIDATION,
+                    message=exc.message,
+                    error_code=exc.error_code,
+                )
             )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_404_NOT_FOUND:
@@ -217,6 +230,7 @@ class CreateDocumentCommandHandler:
                     DocumentCommandError(
                         code=DocumentCommandErrorCode.VALIDATION,
                         message=str(exc.detail),
+                        error_code="validation_error",
                     )
                 )
             raise
@@ -268,7 +282,11 @@ class UpdateDocumentCommandHandler:
             )
         except ValidationError as exc:
             return Result.err(
-                DocumentCommandError(code=DocumentCommandErrorCode.VALIDATION, message=exc.message)
+                DocumentCommandError(
+                    code=DocumentCommandErrorCode.VALIDATION,
+                    message=exc.message,
+                    error_code=exc.error_code,
+                )
             )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_404_NOT_FOUND:
@@ -283,6 +301,7 @@ class UpdateDocumentCommandHandler:
                     DocumentCommandError(
                         code=DocumentCommandErrorCode.VALIDATION,
                         message=str(exc.detail),
+                        error_code="validation_error",
                     )
                 )
             raise
@@ -329,7 +348,11 @@ class DeleteDocumentCommandHandler:
             )
         except ValidationError as exc:
             return Result.err(
-                DocumentCommandError(code=DocumentCommandErrorCode.VALIDATION, message=exc.message)
+                DocumentCommandError(
+                    code=DocumentCommandErrorCode.VALIDATION,
+                    message=exc.message,
+                    error_code=exc.error_code,
+                )
             )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_404_NOT_FOUND:
@@ -344,6 +367,7 @@ class DeleteDocumentCommandHandler:
                     DocumentCommandError(
                         code=DocumentCommandErrorCode.VALIDATION,
                         message=str(exc.detail),
+                        error_code="validation_error",
                     )
                 )
             raise

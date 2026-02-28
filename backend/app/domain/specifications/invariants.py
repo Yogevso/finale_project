@@ -8,6 +8,7 @@ from app.errors import ConflictError, InvalidStateError, PermissionDeniedError, 
 from app.models import (
     Document,
     DocumentStatus,
+    DocumentVisibility,
     Invitation,
     InvitationStatus,
     ReviewRequest,
@@ -51,6 +52,37 @@ class DocumentDraftOrActiveSpec:
 
     def is_satisfied_by(self, document: Document) -> bool:
         return document.status in self._ALLOWED_STATUSES
+
+
+class DocumentVisibilityCompanyAssignmentSpec:
+    """Company visibility requires assignments; non-company visibility must not carry assignments."""
+
+    def is_satisfied_by(
+        self,
+        *,
+        visibility: DocumentVisibility,
+        company_ids: list[int],
+    ) -> bool:
+        if visibility == DocumentVisibility.COMPANY:
+            return len(company_ids) > 0
+        return len(company_ids) == 0
+
+    def assert_satisfied(
+        self,
+        *,
+        visibility: DocumentVisibility,
+        company_ids: list[int],
+    ) -> None:
+        if visibility == DocumentVisibility.COMPANY and not company_ids:
+            raise ValidationError(
+                "Company visibility requires at least one assigned company",
+                error_code="missing_company_assignment",
+            )
+        if visibility != DocumentVisibility.COMPANY and company_ids:
+            raise ValidationError(
+                "Company assignments require company visibility",
+                error_code="invalid_company_set",
+            )
 
 
 class ReviewPendingStatusSpec:
@@ -148,4 +180,3 @@ class InvitationResendableSpec:
     def assert_satisfied(self, invitation: Invitation) -> None:
         if not self.is_satisfied_by(invitation):
             raise ValidationError("Cannot resend an accepted invitation")
-

@@ -3,6 +3,17 @@ type QueryEntityId = number | string
 const normalizeId = (id: QueryEntityId) => String(id)
 
 export const queryKeys = {
+  companies: {
+    all: ['companies'] as const,
+    selector: (params: {
+      page: number
+      per_page: number
+      search?: string
+      company_type?: string
+      is_active?: boolean
+    }) => ['companies', 'selector', params] as const,
+  },
+
   documents: {
     all: ['documents'] as const,
     list: (params?: {

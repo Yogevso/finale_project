@@ -1,25 +1,18 @@
 # Scaffold Generator
 
-Task 122 introduces consistent generators/templates for baseline architecture modules.
+Task 122 generator for consistent architecture scaffolding.
 
-## Supported scaffolds
+## Supported Targets
 
-- Backend:
-  - `service`
-  - `repository`
-  - `policy`
-  - `controller`
-- Frontend:
-  - `feature`
-- Collab-server:
-  - `port`
-  - `adapter`
+- Backend: `service`, `repository`, `policy`, `controller`
+- Frontend: `feature`
+- Collab-server: `port`, `adapter`
 
-Each scaffold generates:
+Generated output includes:
 
-- implementation file,
-- test stub,
-- docs stub under `docs/scaffolds/`.
+- implementation file
+- test stub
+- docs stub under `docs/scaffolds/`
 
 ## Usage
 
@@ -41,7 +34,7 @@ node scripts/scaffold/scaffold.mjs \
   --scope management
 ```
 
-Dry-run plan only:
+Dry-run only:
 
 ```bash
 node scripts/scaffold/scaffold.mjs \
@@ -51,9 +44,7 @@ node scripts/scaffold/scaffold.mjs \
   --dry-run
 ```
 
-## Output checks
-
-Validate generator output structure/tests/docs stubs:
+## Validate Output
 
 ```bash
 node scripts/scaffold/check_scaffold_output.mjs

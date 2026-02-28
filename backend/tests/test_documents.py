@@ -59,6 +59,157 @@ def test_create_document(client, auth_headers):
     assert data["document_number"].startswith("DOC-")
 
 
+def test_create_company_visible_document_requires_company_assignment(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents",
+        headers=auth_headers,
+        json={
+            "title": "Company Scoped Doc",
+            "visibility": "company",
+            "status": "draft",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "at least one assigned company" in response.json()["detail"]
+
+
+def test_create_company_visible_document_with_assignment(
+    client, auth_headers, test_tenant
+):
+    response = client.post(
+        "/api/v1/documents",
+        headers=auth_headers,
+        json={
+            "title": "Company Scoped Doc",
+            "visibility": "company",
+            "status": "draft",
+            "company_ids": [test_tenant.id],
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["visibility"] == "company"
+    assert sorted(company["id"] for company in payload["assigned_companies"]) == [test_tenant.id]
+
+
+def test_create_non_company_document_rejects_company_assignments(client, auth_headers, test_tenant):
+    response = client.post(
+        "/api/v1/documents",
+        headers=auth_headers,
+        json={
+            "title": "Internal Doc With Invalid Company Assignments",
+            "visibility": "internal",
+            "status": "draft",
+            "company_ids": [test_tenant.id],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Company assignments require company visibility" in response.json()["detail"]
+    assert response.json()["error_code"] == "invalid_company_set"
+
+
+def test_create_company_visible_document_rejects_inactive_companies(
+    client, auth_headers, db, test_tenant
+):
+    test_tenant.is_active = False
+    db.commit()
+
+    response = client.post(
+        "/api/v1/documents",
+        headers=auth_headers,
+        json={
+            "title": "Company Doc With Inactive Assignment",
+            "visibility": "company",
+            "status": "draft",
+            "company_ids": [test_tenant.id],
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Inactive companies cannot be assigned to documents" in response.json()["detail"]
+    assert response.json()["error_code"] == "invalid_company_set"
+
+
+def test_update_document_rejects_company_visibility_without_assignments(
+    client, admin_headers, db, test_admin
+):
+    doc = Document(
+        title="Visibility Transition Target",
+        document_number="DOC-VIS-TRANS-0001",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=test_admin.id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    response = client.put(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+        json={"visibility": "company"},
+    )
+
+    assert response.status_code == 400
+    assert "at least one assigned company" in response.json()["detail"]
+
+
+def test_update_document_allows_company_visibility_with_assignments(
+    client, admin_headers, db, test_admin, test_tenant
+):
+    doc = Document(
+        title="Visibility Transition With Assignment",
+        document_number="DOC-VIS-TRANS-0002",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=test_admin.id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    response = client.put(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+        json={"visibility": "company", "company_ids": [test_tenant.id]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visibility"] == "company"
+    assert sorted(company["id"] for company in payload["assigned_companies"]) == [test_tenant.id]
+
+
+def test_update_document_transition_away_from_company_clears_assignments(
+    client, admin_headers, db, test_admin, test_tenant
+):
+    doc = Document(
+        title="Visibility Transition Away",
+        document_number="DOC-VIS-TRANS-0003",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    doc.assigned_companies = [test_tenant]
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    response = client.put(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+        json={"visibility": "internal"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["visibility"] == "internal"
+    assert payload["assigned_companies"] == []
+
+
 def test_list_documents(client, auth_headers, db, test_user):
     """Test listing documents"""
     # Create some test documents
@@ -496,10 +647,12 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
     first_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers={**admin_headers, "If-Match": document.etag},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert first_assign.status_code == 200
+    next_etag = first_assign.headers.get("ETag")
+    assert next_etag is not None
 
     first_state = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
@@ -512,7 +665,7 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
     second_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers={**admin_headers, "If-Match": next_etag},
         json={"company_ids": [test_tenant_2.id, tenant_three.id]},
     )
     assert second_assign.status_code == 200
@@ -527,7 +680,7 @@ def test_assign_companies_replaces_existing_set_on_each_request(
     )
 
 
-def test_assign_companies_is_idempotent_and_supports_clear_set(
+def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibility(
     client, db, admin_headers, test_admin, test_tenant, test_tenant_2
 ):
     document = Document(
@@ -543,10 +696,12 @@ def test_assign_companies_is_idempotent_and_supports_clear_set(
 
     assign_with_duplicates = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers={**admin_headers, "If-Match": document.etag},
         json={"company_ids": [test_tenant.id, test_tenant.id, test_tenant_2.id]},
     )
     assert assign_with_duplicates.status_code == 200
+    next_etag = assign_with_duplicates.headers.get("ETag")
+    assert next_etag is not None
 
     state_after_first_assign = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
@@ -559,10 +714,12 @@ def test_assign_companies_is_idempotent_and_supports_clear_set(
 
     idempotent_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers={**admin_headers, "If-Match": next_etag},
         json={"company_ids": [test_tenant_2.id, test_tenant.id]},
     )
     assert idempotent_assign.status_code == 200
+    next_etag = idempotent_assign.headers.get("ETag")
+    assert next_etag is not None
 
     state_after_idempotent_assign = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
@@ -575,17 +732,75 @@ def test_assign_companies_is_idempotent_and_supports_clear_set(
 
     clear_assignments = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers={**admin_headers, "If-Match": next_etag},
         json={"company_ids": []},
     )
-    assert clear_assignments.status_code == 200
+    assert clear_assignments.status_code == 400
+    assert "at least one assigned company" in clear_assignments.json()["detail"]
 
     state_after_clear = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
         headers=admin_headers,
     )
     assert state_after_clear.status_code == 200
-    assert state_after_clear.json() == []
+    assert sorted(company["id"] for company in state_after_clear.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+
+
+def test_assign_companies_requires_if_match_header(
+    client, db, admin_headers, test_admin, test_tenant
+):
+    document = Document(
+        title="If-Match Required Document",
+        document_number="DOC-ASG-PREC-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    response = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers=admin_headers,
+        json={"company_ids": [test_tenant.id]},
+    )
+
+    assert response.status_code == 428
+    assert "If-Match header is required" in response.json()["detail"]
+
+
+def test_assign_companies_rejects_stale_if_match_conflict(
+    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+):
+    document = Document(
+        title="If-Match Conflict Document",
+        document_number="DOC-ASG-CONFLICT-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    stale_etag = document.etag
+    first_assign = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers={**admin_headers, "If-Match": stale_etag},
+        json={"company_ids": [test_tenant.id]},
+    )
+    assert first_assign.status_code == 200
+
+    stale_retry = client.post(
+        f"/api/v1/documents/{document.id}/assign-companies",
+        headers={**admin_headers, "If-Match": stale_etag},
+        json={"company_ids": [test_tenant.id, test_tenant_2.id]},
+    )
+    assert stale_retry.status_code == 409
+    assert "Write conflict detected" in stale_retry.json()["detail"]
 
 
 def test_assign_company_endpoints_require_document_in_same_tenant(client, db):

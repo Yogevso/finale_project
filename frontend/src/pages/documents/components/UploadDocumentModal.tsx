@@ -1,3 +1,10 @@
+import CompanySelector from '@/components/CompanySelector'
+import {
+  applyAudiencePreset,
+  getAudienceDirtyHelperText,
+  getAudienceVisibilityHelperText,
+  listAudiencePresets,
+} from '@/features/documents'
 import { ACCEPTED_FILE_TYPES, useUploadDocumentFlow } from '@/pages/documents/hooks/useUploadDocumentFlow'
 
 export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
@@ -14,14 +21,36 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     setReleaseBranch,
     tags,
     setTags,
+    visibility,
+    setVisibility,
+    companyIds,
+    setCompanyIds,
     error,
+    setError,
     dragActive,
     setDragActive,
+    audienceDirtyState,
     uploadMutation,
     handleFileSelect,
     handleDrop,
     handleSubmit,
   } = useUploadDocumentFlow({ onClose })
+  const audiencePresets = listAudiencePresets()
+  const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
+  const visibilityHelperText = getAudienceVisibilityHelperText(visibility)
+
+  const handlePresetApply = (presetId: (typeof audiencePresets)[number]['id']) => {
+    const nextAudience = applyAudiencePreset(
+      {
+        visibility,
+        company_ids: companyIds,
+      },
+      presetId,
+    )
+    setVisibility(nextAudience.visibility)
+    setCompanyIds(nextAudience.company_ids)
+    setError('')
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -113,6 +142,69 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Audience Presets</label>
+            <div className="grid grid-cols-1 gap-2">
+              {audiencePresets.map((preset) => {
+                const isActive = visibility === preset.visibility
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handlePresetApply(preset.id)}
+                    className={`text-left px-3 py-2 rounded-xl border transition-colors ${
+                      isActive
+                        ? 'border-sky-500 bg-sky-50 text-sky-800'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                    }`}
+                  >
+                    <span className="block text-sm font-medium">{preset.label}</span>
+                    <span className="block text-xs text-slate-500">{preset.description}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as typeof visibility)}
+              className="select-field"
+            >
+              <option value="internal">Internal</option>
+              <option value="public">Public</option>
+              <option value="company">Company</option>
+            </select>
+            <p
+              className="mt-1 text-xs text-slate-500"
+            >
+              {visibilityHelperText}
+            </p>
+            <p
+              className={`mt-1 text-xs ${
+                audienceDirtyHelper.isChanged ? 'text-amber-700' : 'text-slate-500'
+              }`}
+            >
+              {audienceDirtyHelper.text}
+            </p>
+          </div>
+
+          {visibility === 'company' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Target Companies</label>
+              <CompanySelector
+                selectedIds={companyIds}
+                onChange={setCompanyIds}
+                placeholder="Select target companies..."
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {getAudienceVisibilityHelperText('company')}
+              </p>
+            </div>
+          )}
+
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Release Branch</label>
             <input
               type="text"
@@ -140,4 +232,3 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     </div>
   )
 }
-

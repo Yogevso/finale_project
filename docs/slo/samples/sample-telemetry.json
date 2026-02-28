@@ -1,0 +1,102 @@
+[
+  {
+    "use_case_id": "command.approvereviewcommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 182.4,
+    "minutes_ago": 3,
+    "dimensions": {
+      "tenant_scope": "tenant"
+    }
+  },
+  {
+    "use_case_id": "command.approvereviewcommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 210.1,
+    "minutes_ago": 7,
+    "dimensions": {
+      "tenant_scope": "tenant"
+    }
+  },
+  {
+    "use_case_id": "command.approvereviewcommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 240.0,
+    "minutes_ago": 12,
+    "dimensions": {
+      "path": "approve"
+    }
+  },
+  {
+    "use_case_id": "command.publishapprovedversioncommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 320.0,
+    "minutes_ago": 2,
+    "dimensions": {
+      "channel": "management"
+    }
+  },
+  {
+    "use_case_id": "command.publishapprovedversioncommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 410.0,
+    "minutes_ago": 5,
+    "dimensions": {
+      "channel": "management"
+    }
+  },
+  {
+    "use_case_id": "command.publishapprovedversioncommand",
+    "use_case_kind": "command",
+    "outcome": "success",
+    "duration_ms": 370.0,
+    "minutes_ago": 9,
+    "dimensions": {
+      "channel": "management"
+    }
+  },
+  {
+    "use_case_id": "query.analyticsoverviewquery",
+    "use_case_kind": "query",
+    "outcome": "success",
+    "duration_ms": 290.0,
+    "minutes_ago": 1,
+    "dimensions": {
+      "tenant_scope": "tenant"
+    }
+  },
+  {
+    "use_case_id": "query.analyticsoverviewquery",
+    "use_case_kind": "query",
+    "outcome": "success",
+    "duration_ms": 305.0,
+    "minutes_ago": 4,
+    "dimensions": {
+      "tenant_scope": "tenant"
+    }
+  },
+  {
+    "use_case_id": "query.analyticsoverviewquery",
+    "use_case_kind": "query",
+    "outcome": "success",
+    "duration_ms": 330.0,
+    "minutes_ago": 8,
+    "dimensions": {
+      "tenant_scope": "tenant"
+    }
+  },
+  {
+    "use_case_id": "query.analyticsoverviewquery",
+    "use_case_kind": "query",
+    "outcome": "success",
+    "duration_ms": 340.0,
+    "minutes_ago": 11,
+    "dimensions": {
+      "path": "overview"
+    }
+  }
+]

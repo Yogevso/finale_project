@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.domain.ports import EmailPort
 from app.services.email_service import EmailService
+
+logger = logging.getLogger(__name__)
 
 
 class SmtpEmailAdapter(EmailPort):
@@ -19,10 +23,13 @@ class SmtpEmailAdapter(EmailPort):
         html_content: str,
         text_content: str | None = None,
     ) -> bool:
-        return await self._service.send_email(
-            to_email=to_email,
-            subject=subject,
-            html_content=html_content,
-            text_content=text_content,
-        )
-
+        try:
+            return await self._service.send_email(
+                to_email=to_email,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+            )
+        except Exception as exc:
+            logger.error("SMTP adapter send_email transport failure: %s", exc)
+            return False

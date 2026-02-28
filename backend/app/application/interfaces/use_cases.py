@@ -31,5 +31,11 @@ class PublishApprovedVersion(Protocol):
 class AssignCompanySet(Protocol):
     """Replace the full company assignment set for a document."""
 
-    def assign_company_set(self, document_id: int, company_ids: Sequence[int]) -> int:
+    def assign_company_set(
+        self,
+        document_id: int,
+        company_ids: Sequence[int],
+        *,
+        if_match: str | None = None,
+    ) -> int:
         """Apply the target assignment set and return resulting company count."""

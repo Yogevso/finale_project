@@ -113,6 +113,7 @@ export interface DocumentCreate {
   parent_id?: number
   status?: DocumentStatus
   visibility?: DocumentVisibility
+  company_ids?: number[]
   category?: string
   tags?: string
 }
@@ -124,6 +125,7 @@ export interface DocumentUpdate {
   release_branch?: string
   status?: DocumentStatus
   visibility?: DocumentVisibility
+  company_ids?: number[]
   category?: string
   tags?: string
 }
@@ -136,10 +138,25 @@ export interface DocumentListResponse {
   pages: number
 }
 
+export interface AudienceAccessTargetCompany {
+  id: number
+  name: string
+  slug: string
+}
+
+export interface AudienceAccessPreview {
+  visibility: DocumentVisibility
+  is_public: boolean
+  includes_internal_users: boolean
+  target_companies: AudienceAccessTargetCompany[]
+  access_summary: string
+}
+
 export interface DocumentDetailPageBundle {
   document: Document
   attachments: Attachment[]
   assigned_companies: Company[]
+  audience_access_preview: AudienceAccessPreview
   review_history: ReviewListResponse
 }
 

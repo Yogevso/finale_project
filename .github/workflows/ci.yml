@@ -135,6 +135,13 @@ jobs:
           DATABASE_URL: sqlite:///./data/test.db
         run: pytest tests/contracts -v
 
+      - name: Run tenant-isolation attack harness
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+        run: pytest tests/tenant_isolation -v
+
       - name: Run pytest with coverage
         env:
           APP_ENV: testing

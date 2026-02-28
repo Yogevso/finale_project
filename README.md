@@ -172,93 +172,25 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 
 ## 📦 Project Structure
 
-```
-├── .github/
-│   └── workflows/
-│       └── test.yml              # CI/CD pipeline
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── management/       # Admin API routes
-│   │   │   │   ├── auth.py       # Login, logout, password reset
-│   │   │   │   ├── documents.py  # Document CRUD
-│   │   │   │   ├── versions.py   # Version management
-│   │   │   │   ├── attachments.py# File uploads
-│   │   │   │   ├── comments.py   # Comments & threads
-│   │   │   │   ├── notifications.py # User notifications
-│   │   │   │   ├── engagement.py # Feedback, bookmarks, progress
-│   │   │   │   ├── search.py     # Search & saved searches
-│   │   │   │   ├── users.py      # User management
-│   │   │   │   └── tenants.py    # Tenant management
-│   │   │   ├── viewer/           # Public viewer routes
-│   │   │   │   └── documents.py  # Published documents
-│   │   │   └── health.py         # Health checks
-│   │   ├── models/               # SQLAlchemy ORM models
-│   │   ├── schemas/              # Pydantic request/response schemas
-│   │   ├── services/             # Business logic layer
-│   │   │   ├── auth_service.py
-│   │   │   ├── document_service.py
-│   │   │   ├── email_service.py
-│   │   │   ├── storage_service.py
-│   │   │   └── ...
-│   │   ├── dependencies/         # FastAPI dependencies
-│   │   ├── middleware/           # CORS, logging, tenant context
-│   │   ├── db.py                 # Database configuration
-│   │   └── main.py               # Application entrypoint
-│   ├── tests/                    # Pytest test suite
-│   ├── data/                     # SQLite database files
-│   ├── requirements.txt
-│   └── Dockerfile
-├── collab-server/                # Real-time collaboration
-│   ├── src/
-│   │   ├── index.ts              # Hocuspocus server entry
-│   │   ├── auth.ts               # JWT authentication
-│   │   ├── persistence.ts        # Document persistence
-│   │   └── types.ts              # TypeScript types
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/           # Reusable UI components
-│   │   │   ├── Layout.tsx        # Top header navigation
-│   │   │   ├── NotificationBell.tsx # Real-time notifications
-│   │   │   ├── DocumentEditor.tsx# Rich text editor
-│   │   │   ├── RichTextEditor.tsx# TipTap wrapper
-│   │   │   ├── CollaborativeEditor.tsx # Real-time collab
-│   │   │   ├── CommentsSection.tsx
-│   │   │   ├── VersionsSection.tsx
-│   │   │   ├── AttachmentsSection.tsx
-│   │   │   └── analytics/        # Dashboard components
-│   │   ├── pages/
-│   │   │   ├── LoginPage.tsx
-│   │   │   ├── DashboardPage.tsx
-│   │   │   ├── DocumentsPage.tsx
-│   │   │   ├── DocumentDetailPage.tsx
-│   │   │   ├── UsersPage.tsx
-│   │   │   ├── portal/           # Customer portal pages
-│   │   │   └── viewer/           # Public viewer pages
-│   │   ├── lib/
-│   │   │   ├── api/              # Domain API modules + HTTP transport
-│   │   │   ├── api.ts            # Composed API facade
-│   │   │   ├── queryKeys.ts      # Centralized React Query keys
-│   │   │   └── auth.ts           # Auth context
-│   │   └── types/                # TypeScript definitions
-│   ├── e2e/                      # Playwright E2E tests (278 tests)
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.js        # Zip B design tokens
-│   └── Dockerfile
-├── docs/                         # Documentation
-├── docker-compose.yml            # Production deployment
-└── README.md
-```
+As of 2026-02-28:
 
----
+- Refactor waves `E` through `O` are complete.
+- Architecture governance, migration safety, contract testing, and resilience/chaos checks are in place.
+- Wave O observability is implemented:
+  - use-case telemetry/tracing
+  - SLO evaluation
+  - burn-rate alert evaluation
+  - scheduled SLO evidence workflow
+- Selective event-sourcing pilot (review workflow) is implemented behind a feature flag.
 
-## 🎨 Design System (Zip B)
+## Repository Layout
 
-The frontend uses the **Zip B Design System** for a modern, cohesive visual experience.
+- `backend/`: FastAPI app, domain/application layers, persistence, tests
+- `frontend/`: React + TypeScript SPA
+- `collab-server/`: Hocuspocus real-time editing server
+- `docs/`: ADRs, migration playbooks, architecture docs, SLO and chaos evidence
+- `scripts/`: migration safety, chaos, observability, scaffolding tools
+- `plan`: active execution plan and wave progress log
 
 ### Typography
 
@@ -287,9 +219,12 @@ The frontend uses the **Zip B Design System** for a modern, cohesive visual expe
 | `select-field`  | Styled dropdown           |
 | `pill`          | Rounded badge/tag         |
 
----
+Endpoints:
 
-## 🚀 Quick Start
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- API docs: `http://localhost:8000/api/v1/docs`
+- Collab WS: `ws://localhost:8002`
 
 This project supports three execution modes:
 
@@ -314,14 +249,13 @@ This project supports three execution modes:
 ```bash
 cd backend
 python -m venv venv
-
-# Windows
 venv\Scripts\activate
 
 # macOS / Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -335,7 +269,7 @@ Backend:
 ### Real-time Collaboration Server (Hocuspocus + Yjs)
 
 ```bash
-cd collab-server
+cd frontend
 npm install
 npm run dev
 ```
@@ -348,7 +282,7 @@ npm run dev
 ### Frontend (React + Vite)
 
 ```bash
-cd frontend
+cd collab-server
 npm install
 npm run dev
 ```
@@ -490,53 +424,31 @@ Collab Server:
 
 ---
 
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env` file in the `backend/` directory:
-
-```env
-# Database
-DATABASE_URL=sqlite:///./data/document_portal.db
-
-# Authentication
-SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-
-# Storage (S3-compatible)
-STORAGE_BACKEND=local  # or "s3"
-S3_BUCKET_NAME=document-portal
-S3_ACCESS_KEY=your-access-key
-S3_SECRET_KEY=your-secret-key
-S3_ENDPOINT_URL=https://s3.amazonaws.com
-S3_REGION=us-east-1
-
-# Email (SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-EMAIL_FROM=noreply@yourcompany.com
-
-# Frontend URL (for email links)
-FRONTEND_URL=http://localhost:3000
+```bash
+cd frontend
+npm run lint
+npm run build
+npm run test -- --run
 ```
 
----
+Collab server:
 
-## 🧪 Testing
+```bash
+cd collab-server
+npm run typecheck
+npm run test
+```
+
+Wave O SLO evaluation:
 
 ### Backend Tests (262+ tests)
 
 ```bash
-cd backend
-pytest -v                              # Run all tests
-pytest --cov=app --cov-report=html     # With coverage
-pytest tests/test_portal_api.py -v     # Customer portal tests
-pytest tests/test_permissions.py -v    # Permission tests
-pytest tests/test_roles.py -v          # Role-based tests
+python scripts/observability/evaluate_slo_burn_rate.py \
+  --telemetry-file docs/slo/samples/sample-telemetry.json \
+  --slo-file docs/slo/use-case-slos.json \
+  --report-file docs/slo/evidence/latest-slo-burn-rate-report.json \
+  --fail-on-critical
 ```
 
 ### Frontend E2E Tests (278 tests - 100% pass rate)
@@ -546,11 +458,7 @@ cd frontend
 npm test           # Unit tests (Vitest)
 npm run test:e2e   # E2E tests (Playwright)
 
-# Run specific role tests
-npx playwright test admin.spec.ts
-npx playwright test customer.spec.ts
-npx playwright test permissions.spec.ts
-```
+Primary workflows in `.github/workflows/`:
 
 ### Linting
 
@@ -560,10 +468,16 @@ cd backend
 ruff check app/
 ruff format app/
 
-# Frontend
-cd frontend
-npm run lint
-```
+## Key Documentation
+
+- [Execution plan](./plan)
+- [Migration playbooks](./docs/migrations/README.md)
+- [ADRs](./docs/adr/README.md)
+- [Feature rollout flags](./docs/feature-rollout-flags.md)
+- [SLO docs](./docs/slo/README.md)
+- [Chaos suite docs](./scripts/chaos/README.md)
+
+## License
 
 ---
 

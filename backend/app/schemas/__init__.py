@@ -125,6 +125,7 @@ class DocumentCreate(DocumentBase):
     parent_id: Optional[int] = None
     status: DocumentStatus = DocumentStatus.DRAFT
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL
+    company_ids: Optional[List[int]] = None
 
 
 class DocumentUpdate(BaseModel):
@@ -135,6 +136,7 @@ class DocumentUpdate(BaseModel):
     version_label: Optional[str] = Field(None, max_length=50)
     status: Optional[DocumentStatus] = None
     visibility: Optional[DocumentVisibility] = None
+    company_ids: Optional[List[int]] = None
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
@@ -444,12 +446,23 @@ class ReviewListResponse(BaseModel):
 
 
 # ========== BFF Schemas ==========
+class AudienceAccessPreviewResponse(BaseModel):
+    """Computed audience preview for a document's current visibility state."""
+
+    visibility: DocumentVisibility
+    is_public: bool
+    includes_internal_users: bool
+    target_companies: List[TenantSummary]
+    access_summary: str
+
+
 class DocumentDetailPageBundleResponse(BaseModel):
     """Aggregated payload for the internal document detail page."""
 
     document: DocumentResponse
     attachments: List[AttachmentResponse]
     assigned_companies: List[TenantSummary]
+    audience_access_preview: AudienceAccessPreviewResponse
     review_history: ReviewListResponse
 
 
@@ -509,6 +522,7 @@ __all__ = [
     "ReviewResponse",
     "ReviewListResponse",
     # BFF
+    "AudienceAccessPreviewResponse",
     "DocumentDetailPageBundleResponse",
     # Audit
     "AuditLogResponse",

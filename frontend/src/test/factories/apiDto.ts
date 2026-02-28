@@ -75,6 +75,13 @@ export function buildDocumentDetailPageBundleDto(
     document: buildDocumentDto(),
     attachments: [],
     assigned_companies: [],
+    audience_access_preview: {
+      visibility: 'internal',
+      is_public: false,
+      includes_internal_users: true,
+      target_companies: [],
+      access_summary: 'Visible to internal users only.',
+    },
     review_history: buildReviewListResponseDto(),
     ...overrides,
   }

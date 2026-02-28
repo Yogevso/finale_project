@@ -29,8 +29,12 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
 
         document.yjs_state = state
         document.updated_at = datetime.utcnow()
-        self._db.commit()
-        return True
+        try:
+            self._db.commit()
+            return True
+        except Exception:
+            self._db.rollback()
+            return False
 
     def clear_document_state(self, document_id: int) -> bool:
         document = self._db.query(Document).filter(Document.id == document_id).first()
@@ -38,6 +42,9 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
             return False
 
         document.yjs_state = None
-        self._db.commit()
-        return True
-
+        try:
+            self._db.commit()
+            return True
+        except Exception:
+            self._db.rollback()
+            return False

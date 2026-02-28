@@ -8,6 +8,12 @@ from time import perf_counter
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from app.errors import PermissionDeniedError
+from app.observability import (
+    UseCaseTelemetrySink,
+    UseCaseTimer,
+    build_use_case_id,
+    record_use_case_telemetry,
+)
 
 RequestT = TypeVar("RequestT")
 ResponseT = TypeVar("ResponseT")
@@ -108,11 +114,18 @@ class TracingMiddleware:
 class _BaseBus:
     """Shared bus dispatch behavior."""
 
-    def __init__(self, name: str, middlewares: list[BusMiddleware]):
+    def __init__(
+        self,
+        name: str,
+        middlewares: list[BusMiddleware],
+        *,
+        telemetry_sink: UseCaseTelemetrySink | None = None,
+    ):
         self.name = name
         self._middlewares = list(middlewares)
         self._handlers: dict[type[Any], Callable[[Any], Any]] = {}
         self._last_trace: BusDispatchTrace | None = None
+        self._telemetry_sink = telemetry_sink
 
     @property
     def last_trace(self) -> BusDispatchTrace | None:
@@ -142,6 +155,9 @@ class _BaseBus:
             request=request,
             request_name=type(request).__name__,
         )
+        timer = UseCaseTimer.start()
+        outcome = "failure"
+        error_type: str | None = None
 
         def invoke(index: int, ctx: BusDispatchContext[Any]) -> Any:
             if index >= len(self._middlewares):
@@ -149,23 +165,65 @@ class _BaseBus:
             middleware = self._middlewares[index]
             return middleware.handle(ctx, lambda next_ctx: invoke(index + 1, next_ctx))
 
-        result = invoke(0, context)
-        self._record_trace(context)
-        return result
+        try:
+            result = invoke(0, context)
+            outcome = "success"
+            return result
+        except Exception as exc:
+            error_type = type(exc).__name__
+            raise
+        finally:
+            if "started_at" not in context.metadata:
+                context.metadata["started_at"] = timer.started_at
+            if "duration_ms" not in context.metadata:
+                context.metadata["duration_ms"] = round(timer.duration_ms(), 3)
+            context.metadata["outcome"] = outcome
+            context.metadata["use_case_id"] = build_use_case_id(
+                kind="command" if self.name == "command_bus" else "query",
+                name=context.request_name,
+            )
+            if error_type:
+                context.metadata["error_type"] = error_type
+            record_use_case_telemetry(
+                sink=self._telemetry_sink,
+                use_case_kind="command" if self.name == "command_bus" else "query",
+                use_case_name=context.request_name,
+                outcome="failure" if outcome == "failure" else "success",
+                duration_ms=float(context.metadata["duration_ms"]),
+                started_at=str(context.metadata["started_at"]),
+                dimensions={
+                    "bus_name": self.name,
+                    "request_name": context.request_name,
+                    "middleware_order": ",".join(context.middleware_order),
+                    "outcome": outcome,
+                    **({"error_type": error_type} if error_type else {}),
+                },
+            )
+            self._record_trace(context)
 
 
 class CommandBus(_BaseBus):
     """Bus for command dispatch."""
 
-    def __init__(self, middlewares: list[BusMiddleware]):
-        super().__init__(name="command_bus", middlewares=middlewares)
+    def __init__(
+        self,
+        middlewares: list[BusMiddleware],
+        *,
+        telemetry_sink: UseCaseTelemetrySink | None = None,
+    ):
+        super().__init__(name="command_bus", middlewares=middlewares, telemetry_sink=telemetry_sink)
 
 
 class QueryBus(_BaseBus):
     """Bus for query dispatch."""
 
-    def __init__(self, middlewares: list[BusMiddleware]):
-        super().__init__(name="query_bus", middlewares=middlewares)
+    def __init__(
+        self,
+        middlewares: list[BusMiddleware],
+        *,
+        telemetry_sink: UseCaseTelemetrySink | None = None,
+    ):
+        super().__init__(name="query_bus", middlewares=middlewares, telemetry_sink=telemetry_sink)
 
 
 CommandRequestT = TypeVar("CommandRequestT")

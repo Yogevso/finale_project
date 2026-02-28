@@ -193,4 +193,97 @@ describe('useDocumentDetailPageState', () => {
       ]),
     )
   })
+
+  it('shows corrective guidance when company visibility update lacks assignments', async () => {
+    const queryClient = createQueryClient()
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    mockedApi.updateDocument.mockRejectedValue({
+      response: {
+        data: {
+          detail: 'Company visibility requires at least one assigned company',
+          error_code: 'missing_company_assignment',
+        },
+      },
+    } as never)
+
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const { result } = renderHook(() => useDocumentDetailPageState(), { wrapper })
+
+    act(() => {
+      result.current.updateDocument({ visibility: 'company' })
+    })
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Company visibility requires at least one assigned company. Use "Assign Companies" in Details first.',
+      )
+    })
+
+    alertSpy.mockRestore()
+  })
+
+  it('blocks empty assignment save before mutation for company-visible documents', () => {
+    const scenario = buildDocumentDetailCollaborationScenario(42)
+    mockedUseDocumentDetailPageBundleQuery.mockReturnValue({
+      data: {
+        ...scenario.bundle,
+        document: {
+          ...scenario.bundle.document,
+          visibility: 'company',
+        },
+      },
+      isLoading: false,
+      error: null,
+    } as never)
+
+    const queryClient = createQueryClient()
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useDocumentDetailPageState(), { wrapper })
+
+    act(() => {
+      result.current.setActiveTab('details')
+      result.current.toggleCompanySelector()
+      result.current.updateAssignmentDraft([])
+      result.current.saveAssignmentDraft()
+    })
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Company-visible documents must keep at least one assigned company.',
+    )
+    expect(mockedApi.assignCompanies).not.toHaveBeenCalled()
+
+    alertSpy.mockRestore()
+  })
+
+  it('guards tab change when assignment draft has unsaved changes', () => {
+    const queryClient = createQueryClient()
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    const { result } = renderHook(() => useDocumentDetailPageState(), { wrapper })
+
+    act(() => {
+      result.current.setActiveTab('details')
+      result.current.toggleCompanySelector()
+      result.current.updateAssignmentDraft([999])
+      result.current.setActiveTab('preview')
+    })
+
+    expect(result.current.activeTab).toBe('details')
+    expect(result.current.hasUnsavedAssignmentChanges).toBe(true)
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'You have unsaved company assignment changes. Discard them?',
+    )
+
+    confirmSpy.mockRestore()
+  })
 })

@@ -1,3 +1,4 @@
+import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmDialog'
 import PageHeader from '@/components/PageHeader'
 import {
   CreateDocumentModal,
@@ -73,6 +74,16 @@ export default function DocumentsPage() {
         />
       )}
 
+      <VisibilityChangeConfirmDialog
+        isOpen={controller.pendingVisibilityChange !== null}
+        fromVisibility={controller.pendingVisibilityChange?.currentVisibility ?? 'internal'}
+        toVisibility={controller.pendingVisibilityChange?.nextVisibility ?? 'internal'}
+        documentTitle={controller.pendingVisibilityChange?.title}
+        onCancel={controller.cancelPendingVisibilityChange}
+        onConfirm={controller.confirmPendingVisibilityChange}
+        isSubmitting={controller.visibilityMutation.isPending}
+      />
+
       {controller.showCreateModal && (
         <CreateDocumentModal onClose={() => controller.setShowCreateModal(false)} />
       )}
@@ -97,4 +108,3 @@ export default function DocumentsPage() {
     </div>
   )
 }
-

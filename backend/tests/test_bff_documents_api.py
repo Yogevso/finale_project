@@ -34,6 +34,13 @@ def test_document_detail_page_bundle_returns_composed_payload(
     assert payload["attachments"][0]["id"] == scenario.attachment.id
     assert len(payload["assigned_companies"]) == 1
     assert payload["assigned_companies"][0]["id"] == scenario.tenant.id
+    assert payload["audience_access_preview"]["visibility"] == "company"
+    assert payload["audience_access_preview"]["is_public"] is False
+    assert payload["audience_access_preview"]["includes_internal_users"] is True
+    assert len(payload["audience_access_preview"]["target_companies"]) == 1
+    assert (
+        payload["audience_access_preview"]["target_companies"][0]["id"] == scenario.tenant.id
+    )
     assert payload["review_history"]["total"] == 1
     assert payload["review_history"]["items"][0]["id"] == scenario.review.id
 

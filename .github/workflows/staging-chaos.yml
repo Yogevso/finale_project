@@ -1,0 +1,62 @@
+# Staging chaos workflow for adapter-boundary resilience validation.
+
+name: Staging Chaos - Adapter Boundaries
+
+on:
+  schedule:
+    # Weekly Monday run at 04:30 UTC
+    - cron: '30 4 * * 1'
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  adapter-boundary-chaos:
+    name: Adapter Boundary Chaos Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install backend test dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: collab-server/package-lock.json
+
+      - name: Install collab-server dependencies
+        run: npm ci --prefix collab-server
+
+      - name: Run adapter-boundary chaos suite
+        run: |
+          python scripts/chaos/run_adapter_boundary_chaos.py \
+            --report-file docs/chaos/evidence/latest-adapter-chaos-report.json
+
+      - name: Upload chaos evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-chaos-evidence
+          path: docs/chaos/evidence/latest-adapter-chaos-report.json
+          retention-days: 30
+

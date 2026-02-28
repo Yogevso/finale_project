@@ -1,6 +1,7 @@
 """Document Management API Routes"""
 
 import logging
+from datetime import datetime
 from math import ceil
 from typing import List, Optional
 
@@ -13,6 +14,7 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -71,6 +73,7 @@ from app.schemas import (
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
 from app.services.permissions import Permission
+from app.utils.concurrency import ensure_if_match_matches
 from app.utils.html_to_docx import html_to_docx_bytes
 
 router = APIRouter()
@@ -112,7 +115,7 @@ def create_document(
         if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
             raise NotFoundError(result.error.message)
         if result.error.code == DocumentCommandErrorCode.VALIDATION:
-            raise ValidationError(result.error.message)
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected document-create command error")
     return result.value
 
@@ -247,7 +250,7 @@ def update_document(
         if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
             raise NotFoundError(result.error.message)
         if result.error.code == DocumentCommandErrorCode.VALIDATION:
-            raise ValidationError(result.error.message)
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected document-update command error")
     document = result.value
     response.headers["ETag"] = f"\"{document.etag}\""
@@ -276,7 +279,7 @@ def delete_document(
         if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
             raise NotFoundError(result.error.message)
         if result.error.code == DocumentCommandErrorCode.VALIDATION:
-            raise ValidationError(result.error.message)
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected document-delete command error")
     return MessageResponse(message="Document deleted successfully")
 
@@ -285,6 +288,7 @@ def delete_document(
     "/documents/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED
 )
 async def upload_document(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
@@ -316,14 +320,25 @@ async def upload_document(
     """
     # Use filename as title if not provided
     doc_title = title or file.filename.rsplit(".", 1)[0] if file.filename else "Uploaded Document"
+    form = await request.form()
+    raw_company_ids = form.getlist("company_ids")
+    company_ids: List[int] = []
+    for raw_company_id in raw_company_ids:
+        try:
+            company_ids.append(int(raw_company_id))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                "Invalid company_ids value",
+                error_code="invalid_company_set",
+            ) from exc
 
     allowed_visibility = {"public", "internal", "company"}
     if visibility is not None and visibility not in allowed_visibility:
-        raise HTTPException(status_code=400, detail="Invalid visibility value")
+        raise ValidationError("Invalid visibility value", error_code="invalid_visibility")
 
     allowed_status = {item.value for item in DocumentStatus}
     if upload_status is not None and upload_status not in allowed_status:
-        raise HTTPException(status_code=400, detail="Invalid status value")
+        raise ValidationError("Invalid status value", error_code="invalid_status")
 
     privileged_publish = current_user.role in {
         UserRole.SYSTEM_ADMIN,
@@ -338,6 +353,16 @@ async def upload_document(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only managers and above can upload public documents",
         )
+    if visibility_value == "company" and len(company_ids) == 0:
+        raise ValidationError(
+            "Company visibility requires at least one assigned company",
+            error_code="missing_company_assignment",
+        )
+    if visibility_value != "company" and len(company_ids) > 0:
+        raise ValidationError(
+            "Company assignments require company visibility",
+            error_code="invalid_company_set",
+        )
     if status_value == DocumentStatus.ACTIVE.value and not privileged_publish:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -350,6 +375,7 @@ async def upload_document(
         description=description or f"Uploaded from file: {file.filename}",
         status=status_value,
         visibility=visibility_value,
+        company_ids=company_ids,
         category=category or "Uploaded",
         topic=topic,
         platform=platform,
@@ -367,6 +393,7 @@ async def upload_document(
             description=f"Release notes for {doc_title}",
             status=status_value,
             visibility=visibility_value,
+            company_ids=company_ids,
             category="Release Notes",
             tags="release-notes",
             document_number=None,
@@ -423,26 +450,36 @@ def get_assigned_companies(
 def assign_companies(
     document_id: int,
     request: CompanyAssignRequest,
+    response: Response,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
     assign_company_set_command_handler: AssignCompanySetCommandHandler = Depends(
         get_assign_company_set_command_handler
     ),
+    document_service: DocumentService = Depends(get_document_service),
 ):
     """
     Replace the companies assigned to a document.
     Manager+ access required.
     """
     result = assign_company_set_command_handler.execute(
-        AssignCompanySetCommand(document_id=document_id, company_ids=request.company_ids)
+        AssignCompanySetCommand(
+            document_id=document_id,
+            company_ids=request.company_ids,
+            if_match=if_match,
+        )
     )
     if result.is_err:
         if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
             raise NotFoundError(result.error.message)
         if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
-            raise ValidationError(result.error.message, error_code="invalid_company_set")
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
 
     assigned_count = result.value
+    updated_document = document_service.get_document(document_id)
+    if updated_document:
+        response.headers["ETag"] = f"\"{updated_document.etag}\""
     return MessageResponse(message=f"Assigned company set updated ({assigned_count} total)")
 
 
@@ -452,6 +489,8 @@ def assign_companies(
 def remove_company_assignment(
     document_id: int,
     company_id: int,
+    response: Response,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
     document_service: DocumentService = Depends(get_document_service),
     db: Session = Depends(get_db),
@@ -463,6 +502,12 @@ def remove_company_assignment(
     document = document_service.get_document(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    ensure_if_match_matches(
+        if_match=if_match,
+        resource_type="document",
+        resource_id=document.id,
+        row_version=document.row_version,
+    )
 
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -470,8 +515,19 @@ def remove_company_assignment(
 
     if company not in document.assigned_companies:
         raise HTTPException(status_code=400, detail="Company is not assigned to this document")
+    if (
+        document.visibility == DocumentVisibility.COMPANY
+        and len(document.assigned_companies) <= 1
+    ):
+        raise ValidationError(
+            "Company visibility requires at least one assigned company",
+            error_code="missing_company_assignment",
+        )
 
     document.assigned_companies.remove(company)
+    document.updated_at = datetime.utcnow()
     db.commit()
+    db.refresh(document)
+    response.headers["ETag"] = f"\"{document.etag}\""
 
     return MessageResponse(message=f"Removed {company.name} from document")

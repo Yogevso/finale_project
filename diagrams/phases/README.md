@@ -1,18 +1,24 @@
 # Endpoint-Level Phase Packs
 
-This folder provides one endpoint-level phase pack per platform phase.
+This directory contains endpoint-level diagram packs grouped by platform phase.
+
+## Phase Folders
+
+- `P0_ACCESS_IDENTITY/`
+- `P1_GOVERNANCE_SETUP/`
+- `P2_AUTHORING_ASSEMBLY/`
+- `P3_COLLABORATION/`
+- `P4_REVIEW_APPROVAL/`
+- `P5_PUBLISH_RELEASE/`
+- `P6_DISTRIBUTION_CONSUMPTION/`
+- `P7_FEEDBACK_ANALYTICS_AUDIT/`
+
+## Cross-Phase Map
 
 - `TRACEABILITY_MASTER.md`
-- `P0_ACCESS_IDENTITY/README.md`
-- `P1_GOVERNANCE_SETUP/README.md`
-- `P2_AUTHORING_ASSEMBLY/README.md`
-- `P3_COLLABORATION/README.md`
-- `P4_REVIEW_APPROVAL/README.md`
-- `P5_PUBLISH_RELEASE/README.md`
-- `P6_DISTRIBUTION_CONSUMPTION/README.md`
-- `P7_FEEDBACK_ANALYTICS_AUDIT/README.md`
 
-Each phase folder contains:
+## Standard Files Per Phase
+
 - `CLASS.md`
 - `FLOW.md`
 - `SEQUENCE.md`
@@ -20,4 +26,4 @@ Each phase folder contains:
 - `ADDITIONS.md`
 - `TRACEABILITY.md`
 
-All endpoint paths assume the API prefix: `/api/v1`.
+API path references assume prefix `/api/v1`.
