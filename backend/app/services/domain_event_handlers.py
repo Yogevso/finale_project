@@ -13,8 +13,11 @@ from app.domain.events import (
     InProcessDomainEventDispatcher,
 )
 from app.models import UserRole
+from app.notifications import (
+    NotificationDispatcher,
+)
+from app.plugins.notifications import get_notification_channel_plugin_registry
 from app.repositories import UserRepository
-from app.services.email_service import email_service
 from app.utils.async_tasks import run_async_task
 
 logger = logging.getLogger(__name__)
@@ -23,16 +26,27 @@ logger = logging.getLogger(__name__)
 class NotificationEmailEventHandlers:
     """Notification/email side effects for write-path domain events."""
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        notification_dispatcher: NotificationDispatcher | None = None,
+    ):
         self.user_repository = UserRepository(db)
+        if notification_dispatcher is not None:
+            self.notification_dispatcher = notification_dispatcher
+        else:
+            channel_registry = get_notification_channel_plugin_registry()
+            self.notification_dispatcher = NotificationDispatcher(
+                channels=channel_registry.build_channels()
+            )
 
     @staticmethod
-    def _should_send_email() -> bool:
+    def _should_send_notifications() -> bool:
         return settings.EMAIL_ENABLED
 
     def handle_document_published(self, event: DocumentPublished) -> None:
         if (
-            not self._should_send_email()
+            not self._should_send_notifications()
             or not event.document_author_id
             or event.document_author_id == event.published_by_user_id
         ):
@@ -43,7 +57,7 @@ class NotificationEmailEventHandlers:
             return
 
         run_async_task(
-            email_service.send_document_published(
+            self.notification_dispatcher.send_document_published(
                 to_email=author.email,
                 document_title=event.document_title,
                 document_number=event.document_number,
@@ -53,7 +67,7 @@ class NotificationEmailEventHandlers:
         logger.info("Queued publish notification for document %s", event.document_id)
 
     def handle_comment_created(self, event: CommentCreated) -> None:
-        if not self._should_send_email():
+        if not self._should_send_notifications():
             return
 
         notified_users: set[int] = set()
@@ -76,7 +90,7 @@ class NotificationEmailEventHandlers:
             return
 
         run_async_task(
-            email_service.send_comment_reply(
+            self.notification_dispatcher.send_comment_reply(
                 to_email=parent_author.email,
                 replier_name=event.commenter_display_name,
                 document_title=event.document_title,
@@ -106,7 +120,7 @@ class NotificationEmailEventHandlers:
             return
 
         run_async_task(
-            email_service.send_new_comment(
+            self.notification_dispatcher.send_new_comment(
                 to_email=author.email,
                 commenter_name=event.commenter_display_name,
                 document_title=event.document_title,
@@ -141,7 +155,7 @@ class NotificationEmailEventHandlers:
             if not admin.email:
                 continue
             run_async_task(
-                email_service.send_new_comment(
+                self.notification_dispatcher.send_new_comment(
                     to_email=admin.email,
                     commenter_name=event.commenter_display_name,
                     document_title=event.document_title,

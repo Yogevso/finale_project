@@ -3,77 +3,33 @@
  * Validates collaboration tokens issued by FastAPI backend
  */
 
-import jwt from 'jsonwebtoken';
-import type { CollabTokenPayload, UserContext } from './types.js';
-import { getUserColor } from './types.js';
+import {
+  CollaborationAuthService,
+  type AuthResult,
+} from './authContext/collaborationAuthService.js';
+import type { CollaborationPermission } from './authContext/contracts.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-export interface AuthResult {
-  success: boolean;
-  user?: UserContext;
-  permissions?: ('read' | 'write')[];
-  error?: string;
-}
+const collabAuthService = new CollaborationAuthService();
 
 /**
  * Verify a collaboration token and extract user info
  */
 export function verifyCollabToken(token: string, documentId: string): AuthResult {
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as CollabTokenPayload;
-    
-    // Verify the token is for the correct document
-    if (decoded.document_id !== documentId) {
-      return {
-        success: false,
-        error: 'Token is not valid for this document',
-      };
-    }
-
-    return {
-      success: true,
-      user: {
-        userId: decoded.sub,
-        username: decoded.username,
-        email: decoded.email,
-        role: decoded.role,
-        color: getUserColor(decoded.sub),
-      },
-      permissions: decoded.permissions,
-    };
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return {
-        success: false,
-        error: 'Token has expired',
-      };
-    }
-    if (error instanceof jwt.JsonWebTokenError) {
-      return {
-        success: false,
-        error: 'Invalid token',
-      };
-    }
-    return {
-      success: false,
-      error: 'Authentication failed',
-    };
-  }
+  return collabAuthService.verifyCollabToken(token, documentId);
 }
 
 /**
  * Check if user has write permission
  */
-export function canWrite(permissions: ('read' | 'write')[]): boolean {
-  return permissions.includes('write');
+export function canWrite(permissions: CollaborationPermission[]): boolean {
+  return collabAuthService.canWrite(permissions);
 }
 
 /**
  * Check if user has read permission
  */
-export function canRead(permissions: ('read' | 'write')[]): boolean {
-  return permissions.includes('read') || permissions.includes('write');
+export function canRead(permissions: CollaborationPermission[]): boolean {
+  return collabAuthService.canRead(permissions);
 }
 
 /**

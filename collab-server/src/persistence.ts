@@ -4,6 +4,7 @@
  */
 
 import * as Y from 'yjs';
+import { DocumentStateContractAdapter } from './adapters/documentStateContractAdapter.js';
 import {
   BackendDocumentStateTransportAdapter,
   buildDocumentStateUrl,
@@ -21,6 +22,7 @@ export interface PersistenceResult {
 }
 
 const defaultTransport: DocumentStateTransportPort = new BackendDocumentStateTransportAdapter();
+const stateContractAdapter = new DocumentStateContractAdapter();
 
 /**
  * Load document state from FastAPI backend
@@ -38,7 +40,9 @@ export async function loadDocument(
   }
 
   try {
-    const state = await transport.loadDocumentState(documentId, token);
+    const state = stateContractAdapter.normalizeLoadedState(
+      await transport.loadDocumentState(documentId, token),
+    );
     if (state) {
       documentCache.set(documentId, state);
       console.log(`[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`);
@@ -73,7 +77,7 @@ export async function saveDocument(
     console.error(`[Persistence] Failed to save document ${documentId}:`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: stateContractAdapter.toErrorMessage(error),
     };
   }
 }

@@ -1751,54 +1751,14 @@ def convert_document_to_html(content: bytes, mime_type: str, filename: str = "")
 
     Returns HTML string or None if conversion is not supported.
     """
-    mime_type = mime_type.lower()
-    filename = filename.lower()
+    from app.conversion import get_document_conversion_pipeline
 
-    # PDF
-    if mime_type == "application/pdf" or filename.endswith(".pdf"):
-        return convert_pdf_to_html(content)
-
-    # Word documents
-    if (
-        mime_type
-        in [
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ]
-        or filename.endswith(".docx")
-        or filename.endswith(".doc")
-    ):
-        return convert_word_to_html(content)
-
-    # Plain text
-    if mime_type.startswith("text/") or filename.endswith(".txt"):
-        return convert_text_to_html(content)
-
-    # Markdown
-    if mime_type in ["text/markdown", "text/x-markdown"] or filename.endswith(".md"):
-        return convert_text_to_html(content)
-
-    # HTML content
-    if (
-        mime_type in ["text/html", "application/xhtml+xml"]
-        or filename.endswith(".html")
-        or filename.endswith(".htm")
-    ):
-        try:
-            return content.decode("utf-8")
-        except UnicodeDecodeError:
-            return content.decode("utf-8", errors="replace")
-
-    # JSON - show as formatted text
-    if mime_type == "application/json" or filename.endswith(".json"):
-        return convert_text_to_html(content)
-
-    # RTF - treat as text for now
-    if mime_type == "application/rtf" or filename.endswith(".rtf"):
-        return convert_text_to_html(content)
-
-    logger.info(f"No converter for mime_type={mime_type}, filename={filename}")
-    return None
+    pipeline = get_document_conversion_pipeline()
+    return pipeline.convert_document_to_html(
+        content,
+        mime_type,
+        filename,
+    )
 
 
 __all__ = [

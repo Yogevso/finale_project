@@ -1,23 +1,15 @@
 """Collaboration activity endpoints."""
 
-import json
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.db import get_db
-from app.models import (
-    CollaborationActivity,
-    CollaborationActivityType,
-    CollaborationSession,
-    User,
-)
-from app.repositories import DocumentRepository, UserRepository
+from app.collaboration.dependencies import get_session_manager
+from app.collaboration.session_manager import SessionManager
+from app.models import User
 from app.security import get_current_active_user
-from app.services.collaboration_service import CollaborationService
 
 router = APIRouter()
 
@@ -56,79 +48,20 @@ class ActivityFeedResponse(BaseModel):
 async def log_activity(
     request: ActivityLogRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Log a collaboration activity.
 
     Used for tracking edits, cursor movements, and other activities.
     """
-    collaboration_service = CollaborationService()
-    document_repository = DocumentRepository(db)
-
-    # Validate activity type
-    try:
-        activity_type = CollaborationActivityType(request.activity_type)
-    except ValueError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid activity type: {request.activity_type}",
-        ) from err
-
-    # Ensure document exists and user can access it.
-    document = document_repository.get_by_id(request.document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
-    if not permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document",
-        )
-
-    session = None
-    if request.session_id:
-        session = (
-            db.query(CollaborationSession)
-            .filter(CollaborationSession.session_id == request.session_id)
-            .first()
-        )
-        if not session or not session.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Active session not found",
-            )
-        if session.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to use this session",
-            )
-        if session.document_id != request.document_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Session does not belong to the specified document",
-            )
-
-    # Create activity record
-    activity = CollaborationActivity(
+    return session_manager.log_activity(
         document_id=request.document_id,
-        user_id=current_user.id,
+        activity_type=request.activity_type,
+        details=request.details,
         session_id=request.session_id,
-        activity_type=activity_type,
-        details=json.dumps(request.details) if request.details else None,
+        current_user=current_user,
     )
-    db.add(activity)
-
-    # Update session last activity timestamp if session exists
-    if session:
-        session.last_activity_at = datetime.utcnow()
-        if activity_type == CollaborationActivityType.CONTENT_EDITED:
-            session.edits_count += 1
-
-    db.commit()
-
-    return {"message": "Activity logged", "id": activity.id}
 
 
 @router.get("/collaboration/documents/{document_id}/activity", response_model=ActivityFeedResponse)
@@ -137,67 +70,22 @@ async def get_activity_feed(
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Get the activity feed for a document.
 
     Returns recent collaboration activities for display in the activity feed.
     """
-    collaboration_service = CollaborationService()
-    document_repository = DocumentRepository(db)
-    user_repository = UserRepository(db)
-
-    # Get the document
-    document = document_repository.get_by_id(document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Check permissions
-    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
-    if not permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document",
-        )
-
-    # Query activities
-    query = (
-        db.query(CollaborationActivity)
-        .filter(CollaborationActivity.document_id == document_id)
-        .order_by(CollaborationActivity.created_at.desc())
-    )
-
-    total = query.count()
-    activities = query.offset(offset).limit(limit).all()
-    user_ids = list({activity.user_id for activity in activities})
-    user_map = {user.id: user.username for user in user_repository.list_by_ids(user_ids)}
-
-    # Build response with usernames
-    activity_responses = []
-    for activity in activities:
-        details = None
-        if activity.details:
-            try:
-                details = json.loads(activity.details)
-            except json.JSONDecodeError:
-                details = {"raw": activity.details}
-
-        activity_responses.append(
-            ActivityResponse(
-                id=activity.id,
-                document_id=activity.document_id,
-                user_id=activity.user_id,
-                username=user_map.get(activity.user_id, "Unknown"),
-                activity_type=activity.activity_type.value,
-                details=details,
-                created_at=activity.created_at,
-            )
-        )
-
-    return ActivityFeedResponse(
+    payload = session_manager.get_activity_feed(
         document_id=document_id,
-        activities=activity_responses,
-        total=total,
-        has_more=offset + limit < total,
+        limit=limit,
+        offset=offset,
+        current_user=current_user,
+    )
+    return ActivityFeedResponse(
+        document_id=payload["document_id"],
+        activities=[ActivityResponse(**activity) for activity in payload["activities"]],
+        total=payload["total"],
+        has_more=payload["has_more"],
     )

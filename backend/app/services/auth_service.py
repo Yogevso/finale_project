@@ -1,29 +1,32 @@
 """Authentication Service"""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 from fastapi import HTTPException, status
 
+from app.auth_context import RefreshTokenService, TokenService
 from app.config import settings
-from app.models import PasswordReset, Tenant, User, UserRole
+from app.models import Tenant, User, UserRole
 from app.repositories import UserRepository
 from app.schemas import TokenResponse, UserCreate
-from app.security import (
-    create_access_token,
-    create_refresh_token,
-    get_password_hash,
-    verify_password,
-)
+from app.security import get_password_hash, verify_password
 from app.services.base_service import SessionService
 
 
 class AuthService(SessionService):
     """Authentication service"""
 
-    def __init__(self, db):
+    def __init__(
+        self,
+        db,
+        token_service: TokenService | None = None,
+        refresh_token_service: RefreshTokenService | None = None,
+    ):
         super().__init__(db)
         self.user_repository = UserRepository(db)
+        self.token_service = token_service or TokenService()
+        self.refresh_token_service = refresh_token_service or RefreshTokenService(db)
 
     def _ensure_tenant_is_active(self, user: User) -> None:
         """Reject auth flows for users tied to inactive tenants."""
@@ -67,26 +70,13 @@ class AuthService(SessionService):
 
         # Create access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "username": user.username,
-                "role": user.role.value,
-                "tenant_id": user.tenant_id,
-            },
+        access_token = self.token_service.create_access_token_for_user(
+            user,
             expires_delta=access_token_expires,
         )
 
         # Create refresh token
-        refresh_token, expires_at = create_refresh_token(user.id)
-
-        # Store refresh token hash in password_resets table (repurposed for refresh tokens)
-        token_hash = get_password_hash(refresh_token)
-        refresh_record = PasswordReset(
-            user_id=user.id, token_hash=token_hash, expires_at=expires_at
-        )
-        self.db.add(refresh_record)
-        self.db.commit()
+        refresh_token, _ = self.refresh_token_service.issue_refresh_token(user.id)
 
         return TokenResponse(
             access_token=access_token, refresh_token=refresh_token, token_type="bearer"
@@ -94,20 +84,7 @@ class AuthService(SessionService):
 
     def refresh_access_token(self, refresh_token: str) -> TokenResponse:
         """Generate new access token using refresh token"""
-        # Find all non-expired refresh tokens
-        now = datetime.utcnow()
-        refresh_records = (
-            self.db.query(PasswordReset)
-            .filter(PasswordReset.expires_at > now, PasswordReset.used_at.is_(None))
-            .all()
-        )
-
-        # Verify refresh token against stored hashes
-        valid_record = None
-        for record in refresh_records:
-            if verify_password(refresh_token, record.token_hash):
-                valid_record = record
-                break
+        valid_record = self.refresh_token_service.find_valid_record(refresh_token)
 
         if not valid_record:
             raise HTTPException(
@@ -126,13 +103,8 @@ class AuthService(SessionService):
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={
-                "sub": str(user.id),
-                "username": user.username,
-                "role": user.role.value,
-                "tenant_id": user.tenant_id,
-            },
+        access_token = self.token_service.create_access_token_for_user(
+            user,
             expires_delta=access_token_expires,
         )
 
@@ -140,11 +112,7 @@ class AuthService(SessionService):
 
     def logout(self, user_id: int) -> None:
         """Invalidate all refresh tokens for user"""
-        now = datetime.utcnow()
-        self.db.query(PasswordReset).filter(
-            PasswordReset.user_id == user_id, PasswordReset.used_at.is_(None)
-        ).update({"used_at": now})
-        self.db.commit()
+        self.refresh_token_service.invalidate_user_tokens(user_id)
 
     def register(self, user_data: UserCreate) -> User:
         """Register a new user"""

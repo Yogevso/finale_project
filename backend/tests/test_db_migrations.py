@@ -10,12 +10,25 @@ from sqlalchemy import create_engine, inspect, text
 import app.models  # noqa: F401
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app.db import Base
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 ALEMBIC_DIR = BACKEND_DIR / "alembic"
-HEAD_REVISION = "20260224_0003"
+
+
+def _head_revision() -> str:
+    config = Config(str(ALEMBIC_INI))
+    config.set_main_option("script_location", str(ALEMBIC_DIR))
+    script = ScriptDirectory.from_config(config)
+    head = script.get_current_head()
+    if head is None:  # pragma: no cover - defensive for empty migration trees.
+        raise RuntimeError("Expected at least one managed migration revision")
+    return head
+
+
+HEAD_REVISION = _head_revision()
 
 
 def _upgrade_to_head(sqlite_path: Path) -> None:
@@ -52,6 +65,14 @@ def test_managed_migration_existing_versions_table_upgrade_path(tmp_path: Path) 
     sqlite_path = tmp_path / "legacy_versions.db"
 
     with sqlite3.connect(sqlite_path) as connection:
+        # Newer revisions touch documents metadata too; keep a minimal legacy table present.
+        connection.execute(
+            """
+            CREATE TABLE documents (
+                id INTEGER PRIMARY KEY
+            )
+            """
+        )
         connection.execute(
             """
             CREATE TABLE versions (

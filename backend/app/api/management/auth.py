@@ -400,7 +400,7 @@ def get_collab_token(
         )
 
     # Create the collaboration token
-    token = CollaborationService.create_collab_token(
+    token = collab_service.issue_collab_token(
         user=current_user,
         document_id=request.document_id,
         permissions=permissions,

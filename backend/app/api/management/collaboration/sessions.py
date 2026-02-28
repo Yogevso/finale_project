@@ -1,25 +1,14 @@
 """Collaboration session endpoints."""
 
-import json
-import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.db import get_db
-from app.models import (
-    ActionType,
-    AuditLog,
-    CollaborationActivity,
-    CollaborationActivityType,
-    CollaborationSession,
-    User,
-)
-from app.repositories import DocumentRepository, UserRepository
+from app.collaboration.dependencies import get_session_manager
+from app.collaboration.session_manager import SessionManager
+from app.models import User
 from app.security import get_current_active_user
-from app.services.collaboration_service import CollaborationService
 
 router = APIRouter()
 
@@ -60,69 +49,21 @@ class ActiveSessionResponse(BaseModel):
 async def start_collaboration_session(
     request: SessionStartRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Start a new collaboration session.
 
     Called when a user joins a document for collaborative editing.
     """
-    collaboration_service = CollaborationService()
-    document_repository = DocumentRepository(db)
-
-    # Get the document
-    document = document_repository.get_by_id(request.document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Check permissions
-    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
-    if not permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document",
-        )
-
-    # Generate session ID
-    session_id = f"collab_{current_user.id}_{request.document_id}_{uuid.uuid4().hex[:8]}"
-
-    # Create session record
-    session = CollaborationSession(
+    payload = session_manager.start_collaboration_session(
         document_id=request.document_id,
-        user_id=current_user.id,
-        session_id=session_id,
-        started_at=datetime.utcnow(),
-        is_active=True,
-        edits_count=0,
-        last_activity_at=datetime.utcnow(),
+        current_user=current_user,
     )
-    db.add(session)
-
-    # Log activity
-    activity = CollaborationActivity(
-        document_id=request.document_id,
-        user_id=current_user.id,
-        session_id=session_id,
-        activity_type=CollaborationActivityType.USER_JOINED,
-        details=json.dumps({"username": current_user.username}),
-    )
-    db.add(activity)
-
-    # Create audit log entry
-    audit_log = AuditLog(
-        user_id=current_user.id,
-        document_id=request.document_id,
-        action=ActionType.VIEW,
-        details=f"Started collaboration session: {session_id}",
-    )
-    db.add(audit_log)
-
-    db.commit()
-
     return SessionStartResponse(
-        session_id=session_id,
-        document_id=request.document_id,
-        started_at=session.started_at,
+        session_id=payload["session_id"],
+        document_id=payload["document_id"],
+        started_at=payload["started_at"],
     )
 
 
@@ -130,111 +71,37 @@ async def start_collaboration_session(
 async def end_collaboration_session(
     request: SessionEndRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     End a collaboration session.
 
     Called when a user leaves a document or disconnects.
     """
-    # Find the session
-    session = (
-        db.query(CollaborationSession)
-        .filter(
-            CollaborationSession.session_id == request.session_id,
-            CollaborationSession.user_id == current_user.id,
-            CollaborationSession.is_active.is_(True),
-        )
-        .first()
-    )
-
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Active session not found"
-        )
-
-    # Update session
-    session.ended_at = datetime.utcnow()
-    session.is_active = False
-    session.edits_count = request.edits_count
-
-    # Log activity
-    activity = CollaborationActivity(
-        document_id=session.document_id,
-        user_id=current_user.id,
+    return session_manager.end_collaboration_session(
         session_id=request.session_id,
-        activity_type=CollaborationActivityType.USER_LEFT,
-        details=json.dumps(
-            {
-                "username": current_user.username,
-                "duration_seconds": int((session.ended_at - session.started_at).total_seconds()),
-                "edits_count": request.edits_count,
-            }
-        ),
+        edits_count=request.edits_count,
+        current_user=current_user,
     )
-    db.add(activity)
-
-    db.commit()
-
-    return {"message": "Session ended successfully", "session_id": request.session_id}
 
 
 @router.get("/collaboration/documents/{document_id}/sessions")
 async def get_active_sessions(
     document_id: int,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    session_manager: SessionManager = Depends(get_session_manager),
 ):
     """
     Get active collaboration sessions for a document.
 
     Returns all currently active sessions (users editing the document).
     """
-    collaboration_service = CollaborationService()
-    document_repository = DocumentRepository(db)
-    user_repository = UserRepository(db)
-
-    # Get the document
-    document = document_repository.get_by_id(document_id)
-    if not document:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-
-    # Check permissions
-    permissions = collaboration_service.get_user_permissions_for_document(current_user, document)
-    if not permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document",
-        )
-
-    # Query active sessions
-    sessions = (
-        db.query(CollaborationSession)
-        .filter(
-            CollaborationSession.document_id == document_id,
-            CollaborationSession.is_active.is_(True),
-        )
-        .all()
+    payload = session_manager.get_active_sessions(
+        document_id=document_id,
+        current_user=current_user,
     )
-    session_user_ids = list({session.user_id for session in sessions})
-    user_map = {user.id: user.username for user in user_repository.list_by_ids(session_user_ids)}
-
-    # Build response
-    session_responses = []
-    for session in sessions:
-        session_responses.append(
-            ActiveSessionResponse(
-                session_id=session.session_id,
-                user_id=session.user_id,
-                username=user_map.get(session.user_id, "Unknown"),
-                started_at=session.started_at,
-                last_activity_at=session.last_activity_at,
-                edits_count=session.edits_count,
-            )
-        )
-
     return {
-        "document_id": document_id,
-        "sessions": session_responses,
-        "count": len(session_responses),
+        "document_id": payload["document_id"],
+        "sessions": [ActiveSessionResponse(**session) for session in payload["sessions"]],
+        "count": payload["count"],
     }

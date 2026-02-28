@@ -1,22 +1,13 @@
-"""
-Portal Documents API - Customer authenticated document access
-"""
+"""Portal Documents API - Customer authenticated document access."""
+
+from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.application.queries.dependencies import get_portal_documents_query_handler
-from app.application.queries.portal_queries import (
-    GetPortalAttachmentQuery,
-    GetPortalDocumentQuery,
-    ListPortalCategoriesQuery,
-    ListPortalDocumentsQuery,
-    PortalDashboardStatsQuery,
-    PortalDocumentsQueryHandler,
-    SearchPortalDocumentsQuery,
-)
-from app.domain.specifications import RoleAccessSpec
+from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.models import User
 from app.schemas.portal import (
     PortalDashboardStats,
@@ -24,19 +15,14 @@ from app.schemas.portal import (
     PortalDocumentListResponse,
 )
 from app.security import get_current_active_user
+from app.web.controllers.portal import PortalDocumentsController
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
-CUSTOMER_ROLE_ACCESS_SPEC = RoleAccessSpec.customer_only()
+portal_documents_controller = PortalDocumentsController()
 
 
 def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
-    """Dependency to ensure user is a customer"""
-    if not CUSTOMER_ROLE_ACCESS_SPEC.is_satisfied_by(current_user):
-        raise HTTPException(
-            status_code=403,
-            detail="This endpoint is only for customer users. Use /api/v1/documents for internal access.",
-        )
-    return current_user
+    return portal_documents_controller.require_customer(current_user=current_user)
 
 
 @router.get("/documents", response_model=PortalDocumentListResponse)
@@ -50,18 +36,13 @@ async def list_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    List documents accessible to the customer.
-    Includes PUBLIC published docs and COMPANY docs assigned to their company.
-    """
-    return portal_documents_query_handler.execute_list_documents(
-        ListPortalDocumentsQuery(
-            page=page,
-            per_page=per_page,
-            category=category,
-            search=search,
-            current_user=current_user,
-        )
+    return portal_documents_controller.list_customer_documents(
+        page=page,
+        per_page=per_page,
+        category=category,
+        search=search,
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
 
 
@@ -73,14 +54,10 @@ async def get_customer_document(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    Get a specific document if accessible to the customer.
-    """
-    return portal_documents_query_handler.execute_get_document(
-        GetPortalDocumentQuery(
-            document_id=document_id,
-            current_user=current_user,
-        )
+    return portal_documents_controller.get_customer_document(
+        document_id=document_id,
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
 
 
@@ -93,15 +70,11 @@ async def get_customer_attachment(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    Get attachment info for download (customer must have document access).
-    """
-    return portal_documents_query_handler.execute_get_attachment(
-        GetPortalAttachmentQuery(
-            document_id=document_id,
-            attachment_id=attachment_id,
-            current_user=current_user,
-        )
+    return portal_documents_controller.get_customer_attachment(
+        document_id=document_id,
+        attachment_id=attachment_id,
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
 
 
@@ -112,11 +85,9 @@ async def get_customer_categories(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    Get categories with document counts for customer-accessible documents.
-    """
-    return portal_documents_query_handler.execute_categories(
-        ListPortalCategoriesQuery(current_user=current_user)
+    return portal_documents_controller.get_customer_categories(
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
 
 
@@ -127,11 +98,9 @@ async def get_customer_dashboard_stats(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    Get dashboard statistics for customer portal.
-    """
-    return portal_documents_query_handler.execute_dashboard_stats(
-        PortalDashboardStatsQuery(current_user=current_user)
+    return portal_documents_controller.get_customer_dashboard_stats(
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
 
 
@@ -146,15 +115,11 @@ async def search_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    """
-    Search documents accessible to the customer.
-    """
-    return portal_documents_query_handler.execute_search_documents(
-        SearchPortalDocumentsQuery(
-            q=q,
-            category=category,
-            page=page,
-            per_page=per_page,
-            current_user=current_user,
-        )
+    return portal_documents_controller.search_customer_documents(
+        q=q,
+        category=category,
+        page=page,
+        per_page=per_page,
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
     )
