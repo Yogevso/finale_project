@@ -1,6 +1,6 @@
 import CompanySelector from '@/components/CompanySelector'
 import VisibilityBadge from '@/components/VisibilityBadge'
-import type { Company, Document, ReviewRequest } from '@/types'
+import type { AudienceAccessPreview, Company, Document, ReviewRequest } from '@/types'
 import { Building2, CheckCircle, Clock, History, X, XCircle } from 'lucide-react'
 
 interface DocumentDetailsViewProps {
@@ -9,7 +9,12 @@ interface DocumentDetailsViewProps {
   showCompanySelector: boolean
   onToggleCompanySelector: () => void
   assignedCompanies: Company[]
-  onAssignCompanies: (ids: number[]) => void
+  assignmentDraftIds: number[]
+  hasUnsavedAssignmentChanges: boolean
+  audienceAccessPreview?: AudienceAccessPreview
+  onAssignmentDraftChange: (ids: number[]) => void
+  onSaveAssignmentDraft: () => void
+  onDiscardAssignmentDraft: () => void
   isAssigningCompanies: boolean
   onRemoveCompany: (companyId: number) => void
   isRemovingCompany: boolean
@@ -22,7 +27,12 @@ export function DocumentDetailsView({
   showCompanySelector,
   onToggleCompanySelector,
   assignedCompanies,
-  onAssignCompanies,
+  assignmentDraftIds,
+  hasUnsavedAssignmentChanges,
+  audienceAccessPreview,
+  onAssignmentDraftChange,
+  onSaveAssignmentDraft,
+  onDiscardAssignmentDraft,
   isAssigningCompanies,
   onRemoveCompany,
   isRemovingCompany,
@@ -80,6 +90,54 @@ export function DocumentDetailsView({
         </p>
       </div>
 
+      {audienceAccessPreview && (
+        <div className="border-t border-slate-200 pt-6">
+          <label className="text-sm font-medium text-slate-700">Audience Access Preview</label>
+          <p className="mt-2 text-sm text-slate-600">{audienceAccessPreview.access_summary}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span
+              className={`px-2 py-1 rounded-full ${
+                audienceAccessPreview.is_public
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {audienceAccessPreview.is_public ? 'Public users' : 'No public access'}
+            </span>
+            <span
+              className={`px-2 py-1 rounded-full ${
+                audienceAccessPreview.includes_internal_users
+                  ? 'bg-sky-100 text-sky-700'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {audienceAccessPreview.includes_internal_users
+                ? 'Internal users included'
+                : 'No internal access'}
+            </span>
+            {audienceAccessPreview.target_companies.length > 0 && (
+              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                {audienceAccessPreview.target_companies.length} assigned{' '}
+                {audienceAccessPreview.target_companies.length === 1 ? 'company' : 'companies'}
+              </span>
+            )}
+          </div>
+          {audienceAccessPreview.target_companies.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {audienceAccessPreview.target_companies.map((company) => (
+                <span
+                  key={company.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-xs"
+                >
+                  <Building2 className="w-3 h-3" />
+                  {company.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {document.tags && (
         <div>
           <label className="text-sm text-slate-500">Tags</label>
@@ -116,10 +174,41 @@ export function DocumentDetailsView({
                 Select companies to assign this document to:
               </p>
               <CompanySelector
-                selectedIds={assignedCompanies.map((company) => company.id)}
-                onChange={onAssignCompanies}
+                selectedIds={assignmentDraftIds}
+                selectedCompanyOptions={assignedCompanies}
+                onChange={onAssignmentDraftChange}
+                placeholder="Update assigned companies..."
+                disabled={isAssigningCompanies || isRemovingCompany}
               />
-              {isAssigningCompanies && <p className="mt-2 text-sm text-slate-500">Saving...</p>}
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p
+                  className={`text-xs ${
+                    hasUnsavedAssignmentChanges ? 'text-amber-700' : 'text-slate-500'
+                  }`}
+                >
+                  {hasUnsavedAssignmentChanges
+                    ? 'You have unsaved assignment changes.'
+                    : 'No assignment changes pending.'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onDiscardAssignmentDraft}
+                    disabled={!hasUnsavedAssignmentChanges || isAssigningCompanies}
+                    className="btn-ghost disabled:opacity-50"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSaveAssignmentDraft}
+                    disabled={!hasUnsavedAssignmentChanges || isAssigningCompanies}
+                    className="btn-primary disabled:opacity-50"
+                  >
+                    {isAssigningCompanies ? 'Saving...' : 'Save Assignments'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -136,7 +225,7 @@ export function DocumentDetailsView({
                     <button
                       onClick={() => onRemoveCompany(company.id)}
                       className="ml-1 hover:text-amber-900"
-                      disabled={isRemovingCompany}
+                      disabled={isRemovingCompany || isAssigningCompanies || showCompanySelector}
                     >
                       <X className="w-4 h-4" />
                     </button>

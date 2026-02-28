@@ -5,8 +5,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES,
   documentsUseCases,
+  getDefaultAudienceForRole,
+  getAudienceDirtyState,
+  validateAudienceFormPayload,
   validateDocumentUploadFile,
 } from '@/features/documents'
+import { useAuth } from '@/lib/auth'
+import type { DocumentVisibility } from '@/types'
 import { queryKeys } from '@/lib/queryKeys'
 
 export const ACCEPTED_FILE_TYPES = DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES
@@ -14,6 +19,8 @@ export const ACCEPTED_FILE_TYPES = DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES
 export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const defaultVisibility = getDefaultAudienceForRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -22,8 +29,20 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('')
   const [releaseBranch, setReleaseBranch] = useState('')
   const [tags, setTags] = useState('')
+  const [visibility, setVisibility] = useState<DocumentVisibility>(defaultVisibility)
+  const [companyIds, setCompanyIds] = useState<number[]>([])
   const [error, setError] = useState('')
   const [dragActive, setDragActive] = useState(false)
+  const audienceDirtyState = getAudienceDirtyState(
+    {
+      visibility: defaultVisibility,
+      company_ids: [],
+    },
+    {
+      visibility,
+      company_ids: companyIds,
+    },
+  )
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -33,6 +52,8 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
         category,
         releaseBranch,
         tags,
+        visibility,
+        companyIds,
       }),
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
@@ -69,10 +90,22 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+
     if (!selectedFile) {
       setError('Please select a file to upload')
       return
     }
+
+    const audienceValidationIssue = validateAudienceFormPayload({
+      visibility,
+      company_ids: companyIds,
+    })
+    if (audienceValidationIssue) {
+      setError(audienceValidationIssue.message)
+      return
+    }
+
     uploadMutation.mutate(selectedFile)
   }
 
@@ -90,10 +123,15 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     setReleaseBranch,
     tags,
     setTags,
+    visibility,
+    setVisibility,
+    companyIds,
+    setCompanyIds,
     error,
     setError,
     dragActive,
     setDragActive,
+    audienceDirtyState,
     uploadMutation,
     handleFileSelect,
     handleDrop,

@@ -34,6 +34,11 @@ export default function DocumentDetailPage() {
     contentEditRequestToken,
     showCompanySelector,
     toggleCompanySelector,
+    assignmentDraftCompanyIds,
+    hasUnsavedAssignmentChanges,
+    updateAssignmentDraft,
+    saveAssignmentDraft,
+    discardAssignmentDraft,
     showSubmitReview,
     submitMessage,
     setSubmitMessage,
@@ -47,6 +52,7 @@ export default function DocumentDetailPage() {
     applyWidth,
     attachments,
     assignedCompanies,
+    audienceAccessPreview,
     reviewHistoryItems,
     navigateToDocuments,
     navigateToFullscreen,
@@ -55,7 +61,6 @@ export default function DocumentDetailPage() {
     handleEditAction,
     updateDocument,
     isUpdatingDocument,
-    assignCompanies,
     isAssigningCompanies,
     removeCompany,
     isRemovingCompany,
@@ -147,7 +152,12 @@ export default function DocumentDetailPage() {
                 showCompanySelector={showCompanySelector}
                 onToggleCompanySelector={toggleCompanySelector}
                 assignedCompanies={assignedCompanies}
-                onAssignCompanies={assignCompanies}
+                assignmentDraftIds={assignmentDraftCompanyIds}
+                hasUnsavedAssignmentChanges={hasUnsavedAssignmentChanges}
+                audienceAccessPreview={audienceAccessPreview}
+                onAssignmentDraftChange={updateAssignmentDraft}
+                onSaveAssignmentDraft={saveAssignmentDraft}
+                onDiscardAssignmentDraft={discardAssignmentDraft}
                 isAssigningCompanies={isAssigningCompanies}
                 onRemoveCompany={removeCompany}
                 isRemovingCompany={isRemovingCompany}

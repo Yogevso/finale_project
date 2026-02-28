@@ -1,6 +1,14 @@
 import VisibilityBadge from '@/components/VisibilityBadge'
 import type { DocumentListResponse, DocumentVisibility } from '@/types'
 
+type VisibilityChangeRequest = {
+  id: number
+  currentVisibility: DocumentVisibility
+  nextVisibility: DocumentVisibility
+  ifMatch: string
+  title: string
+}
+
 type DocumentsTableProps = {
   data: DocumentListResponse | undefined
   isLoading: boolean
@@ -8,7 +16,7 @@ type DocumentsTableProps = {
   page: number
   visibilityOverrides: Record<number, DocumentVisibility>
   onDelete: (id: number, title: string) => void
-  onVisibilityChange: (id: number, visibility: DocumentVisibility, ifMatch: string) => void
+  onVisibilityChange: (change: VisibilityChangeRequest) => void
   onPageChange: (nextPage: number) => void
 }
 
@@ -84,11 +92,13 @@ export function DocumentsTable({
                       <select
                         value={visibilityOverrides[doc.id] || doc.visibility || 'internal'}
                         onChange={(e) =>
-                          onVisibilityChange(
-                            doc.id,
-                            e.target.value as DocumentVisibility,
-                            doc.etag || String(doc.row_version || ''),
-                          )
+                          onVisibilityChange({
+                            id: doc.id,
+                            currentVisibility: doc.visibility || 'internal',
+                            nextVisibility: e.target.value as DocumentVisibility,
+                            ifMatch: doc.etag || String(doc.row_version || ''),
+                            title: doc.title,
+                          })
                         }
                         className="select-field w-40 min-w-[9.5rem]"
                       >
@@ -149,4 +159,3 @@ export function DocumentsTable({
     </div>
   )
 }
-

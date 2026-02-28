@@ -1,4 +1,8 @@
 import { api } from '@/lib/api'
+import {
+  normalizeAudienceFormPayload,
+  validateAudienceFormPayload,
+} from '@/features/documents/forms'
 import type {
   Document,
   DocumentCreate,
@@ -25,6 +29,8 @@ export type DocumentUploadMetadataInput = {
   category: string
   releaseBranch: string
   tags: string
+  visibility?: DocumentVisibility
+  companyIds?: number[]
 }
 
 export type DocumentsUseCasesClient = Pick<
@@ -84,12 +90,19 @@ function toOptionalString(value: string): string | undefined {
 }
 
 function toUploadMetadata(input: DocumentUploadMetadataInput) {
+  const audience = normalizeAudienceFormPayload({
+    visibility: input.visibility,
+    company_ids: input.companyIds,
+  })
+
   return {
     title: toOptionalString(input.title),
     description: toOptionalString(input.description),
     category: toOptionalString(input.category),
     release_branch: toOptionalString(input.releaseBranch),
     tags: toOptionalString(input.tags),
+    visibility: audience.visibility,
+    company_ids: audience.company_ids.length > 0 ? audience.company_ids : undefined,
   }
 }
 
@@ -115,11 +128,18 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       formData: DocumentCreateFormData,
       options: { generateWord: boolean },
     ): Promise<Document> {
+      const audienceValidationIssue = validateAudienceFormPayload(formData)
+      if (audienceValidationIssue) {
+        throw new Error(audienceValidationIssue.message)
+      }
+
+      const audience = normalizeAudienceFormPayload(formData)
       const document = await client.createDocument({
         title: formData.title,
         description: formData.description,
         status: 'draft',
-        visibility: 'internal',
+        visibility: audience.visibility,
+        company_ids: audience.company_ids,
         category: formData.category,
         release_branch: formData.release_branch,
         tags: formData.tags,
@@ -147,6 +167,14 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
     },
 
     uploadDocument(file: File, metadata: DocumentUploadMetadataInput): Promise<Document> {
+      const audienceValidationIssue = validateAudienceFormPayload({
+        visibility: metadata.visibility,
+        company_ids: metadata.companyIds,
+      })
+      if (audienceValidationIssue) {
+        throw new Error(audienceValidationIssue.message)
+      }
+
       return client.uploadDocument(file, toUploadMetadata(metadata))
     },
   }

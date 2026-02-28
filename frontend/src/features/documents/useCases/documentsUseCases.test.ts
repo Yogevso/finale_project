@@ -66,6 +66,30 @@ describe('documents use cases', () => {
     expect(client.generateWordAttachment).toHaveBeenCalledWith(11, '<p>Hello</p>', 'Release Notes.docx')
   })
 
+  it('creates a company-visible draft document with normalized company assignments', async () => {
+    const client = createClientMocks()
+    vi.mocked(client.createDocument).mockResolvedValue({ id: 33 } as never)
+
+    const useCases = createDocumentsUseCases(client)
+    await useCases.createDraftDocument(
+      {
+        title: 'Customer Notice',
+        visibility: 'company',
+        company_ids: [5, 5, 7],
+        content: '',
+      },
+      { generateWord: false },
+    )
+
+    expect(client.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Customer Notice',
+        visibility: 'company',
+        company_ids: [5, 7],
+      }),
+    )
+  })
+
   it('fails when generateWord is requested without content', async () => {
     const client = createClientMocks()
     vi.mocked(client.createDocument).mockResolvedValue({ id: 22 } as never)
@@ -106,7 +130,85 @@ describe('documents use cases', () => {
       category: 'Security',
       release_branch: undefined,
       tags: 'tag-a,tag-b',
+      visibility: 'internal',
+      company_ids: undefined,
     })
+  })
+
+  it('requires company selection when creating a company-visible document', async () => {
+    const client = createClientMocks()
+    const useCases = createDocumentsUseCases(client)
+
+    await expect(
+      useCases.createDraftDocument(
+        {
+          title: 'Company Guide',
+          visibility: 'company',
+          company_ids: [],
+        },
+        { generateWord: false },
+      ),
+    ).rejects.toThrow('Select at least one company for company-visible documents.')
+
+    expect(client.createDocument).not.toHaveBeenCalled()
+  })
+
+  it('rejects company assignments when creating a non-company-visible document', async () => {
+    const client = createClientMocks()
+    const useCases = createDocumentsUseCases(client)
+
+    await expect(
+      useCases.createDraftDocument(
+        {
+          title: 'Internal Policy',
+          visibility: 'internal',
+          company_ids: [6],
+        },
+        { generateWord: false },
+      ),
+    ).rejects.toThrow('Company assignments are only allowed for company-visible documents.')
+
+    expect(client.createDocument).not.toHaveBeenCalled()
+  })
+
+  it('requires company selection for company-visible uploads', async () => {
+    const client = createClientMocks()
+    const useCases = createDocumentsUseCases(client)
+    const file = { name: 'policy.docx', type: '', size: 10 } as File
+
+    await expect(
+      useCases.uploadDocument(file, {
+        title: 'Policy',
+        description: '',
+        category: '',
+        releaseBranch: '',
+        tags: '',
+        visibility: 'company',
+        companyIds: [],
+      }),
+    ).rejects.toThrow('Select at least one company for company-visible documents.')
+
+    expect(client.uploadDocument).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid company IDs for uploads before API call', async () => {
+    const client = createClientMocks()
+    const useCases = createDocumentsUseCases(client)
+    const file = { name: 'policy.docx', type: '', size: 10 } as File
+
+    await expect(
+      useCases.uploadDocument(file, {
+        title: 'Policy',
+        description: '',
+        category: '',
+        releaseBranch: '',
+        tags: '',
+        visibility: 'company',
+        companyIds: [0],
+      }),
+    ).rejects.toThrow('Company assignments contain invalid company IDs.')
+
+    expect(client.uploadDocument).not.toHaveBeenCalled()
   })
 
   it('validates upload files by type and size', () => {
@@ -123,4 +225,3 @@ describe('documents use cases', () => {
     expect(validateDocumentUploadFile(validFile)).toBeNull()
   })
 })
-

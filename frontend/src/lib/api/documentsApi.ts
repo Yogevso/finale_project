@@ -105,6 +105,7 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       document_number?: string
       version_label?: string
       visibility?: DocumentVisibility
+      company_ids?: number[]
       parent_id?: number
       topic?: string
       platform?: string
@@ -121,6 +122,11 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       if (metadata?.document_number) formData.append('document_number', metadata.document_number)
       if (metadata?.version_label) formData.append('version_label', metadata.version_label)
       if (metadata?.visibility) formData.append('visibility', metadata.visibility)
+      if (metadata?.company_ids && metadata.company_ids.length > 0) {
+        for (const companyId of metadata.company_ids) {
+          formData.append('company_ids', String(companyId))
+        }
+      }
       if (metadata?.parent_id) formData.append('parent_id', metadata.parent_id.toString())
       if (metadata?.topic) formData.append('topic', metadata.topic)
       if (metadata?.platform) formData.append('platform', metadata.platform)
@@ -143,17 +149,26 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     async assignCompanies(
       documentId: number,
       companyIds: number[],
+      ifMatch?: string,
     ): Promise<MessageResponse> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
       const { data } = await this.client.post<MessageResponseDto>(
         `/documents/${documentId}/assign-companies`,
         { company_ids: companyIds },
+        { headers },
       )
       return mapMessageResponseDto(data)
     }
 
-    async removeCompanyAssignment(documentId: number, companyId: number): Promise<MessageResponse> {
+    async removeCompanyAssignment(
+      documentId: number,
+      companyId: number,
+      ifMatch?: string,
+    ): Promise<MessageResponse> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
       const { data } = await this.client.delete<MessageResponseDto>(
         `/documents/${documentId}/assign-companies/${companyId}`,
+        { headers },
       )
       return mapMessageResponseDto(data)
     }
