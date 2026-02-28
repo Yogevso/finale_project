@@ -9,9 +9,10 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
-from app.models import DocumentStatus, DocumentVisibility, UserRole
+from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole
 from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
+from tests.tenant_isolation.harness import TenantIsolationScenario
 
 # Disable rate limiting for tests
 settings.RATE_LIMIT_ENABLED = False
@@ -340,3 +341,115 @@ def company_document(db, test_admin, test_tenant):
     db.commit()
     db.refresh(doc)
     return doc
+
+
+@pytest.fixture
+def tenant_isolation_scenario(db):
+    """Create a reusable owner/attacker scenario for tenant-isolation attack suites."""
+    owner_tenant = create_tenant(
+        db,
+        name="Harness Owner Tenant",
+        slug="harness-owner-tenant",
+        company_type="customer",
+    )
+    attacker_tenant = create_tenant(
+        db,
+        name="Harness Attacker Tenant",
+        slug="harness-attacker-tenant",
+        company_type="customer",
+    )
+
+    owner_user = create_user(
+        db,
+        email="harness-owner@example.com",
+        username="harness_owner",
+        full_name="Harness Owner",
+        plain_password="owner-pass-123",
+        role=UserRole.ADMIN,
+        tenant_id=owner_tenant.id,
+        is_active=True,
+    )
+
+    attacker_editor_password = "attacker-editor-pass-123"
+    attacker_manager_password = "attacker-manager-pass-123"
+    attacker_editor = create_user(
+        db,
+        email="harness-attacker-editor@example.com",
+        username="harness_attacker_editor",
+        full_name="Harness Attacker Editor",
+        plain_password=attacker_editor_password,
+        role=UserRole.EDITOR,
+        tenant_id=attacker_tenant.id,
+        is_active=True,
+    )
+    attacker_manager = create_user(
+        db,
+        email="harness-attacker-manager@example.com",
+        username="harness_attacker_manager",
+        full_name="Harness Attacker Manager",
+        plain_password=attacker_manager_password,
+        role=UserRole.MANAGER,
+        tenant_id=attacker_tenant.id,
+        is_active=True,
+    )
+
+    document = create_document(
+        db,
+        title="Tenant Harness Target Document",
+        document_number="DOC-HARNESS-0001",
+        description="Tenant-isolation target document",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=owner_user.id,
+        tenant_id=owner_tenant.id,
+    )
+    document.assigned_companies.append(owner_tenant)
+    document.yjs_state = b"\x01\x02\x03"
+
+    review = ReviewRequest(
+        document_id=document.id,
+        submitted_by=owner_user.id,
+        status=ReviewStatus.PENDING,
+        message="Harness review seed",
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(document)
+    db.refresh(review)
+
+    return TenantIsolationScenario(
+        owner_tenant=owner_tenant,
+        attacker_tenant=attacker_tenant,
+        owner_user=owner_user,
+        attacker_editor=attacker_editor,
+        attacker_manager=attacker_manager,
+        attacker_editor_password=attacker_editor_password,
+        attacker_manager_password=attacker_manager_password,
+        document=document,
+        review=review,
+    )
+
+
+@pytest.fixture
+def tenant_isolation_actor_headers(client, tenant_isolation_scenario: TenantIsolationScenario):
+    """Issue auth headers for attacker actors used by tenant attack harnesses."""
+
+    def _login(username: str, password: str) -> dict[str, str]:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": password},
+        )
+        assert response.status_code == 200
+        token = response.json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return {
+        "attacker_editor": _login(
+            tenant_isolation_scenario.attacker_editor.username,
+            tenant_isolation_scenario.attacker_editor_password,
+        ),
+        "attacker_manager": _login(
+            tenant_isolation_scenario.attacker_manager.username,
+            tenant_isolation_scenario.attacker_manager_password,
+        ),
+    }

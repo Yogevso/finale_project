@@ -1,6 +1,6 @@
 export class DocumentStateContractAdapter {
-  normalizeLoadedState(state: Uint8Array | null): Uint8Array | null {
-    if (!state || state.length === 0) {
+  normalizeLoadedState(state: unknown): Uint8Array | null {
+    if (!(state instanceof Uint8Array) || state.length === 0) {
       return null;
     }
     return state;

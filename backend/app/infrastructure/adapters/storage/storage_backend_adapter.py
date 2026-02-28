@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import BinaryIO
 
 from app.domain.ports import StoragePort
 from app.services.storage_service import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class StorageBackendAdapter(StoragePort):
@@ -21,11 +24,18 @@ class StorageBackendAdapter(StoragePort):
         return self._backend.download(storage_key)
 
     def delete(self, storage_key: str) -> bool:
-        return self._backend.delete(storage_key)
+        try:
+            return self._backend.delete(storage_key)
+        except Exception as exc:
+            logger.error("Storage adapter delete failed for key %s: %s", storage_key, exc)
+            return False
 
     def get_url(self, storage_key: str, expires_in: int = 3600) -> str:
         return self._backend.get_url(storage_key, expires_in)
 
     def exists(self, storage_key: str) -> bool:
-        return self._backend.exists(storage_key)
-
+        try:
+            return self._backend.exists(storage_key)
+        except Exception as exc:
+            logger.error("Storage adapter exists failed for key %s: %s", storage_key, exc)
+            return False
