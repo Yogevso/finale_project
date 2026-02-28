@@ -48,7 +48,7 @@ def test_document_converter_wrapper_tracks_call_volume(monkeypatch):
     wrapper = get_document_converter_wrapper()
 
     monkeypatch.setattr(
-        "app.utils.document_converter.convert_document_to_html",
+        "app.utils.document_converter.convert_text_to_html",
         lambda *_args, **_kwargs: "<p>wrapped</p>",
     )
 

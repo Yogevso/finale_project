@@ -14,7 +14,16 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
-from app.legacy_wrappers import get_document_converter_wrapper
+from app.conversion import (
+    GenericDocumentPreviewPdfStrategy,
+    HtmlPreviewPdfStrategy,
+    ImagePreviewPdfStrategy,
+    OfficePreviewPdfStrategy,
+    PreviewPdfConversionPipeline,
+    PreviewPdfConversionRequest,
+    TextPreviewPdfStrategy,
+    get_document_conversion_pipeline,
+)
 from app.models import Attachment
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
@@ -135,8 +144,7 @@ class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
 
     @staticmethod
     def _convert_word_to_pdf_fallback_bytes(content: bytes, *, filename: str) -> bytes:
-        wrapper = get_document_converter_wrapper()
-        html_content = (wrapper.convert_word_to_html(content) or "").strip()
+        html_content = (get_document_conversion_pipeline().convert_word_to_html(content) or "").strip()
         if AttachmentService._is_conversion_error_html(html_content):
             raise ValueError(
                 "LibreOffice headless is required for Office conversion (Word fallback unavailable)"
@@ -422,43 +430,48 @@ class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
 
     @staticmethod
     def _convert_non_pdf_to_preview_pdf(*, content: bytes, mime_type: str, filename: str) -> bytes:
-        normalized_mime = (mime_type or "").lower()
-        suffix = Path(filename or "").suffix.lower()
-
-        if normalized_mime.startswith("image/"):
-            return AttachmentService._convert_image_to_pdf_bytes(content, title=filename)
-
-        if AttachmentService._is_office_source(normalized_mime, filename):
-            return AttachmentService._convert_office_to_pdf_bytes(
-                content,
+        pipeline = PreviewPdfConversionPipeline(
+            strategies=[
+                ImagePreviewPdfStrategy(
+                    convert_image_to_pdf_bytes=lambda source_bytes, title: (
+                        AttachmentService._convert_image_to_pdf_bytes(source_bytes, title=title)
+                    )
+                ),
+                OfficePreviewPdfStrategy(
+                    convert_office_to_pdf_bytes=lambda source_bytes, source_filename, source_mime: (
+                        AttachmentService._convert_office_to_pdf_bytes(
+                            source_bytes,
+                            filename=source_filename,
+                            mime_type=source_mime,
+                        )
+                    )
+                ),
+                HtmlPreviewPdfStrategy(
+                    convert_html_to_pdf_bytes=lambda html_content, title: (
+                        AttachmentService._convert_html_to_pdf_bytes(html_content, title=title)
+                    )
+                ),
+                TextPreviewPdfStrategy(
+                    convert_text_to_pdf_bytes=lambda source_bytes, title: (
+                        AttachmentService._convert_text_to_pdf_bytes(source_bytes, title=title)
+                    )
+                ),
+                GenericDocumentPreviewPdfStrategy(
+                    document_pipeline=get_document_conversion_pipeline(),
+                    convert_html_to_pdf_bytes=lambda html_content, title: (
+                        AttachmentService._convert_html_to_pdf_bytes(html_content, title=title)
+                    ),
+                    is_conversion_error_html=AttachmentService._is_conversion_error_html,
+                ),
+            ]
+        )
+        return pipeline.convert(
+            PreviewPdfConversionRequest(
+                content=content,
+                mime_type=mime_type,
                 filename=filename,
-                mime_type=normalized_mime,
             )
-
-        if normalized_mime in AttachmentService.HTML_MIME_TYPES or suffix in {".html", ".htm"}:
-            html_content = content.decode("utf-8", errors="replace")
-            if not html_content.strip():
-                raise ValueError("HTML conversion produced empty output")
-            return AttachmentService._convert_html_to_pdf_bytes(html_content, title=filename)
-
-        if normalized_mime in AttachmentService.TEXT_MIME_TYPES or suffix in {
-            ".txt",
-            ".md",
-            ".csv",
-            ".json",
-        }:
-            return AttachmentService._convert_text_to_pdf_bytes(content, title=filename)
-
-        wrapper = get_document_converter_wrapper()
-        html_content = wrapper.convert_document_to_html(content, mime_type, filename) or ""
-        normalized_html = html_content.strip()
-        if not normalized_html:
-            raise ValueError("Content conversion produced empty output")
-
-        if AttachmentService._is_conversion_error_html(normalized_html):
-            raise ValueError(normalized_html)
-
-        return AttachmentService._convert_html_to_pdf_bytes(normalized_html, title=filename)
+        )
 
     @staticmethod
     def _load_preview_pdf_bytes_for_attachment(attachment: Attachment) -> bytes:
