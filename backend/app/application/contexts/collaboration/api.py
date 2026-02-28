@@ -17,7 +17,8 @@ class CollaborationContextAPI:
     db: Session
 
     def create_token(self, user: User, document_id: int, permissions: list[str]) -> str:
-        return CollaborationService.create_collab_token(user, document_id, permissions)
+        service = CollaborationService()
+        return service.issue_collab_token(user, document_id, permissions)
 
     def get_permissions(self, user: User, document: Document) -> list[str]:
         service = CollaborationService()

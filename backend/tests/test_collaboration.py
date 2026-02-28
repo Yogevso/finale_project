@@ -56,6 +56,7 @@ class TestCollabToken:
 
         # Verify token is valid JWT
         decoded = jwt.decode(data["token"], settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        assert decoded["type"] == "collaboration"
         assert decoded["document_id"] == str(test_document.id)
         assert "permissions" in decoded
 

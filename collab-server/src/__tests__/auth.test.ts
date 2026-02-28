@@ -105,6 +105,25 @@ describe('Authentication', () => {
       expect(result.error).toBe('Invalid token');
     });
 
+    it('should reject token with non-collaboration type', () => {
+      const token = createTestToken({
+        sub: '1',
+        username: 'testuser',
+        email: 'test@example.com',
+        role: 'editor',
+        document_id: '123',
+        permissions: ['read', 'write'],
+        type: 'access',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+      });
+
+      const result = verifyCollabToken(token, '123');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid token');
+    });
+
     it('should assign consistent user colors', () => {
       const token = createTestToken({
         sub: '42',
