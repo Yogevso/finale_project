@@ -15,10 +15,11 @@ These playbooks provide repeatable execution checklists for architecture waves.
 - [Wave M - Testability and Scaffolding Acceleration](./wave-m-testability-scaffolding.md)
 - [Wave N - Security and Resilience Validation](./wave-n-security-resilience-validation.md)
 - [Wave O - Observability and Long-Horizon Evolution](./wave-o-observability-evolution.md)
+- [Wave P - Audience and Company Binding](./wave-p-audience-company-binding.md)
 
 ## Completion Snapshot
 
-As of 2026-02-28, planned waves `E` through `O` are complete.
+As of 2026-02-28, planned waves `E` through `O` are complete, and Wave `P` is planned.
 
 ## Checklist Usage
 
@@ -37,3 +38,10 @@ For each wave:
 - contract versioning: `docs/contracts/versioning.md`
 - architecture debt register: `docs/architecture-debt.md`
 - migration safety framework: `docs/migrations/migration-safety-framework.md`
+
+## Operational Helpers
+
+- Wave P draft-audience remediation dry run:
+  - `python backend/scripts/draft_audience_migration_helper.py --strategy auto`
+- Wave P draft-audience remediation apply:
+  - `python backend/scripts/draft_audience_migration_helper.py --apply --strategy auto`
