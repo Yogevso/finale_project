@@ -1,0 +1,307 @@
+"""Class-based user management controller."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.dependencies.tenant import TenantContext
+from app.models import Tenant, User, UserRole
+from app.schemas import UserCreate, UserUpdate
+from app.security import get_password_hash
+
+
+class UsersController:
+    """HTTP-facing orchestration for user management endpoints."""
+
+    ROLE_HIERARCHY = {
+        UserRole.SYSTEM_ADMIN: 6,
+        UserRole.ADMIN: 5,
+        UserRole.MANAGER: 4,
+        UserRole.EDITOR: 3,
+        UserRole.VIEWER: 2,
+        UserRole.CUSTOMER: 1,
+    }
+
+    def list_users(
+        self,
+        *,
+        role: Optional[UserRole],
+        company_id: Optional[int],
+        is_active: Optional[bool],
+        search: Optional[str],
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> list[dict[str, object]]:
+        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+        query = db.query(User)
+        if not tenant_ctx.is_system_admin:
+            query = query.filter(User.tenant_id == tenant_ctx.tenant_id)
+
+        if role:
+            query = query.filter(User.role == role)
+        if company_id:
+            query = query.filter(User.tenant_id == company_id)
+        if is_active is not None:
+            query = query.filter(User.is_active == is_active)
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                (User.full_name.ilike(search_term))
+                | (User.email.ilike(search_term))
+                | (User.username.ilike(search_term))
+            )
+
+        users = query.order_by(User.created_at.desc()).all()
+        return [self._serialize_user(user, db) for user in users]
+
+    def create_user(
+        self,
+        *,
+        user_data: UserCreate,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> dict[str, object]:
+        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+        if not self._can_manage_role(current_user.role, user_data.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"You cannot create users with role '{user_data.role.value}'",
+            )
+
+        target_tenant_id = user_data.tenant_id if user_data.tenant_id is not None else tenant_ctx.tenant_id
+
+        if user_data.role == UserRole.CUSTOMER and not target_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Customers must be assigned to a company",
+            )
+
+        if target_tenant_id is not None:
+            tenant = db.query(Tenant).filter(Tenant.id == target_tenant_id).first()
+            if not tenant:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+            if not tenant_ctx.is_system_admin and tenant.id != tenant_ctx.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot assign users to other companies",
+                )
+
+        if db.query(User).filter(User.email == user_data.email).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            )
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+            )
+
+        user = User(
+            email=user_data.email,
+            username=user_data.username,
+            full_name=user_data.full_name,
+            hashed_password=get_password_hash(user_data.password),
+            role=user_data.role,
+            tenant_id=target_tenant_id,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user, db)
+
+    def get_user(
+        self,
+        *,
+        user_id: int,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> dict[str, object]:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if user.id != current_user.id:
+            if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+                )
+            if not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        return self._serialize_user(user, db)
+
+    def update_user(
+        self,
+        *,
+        user_id: int,
+        user_data: UserUpdate,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> dict[str, object]:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        is_self = user.id == current_user.id
+        is_admin = current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]
+        tenant_id_provided = "tenant_id" in user_data.model_fields_set
+        has_privileged_update = (
+            user_data.role is not None
+            or user_data.is_active is not None
+            or tenant_id_provided
+        )
+
+        if not is_self and not is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        if has_privileged_update and not is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+        if not is_self and not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if is_admin and not is_self and not self._can_manage_role(current_user.role, user.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify users with higher roles",
+            )
+
+        if user_data.email is not None:
+            existing = db.query(User).filter(User.email == user_data.email, User.id != user_id).first()
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                )
+            user.email = user_data.email
+
+        if user_data.full_name is not None:
+            user.full_name = user_data.full_name
+
+        if user_data.role is not None:
+            if not self._can_manage_role(current_user.role, user_data.role):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"You cannot assign role '{user_data.role.value}'",
+                )
+            if is_self and self.ROLE_HIERARCHY.get(user_data.role, 0) < self.ROLE_HIERARCHY.get(
+                user.role, 0
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot demote yourself"
+                )
+            user.role = user_data.role
+
+        if user_data.is_active is not None:
+            if is_self and not user_data.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate yourself"
+                )
+            user.is_active = user_data.is_active
+
+        if tenant_id_provided:
+            requested_tenant_id = user_data.tenant_id
+            if user.role == UserRole.CUSTOMER and not requested_tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customers must be assigned to a company",
+                )
+            if requested_tenant_id:
+                tenant = db.query(Tenant).filter(Tenant.id == requested_tenant_id).first()
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
+                    )
+                if not tenant_ctx.is_system_admin and requested_tenant_id != tenant_ctx.tenant_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Cannot assign users to other companies",
+                    )
+            elif not tenant_ctx.is_system_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Cannot remove company assignment in this tenant scope",
+                )
+            user.tenant_id = requested_tenant_id
+
+        if user.role == UserRole.CUSTOMER and not user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Customers must be assigned to a company",
+            )
+
+        db.commit()
+        db.refresh(user)
+        return self._serialize_user(user, db)
+
+    def delete_user(
+        self,
+        *,
+        user_id: int,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> None:
+        if current_user.role not in [UserRole.ADMIN, UserRole.SYSTEM_ADMIN]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        if user.id == current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete yourself"
+            )
+
+        if not self._can_manage_role(current_user.role, user.role):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete users with higher roles"
+            )
+
+        user.is_active = False
+        db.commit()
+
+    @classmethod
+    def _can_manage_role(cls, manager_role: UserRole, target_role: UserRole) -> bool:
+        if manager_role == UserRole.SYSTEM_ADMIN:
+            return True
+        if manager_role == UserRole.ADMIN:
+            return target_role != UserRole.SYSTEM_ADMIN
+        if manager_role == UserRole.MANAGER:
+            return target_role in [UserRole.EDITOR, UserRole.VIEWER, UserRole.CUSTOMER]
+        return False
+
+    @staticmethod
+    def _serialize_user(user: User, db: Session) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            "is_active": user.is_active,
+            "tenant_id": user.tenant_id,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+            "company_name": None,
+            "company_slug": None,
+        }
+        if user.tenant_id:
+            tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            if tenant:
+                payload["company_name"] = tenant.name
+                payload["company_slug"] = tenant.slug
+        return payload

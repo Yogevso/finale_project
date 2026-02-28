@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from dataclasses import dataclass
+
+from fastapi import APIRouter, FastAPI
 
 from app.api import health
 from app.api.management import (
@@ -32,36 +34,68 @@ from app.api.viewer import documents as viewer_documents
 from app.config import settings
 
 
+@dataclass(frozen=True, slots=True)
+class RouterRegistration:
+    """Declarative registration entry for a FastAPI router."""
+
+    router: APIRouter
+    prefix: str = ""
+    tags: tuple[str, ...] = ()
+
+
+class FastAPIRouterRegistry:
+    """Object model for router registration and composition order."""
+
+    def __init__(self, *, api_prefix: str) -> None:
+        self._api_prefix = api_prefix
+
+    def registrations(self) -> tuple[RouterRegistration, ...]:
+        """Return ordered router registration entries."""
+        return (
+            RouterRegistration(health.router, tags=("Health",)),
+            # Public API (no authentication required)
+            RouterRegistration(public_router, prefix=self._api_prefix, tags=("Public",)),
+            RouterRegistration(public_platforms_router, prefix="/api", tags=("Public",)),
+            RouterRegistration(auth.router, prefix=self._api_prefix, tags=("Authentication",)),
+            RouterRegistration(documents.router, prefix=self._api_prefix, tags=("Documents",)),
+            RouterRegistration(versions.router, prefix=self._api_prefix, tags=("Versions",)),
+            RouterRegistration(attachments.router, prefix=self._api_prefix, tags=("Attachments",)),
+            RouterRegistration(comments.router, prefix=self._api_prefix, tags=("Comments",)),
+            RouterRegistration(search.router, prefix=self._api_prefix, tags=("Search",)),
+            RouterRegistration(engagement.router, prefix=self._api_prefix, tags=("Engagement",)),
+            RouterRegistration(tenants.router, prefix=self._api_prefix, tags=("Tenants",)),
+            RouterRegistration(users.router, prefix=self._api_prefix, tags=("Users",)),
+            RouterRegistration(notifications.router, prefix=self._api_prefix, tags=("Notifications",)),
+            RouterRegistration(companies.router, prefix=self._api_prefix, tags=("Companies",)),
+            RouterRegistration(reviews.router, prefix=self._api_prefix, tags=("Reviews",)),
+            RouterRegistration(feedback.router, prefix=self._api_prefix, tags=("Feedback",)),
+            RouterRegistration(invitations.router, prefix=self._api_prefix, tags=("Invitations",)),
+            RouterRegistration(analytics.router, prefix=self._api_prefix, tags=("Analytics",)),
+            RouterRegistration(collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)),
+            RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
+            RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
+            # Viewer Portal (public, no auth required)
+            RouterRegistration(viewer_documents.router, prefix=self._api_prefix, tags=("Viewer",)),
+            # Customer Portal (authenticated customers only)
+            RouterRegistration(portal_router, prefix=self._api_prefix, tags=("Customer Portal",)),
+        )
+
+    def register(self, app: FastAPI) -> None:
+        """Register routers on a FastAPI app in deterministic order."""
+        for registration in self.registrations():
+            include_kwargs: dict[str, object] = {}
+            if registration.prefix:
+                include_kwargs["prefix"] = registration.prefix
+            if registration.tags:
+                include_kwargs["tags"] = list(registration.tags)
+            app.include_router(registration.router, **include_kwargs)
+
+
+def build_default_router_registry() -> FastAPIRouterRegistry:
+    """Construct the default router registry for runtime composition."""
+    return FastAPIRouterRegistry(api_prefix=settings.API_PREFIX)
+
+
 def register_routers(app: FastAPI) -> None:
-    """Register all API routers in one place."""
-    app.include_router(health.router, tags=["Health"])
-
-    # Public API (no authentication required)
-    app.include_router(public_router, prefix=settings.API_PREFIX, tags=["Public"])
-    app.include_router(public_platforms_router, prefix="/api", tags=["Public"])
-
-    app.include_router(auth.router, prefix=settings.API_PREFIX, tags=["Authentication"])
-    app.include_router(documents.router, prefix=settings.API_PREFIX, tags=["Documents"])
-    app.include_router(versions.router, prefix=settings.API_PREFIX, tags=["Versions"])
-    app.include_router(attachments.router, prefix=settings.API_PREFIX, tags=["Attachments"])
-    app.include_router(comments.router, prefix=settings.API_PREFIX, tags=["Comments"])
-    app.include_router(search.router, prefix=settings.API_PREFIX, tags=["Search"])
-    app.include_router(engagement.router, prefix=settings.API_PREFIX, tags=["Engagement"])
-    app.include_router(tenants.router, prefix=settings.API_PREFIX, tags=["Tenants"])
-    app.include_router(users.router, prefix=settings.API_PREFIX, tags=["Users"])
-    app.include_router(notifications.router, prefix=settings.API_PREFIX, tags=["Notifications"])
-    app.include_router(companies.router, prefix=settings.API_PREFIX, tags=["Companies"])
-    app.include_router(reviews.router, prefix=settings.API_PREFIX, tags=["Reviews"])
-    app.include_router(feedback.router, prefix=settings.API_PREFIX, tags=["Feedback"])
-    app.include_router(invitations.router, prefix=settings.API_PREFIX, tags=["Invitations"])
-    app.include_router(analytics.router, prefix=settings.API_PREFIX, tags=["Analytics"])
-    app.include_router(collaboration.router, prefix=settings.API_PREFIX, tags=["Collaboration"])
-    app.include_router(system_settings.router, prefix=settings.API_PREFIX, tags=["System Settings"])
-    app.include_router(rbac.router, prefix=settings.API_PREFIX, tags=["RBAC"])
-
-    # Viewer Portal (public, no auth required)
-    app.include_router(viewer_documents.router, prefix=settings.API_PREFIX, tags=["Viewer"])
-
-    # Customer Portal (authenticated customers only)
-    app.include_router(portal_router, prefix=settings.API_PREFIX, tags=["Customer Portal"])
-
+    """Backward-compatible router registration entrypoint."""
+    build_default_router_registry().register(app)
