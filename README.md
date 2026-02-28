@@ -1,8 +1,176 @@
 # Documentation Platform
 
-Multi-tenant document platform with a FastAPI backend, React frontend, and a Hocuspocus collaboration server.
+[![CI/CD](https://github.com/Yogevso/finale_project/actions/workflows/test.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/test.yml)
 
-## Current Status
+A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time notifications, customer portal with company-based access, and a public viewer portal.
+
+---
+
+## 🚀 Features
+
+### Management Portal (Internal Users)
+
+- **🔐 Authentication & Authorization**
+  - JWT-based authentication with refresh tokens
+  - Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
+  - Password reset with email verification
+  - Multi-tenancy support with tenant isolation
+
+- **📄 Document Management**
+  - Create, edit, and delete documents
+  - Rich text editor with TipTap (headings, lists, tables, links)
+  - Document categorization and tagging
+  - Draft → Active → Archived workflow
+  - Bulk document upload (PDF/Word)
+
+- **📝 Version Control**
+  - Immutable version history
+  - Publish specific versions to viewer portal
+  - Version comparison and change summaries
+  - Rollback capability
+
+- **📎 File Attachments**
+  - Upload files to documents (PDF, Word, images, etc.)
+  - S3-compatible storage (AWS S3, MinIO, Azure Blob)
+  - Secure download URLs with expiration
+  - File size limits (10MB default)
+
+- **💬 Comments & Collaboration**
+  - Threaded comments with replies
+  - Private comments (admin/editor only)
+  - Inline comments anchored to text
+  - Comment resolution workflow
+  - @mentions and notifications
+
+- **🤝 Real-Time Collaboration**
+  - Google Docs-style simultaneous editing
+  - Live cursor presence (see where others are editing)
+  - Yjs CRDT conflict resolution
+  - Automatic sync with offline support
+  - Collaboration snapshots and history
+
+- **🔔 Notifications**
+  - Real-time notification bell with unread count
+  - Email notifications (document published, comments, replies)
+  - Notification preferences per user
+  - Mark as read / mark all as read
+
+- **📊 Engagement & Analytics**
+  - Document view tracking
+  - Reading progress indicators
+  - Helpful/Not helpful feedback
+  - User bookmarks
+  - Saved searches
+
+- **📈 Analytics Dashboard**
+  - Overview statistics with trend analysis
+  - Engagement analytics (views, downloads, reading progress)
+  - User analytics (role distribution, activity) - Admin+
+  - Content production metrics (documents, versions, reviews)
+  - Feedback analytics with response times
+  - Tenant comparison (System Admin only)
+  - Export reports (CSV/PDF)
+  - Interactive charts with Recharts
+
+- **🔍 Search & Filtering**
+  - Full-text search across documents
+  - Filter by category, status, date range
+  - Save and reuse search filters
+  - Recent documents quick access
+
+- **👥 User Management**
+  - CRUD operations for users
+  - Assign roles and permissions
+  - Tenant-scoped user management
+  - Activity audit logs
+
+- **🛠️ System Setup (Phase 1)**
+  - System Admin console for global settings
+  - RBAC policy management with publish-to-ACL flow
+  - System actions logged to audit logs
+
+- **🏢 Multi-Tenancy**
+  - Complete tenant isolation
+  - Super Admin can manage all tenants
+  - Tenant-specific settings and branding
+  - Cross-tenant document sharing (future)
+
+### Customer Portal (Authenticated Customers)
+
+- **🏢 Company-Based Access**
+  - Customers see documents assigned to their company
+  - Company visibility (COMPANY level) for targeted content
+  - Public documents also visible
+  - Secure authenticated access
+
+- **📝 Customer Engagement**
+  - Submit feedback on documents
+  - View document versions
+  - Download attachments
+  - Search within accessible documents
+
+- **👤 Customer Management**
+  - Admin assigns customers to companies
+  - Companies assigned to documents via visibility
+  - Self-service password reset
+
+### Viewer Portal (Public)
+
+- **📖 Document Viewing**
+  - Clean, distraction-free reading experience
+  - Published version access only (PUBLIC visibility)
+  - Table of contents navigation
+  - Print-friendly layout
+
+- **🔍 Discovery**
+  - Browse all public documents
+  - Search and filter
+  - Category-based navigation
+  - Recent and popular documents
+
+- **📥 Downloads**
+  - Download attachments from public documents
+  - Download tracking and analytics
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   React SPA     │────▶│  FastAPI        │     │  Hocuspocus     │
+│   (Vite + TS)   │     │  Backend        │◀───▶│  Collab Server  │
+│   Port: 3000    │     │  Port: 8000     │     │  Port: 8002     │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │                      ▲
+         │   WebSocket           │                      │
+         └───────────────────────┼──────────────────────┘
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              ┌──────────┐ ┌──────────┐ ┌──────────┐
+              │  SQLite  │ │ S3/MinIO │ │  SMTP    │
+              │ Database │ │ Storage  │ │  Email   │
+              └──────────┘ └──────────┘ └──────────┘
+```
+
+### Technology Stack
+
+| Layer             | Technology                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Frontend**      | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor                         |
+| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette)                |
+| **Real-time**     | Hocuspocus (Yjs CRDT), WebSocket collaboration                                       |
+| **Backend**       | FastAPI 0.109+, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0                           |
+| **Database**      | SQLite (development), PostgreSQL (production ready)                                  |
+| **Storage**       | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem)                          |
+| **Email**         | aiosmtplib (SMTP), HTML templates                                                    |
+| **Testing**       | Pytest 262+ tests (backend), Vitest (frontend), Playwright 278 E2E tests (100% pass) |
+| **CI/CD**         | GitHub Actions (lint, test, build, docker)                                           |
+| **Deployment**    | Docker Compose                                                                       |
+
+---
+
+## 📦 Project Structure
 
 As of 2026-02-28:
 
@@ -24,13 +192,32 @@ As of 2026-02-28:
 - `scripts/`: migration safety, chaos, observability, scaffolding tools
 - `plan`: active execution plan and wave progress log
 
-## Quick Start
+### Typography
 
-### Docker Compose
+- **Display Font**: Space Grotesk (headings)
+- **Body Font**: IBM Plex Sans (text, UI)
 
-```bash
-docker compose up -d
-```
+### Color Palette
+
+| Color       | Usage                         |
+| ----------- | ----------------------------- |
+| `slate-*`   | Backgrounds, text, borders    |
+| `sky-*`     | Primary actions, links, focus |
+| `emerald-*` | Success, published, positive  |
+| `amber-*`   | Warning, draft, pending       |
+| `rose-*`    | Error, delete, destructive    |
+
+### Component Classes
+
+| Class           | Description               |
+| --------------- | ------------------------- |
+| `surface-card`  | Card with border & shadow |
+| `btn-primary`   | Primary action button     |
+| `btn-secondary` | Secondary outline button  |
+| `btn-ghost`     | Transparent hover button  |
+| `input-field`   | Styled text input         |
+| `select-field`  | Styled dropdown           |
+| `pill`          | Rounded badge/tag         |
 
 Endpoints:
 
@@ -39,20 +226,47 @@ Endpoints:
 - API docs: `http://localhost:8000/api/v1/docs`
 - Collab WS: `ws://localhost:8002`
 
-### Local Development
+This project supports three execution modes:
 
-Backend:
+1. Local Development (manual services)
+2. Docker Compose (Development stack)
+3. Docker Compose (Production stack)
+
+---
+
+## 📋 Prerequisites
+
+- Python 3.11+
+- Node.js 20+
+- Docker & Docker Compose
+
+---
+
+# 🧪 Option 1: Local Development (Manual Services)
+
+### Backend (FastAPI)
 
 ```bash
 cd backend
 python -m venv venv
 venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Frontend:
+Backend:
+
+- http://localhost:8000
+- Swagger: http://localhost:8000/api/v1/docs
+
+---
+
+### Real-time Collaboration Server (Hocuspocus + Yjs)
 
 ```bash
 cd frontend
@@ -60,7 +274,12 @@ npm install
 npm run dev
 ```
 
-Collab server:
+- WebSocket: ws://localhost:8002
+- Health (dev): http://localhost:8003/health
+
+---
+
+### Frontend (React + Vite)
 
 ```bash
 cd collab-server
@@ -68,16 +287,142 @@ npm install
 npm run dev
 ```
 
-## Validation Commands
+- Frontend: http://localhost:3000
 
-Backend targeted checks:
+---
+
+### Local Access Summary
+
+| Service     | URL                               |
+| ----------- | --------------------------------- |
+| Frontend    | http://localhost:3000             |
+| Backend API | http://localhost:8000             |
+| API Docs    | http://localhost:8000/api/v1/docs |
+| Collab WS   | ws://localhost:8002               |
+
+---
+
+# 🐳 Option 2: Docker Compose (Development)
 
 ```bash
-docker compose run --rm backend ruff check app/ tests/
-docker compose run --rm backend pytest tests/ -q
+docker compose up -d --build
+```
+
+Services started:
+
+- Backend (8000)
+- Frontend (3000)
+- Collab Server (8002 + 8003)
+
+Access:
+
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+- Swagger: http://localhost:8000/api/v1/docs
+- Collab WS: ws://localhost:8002
+
+Stop:
+
+```bash
+docker compose down
+```
+
+Reset database (⚠ deletes all data):
+
+```bash
+docker compose down -v
+```
+
+---
+
+# 🚀 Option 3: Docker Compose (Production)
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Services started:
+
+- Backend (container 8000 → exposed as 8001)
+- Frontend (80 / 443)
+- Collab Server (8002)
+- Optional Redis (profile: with-redis)
+
+Production access:
+
+| Service     | URL                |
+| ----------- | ------------------ |
+| Frontend    | http://<host>      |
+| Backend API | http://<host>:8001 |
+| Collab WS   | ws://<host>:8002   |
+
+Enable Redis scaling:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile with-redis up -d
+```
+
+Stop production:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+---
+
+# 🧪 Running Tests
+
+Backend:
+
+```bash
+cd backend
+pytest -v
 ```
 
 Frontend:
+
+```bash
+cd frontend
+npm test
+npm run test:e2e
+```
+
+---
+
+# 🩺 Health Endpoints
+
+Backend:
+
+- `/health` (development)
+- `/ready` (production)
+
+Collab Server:
+
+- `/health` (port 8003 in development)
+
+---
+
+# 📦 Persistent Docker Volumes
+
+- backend-data
+- backend-uploads
+- redis-data (if enabled)
+
+⚠ Use `docker compose down -v` only if you want to wipe all stored data.
+
+## 🔑 Default Users
+
+| Username  | Password    | Role         | Description                           |
+| --------- | ----------- | ------------ | ------------------------------------- |
+| sysadmin  | sysadmin123 | System Admin | Full system access, manage all admins |
+| admin     | admin123    | Admin        | Manage users, companies, settings     |
+| manager   | manager123  | Manager      | Publish, delete, approve reviews      |
+| editor    | editor123   | Editor       | Create, edit documents, comments      |
+| viewer    | viewer123   | Viewer       | Read-only internal access             |
+| customer1 | customer123 | Customer     | Customer portal access (Company A)    |
+| customer2 | customer123 | Customer     | Customer portal access (Company B)    |
+
+---
 
 ```bash
 cd frontend
@@ -96,6 +441,8 @@ npm run test
 
 Wave O SLO evaluation:
 
+### Backend Tests (262+ tests)
+
 ```bash
 python scripts/observability/evaluate_slo_burn_rate.py \
   --telemetry-file docs/slo/samples/sample-telemetry.json \
@@ -104,16 +451,22 @@ python scripts/observability/evaluate_slo_burn_rate.py \
   --fail-on-critical
 ```
 
-## CI/CD Workflows
+### Frontend E2E Tests (278 tests - 100% pass rate)
+
+```bash
+cd frontend
+npm test           # Unit tests (Vitest)
+npm run test:e2e   # E2E tests (Playwright)
 
 Primary workflows in `.github/workflows/`:
 
-- `ci.yml`: lint, tests, contracts, migration safety, E2E
-- `cd.yml`: image build/deploy with staging chaos gate
-- `staging-chaos.yml`: scheduled/manual adapter-boundary chaos suite
-- `slo-burn-rate.yml`: scheduled/manual SLO and burn-rate evaluation
-- `architecture-fitness.yml`: architecture boundary checks
-- `architecture-governance.yml`: architecture debt/governance checks
+### Linting
+
+```bash
+# Backend
+cd backend
+ruff check app/
+ruff format app/
 
 ## Key Documentation
 
@@ -126,4 +479,116 @@ Primary workflows in `.github/workflows/`:
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+---
+
+## 📋 API Documentation
+
+### Authentication
+
+| Method | Endpoint                           | Description               |
+| ------ | ---------------------------------- | ------------------------- |
+| POST   | `/api/auth/login`                  | Login and get tokens      |
+| POST   | `/api/auth/logout`                 | Logout current session    |
+| POST   | `/api/auth/refresh`                | Refresh access token      |
+| POST   | `/api/auth/password-reset/request` | Request password reset    |
+| POST   | `/api/auth/password-reset/reset`   | Reset password with token |
+
+### Documents
+
+| Method | Endpoint                | Description          |
+| ------ | ----------------------- | -------------------- |
+| GET    | `/api/documents`        | List documents       |
+| POST   | `/api/documents`        | Create document      |
+| GET    | `/api/documents/{id}`   | Get document         |
+| PUT    | `/api/documents/{id}`   | Update document      |
+| DELETE | `/api/documents/{id}`   | Delete document      |
+| POST   | `/api/documents/upload` | Upload PDF/Word file |
+
+### Versions
+
+| Method | Endpoint                       | Description     |
+| ------ | ------------------------------ | --------------- |
+| GET    | `/api/documents/{id}/versions` | List versions   |
+| POST   | `/api/documents/{id}/versions` | Create version  |
+| POST   | `/api/versions/{id}/publish`   | Publish version |
+
+### Comments
+
+| Method | Endpoint                       | Description    |
+| ------ | ------------------------------ | -------------- |
+| GET    | `/api/documents/{id}/comments` | List comments  |
+| POST   | `/api/documents/{id}/comments` | Add comment    |
+| PUT    | `/api/comments/{id}`           | Update comment |
+| DELETE | `/api/comments/{id}`           | Delete comment |
+| PUT    | `/api/comments/{id}/resolve`   | Resolve thread |
+
+### Notifications
+
+| Method | Endpoint                          | Description          |
+| ------ | --------------------------------- | -------------------- |
+| GET    | `/api/notifications`              | List notifications   |
+| GET    | `/api/notifications/unread-count` | Get unread count     |
+| POST   | `/api/notifications/mark-read`    | Mark as read         |
+| DELETE | `/api/notifications`              | Delete notifications |
+
+### Full API documentation available at `/api/v1/docs` (Swagger UI) or `/api/v1/redoc` (ReDoc).
+
+---
+
+## 🔄 CI/CD Pipeline
+
+The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
+
+1. **Backend Lint** - Ruff code quality checks
+2. **Backend Tests** - Pytest with SQLite
+3. **Frontend Lint** - ESLint + TypeScript checks
+4. **Frontend Build** - Vite production build
+5. **Frontend Tests** - Vitest unit tests
+6. **Docker Build** - Build and validate images (main branch only)
+
+---
+
+## 📈 Roadmap
+
+### Completed ✅
+
+- [x] User authentication & authorization
+- [x] Document CRUD with rich text
+- [x] Version control with publishing
+- [x] File attachments (S3)
+- [x] Threaded comments
+- [x] Notifications (in-app + email)
+- [x] Multi-tenancy
+- [x] Public viewer portal
+- [x] Search & saved searches
+- [x] Engagement tracking
+- [x] Customer Portal (company-based document access, feedback)
+- [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant sections)
+- [x] Real-time collaboration (TipTap + Yjs + Hocuspocus, presence, offline, snapshots)
+
+### Planned 🔜
+
+- [ ] Document templates
+- [ ] Workflow approvals
+- [ ] Mobile app (React Native)
+- [ ] AI-powered search and summaries
+
+> Implementation details: see REALTIME_COLLABORATION_PLAN.md
+
+---
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.

@@ -1,125 +1,275 @@
 ---
 name: prompt-capability-builder
-description: Convert each user prompt into a concrete, reusable capability definition for software delivery with clear trigger, inputs, outputs, constraints, implementation workflow, and acceptance checks. Use when a user asks to create or update a capability/skill from a prompt, when prompt requests are ambiguous and need standardization, or when work must be delegated with consistent execution quality across backend, frontend, devops, or full-stack work.
+description: Convert a user prompt into a production-ready, integration-safe capability specification tailored specifically for the Documentation Platform architecture (FastAPI + React + RBAC + Multi-tenant + Real-time Collaboration).
 ---
 
-# Prompt Capability Builder
+# Prompt Capability Builder (Project-Aware v2)
 
-## Overview
+## 🎯 Purpose
 
-Transform any prompt into a specific capability that can be implemented, tested, and reused in a software project.
-Produce explicit contracts and acceptance checks so execution is consistent across turns and agents.
+Transform any prompt into a concrete, integration-safe capability that can be implemented in the Documentation Platform without breaking:
 
-## Workflow
+- Multi-tenant isolation
+- RBAC policies
+- API versioning (/api/v1)
+- Real-time collaboration
+- Existing test coverage
+- Docker environments
 
-1. Parse the prompt into objective and boundaries.
-- Extract goal, actor, domain objects, constraints, and non-goals.
-- Mark missing critical data (inputs, environment, target output).
+This skill enforces engineering discipline equivalent to a senior backend/full-stack tech lead.
 
-2. Classify the capability.
-- Pick one primary type: `transformation`, `retrieval`, `generation`, `orchestration`, `validation`, or `integration`.
-- Pick one domain: `backend`, `frontend`, `devops`, or `full-stack`.
-- Split combined requests into a primary capability plus secondary support capabilities.
+---
 
-3. Write a concrete capability spec.
-- Fill all required sections:
-  - `Capability Name`
-  - `Domain`
-  - `Purpose`
-  - `Trigger Conditions`
-  - `Required Inputs`
-  - `Optional Inputs`
-  - `Repo Context`
-  - `Output Contract`
-  - `Execution Steps`
-  - `Deliverables`
-  - `Tools/Dependencies`
-  - `Constraints/Safety`
-  - `Failure Modes`
-  - `Acceptance Tests`
+## 🏗 System Context (Mandatory Awareness)
 
-4. Set implementation freedom intentionally.
-- Use high freedom (text guidance) for adaptive tasks with many valid methods.
-- Use medium freedom (structured pseudocode/scripts with parameters) for repeatable tasks with moderate variance.
-- Use low freedom (deterministic script/sequence) for fragile or high-risk tasks.
+All capabilities MUST respect:
 
-5. Return the capability in the requested delivery mode.
-- Generate or update a skill when the user asks for a reusable capability.
-- Return a compact execution-ready spec for one-off tasks.
-- Ask up to 3 targeted questions only when required inputs are missing.
+- Backend: FastAPI + SQLAlchemy + Pydantic
+- Auth: JWT-based authentication
+- RBAC: Role-based access control
+- Multi-tenancy: Tenant isolation enforced in dependencies
+- API versioning: `/api/v1`
+- Frontend: React + Vite + TypeScript
+- Collaboration: Yjs + Hocuspocus WebSocket server
+- DevOps: Docker Compose (dev + prod)
+- Test stack: Pytest + Playwright + Jest
 
-## Domain Rules
+Any generated capability that ignores these constraints is invalid.
 
-Apply these rules based on the selected domain:
+---
 
-- `backend`
-- Include API contract impact, auth/permissions impact, and data/storage impact.
-- Include validation of error paths and role/access behavior.
+## 🔍 Workflow
 
-- `frontend`
-- Include UX state flows (loading, empty, error, success).
-- Include accessibility and responsive behavior checks.
+### 1️⃣ Parse the Prompt
 
-- `devops`
-- Include runtime topology, environment variables, and health checks.
-- Include rollback/safe recovery strategy.
+Extract:
 
-- `full-stack`
-- Split capability into backend + frontend + integration checkpoints.
-- Define handoff contracts between layers.
+- Business goal
+- Affected layer (backend / frontend / collab / devops)
+- Domain objects
+- Roles impacted (must be explicit: System Admin / Admin / Manager / Editor / Viewer / Customer)
+- Tenant scope
+- Whether real-time behavior is affected
 
-## Output Template
+If critical inputs are missing — ask up to 3 targeted questions.
 
-Use this exact structure unless the user requests a different format:
+---
+
+### 2️⃣ Classify the Capability
+
+Primary type:
+
+- transformation
+- retrieval
+- generation
+- orchestration
+- validation
+- integration
+
+Domain:
+
+- backend
+- frontend
+- devops
+- full-stack
+
+---
+
+### 3️⃣ Produce a Production-Ready Capability Spec
+
+Use the structure below.
+
+---
+
+# 📄 Output Template (Strict)
 
 ```markdown
-Capability Name: <hyphen-case-when-reusable>
+Capability Name: <hyphen-case>
 Domain: <backend|frontend|devops|full-stack>
-Purpose: <one sentence>
+Purpose: <single precise sentence>
+
 Trigger Conditions:
+
 - ...
+
 Required Inputs:
+
 - ...
+
 Optional Inputs:
+
 - ...
+
 Repo Context:
+
 - Relevant paths:
 - Existing constraints:
+- Existing related tests:
+
+Change Impact Analysis:
+
+- Affected API routes:
+- Affected models:
+- Affected services:
+- Affected dependencies/guards:
+- Affected frontend pages:
+- Affected collaboration logic:
+- Required test updates:
+
 Output Contract:
-- Format:
-- Fields:
-- Quality Criteria:
+
+- API changes (if any):
+- Request schema:
+- Response schema:
+- Error cases:
+- Permission behavior:
+- Tenant behavior:
+
 Execution Steps:
+
 1. ...
 2. ...
 3. ...
+
+Integration Validation:
+
+- Backward compatibility impact:
+- Tenant isolation verified:
+- RBAC matrix verified:
+- API versioning preserved (/api/v1):
+- Collaboration impact evaluated:
+- Docker/dev/prod environment impact:
+
 Deliverables:
+
 - Files to create/update:
+- Tests to add/update:
 - Commands to run:
-- Evidence to report:
+- Migration required (yes/no):
+
 Tools/Dependencies:
+
 - ...
+
 Constraints/Safety:
-- ...
+
+- Must not break tenant isolation
+- Must not bypass RBAC dependencies
+- Must not remove existing API contracts
+- Must preserve /api/v1 prefix
+
 Failure Modes:
+
 - ...
+- ...
+- ...
+
 Acceptance Tests:
+
+Happy Path:
+
 1. Given ... When ... Then ...
-2. Given ... When ... Then ...
-3. Given ... When ... Then ...
+
+Failure Paths: 2. Given invalid role ... Then 403 3. Given cross-tenant access ... Then 404
+
+Permission Test: 4. Given role X ... Then allowed 5. Given role Y ... Then denied
+
+Tenant Isolation Test: 6. Given tenant A accessing tenant B resource ... Then forbidden
 ```
 
-## Quality Gate
+---
 
-Enforce these checks before returning output:
-- Map each execution step to at least one required input and one output field.
-- Include at least one happy-path and two failure-path acceptance tests.
-- Keep requirements measurable; avoid vague phrases such as "handle properly".
-- Remove placeholder text (`TODO`, `<fill>`, `TBD`).
-- Require domain checks: API/permissions for backend, accessibility/responsiveness for frontend, health/rollback for devops.
-- Ensure deliverables list concrete file paths or command categories.
+## ✅ Quality Gate (Enforced Checklist)
 
-## References
+Before returning the capability, the agent MUST verify:
 
-Read `references/capability-patterns.md` when classification is unclear or when quality criteria are weak.
-Read `references/project-domain-playbook.md` when generating domain-specific acceptance checks and deliverables.
+### Contract & Traceability
+
+- Every execution step maps to at least one Required Input and one Output Contract field.
+- API contracts explicitly define success and error responses.
+- Roles are explicitly listed (no generic “user/admin”).
+
+### Testing Requirements (Minimum)
+
+- 1 happy-path test.
+- 2 failure-path tests.
+- 1 permission test.
+- 1 tenant isolation test.
+
+### Repository Precision
+
+- Concrete file paths are listed.
+- `/api/v1` is preserved (if backend).
+- Collaboration impact evaluated (if document-related).
+- Docker/dev/prod impact considered.
+
+If any checklist item is missing → the capability is invalid.
+
+---
+
+## 🧠 Domain Rules (Enforced)
+
+### Backend
+
+Must include:
+
+- Dependency injection updates
+- RBAC guard validation
+- Tenant filtering in queries
+- Proper HTTP status codes (401/403/404/409/422 as appropriate)
+- Schema validation (Pydantic)
+
+### Frontend
+
+Must include:
+
+- Loading / empty / error / success states
+- Role-based UI behavior
+- API client updates
+- Type updates aligned with backend schema
+
+### Collaboration (if document-related)
+
+Must include:
+
+- Yjs document impact
+- Persistence impact
+- WebSocket auth impact (JWT validation + tenant context)
+
+### DevOps
+
+Must include:
+
+- Compose impact (dev + prod)
+- Required environment variables
+- Health checks impact
+- Rollback / safe recovery strategy
+
+---
+
+## 🚫 Forbidden Patterns (Hard Fail)
+
+The capability is invalid if it contains:
+
+- “Handle properly”
+- “Update as needed”
+- Vague acceptance criteria
+- Ignoring roles
+- Ignoring tenants
+- Ignoring tests
+- Ignoring Docker
+- Ignoring collaboration when relevant
+
+---
+
+## 🏁 Objective
+
+Every capability generated must be:
+
+✔ Integration-safe  
+✔ Tenant-safe  
+✔ RBAC-safe  
+✔ Test-covered  
+✔ Docker-compatible  
+✔ Collaboration-aware  
+✔ Production-grade
