@@ -11,6 +11,8 @@ import {
   registerDocumentConnectionAuth,
   unregisterDocumentConnectionAuth,
 } from '../documentAuthStore.js';
+import { buildDocumentConnectionAuth } from './factories/collaborationFixtures.js';
+import { buildConnectionSetScenario } from './scenarios/collaborationScenario.js';
 
 describe('documentAuthStore', () => {
   const documentId = 'doc-123';
@@ -24,48 +26,56 @@ describe('documentAuthStore', () => {
   });
 
   it('keeps write token stable when read-only users connect later', () => {
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-write',
-      token: 'token-write',
-      writeCapable: true,
-    });
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-read',
-      token: 'token-read',
-      writeCapable: false,
-    });
+    const scenario = buildConnectionSetScenario(documentId);
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.writeAuth,
+        connectionId: 'conn-write',
+        token: 'token-write',
+      }),
+    );
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.readAuth,
+        connectionId: 'conn-read',
+        token: 'token-read',
+      }),
+    );
 
     expect(getDocumentTokenForStore(documentId)).toBe('token-write');
     expect(getDocumentTokenForLoad(documentId)).toBe('token-write');
   });
 
   it('falls back to read token for load when no write-capable connection exists', () => {
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-read',
-      token: 'token-read',
-      writeCapable: false,
-    });
+    const scenario = buildConnectionSetScenario(documentId);
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.readAuth,
+        connectionId: 'conn-read',
+        token: 'token-read',
+      }),
+    );
 
     expect(getDocumentTokenForStore(documentId)).toBeNull();
     expect(getDocumentTokenForLoad(documentId)).toBe('token-read');
   });
 
   it('does not clear remaining connection tokens when one connection disconnects', () => {
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-a',
-      token: 'token-a',
-      writeCapable: true,
-    });
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-b',
-      token: 'token-b',
-      writeCapable: false,
-    });
+    const scenario = buildConnectionSetScenario(documentId);
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.writeAuth,
+        connectionId: 'conn-a',
+        token: 'token-a',
+      }),
+    );
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.readAuth,
+        connectionId: 'conn-b',
+        token: 'token-b',
+      }),
+    );
 
     const remaining = unregisterDocumentConnectionAuth(documentId, 'conn-a');
     expect(remaining).toBe(1);
@@ -75,12 +85,14 @@ describe('documentAuthStore', () => {
 
   it('cleans up state after the last connection disconnects', () => {
     const trackedBefore = getTrackedDocumentCount();
-    registerDocumentConnectionAuth({
-      documentId,
-      connectionId: 'conn-a',
-      token: 'token-a',
-      writeCapable: true,
-    });
+    const scenario = buildConnectionSetScenario(documentId);
+    registerDocumentConnectionAuth(
+      buildDocumentConnectionAuth({
+        ...scenario.writeAuth,
+        connectionId: 'conn-a',
+        token: 'token-a',
+      }),
+    );
 
     expect(getTrackedDocumentCount()).toBe(trackedBefore + 1);
     const remaining = unregisterDocumentConnectionAuth(documentId, 'conn-a');

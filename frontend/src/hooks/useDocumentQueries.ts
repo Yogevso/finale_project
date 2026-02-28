@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
-import type { Attachment } from '@/types'
+import type { Attachment, DocumentDetailPageBundle } from '@/types'
 
 type DocumentIdInput = number | string | null | undefined
 
@@ -20,6 +20,25 @@ export function useDocumentDetailQuery(documentId: DocumentIdInput, enabled: boo
     queryKey: queryKeys.documents.detail(documentId ?? 'unknown'),
     queryFn: () => api.getDocument(parsedDocumentId as number),
     enabled: enabled && parsedDocumentId !== null,
+  })
+}
+
+export function useDocumentDetailPageBundleQuery(
+  documentId: DocumentIdInput,
+  options?: {
+    enabled?: boolean
+    refetchInterval?: (query: {
+      state: { data: DocumentDetailPageBundle | undefined }
+    }) => number | false
+  },
+) {
+  const parsedDocumentId = parseDocumentId(documentId)
+
+  return useQuery({
+    queryKey: queryKeys.bff.documentDetailBundle(documentId ?? 'unknown'),
+    queryFn: () => api.getDocumentDetailPageBundle(parsedDocumentId as number),
+    enabled: (options?.enabled ?? true) && parsedDocumentId !== null,
+    refetchInterval: options?.refetchInterval,
   })
 }
 

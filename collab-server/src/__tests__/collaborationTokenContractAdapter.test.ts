@@ -1,19 +1,17 @@
 import { CollaborationTokenContractAdapter } from '../adapters/collaborationTokenContractAdapter.js';
+import { buildCollaborationTokenPayload } from './factories/collaborationFixtures.js';
 
 describe('CollaborationTokenContractAdapter', () => {
   const adapter = new CollaborationTokenContractAdapter();
 
   it('maps valid collaboration payloads into auth context', () => {
     const result = adapter.mapDecodedToken(
-      {
+      buildCollaborationTokenPayload({
         sub: '10',
         username: 'author',
         email: 'author@example.com',
-        role: 'editor',
         document_id: '55',
-        permissions: ['read', 'write'],
-        type: 'collaboration',
-      },
+      }),
       '55',
     );
 
@@ -24,15 +22,13 @@ describe('CollaborationTokenContractAdapter', () => {
 
   it('rejects token payloads for mismatched document ids', () => {
     const result = adapter.mapDecodedToken(
-      {
+      buildCollaborationTokenPayload({
         sub: '10',
         username: 'author',
         email: 'author@example.com',
-        role: 'editor',
         document_id: '55',
         permissions: ['read'],
-        type: 'collaboration',
-      },
+      }),
       '99',
     );
 

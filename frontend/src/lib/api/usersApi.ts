@@ -1,4 +1,13 @@
 import type { User, UserRole } from '@/types'
+import {
+  type UserCreateDto,
+  type UserDto,
+  type UserUpdateDto,
+  mapUserDto,
+  mapUsersDto,
+  toUserCreateDto,
+  toUserUpdateDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -13,13 +22,13 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       is_active?: boolean
       search?: string
     }): Promise<User[]> {
-      const { data } = await this.client.get<User[]>('/users', { params })
-      return data
+      const { data } = await this.client.get<UserDto[]>('/users', { params })
+      return mapUsersDto(data)
     }
 
     async getUser(id: number): Promise<User> {
-      const { data } = await this.client.get<User>(`/users/${id}`)
-      return data
+      const { data } = await this.client.get<UserDto>(`/users/${id}`)
+      return mapUserDto(data)
     }
 
     async createUser(userData: {
@@ -30,8 +39,9 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       role: UserRole
       tenant_id?: number
     }): Promise<User> {
-      const { data } = await this.client.post<User>('/users', userData)
-      return data
+      const payload = toUserCreateDto(userData)
+      const { data } = await this.client.post<UserDto>('/users', payload as UserCreateDto)
+      return mapUserDto(data)
     }
 
     async updateUser(id: number, userData: {
@@ -41,8 +51,9 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       is_active?: boolean
       tenant_id?: number | null
     }): Promise<User> {
-      const { data } = await this.client.put<User>(`/users/${id}`, userData)
-      return data
+      const payload = toUserUpdateDto(userData)
+      const { data } = await this.client.put<UserDto>(`/users/${id}`, payload as UserUpdateDto)
+      return mapUserDto(data)
     }
 
     async deleteUser(id: number): Promise<void> {

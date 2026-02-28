@@ -4,13 +4,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run generate:api-contracts:check && tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 50",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "test": "vitest",
+    "test": "npm run generate:api-contracts:check && vitest",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "generate:api-contracts": "node ../scripts/api_contracts/generate_frontend_contracts.mjs",
+    "generate:api-contracts:check": "node ../scripts/api_contracts/generate_frontend_contracts.mjs --check",
+    "refresh:api-contracts": "node ../scripts/api_contracts/refresh_openapi_snapshot.mjs && npm run generate:api-contracts"
   },
   "dependencies": {
     "@hocuspocus/provider": "^3.4.3",

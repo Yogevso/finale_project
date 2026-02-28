@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useReducer } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  createInitialContentEditingMachineState,
+  toSectionEditTarget,
+  transitionContentEditingMachineState,
+} from '@/features/documentDetail'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
 import type { SectionEditTarget, TocSection } from '@/pages/document-detail/helpers/previewHelpers'
@@ -28,9 +33,14 @@ export function useContentEditingFlow({
   onRequireOriginalPdf,
 }: UseContentEditingFlowParams) {
   const queryClient = useQueryClient()
-  const [showContentEditChooser, setShowContentEditChooser] = useState(false)
-  const [editingSection, setEditingSection] = useState<SectionEditTarget | null>(null)
-  const [handledContentEditToken, setHandledContentEditToken] = useState(0)
+  const [editingFlowState, dispatchEditingFlow] = useReducer(
+    transitionContentEditingMachineState,
+    undefined,
+    createInitialContentEditingMachineState,
+  )
+  const showContentEditChooser = editingFlowState.phase === 'chooser'
+  const editingSection = editingFlowState.editingSection
+  const handledContentEditToken = editingFlowState.handledRequestToken
 
   useEffect(() => {
     if (!contentEditRequestToken || contentEditRequestToken === handledContentEditToken) {
@@ -38,7 +48,10 @@ export function useContentEditingFlow({
     }
 
     if (!isEditor) {
-      setHandledContentEditToken(contentEditRequestToken)
+      dispatchEditingFlow({
+        type: 'MARK_REQUEST_HANDLED',
+        token: contentEditRequestToken,
+      })
       return
     }
 
@@ -52,9 +65,10 @@ export function useContentEditingFlow({
       return
     }
 
-    setEditingSection(null)
-    setShowContentEditChooser(true)
-    setHandledContentEditToken(contentEditRequestToken)
+    dispatchEditingFlow({
+      type: 'OPEN_CHOOSER',
+      token: contentEditRequestToken,
+    })
   }, [
     activeHtmlContent,
     contentEditRequestToken,
@@ -66,19 +80,22 @@ export function useContentEditingFlow({
   ])
 
   const handleCloseContentEditChooser = useCallback(() => {
-    setShowContentEditChooser(false)
+    dispatchEditingFlow({ type: 'CLOSE_CHOOSER' })
   }, [])
 
   const handleStartEditingSection = useCallback((section: TocSection) => {
-    setEditingSection(section)
+    dispatchEditingFlow({
+      type: 'START_EDITING',
+      section: toSectionEditTarget(section),
+    })
   }, [])
 
   const handleChooseEditSection = useCallback((section: TocSection) => {
-    setShowContentEditChooser(false)
-    setEditingSection({
-      ...section,
-      editMode: section.index < 0 ? 'full' : 'edit',
-      fromChooser: true,
+    dispatchEditingFlow({
+      type: 'START_EDITING',
+      section: toSectionEditTarget(section, {
+        fromChooser: true,
+      }),
     })
   }, [])
 
@@ -90,28 +107,34 @@ export function useContentEditingFlow({
       const defaultTitle = 'New Section'
       const defaultHtml = `<${headingTag}>${defaultTitle}</${headingTag}><p>Write section content here.</p>`
 
-      setShowContentEditChooser(false)
-      setEditingSection({
-        id: `insert-${Date.now()}-${insertAfterIndex}`,
-        text: defaultTitle,
-        level: headingLevel,
-        html: defaultHtml,
-        index: Math.max(0, insertAfterIndex + 1),
-        editMode: 'insert',
+      const insertTarget: SectionEditTarget = {
+        ...toSectionEditTarget(
+          {
+            id: `insert-${Date.now()}-${insertAfterIndex}`,
+            text: defaultTitle,
+            level: headingLevel,
+            html: defaultHtml,
+            index: Math.max(0, insertAfterIndex + 1),
+          },
+          { fromChooser: true, forceMode: 'insert' },
+        ),
         insertAfterIndex,
-        fromChooser: true,
+      }
+
+      dispatchEditingFlow({
+        type: 'START_EDITING',
+        section: insertTarget,
       })
     },
     [sections],
   )
 
   const handleCloseSectionEdit = useCallback(() => {
-    setEditingSection(null)
+    dispatchEditingFlow({ type: 'CLOSE_EDITING' })
   }, [])
 
   const handleBackToChooser = useCallback(() => {
-    setEditingSection(null)
-    setShowContentEditChooser(true)
+    dispatchEditingFlow({ type: 'BACK_TO_CHOOSER' })
   }, [])
 
   const handleSaveSection = useCallback(

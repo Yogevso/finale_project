@@ -8,6 +8,22 @@ import type {
   ReviewRequest,
   ReviewSubmit,
 } from '@/types'
+import {
+  type FeedbackDetailResponseDto,
+  type FeedbackListManagementResponseDto,
+  type ManagementFeedbackStatsDto,
+  type ReviewActionDto,
+  type ReviewListResponseDto,
+  type ReviewRequestDto,
+  type ReviewSubmitDto,
+  mapFeedbackDetailResponseDto,
+  mapFeedbackListManagementResponseDto,
+  mapManagementFeedbackStatsDto,
+  mapReviewListResponseDto,
+  mapReviewRequestDto,
+  toReviewActionDto,
+  toReviewSubmitDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -17,16 +33,17 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     }
 
     async submitForReview(documentId: number, data: ReviewSubmit): Promise<ReviewRequest> {
-      const { data: response } = await this.client.post<ReviewRequest>(
+      const payload = toReviewSubmitDto(data)
+      const { data: response } = await this.client.post<ReviewRequestDto>(
         `/reviews/documents/${documentId}/submit`,
-        data,
+        payload as ReviewSubmitDto,
       )
-      return response
+      return mapReviewRequestDto(response)
     }
 
     async getPendingReviews(params?: { page?: number; per_page?: number }): Promise<ReviewListResponse> {
-      const { data } = await this.client.get<ReviewListResponse>('/reviews/pending', { params })
-      return data
+      const { data } = await this.client.get<ReviewListResponseDto>('/reviews/pending', { params })
+      return mapReviewListResponseDto(data)
     }
 
     async getMySubmissions(params?: {
@@ -34,39 +51,48 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
       per_page?: number
       status?: string
     }): Promise<ReviewListResponse> {
-      const { data } = await this.client.get<ReviewListResponse>('/reviews/my-submissions', { params })
-      return data
+      const { data } = await this.client.get<ReviewListResponseDto>('/reviews/my-submissions', {
+        params,
+      })
+      return mapReviewListResponseDto(data)
     }
 
     async getReview(reviewId: number): Promise<ReviewRequest> {
-      const { data } = await this.client.get<ReviewRequest>(`/reviews/${reviewId}`)
-      return data
+      const { data } = await this.client.get<ReviewRequestDto>(`/reviews/${reviewId}`)
+      return mapReviewRequestDto(data)
     }
 
     async approveReview(reviewId: number, data: ReviewAction): Promise<ReviewRequest> {
-      const { data: response } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/approve`, data)
-      return response
+      const payload = toReviewActionDto(data)
+      const { data: response } = await this.client.post<ReviewRequestDto>(
+        `/reviews/${reviewId}/approve`,
+        payload as ReviewActionDto,
+      )
+      return mapReviewRequestDto(response)
     }
 
     async rejectReview(reviewId: number, data: { comments: string }): Promise<ReviewRequest> {
-      const { data: response } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/reject`, data)
-      return response
+      const { data: response } = await this.client.post<ReviewRequestDto>(
+        `/reviews/${reviewId}/reject`,
+        data,
+      )
+      return mapReviewRequestDto(response)
     }
 
     async cancelReview(reviewId: number): Promise<ReviewRequest> {
-      const { data } = await this.client.post<ReviewRequest>(`/reviews/${reviewId}/cancel`)
-      return data
+      const { data } = await this.client.post<ReviewRequestDto>(`/reviews/${reviewId}/cancel`)
+      return mapReviewRequestDto(data)
     }
 
     async getDocumentReviewHistory(
       documentId: number,
       params?: { page?: number; per_page?: number },
     ): Promise<ReviewListResponse> {
-      const { data } = await this.client.get<ReviewListResponse>(
+      const { data } = await this.client.get<ReviewListResponseDto>(
         `/reviews/documents/${documentId}/history`,
         { params },
       )
-      return data
+      return mapReviewListResponseDto(data)
     }
 
     async getAllFeedback(params?: {
@@ -77,42 +103,41 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
       company_id?: number
       search?: string
     }): Promise<FeedbackListManagementResponse> {
-      const { data } = await this.client.get<FeedbackListManagementResponse>('/feedback', { params })
-      return data
+      const { data } = await this.client.get<FeedbackListManagementResponseDto>('/feedback', {
+        params,
+      })
+      return mapFeedbackListManagementResponseDto(data)
     }
 
     async getFeedback(feedbackId: number): Promise<FeedbackDetailResponse> {
-      const { data } = await this.client.get<FeedbackDetailResponse>(`/feedback/${feedbackId}`)
-      return data
+      const { data } = await this.client.get<FeedbackDetailResponseDto>(`/feedback/${feedbackId}`)
+      return mapFeedbackDetailResponseDto(data)
     }
 
     async respondToFeedback(feedbackId: number, response: string): Promise<FeedbackDetailResponse> {
-      const { data } = await this.client.post<FeedbackDetailResponse>(
+      const { data } = await this.client.post<FeedbackDetailResponseDto>(
         `/feedback/${feedbackId}/respond`,
         { response },
       )
-      return data
+      return mapFeedbackDetailResponseDto(data)
     }
 
     async updateFeedbackStatus(
       feedbackId: number,
       status: FeedbackStatus,
     ): Promise<FeedbackDetailResponse> {
-      const { data } = await this.client.put<FeedbackDetailResponse>(`/feedback/${feedbackId}/status`, {
-        status,
-      })
-      return data
+      const { data } = await this.client.put<FeedbackDetailResponseDto>(
+        `/feedback/${feedbackId}/status`,
+        {
+          status,
+        },
+      )
+      return mapFeedbackDetailResponseDto(data)
     }
 
-    async getManagementFeedbackStats(): Promise<{
-      total: number
-      pending: number
-      responded: number
-      closed: number
-      by_type: Record<string, number>
-    }> {
-      const { data } = await this.client.get('/feedback/stats/summary')
-      return data
+    async getManagementFeedbackStats(): Promise<ManagementFeedbackStatsDto> {
+      const { data } = await this.client.get<ManagementFeedbackStatsDto>('/feedback/stats/summary')
+      return mapManagementFeedbackStatsDto(data)
     }
   }
 

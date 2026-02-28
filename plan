@@ -298,7 +298,7 @@ Acceptance criteria:
 Task 47: Decompose DocumentsPage into components/hooks (P2)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - DocumentsPage contains list screen + modal forms + business flow logic in one file.
@@ -667,7 +667,7 @@ Acceptance criteria:
 Task 62: Frontend feature controllers/view-models (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Large page components still mix UI rendering and orchestration logic.
@@ -691,7 +691,7 @@ Acceptance criteria:
 Task 63: Typed DTO mapper layer (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - UI and services frequently consume transport payloads directly.
@@ -738,7 +738,7 @@ Acceptance criteria:
 Task 65: Test builders/factories for domain setup (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Tests repeat heavy setup logic that obscures behavior under test.
@@ -1014,7 +1014,7 @@ Acceptance criteria:
 Task 76: Frontend feature modules and use-case services (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Business orchestration is still mostly colocated with page-level UI code.
@@ -1038,7 +1038,7 @@ Acceptance criteria:
 Task 77: Frontend workflow state machines (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Multi-state flows rely on many boolean flags that are hard to reason about.
@@ -1061,7 +1061,7 @@ Acceptance criteria:
 Task 78: Contract-first generated API clients (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Transport contracts are partially hand-maintained, increasing drift risk.
@@ -1086,7 +1086,7 @@ Acceptance criteria:
 Task 79: Cross-service contract tests (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Token/payload compatibility across backend, frontend, and collab-server relies on implicit assumptions.
@@ -1109,7 +1109,7 @@ Acceptance criteria:
 Task 80: Scenario object mothers and cross-domain fixture packs (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Task 65 adds base builders; advanced cross-domain scenarios still need reusable high-level fixtures.
@@ -1832,7 +1832,7 @@ Acceptance criteria:
 Task 110: Backend-for-Frontend (BFF) layer (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Complex UI pages orchestrate many backend calls and perform client-side joining.
@@ -1992,7 +1992,7 @@ Acceptance criteria:
 Task 117: Consumer-driven contract tests (P6)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Backend/provider changes can break consumer assumptions even with type checks.
@@ -2108,7 +2108,7 @@ Acceptance criteria:
 Task 122: Refactor scaffolding generators/templates (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Repeated architectural patterns are currently implemented manually and inconsistently.
@@ -2273,6 +2273,14 @@ For each task:
 ================================================
 5) Progress
 ================================================
+
+2026-02-28:
+- Completed Task 122: added scaffold generator system under `scripts/scaffold/` with reusable templates for backend (`service/repository/policy/controller`), frontend (`feature`), and collab-server (`port/adapter`) modules.
+- Added structure checks at `scripts/scaffold/check_scaffold_output.mjs` to validate generated implementation/test/docs stub outputs.
+- Published usage docs in `scripts/scaffold/README.md`.
+- Task 122 validation run:
+- `node scripts/scaffold/check_scaffold_output.mjs` (pass)
+- `node scripts/scaffold/scaffold.mjs --target backend --kind service --name demo_sync --dry-run` (pass)
 
 2026-02-27:
 - Completed Task 60: introduced strategy-driven conversion package under `backend/app/conversion/`:
@@ -2671,10 +2679,128 @@ For each task:
 - Completed Task 49: replaced deep nested API mixin composition with explicit module-list factory composition using typed helper (`frontend/src/lib/api/composition.ts`, `frontend/src/lib/api.ts`).
 - Preserved existing API call surface (`api.<method>`) while making composition order declarative and easier to extend.
 - Added file-level architecture note in `frontend/src/lib/api.ts` describing the composition intent.
+- Started Task 63: introduced explicit API transport DTO contracts and mapper layer (`frontend/src/lib/api/dto/contracts.ts`, `frontend/src/lib/api/dto/mappers.ts`) and wired auth/users/documents API modules through mappers.
+- Preserved existing API method signatures while centralizing transport-to-domain adaptation in one boundary layer (`frontend/src/lib/api/authApi.ts`, `frontend/src/lib/api/usersApi.ts`, `frontend/src/lib/api/documentsApi.ts`).
+- Completed Task 63: expanded mapper coverage across all frontend API mixins under `frontend/src/lib/api/*.ts` (analytics, attachments, collaboration, companies, invitations, notifications, reviews, search/engagement) with explicit DTO contracts and mapping helpers.
+- Added DTO mapper regression tests (`frontend/src/lib/api/dto/mappers.test.ts`) for nested response mapping and contract copy semantics.
+- Completed Task 47: decomposed `DocumentsPage` into feature modules under `frontend/src/pages/documents/` with dedicated controller hooks (`useDocumentsPageController`, `useCreateDocumentFlow`, `useUploadDocumentFlow`) and extracted components for filters/table/quick-start/create/upload modals.
+- Refactored `frontend/src/pages/DocumentsPage.tsx` into a composition-oriented page that delegates business flow logic to hooks and UI sections to feature components.
+- Task 47 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- Completed Task 62: introduced frontend feature controller/view-model modules under `frontend/src/features/` for complex screens:
+- `reviews`: `useReviewsPageController` hook + extracted tabs/filter/table components, with `frontend/src/pages/ReviewsPage.tsx` reduced to composition.
+- `analyticsDashboard`: `useAnalyticsDashboardController` hook + access/tabs/section composition components, with `frontend/src/pages/AnalyticsDashboardPage.tsx` reduced to composition.
+- Added feature-level utility regression tests for controller/view-model support logic:
+- `frontend/src/features/reviews/constants.test.ts`
+- `frontend/src/features/analyticsDashboard/constants.test.ts`
+- Task 62 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run test -- src/features/reviews/constants.test.ts src/features/analyticsDashboard/constants.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
+- Completed Task 76: introduced explicit frontend use-case service modules for complex document/review workflows under feature boundaries.
+- Added `frontend/src/features/documents/useCases/documentsUseCases.ts` with reusable orchestration for document list query param building, draft creation + initial-version generation, upload metadata normalization, visibility updates, and upload file validation.
+- Added `frontend/src/features/reviews/useCases/reviewsUseCases.ts` with reusable review approval/rejection/cancel command wrappers.
+- Refactored page-level controllers/hooks to delegate business orchestration to use-case services:
+- `frontend/src/pages/documents/hooks/useDocumentsPageController.ts`
+- `frontend/src/pages/documents/hooks/useCreateDocumentFlow.ts`
+- `frontend/src/pages/documents/hooks/useUploadDocumentFlow.ts`
+- `frontend/src/features/reviews/hooks/useReviewsPageController.ts`
+- Added use-case regression tests:
+- `frontend/src/features/documents/useCases/documentsUseCases.test.ts`
+- `frontend/src/features/reviews/useCases/reviewsUseCases.test.ts`
+- Task 76 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run test -- src/features/documents/useCases/documentsUseCases.test.ts src/features/reviews/useCases/reviewsUseCases.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
+- Completed Task 77: introduced explicit frontend workflow state machines for collaboration connection lifecycle and document content-editing flow.
+- Added collaboration state machine module and transition tests:
+- `frontend/src/features/collaboration/state/collaborationConnectionMachine.ts`
+- `frontend/src/features/collaboration/state/collaborationConnectionMachine.test.ts`
+- Added document-detail content-editing state machine module and transition tests:
+- `frontend/src/features/documentDetail/state/contentEditingMachine.ts`
+- `frontend/src/features/documentDetail/state/contentEditingMachine.test.ts`
+- Added feature exports for machine boundaries:
+- `frontend/src/features/collaboration/index.ts`
+- `frontend/src/features/documentDetail/index.ts`
+- Refactored hook orchestration to dispatch explicit machine transitions:
+- `frontend/src/lib/useCollaboration.ts` now drives connect/sync/disconnect/reconnect/online/offline through `collaborationConnectionMachine`.
+- `frontend/src/pages/document-detail/hooks/useContentEditingFlow.ts` now drives chooser/editing/token-handling through `contentEditingMachine`.
+- Task 77 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run test -- src/features/collaboration/state/collaborationConnectionMachine.test.ts src/features/documentDetail/state/contentEditingMachine.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
+- Completed Task 78: added contract-first OpenAPI generation flow for frontend transport DTOs and integrated drift checks into frontend build/test scripts.
+- Added backend OpenAPI snapshot source:
+- `backend/openapi.contract.json`
+- Added generation tooling:
+- `scripts/api_contracts/refresh_openapi_snapshot.mjs` (refreshes snapshot from running backend OpenAPI URL)
+- `scripts/api_contracts/generate_frontend_contracts.mjs` (generates typed frontend contracts from snapshot with `--check` mode)
+- Added generated contract output consumed by frontend API boundary:
+- `frontend/src/lib/api/generated/openapi-contracts.ts`
+- Updated frontend scripts to integrate contract checks into build/test flow:
+- `frontend/package.json`
+- `build` now runs `generate:api-contracts:check` before compile.
+- `test` now runs `generate:api-contracts:check` before vitest.
+- Added explicit contract generation commands:
+- `generate:api-contracts`
+- `generate:api-contracts:check`
+- `refresh:api-contracts`
+- Updated DTO transport contract layer to consume generated OpenAPI types for core resources while preserving mapper/domain compatibility:
+- `frontend/src/lib/api/dto/contracts.ts`
+- Task 78 validation run:
+- `npm.cmd --prefix frontend run generate:api-contracts` (pass)
+- `npm.cmd --prefix frontend run generate:api-contracts:check` (pass)
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run test -- src/lib/api/dto/mappers.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
+- Task 63 validation run:
+- `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
+- `npm.cmd --prefix frontend run test -- src/lib/api/dto/mappers.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
 - Task 49 validation run:
 - `npm.cmd exec -- tsc --noEmit -p tsconfig.json` (pass, in `frontend/`)
 - `npm.cmd --prefix frontend run build` (fails in sandbox: esbuild `spawn EPERM`)
 - `npm.cmd run test -- src/lib/api/httpClient.test.ts --run` (fails in sandbox: esbuild `spawn EPERM`)
+- Completed Task 110: introduced initial Backend-for-Frontend layer for document detail orchestration.
+- Added backend BFF endpoint and payload contract:
+- `GET /api/v1/bff/documents/{document_id}/detail-page`
+- `backend/app/api/bff/documents.py`
+- `backend/app/schemas/__init__.py` (`DocumentDetailPageBundleResponse`)
+- `backend/app/web/router_registry.py` router registration.
+- Added backend regression tests for composed payload and tenant-scoped access:
+- `backend/tests/test_bff_documents_api.py`.
+- Added frontend BFF client boundary + query:
+- `frontend/src/lib/api/bffApi.ts`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/api/dto/contracts.ts`
+- `frontend/src/lib/api/dto/mappers.ts`
+- `frontend/src/hooks/useDocumentQueries.ts`
+- `frontend/src/lib/queryKeys.ts`
+- Refactored document detail page state to consume one bundled query instead of orchestrating 4 separate calls:
+- `frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.ts`
+- Updated hook tests for new bundle query invalidation semantics:
+- `frontend/src/pages/document-detail/hooks/useDocumentDetailPageState.test.tsx`
+- `frontend/src/types/index.ts`.
+- Task 110 validation run:
+- `cmd /c npx --prefix frontend tsc --noEmit -p frontend/tsconfig.json` (pass)
+- `cmd /c npm --prefix frontend run test -- useDocumentDetailPageState.test.tsx` (fails in sandbox: esbuild `spawn EPERM`)
+- `python -m pytest backend/tests/test_bff_documents_api.py` (cannot run in this environment: `python.exe` inaccessible)
+- Completed Task 117: introduced consumer-driven contract testing baseline with explicit, versioned consumer contracts and backend provider verification.
+- Added frontend consumer contract definition + fixtures:
+- `frontend/src/test/contracts/backendProvider.contract.json`
+- `frontend/src/test/contracts/backendProvider.contract.test.ts`.
+- Added backend provider verification suite that loads consumer contracts and verifies OpenAPI operation/response compatibility plus collaboration token payload claims:
+- `backend/tests/contracts/test_provider_consumer_contracts.py`
+- `backend/tests/contracts/__init__.py`.
+- Wired explicit provider verification stage into backend CI job:
+- `.github/workflows/ci.yml` (`backend-tests` now runs `pytest tests/contracts -v` before full backend suite).
+- Completed Task 79: added cross-service contract checks for backend/frontend/collab integration assumptions.
+- Added collab-server consumer contract definition + token fixture and adapter compatibility checks:
+- `collab-server/src/__tests__/contracts/backendProvider.contract.json`
+- `collab-server/src/__tests__/contracts/backendProvider.contract.test.ts`.
+- Task 117/79 validation run:
+- `cmd /c npx --prefix frontend tsc --noEmit -p frontend/tsconfig.json` (pass)
+- `cmd /c npm --prefix collab-server run typecheck` (pass)
+- `cmd /c npm --prefix frontend run test -- src/test/contracts/backendProvider.contract.test.ts` (fails in sandbox: esbuild `spawn EPERM`)
+- `cmd /c npm --prefix collab-server run test -- --runInBand src/__tests__/contracts/backendProvider.contract.test.ts` (pass)
+- `python -m pytest backend/tests/contracts/test_provider_consumer_contracts.py` (cannot run in this environment: `python.exe` inaccessible)
+- `docker compose run --rm backend pytest tests/contracts/test_provider_consumer_contracts.py -q` (cannot run in this environment: Docker pipe access denied)
+- Completed Wave L (frontend architecture and contract alignment): 49, 63, 47, 62, 76, 77, 78, 110, 117, 79.
 
 2026-02-25:
 - Cleaned this plan file to open work only.

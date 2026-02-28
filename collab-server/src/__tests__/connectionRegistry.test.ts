@@ -1,22 +1,7 @@
 import { ConnectionRegistry } from '../server/connectionRegistry.js';
 import type { ConnectionRegistryHooks } from '../server/connectionRegistry.js';
-import type { ConnectionContext } from '../types.js';
 import { jest } from '@jest/globals';
-
-function buildConnection(overrides: Partial<ConnectionContext> = {}): ConnectionContext {
-  return {
-    userId: 'user-1',
-    username: 'User One',
-    email: 'user1@example.com',
-    role: 'editor',
-    color: '#123456',
-    documentId: 'doc-1',
-    connectionId: 'conn-1',
-    canWrite: true,
-    connectedAt: new Date(),
-    ...overrides,
-  };
-}
+import { buildConnectionSetScenario } from './scenarios/collaborationScenario.js';
 
 describe('ConnectionRegistry', () => {
   it('tracks document connections and server info', () => {
@@ -27,14 +12,15 @@ describe('ConnectionRegistry', () => {
       clearDocumentCache: jest.fn(),
     };
     const registry = new ConnectionRegistry(hooks);
+    const scenario = buildConnectionSetScenario('doc-1');
 
     registry.register({
-      connection: buildConnection(),
+      connection: scenario.writeConnection,
       token: 'token-1',
       writeCapable: true,
     });
     registry.register({
-      connection: buildConnection({ connectionId: 'conn-2', userId: 'user-2' }),
+      connection: scenario.readConnection,
       token: 'token-2',
       writeCapable: false,
     });
@@ -53,14 +39,15 @@ describe('ConnectionRegistry', () => {
       clearDocumentCache: jest.fn(),
     };
     const registry = new ConnectionRegistry(hooks);
+    const scenario = buildConnectionSetScenario('doc-1');
 
     registry.register({
-      connection: buildConnection({ connectionId: 'conn-1', userId: 'user-1' }),
+      connection: scenario.writeConnection,
       token: 'token-1',
       writeCapable: true,
     });
     registry.register({
-      connection: buildConnection({ connectionId: 'conn-2', userId: 'user-2' }),
+      connection: scenario.readConnection,
       token: 'token-2',
       writeCapable: false,
     });

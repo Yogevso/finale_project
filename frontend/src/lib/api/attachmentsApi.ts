@@ -5,6 +5,18 @@ import type {
   AttachmentUploadResponse,
   MessageResponse,
 } from '@/types'
+import {
+  type AttachmentDto,
+  type AttachmentOutlineResponseDto,
+  type AttachmentReaderViewResponseDto,
+  type AttachmentUploadResponseDto,
+  type MessageResponseDto,
+  mapAttachmentOutlineResponseDto,
+  mapAttachmentReaderViewResponseDto,
+  mapAttachmentUploadResponseDto,
+  mapAttachmentsDto,
+  mapMessageResponseDto,
+} from './dto'
 import { API_BASE_URL } from './httpClient'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
@@ -15,26 +27,26 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
     }
 
     async getAttachments(documentId: number): Promise<Attachment[]> {
-      const { data } = await this.client.get<Attachment[]>(`/documents/${documentId}/attachments`)
-      return data
+      const { data } = await this.client.get<AttachmentDto[]>(`/documents/${documentId}/attachments`)
+      return mapAttachmentsDto(data)
     }
 
     async uploadAttachment(documentId: number, file: File): Promise<AttachmentUploadResponse> {
       const formData = new FormData()
       formData.append('file', file)
-      const { data } = await this.client.post<AttachmentUploadResponse>(
+      const { data } = await this.client.post<AttachmentUploadResponseDto>(
         `/documents/${documentId}/attachments`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
       )
-      return data
+      return mapAttachmentUploadResponseDto(data)
     }
 
     async deleteAttachment(documentId: number, attachmentId: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponse>(
+      const { data } = await this.client.delete<MessageResponseDto>(
         `/documents/${documentId}/attachments/${attachmentId}`,
       )
-      return data
+      return mapMessageResponseDto(data)
     }
 
     getAttachmentDownloadUrl(documentId: number, attachmentId: number): string {
@@ -69,33 +81,33 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
       attachmentId: number,
       options?: { retry?: boolean },
     ): Promise<AttachmentReaderViewResponse> {
-      const { data } = await this.client.get<AttachmentReaderViewResponse>(
+      const { data } = await this.client.get<AttachmentReaderViewResponseDto>(
         `/documents/${documentId}/attachments/${attachmentId}/reader-view`,
         {
           params: options?.retry ? { retry: true } : undefined,
         },
       )
-      return data
+      return mapAttachmentReaderViewResponseDto(data)
     }
 
     async retryAttachmentReaderView(
       documentId: number,
       attachmentId: number,
     ): Promise<AttachmentReaderViewResponse> {
-      const { data } = await this.client.post<AttachmentReaderViewResponse>(
+      const { data } = await this.client.post<AttachmentReaderViewResponseDto>(
         `/documents/${documentId}/attachments/${attachmentId}/reader-view/retry`,
       )
-      return data
+      return mapAttachmentReaderViewResponseDto(data)
     }
 
     async getAttachmentOutline(
       documentId: number,
       attachmentId: number,
     ): Promise<AttachmentOutlineResponse> {
-      const { data } = await this.client.get<AttachmentOutlineResponse>(
+      const { data } = await this.client.get<AttachmentOutlineResponseDto>(
         `/documents/${documentId}/attachments/${attachmentId}/outline`,
       )
-      return data
+      return mapAttachmentOutlineResponseDto(data)
     }
 
     async getAttachmentBlob(documentId: number, attachmentId: number): Promise<Blob> {

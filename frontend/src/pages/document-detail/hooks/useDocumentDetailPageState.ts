@@ -5,10 +5,7 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
 import {
-  useDocumentAssignedCompaniesQuery,
-  useDocumentAttachmentsQuery,
-  useDocumentDetailQuery,
-  useDocumentReviewHistoryQuery,
+  useDocumentDetailPageBundleQuery,
 } from '@/hooks/useDocumentQueries'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type { DocumentUpdate } from '@/types'
@@ -59,11 +56,11 @@ export function useDocumentDetailPageState() {
   const isFullscreen =
     location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
 
-  const { data: document, isLoading, error } = useDocumentDetailQuery(id)
+  const bffQueryKey = queryKeys.bff.documentDetailBundle(documentIdKey)
 
-  const { data: attachmentsData } = useDocumentAttachmentsQuery(id, {
+  const { data: detailPageBundle, isLoading, error } = useDocumentDetailPageBundleQuery(id, {
     refetchInterval: (query) => {
-      const items = query.state.data ?? []
+      const items = query.state.data?.attachments ?? []
       const hasPendingPreview = items.some(
         (attachment) =>
           attachment.preview_pdf_status === 'pending' ||
@@ -72,16 +69,20 @@ export function useDocumentDetailPageState() {
       return hasPendingPreview ? 2500 : false
     },
   })
-  const attachments = useMemo(() => attachmentsData ?? [], [attachmentsData])
 
-  const { data: assignedCompaniesData } = useDocumentAssignedCompaniesQuery(
-    id,
-    !!id && document?.visibility === 'company',
+  const document = detailPageBundle?.document
+
+  const attachments = useMemo(
+    () => detailPageBundle?.attachments ?? [],
+    [detailPageBundle?.attachments],
   )
-  const assignedCompanies = assignedCompaniesData ?? []
+  const assignedCompanies = detailPageBundle?.assigned_companies ?? []
+  const reviewHistoryItems = detailPageBundle?.review_history.items ?? []
 
-  const { data: reviewHistory } = useDocumentReviewHistoryQuery(id)
-  const reviewHistoryItems = reviewHistory?.items ?? []
+  const invalidateDocumentDetailState = () => {
+    queryClient.invalidateQueries({ queryKey: bffQueryKey })
+    queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
+  }
 
   const updateMutation = useMutation({
     mutationFn: (data: DocumentUpdate) => {
@@ -92,7 +93,7 @@ export function useDocumentDetailPageState() {
       return api.updateDocument(documentId, data, ifMatch)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
+      invalidateDocumentDetailState()
       setIsEditing(false)
     },
   })
@@ -111,10 +112,7 @@ export function useDocumentDetailPageState() {
   const assignCompaniesMutation = useMutation({
     mutationFn: (companyIds: number[]) => api.assignCompanies(documentId, companyIds),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.assignedCompanies(documentIdKey),
-      })
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
+      invalidateDocumentDetailState()
       setShowCompanySelector(false)
     },
   })
@@ -122,17 +120,14 @@ export function useDocumentDetailPageState() {
   const removeCompanyMutation = useMutation({
     mutationFn: (companyId: number) => api.removeCompanyAssignment(documentId, companyId),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.documents.assignedCompanies(documentIdKey),
-      })
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
+      invalidateDocumentDetailState()
     },
   })
 
   const submitReviewMutation = useMutation({
     mutationFn: (message?: string) => api.submitForReview(documentId, { message }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentIdKey) })
+      invalidateDocumentDetailState()
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
       setShowSubmitReview(false)
       setSubmitMessage('')

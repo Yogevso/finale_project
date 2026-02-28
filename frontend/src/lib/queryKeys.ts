@@ -40,6 +40,11 @@ export const queryKeys = {
       ['reviews', 'document', normalizeId(documentId), params ?? {}] as const,
   },
 
+  bff: {
+    documentDetailBundle: (documentId: QueryEntityId) =>
+      ['bff', 'documents', normalizeId(documentId), 'detail-page'] as const,
+  },
+
   collaboration: {
     all: ['collaboration'] as const,
     status: (documentId: QueryEntityId) =>

@@ -443,6 +443,16 @@ class ReviewListResponse(BaseModel):
     has_more: bool
 
 
+# ========== BFF Schemas ==========
+class DocumentDetailPageBundleResponse(BaseModel):
+    """Aggregated payload for the internal document detail page."""
+
+    document: DocumentResponse
+    attachments: List[AttachmentResponse]
+    assigned_companies: List[TenantSummary]
+    review_history: ReviewListResponse
+
+
 # ========== General Schemas ==========
 class MessageResponse(BaseModel):
     """Generic message response"""
@@ -498,6 +508,8 @@ __all__ = [
     "ReviewReject",
     "ReviewResponse",
     "ReviewListResponse",
+    # BFF
+    "DocumentDetailPageBundleResponse",
     # Audit
     "AuditLogResponse",
     # General

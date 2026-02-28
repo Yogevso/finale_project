@@ -1,6 +1,7 @@
 import { AnalyticsApiMixin } from './api/analyticsApi'
 import { AttachmentsApiMixin } from './api/attachmentsApi'
 import { AuthApiMixin } from './api/authApi'
+import { BffApiMixin } from './api/bffApi'
 import { CollaborationApiMixin } from './api/collaborationApi'
 import { type ComposedApiClient, composeApiClient } from './api/composition'
 import { CompaniesApiMixin } from './api/companiesApi'
@@ -17,6 +18,7 @@ const apiMixins = [
   AuthApiMixin,
   UsersApiMixin,
   DocumentsApiMixin,
+  BffApiMixin,
   AttachmentsApiMixin,
   SearchEngagementApiMixin,
   NotificationsApiMixin,

@@ -6,14 +6,12 @@ import { useLocation, useNavigate, useParams, type NavigateFunction } from 'reac
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import {
-  useDocumentAssignedCompaniesQuery,
-  useDocumentAttachmentsQuery,
-  useDocumentDetailQuery,
-  useDocumentReviewHistoryQuery,
+  useDocumentDetailPageBundleQuery,
 } from '@/hooks/useDocumentQueries'
 import { queryKeys } from '@/lib/queryKeys'
 import { setReadingWidth } from '@/lib/readingWidth'
 import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState'
+import { buildDocumentDetailCollaborationScenario } from '@/test/scenarios/documentDetailScenario'
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -30,10 +28,7 @@ vi.mock('@/lib/auth', () => ({
 }))
 
 vi.mock('@/hooks/useDocumentQueries', () => ({
-  useDocumentAssignedCompaniesQuery: vi.fn(),
-  useDocumentAttachmentsQuery: vi.fn(),
-  useDocumentDetailQuery: vi.fn(),
-  useDocumentReviewHistoryQuery: vi.fn(),
+  useDocumentDetailPageBundleQuery: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -56,10 +51,7 @@ const mockedUseParams = vi.mocked(useParams)
 const mockedUseNavigate = vi.mocked(useNavigate)
 const mockedUseLocation = vi.mocked(useLocation)
 const mockedUseAuth = vi.mocked(useAuth)
-const mockedUseDocumentDetailQuery = vi.mocked(useDocumentDetailQuery)
-const mockedUseDocumentAttachmentsQuery = vi.mocked(useDocumentAttachmentsQuery)
-const mockedUseDocumentAssignedCompaniesQuery = vi.mocked(useDocumentAssignedCompaniesQuery)
-const mockedUseDocumentReviewHistoryQuery = vi.mocked(useDocumentReviewHistoryQuery)
+const mockedUseDocumentDetailPageBundleQuery = vi.mocked(useDocumentDetailPageBundleQuery)
 const mockedSetReadingWidth = vi.mocked(setReadingWidth)
 
 function createQueryClient() {
@@ -71,23 +63,10 @@ function createQueryClient() {
   })
 }
 
-const baseDocument = {
-  id: 42,
-  title: 'Safety Manual',
-  document_number: 'DOC-42',
-  description: 'Safety baseline',
-  status: 'draft',
-  visibility: 'internal',
-  category: 'Ops',
-  tags: null,
-  created_by: 1,
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-02T00:00:00Z',
-}
-
 describe('useDocumentDetailPageState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const scenario = buildDocumentDetailCollaborationScenario(42)
 
     mockedUseParams.mockReturnValue({ id: '42' } as never)
     mockedUseNavigate.mockReturnValue(vi.fn() as unknown as NavigateFunction)
@@ -95,16 +74,13 @@ describe('useDocumentDetailPageState', () => {
 
     mockedUseAuth.mockReturnValue({ isEditor: true, isManager: true } as never)
 
-    mockedUseDocumentDetailQuery.mockReturnValue({
-      data: baseDocument,
+    mockedUseDocumentDetailPageBundleQuery.mockReturnValue({
+      data: scenario.bundle,
       isLoading: false,
       error: null,
     } as never)
-    mockedUseDocumentAttachmentsQuery.mockReturnValue({ data: [] } as never)
-    mockedUseDocumentAssignedCompaniesQuery.mockReturnValue({ data: { companies: [] } } as never)
-    mockedUseDocumentReviewHistoryQuery.mockReturnValue({ data: { items: [] } } as never)
 
-    mockedApi.updateDocument.mockResolvedValue(baseDocument as never)
+    mockedApi.updateDocument.mockResolvedValue(scenario.bundle.document as never)
     mockedApi.deleteDocument.mockResolvedValue({ message: 'ok' } as never)
     mockedApi.assignCompanies.mockResolvedValue({ message: 'ok' } as never)
     mockedApi.removeCompanyAssignment.mockResolvedValue({ message: 'ok' } as never)
@@ -210,7 +186,11 @@ describe('useDocumentDetailPageState', () => {
       .filter((value) => value !== undefined)
 
     expect(invalidatedKeys).toEqual(
-      expect.arrayContaining([queryKeys.documents.detail('42'), queryKeys.reviews.all]),
+      expect.arrayContaining([
+        queryKeys.bff.documentDetailBundle('42'),
+        queryKeys.documents.detail('42'),
+        queryKeys.reviews.all,
+      ]),
     )
   })
 })

@@ -1,0 +1,27 @@
+{
+  "contract_version": "1.0.0",
+  "consumer": "collab-server",
+  "provider": "backend",
+  "collaboration_token": {
+    "token_type": "collaboration",
+    "allowed_permissions": ["read", "write"],
+    "required_claims": [
+      "sub",
+      "username",
+      "email",
+      "role",
+      "document_id",
+      "permissions"
+    ],
+    "fixture": {
+      "sub": "7",
+      "username": "editor",
+      "email": "editor@example.com",
+      "role": "editor",
+      "document_id": "42",
+      "permissions": ["read", "write"],
+      "type": "collaboration"
+    }
+  }
+}
+

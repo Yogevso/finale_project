@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, FastAPI
 
 from app.api import health
+from app.api.bff import documents as bff_documents
 from app.api.management import (
     analytics,
     attachments,
@@ -74,6 +75,7 @@ class FastAPIRouterRegistry:
             RouterRegistration(collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)),
             RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
+            RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),
             # Viewer Portal (public, no auth required)
             RouterRegistration(viewer_documents.router, prefix=self._api_prefix, tags=("Viewer",)),
             # Customer Portal (authenticated customers only)

@@ -1,4 +1,24 @@
 import type { ApiHttpClient, Constructor } from './httpClient'
+import {
+  type CollaborationActiveSessionsResponseDto,
+  type CollaborationActivityFeedResponseDto,
+  type CollaborationAutoSnapshotResponseDto,
+  type CollaborationRestoreSnapshotResponseDto,
+  type CollaborationSessionStartResponseDto,
+  type CollaborationSnapshotDto,
+  type CollaborationSnapshotListResponseDto,
+  type CollaborationStatusResponseDto,
+  type CollaborationTokenResponseDto,
+  mapCollaborationActiveSessionsResponseDto,
+  mapCollaborationActivityFeedResponseDto,
+  mapCollaborationAutoSnapshotResponseDto,
+  mapCollaborationRestoreSnapshotResponseDto,
+  mapCollaborationSessionStartResponseDto,
+  mapCollaborationSnapshotDto,
+  mapCollaborationSnapshotListResponseDto,
+  mapCollaborationStatusResponseDto,
+  mapCollaborationTokenResponseDto,
+} from './dto'
 
 export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
   class extends Base {
@@ -6,41 +26,32 @@ export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(
       super(...args)
     }
 
-    async getCollabToken(documentId: number): Promise<{
-      token: string
-      document_id: number
-      permissions: string[]
-      websocket_url: string
-      expires_in: number
-    }> {
-      const { data } = await this.client.post('/auth/collab-token', { document_id: documentId })
-      return data
-    }
-
-    async getCollaborationStatus(documentId: number): Promise<{
-      document_id: number
-      active_collaborators: Array<{
-        user_id: number
-        username: string
-        color: string
-        is_editing: boolean
-      }>
-      is_collaborative_mode: boolean
-      has_unsaved_changes: boolean
-    }> {
-      const { data } = await this.client.get(`/collaboration/documents/${documentId}/status`)
-      return data
-    }
-
-    async startCollaborationSession(documentId: number): Promise<{
-      session_id: string
-      document_id: number
-      started_at: string
-    }> {
-      const { data } = await this.client.post('/collaboration/sessions/start', {
+    async getCollabToken(documentId: number): Promise<CollaborationTokenResponseDto> {
+      const { data } = await this.client.post<CollaborationTokenResponseDto>('/auth/collab-token', {
         document_id: documentId,
       })
-      return data
+      return mapCollaborationTokenResponseDto(data)
+    }
+
+    async getCollaborationStatus(
+      documentId: number,
+    ): Promise<CollaborationStatusResponseDto> {
+      const { data } = await this.client.get<CollaborationStatusResponseDto>(
+        `/collaboration/documents/${documentId}/status`,
+      )
+      return mapCollaborationStatusResponseDto(data)
+    }
+
+    async startCollaborationSession(
+      documentId: number,
+    ): Promise<CollaborationSessionStartResponseDto> {
+      const { data } = await this.client.post<CollaborationSessionStartResponseDto>(
+        '/collaboration/sessions/start',
+        {
+        document_id: documentId,
+        },
+      )
+      return mapCollaborationSessionStartResponseDto(data)
     }
 
     async endCollaborationSession(sessionId: string, editsCount: number = 0): Promise<void> {
@@ -68,154 +79,76 @@ export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(
       documentId: number,
       limit: number = 50,
       offset: number = 0,
-    ): Promise<{
-      document_id: number
-      activities: Array<{
-        id: number
-        document_id: number
-        user_id: number
-        username: string
-        activity_type: string
-        details: Record<string, unknown> | null
-        created_at: string
-      }>
-      total: number
-      has_more: boolean
-    }> {
-      const { data } = await this.client.get(`/collaboration/documents/${documentId}/activity`, {
-        params: { limit, offset },
-      })
-      return data
+    ): Promise<CollaborationActivityFeedResponseDto> {
+      const { data } = await this.client.get<CollaborationActivityFeedResponseDto>(
+        `/collaboration/documents/${documentId}/activity`,
+        {
+          params: { limit, offset },
+        },
+      )
+      return mapCollaborationActivityFeedResponseDto(data)
     }
 
-    async getActiveSessions(documentId: number): Promise<{
-      document_id: number
-      sessions: Array<{
-        session_id: string
-        user_id: number
-        username: string
-        started_at: string
-        last_activity_at: string
-        edits_count: number
-      }>
-      count: number
-    }> {
-      const { data } = await this.client.get(`/collaboration/documents/${documentId}/sessions`)
-      return data
+    async getActiveSessions(documentId: number): Promise<CollaborationActiveSessionsResponseDto> {
+      const { data } = await this.client.get<CollaborationActiveSessionsResponseDto>(
+        `/collaboration/documents/${documentId}/sessions`,
+      )
+      return mapCollaborationActiveSessionsResponseDto(data)
     }
 
     async createSnapshot(
       documentId: number,
       options?: { name?: string; description?: string; session_id?: string },
-    ): Promise<{
-      id: number
-      document_id: number
-      snapshot_type: string
-      name: string | null
-      description: string | null
-      state_size: number
-      created_by: number | null
-      created_by_username: string | null
-      session_id: string | null
-      is_pinned: boolean
-      expires_at: string | null
-      created_at: string
-    }> {
-      const { data } = await this.client.post(
+    ): Promise<CollaborationSnapshotDto> {
+      const { data } = await this.client.post<CollaborationSnapshotDto>(
         `/collaboration/documents/${documentId}/snapshots`,
         options || {},
       )
-      return data
+      return mapCollaborationSnapshotDto(data)
     }
 
     async listSnapshots(
       documentId: number,
       options?: { limit?: number; offset?: number; include_expired?: boolean },
-    ): Promise<{
-      document_id: number
-      snapshots: Array<{
-        id: number
-        document_id: number
-        snapshot_type: string
-        name: string | null
-        description: string | null
-        state_size: number
-        created_by: number | null
-        created_by_username: string | null
-        session_id: string | null
-        is_pinned: boolean
-        expires_at: string | null
-        created_at: string
-      }>
-      total: number
-      has_more: boolean
-    }> {
-      const { data } = await this.client.get(`/collaboration/documents/${documentId}/snapshots`, {
-        params: options,
-      })
-      return data
+    ): Promise<CollaborationSnapshotListResponseDto> {
+      const { data } = await this.client.get<CollaborationSnapshotListResponseDto>(
+        `/collaboration/documents/${documentId}/snapshots`,
+        {
+          params: options,
+        },
+      )
+      return mapCollaborationSnapshotListResponseDto(data)
     }
 
-    async getSnapshot(documentId: number, snapshotId: number): Promise<{
-      id: number
-      document_id: number
-      snapshot_type: string
-      name: string | null
-      description: string | null
-      state_size: number
-      created_by: number | null
-      created_by_username: string | null
-      session_id: string | null
-      is_pinned: boolean
-      expires_at: string | null
-      created_at: string
-    }> {
-      const { data } = await this.client.get(
+    async getSnapshot(documentId: number, snapshotId: number): Promise<CollaborationSnapshotDto> {
+      const { data } = await this.client.get<CollaborationSnapshotDto>(
         `/collaboration/documents/${documentId}/snapshots/${snapshotId}`,
       )
-      return data
+      return mapCollaborationSnapshotDto(data)
     }
 
     async restoreSnapshot(
       documentId: number,
       snapshotId: number,
       sessionId?: string,
-    ): Promise<{
-      message: string
-      snapshot_id: number
-      snapshot_name: string
-      document_id: number
-    }> {
-      const { data } = await this.client.post(
+    ): Promise<CollaborationRestoreSnapshotResponseDto> {
+      const { data } = await this.client.post<CollaborationRestoreSnapshotResponseDto>(
         `/collaboration/documents/${documentId}/snapshots/${snapshotId}/restore`,
         { session_id: sessionId },
       )
-      return data
+      return mapCollaborationRestoreSnapshotResponseDto(data)
     }
 
     async updateSnapshot(
       documentId: number,
       snapshotId: number,
       updates: { name?: string; description?: string; is_pinned?: boolean },
-    ): Promise<{
-      id: number
-      document_id: number
-      snapshot_type: string
-      name: string | null
-      description: string | null
-      state_size: number
-      created_by: number | null
-      created_by_username: string | null
-      session_id: string | null
-      is_pinned: boolean
-      expires_at: string | null
-      created_at: string
-    }> {
-      const { data } = await this.client.patch(
+    ): Promise<CollaborationSnapshotDto> {
+      const { data } = await this.client.patch<CollaborationSnapshotDto>(
         `/collaboration/documents/${documentId}/snapshots/${snapshotId}`,
         updates,
       )
-      return data
+      return mapCollaborationSnapshotDto(data)
     }
 
     async deleteSnapshot(documentId: number, snapshotId: number): Promise<void> {
@@ -225,20 +158,15 @@ export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(
     async createAutoSnapshot(
       documentId: number,
       sessionId?: string,
-    ): Promise<{
-      created: boolean
-      reason?: string
-      snapshot_id?: number
-      snapshot_name?: string
-    }> {
-      const { data } = await this.client.post(
+    ): Promise<CollaborationAutoSnapshotResponseDto> {
+      const { data } = await this.client.post<CollaborationAutoSnapshotResponseDto>(
         `/collaboration/documents/${documentId}/auto-snapshot`,
         null,
         {
           params: { session_id: sessionId },
         },
       )
-      return data
+      return mapCollaborationAutoSnapshotResponseDto(data)
     }
   }
 

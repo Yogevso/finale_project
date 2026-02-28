@@ -10,6 +10,22 @@ import type {
   User,
   UserCreate,
 } from '@/types'
+import {
+  type MessageResponseDto,
+  type RbacPoliciesResponseDto,
+  type RbacPoliciesUpdateDto,
+  type SystemSettingsResponseDto,
+  type SystemSettingsUpdateDto,
+  type TokenResponseDto,
+  type UserDto,
+  mapMessageResponseDto,
+  mapRbacPoliciesResponseDto,
+  mapSystemSettingsResponseDto,
+  mapTokenResponseDto,
+  mapUserDto,
+  toRbacPoliciesUpdateDto,
+  toSystemSettingsUpdateDto,
+} from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
 export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
@@ -19,24 +35,25 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
     }
 
     async login(credentials: LoginRequest): Promise<TokenResponse> {
-      const { data } = await this.client.post<TokenResponse>('/auth/login', credentials)
-      this.setToken(data.access_token, data.refresh_token)
-      return data
+      const { data } = await this.client.post<TokenResponseDto>('/auth/login', credentials)
+      const payload = mapTokenResponseDto(data)
+      this.setToken(payload.access_token, payload.refresh_token)
+      return payload
     }
 
     async register(userData: UserCreate): Promise<User> {
-      const { data } = await this.client.post<User>('/auth/register', userData)
-      return data
+      const { data } = await this.client.post<UserDto>('/auth/register', userData)
+      return mapUserDto(data)
     }
 
     async getCurrentUser(): Promise<User> {
-      const { data } = await this.client.get<User>('/auth/me')
-      return data
+      const { data } = await this.client.get<UserDto>('/auth/me')
+      return mapUserDto(data)
     }
 
     async changePassword(passwords: PasswordChange): Promise<MessageResponse> {
-      const { data } = await this.client.post<MessageResponse>('/auth/change-password', passwords)
-      return data
+      const { data } = await this.client.post<MessageResponseDto>('/auth/change-password', passwords)
+      return mapMessageResponseDto(data)
     }
 
     async logout(): Promise<void> {
@@ -49,23 +66,31 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
     }
 
     async getSystemSettings(): Promise<SystemSettingsResponse> {
-      const { data } = await this.client.get<SystemSettingsResponse>('/system/settings')
-      return data
+      const { data } = await this.client.get<SystemSettingsResponseDto>('/system/settings')
+      return mapSystemSettingsResponseDto(data)
     }
 
     async updateSystemSettings(payload: SystemSettingsUpdate): Promise<SystemSettingsResponse> {
-      const { data } = await this.client.put<SystemSettingsResponse>('/system/settings', payload)
-      return data
+      const requestDto = toSystemSettingsUpdateDto(payload)
+      const { data } = await this.client.put<SystemSettingsResponseDto>(
+        '/system/settings',
+        requestDto as SystemSettingsUpdateDto,
+      )
+      return mapSystemSettingsResponseDto(data)
     }
 
     async getRbacPolicies(): Promise<RbacPoliciesResponse> {
-      const { data } = await this.client.get<RbacPoliciesResponse>('/rbac/policies')
-      return data
+      const { data } = await this.client.get<RbacPoliciesResponseDto>('/rbac/policies')
+      return mapRbacPoliciesResponseDto(data)
     }
 
     async updateRbacPolicies(payload: RbacPoliciesUpdate): Promise<RbacPoliciesResponse> {
-      const { data } = await this.client.put<RbacPoliciesResponse>('/rbac/policies', payload)
-      return data
+      const requestDto = toRbacPoliciesUpdateDto(payload)
+      const { data } = await this.client.put<RbacPoliciesResponseDto>(
+        '/rbac/policies',
+        requestDto as RbacPoliciesUpdateDto,
+      )
+      return mapRbacPoliciesResponseDto(data)
     }
   }
 
