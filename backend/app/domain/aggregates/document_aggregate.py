@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from app.domain.specifications import (
     DocumentDraftStatusSpec,
+    DocumentVisibilityCompanyAssignmentSpec,
     ManagerVisibilityRoleSpec,
 )
 from app.domain.workflows import DocumentWorkflow
-from app.models import Document, DocumentStatus, UserRole
+from app.models import Document, DocumentStatus, DocumentVisibility, UserRole
 
 
 class DocumentAggregate:
@@ -15,6 +16,7 @@ class DocumentAggregate:
 
     _submittable_spec = DocumentDraftStatusSpec()
     _visibility_change_spec = ManagerVisibilityRoleSpec()
+    _company_visibility_assignment_spec = DocumentVisibilityCompanyAssignmentSpec()
     _workflow = DocumentWorkflow()
 
     def __init__(self, document: Document):
@@ -25,6 +27,17 @@ class DocumentAggregate:
 
     def ensure_visibility_change_allowed(self, actor_role: UserRole) -> None:
         self._visibility_change_spec.assert_satisfied(actor_role)
+
+    def ensure_visibility_assignment_invariants(
+        self,
+        *,
+        visibility: DocumentVisibility,
+        company_ids: list[int],
+    ) -> None:
+        self._company_visibility_assignment_spec.assert_satisfied(
+            visibility=visibility,
+            company_ids=company_ids,
+        )
 
     def transition_to_pending_review(self) -> None:
         self.document.status = self._workflow.transition(

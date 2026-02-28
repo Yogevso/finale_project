@@ -21,7 +21,7 @@ def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers):
         files={"file": ("default-upload.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 201, response.json()
     payload = response.json()
     assert payload["status"] == "draft"
     assert payload["visibility"] == "internal"
@@ -52,6 +52,89 @@ def test_manager_can_explicitly_publish_via_upload_override(client, manager_head
     payload = response.json()
     assert payload["status"] == "active"
     assert payload["visibility"] == "public"
+
+
+def test_upload_company_visibility_requires_assignment(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"visibility": "company"},
+        files={"file": ("company-upload.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert "at least one assigned company" in response.json()["detail"]
+    assert response.json()["error_code"] == "missing_company_assignment"
+
+
+def test_upload_non_company_visibility_rejects_company_assignments(
+    client, auth_headers, test_tenant
+):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"visibility": "internal", "company_ids": [str(test_tenant.id)]},
+        files={"file": ("company-upload.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert "Company assignments require company visibility" in response.json()["detail"]
+    assert response.json()["error_code"] == "invalid_company_set"
+
+
+def test_upload_rejects_invalid_company_ids_value(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"visibility": "company", "company_ids": ["abc"]},
+        files={"file": ("company-upload.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid company_ids value"
+    assert response.json()["error_code"] == "invalid_company_set"
+
+
+def test_upload_rejects_invalid_visibility_value(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"visibility": "external"},
+        files={"file": ("invalid-visibility.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid visibility value"
+    assert response.json()["error_code"] == "invalid_visibility"
+
+
+def test_upload_rejects_invalid_status_value(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"status": "ready"},
+        files={"file": ("invalid-status.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid status value"
+    assert response.json()["error_code"] == "invalid_status"
+
+
+def test_upload_company_visibility_with_assignment_succeeds(
+    client, auth_headers, test_tenant
+):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data={"visibility": "company", "company_ids": [str(test_tenant.id)]},
+        files={"file": ("company-upload.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 201, response.json()
+    payload = response.json()
+    assert payload["visibility"] == "company"
+    assert sorted(company["id"] for company in payload["assigned_companies"]) == [test_tenant.id]
 
 
 def test_release_notes_child_uses_same_default_lifecycle_policy(client, auth_headers, db):
