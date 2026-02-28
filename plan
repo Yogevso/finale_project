@@ -738,7 +738,7 @@ Acceptance criteria:
 Task 65: Test builders/factories for domain setup (P3)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Tests repeat heavy setup logic that obscures behavior under test.
@@ -1109,7 +1109,7 @@ Acceptance criteria:
 Task 80: Scenario object mothers and cross-domain fixture packs (P4)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Task 65 adds base builders; advanced cross-domain scenarios still need reusable high-level fixtures.
@@ -2108,7 +2108,7 @@ Acceptance criteria:
 Task 122: Refactor scaffolding generators/templates (P7)
 
 Status:
-- Not started.
+- Completed (2026-02-28).
 
 Why:
 - Repeated architectural patterns are currently implemented manually and inconsistently.
@@ -2273,6 +2273,14 @@ For each task:
 ================================================
 5) Progress
 ================================================
+
+2026-02-28:
+- Completed Task 122: added scaffold generator system under `scripts/scaffold/` with reusable templates for backend (`service/repository/policy/controller`), frontend (`feature`), and collab-server (`port/adapter`) modules.
+- Added structure checks at `scripts/scaffold/check_scaffold_output.mjs` to validate generated implementation/test/docs stub outputs.
+- Published usage docs in `scripts/scaffold/README.md`.
+- Task 122 validation run:
+- `node scripts/scaffold/check_scaffold_output.mjs` (pass)
+- `node scripts/scaffold/scaffold.mjs --target backend --kind service --name demo_sync --dry-run` (pass)
 
 2026-02-27:
 - Completed Task 60: introduced strategy-driven conversion package under `backend/app/conversion/`:
