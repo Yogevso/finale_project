@@ -9,6 +9,12 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import * as Y from 'yjs'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
+import {
+  createInitialCollaborationConnectionState,
+  toCollaborationConnectionFlags,
+  transitionCollaborationConnectionState,
+  type CollaborationConnectionMachineEvent,
+} from '@/features/collaboration'
 import { api } from '@/lib/api'
 import { getUserColor } from '@/lib/userColors'
 import { useCollaborationStore } from '@/stores/collaborationStore'
@@ -89,16 +95,12 @@ export function useCollaboration({
   onOfflineChange,
   onPermissionChange,
 }: UseCollaborationOptions): UseCollaborationReturn {
+  const initialConnectionState = createInitialCollaborationConnectionState(!navigator.onLine)
   const [state, setState] = useState<CollaborationState>({
-    isConnected: false,
-    isConnecting: false,
-    isSynced: false,
-    isOffline: !navigator.onLine,
+    ...toCollaborationConnectionFlags(initialConnectionState),
     isReadOnly: false,
     hasLocalChanges: false,
-    reconnectAttempt: 0,
     permissions: [],
-    error: null,
     collaborators: [],
     provider: null,
     ydoc: null,
@@ -119,10 +121,12 @@ export function useCollaboration({
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnectAttemptRef = useRef(0)
+  const connectionMachineStateRef = useRef(initialConnectionState)
+  const initialConnectionFlags = toCollaborationConnectionFlags(initialConnectionState)
   const connectionStateRef = useRef({
-    isConnected: false,
-    isConnecting: false,
-    isOffline: !navigator.onLine,
+    isConnected: initialConnectionFlags.isConnected,
+    isConnecting: initialConnectionFlags.isConnecting,
+    isOffline: initialConnectionFlags.isOffline,
   })
   const onConnectRef = useRef(onConnect)
   const onDisconnectRef = useRef(onDisconnect)
@@ -132,6 +136,26 @@ export function useCollaboration({
   const onPermissionChangeRef = useRef(onPermissionChange)
   const connectActionRef = useRef<(() => Promise<void>) | null>(null)
   const disconnectActionRef = useRef<(() => void) | null>(null)
+
+  const applyConnectionEvent = useCallback((event: CollaborationConnectionMachineEvent) => {
+    const nextConnectionState = transitionCollaborationConnectionState(
+      connectionMachineStateRef.current,
+      event,
+    )
+    connectionMachineStateRef.current = nextConnectionState
+    const connectionFlags = toCollaborationConnectionFlags(nextConnectionState)
+
+    connectionStateRef.current = {
+      isConnected: connectionFlags.isConnected,
+      isConnecting: connectionFlags.isConnecting,
+      isOffline: connectionFlags.isOffline,
+    }
+
+    setState((prev) => ({
+      ...prev,
+      ...connectionFlags,
+    }))
+  }, [])
 
   useEffect(() => {
     connectionStateRef.current = {
@@ -180,18 +204,19 @@ export function useCollaboration({
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
     const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, attempt - 1), 30000)
 
-    setState((prev) => ({
-      ...prev,
-      reconnectAttempt: attempt,
-      error: `Connection lost. Reconnecting in ${Math.round(delay / 1000)}s... (attempt ${attempt}/${maxReconnectAttempts})`,
-    }))
+    applyConnectionEvent({
+      type: 'RECONNECT_SCHEDULED',
+      attempt,
+      delayMs: delay,
+      maxAttempts: maxReconnectAttempts,
+    })
 
     reconnectTimeoutRef.current = setTimeout(() => {
       if (providerRef.current) {
         providerRef.current.connect()
       }
     }, delay)
-  }, [maxReconnectAttempts])
+  }, [applyConnectionEvent, maxReconnectAttempts])
 
   // Connect to collaboration server
   const connect = useCallback(async () => {
@@ -203,8 +228,7 @@ export function useCollaboration({
       return
     }
 
-    connectionStateRef.current.isConnecting = true
-    setState((prev) => ({ ...prev, isConnecting: true, error: null }))
+    applyConnectionEvent({ type: 'CONNECT_REQUESTED' })
 
     try {
       // Get collaboration token from backend
@@ -258,15 +282,7 @@ export function useCollaboration({
           // Reset reconnect counter on successful connection
           reconnectAttemptRef.current = 0
           editsCountRef.current = 0
-          connectionStateRef.current.isConnected = true
-          connectionStateRef.current.isConnecting = false
-          setState((prev) => ({
-            ...prev,
-            isConnected: true,
-            isConnecting: false,
-            reconnectAttempt: 0,
-            error: null,
-          }))
+          applyConnectionEvent({ type: 'CONNECT_SUCCEEDED' })
           // Update global store
           setSession(documentId, {
             documentTitle,
@@ -283,13 +299,7 @@ export function useCollaboration({
           onConnectRef.current?.()
         },
         onDisconnect: () => {
-          connectionStateRef.current.isConnected = false
-          connectionStateRef.current.isConnecting = false
-          setState((prev) => ({
-            ...prev,
-            isConnected: false,
-            isSynced: false,
-          }))
+          applyConnectionEvent({ type: 'DISCONNECTED' })
           // End activity tracking session
           if (sessionIdRef.current) {
             api.endCollaborationSession(sessionIdRef.current, editsCountRef.current)
@@ -315,7 +325,7 @@ export function useCollaboration({
           onDisconnectRef.current?.()
         },
         onSynced: () => {
-          setState((prev) => ({ ...prev, isSynced: true }))
+          applyConnectionEvent({ type: 'SYNCED' })
           // Update global store
           setSession(documentId, { isSynced: true })
           onSyncedRef.current?.()
@@ -341,12 +351,10 @@ export function useCollaboration({
         },
         onAuthenticationFailed: ({ reason }) => {
           const error = new Error(`Authentication failed: ${reason}`)
-          connectionStateRef.current.isConnecting = false
-          setState((prev) => ({
-            ...prev,
-            isConnecting: false,
+          applyConnectionEvent({
+            type: 'CONNECT_FAILED',
             error: error.message,
-          }))
+          })
           onErrorRef.current?.(error)
         },
       })
@@ -367,15 +375,14 @@ export function useCollaboration({
       }))
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Failed to connect')
-      connectionStateRef.current.isConnecting = false
-      setState((prev) => ({
-        ...prev,
-        isConnecting: false,
+      applyConnectionEvent({
+        type: 'CONNECT_FAILED',
         error: err.message,
-      }))
+      })
       onErrorRef.current?.(err)
     }
   }, [
+    applyConnectionEvent,
     autoReconnect,
     documentId,
     documentTitle,
@@ -392,8 +399,7 @@ export function useCollaboration({
   // Track browser online/offline status
   useEffect(() => {
     const handleOnline = () => {
-      connectionStateRef.current.isOffline = false
-      setState((prev) => ({ ...prev, isOffline: false }))
+      applyConnectionEvent({ type: 'ONLINE' })
       onOfflineChangeRef.current?.(false)
       if (
         autoReconnect &&
@@ -406,8 +412,7 @@ export function useCollaboration({
     }
 
     const handleOffline = () => {
-      connectionStateRef.current.isOffline = true
-      setState((prev) => ({ ...prev, isOffline: true }))
+      applyConnectionEvent({ type: 'OFFLINE' })
       onOfflineChangeRef.current?.(true)
     }
 
@@ -418,7 +423,7 @@ export function useCollaboration({
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [autoReconnect])
+  }, [applyConnectionEvent, autoReconnect])
 
   // Manual reconnect function
   const reconnect = useCallback(async () => {
@@ -430,7 +435,7 @@ export function useCollaboration({
 
     // Reset attempt counter
     reconnectAttemptRef.current = 0
-    setState((prev) => ({ ...prev, reconnectAttempt: 0, error: null }))
+    applyConnectionEvent({ type: 'RECONNECT_RESET' })
 
     // If we have a provider, try to reconnect it
     if (providerRef.current) {
@@ -439,7 +444,7 @@ export function useCollaboration({
       // Otherwise, do a full connect
       await connect()
     }
-  }, [connect])
+  }, [applyConnectionEvent, connect])
 
   // Disconnect from collaboration server
   const disconnect = useCallback(() => {
@@ -479,23 +484,30 @@ export function useCollaboration({
 
     tokenRef.current = null
     editsCountRef.current = 0
-    connectionStateRef.current.isConnected = false
-    connectionStateRef.current.isConnecting = false
-    connectionStateRef.current.isOffline = !navigator.onLine
 
     // Remove from global store
     removeSession(documentId)
 
+    const resetConnectionState = transitionCollaborationConnectionState(
+      connectionMachineStateRef.current,
+      {
+        type: 'RESET',
+        isOffline: !navigator.onLine,
+      },
+    )
+    connectionMachineStateRef.current = resetConnectionState
+    const resetConnectionFlags = toCollaborationConnectionFlags(resetConnectionState)
+    connectionStateRef.current = {
+      isConnected: resetConnectionFlags.isConnected,
+      isConnecting: resetConnectionFlags.isConnecting,
+      isOffline: resetConnectionFlags.isOffline,
+    }
+
     setState({
-      isConnected: false,
-      isConnecting: false,
-      isSynced: false,
-      isOffline: !navigator.onLine,
+      ...resetConnectionFlags,
       isReadOnly: false,
       hasLocalChanges: false,
-      reconnectAttempt: 0,
       permissions: [],
-      error: null,
       collaborators: [],
       provider: null,
       ydoc: null,
