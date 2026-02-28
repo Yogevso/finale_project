@@ -10,6 +10,7 @@ import { useContentEditingFlow } from '@/pages/document-detail/hooks/useContentE
 vi.mock('@/lib/api', () => ({
   api: {
     createVersion: vi.fn(),
+    getDocument: vi.fn(),
     updateDocument: vi.fn(),
     submitForReview: vi.fn(),
   },
@@ -113,6 +114,7 @@ describe('useContentEditingFlow', () => {
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
+    mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
     mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 
@@ -151,7 +153,7 @@ describe('useContentEditingFlow', () => {
         content: '<h2>Introduction</h2><p>New content</p>',
       }),
     )
-    expect(mockedApi.updateDocument).toHaveBeenCalledWith(42, { status: 'draft' })
+    expect(mockedApi.updateDocument).toHaveBeenCalledWith(42, { status: 'draft' }, 'doc-42-v2')
     expect(mockedApi.submitForReview).toHaveBeenCalledWith(42, {
       version_id: 77,
       message: 'Edited section: "Introduction"',

@@ -1,6 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCollaboration } from './useCollaboration'
+import { buildDocumentDetailCollaborationScenario } from '@/test/scenarios/documentDetailScenario'
 
 const shared = vi.hoisted(() => ({
   providerInstances: [] as Array<{
@@ -87,13 +88,13 @@ describe('useCollaboration', () => {
     shared.removeSession.mockReset()
     shared.updateCollaborators.mockReset()
 
-    shared.getCollabToken.mockImplementation(async (documentId: number) => ({
-      token: `token-${documentId}`,
-      document_id: documentId,
-      permissions: ['write'],
-      websocket_url: 'ws://localhost:8002',
-      expires_in: 3600,
-    }))
+    shared.getCollabToken.mockImplementation(async (documentId: number) => {
+      const scenario = buildDocumentDetailCollaborationScenario(documentId)
+      return {
+        ...scenario.collabToken,
+        websocket_url: 'ws://localhost:8002',
+      }
+    })
   })
 
   it('tears down previous provider and reconnects when documentId changes', async () => {

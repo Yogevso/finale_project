@@ -11,6 +11,7 @@ import {
 import { queryKeys } from '@/lib/queryKeys'
 import { setReadingWidth } from '@/lib/readingWidth'
 import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState'
+import { buildDocumentDetailCollaborationScenario } from '@/test/scenarios/documentDetailScenario'
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -62,23 +63,10 @@ function createQueryClient() {
   })
 }
 
-const baseDocument = {
-  id: 42,
-  title: 'Safety Manual',
-  document_number: 'DOC-42',
-  description: 'Safety baseline',
-  status: 'draft',
-  visibility: 'internal',
-  category: 'Ops',
-  tags: null,
-  created_by: 1,
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-02T00:00:00Z',
-}
-
 describe('useDocumentDetailPageState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    const scenario = buildDocumentDetailCollaborationScenario(42)
 
     mockedUseParams.mockReturnValue({ id: '42' } as never)
     mockedUseNavigate.mockReturnValue(vi.fn() as unknown as NavigateFunction)
@@ -87,23 +75,12 @@ describe('useDocumentDetailPageState', () => {
     mockedUseAuth.mockReturnValue({ isEditor: true, isManager: true } as never)
 
     mockedUseDocumentDetailPageBundleQuery.mockReturnValue({
-      data: {
-        document: baseDocument,
-        attachments: [],
-        assigned_companies: [],
-        review_history: {
-          items: [],
-          total: 0,
-          page: 1,
-          per_page: 20,
-          has_more: false,
-        },
-      },
+      data: scenario.bundle,
       isLoading: false,
       error: null,
     } as never)
 
-    mockedApi.updateDocument.mockResolvedValue(baseDocument as never)
+    mockedApi.updateDocument.mockResolvedValue(scenario.bundle.document as never)
     mockedApi.deleteDocument.mockResolvedValue({ message: 'ok' } as never)
     mockedApi.assignCompanies.mockResolvedValue({ message: 'ok' } as never)
     mockedApi.removeCompanyAssignment.mockResolvedValue({ message: 'ok' } as never)

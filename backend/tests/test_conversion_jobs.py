@@ -4,9 +4,10 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Attachment, AttachmentConversionJob, Document, DocumentStatus
+from app.models import AttachmentConversionJob
 from app.services import conversion_jobs
 from app.services.attachment_service import AttachmentService
+from tests.factories import create_conversion_job_scenario
 
 
 def _create_job(
@@ -18,43 +19,21 @@ def _create_job(
     max_attempts: int = 3,
     started_at=None,
 ):
-    document = Document(
-        title=f"Conversion Job Doc {status}",
-        document_number=f"DOC-CONV-{status}-{attempts}-{max_attempts}-{int(datetime.utcnow().timestamp() * 1_000_000)}",
-        status=DocumentStatus.DRAFT,
+    scenario = create_conversion_job_scenario(
+        db,
         created_by=test_user.id,
-    )
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-
-    attachment = Attachment(
-        document_id=document.id,
-        filename="conversion-source.pdf",
-        original_filename="conversion-source.pdf",
-        file_size=10,
-        size_bytes=10,
-        mime_type="application/pdf",
-        storage_path="/tmp/conversion-source.pdf",
-        storage_key="/tmp/conversion-source.pdf",
-        uploaded_by=test_user.id,
-    )
-    db.add(attachment)
-    db.commit()
-    db.refresh(attachment)
-
-    job = AttachmentConversionJob(
-        attachment_id=attachment.id,
+        document_title=f"Conversion Job Doc {status}",
         job_type=conversion_jobs.JOB_TYPE_PREVIEW_PDF,
-        status=status,
-        attempts=attempts,
-        max_attempts=max_attempts,
+        job_status=status,
+        job_attempts=attempts,
+        job_max_attempts=max_attempts,
         started_at=started_at,
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    return job
+    return (
+        db.query(AttachmentConversionJob)
+        .filter(AttachmentConversionJob.id == scenario.job_id)
+        .one()
+    )
 
 
 def test_process_pending_jobs_claims_unique_jobs(db, test_user, monkeypatch):

@@ -11,9 +11,9 @@ from app.application.process_managers import (
     DocumentUploadProcessManager,
     PreviewConversionProcessManager,
 )
-from app.models import AttachmentConversionJob, Document
-from app.schemas import DocumentCreate
+from app.models import Document
 from app.services.document_service import DocumentService
+from tests.factories import build_attachment_conversion_job, build_document_create
 
 
 def _pdf_upload_file(name: str) -> UploadFile:
@@ -39,19 +39,13 @@ async def test_upload_process_manager_compensates_parent_and_child_on_release_no
         attachment_uploader=fake_uploader,
     )
 
-    parent_data = DocumentCreate(
+    parent_data = build_document_create(
         title="PM Parent Doc",
         description="parent",
-        status="draft",
-        visibility="internal",
-        category="Uploaded",
-        tags="",
     )
-    release_data = DocumentCreate(
+    release_data = build_document_create(
         title="PM Parent Doc Release Notes",
         description="child",
-        status="draft",
-        visibility="internal",
         category="Release Notes",
         tags="release-notes",
         parent_id=None,
@@ -76,7 +70,7 @@ async def test_upload_process_manager_compensates_parent_and_child_on_release_no
 
 
 def test_conversion_process_manager_marks_completed_when_preview_ready():
-    job = AttachmentConversionJob(
+    job = build_attachment_conversion_job(
         attachment_id=42,
         job_type="preview_pdf",
         status="processing",
@@ -110,7 +104,7 @@ def test_conversion_process_manager_marks_completed_when_preview_ready():
 
 
 def test_conversion_process_manager_retries_on_generation_exception():
-    job = AttachmentConversionJob(
+    job = build_attachment_conversion_job(
         attachment_id=7,
         job_type="preview_pdf",
         status="processing",
@@ -143,7 +137,7 @@ def test_conversion_process_manager_retries_on_generation_exception():
 
 
 def test_conversion_process_manager_marks_failed_when_attempts_exhausted():
-    job = AttachmentConversionJob(
+    job = build_attachment_conversion_job(
         attachment_id=8,
         job_type="preview_pdf",
         status="processing",

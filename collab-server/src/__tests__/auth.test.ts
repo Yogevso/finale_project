@@ -2,7 +2,6 @@
  * Unit Tests for Collaboration Server Authentication
  */
 
-import jwt from 'jsonwebtoken';
 import {
   verifyCollabToken,
   canWrite,
@@ -10,27 +9,14 @@ import {
   extractToken,
   extractDocumentId,
 } from '../auth.js';
+import { signCollaborationToken } from './factories/collaborationFixtures.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 describe('Authentication', () => {
-  // Helper to create a valid token
-  const createTestToken = (payload: Record<string, unknown>, secret = JWT_SECRET) => {
-    return jwt.sign(payload, secret);
-  };
-
   describe('verifyCollabToken', () => {
     it('should verify a valid token', () => {
-      const token = createTestToken({
-        sub: '1',
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'editor',
-        document_id: '123',
-        permissions: ['read', 'write'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      });
+      const token = signCollaborationToken({}, JWT_SECRET);
 
       const result = verifyCollabToken(token, '123');
 
@@ -42,16 +28,7 @@ describe('Authentication', () => {
     });
 
     it('should reject token for wrong document', () => {
-      const token = createTestToken({
-        sub: '1',
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'editor',
-        document_id: '123',
-        permissions: ['read', 'write'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      });
+      const token = signCollaborationToken({}, JWT_SECRET);
 
       const result = verifyCollabToken(token, '456');
 
@@ -60,16 +37,14 @@ describe('Authentication', () => {
     });
 
     it('should reject expired token', () => {
-      const token = createTestToken({
-        sub: '1',
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'editor',
-        document_id: '123',
-        permissions: ['read', 'write'],
-        exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
-        iat: Math.floor(Date.now() / 1000) - 7200,
-      });
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const token = signCollaborationToken(
+        {
+          exp: nowSeconds - 3600,
+          iat: nowSeconds - 7200,
+        },
+        JWT_SECRET,
+      );
 
       const result = verifyCollabToken(token, '123');
 
@@ -85,19 +60,7 @@ describe('Authentication', () => {
     });
 
     it('should reject token signed with wrong secret', () => {
-      const token = createTestToken(
-        {
-          sub: '1',
-          username: 'testuser',
-          email: 'test@example.com',
-          role: 'editor',
-          document_id: '123',
-          permissions: ['read', 'write'],
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          iat: Math.floor(Date.now() / 1000),
-        },
-        'wrong-secret'
-      );
+      const token = signCollaborationToken({}, 'wrong-secret');
 
       const result = verifyCollabToken(token, '123');
 
@@ -106,17 +69,7 @@ describe('Authentication', () => {
     });
 
     it('should reject token with non-collaboration type', () => {
-      const token = createTestToken({
-        sub: '1',
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'editor',
-        document_id: '123',
-        permissions: ['read', 'write'],
-        type: 'access',
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      });
+      const token = signCollaborationToken({ type: 'access' }, JWT_SECRET);
 
       const result = verifyCollabToken(token, '123');
 
@@ -125,16 +78,15 @@ describe('Authentication', () => {
     });
 
     it('should assign consistent user colors', () => {
-      const token = createTestToken({
-        sub: '42',
-        username: 'coloruser',
-        email: 'color@example.com',
-        role: 'editor',
-        document_id: '123',
-        permissions: ['read'],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        iat: Math.floor(Date.now() / 1000),
-      });
+      const token = signCollaborationToken(
+        {
+          sub: '42',
+          username: 'coloruser',
+          email: 'color@example.com',
+          permissions: ['read'],
+        },
+        JWT_SECRET,
+      );
 
       const result1 = verifyCollabToken(token, '123');
       const result2 = verifyCollabToken(token, '123');
