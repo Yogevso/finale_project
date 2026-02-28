@@ -1,0 +1,68 @@
+﻿name: SLO Burn-Rate Evaluation
+
+on:
+  schedule:
+    # Daily run at 05:00 UTC
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      telemetry_file:
+        description: "Telemetry JSON file path"
+        required: false
+        default: "docs/slo/samples/sample-telemetry.json"
+        type: string
+  workflow_call:
+    inputs:
+      telemetry_file:
+        description: "Telemetry JSON file path"
+        required: false
+        default: "docs/slo/samples/sample-telemetry.json"
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  evaluate-slo-burn-rate:
+    name: Evaluate Use-Case SLO Burn-Rate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Resolve telemetry file input
+        id: telemetry
+        run: |
+          input_path="${{ github.event.inputs.telemetry_file }}"
+          call_path="${{ inputs.telemetry_file }}"
+          if [ -n "$input_path" ]; then
+            resolved="$input_path"
+          elif [ -n "$call_path" ]; then
+            resolved="$call_path"
+          else
+            resolved="docs/slo/samples/sample-telemetry.json"
+          fi
+          echo "path=$resolved" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate SLOs and burn-rate alerts
+        run: |
+          python scripts/observability/evaluate_slo_burn_rate.py \
+            --telemetry-file "${{ steps.telemetry.outputs.path }}" \
+            --slo-file docs/slo/use-case-slos.json \
+            --report-file docs/slo/evidence/latest-slo-burn-rate-report.json \
+            --fail-on-critical
+
+      - name: Upload SLO evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: slo-burn-rate-evidence
+          path: docs/slo/evidence/latest-slo-burn-rate-report.json
+          retention-days: 30

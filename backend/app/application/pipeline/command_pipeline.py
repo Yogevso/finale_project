@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Generic, Protocol, TypeVar
 
+from app.observability import (
+    UseCaseTelemetrySink,
+    UseCaseTimer,
+    build_use_case_id,
+    record_use_case_telemetry,
+)
+
 CommandT = TypeVar("CommandT")
 ResultT = TypeVar("ResultT")
 
@@ -23,6 +30,7 @@ class CommandExecutionTrace:
 
     command_name: str
     stage_order: tuple[str, ...]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,32 +136,66 @@ class CommandPipeline(Generic[CommandT, ResultT]):
         validator: CommandValidator[CommandT] | None = None,
         authorizer: CommandAuthorizer[CommandT] | None = None,
         publisher: CommandPublisher[CommandT, ResultT] | None = None,
+        telemetry_sink: UseCaseTelemetrySink | None = None,
     ) -> None:
         self._validator = validator or NoOpCommandValidator()
         self._authorizer = authorizer or NoOpCommandAuthorizer()
         self._executor = executor
         self._publisher = publisher or NoOpCommandPublisher()
+        self._telemetry_sink = telemetry_sink
 
     def run(self, command: CommandT) -> CommandPipelineRun[ResultT]:
         context = CommandContext(command=command)
         stage_order: list[str] = []
+        timer = UseCaseTimer.start()
+        command_name = type(command).__name__
 
-        self._validator.validate(context)
-        stage_order.append("validate")
+        def _emit(outcome: str, *, error_type: str | None = None) -> dict[str, Any]:
+            metadata: dict[str, Any] = {
+                "started_at": timer.started_at,
+                "duration_ms": round(timer.duration_ms(), 3),
+                "outcome": outcome,
+                "use_case_id": build_use_case_id(kind="command", name=command_name),
+            }
+            if error_type:
+                metadata["error_type"] = error_type
+            record_use_case_telemetry(
+                sink=self._telemetry_sink,
+                use_case_kind="command",
+                use_case_name=command_name,
+                outcome="failure" if outcome == "failure" else "success",
+                duration_ms=metadata["duration_ms"],
+                started_at=timer.started_at,
+                dimensions={
+                    "command_name": command_name,
+                    "stage_count": str(len(stage_order)),
+                    "outcome": outcome,
+                    **({"error_type": error_type} if error_type else {}),
+                },
+            )
+            return metadata
 
-        self._authorizer.authorize(context)
-        stage_order.append("authorize")
+        try:
+            self._validator.validate(context)
+            stage_order.append("validate")
 
-        value = self._executor.execute(context)
-        stage_order.append("execute")
+            self._authorizer.authorize(context)
+            stage_order.append("authorize")
 
-        self._publisher.publish(context, value)
-        stage_order.append("publish")
+            value = self._executor.execute(context)
+            stage_order.append("execute")
 
-        return CommandPipelineRun(
-            value=value,
-            trace=CommandExecutionTrace(
-                command_name=type(command).__name__,
-                stage_order=tuple(stage_order),
-            ),
-        )
+            self._publisher.publish(context, value)
+            stage_order.append("publish")
+
+            return CommandPipelineRun(
+                value=value,
+                trace=CommandExecutionTrace(
+                    command_name=command_name,
+                    stage_order=tuple(stage_order),
+                    metadata=_emit("success"),
+                ),
+            )
+        except Exception as exc:
+            _emit("failure", error_type=type(exc).__name__)
+            raise

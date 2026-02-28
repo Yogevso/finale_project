@@ -1,0 +1,37 @@
+﻿{
+  "use_case_slos": [
+    {
+      "use_case_id": "command.approvereviewcommand",
+      "window_minutes": 60,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 350,
+      "owner": "review-workflow"
+    },
+    {
+      "use_case_id": "command.publishapprovedversioncommand",
+      "window_minutes": 60,
+      "target_success_ratio": 0.99,
+      "target_p95_latency_ms": 500,
+      "owner": "release-workflow"
+    },
+    {
+      "use_case_id": "query.analyticsoverviewquery",
+      "window_minutes": 60,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 450,
+      "owner": "analytics"
+    }
+  ],
+  "burn_rate_thresholds": [
+    {
+      "window_minutes": 5,
+      "warning_threshold": 2.0,
+      "critical_threshold": 10.0
+    },
+    {
+      "window_minutes": 60,
+      "warning_threshold": 1.0,
+      "critical_threshold": 4.0
+    }
+  ]
+}
