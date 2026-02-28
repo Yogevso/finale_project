@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     # Feature flags (architecture rollout safety)
     FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE: bool = True
     FEATURE_FLAG_PROJECTION_CACHE: bool = True
+    FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT: bool = False
 
     class Config:
         env_file = ".env"

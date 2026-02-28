@@ -13,6 +13,7 @@ class BackendFeatureFlag(str, Enum):
 
     IDEMPOTENCY_MIDDLEWARE = "idempotency_middleware"
     PROJECTION_CACHE = "projection_cache"
+    EVENT_SOURCING_REVIEW_PILOT = "event_sourcing_review_pilot"
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,12 +22,15 @@ class BackendFeatureFlags:
 
     idempotency_middleware: bool
     projection_cache: bool
+    event_sourcing_review_pilot: bool
 
     def is_enabled(self, flag: BackendFeatureFlag) -> bool:
         if flag == BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE:
             return bool(self.idempotency_middleware)
         if flag == BackendFeatureFlag.PROJECTION_CACHE:
             return bool(self.projection_cache)
+        if flag == BackendFeatureFlag.EVENT_SOURCING_REVIEW_PILOT:
+            return bool(self.event_sourcing_review_pilot)
         return False
 
 
@@ -35,6 +39,7 @@ def get_backend_feature_flags() -> BackendFeatureFlags:
     return BackendFeatureFlags(
         idempotency_middleware=bool(settings.FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE),
         projection_cache=bool(settings.FEATURE_FLAG_PROJECTION_CACHE),
+        event_sourcing_review_pilot=bool(settings.FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT),
     )
 
 

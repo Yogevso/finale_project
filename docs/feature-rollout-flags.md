@@ -10,6 +10,9 @@ This project uses config-driven feature flags for architecture rollouts and roll
 - `FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE`
   - `true` (default): idempotency middleware is enabled for selected write endpoints.
   - `false`: middleware is not mounted and requests are processed without idempotency replay logic.
+- `FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT`
+  - `false` (default): review workflow event-sourcing pilot is disabled.
+  - `true`: shadow event streams are appended for review workflow pilot operations.
 
 ## Frontend Flags
 

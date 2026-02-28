@@ -16,6 +16,7 @@ def _middleware_names(app) -> set[str]:
 def test_feature_flags_default_to_enabled():
     assert is_backend_feature_enabled(BackendFeatureFlag.PROJECTION_CACHE) is True
     assert is_backend_feature_enabled(BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE) is True
+    assert is_backend_feature_enabled(BackendFeatureFlag.EVENT_SOURCING_REVIEW_PILOT) is False
 
 
 def test_create_app_skips_idempotency_middleware_when_flag_disabled(monkeypatch):
