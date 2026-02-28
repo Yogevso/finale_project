@@ -136,6 +136,13 @@ export interface DocumentListResponse {
   pages: number
 }
 
+export interface DocumentDetailPageBundle {
+  document: Document
+  attachments: Attachment[]
+  assigned_companies: Company[]
+  review_history: ReviewListResponse
+}
+
 // Version types
 export type VersionBumpType = 'major' | 'minor' | 'patch'
 
