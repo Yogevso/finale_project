@@ -1,40 +1,19 @@
 Project Plan: Active Tasks (Names Only)
-Last updated: 2026-02-28
+Last updated: 2026-03-01
 
 Execution Order
-1. Wave P
-2. Wave Q
-3. Wave R
-4. Wave S
-5. Wave T
-6. Wave U
-7. Wave V
-8. Wave W
-9. Wave X
-10. Wave Y
-11. Wave Z
-12. Wave AA
-13. Wave AB
-
-Wave P - Audience and Company Binding
-123. Create flow audience binding
-124. Visibility transition invariants
-125. Upload flow audience parity
-126. Audience access preview panel
-127. Shared company selector primitive
-128. Audience form schema normalization
-129. Company picker search and pagination
-130. Audience defaults by role
-131. Assignment pre-submit validation
-132. Audience template presets
-133. Audience change confirmation dialog
-134. Company assignment conflict detection
-135. Draft audience migration helper
-136. Assignment chips bulk remove UX
-137. Company selector keyboard navigation
-138. Audience field dirty-state tracking
-139. Assignment unsaved-changes guard
-140. Audience inline helper text standard
+1. Wave Q
+2. Wave R
+3. Wave S
+4. Wave T
+5. Wave U
+6. Wave V
+7. Wave W
+8. Wave X
+9. Wave Y
+10. Wave Z
+11. Wave AA
+12. Wave AB
 
 Wave Q - Review, Version, and Publish Safety
 141. Publish preflight checklist endpoint

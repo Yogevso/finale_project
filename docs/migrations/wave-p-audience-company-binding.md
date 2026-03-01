@@ -4,8 +4,18 @@
 
 - Task IDs: 123-140
 - Reference plan: `plan`
-- Status: planned
+- Status: completed (2026-03-01)
 - Goal: make audience and company assignment behavior deterministic across create, upload, edit, and detail flows.
+
+## Completion Summary
+
+- Completed on: 2026-03-01
+- Implemented task IDs: 123-140
+- Implementation commits:
+- `926388b` feat(backend): enforce audience-company rules and add draft migration helper
+- `d71828c` feat(frontend): complete audience assignment UX safeguards
+- `9263f4f` feat(frontend): enforce company selection on visibility changes
+- Next active wave: Wave Q (starting at task 141)
 
 ## Logical Execution Order
 
