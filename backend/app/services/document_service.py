@@ -1,5 +1,6 @@
 """Document Service"""
 
+import logging
 import re
 from datetime import datetime
 from typing import List, Optional
@@ -15,7 +16,7 @@ from app.domain.aggregates import DocumentAggregate
 from app.domain.factories import DocumentFactory
 from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
-from app.errors import NotFoundError, ValidationError
+from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     AuditLog,
@@ -27,6 +28,7 @@ from app.models import (
     Tenant,
     Topic,
     User,
+    UserRole,
     Version,
 )
 from app.schemas import DocumentCreate, DocumentUpdate
@@ -34,6 +36,8 @@ from app.services.base_service import TenantAwareService
 from app.services.uow import UnitOfWork
 from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService(TenantAwareService[Document]):
@@ -538,3 +542,156 @@ class DocumentService(TenantAwareService[Document]):
             document.updated_at = datetime.utcnow()
 
         return len(requested_ids)
+
+    def archive_document(self, document_id: int, user: User) -> dict:
+        """
+        Soft-delete a document by setting status to ARCHIVED.
+
+        Preserves all data including audience assignments for potential restore.
+        Returns snapshot of audience state at archive time.
+        """
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        if document.status == DocumentStatus.ARCHIVED:
+            raise InvalidStateError("Document is already archived")
+
+        if user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+            raise PermissionDeniedError("Only admins and managers can archive documents")
+
+        # Capture audience state before archiving
+        company_ids = [c.id for c in (document.assigned_companies or [])]
+        visibility_snapshot = document.visibility.value if document.visibility else None
+        company_ids_snapshot = company_ids.copy()
+        previous_status = document.status.value
+
+        with UnitOfWork(self.db):
+            document.status = DocumentStatus.ARCHIVED
+            document.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Archived document '{document.title}'. "
+                    f"Previous status: {previous_status}. "
+                    f"Audience preserved: visibility={visibility_snapshot}, companies={company_ids_snapshot}"
+                ),
+            )
+            self.db.add(audit)
+
+        logger.info(
+            "Document %d archived by user %d. Audience preserved: visibility=%s companies=%s",
+            document_id,
+            user.id,
+            visibility_snapshot,
+            company_ids_snapshot,
+        )
+
+        return {
+            "document_id": document_id,
+            "status": "archived",
+            "previous_status": previous_status,
+            "audience_snapshot": {
+                "visibility": visibility_snapshot,
+                "company_ids": company_ids_snapshot,
+            },
+        }
+
+    def restore_document(self, document_id: int, user: User) -> dict:
+        """
+        Restore a soft-deleted (archived) document.
+
+        Performs audience reconciliation:
+        - Validates that assigned companies still exist and are active
+        - Removes stale companies from assignments
+        - Logs any audience changes
+
+        Returns the restored document state with any audience changes noted.
+        """
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        if document.status != DocumentStatus.ARCHIVED:
+            raise InvalidStateError("Only archived documents can be restored")
+
+        if user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+            raise PermissionDeniedError("Only admins and managers can restore documents")
+
+        # Reconcile audience - check for stale companies
+        original_company_ids = [c.id for c in (document.assigned_companies or [])]
+
+        # Check which companies are still active
+        active_companies = []
+        stale_companies = []
+
+        if original_company_ids:
+            tenants = self.db.query(Tenant).filter(Tenant.id.in_(original_company_ids)).all()
+            tenant_map = {t.id: t for t in tenants}
+
+            for cid in original_company_ids:
+                tenant = tenant_map.get(cid)
+                if tenant is None:
+                    stale_companies.append({"id": cid, "reason": "deleted"})
+                elif not tenant.is_active:
+                    stale_companies.append({"id": cid, "name": tenant.name, "reason": "deactivated"})
+                else:
+                    active_companies.append(tenant)
+
+        # Determine appropriate status for restore
+        # If document was published before, restore to ACTIVE. Otherwise DRAFT.
+        has_published_version = any(v.is_published for v in document.versions)
+        restore_status = DocumentStatus.ACTIVE if has_published_version else DocumentStatus.DRAFT
+
+        # Handle audience changes
+        audience_changes = {
+            "removed_stale_companies": stale_companies,
+            "original_company_count": len(original_company_ids),
+            "restored_company_count": len(active_companies),
+        }
+
+        # Validate company visibility with remaining companies
+        if document.visibility == DocumentVisibility.COMPANY and not active_companies:
+            # All companies were stale - need to change visibility
+            audience_changes["visibility_change"] = {
+                "from": "company",
+                "to": "internal",
+                "reason": "No active companies remain after reconciliation",
+            }
+            new_visibility = DocumentVisibility.INTERNAL
+        else:
+            new_visibility = document.visibility
+
+        with UnitOfWork(self.db):
+            document.status = restore_status
+            document.visibility = new_visibility
+            document.assigned_companies = active_companies
+            document.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Restored document '{document.title}' from archive. "
+                    f"New status: {restore_status.value}. "
+                    f"Audience reconciliation: {audience_changes}"
+                ),
+            )
+            self.db.add(audit)
+
+        logger.info(
+            "Document %d restored by user %d. Audience reconciliation: %s",
+            document_id,
+            user.id,
+            audience_changes,
+        )
+
+        return {
+            "document_id": document_id,
+            "status": restore_status.value,
+            "visibility": new_visibility.value,
+            "audience_reconciliation": audience_changes,
+            "active_company_ids": [c.id for c in active_companies],
+        }

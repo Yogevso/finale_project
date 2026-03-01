@@ -547,3 +547,97 @@ async def list_company_documents(
         "pages": pages,
         "scope": scope,
     }
+
+
+@router.get("/{company_id}/audience-blockers")
+async def get_audience_blockers(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Get audience dependency graph showing what blocks company deactivation.
+
+    Returns documents that depend on this company for audience visibility,
+    along with statistics showing the impact of deactivating this company.
+
+    Admin access required.
+    """
+    company = db.query(Tenant).filter(Tenant.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Get documents assigned to this company
+    assigned_docs = (
+        db.query(Document)
+        .filter(Document.assigned_companies.any(id=company_id))
+        .all()
+    )
+
+    # Get documents owned by this company
+    owned_docs = (
+        db.query(Document)
+        .filter(Document.tenant_id == company_id)
+        .all()
+    )
+
+    # Get users in this company
+    users = db.query(User).filter(User.tenant_id == company_id).all()
+
+    # Compute blockers
+    blockers = {
+        "company_id": company_id,
+        "company_name": company.name,
+        "is_active": company.is_active,
+        "summary": {
+            "can_deactivate": len(assigned_docs) == 0 and len(owned_docs) == 0 and len(users) == 0,
+            "total_blocking_documents": len(assigned_docs) + len(owned_docs),
+            "assigned_document_count": len(assigned_docs),
+            "owned_document_count": len(owned_docs),
+            "user_count": len(users),
+        },
+        "blocking_documents": {
+            "assigned": [
+                {
+                    "id": doc.id,
+                    "title": doc.title,
+                    "status": doc.status.value if doc.status else "draft",
+                    "visibility": doc.visibility.value if doc.visibility else "internal",
+                    "reason": "Document has company visibility and is assigned to this company",
+                }
+                for doc in assigned_docs[:20]
+            ],
+            "owned": [
+                {
+                    "id": doc.id,
+                    "title": doc.title,
+                    "status": doc.status.value if doc.status else "draft",
+                    "visibility": doc.visibility.value if doc.visibility else "internal",
+                    "reason": "Document is owned by this company",
+                }
+                for doc in owned_docs[:20]
+            ],
+        },
+        "blocking_users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "full_name": u.full_name,
+                "role": u.role.value if u.role else "viewer",
+                "is_active": u.is_active,
+            }
+            for u in users[:20]
+        ],
+        "deactivation_impact": {
+            "documents_losing_audience": len(assigned_docs),
+            "users_losing_access": len([u for u in users if u.is_active]),
+            "warning": (
+                "Deactivating this company will remove it from all document assignments "
+                "and prevent company users from accessing the platform."
+                if len(assigned_docs) > 0 or len(users) > 0
+                else "No blocking dependencies found."
+            ),
+        },
+    }
+
+    return blockers

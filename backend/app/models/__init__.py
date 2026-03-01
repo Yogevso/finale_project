@@ -381,6 +381,14 @@ class Version(Base):
     row_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Scheduled publish timestamp (null = not scheduled)
+    scheduled_publish_at = Column(DateTime, nullable=True, index=True)
+    scheduled_publish_audience_validated_at = Column(DateTime, nullable=True)
+
+    # Audience state snapshot at publish time (carry-forward for auditing)
+    audience_visibility_snapshot = Column(String(50), nullable=True)
+    audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
+
     # Relationships
     document = relationship("Document", back_populates="versions")
     created_by_user = relationship("User", foreign_keys=[created_by])
@@ -732,6 +740,10 @@ class ReviewRequest(Base):
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Audience state snapshot at submission time
+    audience_visibility_snapshot = Column(String(50), nullable=True)
+    audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
 
     # Relationships
     document = relationship("Document", back_populates="review_requests")
