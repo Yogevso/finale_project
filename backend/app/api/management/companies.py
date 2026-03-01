@@ -5,7 +5,7 @@ Companies API - Admin management of companies/tenants
 import re
 from typing import Optional, Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from app.models import (
     Document,
     DocumentStatus,
     DocumentVisibility,
+    Invitation,
+    InvitationStatus,
     Tenant,
     User,
     UserRole,
@@ -317,12 +319,15 @@ async def get_company(
 async def update_company(
     company_id: int,
     company_data: CompanyUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     """
     Update a company.
     Admin access required.
+    If deactivating (is_active=False), cascades: cancels pending invitations.
+    If reactivating (is_active=True), returns company state info in headers.
     """
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -338,13 +343,66 @@ async def update_company(
         if existing:
             raise HTTPException(status_code=400, detail="Company with this slug already exists")
 
+    # Detect deactivation event
+    was_active = company.is_active
+    is_deactivating = (
+        company_data.is_active is False
+        and was_active is True
+    )
+    is_reactivating = (
+        company_data.is_active is True
+        and was_active is False
+    )
+
     # Update fields
     update_data = company_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(company, field, value)
 
+    # Company deactivation cascade events
+    cancelled_invitations = 0
+    if is_deactivating:
+        # Cancel all pending invitations for this company
+        cancelled_invitations = db.query(Invitation).filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        ).update({"status": InvitationStatus.CANCELLED})
+
+    # Company reactivation events - log and validate state
+    reactivation_info = None
+    if is_reactivating:
+        # Count active and inactive users for this company
+        active_users = db.query(User).filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(True),
+        ).count()
+        inactive_users = db.query(User).filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(False),
+        ).count()
+        # Get count of cancelled invitations that could be re-sent
+        cancelled_invite_count = db.query(Invitation).filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.CANCELLED,
+        ).count()
+        reactivation_info = {
+            "active_users": active_users,
+            "inactive_users": inactive_users,
+            "cancelled_invitations": cancelled_invite_count,
+        }
+
     db.commit()
     db.refresh(company)
+
+    # Set lifecycle event headers
+    if is_deactivating:
+        response.headers["X-Company-Event"] = "deactivated"
+        response.headers["X-Invitations-Cancelled"] = str(cancelled_invitations)
+    elif is_reactivating and reactivation_info:
+        response.headers["X-Company-Event"] = "reactivated"
+        response.headers["X-Active-Users"] = str(reactivation_info["active_users"])
+        response.headers["X-Inactive-Users"] = str(reactivation_info["inactive_users"])
+        response.headers["X-Cancelled-Invitations"] = str(reactivation_info["cancelled_invitations"])
 
     stats = get_company_stats(db, company_id)
 
@@ -375,6 +433,7 @@ async def delete_company(
     """
     Soft delete a company (set is_active=False).
     Admin access required.
+    Cascades: cancels pending invitations for the company.
     """
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -384,11 +443,23 @@ async def delete_company(
     if company_id == current_user.tenant_id:
         raise HTTPException(status_code=400, detail="Cannot delete your own company")
 
+    # Company deactivation cascade events:
+    # 1. Cancel all pending invitations for this company
+    cancelled_invitations = db.query(Invitation).filter(
+        Invitation.tenant_id == company_id,
+        Invitation.status == InvitationStatus.PENDING,
+    ).update({"status": InvitationStatus.CANCELLED})
+
     # Soft delete
     company.is_active = False
     db.commit()
 
-    return {"message": "Company deactivated successfully"}
+    return {
+        "message": "Company deactivated successfully",
+        "cascade_actions": {
+            "invitations_cancelled": cancelled_invitations,
+        },
+    }
 
 
 @router.get("/{company_id}/users", response_model=list[CompanyUserInfo])

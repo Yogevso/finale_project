@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
-from app.models import Tenant, User, UserRole
+from app.models import Invitation, InvitationStatus, Tenant, User, UserRole
 from app.schemas import UserCreate, UserUpdate
 from app.security import get_password_hash
 
@@ -199,6 +199,41 @@ class UsersController:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot demote yourself"
                 )
+
+            # Role downgrade protection: prevent orphaning admin capabilities
+            is_downgrade = self.ROLE_HIERARCHY.get(user_data.role, 0) < self.ROLE_HIERARCHY.get(
+                user.role, 0
+            )
+            if is_downgrade:
+                # Prevent downgrading the last system_admin
+                if user.role == UserRole.SYSTEM_ADMIN:
+                    system_admin_count = db.query(User).filter(
+                        User.role == UserRole.SYSTEM_ADMIN,
+                        User.is_active.is_(True),
+                        User.id != user.id,
+                    ).count()
+                    if system_admin_count == 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot downgrade the last active system admin",
+                            headers={"X-Error-Code": "last_system_admin"},
+                        )
+                # Prevent downgrading the last admin in a tenant (if not a system_admin in the system)
+                elif user.role == UserRole.ADMIN and user.tenant_id:
+                    # Check if there are other admins or system_admins in the same tenant
+                    admin_count = db.query(User).filter(
+                        User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
+                        User.tenant_id == user.tenant_id,
+                        User.is_active.is_(True),
+                        User.id != user.id,
+                    ).count()
+                    if admin_count == 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot downgrade the last admin for this company",
+                            headers={"X-Error-Code": "last_company_admin"},
+                        )
+
             user.role = user_data.role
 
         if user_data.is_active is not None:
@@ -206,6 +241,65 @@ class UsersController:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate yourself"
                 )
+
+            # User deactivation cascade: check if last admin and cancel their invitations
+            was_active = user.is_active
+            is_deactivating = not user_data.is_active and was_active
+
+            if is_deactivating:
+                # Prevent deactivating the last system_admin
+                if user.role == UserRole.SYSTEM_ADMIN:
+                    system_admin_count = db.query(User).filter(
+                        User.role == UserRole.SYSTEM_ADMIN,
+                        User.is_active.is_(True),
+                        User.id != user.id,
+                    ).count()
+                    if system_admin_count == 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot deactivate the last active system admin",
+                            headers={"X-Error-Code": "last_system_admin"},
+                        )
+                # Prevent deactivating the last admin in a tenant
+                elif user.role == UserRole.ADMIN and user.tenant_id:
+                    admin_count = db.query(User).filter(
+                        User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
+                        User.tenant_id == user.tenant_id,
+                        User.is_active.is_(True),
+                        User.id != user.id,
+                    ).count()
+                    if admin_count == 0:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot deactivate the last admin for this company",
+                            headers={"X-Error-Code": "last_company_admin"},
+                        )
+
+                # Cascade: cancel pending invitations created by this user
+                db.query(Invitation).filter(
+                    Invitation.invited_by == user.id,
+                    Invitation.status == InvitationStatus.PENDING,
+                ).update({"status": InvitationStatus.CANCELLED})
+
+            # User reactivation checks
+            is_reactivating = user_data.is_active and not was_active
+            if is_reactivating:
+                # Customer users can only be reactivated if their company is still active
+                if user.role == UserRole.CUSTOMER and user.tenant_id:
+                    tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+                    if not tenant:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot reactivate user: their company no longer exists",
+                            headers={"X-Error-Code": "user_company_deleted"},
+                        )
+                    if not tenant.is_active:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Cannot reactivate user: their company is deactivated",
+                            headers={"X-Error-Code": "user_company_inactive"},
+                        )
+
             user.is_active = user_data.is_active
 
         if tenant_id_provided:
@@ -220,6 +314,12 @@ class UsersController:
                 if not tenant:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
+                    )
+                if not tenant.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Cannot assign user to a deactivated company",
+                        headers={"X-Error-Code": "company_inactive"},
                     )
                 if not tenant_ctx.is_system_admin and requested_tenant_id != tenant_ctx.tenant_id:
                     raise HTTPException(
@@ -238,6 +338,23 @@ class UsersController:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Customers must be assigned to a company",
             )
+
+        # Role change lifecycle validation: customer role requires active company
+        # Only check when user will be active (inactive users don't need this validation)
+        if user.is_active and user.role == UserRole.CUSTOMER and user.tenant_id:
+            tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot assign customer role: company no longer exists",
+                    headers={"X-Error-Code": "role_change_company_deleted"},
+                )
+            if not tenant.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot assign customer role: company is deactivated",
+                    headers={"X-Error-Code": "role_change_company_inactive"},
+                )
 
         db.commit()
         db.refresh(user)
@@ -273,6 +390,68 @@ class UsersController:
 
         user.is_active = False
         db.commit()
+
+    def check_company_binding(
+        self,
+        *,
+        user_id: int,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> dict[str, object]:
+        """Check a user's company binding status."""
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        # Allow self-access or admin access
+        is_self = user.id == current_user.id
+        is_admin = current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]
+        if not is_self and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+            )
+
+        if not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        is_customer = user.role == UserRole.CUSTOMER
+        requires_company = is_customer  # Customers must have a company
+
+        result: dict[str, object] = {
+            "user_id": user.id,
+            "role": user.role.value,
+            "is_customer": is_customer,
+            "requires_company": requires_company,
+            "has_company": user.tenant_id is not None,
+            "company_id": user.tenant_id,
+            "company_name": None,
+            "company_slug": None,
+            "company_is_active": None,
+            "binding_valid": True,
+            "binding_issues": [],
+        }
+
+        issues = []
+
+        if user.tenant_id:
+            tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            if tenant:
+                result["company_name"] = tenant.name
+                result["company_slug"] = tenant.slug
+                result["company_is_active"] = tenant.is_active
+                if not tenant.is_active:
+                    issues.append("Company is deactivated")
+            else:
+                result["company_is_active"] = False
+                issues.append("Company no longer exists")
+        elif requires_company:
+            issues.append("Customer user must be bound to a company")
+
+        result["binding_issues"] = issues
+        result["binding_valid"] = len(issues) == 0
+
+        return result
 
     @classmethod
     def _can_manage_role(cls, manager_role: UserRole, target_role: UserRole) -> bool:

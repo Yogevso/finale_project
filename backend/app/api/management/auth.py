@@ -13,7 +13,7 @@ from app.dependencies.services import (
     get_auth_service,
     get_collaboration_service,
 )
-from app.models import InvitationStatus, User
+from app.models import InvitationStatus, Tenant, User, UserRole
 from app.repositories import InvitationRepository, UserRepository
 from app.schemas import (
     LoginRequest,
@@ -314,6 +314,22 @@ def accept_invitation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This invitation has already been used or cancelled",
         )
+
+    # Check for company drift - company may have been deactivated since invitation
+    if invitation.role == UserRole.CUSTOMER and invitation.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The company for this invitation no longer exists",
+                headers={"X-Error-Code": "invitation_company_deleted"},
+            )
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The company for this invitation has been deactivated",
+                headers={"X-Error-Code": "invitation_company_inactive"},
+            )
 
     # Check if email is already registered
     if user_repository.get_by_email(invitation.email):

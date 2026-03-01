@@ -100,3 +100,23 @@ def delete_user(
         db=db,
     )
     return None
+
+
+@router.get("/users/{user_id}/company-binding")
+def check_company_binding(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """
+    Check a user's company binding status.
+    Returns validation info about the user-company relationship.
+    Admin+ or self access required.
+    """
+    return users_controller.check_company_binding(
+        user_id=user_id,
+        current_user=current_user,
+        tenant_ctx=tenant_ctx,
+        db=db,
+    )

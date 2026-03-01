@@ -123,12 +123,17 @@ def create_invitation(
 
     InvitationAggregate.ensure_customer_has_tenant(invitation_data.role, target_tenant_id)
 
-    # Validate tenant exists if provided
+    # Validate tenant exists and is active if provided
     tenant = None
     if target_tenant_id:
         tenant = db.query(Tenant).filter(Tenant.id == target_tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot invite users to an inactive company",
+            )
 
     # Check if email is already registered
     if user_repository.get_by_email(invitation_data.email):
@@ -345,6 +350,20 @@ def resend_invitation(
     if not invitation_policy.can_access_invitation_tenant(invitation.tenant_id, tenant_ctx):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
+    # Check company consistency for customer invitations
+    if invitation.role == UserRole.CUSTOMER and invitation.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot resend: the company for this invitation no longer exists",
+            )
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot resend: the company for this invitation has been deactivated",
+            )
+
     # Check if user already exists
     if user_repository.get_by_email(invitation.email):
         raise HTTPException(
@@ -380,3 +399,68 @@ def resend_invitation(
         created_at=invitation.created_at,
         accepted_at=invitation.accepted_at,
     )
+
+
+@router.get("/invitations/{invitation_id}/company-binding")
+def check_invitation_company_binding(
+    invitation_id: int,
+    current_user: User = Depends(get_current_active_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """
+    Check an invitation's company binding status.
+    Returns validation info about the invitation-company relationship.
+    Admin+ access required.
+    """
+    if not invitation_policy.can_manage_invitations(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    invitation_repository = InvitationRepository(db)
+    invitation = invitation_repository.get_by_id(invitation_id)
+
+    if not invitation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+
+    if not tenant_ctx.is_system_admin and invitation.tenant_id != tenant_ctx.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+
+    is_customer_invite = invitation.role == UserRole.CUSTOMER
+    requires_company = is_customer_invite
+
+    result = {
+        "invitation_id": invitation.id,
+        "email": invitation.email,
+        "role": invitation.role.value,
+        "status": invitation.status.value,
+        "is_customer_invite": is_customer_invite,
+        "requires_company": requires_company,
+        "has_company": invitation.tenant_id is not None,
+        "company_id": invitation.tenant_id,
+        "company_name": None,
+        "company_slug": None,
+        "company_is_active": None,
+        "binding_valid": True,
+        "binding_issues": [],
+    }
+
+    issues = []
+
+    if invitation.tenant_id:
+        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
+        if tenant:
+            result["company_name"] = tenant.name
+            result["company_slug"] = tenant.slug
+            result["company_is_active"] = tenant.is_active
+            if not tenant.is_active:
+                issues.append("Company is deactivated")
+        else:
+            result["company_is_active"] = False
+            issues.append("Company no longer exists")
+    elif requires_company:
+        issues.append("Customer invitation must be bound to a company")
+
+    result["binding_issues"] = issues
+    result["binding_valid"] = len(issues) == 0
+
+    return result

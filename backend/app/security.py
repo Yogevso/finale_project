@@ -87,11 +87,37 @@ async def get_current_active_user(current_user=Depends(get_current_user), db: Se
 
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+
     is_system_admin = evaluate_role_membership(current_user, [UserRole.SYSTEM_ADMIN]).allowed
-    if not is_system_admin and current_user.tenant_id is not None:
+    is_customer = current_user.role == UserRole.CUSTOMER
+
+    # Customer users MUST have a valid, active company
+    if is_customer:
+        if current_user.tenant_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Customer user must be bound to a company",
+                headers={"X-Error-Code": "customer_company_binding_required"},
+            )
+        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if not tenant:
+            raise HTTPException(
+                status_code=403,
+                detail="Customer's company no longer exists",
+                headers={"X-Error-Code": "customer_company_not_found"},
+            )
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=403,
+                detail="Company is inactive",
+                headers={"X-Error-Code": "customer_company_inactive"},
+            )
+    elif not is_system_admin and current_user.tenant_id is not None:
+        # Non-customer internal users with inactive company
         tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
         if tenant and not tenant.is_active:
             raise HTTPException(status_code=403, detail="Company is inactive")
+
     return current_user
 
 
