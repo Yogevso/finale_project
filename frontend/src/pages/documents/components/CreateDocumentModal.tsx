@@ -19,6 +19,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     createMutation,
     audienceDirtyState,
     handleSubmit,
+    confirmClose,
   } = useCreateDocumentFlow({ onClose })
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
@@ -47,7 +48,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h2 className="text-xl font-display font-bold text-slate-900">Create Document</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500">
+          <button onClick={confirmClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500">
             x
           </button>
         </div>
@@ -220,7 +221,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex justify-end gap-3 p-4 border-t border-slate-200 surface-muted">
-            <button type="button" onClick={onClose} className="btn-ghost">
+            <button type="button" onClick={confirmClose} className="btn-ghost">
               Cancel
             </button>
             <button

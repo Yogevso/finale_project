@@ -34,6 +34,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     handleFileSelect,
     handleDrop,
     handleSubmit,
+    confirmClose,
   } = useUploadDocumentFlow({ onClose })
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
@@ -216,7 +217,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn-ghost">
+            <button type="button" onClick={confirmClose} className="btn-ghost">
               Cancel
             </button>
             <button

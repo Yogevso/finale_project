@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
@@ -42,6 +42,27 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     },
   )
 
+  // Check if form has any unsaved changes
+  const hasUnsavedChanges =
+    formData.title.trim() !== '' ||
+    (formData.description?.trim() ?? '') !== '' ||
+    (formData.content?.trim() ?? '') !== '' ||
+    (formData.category?.trim() ?? '') !== '' ||
+    (formData.release_branch?.trim() ?? '') !== '' ||
+    (formData.tags?.trim() ?? '') !== '' ||
+    audienceDirtyState.visibilityChanged ||
+    audienceDirtyState.companyAssignmentsChanged
+
+  const confirmClose = useCallback(() => {
+    if (!hasUnsavedChanges) {
+      onClose()
+      return
+    }
+    if (confirm('You have unsaved changes. Discard them?')) {
+      onClose()
+    }
+  }, [hasUnsavedChanges, onClose])
+
   const createMutation = useMutation({
     mutationFn: (data: DocumentCreateFormData) =>
       documentsUseCases.createDraftDocument(data, { generateWord }),
@@ -84,5 +105,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     createMutation,
     audienceDirtyState,
     handleSubmit,
+    hasUnsavedChanges,
+    confirmClose,
   }
 }
