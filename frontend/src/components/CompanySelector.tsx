@@ -28,6 +28,7 @@ const DEFAULT_NO_RESULTS_TEXT = 'No companies found'
 const DEFAULT_LOADING_TEXT = 'Loading companies...'
 const DEFAULT_ERROR_TEXT = 'Failed to load companies'
 const SEARCH_DEBOUNCE_MS = 250
+const EMPTY_PAGE_COMPANIES: SelectorCompany[] = []
 
 const getCompanyTypeBadgeClassName = (companyType: CompanyType) => {
   if (companyType === 'customer') {
@@ -108,7 +109,7 @@ export default function CompanySelector({
     placeholderData: (previous) => previous,
   })
 
-  const pageCompanies = companiesQuery.data?.items || []
+  const pageCompanies = companiesQuery.data?.items ?? EMPTY_PAGE_COMPANIES
   const currentPage = companiesQuery.data?.page ?? page
   const totalPages = companiesQuery.data?.pages ?? 1
   const hasPreviousPage = currentPage > 1
@@ -385,7 +386,10 @@ export default function CompanySelector({
       </button>
 
       {isOpen && (
-        <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+        <div
+          className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div className="p-2 border-b border-slate-200">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -428,9 +432,14 @@ export default function CompanySelector({
                   type="button"
                   role="option"
                   aria-selected={selectedIds.includes(company.id)}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
                     setActiveOptionIndex(index)
                     toggleCompany(company.id)
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
                   }}
                   onMouseEnter={() => setActiveOptionIndex(index)}
                   onFocus={() => setActiveOptionIndex(index)}

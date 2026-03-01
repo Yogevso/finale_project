@@ -120,8 +120,13 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       documentId: number,
       visibility: DocumentVisibility,
       ifMatch: string,
+      companyIds?: number[],
     ): Promise<Document> {
-      return client.updateDocument(documentId, { visibility }, ifMatch)
+      const updatePayload: { visibility: DocumentVisibility; company_ids?: number[] } = { visibility }
+      if (companyIds && companyIds.length > 0) {
+        updatePayload.company_ids = companyIds
+      }
+      return client.updateDocument(documentId, updatePayload, ifMatch)
     },
 
     async createDraftDocument(

@@ -88,27 +88,40 @@ export function DocumentsTable({
                     </span>
                   </td>
                   <td className="admin-table-cell">
-                    {isManager ? (
-                      <select
-                        value={visibilityOverrides[doc.id] || doc.visibility || 'internal'}
-                        onChange={(e) =>
-                          onVisibilityChange({
-                            id: doc.id,
-                            currentVisibility: doc.visibility || 'internal',
-                            nextVisibility: e.target.value as DocumentVisibility,
-                            ifMatch: doc.etag || String(doc.row_version || ''),
-                            title: doc.title,
-                          })
-                        }
-                        className="select-field w-40 min-w-[9.5rem]"
-                      >
-                        <option value="internal">Internal</option>
-                        <option value="public">Public</option>
-                        <option value="company">Company</option>
-                      </select>
-                    ) : (
-                      <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
-                    )}
+                    {(() => {
+                      const effectiveVisibility = visibilityOverrides[doc.id] || doc.visibility || 'internal'
+                      return isManager ? (
+                        <div className="space-y-1.5">
+                          <select
+                            value={effectiveVisibility}
+                            onChange={(e) =>
+                              onVisibilityChange({
+                                id: doc.id,
+                                currentVisibility: doc.visibility || 'internal',
+                                nextVisibility: e.target.value as DocumentVisibility,
+                                ifMatch: doc.etag || String(doc.row_version || ''),
+                                title: doc.title,
+                              })
+                            }
+                            className="select-field w-40 min-w-[9.5rem]"
+                          >
+                            <option value="internal">Internal</option>
+                            <option value="public">Public</option>
+                            <option value="company">Company</option>
+                          </select>
+                          {effectiveVisibility === 'company' && (
+                            <a
+                              href={`/documents/${doc.id}`}
+                              className="inline-flex text-xs font-medium text-sky-700 hover:text-sky-800"
+                            >
+                              Manage companies
+                            </a>
+                          )}
+                        </div>
+                      ) : (
+                        <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
+                      )
+                    })()}
                   </td>
                   <td className="admin-table-cell text-slate-500">{doc.category || '-'}</td>
                   <td className="admin-table-cell text-slate-500 whitespace-nowrap">

@@ -38,6 +38,9 @@ export function DocumentDetailsView({
   isRemovingCompany,
   reviewHistoryItems,
 }: DocumentDetailsViewProps) {
+  const showAssignmentSection =
+    document.visibility === 'company' || isEditor || assignedCompanies.length > 0
+
   return (
     <div className="surface-card rounded-2xl p-6 space-y-6">
       <div className="grid grid-cols-2 gap-6">
@@ -151,12 +154,12 @@ export function DocumentDetailsView({
         </div>
       )}
 
-      {document.visibility === 'company' && (
+      {showAssignmentSection && (
         <div className="border-t border-slate-200 pt-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-slate-500" />
-              <label className="text-sm font-medium text-slate-700">Assigned Companies</label>
+              <label className="text-sm font-medium text-slate-700">Company Assignments</label>
             </div>
             {isEditor && (
               <button
@@ -167,6 +170,11 @@ export function DocumentDetailsView({
               </button>
             )}
           </div>
+          <p className="text-xs text-slate-500 mb-3">
+            {document.visibility === 'company'
+              ? 'Assigned companies currently have audience access.'
+              : 'Pre-assign companies here, then switch visibility to Company to grant access.'}
+          </p>
 
           {showCompanySelector && (
             <div className="mb-4 p-4 bg-slate-50 rounded-xl">
