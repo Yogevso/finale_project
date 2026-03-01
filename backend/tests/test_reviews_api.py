@@ -126,6 +126,39 @@ class TestMySubmissions:
         assert response.status_code == 200
 
 
+class TestReviewAudienceDiffResilience:
+    """Regression tests for audience diff payload robustness."""
+
+    def test_get_review_handles_malformed_company_snapshot_json(
+        self,
+        client,
+        db,
+        auth_headers,
+        test_document,
+    ):
+        """Malformed snapshot JSON should not crash review detail responses."""
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{test_document.id}/submit",
+            headers=auth_headers,
+            json={"message": "capture snapshot"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        from app.models import ReviewRequest
+
+        review = db.query(ReviewRequest).filter(ReviewRequest.id == review_id).first()
+        assert review is not None
+        review.audience_company_ids_snapshot = "{not-valid-json"
+        db.commit()
+
+        detail_response = client.get(f"/api/v1/reviews/{review_id}", headers=auth_headers)
+        assert detail_response.status_code == 200
+        payload = detail_response.json()
+        assert payload["audience_diff"] is not None
+        assert payload["audience_diff"]["snapshot_company_ids"] == []
+
+
 class TestApproveReview:
     """Test approving reviews"""
 
