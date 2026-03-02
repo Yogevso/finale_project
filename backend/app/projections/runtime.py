@@ -24,6 +24,32 @@ def invalidate_projection_scopes(scopes: set[str]) -> int:
     return _projection_cache.invalidate_scopes(scopes)
 
 
+def invalidate_portal_audience_cache() -> int:
+    """Explicitly invalidate portal projections after audience/visibility changes.
+
+    Call this as a safety net after any operation that modifies a document's
+    visibility or company assignments, especially when the change may not
+    trigger SQLAlchemy session flush hooks (e.g. raw SQL, bulk updates).
+    """
+    count = _projection_cache.invalidate_scopes({"portal"})
+    if count:
+        logger.info("Invalidated %d portal projection entries due to audience change", count)
+    return count
+
+
+def invalidate_search_audience_cache() -> int:
+    """Invalidate search + public projection caches after audience changes.
+
+    Call alongside ``invalidate_portal_audience_cache`` whenever visibility
+    or company assignments change so that search results and public listings
+    reflect the updated audience rules.
+    """
+    count = _projection_cache.invalidate_scopes({"search", "public"})
+    if count:
+        logger.info("Invalidated %d search/public projection entries due to audience change", count)
+    return count
+
+
 def reset_projection_cache() -> None:
     """Clear the shared projection cache (used in tests)."""
     _projection_cache.clear()

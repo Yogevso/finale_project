@@ -1,11 +1,14 @@
 """Tests for explicit application use-case service interfaces."""
 
+import pytest
+
 from app.application.interfaces.dependencies import (
     get_assign_company_set_use_case,
     get_publish_approved_version_use_case,
 )
 from app.application.interfaces.use_cases import AssignCompanySet, PublishApprovedVersion
 from app.dependencies.tenant import TenantContext
+from app.errors import ValidationError
 from app.models import Document, DocumentStatus, DocumentVisibility, UserRole
 from app.services.document_service import DocumentService
 from app.services.version_service import VersionService
@@ -78,7 +81,11 @@ def test_assign_company_set_use_case_replaces_assignments(
         [test_tenant.id, test_tenant_2.id]
     )
 
-    cleared_count = service.assign_company_set(document.id, [])
-    assert cleared_count == 0
+    with pytest.raises(ValidationError) as exc_info:
+        service.assign_company_set(document.id, [])
+    assert exc_info.value.error_code == "missing_company_assignment"
+
     db.refresh(document)
-    assert document.assigned_companies == []
+    assert sorted(company.id for company in document.assigned_companies) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )

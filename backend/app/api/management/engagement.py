@@ -9,7 +9,16 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Bookmark, Document, Feedback, ReadingProgress, User, UserRole
+from app.models import (
+    Bookmark,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    Feedback,
+    ReadingProgress,
+    User,
+    UserRole,
+)
 from app.security import get_current_active_user
 
 router = APIRouter(prefix="/engagement", tags=["Engagement"])
@@ -34,6 +43,27 @@ def _get_scoped_document_or_404(db: Session, document_id: int, current_user: Use
     document = query.first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    # Task 194: audience safeguards for quick actions.
+    # Non-admin users may only interact with ACTIVE documents they can see.
+    if not _is_system_admin(current_user):
+        if document.status != DocumentStatus.ACTIVE:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if document.visibility == DocumentVisibility.INTERNAL:
+            # Customer users (external) should not interact with INTERNAL docs
+            if current_user.role == UserRole.CUSTOMER:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You don't have access to this document",
+                )
+        elif document.visibility == DocumentVisibility.COMPANY:
+            # COMPANY docs: customer must belong to an assigned company
+            if current_user.role == UserRole.CUSTOMER:
+                assigned_ids = {c.id for c in (document.assigned_companies or [])}
+                if current_user.tenant_id not in assigned_ids:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You don't have access to this document",
+                    )
     return document
 
 
@@ -106,6 +136,12 @@ def list_bookmarks(
         .filter(Bookmark.user_id == current_user.id)
     )
     query = _apply_document_tenant_scope(query, current_user)
+    # Task 194: audience filter – customers only see ACTIVE + audience-visible docs
+    if not _is_system_admin(current_user) and current_user.role == UserRole.CUSTOMER:
+        query = query.filter(
+            Document.status == DocumentStatus.ACTIVE,
+            Document.visibility != DocumentVisibility.INTERNAL,
+        )
     bookmarks = query.order_by(Bookmark.created_at.desc()).all()
 
     return [
@@ -321,6 +357,12 @@ def list_reading_progress(
         .filter(ReadingProgress.user_id == current_user.id)
     )
     query = _apply_document_tenant_scope(query, current_user)
+    # Task 194: audience filter
+    if not _is_system_admin(current_user) and current_user.role == UserRole.CUSTOMER:
+        query = query.filter(
+            Document.status == DocumentStatus.ACTIVE,
+            Document.visibility != DocumentVisibility.INTERNAL,
+        )
 
     if completed_only:
         query = query.filter(ReadingProgress.completed_at.isnot(None))

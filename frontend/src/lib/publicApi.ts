@@ -19,6 +19,8 @@ export interface PublicDocumentSummary {
   platform?: string
   release_branch?: string
   tags?: string
+  thumbnail_url?: string
+  visibility: string
   created_at: string
   updated_at?: string
   published_at?: string
@@ -68,6 +70,7 @@ export interface PublicSearchResult {
   category?: string
   topic?: string
   platform?: string
+  visibility: string
   snippet?: string
   score: number
 }

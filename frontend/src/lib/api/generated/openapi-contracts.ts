@@ -17,16 +17,14 @@ export interface OpenApiSchemas {
 };
   ActivityLogRequest: {
   activity_type: string;
-  details?: {
-} | null;
+  details?: Record<string, unknown> | null;
   document_id: number;
   session_id?: string | null;
 };
   ActivityResponse: {
   activity_type: string;
   created_at: string;
-  details?: {
-} | null;
+  details?: Record<string, unknown> | null;
   document_id: number;
   id: number;
   user_id: number;
@@ -34,9 +32,7 @@ export interface OpenApiSchemas {
 };
   AnalyticsOverview: {
   documents_by_category: (OpenApiSchema<'CategoryCount'>)[];
-  documents_by_status: {
-  [key: string]: number;
-};
+  documents_by_status: Record<string, number>;
   new_docs_this_week?: number;
   pending_reviews: number;
   period_end: string;
@@ -263,9 +259,7 @@ export interface OpenApiSchemas {
   granularity: OpenApiSchema<'TimeGranularity'>;
   period_end: string;
   period_start: string;
-  reviews_by_status: {
-  [key: string]: number;
-};
+  reviews_by_status: Record<string, number>;
   total_comments: number;
   total_documents_created: number;
   total_versions_published: number;
@@ -354,12 +348,8 @@ export interface OpenApiSchemas {
 };
   FeedbackAnalytics: {
   avg_response_time_hours?: number | null;
-  feedback_by_status: {
-  [key: string]: number;
-};
-  feedback_by_type: {
-  [key: string]: number;
-};
+  feedback_by_status: Record<string, number>;
+  feedback_by_type: Record<string, number>;
   feedback_over_time: (OpenApiSchema<'TimeSeriesPoint'>)[];
   granularity: OpenApiSchema<'TimeGranularity'>;
   helpfulness_rate: number;
@@ -828,20 +818,16 @@ export interface OpenApiSchemas {
   name?: string | null;
 };
   SystemSettingsResponse: {
-  settings: {
-};
+  settings: Record<string, unknown>;
 };
   SystemSettingsUpdate: {
-  settings: {
-};
+  settings: Record<string, unknown>;
 };
   TenantAnalytics: {
   active_tenants: number;
   period_end: string;
   period_start: string;
-  tenant_activity_over_time?: {
-  [key: string]: (OpenApiSchema<'TimeSeriesPoint'>)[];
-} | null;
+  tenant_activity_over_time?: Record<string, (OpenApiSchema<'TimeSeriesPoint'>)[]> | null;
   tenants: (OpenApiSchema<'TenantMetrics'>)[];
   total_tenants: number;
 };
@@ -916,9 +902,7 @@ export interface OpenApiSchemas {
   period_end: string;
   period_start: string;
   total_users: number;
-  users_by_role: {
-  [key: string]: number;
-};
+  users_by_role: Record<string, number>;
 };
   UserCreate: {
   email: string;

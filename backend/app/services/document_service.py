@@ -257,6 +257,23 @@ class DocumentService(TenantAwareService[Document]):
             parent = self._base_query().filter(Document.id == parent_id).first()
             if not parent:
                 raise NotFoundError("Parent document not found")
+            # Task 193: carry-over audience from parent when duplicating.
+            # If the caller didn't explicitly set visibility (left default INTERNAL),
+            # inherit from the parent.
+            if document_data.visibility == DocumentVisibility.INTERNAL and parent.visibility != DocumentVisibility.INTERNAL:
+                document_data = document_data.model_copy(
+                    update={"visibility": parent.visibility}
+                )
+            # Inherit company assignments if the caller didn't specify any.
+            if not normalized_company_ids and parent.assigned_companies:
+                parent_company_ids = [c.id for c in parent.assigned_companies]
+                normalized_company_ids = self._normalize_company_ids(parent_company_ids)
+                assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+            # Re-validate after carry-over
+            self._validate_company_visibility_assignment(
+                visibility=document_data.visibility,
+                company_ids=normalized_company_ids,
+            )
 
         # Create document with retry in case of document_number collision
         attempts = 0
@@ -492,6 +509,18 @@ class DocumentService(TenantAwareService[Document]):
 
         self.db.refresh(document)
 
+        # If visibility or company assignments changed, invalidate portal cache
+        if has_visibility_update or has_company_assignment_update:
+            from app.projections import (
+                invalidate_portal_audience_cache,
+                invalidate_search_audience_cache,
+            )
+            invalidate_portal_audience_cache()
+            invalidate_search_audience_cache()
+            # Sync FTS5 search index so queries reflect the new audience
+            from app.services.search_index_service import SearchIndexSyncService
+            SearchIndexSyncService(self.db).sync_document(document_id)
+
         return document
 
     def delete_document(self, document_id: int, user: User) -> None:
@@ -522,12 +551,6 @@ class DocumentService(TenantAwareService[Document]):
         """Replace the full assigned-company set for a document."""
         document = self.get_document(document_id)
         self._verify_access(document)
-        ensure_if_match_matches(
-            if_match=if_match,
-            resource_type="document",
-            resource_id=document.id,
-            row_version=document.row_version,
-        )
 
         requested_ids = self._normalize_company_ids(company_ids)
         if document.visibility == DocumentVisibility.COMPANY and not requested_ids:
@@ -537,9 +560,30 @@ class DocumentService(TenantAwareService[Document]):
             )
         assigned_companies = self._resolve_assigned_companies(requested_ids)
 
+        # API callers (tenant-scoped service instances) must provide If-Match tokens,
+        # but direct internal service usage remains backwards-compatible.
+        if if_match is not None or self.tenant_ctx is not None:
+            ensure_if_match_matches(
+                if_match=if_match,
+                resource_type="document",
+                resource_id=document.id,
+                row_version=document.row_version,
+            )
+
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
             document.updated_at = datetime.utcnow()
+
+        # Safety net: explicitly invalidate portal + search cache after audience change
+        from app.projections import (
+            invalidate_portal_audience_cache,
+            invalidate_search_audience_cache,
+        )
+        invalidate_portal_audience_cache()
+        invalidate_search_audience_cache()
+        # Sync FTS5 search index so queries reflect the new audience
+        from app.services.search_index_service import SearchIndexSyncService
+        SearchIndexSyncService(self.db).sync_document(document_id)
 
         return len(requested_ids)
 
@@ -588,6 +632,12 @@ class DocumentService(TenantAwareService[Document]):
             visibility_snapshot,
             company_ids_snapshot,
         )
+
+        # Archived docs should be removed from active search/public results
+        from app.projections import invalidate_search_audience_cache
+        invalidate_search_audience_cache()
+        from app.services.search_index_service import SearchIndexSyncService
+        SearchIndexSyncService(self.db).sync_document(document_id)
 
         return {
             "document_id": document_id,

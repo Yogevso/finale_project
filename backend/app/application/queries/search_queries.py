@@ -9,9 +9,9 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.domain.specifications import DateRangeSpec, TenantScopeSpec
+from app.domain.specifications import DateRangeSpec, TenantScopeSpec, VisibilitySpec
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
-from app.models import Document, SavedSearch, User
+from app.models import Document, SavedSearch, User, UserRole
 from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
 
@@ -96,6 +96,21 @@ class SearchQueryHandler:
         tenant_scope = "system" if is_system_admin else f"tenant:{user.tenant_id}"
         return f"{tenant_scope}:role:{role}"
 
+    @staticmethod
+    def _visibility_spec_for_user(user: User) -> VisibilitySpec | None:
+        """Return a ``VisibilitySpec`` appropriate for the searching user.
+
+        * **system_admin** – no visibility restriction (returns ``None``).
+        * **customer** – portal-style (PUBLIC + assigned COMPANY, active only).
+        * **all other internal roles** – management (PUBLIC + INTERNAL + COMPANY, active only).
+        """
+        role = user.role.value if hasattr(user.role, "value") else str(user.role)
+        if role == UserRole.SYSTEM_ADMIN.value if hasattr(UserRole.SYSTEM_ADMIN, "value") else role == "system_admin":
+            return None  # system admin sees everything
+        if role == (UserRole.CUSTOMER.value if hasattr(UserRole.CUSTOMER, "value") else "customer"):
+            return VisibilitySpec.customer_portal(user.tenant_id)
+        return VisibilitySpec.management()
+
     def _execute_cached(
         self,
         *,
@@ -159,6 +174,7 @@ class SearchQueryHandler:
             document_repository = DocumentRepository(self.db)
             tenant_scope_spec = TenantScopeSpec.for_user(query.current_user)
             date_range_spec = DateRangeSpec(date_from=query.date_from, date_to=query.date_to)
+            visibility_spec = self._visibility_spec_for_user(query.current_user)
             offset = (query.page - 1) * query.page_size
 
             try:
@@ -179,6 +195,16 @@ class SearchQueryHandler:
                 if tenant_clause:
                     filters.append(tenant_clause)
                     params.update(tenant_params)
+
+                # Audience / visibility filtering
+                if visibility_spec is not None:
+                    vis_clauses, vis_params = visibility_spec.sql_clauses(
+                        visibility_col="d.visibility",
+                        status_col="d.status",
+                        company_subquery_col="d.id",
+                    )
+                    filters.extend(vis_clauses)
+                    params.update(vis_params)
 
                 where_clause = " AND ".join(filters)
                 fts_query = text(
@@ -207,6 +233,8 @@ class SearchQueryHandler:
                     (Document.title.ilike(f"%{query.q}%")) | (Document.description.ilike(f"%{query.q}%"))
                 )
                 fallback_query = tenant_scope_spec.apply(fallback_query, Document)
+                if visibility_spec is not None:
+                    fallback_query = visibility_spec.apply(fallback_query, Document)
                 if query.category:
                     fallback_query = fallback_query.filter(Document.category == query.category)
                 fallback_query = date_range_spec.apply(fallback_query, Document.created_at)

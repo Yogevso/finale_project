@@ -6,6 +6,8 @@ Create Date: 2026-03-01
 
 """
 
+from __future__ import annotations
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -17,19 +19,43 @@ branch_labels = None
 depends_on = None
 
 
+def _table_exists(inspector: sa.Inspector, table_name: str) -> bool:
+    return table_name in set(inspector.get_table_names())
+
+
+def _has_column(inspector: sa.Inspector, table_name: str, column_name: str) -> bool:
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    """Add audience snapshot columns to versions table."""
-    op.add_column(
-        "versions",
-        sa.Column("audience_visibility_snapshot", sa.String(50), nullable=True),
-    )
-    op.add_column(
-        "versions",
-        sa.Column("audience_company_ids_snapshot", sa.Text(), nullable=True),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if not _table_exists(inspector, "versions"):
+        return
+
+    with op.batch_alter_table("versions") as batch_op:
+        if not _has_column(inspector, "versions", "audience_visibility_snapshot"):
+            batch_op.add_column(
+                sa.Column("audience_visibility_snapshot", sa.String(length=50), nullable=True)
+            )
+
+        if not _has_column(inspector, "versions", "audience_company_ids_snapshot"):
+            batch_op.add_column(
+                sa.Column("audience_company_ids_snapshot", sa.Text(), nullable=True)
+            )
 
 
 def downgrade() -> None:
-    """Remove audience snapshot columns from versions table."""
-    op.drop_column("versions", "audience_company_ids_snapshot")
-    op.drop_column("versions", "audience_visibility_snapshot")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    if not _table_exists(inspector, "versions"):
+        return
+
+    with op.batch_alter_table("versions") as batch_op:
+        if _has_column(inspector, "versions", "audience_company_ids_snapshot"):
+            batch_op.drop_column("audience_company_ids_snapshot")
+
+        if _has_column(inspector, "versions", "audience_visibility_snapshot"):
+            batch_op.drop_column("audience_visibility_snapshot")

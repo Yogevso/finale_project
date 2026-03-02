@@ -18,6 +18,8 @@ class PublicDocumentSummary(BaseModel):
     platform: Optional[str] = None
     release_branch: Optional[str] = None
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    visibility: str = "public"
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
@@ -39,6 +41,8 @@ class PublicDocumentDetail(BaseModel):
     platform: Optional[str] = None
     release_branch: Optional[str] = None
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    visibility: str = "public"
     created_at: datetime
     updated_at: Optional[datetime] = None
     # Version content
@@ -70,6 +74,8 @@ class PublicDocumentWithAttachments(PublicDocumentDetail):
     """Document with attachment list"""
 
     attachments: List[PublicAttachmentInfo] = []
+    sharing_policy: Optional[dict] = None
+    embed_policy: Optional[dict] = None
 
 
 class PublicPlatformDocument(BaseModel):
@@ -199,6 +205,7 @@ class PublicSearchResult(BaseModel):
     category: Optional[str] = None
     topic: Optional[str] = None
     platform: Optional[str] = None
+    visibility: str = "public"
     snippet: Optional[str] = None  # Highlighted search snippet
     score: float = 0.0
 

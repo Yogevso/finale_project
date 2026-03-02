@@ -17,6 +17,15 @@ class TestPublicDocumentsEndpoint:
         titles = [doc["title"] for doc in data["items"]]
         assert "Public Document" in titles
 
+    def test_list_public_documents_includes_visibility(self, client, public_document):
+        """Public document list items should include visibility field for audience parity"""
+        response = client.get("/api/v1/public/documents")
+        assert response.status_code == 200
+        data = response.json()
+        for item in data["items"]:
+            assert "visibility" in item
+            assert item["visibility"] == "public"
+
     def test_list_public_documents_excludes_internal(
         self, client, public_document, internal_document
     ):
@@ -66,6 +75,14 @@ class TestPublicDocumentDetailEndpoint:
         data = response.json()
         assert data["title"] == "Public Document"
         assert data["id"] == public_document.id
+
+    def test_get_public_document_includes_visibility(self, client, public_document):
+        """Public document detail should include visibility field for audience parity"""
+        response = client.get(f"/api/v1/public/documents/{public_document.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "visibility" in data
+        assert data["visibility"] == "public"
 
     def test_get_internal_document_fails(self, client, internal_document):
         """Should not return internal documents on public endpoint"""
@@ -408,6 +425,96 @@ class TestPublicPlatformsEndpoints:
         assert payload["total"] == 1
         assert payload["items"][0]["title"] == "API Reference Index"
         assert payload["items"][0]["document_number"] == "DOC-PLAT-010"
+
+
+class TestPublicRssFeed:
+    """Test /api/v1/public/feed.xml endpoint"""
+
+    def test_rss_feed_returns_xml(self, client, public_document):
+        """RSS feed should return valid RSS 2.0 XML."""
+        response = client.get("/api/v1/public/feed.xml")
+        assert response.status_code == 200
+        body = response.text
+        assert '<?xml version="1.0"' in body
+        assert "<rss" in body
+        assert "<channel>" in body
+        assert "<item>" in body
+        assert "<title>" in body
+
+    def test_rss_feed_excludes_internal_documents(self, client, public_document, internal_document):
+        """RSS feed should not contain internal documents."""
+        response = client.get("/api/v1/public/feed.xml")
+        assert response.status_code == 200
+        body = response.text
+        assert "Public Document" in body
+        assert "Internal Document" not in body
+
+    def test_rss_feed_has_cache_headers(self, client, public_document):
+        """RSS feed should set Cache-Control."""
+        response = client.get("/api/v1/public/feed.xml")
+        assert response.status_code == 200
+        cc = response.headers.get("cache-control", "")
+        assert "public" in cc
+
+    def test_rss_feed_respects_limit(self, client, public_document):
+        """RSS feed should respect the limit query parameter."""
+        response = client.get("/api/v1/public/feed.xml?limit=1")
+        assert response.status_code == 200
+        body = response.text
+        assert body.count("<item>") <= 1
+
+
+class TestPublicSitemap:
+    """Test /api/v1/public/sitemap.xml endpoint"""
+
+    def test_sitemap_returns_xml(self, client, public_document):
+        """Sitemap should return valid XML with public documents."""
+        response = client.get("/api/v1/public/sitemap.xml")
+        assert response.status_code == 200
+        assert "application/xml" in response.headers.get("content-type", "")
+        body = response.text
+        assert '<?xml version="1.0"' in body
+        assert "<urlset" in body
+        assert "<url>" in body
+        assert "<loc>" in body
+
+    def test_sitemap_excludes_internal_documents(self, client, public_document, internal_document):
+        """Sitemap should not contain internal documents."""
+        response = client.get("/api/v1/public/sitemap.xml")
+        assert response.status_code == 200
+        body = response.text
+        assert f"/docs/{internal_document.id}" not in body
+        assert f"/docs/{public_document.id}" in body
+
+    def test_sitemap_has_cache_headers(self, client, public_document):
+        """Sitemap should set Cache-Control."""
+        response = client.get("/api/v1/public/sitemap.xml")
+        assert response.status_code == 200
+        cc = response.headers.get("cache-control", "")
+        assert "public" in cc
+
+
+class TestPublicCacheHeaders:
+    """Test Cache-Control / ETag headers on public endpoints"""
+
+    def test_list_documents_has_cache_control(self, client, public_document):
+        """Public list should return Cache-Control header"""
+        response = client.get("/api/v1/public/documents")
+        assert response.status_code == 200
+        cc = response.headers.get("cache-control", "")
+        assert "public" in cc
+        assert "max-age=" in cc
+
+    def test_detail_document_has_cache_control_and_etag(self, client, public_document):
+        """Public detail should return Cache-Control and ETag headers"""
+        response = client.get(f"/api/v1/public/documents/{public_document.id}")
+        assert response.status_code == 200
+        cc = response.headers.get("cache-control", "")
+        assert "public" in cc
+        assert "max-age=" in cc
+        # ETag should be present and non-empty
+        etag = response.headers.get("etag")
+        assert etag is not None and len(etag) > 0
 
 
 class TestPublicEndpointsSecure:

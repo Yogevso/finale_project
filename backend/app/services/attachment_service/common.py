@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.domain.value_objects import SemanticVersion
-from app.models import Attachment, AttachmentArtifact, Document, User, UserRole
+from app.models import Attachment, AttachmentArtifact, Document, DocumentVisibility, User, UserRole
 from app.services.permissions import (
     Permission,
     can_view_document,
@@ -301,6 +301,12 @@ class AttachmentServiceCommonMixin:
         """Enforce attachment access constraints through one code path."""
         if current_user is None:
             # Anonymous/public flows are governed by caller-specific route rules.
+            # Defence-in-depth: only PUBLIC documents should be accessible without auth.
+            if document.visibility != DocumentVisibility.PUBLIC:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Authentication required to access this document's attachments",
+                )
             return
 
         if not can_view_document(current_user, document):

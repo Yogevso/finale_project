@@ -327,6 +327,7 @@ class Document(Base):
     platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
+    thumbnail_url = Column(String(500), nullable=True)  # Cover image / thumbnail URL
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)

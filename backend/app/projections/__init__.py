@@ -5,7 +5,9 @@ from app.projections.invalidation import register_projection_invalidation_listen
 from app.projections.runtime import (
     execute_cached_projection,
     get_projection_cache,
+    invalidate_portal_audience_cache,
     invalidate_projection_scopes,
+    invalidate_search_audience_cache,
     reset_projection_cache,
 )
 
@@ -14,7 +16,9 @@ __all__ = [
     "ProjectionCacheError",
     "execute_cached_projection",
     "get_projection_cache",
+    "invalidate_portal_audience_cache",
     "invalidate_projection_scopes",
+    "invalidate_search_audience_cache",
     "register_projection_invalidation_listeners",
     "reset_projection_cache",
 ]

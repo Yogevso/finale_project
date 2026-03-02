@@ -120,6 +120,11 @@ class AssignCompanySetCommandHandler:
 
     def _execute_use_case(self, context: CommandContext[AssignCompanySetCommand]) -> int:
         command = context.command
+        if command.if_match is None:
+            return self.use_case.assign_company_set(
+                command.document_id,
+                command.company_ids,
+            )
         return self.use_case.assign_company_set(
             command.document_id,
             command.company_ids,

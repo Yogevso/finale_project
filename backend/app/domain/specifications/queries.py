@@ -134,6 +134,28 @@ class VisibilitySpec:
             required_statuses=frozenset({DocumentStatus.ACTIVE}),
         )
 
+    @classmethod
+    def management(cls) -> VisibilitySpec:
+        """All visibility levels, active documents only – for internal staff search."""
+        return cls(
+            allowed_visibilities=frozenset(
+                {
+                    DocumentVisibility.PUBLIC,
+                    DocumentVisibility.INTERNAL,
+                    DocumentVisibility.COMPANY,
+                }
+            ),
+            required_statuses=frozenset({DocumentStatus.ACTIVE}),
+        )
+
+    @classmethod
+    def public_only(cls) -> VisibilitySpec:
+        """Public + active – for anonymous/public search and sitemap."""
+        return cls(
+            allowed_visibilities=frozenset({DocumentVisibility.PUBLIC}),
+            required_statuses=frozenset({DocumentStatus.ACTIVE}),
+        )
+
     def is_satisfied_by(self, document: Document) -> bool:
         if self.required_statuses and document.status not in self.required_statuses:
             return False
@@ -180,3 +202,64 @@ class VisibilitySpec:
         if len(conditions) == 1:
             return query.filter(conditions[0])
         return query.filter(or_(*conditions))
+
+    def sql_clauses(
+        self,
+        *,
+        visibility_col: str = "d.visibility",
+        status_col: str = "d.status",
+        company_subquery_col: str = "d.id",
+    ) -> tuple[list[str], dict[str, object]]:
+        """Return raw-SQL WHERE fragments + bind params for FTS5 / text queries.
+
+        The returned clauses should be ANDed into the caller's WHERE.
+        """
+        clauses: list[str] = []
+        params: dict[str, object] = {}
+
+        # Status filter
+        if self.required_statuses:
+            status_values = [s.value for s in self.required_statuses]
+            if len(status_values) == 1:
+                clauses.append(f"{status_col} = :vis_status")
+                params["vis_status"] = status_values[0]
+            else:
+                placeholders = ", ".join(
+                    f":vis_status_{i}" for i in range(len(status_values))
+                )
+                clauses.append(f"{status_col} IN ({placeholders})")
+                for i, v in enumerate(status_values):
+                    params[f"vis_status_{i}"] = v
+
+        # Visibility filter
+        vis_parts: list[str] = []
+        if DocumentVisibility.PUBLIC in self.allowed_visibilities:
+            vis_parts.append(f"{visibility_col} = :vis_public")
+            params["vis_public"] = DocumentVisibility.PUBLIC.value
+
+        if DocumentVisibility.INTERNAL in self.allowed_visibilities:
+            vis_parts.append(f"{visibility_col} = :vis_internal")
+            params["vis_internal"] = DocumentVisibility.INTERNAL.value
+
+        if (
+            DocumentVisibility.COMPANY in self.allowed_visibilities
+            and self.company_tenant_id is not None
+        ):
+            vis_parts.append(
+                f"({visibility_col} = :vis_company AND {company_subquery_col} IN "
+                f"(SELECT document_id FROM document_company_assignments "
+                f"WHERE company_id = :vis_company_tid))"
+            )
+            params["vis_company"] = DocumentVisibility.COMPANY.value
+            params["vis_company_tid"] = self.company_tenant_id
+
+        if vis_parts:
+            clauses.append("(" + " OR ".join(vis_parts) + ")")
+        elif not vis_parts and self.allowed_visibilities:
+            # All visibilities allowed but none matched the branch conditions
+            pass
+        else:
+            # Empty allowed_visibilities → match nothing
+            clauses.append("1 = 0")
+
+        return clauses, params

@@ -107,10 +107,6 @@ class ApproveReviewCommandHandler:
         review_aggregate = ReviewAggregate(review)
         review_aggregate.ensure_pending()
 
-        # Ensure audience configuration is valid before approval
-        document_aggregate = DocumentAggregate(review.document)
-        document_aggregate.ensure_audience_ready_for_submit()
-
         if review.version_id:
             review_version = (
                 self.db.query(Version)
@@ -159,6 +155,9 @@ class ApproveReviewCommandHandler:
         document_aggregate = DocumentAggregate(review.document)
         current_user = context.command.current_user
         document = review.document
+
+        # Validate audience only after authorization to preserve tenant-boundary 404 semantics.
+        document_aggregate.ensure_audience_ready_for_submit()
 
         # Perform audience resolution before approval
         audience_resolution = self._resolve_audience_drift(review, document)

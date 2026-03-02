@@ -26,26 +26,40 @@ portalClient.interceptors.request.use((config) => {
 
 export interface PortalDocument {
   id: number
+  document_number?: string
   title: string
   description?: string
   category?: string
+  topic?: string
+  platform?: string
+  release_branch?: string
+  tags?: string
+  thumbnail_url?: string
   visibility: string
   version: number
+  created_at?: string
   updated_at: string
+  published_at?: string
   has_attachments: boolean
 }
 
 export interface PortalDocumentDetail {
   id: number
+  document_number?: string
   title: string
   description?: string
   content: string
   category?: string
+  topic?: string
+  platform?: string
+  release_branch?: string
   tags: string[]
+  thumbnail_url?: string
   visibility: string
   version: number
   created_at: string
   updated_at: string
+  published_at?: string
   attachments: PortalAttachment[]
 }
 

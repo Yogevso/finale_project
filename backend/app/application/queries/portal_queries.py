@@ -179,15 +179,23 @@ class PortalDocumentsQueryHandler:
                 )
                 visible_version = self._portal_visible_version(doc)
                 version_number = visible_version.version_number if visible_version else 1
+                published_at = visible_version.published_at if visible_version else None
                 items.append(
                     PortalDocumentSummary(
                         id=doc.id,
+                        document_number=doc.document_number,
                         title=doc.title,
                         description=doc.description,
                         category=doc.category,
+                        topic=doc.topic,
+                        platform=doc.platform,
+                        release_branch=doc.release_branch,
+                        tags=doc.tags,
                         visibility=doc.visibility.value if doc.visibility else "internal",
                         version=version_number,
+                        created_at=doc.created_at,
                         updated_at=doc.updated_at,
+                        published_at=published_at,
                         has_attachments=attachment_count > 0,
                     )
                 )
@@ -227,18 +235,24 @@ class PortalDocumentsQueryHandler:
             visible_version = self._portal_visible_version(document)
             content = visible_version.content if visible_version else ""
             version_number = visible_version.version_number if visible_version else 1
+            published_at = visible_version.published_at if visible_version else None
 
             return PortalDocumentDetail(
                 id=document.id,
+                document_number=document.document_number,
                 title=document.title,
                 description=document.description,
                 content=content,
                 category=document.category,
+                topic=document.topic,
+                platform=document.platform,
+                release_branch=document.release_branch,
                 tags=tags,
                 visibility=document.visibility.value if document.visibility else "internal",
                 version=version_number,
                 created_at=document.created_at,
                 updated_at=document.updated_at,
+                published_at=published_at,
                 attachments=[
                     PortalAttachment(
                         id=att.id,
@@ -283,7 +297,7 @@ class PortalDocumentsQueryHandler:
             "file_size": attachment.file_size,
             "mime_type": attachment.mime_type,
             "download_url": (
-                f"/api/v1/documents/{query.document_id}/attachments/{attachment.id}/download"
+                f"/api/v1/portal/documents/{query.document_id}/attachments/{attachment.id}/download"
             ),
         }
 

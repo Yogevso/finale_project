@@ -116,6 +116,7 @@ class DocumentBase(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
 class DocumentCreate(DocumentBase):
@@ -143,6 +144,7 @@ class DocumentUpdate(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
 class DocumentResponse(DocumentBase):
@@ -491,6 +493,10 @@ class AudienceAccessPreviewResponse(BaseModel):
     includes_internal_users: bool
     target_companies: List[TenantSummary]
     access_summary: str
+    # Snapshot from last published version (None if never published)
+    published_visibility_snapshot: Optional[str] = None
+    published_company_ids_snapshot: Optional[List[int]] = None
+    audience_changed_since_publish: bool = False
 
 
 class DocumentDetailPageBundleResponse(BaseModel):
@@ -501,6 +507,8 @@ class DocumentDetailPageBundleResponse(BaseModel):
     assigned_companies: List[TenantSummary]
     audience_access_preview: AudienceAccessPreviewResponse
     review_history: ReviewListResponse
+    # Partial-failure tracking: lists sub-sections that failed to load
+    partial_errors: Optional[List[str]] = None
 
 
 # ========== General Schemas ==========

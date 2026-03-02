@@ -1,12 +1,19 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useQuery } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CompanySelector from '@/components/CompanySelector'
 
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: vi.fn(),
-}))
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual<typeof import('@tanstack/react-query')>(
+    '@tanstack/react-query',
+  )
+
+  return {
+    ...actual,
+    useQuery: vi.fn(),
+  }
+})
 
 const mockedUseQuery = vi.mocked(useQuery)
 
@@ -30,6 +37,10 @@ function buildCompany(id: number, name: string) {
 describe('CompanySelector', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('renders loading state', () => {
@@ -169,31 +180,33 @@ describe('CompanySelector', () => {
   })
 
   it('supports API-backed pagination controls', () => {
+    const pageOneResult = {
+      data: {
+        items: [buildCompany(10, 'Page One Company')],
+        page: 1,
+        pages: 2,
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    } as never
+    const pageTwoResult = {
+      data: {
+        items: [buildCompany(20, 'Page Two Company')],
+        page: 2,
+        pages: 2,
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    } as never
+
     mockedUseQuery.mockImplementation((queryOptions: any) => {
       const params = queryOptions.queryKey[2] as { page: number }
       if (params.page === 2) {
-        return {
-          data: {
-            items: [buildCompany(20, 'Page Two Company')],
-            page: 2,
-            pages: 2,
-          },
-          isLoading: false,
-          isError: false,
-          isFetching: false,
-        } as never
+        return pageTwoResult
       }
-
-      return {
-        data: {
-          items: [buildCompany(10, 'Page One Company')],
-          page: 1,
-          pages: 2,
-        },
-        isLoading: false,
-        isError: false,
-        isFetching: false,
-      } as never
+      return pageOneResult
     })
 
     render(<CompanySelector selectedIds={[]} onChange={vi.fn()} perPage={1} />)

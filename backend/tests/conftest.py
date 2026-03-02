@@ -1,5 +1,7 @@
 """Test Configuration and Fixtures"""
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -28,6 +30,18 @@ engine = create_engine(
 )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def event_loop_compat():
+    """Provide a default event loop for tests that call asyncio.get_event_loop()."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        yield
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
 
 @pytest.fixture(autouse=True)
