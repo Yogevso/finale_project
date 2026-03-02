@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -21,18 +23,20 @@ from app.application.pipeline import (
 from app.application.policies import DocumentAccessPolicy, ReviewPolicy
 from app.domain.aggregates import DocumentAggregate, ReviewAggregate
 from app.domain.result import Result
-from app.errors import ConflictError, NotFoundError, PermissionDeniedError
+from app.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     AuditLog,
     Notification,
     NotificationType,
     ReviewRequest,
+    Tenant,
     User,
     Version,
 )
 from app.services.permissions import Permission, has_permission
 
+logger = logging.getLogger(__name__)
 
 class ApproveReviewCommandErrorCode(str, Enum):
     """Expected approve-review command failure categories."""
@@ -40,6 +44,7 @@ class ApproveReviewCommandErrorCode(str, Enum):
     NOT_FOUND = "not_found"
     PERMISSION_DENIED = "permission_denied"
     CONFLICT = "conflict"
+    VALIDATION = "validation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,10 +90,12 @@ class ApproveReviewCommandHandler:
         return self._last_trace
 
     def _validate(self, context: CommandContext[ApproveReviewCommand]) -> None:
+        from app.models import Document
+
         review = (
             self.db.query(ReviewRequest)
             .options(
-                joinedload(ReviewRequest.document),
+                joinedload(ReviewRequest.document).joinedload(Document.assigned_companies),
                 joinedload(ReviewRequest.submitter),
             )
             .filter(ReviewRequest.id == context.command.review_id)
@@ -147,6 +154,22 @@ class ApproveReviewCommandHandler:
         review_aggregate = ReviewAggregate(review)
         document_aggregate = DocumentAggregate(review.document)
         current_user = context.command.current_user
+        document = review.document
+
+        # Validate audience only after authorization to preserve tenant-boundary 404 semantics.
+        document_aggregate.ensure_audience_ready_for_submit()
+
+        # Perform audience resolution before approval
+        audience_resolution = self._resolve_audience_drift(review, document)
+        if audience_resolution["has_drift"]:
+            logger.info(
+                "Review approve audience resolution for review=%d document=%d: %s",
+                review.id,
+                document.id,
+                json.dumps(audience_resolution),
+            )
+            # Store resolution info on context for audit
+            context.state["audience_resolution"] = audience_resolution
 
         review_aggregate.approve(
             reviewer_id=current_user.id,
@@ -155,12 +178,31 @@ class ApproveReviewCommandHandler:
         )
         document_aggregate.transition_to_approved()
 
+        # Build audit details with audience resolution
+        audit_details = f"Approved review #{review.id} for version {review.version_id or 'n/a'}"
+        if audience_resolution["has_drift"]:
+            resolution_summary = []
+            if audience_resolution.get("visibility_change"):
+                resolution_summary.append(
+                    f"visibility: {audience_resolution['visibility_change']['from']} -> "
+                    f"{audience_resolution['visibility_change']['to']}"
+                )
+            if audience_resolution.get("removed_stale_companies"):
+                stale_names = [c["name"] for c in audience_resolution["removed_stale_companies"]]
+                resolution_summary.append(f"removed stale companies: {stale_names}")
+            if audience_resolution.get("companies_added"):
+                resolution_summary.append(f"companies added since submit: {audience_resolution['companies_added']}")
+            if audience_resolution.get("companies_removed"):
+                resolution_summary.append(f"companies removed since submit: {audience_resolution['companies_removed']}")
+            if resolution_summary:
+                audit_details += f" | Audience resolution: {'; '.join(resolution_summary)}"
+
         self.db.add(
             AuditLog(
                 user_id=current_user.id,
                 document_id=review.document_id,
                 action=ActionType.UPDATE,
-                details=f"Approved review #{review.id} for version {review.version_id or 'n/a'}",
+                details=audit_details,
             )
         )
         self.db.add(
@@ -186,6 +228,73 @@ class ApproveReviewCommandHandler:
             .filter(ReviewRequest.id == review.id)
             .first()
         )
+
+    def _resolve_audience_drift(self, review: ReviewRequest, document) -> dict:
+        """
+        Detect and resolve audience drift between submit snapshot and current state.
+        Returns resolution details for audit trail.
+        """
+        result = {
+            "has_drift": False,
+            "snapshot_visibility": review.audience_visibility_snapshot,
+            "current_visibility": document.visibility.value if document.visibility else None,
+            "visibility_change": None,
+            "snapshot_company_ids": [],
+            "current_company_ids": [],
+            "companies_added": [],
+            "companies_removed": [],
+            "removed_stale_companies": [],
+        }
+
+        # Parse snapshot company IDs
+        if review.audience_company_ids_snapshot:
+            try:
+                result["snapshot_company_ids"] = json.loads(review.audience_company_ids_snapshot)
+            except (json.JSONDecodeError, TypeError):
+                result["snapshot_company_ids"] = []
+
+        # Get current company IDs
+        result["current_company_ids"] = [c.id for c in (document.assigned_companies or [])]
+
+        # Detect visibility change
+        if result["snapshot_visibility"] != result["current_visibility"]:
+            result["has_drift"] = True
+            result["visibility_change"] = {
+                "from": result["snapshot_visibility"],
+                "to": result["current_visibility"],
+            }
+
+        # Detect company changes
+        snapshot_set = set(result["snapshot_company_ids"])
+        current_set = set(result["current_company_ids"])
+
+        result["companies_added"] = list(current_set - snapshot_set)
+        result["companies_removed"] = list(snapshot_set - current_set)
+
+        if result["companies_added"] or result["companies_removed"]:
+            result["has_drift"] = True
+
+        # Detect stale companies in current assignment
+        if result["current_company_ids"]:
+            stale_companies = (
+                self.db.query(Tenant)
+                .filter(
+                    Tenant.id.in_(result["current_company_ids"]),
+                    Tenant.is_active.is_(False),
+                )
+                .all()
+            )
+            if stale_companies:
+                result["has_drift"] = True
+                result["removed_stale_companies"] = [
+                    {"id": c.id, "name": c.name, "reason": "deactivated"}
+                    for c in stale_companies
+                ]
+                # Note: We don't actually remove stale companies here - that's done
+                # at publish time. We just record them for the audit trail.
+                # The publish_version method enforces the stale company block.
+
+        return result
 
     def _publish(
         self, context: CommandContext[ApproveReviewCommand], result: ReviewRequest
@@ -221,6 +330,13 @@ class ApproveReviewCommandHandler:
                     message=exc.message,
                 )
             )
+        except ValidationError as exc:
+            return Result.err(
+                ApproveReviewCommandError(
+                    code=ApproveReviewCommandErrorCode.VALIDATION,
+                    message=exc.message,
+                )
+            )
         except HTTPException as exc:
             if exc.status_code == status.HTTP_404_NOT_FOUND:
                 return Result.err(
@@ -244,3 +360,6 @@ class ApproveReviewCommandHandler:
                     )
                 )
             raise
+
+
+

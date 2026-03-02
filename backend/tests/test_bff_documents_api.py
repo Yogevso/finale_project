@@ -41,6 +41,10 @@ def test_document_detail_page_bundle_returns_composed_payload(
     assert (
         payload["audience_access_preview"]["target_companies"][0]["id"] == scenario.tenant.id
     )
+    # Audience snapshot fields should be present
+    assert "published_visibility_snapshot" in payload["audience_access_preview"]
+    assert "published_company_ids_snapshot" in payload["audience_access_preview"]
+    assert "audience_changed_since_publish" in payload["audience_access_preview"]
     assert payload["review_history"]["total"] == 1
     assert payload["review_history"]["items"][0]["id"] == scenario.review.id
 

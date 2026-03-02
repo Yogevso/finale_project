@@ -134,6 +134,21 @@ function objectSchemaToType(schema) {
   const properties = schema.properties && typeof schema.properties === 'object' ? schema.properties : {}
   const required = new Set(Array.isArray(schema.required) ? schema.required : [])
   const keys = Object.keys(properties).sort()
+  const hasAdditionalProperties = Object.prototype.hasOwnProperty.call(
+    schema,
+    'additionalProperties',
+  )
+
+  // Avoid emitting bare `{}` which fails lint (`@typescript-eslint/ban-types`).
+  if (keys.length === 0) {
+    if (!hasAdditionalProperties || schema.additionalProperties === true) {
+      return 'Record<string, unknown>'
+    }
+    if (schema.additionalProperties === false) {
+      return 'Record<string, never>'
+    }
+    return `Record<string, ${schemaToType(schema.additionalProperties)}>`
+  }
 
   const lines = ['{']
   for (const key of keys) {

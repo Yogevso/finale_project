@@ -144,6 +144,7 @@ export default function DocumentDetailPage() {
                 onCancel={() => setIsEditing(false)}
                 isLoading={isUpdatingDocument}
                 canEditVisibility={isManager}
+                initialCompanyIds={assignedCompanies.map((c) => c.id)}
               />
             ) : (
               <DocumentDetailsView

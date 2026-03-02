@@ -23,6 +23,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: true,
+    fileParallelism: false,
+    poolOptions: {
+      threads: {
+        singleThread: true,
+      },
+    },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules/**', 'e2e/**', '**/*.spec.ts'],
     coverage: {

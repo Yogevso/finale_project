@@ -12,8 +12,8 @@ Run this AFTER init_db.py:
     python init_db.py
     python seed_data.py
 """
-import sys
 import os
+import sys
 from datetime import datetime
 
 # Ensure the app module is importable
@@ -21,15 +21,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.db import SessionLocal, init_db
 from app.models import (
-    Tenant,
-    User,
-    UserRole,
     Document,
     DocumentStatus,
     DocumentVisibility,
+    Tenant,
+    Topic,
+    User,
+    UserRole,
     Version,
     VersionBumpType,
-    Topic,
 )
 from app.security import get_password_hash
 
@@ -37,9 +37,9 @@ from app.security import get_password_hash
 def create_tenants(db):
     """Create default organization and customer companies"""
     print("\n📁 Creating Tenants/Organizations...")
-    
+
     tenants = {}
-    
+
     # Default tenant for internal users
     default_tenant = db.query(Tenant).filter(Tenant.slug == "default").first()
     if not default_tenant:
@@ -50,13 +50,13 @@ def create_tenants(db):
     else:
         print(f"   ✓ 'Default Organization' already exists (ID: {default_tenant.id})")
     tenants["default"] = default_tenant
-    
+
     # Company A (customer tenant)
     company_a = db.query(Tenant).filter(Tenant.slug == "company-a").first()
     if not company_a:
         company_a = Tenant(
-            name="Company A", 
-            slug="company-a", 
+            name="Company A",
+            slug="company-a",
             is_active=True,
             company_type="customer"
         )
@@ -66,13 +66,13 @@ def create_tenants(db):
     else:
         print(f"   ✓ 'Company A' already exists (ID: {company_a.id})")
     tenants["company-a"] = company_a
-    
+
     # Company B (customer tenant)
     company_b = db.query(Tenant).filter(Tenant.slug == "company-b").first()
     if not company_b:
         company_b = Tenant(
-            name="Company B", 
-            slug="company-b", 
+            name="Company B",
+            slug="company-b",
             is_active=True,
             company_type="customer"
         )
@@ -82,7 +82,7 @@ def create_tenants(db):
     else:
         print(f"   ✓ 'Company B' already exists (ID: {company_b.id})")
     tenants["company-b"] = company_b
-    
+
     db.commit()
     return tenants
 
@@ -90,11 +90,11 @@ def create_tenants(db):
 def create_users(db, tenants):
     """Create all user accounts"""
     print("\n👥 Creating Users...")
-    
+
     default_tenant = tenants["default"]
     company_a = tenants["company-a"]
     company_b = tenants["company-b"]
-    
+
     # Define all users to create
     users_config = [
         # Internal users (default tenant)
@@ -156,7 +156,7 @@ def create_users(db, tenants):
             "tenant": company_b
         },
     ]
-    
+
     created_users = {}
     for user_data in users_config:
         existing = db.query(User).filter(User.username == user_data["username"]).first()
@@ -176,7 +176,7 @@ def create_users(db, tenants):
         else:
             created_users[user_data["username"]] = existing
             print(f"   ✓ {user_data['username']} already exists")
-    
+
     db.commit()
     return created_users
 
@@ -258,16 +258,16 @@ def create_topics(db):
 def create_documents(db, tenants, users):
     """Create sample documents with different visibility levels"""
     print("\n📄 Creating Sample Documents...")
-    
+
     default_tenant = tenants["default"]
     company_a = tenants["company-a"]
     company_b = tenants["company-b"]
     admin = users.get("admin")
-    
+
     if not admin:
         print("   ⚠ Admin user not found, skipping document creation")
         return
-    
+
     documents_config = [
         # Public documents (visible to everyone)
         {
@@ -421,12 +421,12 @@ def create_documents(db, tenants, users):
                 "content": f"<h1>{title}</h1><p>{description}</p>",
             }
         )
-    
+
     for doc_data in documents_config:
         existing = db.query(Document).filter(
             Document.document_number == doc_data["doc_num"]
         ).first()
-        
+
         if not existing:
             doc = Document(
                 title=doc_data["title"],
@@ -444,7 +444,7 @@ def create_documents(db, tenants, users):
             )
             db.add(doc)
             db.flush()
-            
+
             # Create initial version with content
             version = Version(
                 document_id=doc.id,
@@ -459,11 +459,11 @@ def create_documents(db, tenants, users):
                 published_by=admin.id,
             )
             db.add(version)
-            
+
             # Assign company if specified
             if doc_data.get("assigned_company"):
                 doc.assigned_companies.append(doc_data["assigned_company"])
-            
+
             print(f"   ✓ Created '{doc_data['title']}' ({doc_data['visibility'].value})")
         else:
             updated = False
@@ -486,7 +486,7 @@ def create_documents(db, tenants, users):
                 print(f"   ✓ Updated '{doc_data['title']}'")
             else:
                 print(f"   ✓ '{doc_data['title']}' already exists")
-    
+
     db.commit()
 
 
@@ -495,14 +495,14 @@ def print_summary(db):
     tenant_count = db.query(Tenant).count()
     user_count = db.query(User).count()
     doc_count = db.query(Document).count()
-    
+
     print("\n" + "=" * 60)
     print("📊 SUMMARY")
     print("=" * 60)
     print(f"   Tenants/Companies: {tenant_count}")
     print(f"   Users: {user_count}")
     print(f"   Documents: {doc_count}")
-    
+
     print("\n" + "=" * 60)
     print("🔑 TEST ACCOUNTS")
     print("=" * 60)
@@ -534,29 +534,29 @@ def main():
 
     # Ensure schema and lightweight migrations are always applied before seeding.
     init_db()
-    
+
     db = SessionLocal()
-    
+
     try:
         # Step 1: Create tenants
         tenants = create_tenants(db)
-        
+
         # Step 2: Create users
         users = create_users(db, tenants)
-        
+
         # Step 3: Create topics
         create_topics(db)
 
         # Step 4: Create documents
         create_documents(db, tenants, users)
-        
+
         # Step 5: Print summary
         print_summary(db)
-        
+
         print("\n" + "=" * 60)
         print("✅ Seed completed successfully!")
         print("=" * 60 + "\n")
-        
+
     except Exception as e:
         db.rollback()
         print(f"\n❌ Seed failed: {e}")

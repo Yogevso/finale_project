@@ -33,6 +33,7 @@ htmlcov/
 
 # Node
 node_modules/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -64,3 +65,14 @@ secrets/
 # Uploads (development)
 uploads/
 temp/
+
+# Local manual API payload scratch files (Wave R)
+/accept_test.json
+/activate.json
+/activate_user.json
+/deactivate.json
+/deactivate_user.json
+/invite_deact.json
+/invite_test.json
+/reactivate.json
+/role_test.json

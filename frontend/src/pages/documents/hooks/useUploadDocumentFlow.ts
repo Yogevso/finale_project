@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
@@ -43,6 +43,27 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
       company_ids: companyIds,
     },
   )
+
+  // Check if form has any unsaved changes
+  const hasUnsavedChanges =
+    selectedFile !== null ||
+    title.trim() !== '' ||
+    description.trim() !== '' ||
+    category.trim() !== '' ||
+    releaseBranch.trim() !== '' ||
+    tags.trim() !== '' ||
+    audienceDirtyState.visibilityChanged ||
+    audienceDirtyState.companyAssignmentsChanged
+
+  const confirmClose = useCallback(() => {
+    if (!hasUnsavedChanges) {
+      onClose()
+      return
+    }
+    if (confirm('You have unsaved changes. Discard them?')) {
+      onClose()
+    }
+  }, [hasUnsavedChanges, onClose])
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -136,5 +157,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     handleFileSelect,
     handleDrop,
     handleSubmit,
+    hasUnsavedChanges,
+    confirmClose,
   }
 }

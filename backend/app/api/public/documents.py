@@ -9,11 +9,15 @@ import math
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.domain.specifications.audience_policies import (
+    ExternalEmbedPolicySpec,
+    LinkSharingPolicySpec,
+)
 from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Topic, Version
 from app.schemas.public import (
     PublicAttachmentInfo,
@@ -33,6 +37,17 @@ from app.schemas.public import (
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 router = APIRouter(prefix="/public", tags=["Public"])
+
+# Short cache for public listings, longer for individual documents.
+_PUBLIC_LIST_MAX_AGE = 60  # 1 minute
+_PUBLIC_DETAIL_MAX_AGE = 300  # 5 minutes
+
+
+def _set_public_cache_headers(response: Response, *, max_age: int, etag: str | None = None) -> None:
+    """Set Cache-Control and optional ETag on public responses."""
+    response.headers["Cache-Control"] = f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
+    if etag:
+        response.headers["ETag"] = f'"{etag}"'
 
 
 def get_public_documents_query(db: Session):
@@ -71,6 +86,7 @@ def _apply_topic_filter(query, db: Session, raw_topic: Optional[str]):
 
 @router.get("/documents", response_model=PublicDocumentListResponse)
 def list_public_documents(
+    response: Response,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -172,7 +188,7 @@ def list_public_documents(
             )
         )
 
-    return PublicDocumentListResponse(
+    result = PublicDocumentListResponse(
         items=items,
         total=total,
         page=page,
@@ -180,9 +196,12 @@ def list_public_documents(
         total_pages=total_pages,
     )
 
+    _set_public_cache_headers(response, max_age=_PUBLIC_LIST_MAX_AGE)
+    return result
+
 
 @router.get("/documents/{document_id}", response_model=PublicDocumentWithAttachments)
-def get_public_document(document_id: int, db: Session = Depends(get_db)):
+def get_public_document(document_id: int, response: Response, db: Session = Depends(get_db)):
     """
     Get a single public document with its content.
 
@@ -223,7 +242,10 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
     attachments = db.query(Attachment).filter(Attachment.document_id == document_id).all()
 
     # Build response
-    response = PublicDocumentWithAttachments(
+    sharing_policy = LinkSharingPolicySpec.for_document(document).to_dict()
+    embed_policy = ExternalEmbedPolicySpec.for_document(document).to_dict()
+
+    doc_payload = PublicDocumentWithAttachments(
         id=document.id,
         document_number=document.document_number,
         title=document.title,
@@ -250,9 +272,18 @@ def get_public_document(document_id: int, db: Session = Depends(get_db)):
             )
             for att in attachments
         ],
+        sharing_policy=sharing_policy,
+        embed_policy=embed_policy,
     )
 
-    return response
+    # Set X-Frame-Options based on embed policy
+    embed_spec = ExternalEmbedPolicySpec.for_document(document)
+    response.headers["X-Frame-Options"] = embed_spec.x_frame_options_header
+
+    # ETag based on document version + update time
+    etag = f"doc-{document_id}-v{latest_version.version_number if latest_version else 0}"
+    _set_public_cache_headers(response, max_age=_PUBLIC_DETAIL_MAX_AGE, etag=etag)
+    return doc_payload
 
 
 @router.get("/platforms/history", response_model=PublicPlatformHistoryResponse)
@@ -517,3 +548,132 @@ def get_public_stats(db: Session = Depends(get_db)):
     )
 
     return {"total_documents": doc_count, "total_categories": category_count or 0}
+
+
+# ---------------------------------------------------------------------------
+# Sitemap – public documents only
+# ---------------------------------------------------------------------------
+
+_SITEMAP_XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>\n'
+_SITEMAP_URLSET_OPEN = (
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+)
+_SITEMAP_URLSET_CLOSE = "</urlset>\n"
+
+
+@router.get(
+    "/sitemap.xml",
+    response_class=Response,
+    summary="Sitemap of all public documents",
+    description="Returns an XML sitemap containing only PUBLIC + ACTIVE documents. Useful for SEO crawlers.",
+)
+def get_public_sitemap(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    base_url: Optional[str] = Query(
+        None,
+        description="Override base URL for sitemap <loc> entries. Defaults to request origin.",
+    ),
+):
+    """Generate an XML sitemap that only includes PUBLIC and ACTIVE documents."""
+    origin = base_url or str(request.base_url).rstrip("/")
+
+    docs = (
+        get_public_documents_query(db)
+        .with_entities(Document.id, Document.updated_at)
+        .order_by(Document.updated_at.desc())
+        .all()
+    )
+
+    lines: list[str] = [_SITEMAP_XML_HEADER, _SITEMAP_URLSET_OPEN]
+    for doc_id, updated_at in docs:
+        lastmod = updated_at.strftime("%Y-%m-%d") if updated_at else ""
+        lines.append("  <url>\n")
+        lines.append(f"    <loc>{origin}/docs/{doc_id}</loc>\n")
+        if lastmod:
+            lines.append(f"    <lastmod>{lastmod}</lastmod>\n")
+        lines.append("    <changefreq>weekly</changefreq>\n")
+        lines.append("    <priority>0.7</priority>\n")
+        lines.append("  </url>\n")
+    lines.append(_SITEMAP_URLSET_CLOSE)
+
+    _set_public_cache_headers(response, max_age=_PUBLIC_LIST_MAX_AGE)
+    xml_response = Response(content="".join(lines), media_type="application/xml")
+    xml_response.headers["Cache-Control"] = response.headers.get("Cache-Control", "")
+    return xml_response
+
+
+# ---------------------------------------------------------------------------
+# RSS Feed – public documents only
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/feed.xml",
+    response_class=Response,
+    summary="RSS 2.0 feed of recent public documents",
+    description="Returns an RSS 2.0 XML feed containing the most recent PUBLIC + ACTIVE documents.",
+)
+def get_public_rss_feed(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of items in the feed"),
+    base_url: Optional[str] = Query(
+        None,
+        description="Override base URL for feed <link> entries. Defaults to request origin.",
+    ),
+):
+    """Generate an RSS 2.0 feed filtered to PUBLIC + ACTIVE documents only."""
+    origin = base_url or str(request.base_url).rstrip("/")
+
+    docs = (
+        get_public_documents_query(db)
+        .with_entities(Document.id, Document.title, Document.description, Document.updated_at, Document.category)
+        .order_by(Document.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    def _escape(text: str | None) -> str:
+        if not text:
+            return ""
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;")
+        )
+
+    lines: list[str] = [
+        '<?xml version="1.0" encoding="UTF-8"?>\n',
+        '<rss version="2.0">\n',
+        "  <channel>\n",
+        "    <title>Public Documents</title>\n",
+        f"    <link>{_escape(origin)}/docs</link>\n",
+        "    <description>Recently updated public documents</description>\n",
+    ]
+
+    for doc_id, title, description, updated_at, category in docs:
+        pub_date = updated_at.strftime("%a, %d %b %Y %H:%M:%S GMT") if updated_at else ""
+        lines.append("    <item>\n")
+        lines.append(f"      <title>{_escape(title)}</title>\n")
+        lines.append(f"      <link>{_escape(origin)}/docs/{doc_id}</link>\n")
+        if description:
+            lines.append(f"      <description>{_escape(description)}</description>\n")
+        if category:
+            lines.append(f"      <category>{_escape(category)}</category>\n")
+        if pub_date:
+            lines.append(f"      <pubDate>{pub_date}</pubDate>\n")
+        lines.append(f"      <guid>{_escape(origin)}/docs/{doc_id}</guid>\n")
+        lines.append("    </item>\n")
+
+    lines.append("  </channel>\n")
+    lines.append("</rss>\n")
+
+    _set_public_cache_headers(response, max_age=_PUBLIC_LIST_MAX_AGE)
+    rss_response = Response(content="".join(lines), media_type="application/rss+xml")
+    rss_response.headers["Cache-Control"] = response.headers.get("Cache-Control", "")
+    return rss_response

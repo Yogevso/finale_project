@@ -327,6 +327,7 @@ class Document(Base):
     platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
+    thumbnail_url = Column(String(500), nullable=True)  # Cover image / thumbnail URL
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
@@ -380,6 +381,14 @@ class Version(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     row_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Scheduled publish timestamp (null = not scheduled)
+    scheduled_publish_at = Column(DateTime, nullable=True, index=True)
+    scheduled_publish_audience_validated_at = Column(DateTime, nullable=True)
+
+    # Audience state snapshot at publish time (carry-forward for auditing)
+    audience_visibility_snapshot = Column(String(50), nullable=True)
+    audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
 
     # Relationships
     document = relationship("Document", back_populates="versions")
@@ -732,6 +741,10 @@ class ReviewRequest(Base):
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Audience state snapshot at submission time
+    audience_visibility_snapshot = Column(String(50), nullable=True)
+    audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
 
     # Relationships
     document = relationship("Document", back_populates="review_requests")

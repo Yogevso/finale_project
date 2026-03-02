@@ -24,9 +24,9 @@ _SESSION_SCOPES_KEY = "projection_invalidation_scopes"
 _LISTENERS_REGISTERED = False
 
 _MODEL_SCOPES: tuple[tuple[type[object], frozenset[str]], ...] = (
-    (Document, frozenset({"analytics", "search", "portal"})),
-    (Version, frozenset({"analytics", "search", "portal"})),
-    (Attachment, frozenset({"portal"})),
+    (Document, frozenset({"analytics", "search", "portal", "public"})),
+    (Version, frozenset({"analytics", "search", "portal", "public"})),
+    (Attachment, frozenset({"portal", "public"})),
     (Feedback, frozenset({"analytics", "portal"})),
     (Comment, frozenset({"analytics"})),
     (AuditLog, frozenset({"analytics"})),

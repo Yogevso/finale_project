@@ -5,7 +5,7 @@ Companies API - Admin management of companies/tenants
 import re
 from typing import Optional, Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from app.models import (
     Document,
     DocumentStatus,
     DocumentVisibility,
+    Invitation,
+    InvitationStatus,
     Tenant,
     User,
     UserRole,
@@ -317,12 +319,15 @@ async def get_company(
 async def update_company(
     company_id: int,
     company_data: CompanyUpdate,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     """
     Update a company.
     Admin access required.
+    If deactivating (is_active=False), cascades: cancels pending invitations.
+    If reactivating (is_active=True), returns company state info in headers.
     """
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -338,13 +343,66 @@ async def update_company(
         if existing:
             raise HTTPException(status_code=400, detail="Company with this slug already exists")
 
+    # Detect deactivation event
+    was_active = company.is_active
+    is_deactivating = (
+        company_data.is_active is False
+        and was_active is True
+    )
+    is_reactivating = (
+        company_data.is_active is True
+        and was_active is False
+    )
+
     # Update fields
     update_data = company_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(company, field, value)
 
+    # Company deactivation cascade events
+    cancelled_invitations = 0
+    if is_deactivating:
+        # Cancel all pending invitations for this company
+        cancelled_invitations = db.query(Invitation).filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        ).update({"status": InvitationStatus.CANCELLED})
+
+    # Company reactivation events - log and validate state
+    reactivation_info = None
+    if is_reactivating:
+        # Count active and inactive users for this company
+        active_users = db.query(User).filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(True),
+        ).count()
+        inactive_users = db.query(User).filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(False),
+        ).count()
+        # Get count of cancelled invitations that could be re-sent
+        cancelled_invite_count = db.query(Invitation).filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.CANCELLED,
+        ).count()
+        reactivation_info = {
+            "active_users": active_users,
+            "inactive_users": inactive_users,
+            "cancelled_invitations": cancelled_invite_count,
+        }
+
     db.commit()
     db.refresh(company)
+
+    # Set lifecycle event headers
+    if is_deactivating:
+        response.headers["X-Company-Event"] = "deactivated"
+        response.headers["X-Invitations-Cancelled"] = str(cancelled_invitations)
+    elif is_reactivating and reactivation_info:
+        response.headers["X-Company-Event"] = "reactivated"
+        response.headers["X-Active-Users"] = str(reactivation_info["active_users"])
+        response.headers["X-Inactive-Users"] = str(reactivation_info["inactive_users"])
+        response.headers["X-Cancelled-Invitations"] = str(reactivation_info["cancelled_invitations"])
 
     stats = get_company_stats(db, company_id)
 
@@ -375,6 +433,7 @@ async def delete_company(
     """
     Soft delete a company (set is_active=False).
     Admin access required.
+    Cascades: cancels pending invitations for the company.
     """
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -384,11 +443,23 @@ async def delete_company(
     if company_id == current_user.tenant_id:
         raise HTTPException(status_code=400, detail="Cannot delete your own company")
 
+    # Company deactivation cascade events:
+    # 1. Cancel all pending invitations for this company
+    cancelled_invitations = db.query(Invitation).filter(
+        Invitation.tenant_id == company_id,
+        Invitation.status == InvitationStatus.PENDING,
+    ).update({"status": InvitationStatus.CANCELLED})
+
     # Soft delete
     company.is_active = False
     db.commit()
 
-    return {"message": "Company deactivated successfully"}
+    return {
+        "message": "Company deactivated successfully",
+        "cascade_actions": {
+            "invitations_cancelled": cancelled_invitations,
+        },
+    }
 
 
 @router.get("/{company_id}/users", response_model=list[CompanyUserInfo])
@@ -547,3 +618,97 @@ async def list_company_documents(
         "pages": pages,
         "scope": scope,
     }
+
+
+@router.get("/{company_id}/audience-blockers")
+async def get_audience_blockers(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Get audience dependency graph showing what blocks company deactivation.
+
+    Returns documents that depend on this company for audience visibility,
+    along with statistics showing the impact of deactivating this company.
+
+    Admin access required.
+    """
+    company = db.query(Tenant).filter(Tenant.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Get documents assigned to this company
+    assigned_docs = (
+        db.query(Document)
+        .filter(Document.assigned_companies.any(id=company_id))
+        .all()
+    )
+
+    # Get documents owned by this company
+    owned_docs = (
+        db.query(Document)
+        .filter(Document.tenant_id == company_id)
+        .all()
+    )
+
+    # Get users in this company
+    users = db.query(User).filter(User.tenant_id == company_id).all()
+
+    # Compute blockers
+    blockers = {
+        "company_id": company_id,
+        "company_name": company.name,
+        "is_active": company.is_active,
+        "summary": {
+            "can_deactivate": len(assigned_docs) == 0 and len(owned_docs) == 0 and len(users) == 0,
+            "total_blocking_documents": len(assigned_docs) + len(owned_docs),
+            "assigned_document_count": len(assigned_docs),
+            "owned_document_count": len(owned_docs),
+            "user_count": len(users),
+        },
+        "blocking_documents": {
+            "assigned": [
+                {
+                    "id": doc.id,
+                    "title": doc.title,
+                    "status": doc.status.value if doc.status else "draft",
+                    "visibility": doc.visibility.value if doc.visibility else "internal",
+                    "reason": "Document has company visibility and is assigned to this company",
+                }
+                for doc in assigned_docs[:20]
+            ],
+            "owned": [
+                {
+                    "id": doc.id,
+                    "title": doc.title,
+                    "status": doc.status.value if doc.status else "draft",
+                    "visibility": doc.visibility.value if doc.visibility else "internal",
+                    "reason": "Document is owned by this company",
+                }
+                for doc in owned_docs[:20]
+            ],
+        },
+        "blocking_users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "full_name": u.full_name,
+                "role": u.role.value if u.role else "viewer",
+                "is_active": u.is_active,
+            }
+            for u in users[:20]
+        ],
+        "deactivation_impact": {
+            "documents_losing_audience": len(assigned_docs),
+            "users_losing_access": len([u for u in users if u.is_active]),
+            "warning": (
+                "Deactivating this company will remove it from all document assignments "
+                "and prevent company users from accessing the platform."
+                if len(assigned_docs) > 0 or len(users) > 0
+                else "No blocking dependencies found."
+            ),
+        },
+    }
+
+    return blockers

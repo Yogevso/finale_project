@@ -213,16 +213,28 @@ export function mapDocumentListResponseDto(
 export function mapDocumentDetailPageBundleDto(
   dto: DocumentDetailPageBundleDto,
 ): DocumentDetailPageBundle {
-  const audienceAccessPreview: AudienceAccessPreview = {
-    visibility: dto.audience_access_preview.visibility,
-    is_public: dto.audience_access_preview.is_public,
-    includes_internal_users: dto.audience_access_preview.includes_internal_users,
-    target_companies: dto.audience_access_preview.target_companies.map((company) => ({
+  const fallbackAudienceAccessPreview = {
+    visibility: dto.document.visibility,
+    is_public: dto.document.visibility === 'public',
+    includes_internal_users: true,
+    target_companies: dto.assigned_companies.map((company) => ({
       id: company.id,
       name: company.name,
       slug: company.slug,
     })),
-    access_summary: dto.audience_access_preview.access_summary,
+    access_summary: 'Audience preview unavailable.',
+  }
+  const previewSource = dto.audience_access_preview ?? fallbackAudienceAccessPreview
+  const audienceAccessPreview: AudienceAccessPreview = {
+    visibility: previewSource.visibility,
+    is_public: previewSource.is_public,
+    includes_internal_users: previewSource.includes_internal_users,
+    target_companies: previewSource.target_companies.map((company) => ({
+      id: company.id,
+      name: company.name,
+      slug: company.slug,
+    })),
+    access_summary: previewSource.access_summary,
   }
 
   return {

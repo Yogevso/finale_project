@@ -1,5 +1,11 @@
 """Domain invariant specifications."""
 
+from app.domain.specifications.audience_policies import (
+    EmbedAction,
+    ExternalEmbedPolicySpec,
+    LinkSharingPolicySpec,
+    SharingAction,
+)
 from app.domain.specifications.invariants import (
     CustomerInvitationTenantSpec,
     DocumentDraftOrActiveSpec,
@@ -24,14 +30,18 @@ __all__ = [
     "DocumentDraftOrActiveSpec",
     "DocumentDraftStatusSpec",
     "DocumentVisibilityCompanyAssignmentSpec",
+    "EmbedAction",
+    "ExternalEmbedPolicySpec",
     "InvitationPendingStatusSpec",
     "InvitationResendableSpec",
+    "LinkSharingPolicySpec",
     "ManagerVisibilityRoleSpec",
     "DateRangeSpec",
     "RoleAccessSpec",
     "ReviewApprovableVersionSpec",
     "ReviewPendingStatusSpec",
     "ReviewSubmitterMatchesSpec",
+    "SharingAction",
     "TenantScopeSpec",
     "VisibilitySpec",
 ]

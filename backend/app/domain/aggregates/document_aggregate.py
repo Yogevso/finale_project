@@ -25,6 +25,14 @@ class DocumentAggregate:
     def ensure_submittable_for_review(self) -> None:
         self._submittable_spec.assert_satisfied(self.document)
 
+    def ensure_audience_ready_for_submit(self) -> None:
+        """Ensure audience configuration is valid before submitting for review."""
+        company_ids = [c.id for c in (self.document.assigned_companies or [])]
+        self._company_visibility_assignment_spec.assert_satisfied(
+            visibility=self.document.visibility,
+            company_ids=company_ids,
+        )
+
     def ensure_visibility_change_allowed(self, actor_role: UserRole) -> None:
         self._visibility_change_spec.assert_satisfied(actor_role)
 

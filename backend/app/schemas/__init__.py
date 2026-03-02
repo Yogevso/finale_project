@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import (
     ActionType,
@@ -116,6 +116,7 @@ class DocumentBase(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
 class DocumentCreate(DocumentBase):
@@ -143,6 +144,7 @@ class DocumentUpdate(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
 class DocumentResponse(DocumentBase):
@@ -218,6 +220,9 @@ class VersionResponse(VersionBase):
     created_by_user: Optional["UserResponse"] = None
     published_by_user: Optional["UserResponse"] = None
     latest_review: Optional["VersionReviewSummary"] = None
+    # Audience snapshot at publish time (carry-forward auditing)
+    audience_visibility_snapshot: Optional[str] = None
+    audience_company_ids_snapshot: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -414,6 +419,37 @@ class ReviewReject(BaseModel):
     comments: str = Field(..., min_length=1, max_length=2000)
 
 
+class AudienceDiff(BaseModel):
+    """Diff between review snapshot and current document audience state."""
+
+    has_changes: bool = False
+    snapshot_visibility: Optional[str] = None
+    current_visibility: Optional[str] = None
+    visibility_changed: bool = False
+    snapshot_company_ids: List[int] = []
+    current_company_ids: List[int] = []
+    companies_added: List[int] = []
+    companies_removed: List[int] = []
+
+
+class ApprovalPolicyCheck(BaseModel):
+    """Individual policy check result for approval."""
+
+    id: str
+    label: str
+    passed: bool
+    message: Optional[str] = None
+
+
+class PreApprovePolicy(BaseModel):
+    """Pre-approve policy explanation payload."""
+
+    can_approve: bool
+    checks: List[ApprovalPolicyCheck]
+    audience_summary: Optional[str] = None
+    warnings: List[str] = []
+
+
 class ReviewResponse(BaseModel):
     """Review response with document info"""
 
@@ -428,6 +464,9 @@ class ReviewResponse(BaseModel):
     submitted_at: datetime
     reviewed_at: Optional[datetime] = None
     created_at: datetime
+    audience_visibility_snapshot: Optional[str] = None
+    audience_company_ids_snapshot: Optional[str] = None
+    audience_diff: Optional[AudienceDiff] = None
     document: Optional["DocumentResponse"] = None
     submitter: Optional[UserResponse] = None
     reviewer: Optional[UserResponse] = None
@@ -454,6 +493,10 @@ class AudienceAccessPreviewResponse(BaseModel):
     includes_internal_users: bool
     target_companies: List[TenantSummary]
     access_summary: str
+    # Snapshot from last published version (None if never published)
+    published_visibility_snapshot: Optional[str] = None
+    published_company_ids_snapshot: Optional[List[int]] = None
+    audience_changed_since_publish: bool = False
 
 
 class DocumentDetailPageBundleResponse(BaseModel):
@@ -464,6 +507,8 @@ class DocumentDetailPageBundleResponse(BaseModel):
     assigned_companies: List[TenantSummary]
     audience_access_preview: AudienceAccessPreviewResponse
     review_history: ReviewListResponse
+    # Partial-failure tracking: lists sub-sections that failed to load
+    partial_errors: Optional[List[str]] = None
 
 
 # ========== General Schemas ==========
@@ -477,6 +522,80 @@ class ErrorResponse(BaseModel):
     """Error response schema"""
 
     detail: str
+
+
+class ForcePublishRequest(BaseModel):
+    """Request body for forced publish override."""
+
+    reason: str = Field(..., min_length=10, max_length=1000, description="Admin justification for forced publish")
+    acknowledge_risks: bool = Field(..., description="Confirm acknowledgment of risks")
+
+
+class ForcePublishResponse(BaseModel):
+    """Response for forced publish override."""
+
+    version_id: int
+    document_id: int
+    published_at: str
+    forced_by_user_id: int
+    reason: str
+    warnings_overridden: List[str] = []
+
+
+class SchedulePublishRequest(BaseModel):
+    """Request to schedule a version for future publish."""
+
+    scheduled_publish_at: datetime
+
+    @field_validator("scheduled_publish_at")
+    @classmethod
+    def validate_future_date(cls, v):
+        if v <= datetime.utcnow():
+            raise ValueError("Scheduled publish time must be in the future")
+        return v
+
+
+class SchedulePublishResponse(BaseModel):
+    """Response for scheduled publish."""
+
+    version_id: int
+    document_id: int
+    scheduled_publish_at: str
+    audience_validated_at: str
+
+
+class CancelScheduledPublishResponse(BaseModel):
+    """Response for cancelled scheduled publish."""
+
+    version_id: int
+    document_id: int
+    cancelled_scheduled_at: str
+
+
+class ScheduledPublishReport(BaseModel):
+    """Report from processing scheduled publishes."""
+
+    processed: int
+    published: int
+    failed_validation: int
+    failed_stale_company: int
+    errors: List[dict] = []
+
+
+class PublishPreflightCheckItem(BaseModel):
+    """A single preflight check item for publish readiness"""
+
+    id: str
+    label: str
+    passed: bool
+    message: Optional[str] = None
+
+
+class PublishPreflightResponse(BaseModel):
+    """Response containing all preflight checks for publishing a version"""
+
+    ready: bool
+    checks: List[PublishPreflightCheckItem]
 
 
 # Export all schemas
@@ -529,4 +648,7 @@ __all__ = [
     # General
     "MessageResponse",
     "ErrorResponse",
+    # Publish preflight
+    "PublishPreflightCheckItem",
+    "PublishPreflightResponse",
 ]

@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import Attachment, Comment, Document, DocumentStatus, DocumentVisibility, Version
 from app.schemas import (
     AttachmentOutlineResponse,
@@ -20,6 +21,22 @@ from app.services.attachment_service import AttachmentService
 from app.utils.http_headers import build_content_disposition
 
 router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
+
+
+def _audience_policy_headers(visibility: DocumentVisibility) -> dict[str, str]:
+    """Return embed/sharing policy headers for streaming responses."""
+    embed = ExternalEmbedPolicySpec.for_visibility(visibility)
+    sharing = LinkSharingPolicySpec.for_visibility(visibility)
+    headers: dict[str, str] = {}
+    xfo = embed.x_frame_options_header
+    if xfo:
+        headers["X-Frame-Options"] = xfo
+    csp_fa = embed.content_security_policy_frame_ancestors
+    if csp_fa:
+        headers["Content-Security-Policy"] = f"frame-ancestors {csp_fa}"
+    actions = sorted(a.value for a in sharing.allowed_actions)
+    headers["X-Sharing-Policy"] = ",".join(actions)
+    return headers
 
 
 def _get_active_document_or_404(db: Session, document_id: int) -> Document:
@@ -205,6 +222,7 @@ def _stream_public_attachment(
     filename = attachment.original_filename or attachment.filename or "download"
     headers = {
         "Content-Disposition": build_content_disposition(filename, inline=inline),
+        **_audience_policy_headers(DocumentVisibility.PUBLIC),
     }
     size_bytes = attachment.size_bytes or attachment.file_size
     if size_bytes is not None:
@@ -236,6 +254,7 @@ def _stream_public_preview_attachment(
     headers = {
         "Content-Disposition": build_content_disposition(preview_filename, inline=True),
         "Content-Length": str(content_length),
+        **_audience_policy_headers(DocumentVisibility.PUBLIC),
     }
     if attachment.preview_pdf_sha256:
         headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256

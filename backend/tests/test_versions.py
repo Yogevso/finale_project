@@ -1,10 +1,12 @@
 """Tests for Versions API"""
 
+import json
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app.models import Document, DocumentStatus, Tenant, Version
+from app.models import Document, DocumentStatus, ReviewRequest, ReviewStatus, Tenant, Version
 
 
 class TestVersionsAPI:
@@ -196,6 +198,201 @@ class TestVersionsAPI:
             headers=headers,
         )
         assert publish_resp.status_code == 409
+
+    def test_schedule_publish_rejects_when_latest_review_is_not_approved(
+        self,
+        client: TestClient,
+        db,
+        admin_token: str,
+        sample_document: dict,
+        test_admin,
+    ):
+        """Scheduling should fail when latest review record is pending/rejected."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=headers,
+            json={"content": "Schedule candidate", "changes_summary": "ready"},
+        )
+        version_id = create_resp.json()["id"]
+
+        approved_review = ReviewRequest(
+            document_id=sample_document["id"],
+            version_id=version_id,
+            submitted_by=test_admin.id,
+            status=ReviewStatus.APPROVED,
+            submitted_at=datetime.utcnow() - timedelta(minutes=5),
+            reviewed_at=datetime.utcnow() - timedelta(minutes=4),
+        )
+        latest_pending_review = ReviewRequest(
+            document_id=sample_document["id"],
+            version_id=version_id,
+            submitted_by=test_admin.id,
+            status=ReviewStatus.PENDING,
+            submitted_at=datetime.utcnow(),
+        )
+        db.add_all([approved_review, latest_pending_review])
+        db.commit()
+
+        schedule_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
+            headers=headers,
+            json={
+                "scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+            },
+        )
+        assert schedule_resp.status_code == 400
+        assert "latest review is not approved" in schedule_resp.json()["detail"]
+
+    def test_schedule_publish_and_cancel_manage_audience_snapshots(
+        self,
+        client: TestClient,
+        admin_token: str,
+        manager_headers: dict,
+        sample_document: dict,
+        test_tenant,
+    ):
+        """Scheduling captures audience snapshots and cancelling clears them."""
+        headers = {"Authorization": f"Bearer {admin_token}"}
+
+        update_doc_resp = client.put(
+            f"/api/v1/documents/{sample_document['id']}",
+            headers={**headers, "If-Match": sample_document["etag"]},
+            json={"visibility": "company", "company_ids": [test_tenant.id]},
+        )
+        assert update_doc_resp.status_code == 200
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=headers,
+            json={"content": "Scheduled company release", "changes_summary": "v2"},
+        )
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=headers,
+            json={"version_id": version_id, "message": "approve for schedule"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        scheduled_at = (datetime.utcnow() + timedelta(minutes=45)).isoformat()
+        schedule_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
+            headers=headers,
+            json={"scheduled_publish_at": scheduled_at},
+        )
+        assert schedule_resp.status_code == 200
+
+        version_after_schedule = client.get(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}",
+            headers=headers,
+        )
+        assert version_after_schedule.status_code == 200
+        schedule_payload = version_after_schedule.json()
+        assert schedule_payload["audience_visibility_snapshot"] == "company"
+        assert sorted(json.loads(schedule_payload["audience_company_ids_snapshot"])) == [
+            test_tenant.id
+        ]
+
+        cancel_resp = client.delete(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
+            headers=headers,
+        )
+        assert cancel_resp.status_code == 200
+        assert cancel_resp.json()["version_id"] == version_id
+
+        version_after_cancel = client.get(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}",
+            headers=headers,
+        )
+        assert version_after_cancel.status_code == 200
+        cancel_payload = version_after_cancel.json()
+        assert cancel_payload["audience_visibility_snapshot"] is None
+        assert cancel_payload["audience_company_ids_snapshot"] is None
+
+    def test_process_scheduled_publish_blocks_when_latest_review_becomes_pending(
+        self,
+        client: TestClient,
+        db,
+        admin_headers: dict,
+        manager_headers: dict,
+        test_admin,
+        sample_document: dict,
+    ):
+        """Processor must refuse scheduled publish if latest review is no longer approved."""
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Scheduled candidate", "changes_summary": "v2"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "approve this for scheduler"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        schedule_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
+            headers=admin_headers,
+            json={
+                "scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+            },
+        )
+        assert schedule_resp.status_code == 200
+
+        newer_pending_review = ReviewRequest(
+            document_id=sample_document["id"],
+            version_id=version_id,
+            submitted_by=test_admin.id,
+            status=ReviewStatus.PENDING,
+            submitted_at=datetime.utcnow(),
+        )
+        db.add(newer_pending_review)
+
+        version = db.query(Version).filter(Version.id == version_id).first()
+        assert version is not None
+        version.scheduled_publish_at = datetime.utcnow() - timedelta(minutes=1)
+        db.commit()
+
+        process_resp = client.post(
+            "/api/v1/scheduled-publishes/process",
+            headers=admin_headers,
+            params={"batch_size": 10},
+        )
+        assert process_resp.status_code == 200
+        report = process_resp.json()
+        assert report["processed"] == 1
+        assert report["published"] == 0
+        assert report["failed_validation"] == 1
+        assert any(
+            "Latest review is not approved at scheduled execution time" in error["reason"]
+            for error in report["errors"]
+        )
+
+        db.refresh(version)
+        assert version.is_published is False
 
     def test_cannot_update_version_with_pending_review(
         self, client: TestClient, admin_token: str, sample_document: dict

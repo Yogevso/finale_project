@@ -19,6 +19,7 @@ export function EditForm({
   onCancel,
   isLoading,
   canEditVisibility,
+  initialCompanyIds = [],
 }: {
   document: {
     title: string
@@ -33,6 +34,7 @@ export function EditForm({
   onCancel: () => void
   isLoading: boolean
   canEditVisibility: boolean
+  initialCompanyIds?: number[]
 }) {
   const [formData, setFormData] = useState<DocumentUpdate>({
     title: document.title,
@@ -61,17 +63,23 @@ export function EditForm({
     'edit',
   )
 
-  const submitChanges = () => {
-    onSave(formData)
+  const submitChanges = (companyIds?: number[]) => {
+    const saveData = { ...formData }
+    if (companyIds && companyIds.length > 0) {
+      saveData.company_ids = companyIds
+    }
+    onSave(saveData)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
     const nextVisibility = formData.visibility ?? document.visibility
+    // Always show dialog when changing to company visibility or when expanding access
     if (
       canEditVisibility &&
-      requiresVisibilityChangeConfirmation(document.visibility, nextVisibility)
+      (nextVisibility === 'company' ||
+        requiresVisibilityChangeConfirmation(document.visibility, nextVisibility))
     ) {
       setPendingVisibilityConfirmation({
         fromVisibility: document.visibility,
@@ -83,9 +91,9 @@ export function EditForm({
     submitChanges()
   }
 
-  const handleConfirmVisibilityChange = () => {
+  const handleConfirmVisibilityChange = (companyIds?: number[]) => {
     setPendingVisibilityConfirmation(null)
-    submitChanges()
+    submitChanges(companyIds)
   }
 
   return (
@@ -208,6 +216,7 @@ export function EditForm({
         onCancel={() => setPendingVisibilityConfirmation(null)}
         onConfirm={handleConfirmVisibilityChange}
         isSubmitting={isLoading}
+        initialCompanyIds={initialCompanyIds}
       />
     </>
   )

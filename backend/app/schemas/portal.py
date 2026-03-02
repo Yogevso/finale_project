@@ -30,12 +30,20 @@ class PortalDocumentSummary(BaseModel):
     """Minimal document info for list views"""
 
     id: int
+    document_number: Optional[str] = None
     title: str
     description: Optional[str] = None
     category: Optional[str] = None
+    topic: Optional[str] = None
+    platform: Optional[str] = None
+    release_branch: Optional[str] = None
+    tags: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     visibility: str
     version: int = 1
+    created_at: Optional[datetime] = None
     updated_at: datetime
+    published_at: Optional[datetime] = None
     has_attachments: bool = False
 
     class Config:
@@ -46,15 +54,21 @@ class PortalDocumentDetail(BaseModel):
     """Full document details for portal users"""
 
     id: int
+    document_number: Optional[str] = None
     title: str
     description: Optional[str] = None
     content: str
     category: Optional[str] = None
+    topic: Optional[str] = None
+    platform: Optional[str] = None
+    release_branch: Optional[str] = None
     tags: List[str] = []
+    thumbnail_url: Optional[str] = None
     visibility: str
     version: int = 1
     created_at: datetime
     updated_at: datetime
+    published_at: Optional[datetime] = None
     attachments: List[PortalAttachment] = []
 
     class Config:

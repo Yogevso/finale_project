@@ -104,11 +104,13 @@ export function useDocumentsPageController() {
       id,
       visibility,
       ifMatch,
+      companyIds,
     }: {
       id: number
       visibility: DocumentVisibility
       ifMatch: string
-    }) => documentsUseCases.updateVisibility(id, visibility, ifMatch),
+      companyIds?: number[]
+    }) => documentsUseCases.updateVisibility(id, visibility, ifMatch, companyIds),
     onSuccess: (_, variables) => {
       setVisibilityOverrides((prev) => {
         const next = { ...prev }
@@ -139,7 +141,10 @@ export function useDocumentsPageController() {
   const handleVisibilityChange = (change: VisibilityChangeRequest) => {
     setVisibilityOverrides((prev) => ({ ...prev, [change.id]: change.nextVisibility }))
 
+    // Always show dialog when changing to company visibility (to select companies)
+    // or when expanding access requires confirmation
     if (
+      change.nextVisibility === 'company' ||
       requiresVisibilityChangeConfirmation(change.currentVisibility, change.nextVisibility)
     ) {
       setPendingVisibilityChange(change)
@@ -153,7 +158,7 @@ export function useDocumentsPageController() {
     })
   }
 
-  const confirmPendingVisibilityChange = () => {
+  const confirmPendingVisibilityChange = (companyIds?: number[]) => {
     if (!pendingVisibilityChange) {
       return
     }
@@ -163,6 +168,7 @@ export function useDocumentsPageController() {
       id: change.id,
       visibility: change.nextVisibility,
       ifMatch: change.ifMatch,
+      companyIds,
     })
   }
 

@@ -28,6 +28,8 @@ export function buildDocumentDetailCollaborationScenario(
     category: 'Ops',
     tags: null,
     created_by: 1,
+    row_version: 1,
+    etag: `document:${documentId}:1`,
   })
 
   const bundle = buildDocumentDetailPageBundleDto({

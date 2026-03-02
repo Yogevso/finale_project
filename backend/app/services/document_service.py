@@ -1,5 +1,6 @@
 """Document Service"""
 
+import logging
 import re
 from datetime import datetime
 from typing import List, Optional
@@ -15,7 +16,7 @@ from app.domain.aggregates import DocumentAggregate
 from app.domain.factories import DocumentFactory
 from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
-from app.errors import NotFoundError, ValidationError
+from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     AuditLog,
@@ -27,6 +28,7 @@ from app.models import (
     Tenant,
     Topic,
     User,
+    UserRole,
     Version,
 )
 from app.schemas import DocumentCreate, DocumentUpdate
@@ -34,6 +36,8 @@ from app.services.base_service import TenantAwareService
 from app.services.uow import UnitOfWork
 from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService(TenantAwareService[Document]):
@@ -253,6 +257,23 @@ class DocumentService(TenantAwareService[Document]):
             parent = self._base_query().filter(Document.id == parent_id).first()
             if not parent:
                 raise NotFoundError("Parent document not found")
+            # Task 193: carry-over audience from parent when duplicating.
+            # If the caller didn't explicitly set visibility (left default INTERNAL),
+            # inherit from the parent.
+            if document_data.visibility == DocumentVisibility.INTERNAL and parent.visibility != DocumentVisibility.INTERNAL:
+                document_data = document_data.model_copy(
+                    update={"visibility": parent.visibility}
+                )
+            # Inherit company assignments if the caller didn't specify any.
+            if not normalized_company_ids and parent.assigned_companies:
+                parent_company_ids = [c.id for c in parent.assigned_companies]
+                normalized_company_ids = self._normalize_company_ids(parent_company_ids)
+                assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+            # Re-validate after carry-over
+            self._validate_company_visibility_assignment(
+                visibility=document_data.visibility,
+                company_ids=normalized_company_ids,
+            )
 
         # Create document with retry in case of document_number collision
         attempts = 0
@@ -488,6 +509,18 @@ class DocumentService(TenantAwareService[Document]):
 
         self.db.refresh(document)
 
+        # If visibility or company assignments changed, invalidate portal cache
+        if has_visibility_update or has_company_assignment_update:
+            from app.projections import (
+                invalidate_portal_audience_cache,
+                invalidate_search_audience_cache,
+            )
+            invalidate_portal_audience_cache()
+            invalidate_search_audience_cache()
+            # Sync FTS5 search index so queries reflect the new audience
+            from app.services.search_index_service import SearchIndexSyncService
+            SearchIndexSyncService(self.db).sync_document(document_id)
+
         return document
 
     def delete_document(self, document_id: int, user: User) -> None:
@@ -518,12 +551,6 @@ class DocumentService(TenantAwareService[Document]):
         """Replace the full assigned-company set for a document."""
         document = self.get_document(document_id)
         self._verify_access(document)
-        ensure_if_match_matches(
-            if_match=if_match,
-            resource_type="document",
-            resource_id=document.id,
-            row_version=document.row_version,
-        )
 
         requested_ids = self._normalize_company_ids(company_ids)
         if document.visibility == DocumentVisibility.COMPANY and not requested_ids:
@@ -533,8 +560,188 @@ class DocumentService(TenantAwareService[Document]):
             )
         assigned_companies = self._resolve_assigned_companies(requested_ids)
 
+        # API callers (tenant-scoped service instances) must provide If-Match tokens,
+        # but direct internal service usage remains backwards-compatible.
+        if if_match is not None or self.tenant_ctx is not None:
+            ensure_if_match_matches(
+                if_match=if_match,
+                resource_type="document",
+                resource_id=document.id,
+                row_version=document.row_version,
+            )
+
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
             document.updated_at = datetime.utcnow()
 
+        # Safety net: explicitly invalidate portal + search cache after audience change
+        from app.projections import (
+            invalidate_portal_audience_cache,
+            invalidate_search_audience_cache,
+        )
+        invalidate_portal_audience_cache()
+        invalidate_search_audience_cache()
+        # Sync FTS5 search index so queries reflect the new audience
+        from app.services.search_index_service import SearchIndexSyncService
+        SearchIndexSyncService(self.db).sync_document(document_id)
+
         return len(requested_ids)
+
+    def archive_document(self, document_id: int, user: User) -> dict:
+        """
+        Soft-delete a document by setting status to ARCHIVED.
+
+        Preserves all data including audience assignments for potential restore.
+        Returns snapshot of audience state at archive time.
+        """
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        if document.status == DocumentStatus.ARCHIVED:
+            raise InvalidStateError("Document is already archived")
+
+        if user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+            raise PermissionDeniedError("Only admins and managers can archive documents")
+
+        # Capture audience state before archiving
+        company_ids = [c.id for c in (document.assigned_companies or [])]
+        visibility_snapshot = document.visibility.value if document.visibility else None
+        company_ids_snapshot = company_ids.copy()
+        previous_status = document.status.value
+
+        with UnitOfWork(self.db):
+            document.status = DocumentStatus.ARCHIVED
+            document.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Archived document '{document.title}'. "
+                    f"Previous status: {previous_status}. "
+                    f"Audience preserved: visibility={visibility_snapshot}, companies={company_ids_snapshot}"
+                ),
+            )
+            self.db.add(audit)
+
+        logger.info(
+            "Document %d archived by user %d. Audience preserved: visibility=%s companies=%s",
+            document_id,
+            user.id,
+            visibility_snapshot,
+            company_ids_snapshot,
+        )
+
+        # Archived docs should be removed from active search/public results
+        from app.projections import invalidate_search_audience_cache
+        invalidate_search_audience_cache()
+        from app.services.search_index_service import SearchIndexSyncService
+        SearchIndexSyncService(self.db).sync_document(document_id)
+
+        return {
+            "document_id": document_id,
+            "status": "archived",
+            "previous_status": previous_status,
+            "audience_snapshot": {
+                "visibility": visibility_snapshot,
+                "company_ids": company_ids_snapshot,
+            },
+        }
+
+    def restore_document(self, document_id: int, user: User) -> dict:
+        """
+        Restore a soft-deleted (archived) document.
+
+        Performs audience reconciliation:
+        - Validates that assigned companies still exist and are active
+        - Removes stale companies from assignments
+        - Logs any audience changes
+
+        Returns the restored document state with any audience changes noted.
+        """
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        if document.status != DocumentStatus.ARCHIVED:
+            raise InvalidStateError("Only archived documents can be restored")
+
+        if user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+            raise PermissionDeniedError("Only admins and managers can restore documents")
+
+        # Reconcile audience - check for stale companies
+        original_company_ids = [c.id for c in (document.assigned_companies or [])]
+
+        # Check which companies are still active
+        active_companies = []
+        stale_companies = []
+
+        if original_company_ids:
+            tenants = self.db.query(Tenant).filter(Tenant.id.in_(original_company_ids)).all()
+            tenant_map = {t.id: t for t in tenants}
+
+            for cid in original_company_ids:
+                tenant = tenant_map.get(cid)
+                if tenant is None:
+                    stale_companies.append({"id": cid, "reason": "deleted"})
+                elif not tenant.is_active:
+                    stale_companies.append({"id": cid, "name": tenant.name, "reason": "deactivated"})
+                else:
+                    active_companies.append(tenant)
+
+        # Determine appropriate status for restore
+        # If document was published before, restore to ACTIVE. Otherwise DRAFT.
+        has_published_version = any(v.is_published for v in document.versions)
+        restore_status = DocumentStatus.ACTIVE if has_published_version else DocumentStatus.DRAFT
+
+        # Handle audience changes
+        audience_changes = {
+            "removed_stale_companies": stale_companies,
+            "original_company_count": len(original_company_ids),
+            "restored_company_count": len(active_companies),
+        }
+
+        # Validate company visibility with remaining companies
+        if document.visibility == DocumentVisibility.COMPANY and not active_companies:
+            # All companies were stale - need to change visibility
+            audience_changes["visibility_change"] = {
+                "from": "company",
+                "to": "internal",
+                "reason": "No active companies remain after reconciliation",
+            }
+            new_visibility = DocumentVisibility.INTERNAL
+        else:
+            new_visibility = document.visibility
+
+        with UnitOfWork(self.db):
+            document.status = restore_status
+            document.visibility = new_visibility
+            document.assigned_companies = active_companies
+            document.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Restored document '{document.title}' from archive. "
+                    f"New status: {restore_status.value}. "
+                    f"Audience reconciliation: {audience_changes}"
+                ),
+            )
+            self.db.add(audit)
+
+        logger.info(
+            "Document %d restored by user %d. Audience reconciliation: %s",
+            document_id,
+            user.id,
+            audience_changes,
+        )
+
+        return {
+            "document_id": document_id,
+            "status": restore_status.value,
+            "visibility": new_visibility.value,
+            "audience_reconciliation": audience_changes,
+            "active_company_ids": [c.id for c in active_companies],
+        }

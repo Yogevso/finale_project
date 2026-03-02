@@ -19,7 +19,7 @@ These playbooks provide repeatable execution checklists for architecture waves.
 
 ## Completion Snapshot
 
-As of 2026-02-28, planned waves `E` through `O` are complete, and Wave `P` is planned.
+As of 2026-03-01, waves `E` through `P` are complete, and Wave `Q` is active.
 
 ## Checklist Usage
 

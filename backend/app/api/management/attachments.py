@@ -17,7 +17,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import User
+from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
+from app.models import Document, User
 from app.schemas import (
     AttachmentOutlineResponse,
     AttachmentReaderViewResponse,
@@ -90,6 +91,19 @@ def _get_current_active_user_or_token(
     return user
 
 
+def _audience_headers_for_document(db: Session, document_id: int) -> dict[str, str]:
+    """Return embed/sharing policy headers based on the document's visibility."""
+    doc = db.query(Document).filter_by(id=document_id).first()
+    if not doc:
+        return {}
+    embed = ExternalEmbedPolicySpec.for_document(doc)
+    sharing = LinkSharingPolicySpec.for_document(doc)
+    return {
+        "X-Frame-Options": embed.x_frame_options_header,
+        "X-Sharing-Policy": ",".join(sorted(a.value for a in sharing.allowed_actions)),
+    }
+
+
 def _stream_original_attachment(
     db: Session,
     document_id: int,
@@ -104,6 +118,7 @@ def _stream_original_attachment(
     filename = attachment.original_filename or attachment.filename or "download"
     headers = {
         "Content-Disposition": build_content_disposition(filename, inline=inline),
+        **_audience_headers_for_document(db, document_id),
     }
     size_bytes = attachment.size_bytes or attachment.file_size
     if size_bytes is not None:
@@ -139,6 +154,7 @@ def _stream_preview_pdf(
     headers = {
         "Content-Disposition": build_content_disposition(preview_filename, inline=inline),
         "Content-Length": str(content_length),
+        **_audience_headers_for_document(db, document_id),
     }
     if attachment.preview_pdf_sha256:
         headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256

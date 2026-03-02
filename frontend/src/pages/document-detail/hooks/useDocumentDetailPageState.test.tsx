@@ -249,8 +249,14 @@ describe('useDocumentDetailPageState', () => {
 
     act(() => {
       result.current.setActiveTab('details')
+    })
+    act(() => {
       result.current.toggleCompanySelector()
+    })
+    act(() => {
       result.current.updateAssignmentDraft([])
+    })
+    act(() => {
       result.current.saveAssignmentDraft()
     })
 
@@ -273,8 +279,14 @@ describe('useDocumentDetailPageState', () => {
 
     act(() => {
       result.current.setActiveTab('details')
+    })
+    act(() => {
       result.current.toggleCompanySelector()
+    })
+    act(() => {
       result.current.updateAssignmentDraft([999])
+    })
+    act(() => {
       result.current.setActiveTab('preview')
     })
 

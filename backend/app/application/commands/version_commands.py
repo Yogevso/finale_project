@@ -19,7 +19,13 @@ from app.application.pipeline import (
     FunctionCommandValidator,
 )
 from app.domain.result import Result
-from app.errors import ConflictError, InvalidStateError, NotFoundError, PermissionDeniedError
+from app.errors import (
+    ConflictError,
+    InvalidStateError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
 from app.models import User
 
 
@@ -30,6 +36,7 @@ class PublishApprovedVersionCommandErrorCode(str, Enum):
     PERMISSION_DENIED = "permission_denied"
     INVALID_STATE = "invalid_state"
     CONFLICT = "conflict"
+    VALIDATION = "validation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +127,13 @@ class PublishApprovedVersionCommandHandler:
             return Result.err(
                 PublishApprovedVersionCommandError(
                     code=PublishApprovedVersionCommandErrorCode.CONFLICT,
+                    message=exc.message,
+                )
+            )
+        except ValidationError as exc:
+            return Result.err(
+                PublishApprovedVersionCommandError(
+                    code=PublishApprovedVersionCommandErrorCode.VALIDATION,
                     message=exc.message,
                 )
             )

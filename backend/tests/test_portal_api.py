@@ -28,6 +28,18 @@ class TestPortalDocumentsEndpoint:
         titles = [doc["title"] for doc in data["items"]]
         assert "Public Document" in titles
 
+    def test_portal_list_has_parity_fields(self, client, customer_headers, public_document):
+        """Portal document list should include parity fields matching public API"""
+        response = client.get("/api/v1/portal/documents", headers=customer_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) > 0
+        item = data["items"][0]
+        # These fields must exist for cross-channel parity
+        for field in ["document_number", "topic", "platform", "release_branch",
+                       "tags", "visibility", "created_at", "published_at"]:
+            assert field in item, f"Missing parity field: {field}"
+
     def test_customer_sees_own_company_documents(self, client, customer_headers, company_document):
         """Customer should see documents assigned to their company"""
         response = client.get("/api/v1/portal/documents", headers=customer_headers)
@@ -68,6 +80,17 @@ class TestPortalDocumentDetailEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["title"] == "Public Document"
+
+    def test_portal_detail_has_parity_fields(self, client, customer_headers, public_document):
+        """Portal document detail should include parity fields matching public API"""
+        response = client.get(
+            f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
+        )
+        assert response.status_code == 200
+        data = response.json()
+        for field in ["document_number", "topic", "platform", "release_branch",
+                       "visibility", "published_at"]:
+            assert field in data, f"Missing parity field: {field}"
 
     def test_customer_can_view_own_company_document(
         self, client, customer_headers, company_document

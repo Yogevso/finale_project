@@ -120,8 +120,13 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       documentId: number,
       visibility: DocumentVisibility,
       ifMatch: string,
+      companyIds?: number[],
     ): Promise<Document> {
-      return client.updateDocument(documentId, { visibility }, ifMatch)
+      const updatePayload: { visibility: DocumentVisibility; company_ids?: number[] } = { visibility }
+      if (companyIds && companyIds.length > 0) {
+        updatePayload.company_ids = companyIds
+      }
+      return client.updateDocument(documentId, updatePayload, ifMatch)
     },
 
     async createDraftDocument(
@@ -166,7 +171,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return document
     },
 
-    uploadDocument(file: File, metadata: DocumentUploadMetadataInput): Promise<Document> {
+    async uploadDocument(file: File, metadata: DocumentUploadMetadataInput): Promise<Document> {
       const audienceValidationIssue = validateAudienceFormPayload({
         visibility: metadata.visibility,
         company_ids: metadata.companyIds,
@@ -175,7 +180,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         throw new Error(audienceValidationIssue.message)
       }
 
-      return client.uploadDocument(file, toUploadMetadata(metadata))
+      return await client.uploadDocument(file, toUploadMetadata(metadata))
     },
   }
 }

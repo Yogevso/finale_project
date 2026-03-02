@@ -59,7 +59,7 @@ from app.dependencies.permissions import (
     require_permission,
 )
 from app.dependencies.services import get_document_service
-from app.errors import NotFoundError, ValidationError
+from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import DocumentStatus, DocumentVisibility, Tenant, User, UserRole
 from app.schemas import (
     AttachmentResponse,
@@ -531,3 +531,47 @@ def remove_company_assignment(
     response.headers["ETag"] = f"\"{document.etag}\""
 
     return MessageResponse(message=f"Removed {company.name} from document")
+
+
+@router.post("/documents/{document_id}/archive", response_model=dict)
+def archive_document(
+    document_id: int,
+    current_user: User = Depends(require_manager),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """
+    Soft-delete (archive) a document.
+    Preserves all data including audience snapshot for potential restore.
+    Manager+ access required.
+    """
+    try:
+        result = document_service.archive_document(document_id, current_user)
+        return result
+    except NotFoundError:
+        raise
+    except InvalidStateError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+
+
+@router.post("/documents/{document_id}/restore", response_model=dict)
+def restore_document(
+    document_id: int,
+    current_user: User = Depends(require_manager),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """
+    Restore an archived document.
+    Reconciles audience: removes stale/deleted companies, adjusts visibility if needed.
+    Manager+ access required.
+    """
+    try:
+        result = document_service.restore_document(document_id, current_user)
+        return result
+    except NotFoundError:
+        raise
+    except InvalidStateError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e

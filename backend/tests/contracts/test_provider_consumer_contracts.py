@@ -7,12 +7,17 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from app.adapters import CollaborationContractAdapter
 from app.auth_context import COLLABORATION_TOKEN_TYPE, CollaborationAuthService
 from app.main import app
 from app.models import User, UserRole
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# Local runs from monorepo root resolve through `backend/` to workspace root,
+# while Dockerized backend tests are mounted at `/app` without sibling projects.
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = BACKEND_ROOT.parent if (BACKEND_ROOT.parent / "frontend").exists() else BACKEND_ROOT
 FRONTEND_CONTRACT_PATH = (
     REPO_ROOT / "frontend" / "src" / "test" / "contracts" / "backendProvider.contract.json"
 )
@@ -28,6 +33,8 @@ SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        pytest.skip(f"Contract fixture not available in this runtime: {path}")
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
@@ -164,4 +171,3 @@ def test_collab_server_token_contract_matches_backend_token_payload_provider_sha
         fixture["permissions"]
     )
     assert normalized_permissions == allowed_permissions
-
