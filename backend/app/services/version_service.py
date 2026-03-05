@@ -591,7 +591,7 @@ class VersionService(SessionService):
         - All company IDs in the snapshot must still exist
         - Visibility value must be valid
         """
-        from app.models import DocumentVisibility, Tenant
+        from app.models import ActionType, AudienceEventType, AuditLog, DocumentVisibility, Tenant
 
         if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
             raise PermissionDeniedError("Only admins can restore audience state")
@@ -642,6 +642,38 @@ class VersionService(SessionService):
             for company in valid_companies:
                 document.assigned_companies.append(company)
 
+            self.db.add(
+                AuditLog(
+                    user_id=current_user.id,
+                    document_id=document_id,
+                    action=ActionType.UPDATE,
+                    audience_event_type=AudienceEventType.AUDIENCE_ROLLBACK,
+                    details=json.dumps(
+                        {
+                            "event": "restore_audience_from_version",
+                            "version_id": version_id,
+                            "previous_visibility": old_visibility,
+                            "restored_visibility": visibility.value,
+                            "missing_company_ids": missing_company_ids,
+                        },
+                        sort_keys=True,
+                    ),
+                    assignment_diff=json.dumps(
+                        {
+                            "old_company_ids": old_company_ids,
+                            "new_company_ids": [c.id for c in valid_companies],
+                            "added_company_ids": [
+                                cid for cid in [c.id for c in valid_companies] if cid not in old_company_ids
+                            ],
+                            "removed_company_ids": [
+                                cid for cid in old_company_ids if cid not in [c.id for c in valid_companies]
+                            ],
+                        },
+                        sort_keys=True,
+                    ),
+                )
+            )
+
         # Log warning if some companies were missing
         logger = logging.getLogger(__name__)
         if missing_company_ids:
@@ -689,7 +721,7 @@ class VersionService(SessionService):
 
         Creates an enhanced audit trail for compliance.
         """
-        from app.models import ActionType, AuditLog
+        from app.models import ActionType, AudienceEventType, AuditLog
 
         # Only system_admin can force publish
         if current_user.role != UserRole.SYSTEM_ADMIN:
@@ -756,10 +788,15 @@ class VersionService(SessionService):
                     user_id=current_user.id,
                     document_id=document_id,
                     action=ActionType.UPDATE,
-                    details=(
-                        f"FORCED PUBLISH (admin override) - Version {version.version_number}. "
-                        f"Reason: {reason}. "
-                        f"Warnings overridden: {warnings_overridden}"
+                    audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
+                    details=json.dumps(
+                        {
+                            "event": "forced_publish",
+                            "version_number": version.version_number,
+                            "reason": reason,
+                            "warnings_overridden": warnings_overridden,
+                        },
+                        sort_keys=True,
                     ),
                 )
             )

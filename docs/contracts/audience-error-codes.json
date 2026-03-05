@@ -1,0 +1,128 @@
+{
+  "lockfile_version": 1,
+  "domain": "audience",
+  "catalog_version": "1.0.0",
+  "compatibility_policy": "additive-only",
+  "codes": [
+    {
+      "id": "AUDIENCE_001",
+      "slug": "missing_company_assignment",
+      "http_status": 400,
+      "description": "Company visibility requires at least one assigned company."
+    },
+    {
+      "id": "AUDIENCE_002",
+      "slug": "invalid_company_set",
+      "http_status": 400,
+      "description": "Company assignment payload is invalid."
+    },
+    {
+      "id": "AUDIENCE_003",
+      "slug": "invalid_visibility",
+      "http_status": 400,
+      "description": "Visibility value is invalid."
+    },
+    {
+      "id": "AUDIENCE_004",
+      "slug": "visibility_reason_required",
+      "http_status": 400,
+      "description": "Visibility changes require a non-empty reason."
+    },
+    {
+      "id": "AUDIENCE_005",
+      "slug": "if_match_required",
+      "http_status": 428,
+      "description": "If-Match precondition header is required."
+    },
+    {
+      "id": "AUDIENCE_006",
+      "slug": "if_match_conflict",
+      "http_status": 409,
+      "description": "If-Match token is stale and conflicts with current resource version."
+    },
+    {
+      "id": "AUDIENCE_007",
+      "slug": "company_not_assigned",
+      "http_status": 400,
+      "description": "Requested company is not currently assigned to the document."
+    },
+    {
+      "id": "AUDIENCE_008",
+      "slug": "inactive_company_assignment",
+      "http_status": 400,
+      "description": "Inactive companies cannot be assigned to documents."
+    },
+    {
+      "id": "AUDIENCE_009",
+      "slug": "stale_company_assignment",
+      "http_status": 400,
+      "description": "Assigned company became stale/deactivated."
+    },
+    {
+      "id": "AUDIENCE_010",
+      "slug": "tenant_scope_violation",
+      "http_status": 403,
+      "description": "User cannot access audience data outside tenant scope."
+    },
+    {
+      "id": "AUDIENCE_011",
+      "slug": "schema_version_unsupported",
+      "http_status": 400,
+      "description": "Requested audience schema version is unsupported."
+    },
+    {
+      "id": "AUDIENCE_012",
+      "slug": "audience_alert_rule_invalid",
+      "http_status": 400,
+      "description": "Audience alert rule payload is invalid."
+    },
+    {
+      "id": "AUDIENCE_013",
+      "slug": "audience_alert_rule_not_found",
+      "http_status": 404,
+      "description": "Audience alert rule was not found."
+    },
+    {
+      "id": "AUDIENCE_014",
+      "slug": "audit_signature_missing",
+      "http_status": 400,
+      "description": "Expected audit signature is missing."
+    },
+    {
+      "id": "AUDIENCE_015",
+      "slug": "audit_signature_invalid",
+      "http_status": 400,
+      "description": "Audit signature verification failed."
+    },
+    {
+      "id": "AUDIENCE_016",
+      "slug": "audience_snapshot_missing",
+      "http_status": 400,
+      "description": "No audience snapshot exists for this operation."
+    },
+    {
+      "id": "AUDIENCE_017",
+      "slug": "audience_restore_invalid",
+      "http_status": 400,
+      "description": "Audience snapshot could not be restored safely."
+    },
+    {
+      "id": "AUDIENCE_018",
+      "slug": "public_transition_risk",
+      "http_status": 400,
+      "description": "Public exposure transition requires explicit governance context."
+    },
+    {
+      "id": "AUDIENCE_019",
+      "slug": "assignment_churn_threshold_exceeded",
+      "http_status": 400,
+      "description": "Assignment churn exceeds configured governance threshold."
+    },
+    {
+      "id": "AUDIENCE_020",
+      "slug": "audit_export_invalid_format",
+      "http_status": 400,
+      "description": "Requested audit export format is unsupported."
+    }
+  ]
+}

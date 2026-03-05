@@ -1,0 +1,119 @@
+{
+  "contract_version": "1.0.0",
+  "provider": "backend",
+  "domain": "audience",
+  "resource": "company_assignment",
+  "fixtures": [
+    {
+      "id": "assign_company_set_success",
+      "description": "Replace document company assignments with a new company set.",
+      "endpoint": {
+        "method": "POST",
+        "path": "/api/v1/documents/{document_id}/assign-companies"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v3\""
+        },
+        "body": {
+          "company_ids": [
+            10,
+            12
+          ]
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "headers": {
+          "ETag": "\"doc-42-v4\""
+        },
+        "body": {
+          "message": "Assigned company set updated (2 total)"
+        }
+      }
+    },
+    {
+      "id": "get_assigned_companies_success",
+      "description": "Read current company assignments for a document.",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/v1/documents/{document_id}/assigned-companies"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "body": [
+          {
+            "id": 10,
+            "name": "Dell",
+            "slug": "dell"
+          },
+          {
+            "id": 12,
+            "name": "Lenovo",
+            "slug": "lenovo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "remove_company_assignment_success",
+      "description": "Remove one company assignment from a document.",
+      "endpoint": {
+        "method": "DELETE",
+        "path": "/api/v1/documents/{document_id}/assign-companies/{company_id}"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42,
+          "company_id": 10
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v4\""
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "headers": {
+          "ETag": "\"doc-42-v5\""
+        },
+        "body": {
+          "message": "Removed Dell from document"
+        }
+      }
+    },
+    {
+      "id": "assign_company_set_empty_rejected_for_company_visibility",
+      "description": "Reject empty company set when document visibility is company.",
+      "endpoint": {
+        "method": "POST",
+        "path": "/api/v1/documents/{document_id}/assign-companies"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v5\""
+        },
+        "body": {
+          "company_ids": []
+        }
+      },
+      "response": {
+        "status_code": 400,
+        "body": {
+          "detail": "Company visibility requires at least one assigned company",
+          "error_code": "missing_company_assignment"
+        }
+      }
+    }
+  ]
+}

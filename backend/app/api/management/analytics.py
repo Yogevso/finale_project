@@ -21,10 +21,13 @@ from app.application.queries.dependencies import (
     get_system_analytics_query_handler,
 )
 from app.dependencies.permissions import require_admin, require_manager, require_system_admin
+from app.dependencies.services import get_analytics_service
+from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.models import User
 from app.plugins.exporters import get_analytics_export_plugin_registry
 from app.schemas.analytics import (
     AnalyticsOverview,
+    CompanyAudienceAnalytics,
     ContentAnalytics,
     EngagementAnalytics,
     FeedbackAnalytics,
@@ -279,6 +282,48 @@ def get_tenant_analytics(
     return analytics_query_handler.execute_tenant_analytics(
         TenantAnalyticsQuery(date_from=date_from, date_to=date_to)
     )
+
+
+@router.get("/company/{company_id}", response_model=CompanyAudienceAnalytics)
+def get_company_audience_analytics(
+    company_id: int,
+    current_user: User = Depends(require_admin),
+    analytics_service: AnalyticsServiceStranglerWrapper = Depends(get_analytics_service),
+):
+    """
+    Company-scoped audience analytics summary.
+
+    Requires: ADMIN role or above.
+    Non-system-admin callers are restricted to their own tenant.
+    """
+    tenant_ctx = analytics_service.tenant_ctx
+    if tenant_ctx and not tenant_ctx.is_system_admin and tenant_ctx.tenant_id != company_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company scope denied")
+
+    return analytics_service.get_company_audience_analytics(company_id)
+
+
+@router.get("/documents/{document_id}/audience-churn")
+def get_document_audience_churn(
+    document_id: int,
+    current_user: User = Depends(require_manager),
+    analytics_service: AnalyticsServiceStranglerWrapper = Depends(get_analytics_service),
+):
+    """
+    Return assignment churn count for one document over trailing 90 days.
+    """
+    overview = analytics_service.get_overview(
+        date_from=date.today() - timedelta(days=90),
+        date_to=date.today(),
+    )
+    churn_items = overview.get("assignment_churn_90d", [])
+    churn_count = 0
+    for item in churn_items:
+        if int(item.get("document_id", -1)) == document_id:
+            churn_count = int(item.get("churn_count", 0))
+            break
+
+    return {"document_id": document_id, "assignment_churn_90d": churn_count}
 
 
 # ============================================================================

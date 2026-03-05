@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.errors import ConflictError, InvalidStateError, PermissionDeniedError, ValidationError
+from app.errors.audience_errors import AudienceErrorCode
 from app.models import (
     Document,
     DocumentStatus,
@@ -76,12 +77,12 @@ class DocumentVisibilityCompanyAssignmentSpec:
         if visibility == DocumentVisibility.COMPANY and not company_ids:
             raise ValidationError(
                 "Company visibility requires at least one assigned company",
-                error_code="missing_company_assignment",
+                error_code=AudienceErrorCode.AUDIENCE_001.value,
             )
         if visibility != DocumentVisibility.COMPANY and company_ids:
             raise ValidationError(
                 "Company assignments require company visibility",
-                error_code="invalid_company_set",
+                error_code=AudienceErrorCode.AUDIENCE_002.value,
             )
 
 

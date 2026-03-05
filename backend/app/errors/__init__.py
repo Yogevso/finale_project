@@ -65,3 +65,4 @@ class PreconditionRequiredError(DomainError):
 
     status_code = status.HTTP_428_PRECONDITION_REQUIRED
     error_code = "precondition_required"
+

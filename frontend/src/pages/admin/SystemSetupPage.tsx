@@ -1,9 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import type { Permission, RbacPolicy, UserRole } from '@/types'
+import type {
+  AudienceAlertRule,
+  AudienceAlertRuleCreate,
+  Permission,
+  RbacPolicy,
+  UserRole,
+} from '@/types'
 
 type SettingRow = { key: string; value: string }
+type AlertRuleFormState = {
+  metric: string
+  threshold: string
+  window_minutes: string
+  document_id: string
+  enabled: boolean
+}
 
 const ROLE_ORDER: UserRole[] = [
   'system_admin',
@@ -72,6 +85,14 @@ export default function SystemSetupPage() {
     viewer: new Set(),
     customer: new Set(),
   })
+  const [audienceAlertRules, setAudienceAlertRules] = useState<AudienceAlertRule[]>([])
+  const [alertRuleForm, setAlertRuleForm] = useState<AlertRuleFormState>({
+    metric: 'visibility_changes_per_document',
+    threshold: '5',
+    window_minutes: '60',
+    document_id: '',
+    enabled: true,
+  })
 
   const settingsQuery = useQuery({
     queryKey: ['system-settings'],
@@ -81,6 +102,11 @@ export default function SystemSetupPage() {
   const policiesQuery = useQuery({
     queryKey: ['rbac-policies'],
     queryFn: () => api.getRbacPolicies(),
+  })
+
+  const alertRulesQuery = useQuery({
+    queryKey: ['audience-alert-rules'],
+    queryFn: () => api.listAudienceAlertRules(),
   })
 
   useEffect(() => {
@@ -109,6 +135,11 @@ export default function SystemSetupPage() {
     })
     setRbacPolicies(next)
   }, [policiesQuery.data])
+
+  useEffect(() => {
+    if (!alertRulesQuery.data) return
+    setAudienceAlertRules(alertRulesQuery.data)
+  }, [alertRulesQuery.data])
 
   const saveSettingsMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -139,6 +170,21 @@ export default function SystemSetupPage() {
         next[policy.role] = new Set(policy.permissions)
       })
       setRbacPolicies(next)
+    },
+  })
+
+  const createAlertRuleMutation = useMutation({
+    mutationFn: (payload: AudienceAlertRuleCreate) => api.createAudienceAlertRule(payload),
+    onSuccess: (createdRule) => {
+      setAudienceAlertRules((prev) => [...prev, createdRule])
+      setAlertRuleForm((prev) => ({ ...prev, document_id: '' }))
+    },
+  })
+
+  const deleteAlertRuleMutation = useMutation({
+    mutationFn: (ruleId: string) => api.deleteAudienceAlertRule(ruleId),
+    onSuccess: (_, ruleId) => {
+      setAudienceAlertRules((prev) => prev.filter((rule) => rule.id !== ruleId))
     },
   })
 
@@ -196,8 +242,26 @@ export default function SystemSetupPage() {
     })
   }
 
-  const isLoading = settingsQuery.isLoading || policiesQuery.isLoading
-  const hasError = settingsQuery.isError || policiesQuery.isError
+  const handleCreateAlertRule = () => {
+    const threshold = Number(alertRuleForm.threshold)
+    const windowMinutes = Number(alertRuleForm.window_minutes)
+    if (!alertRuleForm.metric.trim() || !Number.isFinite(threshold) || !Number.isFinite(windowMinutes)) {
+      return
+    }
+
+    createAlertRuleMutation.mutate({
+      metric: alertRuleForm.metric.trim(),
+      threshold,
+      window_minutes: windowMinutes,
+      document_id: alertRuleForm.document_id.trim()
+        ? Number(alertRuleForm.document_id)
+        : undefined,
+      enabled: alertRuleForm.enabled,
+    })
+  }
+
+  const isLoading = settingsQuery.isLoading || policiesQuery.isLoading || alertRulesQuery.isLoading
+  const hasError = settingsQuery.isError || policiesQuery.isError || alertRulesQuery.isError
 
   if (hasError) {
     return (
@@ -323,6 +387,122 @@ export default function SystemSetupPage() {
             {savePoliciesMutation.isPending ? 'Publishing...' : 'Save & Publish Policies'}
           </button>
         </div>
+      </div>
+
+      <div className="surface-card rounded-2xl p-6 space-y-4" data-testid="audience-alert-rules-section">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Audience Alert Rules</h2>
+          <p className="text-slate-500 text-sm">
+            Configure threshold-based audience governance alerts.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+              Metric
+            </label>
+            <input
+              className="input-field"
+              value={alertRuleForm.metric}
+              onChange={(e) => setAlertRuleForm((prev) => ({ ...prev, metric: e.target.value }))}
+              placeholder="visibility_changes_per_document"
+              data-testid="audience-alert-rule-metric"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+              Threshold
+            </label>
+            <input
+              className="input-field"
+              type="number"
+              min={1}
+              value={alertRuleForm.threshold}
+              onChange={(e) => setAlertRuleForm((prev) => ({ ...prev, threshold: e.target.value }))}
+              data-testid="audience-alert-rule-threshold"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+              Window (min)
+            </label>
+            <input
+              className="input-field"
+              type="number"
+              min={1}
+              value={alertRuleForm.window_minutes}
+              onChange={(e) => setAlertRuleForm((prev) => ({ ...prev, window_minutes: e.target.value }))}
+              data-testid="audience-alert-rule-window"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+              Document ID
+            </label>
+            <input
+              className="input-field"
+              type="number"
+              min={1}
+              value={alertRuleForm.document_id}
+              onChange={(e) => setAlertRuleForm((prev) => ({ ...prev, document_id: e.target.value }))}
+              placeholder="Optional"
+              data-testid="audience-alert-rule-document"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="audience-alert-rule-enabled"
+              type="checkbox"
+              checked={alertRuleForm.enabled}
+              onChange={(e) => setAlertRuleForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+            />
+            <label htmlFor="audience-alert-rule-enabled" className="text-sm text-slate-700">
+              Enabled
+            </label>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end">
+          <button
+            className="btn-primary"
+            onClick={handleCreateAlertRule}
+            disabled={createAlertRuleMutation.isPending}
+            data-testid="audience-alert-rule-create"
+          >
+            {createAlertRuleMutation.isPending ? 'Creating...' : 'Create Rule'}
+          </button>
+        </div>
+
+        {audienceAlertRules.length === 0 ? (
+          <div className="text-sm text-slate-500">No audience alert rules configured.</div>
+        ) : (
+          <ul className="space-y-2" data-testid="audience-alert-rule-list">
+            {audienceAlertRules.map((rule) => (
+              <li
+                key={rule.id}
+                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                data-testid={`audience-alert-rule-${rule.id}`}
+              >
+                <div className="text-sm text-slate-700">
+                  <span className="font-semibold">{rule.metric}</span>
+                  <span className="mx-2 text-slate-400">|</span>
+                  {rule.threshold} in {rule.window_minutes}m
+                  {rule.document_id ? ` | doc ${rule.document_id}` : ' | all docs'}
+                  {rule.enabled ? ' | enabled' : ' | disabled'}
+                </div>
+                <button
+                  className="text-rose-600 hover:text-rose-700 text-sm"
+                  onClick={() => deleteAlertRuleMutation.mutate(rule.id)}
+                  disabled={deleteAlertRuleMutation.isPending}
+                  data-testid={`audience-alert-rule-delete-${rule.id}`}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )

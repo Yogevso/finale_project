@@ -1,7 +1,6 @@
 """Document Management API Routes"""
 
 import logging
-from datetime import datetime
 from math import ceil
 from typing import List, Optional
 
@@ -51,6 +50,7 @@ from app.application.queries.document_queries import (
     ListDocumentsQuery,
     ListDocumentsQueryHandler,
 )
+from app.config import settings
 from app.db import get_db
 from app.dependencies.permissions import (
     require_editor,
@@ -60,6 +60,7 @@ from app.dependencies.permissions import (
 )
 from app.dependencies.services import get_document_service
 from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
+from app.errors.audience_errors import AudienceErrorCode
 from app.models import DocumentStatus, DocumentVisibility, Tenant, User, UserRole
 from app.schemas import (
     AttachmentResponse,
@@ -73,11 +74,11 @@ from app.schemas import (
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
 from app.services.permissions import Permission
-from app.utils.concurrency import ensure_if_match_matches
 from app.utils.html_to_docx import html_to_docx_bytes
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+AUDIENCE_ASSIGNMENT_SCHEMA_VERSION = settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
 
 class CompanyAssignRequest(BaseModel):
@@ -329,12 +330,15 @@ async def upload_document(
         except (TypeError, ValueError) as exc:
             raise ValidationError(
                 "Invalid company_ids value",
-                error_code="invalid_company_set",
+                error_code=AudienceErrorCode.AUDIENCE_002.value,
             ) from exc
 
     allowed_visibility = {"public", "internal", "company"}
     if visibility is not None and visibility not in allowed_visibility:
-        raise ValidationError("Invalid visibility value", error_code="invalid_visibility")
+        raise ValidationError(
+            "Invalid visibility value",
+            error_code=AudienceErrorCode.AUDIENCE_003.value,
+        )
 
     allowed_status = {item.value for item in DocumentStatus}
     if upload_status is not None and upload_status not in allowed_status:
@@ -356,12 +360,12 @@ async def upload_document(
     if visibility_value == "company" and len(company_ids) == 0:
         raise ValidationError(
             "Company visibility requires at least one assigned company",
-            error_code="missing_company_assignment",
+            error_code=AudienceErrorCode.AUDIENCE_001.value,
         )
     if visibility_value != "company" and len(company_ids) > 0:
         raise ValidationError(
             "Company assignments require company visibility",
-            error_code="invalid_company_set",
+            error_code=AudienceErrorCode.AUDIENCE_002.value,
         )
     if status_value == DocumentStatus.ACTIVE.value and not privileged_publish:
         raise HTTPException(
@@ -430,6 +434,7 @@ async def upload_document(
 @router.get("/documents/{document_id}/assigned-companies", response_model=List[TenantSummary])
 def get_assigned_companies(
     document_id: int,
+    response: Response,
     current_user: User = Depends(require_internal_user),
     document_query_handler: GetDocumentQueryHandler = Depends(get_document_query_handler),
 ):
@@ -442,6 +447,7 @@ def get_assigned_companies(
     if result.is_err:
         raise NotFoundError(result.error.message)
     document = result.value
+    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     return [TenantSummary(id=c.id, name=c.name, slug=c.slug) for c in document.assigned_companies]
 
@@ -480,6 +486,7 @@ def assign_companies(
     updated_document = document_service.get_document(document_id)
     if updated_document:
         response.headers["ETag"] = f"\"{updated_document.etag}\""
+    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
     return MessageResponse(message=f"Assigned company set updated ({assigned_count} total)")
 
 
@@ -502,12 +509,6 @@ def remove_company_assignment(
     document = document_service.get_document(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    ensure_if_match_matches(
-        if_match=if_match,
-        resource_type="document",
-        resource_id=document.id,
-        row_version=document.row_version,
-    )
 
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
@@ -515,20 +516,18 @@ def remove_company_assignment(
 
     if company not in document.assigned_companies:
         raise HTTPException(status_code=400, detail="Company is not assigned to this document")
-    if (
-        document.visibility == DocumentVisibility.COMPANY
-        and len(document.assigned_companies) <= 1
-    ):
-        raise ValidationError(
-            "Company visibility requires at least one assigned company",
-            error_code="missing_company_assignment",
-        )
 
-    document.assigned_companies.remove(company)
-    document.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(document)
+    remaining_company_ids = [c.id for c in document.assigned_companies if c.id != company_id]
+    document_service.assign_company_set(
+        document_id=document_id,
+        company_ids=remaining_company_ids,
+        if_match=if_match,
+    )
+    document = document_service.get_document(document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
     response.headers["ETag"] = f"\"{document.etag}\""
+    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     return MessageResponse(message=f"Removed {company.name} from document")
 

@@ -259,7 +259,11 @@ class TestVersionsAPI:
         update_doc_resp = client.put(
             f"/api/v1/documents/{sample_document['id']}",
             headers={**headers, "If-Match": sample_document["etag"]},
-            json={"visibility": "company", "company_ids": [test_tenant.id]},
+            json={
+                "visibility": "company",
+                "reason": "Restrict scheduled publish to customer audience",
+                "company_ids": [test_tenant.id],
+            },
         )
         assert update_doc_resp.status_code == 200
 

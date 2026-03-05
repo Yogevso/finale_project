@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.container import AppContainer, build_container, get_container
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
+from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.comment_service import CommentService
@@ -21,6 +22,17 @@ def get_auth_service(
     if not isinstance(container, AppContainer):
         container = build_container()
     return container.auth_service(db)
+
+
+def get_analytics_service(
+    db: Session = Depends(get_db),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    container: AppContainer = Depends(get_container),
+) -> AnalyticsServiceStranglerWrapper:
+    """Resolve tenant-scoped analytics service from the shared container."""
+    if not isinstance(container, AppContainer):
+        container = build_container()
+    return container.analytics_service(db, tenant_ctx)
 
 
 def get_comment_service(

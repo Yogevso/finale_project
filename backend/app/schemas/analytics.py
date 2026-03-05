@@ -39,6 +39,13 @@ class CategoryCount(BaseModel):
     count: int
 
 
+class AssignmentChurnItem(BaseModel):
+    """Assignment churn count per document."""
+
+    document_id: int
+    churn_count: int
+
+
 class RecentActivity(BaseModel):
     """Recent activity item"""
 
@@ -72,6 +79,7 @@ class AnalyticsOverview(BaseModel):
     # Breakdowns
     documents_by_status: Dict[str, int]
     documents_by_category: List[CategoryCount]
+    by_audience_type: Dict[str, int]
 
     # Action items
     pending_reviews: int
@@ -79,6 +87,21 @@ class AnalyticsOverview(BaseModel):
     # Quick stats
     views_today: int = 0
     new_docs_this_week: int = 0
+    exposure_risk_transitions_30d: int = 0
+    assignment_churn_90d: List[AssignmentChurnItem] = Field(default_factory=list)
+
+
+class CompanyAudienceAnalytics(BaseModel):
+    """Company-scoped audience analytics summary."""
+
+    company_id: int
+    company_name: str
+    document_count: int
+    active_document_count: int
+    company_visible_document_count: int
+    view_count_30d: int
+    download_count_30d: int
+    assignment_churn_90d: int
 
 
 # ============================================================================

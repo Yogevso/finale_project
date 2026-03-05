@@ -1,6 +1,9 @@
 import type {
   AnalyticsOverview,
   AnalyticsQueryParams,
+  AudienceAlertRule,
+  AudienceAlertRuleCreate,
+  CompanyAudienceAnalytics,
   ContentAnalytics,
   EngagementAnalytics,
   FeedbackAnalytics,
@@ -78,6 +81,37 @@ export const AnalyticsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     async getTenantAnalytics(params?: AnalyticsQueryParams): Promise<TenantAnalytics> {
       const { data } = await this.client.get<TenantAnalyticsDto>('/analytics/tenants', { params })
       return mapTenantAnalyticsDto(data)
+    }
+
+    async getCompanyAudienceAnalytics(companyId: number): Promise<CompanyAudienceAnalytics> {
+      const { data } = await this.client.get<CompanyAudienceAnalytics>(`/analytics/company/${companyId}`)
+      return data
+    }
+
+    async getDocumentAudienceChurn(
+      documentId: number,
+    ): Promise<{ document_id: number; assignment_churn_90d: number }> {
+      const { data } = await this.client.get<{ document_id: number; assignment_churn_90d: number }>(
+        `/analytics/documents/${documentId}/audience-churn`,
+      )
+      return data
+    }
+
+    async listAudienceAlertRules(): Promise<AudienceAlertRule[]> {
+      const { data } = await this.client.get<AudienceAlertRule[]>('/admin/alerts/audience-rules')
+      return data
+    }
+
+    async createAudienceAlertRule(payload: AudienceAlertRuleCreate): Promise<AudienceAlertRule> {
+      const { data } = await this.client.post<AudienceAlertRule>('/admin/alerts/audience-rules', payload)
+      return data
+    }
+
+    async deleteAudienceAlertRule(ruleId: string): Promise<{ message: string; rule_id: string }> {
+      const { data } = await this.client.delete<{ message: string; rule_id: string }>(
+        `/admin/alerts/audience-rules/${ruleId}`,
+      )
+      return data
     }
 
     getAnalyticsExportUrl(

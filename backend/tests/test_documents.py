@@ -130,7 +130,7 @@ def test_create_company_visible_document_rejects_inactive_companies(
 
     assert response.status_code == 400
     assert "Inactive companies cannot be assigned to documents" in response.json()["detail"]
-    assert response.json()["error_code"] == "invalid_company_set"
+    assert response.json()["error_code"] == "inactive_company_assignment"
 
 
 def test_update_document_rejects_company_visibility_without_assignments(
@@ -150,7 +150,10 @@ def test_update_document_rejects_company_visibility_without_assignments(
     response = client.put(
         f"/api/v1/documents/{doc.id}",
         headers={**admin_headers, "If-Match": doc.etag},
-        json={"visibility": "company"},
+        json={
+            "visibility": "company",
+            "reason": "Move to company visibility for customer rollout",
+        },
     )
 
     assert response.status_code == 400
@@ -174,7 +177,11 @@ def test_update_document_allows_company_visibility_with_assignments(
     response = client.put(
         f"/api/v1/documents/{doc.id}",
         headers={**admin_headers, "If-Match": doc.etag},
-        json={"visibility": "company", "company_ids": [test_tenant.id]},
+        json={
+            "visibility": "company",
+            "reason": "Limit access to assigned companies",
+            "company_ids": [test_tenant.id],
+        },
     )
 
     assert response.status_code == 200
@@ -201,7 +208,10 @@ def test_update_document_transition_away_from_company_clears_assignments(
     response = client.put(
         f"/api/v1/documents/{doc.id}",
         headers={**admin_headers, "If-Match": doc.etag},
-        json={"visibility": "internal"},
+        json={
+            "visibility": "internal",
+            "reason": "Revert to internal audience",
+        },
     )
 
     assert response.status_code == 200

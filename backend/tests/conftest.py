@@ -1,10 +1,12 @@
 """Test Configuration and Fixtures"""
 
 import asyncio
+import os
+import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,8 +21,17 @@ from tests.tenant_isolation.harness import TenantIsolationScenario
 # Disable rate limiting for tests
 settings.RATE_LIMIT_ENABLED = False
 
-# Test database URL (in-memory SQLite)
-TEST_DATABASE_URL = "sqlite://"
+# Test database URL - use file-based SQLite to avoid Python 3.14 memory issues
+# with in-memory databases. The file is auto-cleaned via SAVEPOINT rollback.
+_test_db_file = os.path.join(tempfile.gettempdir(), "test_portal.db")
+# Remove stale test DB from previous crashed run
+if os.path.exists(_test_db_file):
+    try:
+        os.remove(_test_db_file)
+    except OSError:
+        pass
+
+TEST_DATABASE_URL = f"sqlite:///{_test_db_file}"
 
 # Create test engine
 engine = create_engine(
@@ -30,6 +41,14 @@ engine = create_engine(
 )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# ---------------------------------------------------------------------------
+# Create all tables ONCE at import time (not per-test) to avoid
+# Python 3.14 + SQLite C-driver segfault caused by hundreds of
+# repeated create_all / drop_all cycles on the same in-memory DB.
+# Per-test isolation is achieved via SAVEPOINT rollback below.
+# ---------------------------------------------------------------------------
+Base.metadata.create_all(bind=engine)
 
 
 @pytest.fixture(autouse=True)
@@ -54,14 +73,32 @@ def projection_cache_isolation():
 
 @pytest.fixture(scope="function")
 def db():
-    """Create a fresh database for each test"""
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
+    """Provide a DB session with per-test isolation via SAVEPOINT rollback.
+
+    Tables are created once at module level. Each test runs inside a
+    transaction that is rolled back on teardown, so every test starts
+    with a clean database.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+
+    # Start a SAVEPOINT so the session's own .commit() calls don't
+    # actually commit; they release and re-open the savepoint instead.
+    nested = connection.begin_nested()
+
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(sess, trans):
+        nonlocal nested
+        if trans.nested and not trans._parent.nested:
+            nested = connection.begin_nested()
+
     try:
-        yield db
+        yield session
     finally:
-        db.close()
-        Base.metadata.drop_all(bind=engine)
+        session.close()
+        transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture(scope="function")
