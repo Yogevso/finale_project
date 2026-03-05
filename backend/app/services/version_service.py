@@ -19,7 +19,11 @@ from app.errors import (
     PermissionDeniedError,
     ValidationError,
 )
+from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
+    ActionType,
+    AudienceEventType,
+    AuditLog,
     Document,
     ReviewRequest,
     ReviewStatus,
@@ -132,7 +136,12 @@ class VersionService(SessionService):
         }
 
     @staticmethod
-    def _serialize_version(version: Version, latest_review: Optional[ReviewRequest] = None) -> dict:
+    def _serialize_version(
+        version: Version,
+        latest_review: Optional[ReviewRequest] = None,
+        *,
+        warnings: list[str] | None = None,
+    ) -> dict:
         return {
             "id": version.id,
             "document_id": version.document_id,
@@ -153,7 +162,19 @@ class VersionService(SessionService):
             "latest_review": VersionService._serialize_review(latest_review),
             "audience_visibility_snapshot": version.audience_visibility_snapshot,
             "audience_company_ids_snapshot": version.audience_company_ids_snapshot,
+            "warnings": list(warnings or []),
         }
+
+    @staticmethod
+    def _is_company_audience_enforcement_enabled(*, rollout_key: str | int | None = None) -> bool:
+        return is_backend_feature_enabled(
+            BackendFeatureFlag.COMPANY_AUDIENCE_ENFORCEMENT,
+            rollout_key=rollout_key,
+        )
+
+    @staticmethod
+    def _run_publish_audience_validation_gate(document: Document) -> None:
+        DocumentAggregate(document).ensure_audience_ready_for_submit()
 
     def get_versions(self, document_id: int, current_user: User) -> List[dict]:
         """Get all versions for a document"""
@@ -297,6 +318,11 @@ class VersionService(SessionService):
         document = self._get_document_for_user(document_id, current_user)
         # Ensure assigned_companies is loaded for audience snapshot
         self.db.refresh(document, attribute_names=["assigned_companies"])
+        audience_warnings: list[str] = []
+        enforce_company_audience = self._is_company_audience_enforcement_enabled(
+            rollout_key=document.tenant_id
+        )
+        safe_mode_enabled = bool(getattr(settings, "AUDIENCE_VALIDATION_SAFE_MODE_ENABLED", False))
 
         version = self.version_repository.get_by_id_for_document(
             version_id,
@@ -325,7 +351,7 @@ class VersionService(SessionService):
                     version_id,
                 )
                 latest_review = self._latest_review_for_version(document_id, version_id)
-                return VersionService._serialize_version(version, latest_review)
+                return VersionService._serialize_version(version, latest_review, warnings=[])
             else:
                 # Audience changed since publish - not idempotent
                 raise InvalidStateError(
@@ -350,16 +376,28 @@ class VersionService(SessionService):
             )
             if stale_companies:
                 stale_names = [c.name for c in stale_companies]
+                if enforce_company_audience:
+                    logger.warning(
+                        "Publish blocked: stale companies in audience for document=%d version=%d. "
+                        "Stale companies: %s",
+                        document_id,
+                        version_id,
+                        stale_names,
+                    )
+                    raise InvalidStateError(
+                        f"Cannot publish: document has deactivated companies in audience: {stale_names}. "
+                        "Please remove them before publishing."
+                    )
+                warning_message = (
+                    "Audience enforcement disabled: proceeding despite deactivated companies "
+                    f"in audience ({stale_names})."
+                )
+                audience_warnings.append(warning_message)
                 logger.warning(
-                    "Publish blocked: stale companies in audience for document=%d version=%d. "
-                    "Stale companies: %s",
+                    "Publish advisory for document=%d version=%d: %s",
                     document_id,
                     version_id,
-                    stale_names,
-                )
-                raise InvalidStateError(
-                    f"Cannot publish: document has deactivated companies in audience: {stale_names}. "
-                    "Please remove them before publishing."
+                    warning_message,
                 )
 
         latest_review = self._latest_review_for_version(document_id, version_id)
@@ -367,8 +405,40 @@ class VersionService(SessionService):
             latest_review.status if latest_review else None
         ).ensure_publishable_for_version()
 
-        # Ensure audience configuration is valid before publishing
-        DocumentAggregate(document).ensure_audience_ready_for_submit()
+        # Ensure audience configuration is valid before publishing.
+        # Kill-switch mode turns hard-blocks into advisory warnings.
+        try:
+            self._run_publish_audience_validation_gate(document)
+        except ValidationError as exc:
+            if enforce_company_audience:
+                raise
+            warning_message = (
+                "Audience enforcement disabled: proceeding with advisory warning - "
+                f"{exc}"
+            )
+            audience_warnings.append(warning_message)
+            logger.warning(
+                "Publish advisory for document=%d version=%d: %s",
+                document_id,
+                version_id,
+                warning_message,
+            )
+        except (ConnectionError, TimeoutError) as exc:
+            if not safe_mode_enabled:
+                raise InvalidStateError(
+                    "Audience validation service is unavailable; publish blocked."
+                ) from exc
+
+            warning_message = (
+                "Audience validation service unreachable; safe-mode fallback allowed publish."
+            )
+            audience_warnings.append(warning_message)
+            logger.warning(
+                "Publish safe-mode fallback for document=%d version=%d: %s",
+                document_id,
+                version_id,
+                warning_message,
+            )
 
         # Capture audience state snapshot for carry-forward auditing
         company_ids = [c.id for c in (document.assigned_companies or [])]
@@ -395,6 +465,22 @@ class VersionService(SessionService):
                         published_by_user_id=current_user.id,
                     )
                 )
+                if audience_warnings:
+                    self.db.add(
+                        AuditLog(
+                            user_id=current_user.id,
+                            document_id=document.id,
+                            action=ActionType.PUBLISH,
+                            audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
+                            details=json.dumps(
+                                {
+                                    "event": "publish_with_advisory_audience_warnings",
+                                    "warnings": audience_warnings,
+                                },
+                                sort_keys=True,
+                            ),
+                        )
+                    )
         except Exception as e:
             # Log failed publish attempt with audience state for audit trail
             logging.getLogger(__name__).error(
@@ -419,7 +505,11 @@ class VersionService(SessionService):
             include_users=True,
         )
         latest_review = self._latest_review_for_version(document_id, version_id)
-        return VersionService._serialize_version(version, latest_review)
+        return VersionService._serialize_version(
+            version,
+            latest_review,
+            warnings=audience_warnings,
+        )
 
     def publish_preflight_checks(
         self, document_id: int, version_id: int, current_user: User

@@ -1,5 +1,6 @@
 # Testing dependencies (versions should match requirements.txt)
 faker==22.0.0
+hypothesis==6.148.2
 
 # Type stubs
 types-passlib==1.7.7.20240106

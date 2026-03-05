@@ -169,6 +169,49 @@ class TestRateLimitMiddleware:
         is_limited, _, _ = middleware._is_rate_limited("192.168.1.2")
         assert is_limited is False
 
+    def test_assignment_endpoints_use_assignment_specific_limit_profile(self, monkeypatch):
+        monkeypatch.setattr(settings, "ASSIGNMENT_RATE_LIMIT_REQUESTS", 30)
+        monkeypatch.setattr(settings, "ASSIGNMENT_RATE_LIMIT_WINDOW", 60)
+        middleware = RateLimitMiddleware(app=MagicMock(), max_requests=100, window_seconds=60)
+
+        limit, window, scope = middleware._resolve_limit_profile(
+            request_path="/api/v1/documents/42/companies/bulk",
+            method="POST",
+        )
+
+        assert limit == 30
+        assert window == 60
+        assert scope == "assignment"
+
+    def test_assignment_scope_rate_limit_bucket_isolated_from_default_scope(self):
+        middleware = RateLimitMiddleware(app=MagicMock(), max_requests=100, window_seconds=60)
+
+        # Exhaust assignment-scoped bucket.
+        for _ in range(2):
+            limited, _, _ = middleware._is_rate_limited(
+                "192.168.10.7",
+                max_requests=2,
+                window_seconds=60,
+                scope="assignment",
+            )
+            assert limited is False
+        limited, _, _ = middleware._is_rate_limited(
+            "192.168.10.7",
+            max_requests=2,
+            window_seconds=60,
+            scope="assignment",
+        )
+        assert limited is True
+
+        # Default-scope bucket remains unaffected.
+        limited, _, _ = middleware._is_rate_limited(
+            "192.168.10.7",
+            max_requests=100,
+            window_seconds=60,
+            scope="default",
+        )
+        assert limited is False
+
 
 class TestRateLimitIntegration:
     """Integration tests for rate limiting with FastAPI"""

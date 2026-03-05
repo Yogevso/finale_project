@@ -8,6 +8,7 @@ from app.jobs import (
     AsyncJobBatchReport,
     AsyncJobDisposition,
     RetryPolicy,
+    compute_retry_delay_seconds,
     evaluate_retry,
     run_polling_worker,
 )
@@ -47,6 +48,23 @@ def test_evaluate_retry_treats_poison_messages_as_dead_letter():
     )
     assert decision.disposition == AsyncJobDisposition.DEAD_LETTER
     assert decision.reason == "poison_message_detected"
+
+
+def test_compute_retry_delay_applies_configured_jitter(monkeypatch):
+    policy = RetryPolicy(
+        base_delay_seconds=10,
+        max_delay_seconds=60,
+        backoff_multiplier=2.0,
+        jitter_ratio=0.25,
+    )
+
+    monkeypatch.setattr("app.jobs.retry.random.uniform", lambda low, high: high)
+    high_delay = compute_retry_delay_seconds(attempt_number=3, policy=policy)
+    assert high_delay == 50
+
+    monkeypatch.setattr("app.jobs.retry.random.uniform", lambda low, high: low)
+    low_delay = compute_retry_delay_seconds(attempt_number=3, policy=policy)
+    assert low_delay == 30
 
 
 def test_run_polling_worker_once_executes_single_batch():

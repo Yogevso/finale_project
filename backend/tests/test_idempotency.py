@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import uuid
 
-from app.models import Comment, DomainEventOutbox, Invitation
+from app.models import (
+    Comment,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    DomainEventOutbox,
+    Invitation,
+)
 
 
 def _new_idempotency_key() -> str:
@@ -120,3 +127,37 @@ def test_duplicate_publish_replays_response_and_avoids_duplicate_side_effects(
         .count()
     )
     assert published_event_count == 1
+
+
+def test_duplicate_bulk_company_assignment_replays_response(
+    client,
+    db,
+    admin_headers,
+    test_admin,
+    test_tenant,
+):
+    document = Document(
+        title="Idempotent Bulk Assignment",
+        document_number="DOC-IDEMP-BULK-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    document.assigned_companies = [test_tenant]
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    headers = dict(admin_headers)
+    headers["Idempotency-Key"] = _new_idempotency_key()
+    headers["If-Match"] = document.etag
+    path = f"/api/v1/documents/{document.id}/companies/bulk"
+    payload = {"company_ids": [test_tenant.id]}
+
+    first = client.post(path, headers=headers, json=payload)
+    second = client.post(path, headers=headers, json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.headers.get("x-idempotent-replay") == "true"
+    assert second.json() == first.json()

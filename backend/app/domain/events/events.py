@@ -42,3 +42,13 @@ class CommentCreated(DomainEvent):
     parent_comment_author_id: Optional[int]
     is_private: bool
     has_anchor: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CompanyAssignmentsUpdated(DomainEvent):
+    """Document company-assignment set was replaced."""
+
+    document_id: int
+    document_row_version: int
+    assigned_company_ids: tuple[int, ...]
+    actor_user_id: Optional[int]

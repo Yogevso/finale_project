@@ -2,6 +2,18 @@
 
 from __future__ import annotations
 
+from app.models import User, UserRole
+from app.security import get_password_hash
+
+
+def _login_headers(client, username: str, password: str) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
 
 def test_document_update_requires_if_match_header(client, admin_token, sample_document):
     headers = {"Authorization": f"Bearer {admin_token}"}
@@ -80,3 +92,46 @@ def test_version_update_requires_if_match_header(client, admin_token, sample_doc
     )
     assert update_response.status_code == 428
     assert "If-Match" in update_response.json()["detail"]
+
+
+def test_visibility_update_rejects_stale_if_match_between_two_admins(
+    client,
+    db,
+    sample_document,
+):
+    second_admin = User(
+        email="second-admin@example.com",
+        username="second_admin",
+        full_name="Second Admin",
+        hashed_password=get_password_hash("second-admin-pass-123"),
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    db.add(second_admin)
+    db.commit()
+
+    first_admin_headers = _login_headers(client, "admin", "admin123")
+    second_admin_headers = _login_headers(client, "second_admin", "second-admin-pass-123")
+
+    stale_etag = sample_document["etag"]
+    first_update = client.put(
+        f"/api/v1/documents/{sample_document['id']}",
+        headers={**first_admin_headers, "If-Match": stale_etag},
+        json={
+            "visibility": "public",
+            "reason": "Promote release audience",
+        },
+    )
+    assert first_update.status_code == 200
+    assert first_update.json()["visibility"] == "public"
+
+    second_update = client.put(
+        f"/api/v1/documents/{sample_document['id']}",
+        headers={**second_admin_headers, "If-Match": stale_etag},
+        json={
+            "visibility": "internal",
+            "reason": "Revert rollout after concurrent moderation decision",
+        },
+    )
+    assert second_update.status_code == 409
+    assert "write conflict" in second_update.json()["detail"].lower()
