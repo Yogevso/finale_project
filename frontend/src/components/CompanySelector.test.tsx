@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useQuery } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -218,5 +218,38 @@ describe('CompanySelector', () => {
     fireEvent.click(screen.getByTestId('company-selector-next-page'))
     expect(screen.getByTestId('company-selector-option-20')).toBeInTheDocument()
     expect(screen.getByTestId('company-selector-page-indicator')).toHaveTextContent('Page 2 of 2')
+  })
+
+  it('applies search input to the selector query params', async () => {
+    vi.useFakeTimers()
+    const observedParams: Array<{ search?: string }> = []
+    mockedUseQuery.mockImplementation((queryOptions: any) => {
+      observedParams.push((queryOptions.queryKey?.[2] ?? {}) as { search?: string })
+      return {
+        data: {
+          items: [buildCompany(31, 'Acme Search Target')],
+          page: 1,
+          pages: 1,
+        },
+        isLoading: false,
+        isError: false,
+        isFetching: false,
+      } as never
+    })
+
+    render(<CompanySelector selectedIds={[]} onChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByTestId('company-selector-trigger'))
+    fireEvent.change(screen.getByTestId('company-selector-search'), {
+      target: { value: 'Acme' },
+    })
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+
+    await waitFor(() => {
+      expect(observedParams[observedParams.length - 1]?.search).toBe('Acme')
+    })
+    vi.useRealTimers()
   })
 })
