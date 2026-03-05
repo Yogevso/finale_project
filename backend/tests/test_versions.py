@@ -4,9 +4,21 @@ import json
 import uuid
 from datetime import datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app.models import Document, DocumentStatus, ReviewRequest, ReviewStatus, Tenant, Version
+from app.config import settings
+from app.models import (
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    ReviewRequest,
+    ReviewStatus,
+    Tenant,
+    Version,
+)
+from app.services.outbox import OutboxDomainEventDispatcher
+from app.services.version_service import VersionService
 
 
 class TestVersionsAPI:
@@ -107,6 +119,271 @@ class TestVersionsAPI:
         data = response.json()
         assert data["is_published"] is True
         assert data["published_at"] is not None
+
+    def test_publish_chaos_failure_rolls_back_mid_transaction(
+        self,
+        client: TestClient,
+        db,
+        admin_headers: dict,
+        manager_headers: dict,
+        sample_document: dict,
+        monkeypatch,
+    ):
+        """Simulate publish crash and verify state remains at pre-publish values."""
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Chaos publish candidate", "changes_summary": "chaos"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "ready for chaos approval"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        document_before = db.query(Document).filter(Document.id == sample_document["id"]).first()
+        version_before = db.query(Version).filter(Version.id == version_id).first()
+        assert document_before is not None
+        assert version_before is not None
+        assert document_before.status == DocumentStatus.APPROVED
+        assert version_before.is_published is False
+
+        def _raise_mid_publish(_self, _event) -> None:  # noqa: ANN001
+            raise RuntimeError("chaos publish failure")
+
+        monkeypatch.setattr(OutboxDomainEventDispatcher, "dispatch", _raise_mid_publish)
+
+        with pytest.raises(RuntimeError, match="chaos publish failure"):
+            client.post(
+                f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
+                headers=admin_headers,
+            )
+
+        document_after = db.query(Document).filter(Document.id == sample_document["id"]).first()
+        version_after = db.query(Version).filter(Version.id == version_id).first()
+        assert document_after is not None
+        assert version_after is not None
+        assert document_after.status == DocumentStatus.APPROVED
+        assert version_after.is_published is False
+        assert version_after.published_at is None
+        assert version_after.published_by is None
+
+    def test_publish_blocks_on_invalid_company_audience_when_enforcement_enabled(
+        self,
+        client: TestClient,
+        db,
+        admin_headers: dict,
+        manager_headers: dict,
+        sample_document: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT", True)
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Kill-switch control", "changes_summary": "pre-enforcement"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "review for enforcement-on test"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        document = db.query(Document).filter(Document.id == sample_document["id"]).first()
+        assert document is not None
+        document.visibility = DocumentVisibility.COMPANY
+        document.assigned_companies = []
+        db.commit()
+
+        publish_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
+            headers=admin_headers,
+        )
+        assert publish_resp.status_code == 400
+        assert "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
+
+    def test_publish_returns_advisory_warning_when_audience_enforcement_disabled(
+        self,
+        client: TestClient,
+        db,
+        admin_headers: dict,
+        manager_headers: dict,
+        sample_document: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT", False)
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Kill-switch advisory", "changes_summary": "enforcement off"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "review for enforcement-off test"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        document = db.query(Document).filter(Document.id == sample_document["id"]).first()
+        assert document is not None
+        document.visibility = DocumentVisibility.COMPANY
+        document.assigned_companies = []
+        db.commit()
+
+        publish_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
+            headers=admin_headers,
+        )
+        assert publish_resp.status_code == 200
+        payload = publish_resp.json()
+        assert payload["is_published"] is True
+        assert payload["warnings"]
+        assert any("Audience enforcement disabled" in warning for warning in payload["warnings"])
+
+    def test_publish_blocks_when_audience_validation_service_unreachable_and_safe_mode_disabled(
+        self,
+        client: TestClient,
+        db,
+        admin_headers: dict,
+        manager_headers: dict,
+        sample_document: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT", True)
+        monkeypatch.setattr(settings, "AUDIENCE_VALIDATION_SAFE_MODE_ENABLED", False)
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Safe mode off", "changes_summary": "unreachable validation"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "ready for safe-mode off check"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        def _raise_unreachable(_document) -> None:  # noqa: ANN001
+            raise ConnectionError("audience validation unavailable")
+
+        monkeypatch.setattr(
+            VersionService,
+            "_run_publish_audience_validation_gate",
+            staticmethod(_raise_unreachable),
+        )
+
+        publish_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
+            headers=admin_headers,
+        )
+        assert publish_resp.status_code == 400
+        assert "Audience validation service is unavailable" in publish_resp.json()["detail"]
+
+        version_after = db.query(Version).filter(Version.id == version_id).first()
+        assert version_after is not None
+        assert version_after.is_published is False
+
+    def test_publish_safe_mode_allows_when_audience_validation_service_unreachable(
+        self,
+        client: TestClient,
+        admin_headers: dict,
+        manager_headers: dict,
+        sample_document: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT", True)
+        monkeypatch.setattr(settings, "AUDIENCE_VALIDATION_SAFE_MODE_ENABLED", True)
+
+        create_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions",
+            headers=admin_headers,
+            json={"content": "Safe mode on", "changes_summary": "unreachable validation fallback"},
+        )
+        assert create_resp.status_code == 201
+        version_id = create_resp.json()["id"]
+
+        submit_resp = client.post(
+            f"/api/v1/reviews/documents/{sample_document['id']}/submit",
+            headers=admin_headers,
+            json={"version_id": version_id, "message": "ready for safe-mode on check"},
+        )
+        assert submit_resp.status_code in [200, 201]
+        review_id = submit_resp.json()["id"]
+
+        approve_resp = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "approved"},
+        )
+        assert approve_resp.status_code == 200
+
+        def _raise_unreachable(_document) -> None:  # noqa: ANN001
+            raise TimeoutError("audience validation timeout")
+
+        monkeypatch.setattr(
+            VersionService,
+            "_run_publish_audience_validation_gate",
+            staticmethod(_raise_unreachable),
+        )
+
+        publish_resp = client.post(
+            f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
+            headers=admin_headers,
+        )
+        assert publish_resp.status_code == 200
+        payload = publish_resp.json()
+        assert payload["is_published"] is True
+        assert payload["warnings"]
+        assert any("safe-mode fallback allowed publish" in warning for warning in payload["warnings"])
 
     def test_cannot_modify_published_version(
         self,

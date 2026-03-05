@@ -225,6 +225,7 @@ class VersionResponse(VersionBase):
     # Audience snapshot at publish time (carry-forward auditing)
     audience_visibility_snapshot: Optional[str] = None
     audience_company_ids_snapshot: Optional[str] = None
+    warnings: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 

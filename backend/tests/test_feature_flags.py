@@ -16,7 +16,9 @@ def _middleware_names(app) -> set[str]:
 def test_feature_flags_default_to_enabled():
     assert is_backend_feature_enabled(BackendFeatureFlag.PROJECTION_CACHE) is True
     assert is_backend_feature_enabled(BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE) is True
+    assert is_backend_feature_enabled(BackendFeatureFlag.COMPANY_AUDIENCE_ENFORCEMENT) is True
     assert is_backend_feature_enabled(BackendFeatureFlag.EVENT_SOURCING_REVIEW_PILOT) is False
+    assert is_backend_feature_enabled(BackendFeatureFlag.NEW_AUDIENCE_RULES) is False
 
 
 def test_create_app_skips_idempotency_middleware_when_flag_disabled(monkeypatch):
@@ -60,3 +62,46 @@ def test_analytics_query_handler_bypasses_cache_when_projection_flag_disabled(mo
 
     assert result["kind"] == "overview"
     assert service.calls == 1
+
+
+def test_new_audience_rules_rollout_requires_rollout_key_when_percentage_is_partial(monkeypatch):
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES", True)
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE", 50)
+
+    assert is_backend_feature_enabled(BackendFeatureFlag.NEW_AUDIENCE_RULES) is False
+
+
+def test_new_audience_rules_rollout_honors_percentage_bucket(monkeypatch):
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES", True)
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE", 25)
+
+    monkeypatch.setattr("app.feature_flags._rollout_bucket", lambda _key: 24)
+    assert (
+        is_backend_feature_enabled(
+            BackendFeatureFlag.NEW_AUDIENCE_RULES,
+            rollout_key="tenant-24",
+        )
+        is True
+    )
+
+    monkeypatch.setattr("app.feature_flags._rollout_bucket", lambda _key: 25)
+    assert (
+        is_backend_feature_enabled(
+            BackendFeatureFlag.NEW_AUDIENCE_RULES,
+            rollout_key="tenant-25",
+        )
+        is False
+    )
+
+
+def test_new_audience_rules_rollout_can_be_forced_fully_on(monkeypatch):
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES", True)
+    monkeypatch.setattr(settings, "FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE", 100)
+
+    assert (
+        is_backend_feature_enabled(
+            BackendFeatureFlag.NEW_AUDIENCE_RULES,
+            rollout_key=None,
+        )
+        is True
+    )

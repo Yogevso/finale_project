@@ -20,7 +20,7 @@ known-first-party = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
+python_files = ["test_*.py", "audience_smoke.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
@@ -34,6 +34,7 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow tests",
+    "smoke: Critical-path smoke tests",
 ]
 
 [tool.coverage.run]
