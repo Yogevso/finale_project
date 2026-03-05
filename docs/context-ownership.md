@@ -20,3 +20,16 @@ writes are disallowed unless explicitly documented and approved.
 - Context ownership changes must update:
 - `docs/context-map/*`
 - relevant migration playbook in `docs/migrations/*`
+
+## Audience Domain Ownership Map
+
+| Module/Path | Primary Owner | Secondary Owner | Responsibility |
+| --- | --- | --- | --- |
+| `backend/app/domain/aggregates/document_aggregate.py` | Backend Domain Team | Security Team | Audience invariants (visibility/assignment validity, submit readiness). |
+| `backend/app/services/document_service.py` | Backend Authoring Team | Backend Domain Team | Assignment mutations, validation, audience audit logging, search/cache invalidation hooks. |
+| `backend/app/services/version_service.py` | Backend Release Team | Backend Domain Team | Publish-time audience gates, safe-mode fallback, snapshot carry-forward. |
+| `backend/app/services/outbox.py` | Platform Reliability Team | Backend Domain Team | Audience event delivery semantics, retries, DLQ transition rules. |
+| `backend/app/api/management/documents.py` | Backend API Team | Backend Authoring Team | Assignment endpoints (`assign-companies`, `companies/batch`) and schema-version headers. |
+| `backend/app/api/management/audience_governance.py` | Governance & Compliance Team | Backend API Team | Audience audit export, alert rules, access-history governance endpoints. |
+| `backend/app/errors/audience_errors.py` | Backend Domain Team | API Contract Team | Canonical audience error taxonomy and contract lock alignment. |
+| `frontend/src/features/documents/forms/audience*` | Frontend Documents Team | Backend API Team | UI schema defaults/validation for audience fields and assignment interactions. |

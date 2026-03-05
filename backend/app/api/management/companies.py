@@ -3,10 +3,11 @@ Companies API - Admin management of companies/tenants
 """
 
 import re
+from datetime import datetime
 from typing import Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -33,6 +34,18 @@ from app.schemas.company import (
 from app.security import get_current_active_user
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
+
+
+def _encode_documents_cursor(*, updated_at: datetime, document_id: int) -> str:
+    return f"{updated_at.isoformat()}|{document_id}"
+
+
+def _decode_documents_cursor(cursor: str) -> tuple[datetime, int]:
+    try:
+        updated_at_raw, document_id_raw = cursor.rsplit("|", 1)
+        return datetime.fromisoformat(updated_at_raw), int(document_id_raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid cursor format") from exc
 
 
 def require_admin(current_user: User = Depends(get_current_active_user)) -> User:
@@ -566,6 +579,10 @@ async def list_company_documents(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     scope: str = Query("assigned", pattern="^(assigned|owned|customer_visible)$"),
+    cursor: Optional[str] = Query(
+        default=None,
+        description="Keyset cursor in the format '<updated_at_iso>|<document_id>'",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -596,9 +613,26 @@ async def list_company_documents(
 
     total = query.count()
     pages = (total + per_page - 1) // per_page
-    offset = (page - 1) * per_page
 
-    documents = query.order_by(Document.updated_at.desc()).offset(offset).limit(per_page).all()
+    if cursor:
+        cursor_updated_at, cursor_document_id = _decode_documents_cursor(cursor)
+        query = query.filter(
+            or_(
+                Document.updated_at < cursor_updated_at,
+                and_(
+                    Document.updated_at == cursor_updated_at,
+                    Document.id < cursor_document_id,
+                ),
+            )
+        )
+
+    ordered = query.order_by(Document.updated_at.desc(), Document.id.desc()).limit(per_page + 1).all()
+    has_more = len(ordered) > per_page
+    documents = ordered[:per_page]
+    next_cursor = None
+    if has_more and documents:
+        tail = documents[-1]
+        next_cursor = _encode_documents_cursor(updated_at=tail.updated_at, document_id=tail.id)
 
     return {
         "items": [
@@ -617,6 +651,8 @@ async def list_company_documents(
         "per_page": per_page,
         "pages": pages,
         "scope": scope,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
     }
 
 

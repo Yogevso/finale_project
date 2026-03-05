@@ -1,0 +1,10 @@
+# Route-level direct SQL execution baseline
+# Managed by scripts/architecture_checks/check_route_sql_usage.py
+
+backend/app/api/health.py:23
+backend/app/api/management/company_maintenance.py:254
+backend/app/api/management/company_maintenance.py:341
+backend/app/api/management/company_maintenance.py:347
+backend/app/api/management/company_maintenance.py:462
+backend/app/api/management/company_maintenance.py:511
+backend/app/api/management/company_maintenance.py:861

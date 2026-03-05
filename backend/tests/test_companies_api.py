@@ -179,3 +179,41 @@ class TestCompanyDocumentSemantics:
 
         assert portal_total == 2
         assert company_payload["customer_visible_document_count"] == portal_total
+
+    def test_company_documents_supports_keyset_cursor_pagination(
+        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    ):
+        for index in range(5):
+            doc = _create_document(
+                db,
+                title=f"Assigned Cursor Doc {index}",
+                document_number=f"DOC-ASG-CURSOR-{index:03d}",
+                created_by=test_admin.id,
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.COMPANY,
+                tenant_id=test_tenant_2.id,
+            )
+            doc.assigned_companies.append(test_tenant)
+        db.commit()
+
+        first_page = client.get(
+            f"/api/v1/companies/{test_tenant.id}/documents?per_page=2",
+            headers=admin_headers,
+        )
+        assert first_page.status_code == 200
+        first_payload = first_page.json()
+        assert len(first_payload["items"]) == 2
+        assert first_payload["has_more"] is True
+        assert first_payload["next_cursor"] is not None
+
+        second_page = client.get(
+            f"/api/v1/companies/{test_tenant.id}/documents?per_page=2&cursor={first_payload['next_cursor']}",
+            headers=admin_headers,
+        )
+        assert second_page.status_code == 200
+        second_payload = second_page.json()
+        assert len(second_payload["items"]) == 2
+
+        first_ids = {item["id"] for item in first_payload["items"]}
+        second_ids = {item["id"] for item in second_payload["items"]}
+        assert first_ids.isdisjoint(second_ids)

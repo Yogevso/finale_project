@@ -50,5 +50,11 @@ jobs:
       - name: Route DB access baseline check
         run: python scripts/architecture_checks/check_route_db_access.py
 
+      - name: Route SQL usage baseline check
+        run: python scripts/architecture_checks/check_route_sql_usage.py
+
+      - name: Query-plan regression check
+        run: python scripts/architecture_checks/query_plans.py
+
       - name: Refactor budget check
         run: python scripts/architecture_checks/check_refactor_budget.py

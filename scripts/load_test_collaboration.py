@@ -7,6 +7,7 @@ to test the collaboration server's scalability.
 Usage:
     python load_test_collaboration.py --users 10 --duration 60
     python load_test_collaboration.py --users 50 --duration 120 --document-id 1
+    python load_test_collaboration.py --scenario assignments --document-id 1 --assignment-concurrency 50 --assignment-updates 50 --auth-token <TOKEN>
 
 Requirements:
     pip install aiohttp websockets pyjwt
@@ -20,6 +21,7 @@ import time
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional
+from uuid import uuid4
 
 try:
     import aiohttp
@@ -40,6 +42,10 @@ class LoadTestConfig:
     backend_url: str = "http://localhost:8000"
     collab_server_url: str = "ws://localhost:8002"
     actions_per_second: float = 2.0  # Average actions per user per second
+    scenario: str = "collaboration"
+    assignment_updates: int = 50
+    assignment_concurrency: int = 50
+    auth_token: Optional[str] = None
     verbose: bool = False
 
 
@@ -57,10 +63,16 @@ class LoadTestMetrics:
     min_latency_ms: float = float('inf')
     connection_times: list = None
     message_latencies: list = None
+    assignment_attempts: int = 0
+    assignment_successes: int = 0
+    assignment_conflicts: int = 0
+    assignment_failures: int = 0
+    assignment_latencies_ms: list = None
     
     def __post_init__(self):
         self.connection_times = []
         self.message_latencies = []
+        self.assignment_latencies_ms = []
 
 
 class SimulatedUser:
@@ -359,14 +371,165 @@ class LoadTester:
         print()
 
 
+async def run_assignment_update_load_test(config: LoadTestConfig) -> LoadTestMetrics:
+    """
+    Simulate concurrent company-assignment updates for one document.
+
+    This scenario targets /api/v1/documents/{id}/companies/batch and uses
+    optimistic concurrency headers to exercise conflict handling.
+    """
+    metrics = LoadTestMetrics()
+    if not config.document_id:
+        raise ValueError("Assignment update scenario requires --document-id")
+    if not config.auth_token:
+        raise ValueError(
+            "Assignment update scenario requires --auth-token or LOAD_TEST_AUTH_TOKEN env var"
+        )
+
+    common_headers = {
+        "Authorization": f"Bearer {config.auth_token}",
+        "Content-Type": "application/json",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        doc_url = f"{config.backend_url}/api/v1/documents/{config.document_id}"
+        async with session.get(doc_url, headers=common_headers) as doc_response:
+            if doc_response.status != 200:
+                text = await doc_response.text()
+                raise RuntimeError(
+                    f"Unable to fetch document {config.document_id} for load test "
+                    f"(status={doc_response.status} body={text[:200]})"
+                )
+            etag = doc_response.headers.get("ETag")
+            if not etag:
+                raise RuntimeError("Document detail response is missing ETag header")
+
+        companies_url = f"{config.backend_url}/api/v1/companies?page=1&per_page=100&is_active=true"
+        async with session.get(companies_url, headers=common_headers) as companies_response:
+            if companies_response.status != 200:
+                text = await companies_response.text()
+                raise RuntimeError(
+                    "Unable to list companies for assignment load test "
+                    f"(status={companies_response.status} body={text[:200]})"
+                )
+            company_payload = await companies_response.json()
+            company_ids = [int(item["id"]) for item in company_payload.get("items", [])]
+            if not company_ids:
+                raise RuntimeError("No active companies found for assignment load test")
+
+        total_updates = max(config.assignment_updates, config.assignment_concurrency)
+        semaphore = asyncio.Semaphore(max(1, config.assignment_concurrency))
+        etag_lock = asyncio.Lock()
+        shared_state = {"etag": etag}
+
+        async def _run_update(update_index: int) -> None:
+            async with semaphore:
+                selected_count = min(len(company_ids), random.randint(1, min(3, len(company_ids))))
+                selected_ids = random.sample(company_ids, k=selected_count)
+                payload = {"company_ids": selected_ids}
+                update_headers = {
+                    **common_headers,
+                    "Idempotency-Key": f"assignment-load-{uuid4().hex}",
+                }
+                async with etag_lock:
+                    update_headers["If-Match"] = str(shared_state["etag"])
+
+                started_at = time.perf_counter()
+                endpoint = (
+                    f"{config.backend_url}/api/v1/documents/"
+                    f"{config.document_id}/companies/batch"
+                )
+                async with session.put(
+                    endpoint,
+                    headers=update_headers,
+                    json=payload,
+                ) as update_response:
+                    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+                    metrics.assignment_attempts += 1
+                    metrics.assignment_latencies_ms.append(elapsed_ms)
+
+                    if update_response.status == 200:
+                        metrics.assignment_successes += 1
+                        next_etag = update_response.headers.get("ETag")
+                        if next_etag:
+                            async with etag_lock:
+                                shared_state["etag"] = next_etag
+                        return
+
+                    if update_response.status == 409:
+                        metrics.assignment_conflicts += 1
+                        return
+
+                    metrics.assignment_failures += 1
+                    if config.verbose:
+                        text = await update_response.text()
+                        print(
+                            f"[Assignment {update_index}] status={update_response.status} "
+                            f"body={text[:180]}"
+                        )
+
+        print("\n" + "=" * 60)
+        print("ASSIGNMENT UPDATE LOAD TEST")
+        print("=" * 60)
+        print(f"Document ID: {config.document_id}")
+        print(f"Concurrent workers: {config.assignment_concurrency}")
+        print(f"Total updates: {total_updates}")
+        print(f"Backend: {config.backend_url}")
+        print("=" * 60 + "\n")
+
+        started_at = time.perf_counter()
+        await asyncio.gather(*(_run_update(index) for index in range(total_updates)))
+        duration = time.perf_counter() - started_at
+
+    latencies = sorted(metrics.assignment_latencies_ms)
+    p50 = latencies[len(latencies) // 2] if latencies else 0.0
+    p95 = latencies[max(0, min(len(latencies) - 1, int(len(latencies) * 0.95) - 1))] if latencies else 0.0
+
+    print("\n" + "=" * 60)
+    print("ASSIGNMENT LOAD TEST RESULTS")
+    print("=" * 60)
+    print(f"Attempts: {metrics.assignment_attempts}")
+    print(f"Successes: {metrics.assignment_successes}")
+    print(f"Conflicts: {metrics.assignment_conflicts}")
+    print(f"Failures: {metrics.assignment_failures}")
+    print(f"Duration: {duration:.2f}s")
+    print(f"Latency p50: {p50:.2f}ms")
+    print(f"Latency p95: {p95:.2f}ms")
+    print("=" * 60 + "\n")
+    return metrics
+
+
 async def main():
-    parser = argparse.ArgumentParser(description="Load test the collaboration server")
+    parser = argparse.ArgumentParser(description="Load test collaboration and assignment paths")
+    parser.add_argument(
+        "--scenario",
+        choices=["collaboration", "assignments"],
+        default="collaboration",
+        help="Which scenario to run",
+    )
     parser.add_argument("--users", type=int, default=10, help="Number of simulated users")
     parser.add_argument("--duration", type=int, default=60, help="Test duration in seconds")
     parser.add_argument("--document-id", type=int, default=1, help="Document ID to collaborate on")
     parser.add_argument("--backend-url", default="http://localhost:8000", help="Backend API URL")
     parser.add_argument("--collab-url", default="ws://localhost:8002", help="Collaboration server WebSocket URL")
     parser.add_argument("--actions-per-second", type=float, default=2.0, help="Average actions per user per second")
+    parser.add_argument(
+        "--assignment-updates",
+        type=int,
+        default=50,
+        help="Total assignment update requests for --scenario assignments",
+    )
+    parser.add_argument(
+        "--assignment-concurrency",
+        type=int,
+        default=50,
+        help="Concurrent assignment update workers for --scenario assignments",
+    )
+    parser.add_argument(
+        "--auth-token",
+        default=None,
+        help="Bearer token for assignment scenario (or set LOAD_TEST_AUTH_TOKEN)",
+    )
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     
     args = parser.parse_args()
@@ -378,11 +541,27 @@ async def main():
         backend_url=args.backend_url,
         collab_server_url=args.collab_url,
         actions_per_second=args.actions_per_second,
+        scenario=args.scenario,
+        assignment_updates=args.assignment_updates,
+        assignment_concurrency=args.assignment_concurrency,
+        auth_token=args.auth_token,
         verbose=args.verbose,
     )
-    
-    tester = LoadTester(config)
-    await tester.run()
+
+    if not config.auth_token:
+        config.auth_token = None
+        try:
+            import os
+
+            config.auth_token = os.environ.get("LOAD_TEST_AUTH_TOKEN")
+        except Exception:
+            config.auth_token = None
+
+    if config.scenario == "assignments":
+        await run_assignment_update_load_test(config)
+    else:
+        tester = LoadTester(config)
+        await tester.run()
 
 
 if __name__ == "__main__":

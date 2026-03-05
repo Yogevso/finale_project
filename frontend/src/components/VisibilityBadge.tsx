@@ -1,8 +1,10 @@
 import { Globe, Building2, Lock } from 'lucide-react'
 import type { DocumentVisibility } from '@/types'
 
+type VisibilityBadgeMode = DocumentVisibility | 'client' | 'draft'
+
 interface VisibilityBadgeProps {
-  visibility: DocumentVisibility
+  visibility: VisibilityBadgeMode
   showLabel?: boolean
   size?: 'sm' | 'md'
 }
@@ -34,6 +36,24 @@ const visibilityConfig = {
     iconColor: 'text-amber-600',
     borderColor: 'border-amber-200',
     description: 'Visible to assigned companies + staff',
+  },
+  client: {
+    icon: Lock,
+    label: 'Client',
+    bgColor: 'bg-amber-50',
+    textColor: 'text-amber-700',
+    iconColor: 'text-amber-600',
+    borderColor: 'border-amber-200',
+    description: 'Visible to assigned client companies + staff',
+  },
+  draft: {
+    icon: Building2,
+    label: 'Draft',
+    bgColor: 'bg-slate-100',
+    textColor: 'text-slate-700',
+    iconColor: 'text-slate-600',
+    borderColor: 'border-slate-300',
+    description: 'Draft visibility preview',
   },
 }
 

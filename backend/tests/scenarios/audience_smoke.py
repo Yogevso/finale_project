@@ -63,8 +63,8 @@ def test_smoke_assign_companies_requires_auth(client: TestClient, sample_documen
 
 
 def test_smoke_bulk_assign_companies_requires_auth(client: TestClient, sample_document: dict, test_tenant):
-    resp = client.post(
-        f"/api/v1/documents/{sample_document['id']}/companies/bulk",
+    resp = client.put(
+        f"/api/v1/documents/{sample_document['id']}/companies/batch",
         json={"company_ids": [test_tenant.id]},
     )
     assert resp.status_code == 401
@@ -91,8 +91,8 @@ def test_smoke_bulk_assign_companies_accepts_valid_payload(
     sample_document: dict,
     test_tenant,
 ):
-    resp = client.post(
-        f"/api/v1/documents/{sample_document['id']}/companies/bulk",
+    resp = client.put(
+        f"/api/v1/documents/{sample_document['id']}/companies/batch",
         headers={
             **admin_headers,
             "If-Match": sample_document["etag"],
@@ -101,7 +101,7 @@ def test_smoke_bulk_assign_companies_accepts_valid_payload(
         json={"company_ids": [test_tenant.id]},
     )
     assert resp.status_code == 200
-    assert "Bulk company assignment updated" in resp.json()["message"]
+    assert "Batch company assignment updated" in resp.json()["message"]
 
 
 def test_smoke_document_update_rejects_company_visibility_without_assignments(
@@ -256,3 +256,4 @@ def test_smoke_publish_warns_when_validation_unreachable_and_safe_mode_on(
     payload = publish_resp.json()
     assert payload["warnings"]
     assert any("safe-mode fallback allowed publish" in warning for warning in payload["warnings"])
+

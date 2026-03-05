@@ -293,6 +293,30 @@ def test_get_document(client, auth_headers, db, test_user):
     assert data["title"] == "Test Document"
 
 
+def test_document_detail_payload_budget_under_50kb(client, admin_headers, db, test_admin, test_tenant):
+    """Guardrail: keep /api/v1/documents/{id} payload under the 50KB budget."""
+    doc = Document(
+        title="Payload Budget Document",
+        document_number="DOC-PAYLOAD-0001",
+        description="payload-check " * 80,
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        category="Performance",
+        tags=",".join(f"tag-{index:02d}" for index in range(40)),
+        created_by=test_admin.id,
+    )
+    doc.assigned_companies = [test_tenant]
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    response = client.get(f"/api/v1/documents/{doc.id}", headers=admin_headers)
+
+    assert response.status_code == 200
+    payload_size_bytes = len(response.content)
+    assert payload_size_bytes <= 50 * 1024
+
+
 def test_get_nonexistent_document(client, auth_headers):
     """Test getting nonexistent document"""
     response = client.get("/api/v1/documents/99999", headers=auth_headers)
@@ -831,8 +855,8 @@ def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
     db.commit()
     db.refresh(document)
 
-    response = client.post(
-        f"/api/v1/documents/{document.id}/companies/bulk",
+    response = client.put(
+        f"/api/v1/documents/{document.id}/companies/batch",
         headers={
             **admin_headers,
             "If-Match": document.etag,
@@ -844,6 +868,46 @@ def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
     assert response.status_code == 200
     assert response.headers.get("X-API-Schema-Version")
     assert response.headers.get("ETag")
+
+    assigned = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert assigned.status_code == 200
+    assert sorted(company["id"] for company in assigned.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+
+
+def test_batch_assign_companies_put_endpoint_updates_set_in_single_request(
+    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+):
+    document = Document(
+        title="Batch assignment endpoint document",
+        document_number="DOC-ASG-BATCH-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    document.assigned_companies = [test_tenant]
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    response = client.put(
+        f"/api/v1/documents/{document.id}/companies/batch",
+        headers={
+            **admin_headers,
+            "If-Match": document.etag,
+            "Idempotency-Key": f"batch-set-{uuid4().hex}",
+        },
+        json={"company_ids": [test_tenant.id, test_tenant_2.id]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("X-API-Schema-Version")
+    assert response.headers.get("ETag")
+    assert "Batch company assignment updated" in response.json()["message"]
 
     assigned = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
@@ -976,3 +1040,4 @@ def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
     )
 
     assert updated.topic == "sdk-tools"
+

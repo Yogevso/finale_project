@@ -77,8 +77,8 @@ def test_tenant_manager_cannot_bulk_assign_foreign_company_to_owned_document(cli
     foreign_company_id, document_id, etag = _build_tenant_scoped_assignment_scenario(db)
     manager_headers = _login_headers(client, "tenant_a_manager", "manager123")
 
-    response = client.post(
-        f"/api/v1/documents/{document_id}/companies/bulk",
+    response = client.put(
+        f"/api/v1/documents/{document_id}/companies/batch",
         headers={
             **manager_headers,
             "If-Match": etag,
@@ -88,3 +88,4 @@ def test_tenant_manager_cannot_bulk_assign_foreign_company_to_owned_document(cli
     )
 
     assert response.status_code in {403, 404}
+

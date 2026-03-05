@@ -317,7 +317,7 @@ class TestAudienceEndpointSecurity:
         return [
             ("GET", f"/api/v1/documents/{document_id}/assigned-companies", None),
             ("POST", f"/api/v1/documents/{document_id}/assign-companies", {"company_ids": [1]}),
-            ("POST", f"/api/v1/documents/{document_id}/companies/bulk", {"company_ids": [1]}),
+            ("PUT", f"/api/v1/documents/{document_id}/companies/batch", {"company_ids": [1]}),
             ("DELETE", f"/api/v1/documents/{document_id}/assign-companies/1", None),
             ("POST", f"/api/v1/documents/{document_id}/versions/1/restore-audience", None),
         ]
@@ -328,6 +328,8 @@ class TestAudienceEndpointSecurity:
             return client.get(path, headers=headers)
         if method == "POST":
             return client.post(path, headers=headers, json=json_body)
+        if method == "PUT":
+            return client.put(path, headers=headers, json=json_body)
         if method == "DELETE":
             return client.delete(path, headers=headers)
         raise AssertionError(f"Unsupported method: {method}")
@@ -353,7 +355,7 @@ class TestAudienceEndpointSecurity:
         insufficient_headers_by_path = {
             f"/api/v1/documents/{sample_document['id']}/assigned-companies": customer_headers,
             f"/api/v1/documents/{sample_document['id']}/assign-companies": viewer_auth_headers,
-            f"/api/v1/documents/{sample_document['id']}/companies/bulk": viewer_auth_headers,
+            f"/api/v1/documents/{sample_document['id']}/companies/batch": viewer_auth_headers,
             f"/api/v1/documents/{sample_document['id']}/assign-companies/1": viewer_auth_headers,
             f"/api/v1/documents/{sample_document['id']}/versions/1/restore-audience": viewer_auth_headers,
         }
@@ -367,3 +369,4 @@ class TestAudienceEndpointSecurity:
                 json_body=payload,
             )
             assert response.status_code == 403, f"{method} {path} should reject insufficient role"
+

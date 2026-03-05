@@ -94,6 +94,38 @@ class GenerateWordRequest(BaseModel):
     filename: Optional[str] = None
 
 
+def _apply_company_set_update(
+    *,
+    document_id: int,
+    request: CompanyAssignRequest,
+    if_match: Optional[str],
+    response: Response,
+    assign_company_set_command_handler: AssignCompanySetCommandHandler,
+    document_service: DocumentService,
+    success_message: str,
+) -> MessageResponse:
+    result = assign_company_set_command_handler.execute(
+        AssignCompanySetCommand(
+            document_id=document_id,
+            company_ids=request.company_ids,
+            if_match=if_match,
+        )
+    )
+    if result.is_err:
+        if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
+        raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
+
+    assigned_count = result.value
+    updated_document = document_service.get_document(document_id)
+    if updated_document:
+        response.headers["ETag"] = f"\"{updated_document.etag}\""
+    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    return MessageResponse(message=success_message.format(assigned_count=assigned_count))
+
+
 @router.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def create_document(
     document_data: DocumentCreate,
@@ -468,30 +500,20 @@ def assign_companies(
     Replace the companies assigned to a document.
     Manager+ access required.
     """
-    result = assign_company_set_command_handler.execute(
-        AssignCompanySetCommand(
-            document_id=document_id,
-            company_ids=request.company_ids,
-            if_match=if_match,
-        )
+    _ = current_user
+    return _apply_company_set_update(
+        document_id=document_id,
+        request=request,
+        if_match=if_match,
+        response=response,
+        assign_company_set_command_handler=assign_company_set_command_handler,
+        document_service=document_service,
+        success_message="Assigned company set updated ({assigned_count} total)",
     )
-    if result.is_err:
-        if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
-            raise NotFoundError(result.error.message)
-        if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
-            raise ValidationError(result.error.message, error_code=result.error.error_code)
-        raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
-
-    assigned_count = result.value
-    updated_document = document_service.get_document(document_id)
-    if updated_document:
-        response.headers["ETag"] = f"\"{updated_document.etag}\""
-    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
-    return MessageResponse(message=f"Assigned company set updated ({assigned_count} total)")
 
 
-@router.post("/documents/{document_id}/companies/bulk", response_model=MessageResponse)
-def assign_companies_bulk(
+@router.put("/documents/{document_id}/companies/batch", response_model=MessageResponse)
+def assign_companies_batch(
     document_id: int,
     request: CompanyAssignRequest,
     response: Response,
@@ -503,32 +525,22 @@ def assign_companies_bulk(
     document_service: DocumentService = Depends(get_document_service),
 ):
     """
-    Bulk replace company assignments for a document.
+    Batch replace company assignments in a single command transaction.
 
-    This endpoint is idempotency-key aware through middleware and enforces the same
-    optimistic-concurrency preconditions as the legacy assignment endpoint.
+    This endpoint is intended for high-volume assignment workflows and applies
+    the same optimistic-concurrency and idempotency safeguards as the existing
+    assignment endpoints.
     """
     _ = current_user
-    result = assign_company_set_command_handler.execute(
-        AssignCompanySetCommand(
-            document_id=document_id,
-            company_ids=request.company_ids,
-            if_match=if_match,
-        )
+    return _apply_company_set_update(
+        document_id=document_id,
+        request=request,
+        if_match=if_match,
+        response=response,
+        assign_company_set_command_handler=assign_company_set_command_handler,
+        document_service=document_service,
+        success_message="Batch company assignment updated ({assigned_count} total)",
     )
-    if result.is_err:
-        if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
-            raise NotFoundError(result.error.message)
-        if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
-            raise ValidationError(result.error.message, error_code=result.error.error_code)
-        raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
-
-    assigned_count = result.value
-    updated_document = document_service.get_document(document_id)
-    if updated_document:
-        response.headers["ETag"] = f"\"{updated_document.etag}\""
-    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
-    return MessageResponse(message=f"Bulk company assignment updated ({assigned_count} total)")
 
 
 @router.delete(

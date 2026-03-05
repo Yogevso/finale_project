@@ -47,8 +47,8 @@ def test_assignment_endpoints_emit_schema_version_header(
     assert assign_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     next_etag = assign_response.headers["ETag"]
-    bulk_response = client.post(
-        f"/api/v1/documents/{document_id}/companies/bulk",
+    bulk_response = client.put(
+        f"/api/v1/documents/{document_id}/companies/batch",
         headers={
             **admin_headers,
             "If-Match": next_etag,
@@ -68,3 +68,4 @@ def test_assignment_endpoints_emit_schema_version_header(
     assert remove_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     assert SEMVER_PATTERN.match(settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION)
+

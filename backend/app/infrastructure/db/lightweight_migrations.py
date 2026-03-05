@@ -24,6 +24,7 @@ def run_lightweight_migrations(
         _ensure_attachment_conversion_jobs(conn)
         _ensure_domain_event_outbox(conn)
         _ensure_idempotency_keys(conn)
+        _ensure_document_assignment_indexes(conn)
         if not skip_versions_semantic_migration:
             _ensure_versions_semantic_columns(conn)
         conn.commit()
@@ -596,6 +597,17 @@ def _ensure_idempotency_keys(conn: Connection) -> None:
             """
             CREATE INDEX IF NOT EXISTS ix_idempotency_keys_created_at
             ON idempotency_keys (created_at)
+            """
+        )
+    )
+
+
+def _ensure_document_assignment_indexes(conn: Connection) -> None:
+    conn.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_document_company_assignments_document_id_tenant_id
+            ON document_company_assignments (document_id, tenant_id)
             """
         )
     )
