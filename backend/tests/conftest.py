@@ -2,7 +2,11 @@
 
 import asyncio
 import os
+import shutil
 import tempfile
+import warnings
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,6 +36,8 @@ if os.path.exists(_test_db_file):
         pass
 
 TEST_DATABASE_URL = f"sqlite:///{_test_db_file}"
+_test_tmp_root = Path(__file__).resolve().parent / "_tmp_runtime"
+_test_tmp_root.mkdir(parents=True, exist_ok=True)
 
 # Create test engine
 engine = create_engine(
@@ -99,6 +105,17 @@ def db():
         session.close()
         transaction.rollback()
         connection.close()
+
+
+@pytest.fixture(scope="function")
+def tmp_path():
+    """Windows-stable tmp_path replacement for Python 3.14 pytest runs."""
+    tmp_dir = _test_tmp_root / f"case_{uuid4().hex}"
+    tmp_dir.mkdir(parents=True, exist_ok=False)
+    try:
+        yield tmp_dir
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @pytest.fixture(scope="function")
@@ -504,3 +521,29 @@ def tenant_isolation_actor_headers(client, tenant_isolation_scenario: TenantIsol
             tenant_isolation_scenario.attacker_manager_password,
         ),
     }
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Work around intermittent Windows temp-dir ACL failures in pytest cleanup.
+
+    Python 3.14 + Windows may raise WinError 5 while pytest scans/removes
+    basetemp symlink remnants after tests complete. This hook suppresses only
+    that cleanup exception so real test outcomes are preserved.
+    """
+    _ = exitstatus
+    outcome = yield
+    try:
+        outcome.get_result()
+    except PermissionError as exc:
+        message = str(exc)
+        if "[WinError 5]" in message and ("\\temp\\pytest" in message or "\\tmp_pytest\\" in message):
+            warnings.warn(
+                f"Suppressed pytest temp cleanup permission error: {message}",
+                RuntimeWarning,
+                stacklevel=1,
+            )
+            outcome.force_result(None)
+            return
+        raise

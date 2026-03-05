@@ -6,12 +6,16 @@ import json
 import logging
 from dataclasses import asdict
 from datetime import datetime, timedelta
+from typing import Iterable
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.session import object_session
 
+from app.config import settings
 from app.db import SessionLocal
 from app.domain.events import (
     CommentCreated,
+    CompanyAssignmentsUpdated,
     DocumentPublished,
     DomainEvent,
     InProcessDomainEventDispatcher,
@@ -24,7 +28,7 @@ from app.jobs import (
     evaluate_retry,
     run_polling_worker,
 )
-from app.models import DomainEventOutbox
+from app.models import DomainEventOutbox, Notification, NotificationType, User, UserRole
 from app.repositories import OutboxRepository
 
 logger = logging.getLogger(__name__)
@@ -32,8 +36,11 @@ logger = logging.getLogger(__name__)
 OUTBOX_STATUS_PENDING = "pending"
 OUTBOX_STATUS_PROCESSING = "processing"
 OUTBOX_STATUS_DISPATCHED = "dispatched"
-OUTBOX_STATUS_FAILED = "failed"
+OUTBOX_STATUS_DEAD_LETTER = "dead_letter"
+OUTBOX_STATUS_FAILED = OUTBOX_STATUS_DEAD_LETTER
 OUTBOX_WORKER_NAME = "outbox"
+OUTBOX_DEAD_LETTER_STATUSES = (OUTBOX_STATUS_DEAD_LETTER, "failed")
+ASSIGNMENT_OUTBOX_EVENT_TYPE = "CompanyAssignmentsUpdated"
 
 
 class DomainEventSerializer:
@@ -42,6 +49,7 @@ class DomainEventSerializer:
     _event_types: dict[str, type[DomainEvent]] = {
         "DocumentPublished": DocumentPublished,
         "CommentCreated": CommentCreated,
+        "CompanyAssignmentsUpdated": CompanyAssignmentsUpdated,
     }
 
     @classmethod
@@ -63,7 +71,77 @@ class DomainEventSerializer:
             return f"document_published:{event.version_id}"
         if isinstance(event, CommentCreated):
             return f"comment_created:{event.comment_id}"
+        if isinstance(event, CompanyAssignmentsUpdated):
+            return f"company_assignments_updated:{event.document_id}:{event.document_row_version}"
         return None
+
+    @staticmethod
+    def max_attempts_for(event: DomainEvent) -> int:
+        if isinstance(event, CompanyAssignmentsUpdated):
+            configured_attempts = int(getattr(settings, "ASSIGNMENT_JOB_MAX_ATTEMPTS", 5))
+            return max(1, configured_attempts)
+        default_attempts = int(getattr(settings, "OUTBOX_DEFAULT_MAX_ATTEMPTS", 5))
+        return max(1, default_attempts)
+
+
+def _assignment_retry_policy(default_policy: RetryPolicy) -> RetryPolicy:
+    base_delay = max(
+        0,
+        int(
+            getattr(
+                settings,
+                "ASSIGNMENT_JOB_RETRY_BASE_DELAY_SECONDS",
+                default_policy.base_delay_seconds,
+            )
+        ),
+    )
+    max_delay = max(
+        base_delay,
+        int(
+            getattr(
+                settings,
+                "ASSIGNMENT_JOB_RETRY_MAX_DELAY_SECONDS",
+                default_policy.max_delay_seconds,
+            )
+        ),
+    )
+    backoff_multiplier = max(
+        1.0,
+        float(
+            getattr(
+                settings,
+                "ASSIGNMENT_JOB_RETRY_BACKOFF_MULTIPLIER",
+                default_policy.backoff_multiplier,
+            )
+        ),
+    )
+    jitter_ratio = max(
+        0.0,
+        float(
+            getattr(
+                settings,
+                "ASSIGNMENT_JOB_RETRY_JITTER_RATIO",
+                0.2,
+            )
+        ),
+    )
+    return RetryPolicy(
+        base_delay_seconds=base_delay,
+        max_delay_seconds=max_delay,
+        backoff_multiplier=backoff_multiplier,
+        jitter_ratio=jitter_ratio,
+    )
+
+
+def _retry_policy_for_row(
+    *,
+    row: DomainEventOutbox,
+    default_policy: RetryPolicy,
+    assignment_policy: RetryPolicy,
+) -> RetryPolicy:
+    if row.event_type == ASSIGNMENT_OUTBOX_EVENT_TYPE:
+        return assignment_policy
+    return default_policy
 
 
 class OutboxDomainEventDispatcher:
@@ -82,10 +160,12 @@ class OutboxDomainEventDispatcher:
     def dispatch(self, event: DomainEvent) -> None:
         event_type, payload_json = self._serializer.serialize(event)
         event_key = self._serializer.event_key_for(event)
+        max_attempts = self._serializer.max_attempts_for(event)
         self._repository.enqueue(
             event_type=event_type,
             payload_json=payload_json,
             event_key=event_key,
+            max_attempts=max_attempts,
         )
 
 
@@ -119,16 +199,60 @@ def _mark_retry_or_failed(
     row.claimed_at = None
 
     if decision.disposition == AsyncJobDisposition.DEAD_LETTER:
-        row.status = OUTBOX_STATUS_FAILED
+        row.status = OUTBOX_STATUS_DEAD_LETTER
         row.processed_at = now
         row.next_attempt_at = None
         row.last_error = f"[DLQ:{decision.reason}] {error}"
+        _emit_dead_letter_admin_notifications(
+            row,
+            error_reason=decision.reason,
+        )
         return decision
 
     row.last_error = error
     row.status = OUTBOX_STATUS_PENDING
     row.next_attempt_at = now + timedelta(seconds=max(0, int(decision.next_delay_seconds or 0)))
     return decision
+
+
+def _iter_admin_users(db: Session) -> Iterable[User]:
+    return (
+        db.query(User)
+        .filter(
+            User.is_active.is_(True),
+            User.role.in_([UserRole.SYSTEM_ADMIN, UserRole.ADMIN]),
+        )
+        .all()
+    )
+
+
+def _emit_dead_letter_admin_notifications(
+    row: DomainEventOutbox,
+    *,
+    error_reason: str,
+) -> None:
+    session = object_session(row)
+    if session is None:
+        return
+
+    admins = list(_iter_admin_users(session))
+    if not admins:
+        return
+
+    for admin in admins:
+        session.add(
+            Notification(
+                user_id=admin.id,
+                type=NotificationType.SYSTEM,
+                title="Domain event moved to dead letter queue",
+                message=(
+                    f"Outbox event {row.event_type} (id={row.id}) reached dead-letter status "
+                    f"after {int(row.attempts or 0)}/{int(row.max_attempts or 0)} attempts. "
+                    f"Reason: {error_reason}"
+                ),
+                link="/admin/system-setup",
+            )
+        )
 
 
 def process_pending_outbox_events_batch(
@@ -149,6 +273,7 @@ def process_pending_outbox_events_batch(
         max_delay_seconds=max(0, int(retry_delay_seconds)) * 10 or 300,
         backoff_multiplier=2.0,
     )
+    assignment_policy = _assignment_retry_policy(policy)
     try:
         from app.services.domain_event_handlers import build_domain_event_dispatcher
 
@@ -180,11 +305,16 @@ def process_pending_outbox_events_batch(
                 session.commit()
                 report.completed += 1
             except Exception as exc:
+                resolved_policy = _retry_policy_for_row(
+                    row=row,
+                    default_policy=policy,
+                    assignment_policy=assignment_policy,
+                )
                 decision = _mark_retry_or_failed(
                     row,
                     now=datetime.utcnow(),
                     error=str(exc),
-                    retry_policy=policy,
+                    retry_policy=resolved_policy,
                 )
                 session.commit()
                 if decision.disposition == AsyncJobDisposition.DEAD_LETTER:
@@ -230,7 +360,7 @@ def list_dead_letter_outbox_entries(
     try:
         return (
             session.query(DomainEventOutbox)
-            .filter(DomainEventOutbox.status == OUTBOX_STATUS_FAILED)
+            .filter(DomainEventOutbox.status.in_(OUTBOX_DEAD_LETTER_STATUSES))
             .order_by(DomainEventOutbox.processed_at.desc(), DomainEventOutbox.id.desc())
             .limit(max(1, int(limit)))
             .all()
@@ -254,7 +384,7 @@ def requeue_dead_letter_outbox_entry(
             session.query(DomainEventOutbox)
             .filter(
                 DomainEventOutbox.id == outbox_id,
-                DomainEventOutbox.status == OUTBOX_STATUS_FAILED,
+                DomainEventOutbox.status.in_(OUTBOX_DEAD_LETTER_STATUSES),
             )
             .first()
         )

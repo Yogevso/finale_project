@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from enum import Enum
 
@@ -22,6 +23,7 @@ class RetryPolicy:
     base_delay_seconds: int = 30
     max_delay_seconds: int = 300
     backoff_multiplier: float = 2.0
+    jitter_ratio: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,9 +41,15 @@ def compute_retry_delay_seconds(*, attempt_number: int, policy: RetryPolicy) -> 
     base = max(0, int(policy.base_delay_seconds))
     cap = max(base, int(policy.max_delay_seconds))
     multiplier = max(1.0, float(policy.backoff_multiplier))
+    jitter_ratio = max(0.0, float(policy.jitter_ratio))
 
-    delay = int(round(base * (multiplier ** (bounded_attempt - 1))))
-    return min(cap, max(0, delay))
+    delay = base * (multiplier ** (bounded_attempt - 1))
+    if delay > 0 and jitter_ratio > 0:
+        jitter_window = delay * jitter_ratio
+        delay += random.uniform(-jitter_window, jitter_window)
+
+    bounded_delay = int(round(delay))
+    return min(cap, max(0, bounded_delay))
 
 
 def evaluate_retry(

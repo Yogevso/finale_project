@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.domain.events import (
     CommentCreated,
+    CompanyAssignmentsUpdated,
     DocumentPublished,
     InProcessDomainEventDispatcher,
 )
@@ -169,6 +170,14 @@ class NotificationEmailEventHandlers:
                 admin.email,
             )
 
+    def handle_company_assignments_updated(self, event: CompanyAssignmentsUpdated) -> None:
+        logger.info(
+            "Processed company assignment update event for document=%s row_version=%s companies=%s",
+            event.document_id,
+            event.document_row_version,
+            list(event.assigned_company_ids),
+        )
+
 
 def build_domain_event_dispatcher(
     db: Session,
@@ -183,4 +192,5 @@ def build_domain_event_dispatcher(
     handlers = NotificationEmailEventHandlers(db)
     dispatcher.register(DocumentPublished, handlers.handle_document_published)
     dispatcher.register(CommentCreated, handlers.handle_comment_created)
+    dispatcher.register(CompanyAssignmentsUpdated, handlers.handle_company_assignments_updated)
     return dispatcher

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies.tenant import TenantContext
 from app.domain.aggregates import DocumentAggregate
+from app.domain.events import CompanyAssignmentsUpdated, InProcessDomainEventDispatcher
 from app.domain.factories import DocumentFactory
 from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
@@ -36,6 +37,7 @@ from app.models import (
 )
 from app.schemas import DocumentCreate, DocumentUpdate
 from app.services.base_service import TenantAwareService
+from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
 from app.utils.audience_audit_signing import sign_payload
 from app.utils.concurrency import ensure_if_match_matches
@@ -50,8 +52,15 @@ class DocumentService(TenantAwareService[Document]):
     model = Document
     _company_visibility_assignment_spec = DocumentVisibilityCompanyAssignmentSpec()
 
-    def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None):
+    def __init__(
+        self,
+        db: Session,
+        tenant_ctx: Optional[TenantContext] = None,
+        *,
+        event_dispatcher: InProcessDomainEventDispatcher | None = None,
+    ):
         super().__init__(db, tenant_ctx)
+        self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
@@ -196,10 +205,33 @@ class DocumentService(TenantAwareService[Document]):
             )
         return normalized_ids
 
+    def _enforce_assignment_tenant_scope(self, company_ids: List[int]) -> None:
+        """
+        Prevent tenant-scoped users from assigning foreign company IDs.
+
+        System admins and unscoped internal users keep existing behavior.
+        """
+        if not company_ids:
+            return
+        if not self.tenant_ctx or self.tenant_ctx.is_system_admin:
+            return
+
+        tenant_id = self.tenant_ctx.tenant_id
+        if tenant_id is None:
+            return
+
+        foreign_ids = [company_id for company_id in company_ids if company_id != tenant_id]
+        if foreign_ids:
+            raise PermissionDeniedError(
+                "Cannot assign companies outside your tenant scope",
+                error_code=AudienceErrorCode.AUDIENCE_010.value,
+            )
+
     def _resolve_assigned_companies(self, company_ids: List[int]) -> List[Tenant]:
         if not company_ids:
             return []
 
+        self._enforce_assignment_tenant_scope(company_ids)
         companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
         company_by_id = {company.id: company for company in companies}
         missing_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
@@ -640,7 +672,7 @@ class DocumentService(TenantAwareService[Document]):
         """Replace the full assigned-company set for a document."""
         document = self.get_document(document_id)
         self._verify_access(document)
-        old_company_ids = [company.id for company in (document.assigned_companies or [])]
+        old_company_ids = sorted(company.id for company in (document.assigned_companies or []))
         actor_user_id = self.tenant_ctx.user_id if self.tenant_ctx else None
 
         requested_ids = self._normalize_company_ids(company_ids)
@@ -660,6 +692,10 @@ class DocumentService(TenantAwareService[Document]):
                 resource_id=document.id,
                 row_version=document.row_version,
             )
+
+        # Replay-safe no-op: reapplying the same assignment set must be idempotent.
+        if sorted(requested_ids) == old_company_ids:
+            return len(requested_ids)
 
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
@@ -696,6 +732,15 @@ class DocumentService(TenantAwareService[Document]):
                             sort_keys=True,
                         ),
                         assignment_diff=json.dumps(assignment_diff, sort_keys=True),
+                    )
+                )
+                self.db.flush()
+                self.event_dispatcher.dispatch(
+                    CompanyAssignmentsUpdated(
+                        document_id=document.id,
+                        document_row_version=int(document.row_version or 1),
+                        assigned_company_ids=tuple(sorted(new_company_ids)),
+                        actor_user_id=actor_user_id,
                     )
                 )
 

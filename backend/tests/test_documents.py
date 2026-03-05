@@ -3,6 +3,7 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine
@@ -722,6 +723,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
         [test_tenant.id, test_tenant_2.id]
     )
 
+    etag_before_replay = next_etag
     idempotent_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
         headers={**admin_headers, "If-Match": next_etag},
@@ -730,6 +732,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
     assert idempotent_assign.status_code == 200
     next_etag = idempotent_assign.headers.get("ETag")
     assert next_etag is not None
+    assert next_etag == etag_before_replay
 
     state_after_idempotent_assign = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
@@ -811,6 +814,45 @@ def test_assign_companies_rejects_stale_if_match_conflict(
     )
     assert stale_retry.status_code == 409
     assert "Write conflict detected" in stale_retry.json()["detail"]
+
+
+def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
+    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+):
+    document = Document(
+        title="Bulk assignment endpoint document",
+        document_number="DOC-ASG-BULK-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    document.assigned_companies = [test_tenant]
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    response = client.post(
+        f"/api/v1/documents/{document.id}/companies/bulk",
+        headers={
+            **admin_headers,
+            "If-Match": document.etag,
+            "Idempotency-Key": f"bulk-set-{uuid4().hex}",
+        },
+        json={"company_ids": [test_tenant.id, test_tenant_2.id]},
+    )
+
+    assert response.status_code == 200
+    assert response.headers.get("X-API-Schema-Version")
+    assert response.headers.get("ETag")
+
+    assigned = client.get(
+        f"/api/v1/documents/{document.id}/assigned-companies",
+        headers=admin_headers,
+    )
+    assert assigned.status_code == 200
+    assert sorted(company["id"] for company in assigned.json()) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
 
 
 def test_assign_company_endpoints_require_document_in_same_tenant(client, db):

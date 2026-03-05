@@ -490,6 +490,47 @@ def assign_companies(
     return MessageResponse(message=f"Assigned company set updated ({assigned_count} total)")
 
 
+@router.post("/documents/{document_id}/companies/bulk", response_model=MessageResponse)
+def assign_companies_bulk(
+    document_id: int,
+    request: CompanyAssignRequest,
+    response: Response,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+    current_user: User = Depends(require_permission(Permission.ASSIGN_COMPANIES)),
+    assign_company_set_command_handler: AssignCompanySetCommandHandler = Depends(
+        get_assign_company_set_command_handler
+    ),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """
+    Bulk replace company assignments for a document.
+
+    This endpoint is idempotency-key aware through middleware and enforces the same
+    optimistic-concurrency preconditions as the legacy assignment endpoint.
+    """
+    _ = current_user
+    result = assign_company_set_command_handler.execute(
+        AssignCompanySetCommand(
+            document_id=document_id,
+            company_ids=request.company_ids,
+            if_match=if_match,
+        )
+    )
+    if result.is_err:
+        if result.error.code == AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND:
+            raise NotFoundError(result.error.message)
+        if result.error.code == AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET:
+            raise ValidationError(result.error.message, error_code=result.error.error_code)
+        raise HTTPException(status_code=500, detail="Unexpected company-assignment command error")
+
+    assigned_count = result.value
+    updated_document = document_service.get_document(document_id)
+    if updated_document:
+        response.headers["ETag"] = f"\"{updated_document.etag}\""
+    response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    return MessageResponse(message=f"Bulk company assignment updated ({assigned_count} total)")
+
+
 @router.delete(
     "/documents/{document_id}/assign-companies/{company_id}", response_model=MessageResponse
 )

@@ -9,7 +9,7 @@ from app.application.interfaces.dependencies import (
 from app.application.interfaces.use_cases import AssignCompanySet, PublishApprovedVersion
 from app.dependencies.tenant import TenantContext
 from app.errors import ValidationError
-from app.models import Document, DocumentStatus, DocumentVisibility, UserRole
+from app.models import AuditLog, Document, DocumentStatus, DocumentVisibility, UserRole
 from app.services.document_service import DocumentService
 from app.services.version_service import VersionService
 
@@ -80,6 +80,46 @@ def test_assign_company_set_use_case_replaces_assignments(
     assert sorted(company.id for company in document.assigned_companies) == sorted(
         [test_tenant.id, test_tenant_2.id]
     )
+
+
+def test_assign_company_set_use_case_replay_is_state_idempotent(
+    db, test_admin, test_tenant, test_tenant_2
+):
+    document = Document(
+        title="Use-case replay-safe assignment document",
+        document_number="DOC-USE-CASE-0002",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.COMPANY,
+        created_by=test_admin.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    service = DocumentService(db)
+    first_count = service.assign_company_set(
+        document.id,
+        [test_tenant.id, test_tenant_2.id],
+    )
+    assert first_count == 2
+    db.refresh(document)
+    row_version_after_first = int(document.row_version)
+    etag_after_first = document.etag
+    audit_count_after_first = db.query(AuditLog).filter(AuditLog.document_id == document.id).count()
+
+    replay_count = service.assign_company_set(
+        document.id,
+        [test_tenant_2.id, test_tenant.id],
+    )
+    assert replay_count == 2
+
+    db.refresh(document)
+    assert sorted(company.id for company in document.assigned_companies) == sorted(
+        [test_tenant.id, test_tenant_2.id]
+    )
+    assert int(document.row_version) == row_version_after_first
+    assert document.etag == etag_after_first
+    assert db.query(AuditLog).filter(AuditLog.document_id == document.id).count() == audit_count_after_first
 
     with pytest.raises(ValidationError) as exc_info:
         service.assign_company_set(document.id, [])

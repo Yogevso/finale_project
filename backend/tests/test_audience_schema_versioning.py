@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from uuid import uuid4
 
 from app.config import settings
 
@@ -46,6 +47,19 @@ def test_assignment_endpoints_emit_schema_version_header(
     assert assign_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     next_etag = assign_response.headers["ETag"]
+    bulk_response = client.post(
+        f"/api/v1/documents/{document_id}/companies/bulk",
+        headers={
+            **admin_headers,
+            "If-Match": next_etag,
+            "Idempotency-Key": f"schema-version-bulk-{uuid4().hex}",
+        },
+        json={"company_ids": [test_tenant.id, test_tenant_2.id]},
+    )
+    assert bulk_response.status_code == 200
+    assert bulk_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+
+    next_etag = bulk_response.headers["ETag"]
     remove_response = client.delete(
         f"/api/v1/documents/{document_id}/assign-companies/{test_tenant_2.id}",
         headers={**admin_headers, "If-Match": next_etag},
