@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -170,6 +171,11 @@ document_company_assignments = Table(
     Column("tenant_id", Integer, ForeignKey("tenants.id"), primary_key=True),
     Column("assigned_at", DateTime, default=datetime.utcnow),
     Column("assigned_by", Integer, ForeignKey("users.id")),
+    Index(
+        "ix_document_company_assignments_document_id_tenant_id",
+        "document_id",
+        "tenant_id",
+    ),
 )
 
 

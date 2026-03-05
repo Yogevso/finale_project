@@ -3,7 +3,10 @@
 import json
 import logging
 import re
+from collections import OrderedDict
+from dataclasses import dataclass
 from datetime import datetime
+from time import monotonic
 from typing import List, Optional
 
 from sqlalchemy import func, or_, select, update
@@ -44,6 +47,54 @@ from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 logger = logging.getLogger(__name__)
+COMPANY_LOOKUP_CACHE_TTL_SECONDS = 300
+COMPANY_LOOKUP_CACHE_MAX_ENTRIES = 1024
+
+
+@dataclass(slots=True, frozen=True)
+class CompanyLookupSnapshot:
+    """Minimal cached company lookup data used by assignment validation."""
+
+    id: int
+    name: str
+    slug: str
+    is_active: bool
+
+
+@dataclass(slots=True)
+class _CompanyLookupCacheEntry:
+    snapshot: CompanyLookupSnapshot
+    expires_at: float
+
+
+class _CompanyLookupLRU:
+    """Small in-memory LRU cache with TTL for company ID/name lookups."""
+
+    def __init__(self, *, max_entries: int, ttl_seconds: int):
+        self._max_entries = max_entries
+        self._ttl_seconds = ttl_seconds
+        self._entries: OrderedDict[int, _CompanyLookupCacheEntry] = OrderedDict()
+
+    def get(self, company_id: int) -> CompanyLookupSnapshot | None:
+        now = monotonic()
+        entry = self._entries.get(company_id)
+        if entry is None:
+            return None
+        if entry.expires_at <= now:
+            self._entries.pop(company_id, None)
+            return None
+        self._entries.move_to_end(company_id)
+        return entry.snapshot
+
+    def set(self, snapshot: CompanyLookupSnapshot) -> None:
+        now = monotonic()
+        self._entries[snapshot.id] = _CompanyLookupCacheEntry(
+            snapshot=snapshot,
+            expires_at=now + self._ttl_seconds,
+        )
+        self._entries.move_to_end(snapshot.id)
+        while len(self._entries) > self._max_entries:
+            self._entries.popitem(last=False)
 
 
 class DocumentService(TenantAwareService[Document]):
@@ -61,6 +112,10 @@ class DocumentService(TenantAwareService[Document]):
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+        self._company_lookup_cache = _CompanyLookupLRU(
+            max_entries=COMPANY_LOOKUP_CACHE_MAX_ENTRIES,
+            ttl_seconds=COMPANY_LOOKUP_CACHE_TTL_SECONDS,
+        )
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
@@ -227,27 +282,68 @@ class DocumentService(TenantAwareService[Document]):
                 error_code=AudienceErrorCode.AUDIENCE_010.value,
             )
 
+    def _lookup_company_snapshots(self, company_ids: List[int]) -> dict[int, CompanyLookupSnapshot]:
+        """Resolve minimal company metadata with a short-lived LRU cache."""
+        snapshots: dict[int, CompanyLookupSnapshot] = {}
+        missing_ids: list[int] = []
+
+        for company_id in company_ids:
+            cached = self._company_lookup_cache.get(company_id)
+            if cached is None:
+                missing_ids.append(company_id)
+            else:
+                snapshots[company_id] = cached
+
+        if missing_ids:
+            rows = (
+                self.db.query(Tenant.id, Tenant.name, Tenant.slug, Tenant.is_active)
+                .filter(Tenant.id.in_(missing_ids))
+                .all()
+            )
+            for row in rows:
+                snapshot = CompanyLookupSnapshot(
+                    id=int(row.id),
+                    name=str(row.name),
+                    slug=str(row.slug),
+                    is_active=bool(row.is_active),
+                )
+                snapshots[snapshot.id] = snapshot
+                self._company_lookup_cache.set(snapshot)
+
+        return snapshots
+
     def _resolve_assigned_companies(self, company_ids: List[int]) -> List[Tenant]:
         if not company_ids:
             return []
 
         self._enforce_assignment_tenant_scope(company_ids)
-        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
-        company_by_id = {company.id: company for company in companies}
-        missing_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
+        snapshots_by_id = self._lookup_company_snapshots(company_ids)
+        missing_ids = [company_id for company_id in company_ids if company_id not in snapshots_by_id]
         if missing_ids:
             raise ValidationError(
                 "Some company IDs are invalid",
                 error_code=AudienceErrorCode.AUDIENCE_002.value,
             )
 
-        inactive_ids = [company.id for company in companies if not company.is_active]
+        inactive_ids = [
+            company_id
+            for company_id in company_ids
+            if not snapshots_by_id[company_id].is_active
+        ]
         if inactive_ids:
             raise ValidationError(
                 "Inactive companies cannot be assigned to documents",
                 error_code=AudienceErrorCode.AUDIENCE_008.value,
             )
 
+        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
+        company_by_id = {company.id: company for company in companies}
+        missing_object_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
+        if missing_object_ids:
+            raise ValidationError(
+                "Some company IDs are invalid",
+                error_code=AudienceErrorCode.AUDIENCE_002.value,
+            )
         return [company_by_id[company_id] for company_id in company_ids]
 
     def _validate_company_visibility_assignment(
