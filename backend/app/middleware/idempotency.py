@@ -27,7 +27,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         re.compile(r"^/api/v1/invitations$"),
         re.compile(r"^/api/v1/invitations/\d+/resend$"),
         re.compile(r"^/api/v1/documents/\d+/comments$"),
-        re.compile(r"^/api/v1/documents/\d+/companies/bulk$"),
+        re.compile(r"^/api/v1/documents/\d+/companies/batch$"),
         re.compile(r"^/api/v1/reviews/documents/\d+/submit$"),
         re.compile(r"^/api/v1/reviews/\d+/(approve|reject|cancel)$"),
     )

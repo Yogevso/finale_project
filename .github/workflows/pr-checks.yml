@@ -201,6 +201,54 @@ jobs:
             console.log('Coverage check completed');
 
   # ============================================
+  # Audience Contract Drift Check
+  # ============================================
+  audience-contract-drift:
+    name: Audience Contract Drift
+    runs-on: ubuntu-latest
+    if: github.event.action == 'synchronize' || github.event.action == 'opened'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main
+
+      - name: Detect removed audience error codes
+        id: drift
+        continue-on-error: true
+        run: |
+          python scripts/api_contracts/check_audience_contract_drift.py \
+            --base-ref origin/main \
+            --comment-output .tmp/audience-contract-drift.md
+
+      - name: Comment on PR when drift detected
+        if: steps.drift.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = '.tmp/audience-contract-drift.md';
+            const body = fs.existsSync(path)
+              ? fs.readFileSync(path, 'utf8')
+              : 'Audience contract drift detected.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Fail on contract drift
+        if: steps.drift.outcome == 'failure'
+        run: |
+          echo "Audience error code removals detected versus origin/main."
+          exit 1
+
+  # ============================================
   # Dependency Review
   # ============================================
   dependency-review:

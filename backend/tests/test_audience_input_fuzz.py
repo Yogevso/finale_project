@@ -52,10 +52,11 @@ def test_companies_bulk_assignment_fuzz_inputs_never_return_500(
     company_ids,
 ):
     db.refresh(company_scope_document)
-    response = client.post(
-        f"/api/v1/documents/{company_scope_document.id}/companies/bulk",
+    response = client.put(
+        f"/api/v1/documents/{company_scope_document.id}/companies/batch",
         headers={**admin_headers, "If-Match": company_scope_document.etag},
         json={"company_ids": company_ids},
     )
 
     assert response.status_code in {200, 400, 403, 404, 409, 422, 428}
+

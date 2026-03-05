@@ -151,13 +151,14 @@ def test_duplicate_bulk_company_assignment_replays_response(
     headers = dict(admin_headers)
     headers["Idempotency-Key"] = _new_idempotency_key()
     headers["If-Match"] = document.etag
-    path = f"/api/v1/documents/{document.id}/companies/bulk"
+    path = f"/api/v1/documents/{document.id}/companies/batch"
     payload = {"company_ids": [test_tenant.id]}
 
-    first = client.post(path, headers=headers, json=payload)
-    second = client.post(path, headers=headers, json=payload)
+    first = client.put(path, headers=headers, json=payload)
+    second = client.put(path, headers=headers, json=payload)
 
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.headers.get("x-idempotent-replay") == "true"
     assert second.json() == first.json()
+

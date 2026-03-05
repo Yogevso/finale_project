@@ -50,7 +50,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     ASSIGNMENT_PATH_PATTERNS = (
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies$"),
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies/\d+$"),
-        re.compile(rf"^{settings.API_PREFIX}/documents/\d+/companies/bulk$"),
+        re.compile(rf"^{settings.API_PREFIX}/documents/\d+/companies/batch$"),
     )
 
     def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):

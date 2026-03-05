@@ -175,8 +175,8 @@ class TestRateLimitMiddleware:
         middleware = RateLimitMiddleware(app=MagicMock(), max_requests=100, window_seconds=60)
 
         limit, window, scope = middleware._resolve_limit_profile(
-            request_path="/api/v1/documents/42/companies/bulk",
-            method="POST",
+            request_path="/api/v1/documents/42/companies/batch",
+            method="PUT",
         )
 
         assert limit == 30
@@ -229,3 +229,4 @@ class TestRateLimitIntegration:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
+
