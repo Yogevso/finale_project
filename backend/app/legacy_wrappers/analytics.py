@@ -61,3 +61,16 @@ class AnalyticsServiceStranglerWrapper:
     def get_tenant_analytics(self, date_from: date, date_to: date) -> dict:
         self._record_legacy_usage()
         return self._legacy_service.get_tenant_analytics(date_from, date_to)
+
+    def get_company_audience_analytics(self, company_id: int) -> dict:
+        self._record_legacy_usage()
+        return self._legacy_service.get_company_audience_analytics(company_id)
+
+    def export_audit_logs(
+        self,
+        *,
+        date_from: date | None,
+        date_to: date | None,
+    ) -> list[dict[str, Any]]:
+        self._record_legacy_usage()
+        return self._legacy_service.export_audit_logs(date_from=date_from, date_to=date_to)

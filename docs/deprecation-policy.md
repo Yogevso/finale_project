@@ -44,6 +44,19 @@ The owner is accountable for communication, migration support, and removal.
 - Breaking removals must reference an ADR if architecture-impacting.
 - Contract changes must follow `docs/contracts/versioning.md`.
 
+## Audience Schema Version Headers
+
+Audience-assignment endpoints publish `X-API-Schema-Version` so consumers can
+detect payload evolution without parsing OpenAPI diffs.
+
+- Current audience schema header: `X-API-Schema-Version: 1.0.0`
+- Versioning strategy: semantic versioning (`MAJOR.MINOR.PATCH`)
+- `PATCH`: non-breaking clarifications (docs/examples only)
+- `MINOR`: additive, backwards-compatible response/request fields
+- `MAJOR`: breaking audience contract changes
+- Any `MAJOR` change must include a deprecation window of at least 60 days and
+  be announced in release notes before rollout.
+
 ## Runtime and CI markers
 
 - Runtime markers:

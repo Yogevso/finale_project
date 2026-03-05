@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    AUDIENCE_AUDIT_HMAC_KEYS: str = "v1:dev-audience-audit-signing-key"
+    AUDIENCE_AUDIT_ACTIVE_KEY_ID: str = "v1"
+    AUDIENCE_ASSIGNMENT_SCHEMA_VERSION: str = "1.0.0"
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

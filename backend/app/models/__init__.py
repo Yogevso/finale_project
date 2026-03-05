@@ -100,6 +100,16 @@ class ActionType(str, enum.Enum):
     SYSTEM = "system"
 
 
+class AudienceEventType(str, enum.Enum):
+    """Audience-specific audit taxonomy used for compliance analytics."""
+
+    ASSIGNMENT_CREATED = "assignment_created"
+    ASSIGNMENT_REMOVED = "assignment_removed"
+    VISIBILITY_CHANGED = "visibility_changed"
+    AUDIENCE_SNAPSHOT_TAKEN = "audience_snapshot_taken"
+    AUDIENCE_ROLLBACK = "audience_rollback"
+
+
 class NotificationType(str, enum.Enum):
     """Notification types"""
 
@@ -584,7 +594,11 @@ class AuditLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
     action = Column(SQLEnum(ActionType), nullable=False, index=True)
+    audience_event_type = Column(SQLEnum(AudienceEventType), nullable=True, index=True)
     details = Column(Text, nullable=True)
+    assignment_diff = Column(Text, nullable=True)  # JSON object: old/new + added/removed IDs
+    signature_key_id = Column(String(32), nullable=True)
+    signature = Column(String(128), nullable=True)  # HMAC-SHA256 hex digest
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
@@ -901,6 +915,7 @@ __all__ = [
     "FeedbackType",
     "FeedbackStatus",
     "ActionType",
+    "AudienceEventType",
     "NotificationType",
     "InvitationStatus",
     "CollaborationActivityType",

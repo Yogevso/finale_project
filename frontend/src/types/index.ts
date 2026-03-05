@@ -125,6 +125,7 @@ export interface DocumentUpdate {
   release_branch?: string
   status?: DocumentStatus
   visibility?: DocumentVisibility
+  reason?: string
   company_ids?: number[]
   category?: string
   tags?: string
@@ -686,6 +687,11 @@ export interface CategoryCount {
   count: number
 }
 
+export interface AssignmentChurnItem {
+  document_id: number
+  churn_count: number
+}
+
 export interface RecentActivity {
   id: number
   action: string
@@ -706,9 +712,42 @@ export interface AnalyticsOverview {
   total_downloads: number
   documents_by_status: Record<string, number>
   documents_by_category: CategoryCount[]
+  by_audience_type?: Record<string, number>
   pending_reviews: number
   views_today: number
   new_docs_this_week: number
+  exposure_risk_transitions_30d?: number
+  assignment_churn_90d?: AssignmentChurnItem[]
+}
+
+export interface CompanyAudienceAnalytics {
+  company_id: number
+  company_name: string
+  document_count: number
+  active_document_count: number
+  company_visible_document_count: number
+  view_count_30d: number
+  download_count_30d: number
+  assignment_churn_90d: number
+}
+
+export interface AudienceAlertRule {
+  id: string
+  metric: string
+  threshold: number
+  window_minutes: number
+  document_id?: number | null
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AudienceAlertRuleCreate {
+  metric: string
+  threshold: number
+  window_minutes: number
+  document_id?: number | null
+  enabled?: boolean
 }
 
 export interface EngagementAnalytics {

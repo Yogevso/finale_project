@@ -1,5 +1,6 @@
 """Document Service"""
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -17,8 +18,10 @@ from app.domain.factories import DocumentFactory
 from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
 from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
+from app.errors.audience_errors import AudienceErrorCode
 from app.models import (
     ActionType,
+    AudienceEventType,
     AuditLog,
     Document,
     DocumentNumberSequence,
@@ -34,6 +37,7 @@ from app.models import (
 from app.schemas import DocumentCreate, DocumentUpdate
 from app.services.base_service import TenantAwareService
 from app.services.uow import UnitOfWork
+from app.utils.audience_audit_signing import sign_payload
 from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
@@ -188,7 +192,7 @@ class DocumentService(TenantAwareService[Document]):
         if any(company_id <= 0 for company_id in normalized_ids):
             raise ValidationError(
                 "Company IDs must be positive integers",
-                error_code="invalid_company_set",
+                error_code=AudienceErrorCode.AUDIENCE_002.value,
             )
         return normalized_ids
 
@@ -200,13 +204,16 @@ class DocumentService(TenantAwareService[Document]):
         company_by_id = {company.id: company for company in companies}
         missing_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
         if missing_ids:
-            raise ValidationError("Some company IDs are invalid", error_code="invalid_company_set")
+            raise ValidationError(
+                "Some company IDs are invalid",
+                error_code=AudienceErrorCode.AUDIENCE_002.value,
+            )
 
         inactive_ids = [company.id for company in companies if not company.is_active]
         if inactive_ids:
             raise ValidationError(
                 "Inactive companies cannot be assigned to documents",
-                error_code="invalid_company_set",
+                error_code=AudienceErrorCode.AUDIENCE_008.value,
             )
 
         return [company_by_id[company_id] for company_id in company_ids]
@@ -406,7 +413,9 @@ class DocumentService(TenantAwareService[Document]):
             # Track changes
             changes = []
             previous_visibility = document.visibility
-            current_company_ids = [company.id for company in document.assigned_companies]
+            visibility_changed = False
+            old_company_ids = sorted(company.id for company in document.assigned_companies)
+            current_company_ids = old_company_ids.copy()
             has_visibility_update = document_data.visibility is not None
             has_company_assignment_update = document_data.company_ids is not None
             normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
@@ -434,10 +443,16 @@ class DocumentService(TenantAwareService[Document]):
 
             if document_data.visibility is not None:
                 if document.visibility != document_data.visibility:
+                    if not (document_data.reason and document_data.reason.strip()):
+                        raise ValidationError(
+                            "Visibility changes require a reason",
+                            error_code=AudienceErrorCode.AUDIENCE_004.value,
+                        )
                     document_aggregate.ensure_visibility_change_allowed(user.role)
                     changes.append(
                         f"Visibility changed from '{document.visibility.value}' to '{document_data.visibility.value}'"
                     )
+                    visibility_changed = True
                 document.visibility = document_data.visibility
 
             target_visibility = document_data.visibility or document.visibility
@@ -498,13 +513,87 @@ class DocumentService(TenantAwareService[Document]):
                 )
                 self.db.add(version)
 
-            # Create audit log
-            audit = AuditLog(
-                user_id=user.id,
-                document_id=document.id,
-                action=ActionType.UPDATE,
-                details="; ".join(changes) if changes else "Document updated",
+            new_company_ids = sorted(company.id for company in document.assigned_companies)
+            added_company_ids = [
+                company_id for company_id in new_company_ids if company_id not in old_company_ids
+            ]
+            removed_company_ids = [
+                company_id for company_id in old_company_ids if company_id not in new_company_ids
+            ]
+            company_assignment_changed = bool(added_company_ids or removed_company_ids)
+            assignment_diff_payload = (
+                {
+                    "old_company_ids": old_company_ids,
+                    "new_company_ids": new_company_ids,
+                    "added_company_ids": added_company_ids,
+                    "removed_company_ids": removed_company_ids,
+                }
+                if company_assignment_changed
+                else None
             )
+
+            # Create audit log
+            if visibility_changed:
+                reason = (document_data.reason or "").strip()
+                signed_payload = {
+                    "event": AudienceEventType.VISIBILITY_CHANGED.value,
+                    "document_id": int(document.id),
+                    "user_id": int(user.id),
+                    "from_visibility": previous_visibility.value if previous_visibility else None,
+                    "to_visibility": document.visibility.value if document.visibility else None,
+                    "reason": reason,
+                }
+                signature_key_id, signature = sign_payload(signed_payload)
+                details = json.dumps(
+                    {
+                        "event": "visibility_change",
+                        "from_visibility": previous_visibility.value if previous_visibility else None,
+                        "to_visibility": document.visibility.value if document.visibility else None,
+                        "reason": reason,
+                    },
+                    sort_keys=True,
+                )
+                audit = AuditLog(
+                    user_id=user.id,
+                    document_id=document.id,
+                    action=ActionType.UPDATE,
+                    audience_event_type=AudienceEventType.VISIBILITY_CHANGED,
+                    details=details,
+                    assignment_diff=(
+                        json.dumps(assignment_diff_payload, sort_keys=True)
+                        if assignment_diff_payload
+                        else None
+                    ),
+                    signature_key_id=signature_key_id,
+                    signature=signature,
+                )
+            elif company_assignment_changed:
+                event_type = (
+                    AudienceEventType.ASSIGNMENT_CREATED
+                    if added_company_ids
+                    else AudienceEventType.ASSIGNMENT_REMOVED
+                )
+                audit = AuditLog(
+                    user_id=user.id,
+                    document_id=document.id,
+                    action=ActionType.UPDATE,
+                    audience_event_type=event_type,
+                    details=json.dumps(
+                        {
+                            "event": "assignment_update",
+                            "assigned_count": len(new_company_ids),
+                        },
+                        sort_keys=True,
+                    ),
+                    assignment_diff=json.dumps(assignment_diff_payload, sort_keys=True),
+                )
+            else:
+                audit = AuditLog(
+                    user_id=user.id,
+                    document_id=document.id,
+                    action=ActionType.UPDATE,
+                    details="; ".join(changes) if changes else "Document updated",
+                )
             self.db.add(audit)
 
         self.db.refresh(document)
@@ -551,12 +640,14 @@ class DocumentService(TenantAwareService[Document]):
         """Replace the full assigned-company set for a document."""
         document = self.get_document(document_id)
         self._verify_access(document)
+        old_company_ids = [company.id for company in (document.assigned_companies or [])]
+        actor_user_id = self.tenant_ctx.user_id if self.tenant_ctx else None
 
         requested_ids = self._normalize_company_ids(company_ids)
         if document.visibility == DocumentVisibility.COMPANY and not requested_ids:
             raise ValidationError(
                 "Company visibility requires at least one assigned company",
-                error_code="missing_company_assignment",
+                error_code=AudienceErrorCode.AUDIENCE_001.value,
             )
         assigned_companies = self._resolve_assigned_companies(requested_ids)
 
@@ -573,6 +664,40 @@ class DocumentService(TenantAwareService[Document]):
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
             document.updated_at = datetime.utcnow()
+
+            new_company_ids = [company.id for company in assigned_companies]
+            added_company_ids = [company_id for company_id in new_company_ids if company_id not in old_company_ids]
+            removed_company_ids = [
+                company_id for company_id in old_company_ids if company_id not in new_company_ids
+            ]
+            assignment_diff = {
+                "old_company_ids": old_company_ids,
+                "new_company_ids": new_company_ids,
+                "added_company_ids": added_company_ids,
+                "removed_company_ids": removed_company_ids,
+            }
+            if added_company_ids or removed_company_ids:
+                event_type = (
+                    AudienceEventType.ASSIGNMENT_CREATED
+                    if added_company_ids
+                    else AudienceEventType.ASSIGNMENT_REMOVED
+                )
+                self.db.add(
+                    AuditLog(
+                        user_id=actor_user_id,
+                        document_id=document.id,
+                        action=ActionType.UPDATE,
+                        audience_event_type=event_type,
+                        details=json.dumps(
+                            {
+                                "event": "assignment_set_replaced",
+                                "assigned_count": len(new_company_ids),
+                            },
+                            sort_keys=True,
+                        ),
+                        assignment_diff=json.dumps(assignment_diff, sort_keys=True),
+                    )
+                )
 
         # Safety net: explicitly invalidate portal + search cache after audience change
         from app.projections import (
@@ -617,6 +742,7 @@ class DocumentService(TenantAwareService[Document]):
                 user_id=user.id,
                 document_id=document.id,
                 action=ActionType.UPDATE,
+                audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
                 details=(
                     f"Archived document '{document.title}'. "
                     f"Previous status: {previous_status}. "
@@ -723,6 +849,7 @@ class DocumentService(TenantAwareService[Document]):
                 user_id=user.id,
                 document_id=document.id,
                 action=ActionType.UPDATE,
+                audience_event_type=AudienceEventType.AUDIENCE_ROLLBACK,
                 details=(
                     f"Restored document '{document.title}' from archive. "
                     f"New status: {restore_status.value}. "

@@ -11,6 +11,7 @@ from app.api.bff import documents as bff_documents
 from app.api.management import (
     analytics,
     attachments,
+    audience_governance,
     auth,
     collaboration,
     comments,
@@ -74,6 +75,11 @@ class FastAPIRouterRegistry:
             RouterRegistration(feedback.router, prefix=self._api_prefix, tags=("Feedback",)),
             RouterRegistration(invitations.router, prefix=self._api_prefix, tags=("Invitations",)),
             RouterRegistration(analytics.router, prefix=self._api_prefix, tags=("Analytics",)),
+            RouterRegistration(
+                audience_governance.router,
+                prefix=self._api_prefix,
+                tags=("Audience Governance",),
+            ),
             RouterRegistration(collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)),
             RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),

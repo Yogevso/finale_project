@@ -9,7 +9,7 @@ type VisibilityChangeConfirmDialogProps = {
   toVisibility: DocumentVisibility
   documentTitle?: string
   onCancel: () => void
-  onConfirm: (companyIds?: number[]) => void
+  onConfirm: (result: { reason: string; companyIds?: number[] }) => void
   isSubmitting?: boolean
   initialCompanyIds?: number[]
 }
@@ -25,12 +25,14 @@ export default function VisibilityChangeConfirmDialog({
   initialCompanyIds = [],
 }: VisibilityChangeConfirmDialogProps) {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>(initialCompanyIds)
+  const [reason, setReason] = useState('')
   const wasOpenRef = useRef(false)
 
   // Only reset selection when dialog opens (transitions from closed to open)
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       setSelectedCompanyIds(initialCompanyIds)
+      setReason('')
     }
     wasOpenRef.current = isOpen
   }, [isOpen, initialCompanyIds])
@@ -43,14 +45,14 @@ export default function VisibilityChangeConfirmDialog({
   const toLabel = getVisibilityLabel(toVisibility)
   const documentLabel = documentTitle ? `"${documentTitle}"` : 'this document'
   const isCompanyVisibility = toVisibility === 'company'
-  const canConfirm = !isCompanyVisibility || selectedCompanyIds.length > 0
+  const reasonIsValid = reason.trim().length >= 3
+  const canConfirm = reasonIsValid && (!isCompanyVisibility || selectedCompanyIds.length > 0)
 
   const handleConfirm = () => {
-    if (isCompanyVisibility) {
-      onConfirm(selectedCompanyIds)
-    } else {
-      onConfirm()
-    }
+    onConfirm({
+      reason: reason.trim(),
+      companyIds: isCompanyVisibility ? selectedCompanyIds : undefined,
+    })
   }
 
   return (
@@ -97,6 +99,23 @@ export default function VisibilityChangeConfirmDialog({
             )}
           </div>
         )}
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-slate-700">
+            Reason for change <span className="text-rose-500">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="input-field min-h-[92px]"
+            placeholder="Describe why this visibility change is required..."
+            disabled={isSubmitting}
+            data-testid="visibility-change-reason"
+          />
+          <p className="text-xs text-slate-500">
+            Minimum 3 characters. Reason is stored in the audience audit trail.
+          </p>
+        </div>
 
         <div className="flex justify-end gap-3 pt-1">
           <button type="button" onClick={onCancel} className="btn-ghost" disabled={isSubmitting}>

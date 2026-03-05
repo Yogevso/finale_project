@@ -1,8 +1,8 @@
-import { FileText, Users, Eye, MessageSquare, Clock } from 'lucide-react'
+import { FileText, Users, Eye, MessageSquare, Clock, ShieldAlert } from 'lucide-react'
 import { StatCard } from '../StatCard'
 import { DonutChartWidget } from '../DonutChartWidget'
 import { useAnalyticsOverview, useRecentActivity } from '../hooks/useAnalytics'
-import type { AnalyticsQueryParams, RecentActivity } from '@/types'
+import type { AnalyticsQueryParams, AssignmentChurnItem, RecentActivity } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 
 interface OverviewSectionProps {
@@ -19,6 +19,12 @@ export function OverviewSection({ params }: OverviewSectionProps) {
         value: count,
       }))
     : []
+  const audienceByType = overview?.by_audience_type || {
+    internal: 0,
+    company: 0,
+    public: 0,
+  }
+  const topChurnItems = (overview?.assignment_churn_90d || []).slice(0, 5)
 
   const getActivityIcon = (action: RecentActivity['action']) => {
     if (action.includes('view')) return <Eye className="w-4 h-4 text-sky-500" />
@@ -33,7 +39,7 @@ export function OverviewSection({ params }: OverviewSectionProps) {
       <h2 className="text-xl font-semibold text-slate-900">Overview</h2>
       
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           title="Total Documents"
           value={overview?.total_documents || 0}
@@ -60,6 +66,31 @@ export function OverviewSection({ params }: OverviewSectionProps) {
           icon={MessageSquare}
           loading={overviewLoading}
         />
+        <StatCard
+          title="Exposure Risk (30d)"
+          value={overview?.exposure_risk_transitions_30d || 0}
+          icon={ShieldAlert}
+          loading={overviewLoading}
+          subtitle="Internal -> Public transitions"
+        />
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-6" data-testid="audience-segmentation-chart">
+        <h3 className="text-lg font-medium text-slate-900 mb-4">Audience Breakdown</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50" data-testid="audience-type-internal">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Internal</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{audienceByType.internal || 0}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50" data-testid="audience-type-company">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Client-visible</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{audienceByType.company || 0}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50" data-testid="audience-type-public">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Public</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-900">{audienceByType.public || 0}</div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Row */}
@@ -134,6 +165,29 @@ export function OverviewSection({ params }: OverviewSectionProps) {
           </ul>
         ) : (
           <p className="text-slate-500 text-center py-4">No recent activity</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-6">
+        <h3 className="text-lg font-medium text-slate-900 mb-4">Assignment Churn (90d)</h3>
+        {overviewLoading ? (
+          <div className="animate-pulse h-24 bg-slate-100 rounded"></div>
+        ) : topChurnItems.length > 0 ? (
+          <ul className="space-y-2">
+            {topChurnItems.map((item: AssignmentChurnItem) => (
+              <li
+                key={item.document_id}
+                className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+              >
+                <span className="text-sm text-slate-700">Document #{item.document_id}</span>
+                <span className="text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-full px-2.5 py-0.5">
+                  {item.churn_count} changes
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-slate-500 text-sm">No assignment churn in the selected period.</p>
         )}
       </div>
     </div>

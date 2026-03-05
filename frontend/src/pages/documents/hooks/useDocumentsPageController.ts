@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom'
 import {
   buildDocumentsListQueryParams,
   documentsUseCases,
-  requiresVisibilityChangeConfirmation,
 } from '@/features/documents'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
@@ -17,6 +16,11 @@ type VisibilityChangeRequest = {
   nextVisibility: DocumentVisibility
   ifMatch: string
   title: string
+}
+
+type VisibilityChangeDialogResult = {
+  reason: string
+  companyIds?: number[]
 }
 
 type ApiMutationError = {
@@ -104,13 +108,15 @@ export function useDocumentsPageController() {
       id,
       visibility,
       ifMatch,
+      reason,
       companyIds,
     }: {
       id: number
       visibility: DocumentVisibility
       ifMatch: string
+      reason: string
       companyIds?: number[]
-    }) => documentsUseCases.updateVisibility(id, visibility, ifMatch, companyIds),
+    }) => documentsUseCases.updateVisibility(id, visibility, ifMatch, reason, companyIds),
     onSuccess: (_, variables) => {
       setVisibilityOverrides((prev) => {
         const next = { ...prev }
@@ -139,26 +145,22 @@ export function useDocumentsPageController() {
   }
 
   const handleVisibilityChange = (change: VisibilityChangeRequest) => {
-    setVisibilityOverrides((prev) => ({ ...prev, [change.id]: change.nextVisibility }))
-
-    // Always show dialog when changing to company visibility (to select companies)
-    // or when expanding access requires confirmation
-    if (
-      change.nextVisibility === 'company' ||
-      requiresVisibilityChangeConfirmation(change.currentVisibility, change.nextVisibility)
-    ) {
-      setPendingVisibilityChange(change)
+    if (change.currentVisibility === change.nextVisibility) {
+      setVisibilityOverrides((prev) => {
+        const next = { ...prev }
+        delete next[change.id]
+        return next
+      })
       return
     }
 
-    visibilityMutation.mutate({
-      id: change.id,
-      visibility: change.nextVisibility,
-      ifMatch: change.ifMatch,
-    })
+    setVisibilityOverrides((prev) => ({ ...prev, [change.id]: change.nextVisibility }))
+
+    // Wave T reason-capture policy: all visibility changes require justification.
+    setPendingVisibilityChange(change)
   }
 
-  const confirmPendingVisibilityChange = (companyIds?: number[]) => {
+  const confirmPendingVisibilityChange = ({ reason, companyIds }: VisibilityChangeDialogResult) => {
     if (!pendingVisibilityChange) {
       return
     }
@@ -168,6 +170,7 @@ export function useDocumentsPageController() {
       id: change.id,
       visibility: change.nextVisibility,
       ifMatch: change.ifMatch,
+      reason,
       companyIds,
     })
   }

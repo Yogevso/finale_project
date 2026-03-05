@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import (
     ActionType,
+    AudienceEventType,
     DocumentStatus,
     DocumentVisibility,
     ReviewStatus,
@@ -145,6 +146,7 @@ class DocumentUpdate(BaseModel):
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
     thumbnail_url: Optional[str] = Field(None, max_length=500)
+    reason: Optional[str] = Field(None, min_length=3, max_length=1000)
 
 
 class DocumentResponse(DocumentBase):
@@ -391,7 +393,11 @@ class AuditLogResponse(BaseModel):
     user_id: Optional[int]
     document_id: Optional[int]
     action: ActionType
+    audience_event_type: Optional[AudienceEventType] = None
     details: Optional[str]
+    assignment_diff: Optional[str] = None
+    signature_key_id: Optional[str] = None
+    signature: Optional[str] = None
     ip_address: Optional[str]
     created_at: datetime
     user: Optional[UserResponse] = None

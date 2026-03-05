@@ -96,6 +96,9 @@ jobs:
       - name: Run Ruff formatter check
         run: ruff format app/ tests/ --check
 
+      - name: Validate audience error-code lockfile
+        run: python ../scripts/api_contracts/check_audience_error_codes.py
+
       - name: Run MyPy type checking
         run: mypy app/ --ignore-missing-imports --no-error-summary
         continue-on-error: true  # Type errors are warnings for now

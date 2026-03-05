@@ -76,3 +76,19 @@ temp/
 /invite_test.json
 /reactivate.json
 /role_test.json
+
+# Codex / Ralph Loop / Skills
+.agents/
+skills/
+skills-lock.json
+.skill_inspect_microsoft/
+.skill_inspect_openai/
+PRD.md
+progress.txt
+ralph-loop.sh
+plan
+WAVE_T_PLAN.md
+ANALYTICS_DASHBOARD_PLAN.md
+CUSTOMER_PORTAL_PLAN.md
+DESIGN_MIGRATION_PLAN.md
+REALTIME_COLLABORATION_PLAN.md

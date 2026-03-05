@@ -4,13 +4,17 @@ import {
   getAudienceDirtyHelperText,
   getAudienceDirtyState,
   getAudienceVisibilityHelperText,
-  requiresVisibilityChangeConfirmation,
 } from '@/features/documents'
 import type { DocumentStatus, DocumentUpdate, DocumentVisibility } from '@/types'
 
 type PendingVisibilityConfirmation = {
   fromVisibility: DocumentVisibility
   toVisibility: DocumentVisibility
+}
+
+type VisibilityChangeDialogResult = {
+  reason: string
+  companyIds?: number[]
 }
 
 export function EditForm({
@@ -63,8 +67,11 @@ export function EditForm({
     'edit',
   )
 
-  const submitChanges = (companyIds?: number[]) => {
+  const submitChanges = (reason?: string, companyIds?: number[]) => {
     const saveData = { ...formData }
+    if (reason && reason.trim().length > 0) {
+      saveData.reason = reason.trim()
+    }
     if (companyIds && companyIds.length > 0) {
       saveData.company_ids = companyIds
     }
@@ -75,12 +82,8 @@ export function EditForm({
     e.preventDefault()
 
     const nextVisibility = formData.visibility ?? document.visibility
-    // Always show dialog when changing to company visibility or when expanding access
-    if (
-      canEditVisibility &&
-      (nextVisibility === 'company' ||
-        requiresVisibilityChangeConfirmation(document.visibility, nextVisibility))
-    ) {
+    // Wave T reason-capture policy: all visibility changes require a reason.
+    if (canEditVisibility && nextVisibility !== document.visibility) {
       setPendingVisibilityConfirmation({
         fromVisibility: document.visibility,
         toVisibility: nextVisibility,
@@ -91,9 +94,9 @@ export function EditForm({
     submitChanges()
   }
 
-  const handleConfirmVisibilityChange = (companyIds?: number[]) => {
+  const handleConfirmVisibilityChange = ({ reason, companyIds }: VisibilityChangeDialogResult) => {
     setPendingVisibilityConfirmation(null)
-    submitChanges(companyIds)
+    submitChanges(reason, companyIds)
   }
 
   return (

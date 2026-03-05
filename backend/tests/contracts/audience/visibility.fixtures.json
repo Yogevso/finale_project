@@ -1,0 +1,156 @@
+{
+  "contract_version": "1.0.0",
+  "provider": "backend",
+  "domain": "audience",
+  "resource": "visibility",
+  "fixtures": [
+    {
+      "id": "update_visibility_to_company_success",
+      "description": "Set document visibility to company with explicit company assignments.",
+      "endpoint": {
+        "method": "PUT",
+        "path": "/api/v1/documents/{document_id}"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v2\""
+        },
+        "body": {
+          "visibility": "company",
+          "reason": "Expand rollout to customer pilot companies",
+          "company_ids": [
+            10,
+            12
+          ]
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "headers": {
+          "ETag": "\"doc-42-v3\""
+        },
+        "body": {
+          "id": 42,
+          "title": "Intel Driver Release Notes",
+          "document_number": "DOC-20260304-0042",
+          "description": "Release notes for enterprise client distribution.",
+          "version_label": "v3.2",
+          "category": "Release Notes",
+          "topic": "drivers",
+          "platform": "Dell",
+          "platform_id": 3,
+          "release_branch": "main",
+          "tags": "intel,drivers,dell",
+          "thumbnail_url": null,
+          "parent_id": null,
+          "row_version": 3,
+          "etag": "doc-42-v3",
+          "status": "draft",
+          "visibility": "company",
+          "created_by": 7,
+          "created_at": "2026-03-04T10:15:00Z",
+          "updated_at": "2026-03-04T10:18:00Z",
+          "assigned_companies": [
+            {
+              "id": 10,
+              "name": "Dell",
+              "slug": "dell"
+            },
+            {
+              "id": 12,
+              "name": "Lenovo",
+              "slug": "lenovo"
+            }
+          ],
+          "versions_count": 2,
+          "attachments_count": 1,
+          "comments_count": 0,
+          "created_by_user": null
+        }
+      }
+    },
+    {
+      "id": "update_visibility_to_internal_success",
+      "description": "Move document from company to internal visibility and clear target companies.",
+      "endpoint": {
+        "method": "PUT",
+        "path": "/api/v1/documents/{document_id}"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v3\""
+        },
+        "body": {
+          "visibility": "internal",
+          "reason": "Restrict audience after pilot window"
+        }
+      },
+      "response": {
+        "status_code": 200,
+        "headers": {
+          "ETag": "\"doc-42-v4\""
+        },
+        "body": {
+          "id": 42,
+          "title": "Intel Driver Release Notes",
+          "document_number": "DOC-20260304-0042",
+          "description": "Release notes for enterprise client distribution.",
+          "version_label": "v3.2",
+          "category": "Release Notes",
+          "topic": "drivers",
+          "platform": "Dell",
+          "platform_id": 3,
+          "release_branch": "main",
+          "tags": "intel,drivers,dell",
+          "thumbnail_url": null,
+          "parent_id": null,
+          "row_version": 4,
+          "etag": "doc-42-v4",
+          "status": "draft",
+          "visibility": "internal",
+          "created_by": 7,
+          "created_at": "2026-03-04T10:15:00Z",
+          "updated_at": "2026-03-04T10:20:00Z",
+          "assigned_companies": [],
+          "versions_count": 2,
+          "attachments_count": 1,
+          "comments_count": 0,
+          "created_by_user": null
+        }
+      }
+    },
+    {
+      "id": "update_visibility_to_company_without_company_ids_rejected",
+      "description": "Reject company visibility update when no assigned companies are supplied.",
+      "endpoint": {
+        "method": "PUT",
+        "path": "/api/v1/documents/{document_id}"
+      },
+      "request": {
+        "path_params": {
+          "document_id": 42
+        },
+        "headers": {
+          "If-Match": "\"doc-42-v4\""
+        },
+        "body": {
+          "visibility": "company",
+          "reason": "Attempting company rollout without assignments"
+        }
+      },
+      "response": {
+        "status_code": 400,
+        "body": {
+          "detail": "Company visibility requires at least one assigned company",
+          "error_code": "missing_company_assignment"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "contract_version": "1.0.0",
+  "provider": "backend",
+  "audience_contracts": [
+    {
+      "id": "bff_document_detail_audience",
+      "method": "get",
+      "path": "/api/v1/bff/documents/{document_id}/detail-page",
+      "response_schema": "DocumentDetailPageBundleResponse",
+      "required_paths": [
+        "document.visibility",
+        "assigned_companies",
+        "assigned_companies[].id",
+        "assigned_companies[].name"
+      ],
+      "type_expectations": {
+        "document.visibility": {
+          "type": "string",
+          "required": false,
+          "enum_values": ["internal", "company", "public"]
+        },
+        "assigned_companies": {
+          "type": "array",
+          "required": true
+        },
+        "assigned_companies[].id": {
+          "type": "integer",
+          "required": true
+        },
+        "assigned_companies[].name": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "portal_document_detail_audience",
+      "method": "get",
+      "path": "/api/v1/portal/documents/{document_id}",
+      "response_schema": "PortalDocumentDetail",
+      "required_paths": [
+        "visibility"
+      ],
+      "type_expectations": {
+        "visibility": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "public_document_detail_audience",
+      "method": "get",
+      "path": "/api/v1/public/documents/{document_id}",
+      "response_schema": "PublicDocumentWithAttachments",
+      "required_paths": [
+        "visibility"
+      ],
+      "type_expectations": {
+        "visibility": {
+          "type": "string",
+          "required": false,
+          "default": "public"
+        }
+      }
+    }
+  ]
+}
