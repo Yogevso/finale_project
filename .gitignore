@@ -30,6 +30,9 @@ htmlcov/
 *.cover
 .hypothesis/
 .tox/
+backend/tmp_pytest/
+backend/test-output.txt
+frontend/test-results/
 
 # Node
 node_modules/
