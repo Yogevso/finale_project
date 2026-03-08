@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BookMarked, BookOpen, CheckCircle2, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import OnboardingChecklist from '@/components/OnboardingChecklist'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
 import { api } from '@/lib/api'
@@ -23,6 +24,7 @@ interface DashboardProgressItem {
 
 export default function DashboardPage() {
   const { user, isCustomer } = useAuth()
+  const onboardingStorageKey = `onboarding_completed_${user?.id ?? 'unknown'}`
 
   const { data: documents, isLoading: isDocumentsLoading } = useQuery({
     queryKey: ['documents', 'dashboard'],
@@ -54,6 +56,8 @@ export default function DashboardPage() {
         subtitle={`Welcome back, ${user?.full_name || 'team member'}`}
         eyebrow="Internal Portal"
       />
+
+      <OnboardingChecklist storageKey={onboardingStorageKey} isCustomer={isCustomer} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => {

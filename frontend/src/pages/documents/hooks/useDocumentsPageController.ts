@@ -190,6 +190,13 @@ export function useDocumentsPageController() {
     })
   }
 
+  const resetFilters = () => {
+    setSearch('')
+    setStatusFilter('')
+    setVisibilityFilter('')
+    setPage(1)
+  }
+
   return {
     isEditor,
     isManager,
@@ -201,6 +208,7 @@ export function useDocumentsPageController() {
     setStatusFilter,
     visibilityFilter,
     setVisibilityFilter,
+    resetFilters,
     statusDetailsRef,
     visibilityDetailsRef,
     showCreateModal,

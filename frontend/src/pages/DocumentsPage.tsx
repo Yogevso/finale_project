@@ -2,6 +2,7 @@ import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmD
 import PageHeader from '@/components/PageHeader'
 import {
   CreateDocumentModal,
+  DocumentsEmptyState,
   DocumentsFiltersToolbar,
   DocumentsQuickCreatePanel,
   DocumentsTable,
@@ -13,6 +14,13 @@ import { useDocumentsPageController } from '@/pages/documents/hooks'
 export default function DocumentsPage() {
   const controller = useDocumentsPageController()
   const totalDocuments = controller.documentsQuery.data?.total ?? 0
+  const hasActiveFilters =
+    controller.search.trim().length > 0 ||
+    controller.statusFilter !== '' ||
+    controller.visibilityFilter !== ''
+  const showGuidedEmptyState =
+    !controller.documentsQuery.isLoading &&
+    (controller.documentsQuery.data?.items.length ?? 0) === 0
 
   return (
     <div className="space-y-8">
@@ -62,16 +70,26 @@ export default function DocumentsPage() {
       )}
 
       {!controller.isQuickCreateMode && (
-        <DocumentsTable
-          data={controller.documentsQuery.data}
-          isLoading={controller.documentsQuery.isLoading}
-          isManager={controller.isManager}
-          page={controller.page}
-          visibilityOverrides={controller.visibilityOverrides}
-          onDelete={controller.handleDelete}
-          onVisibilityChange={controller.handleVisibilityChange}
-          onPageChange={controller.setPage}
-        />
+        showGuidedEmptyState ? (
+          <DocumentsEmptyState
+            hasActiveFilters={hasActiveFilters}
+            canCreate={controller.isEditor}
+            onCreate={() => controller.setShowCreateModal(true)}
+            onUpload={() => controller.setShowUploadModal(true)}
+            onClearFilters={controller.resetFilters}
+          />
+        ) : (
+          <DocumentsTable
+            data={controller.documentsQuery.data}
+            isLoading={controller.documentsQuery.isLoading}
+            isManager={controller.isManager}
+            page={controller.page}
+            visibilityOverrides={controller.visibilityOverrides}
+            onDelete={controller.handleDelete}
+            onVisibilityChange={controller.handleVisibilityChange}
+            onPageChange={controller.setPage}
+          />
+        )
       )}
 
       <VisibilityChangeConfirmDialog
