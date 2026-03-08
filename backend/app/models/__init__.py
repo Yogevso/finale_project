@@ -290,6 +290,8 @@ class User(Base):
     locked_until = Column(DateTime, nullable=True)
     last_login_ip = Column(String(45), nullable=True)
     last_login_user_agent = Column(String(512), nullable=True)
+    timezone = Column(String(64), default="UTC", nullable=False)
+    locale = Column(String(10), default="en", nullable=False)
     notification_preferences = Column(JSON, nullable=True)
     avatar_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

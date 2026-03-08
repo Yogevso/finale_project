@@ -30,6 +30,8 @@ export interface User {
   role: UserRole
   is_active: boolean
   tenant_id?: number
+  timezone?: string
+  locale?: string
   notification_preferences?: Record<string, boolean>
   avatar_url?: string | null
   permissions?: Permission[]

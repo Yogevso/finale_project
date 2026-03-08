@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { formatDate } from '@/lib/dateUtils'
 import type { FeedbackDetailResponse, FeedbackStatus, FeedbackType } from '@/types'
 
 interface FeedbackResponseDialogProps {
@@ -77,7 +78,7 @@ export default function FeedbackResponseDialog({
                 {type.label} from {feedback.user_name}
               </h2>
               <p className="text-sm text-slate-500">
-                {new Date(feedback.created_at).toLocaleString()}
+                {formatDate(feedback.created_at)}
               </p>
             </div>
           </div>
@@ -140,7 +141,7 @@ export default function FeedbackResponseDialog({
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                 <p className="text-slate-800 whitespace-pre-wrap">{feedback.response}</p>
                 <p className="text-xs text-slate-500 mt-2">
-                  Responded on {new Date(feedback.responded_at).toLocaleString()}
+                  Responded on {formatDate(feedback.responded_at)}
                 </p>
               </div>
             </div>

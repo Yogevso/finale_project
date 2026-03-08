@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
 import AvatarUpload from '@/components/AvatarUpload'
@@ -13,15 +13,48 @@ export default function ProfileSettingsPage() {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
   const [fullName, setFullName] = useState(user?.full_name || '')
+  const [timezone, setTimezone] = useState(user?.timezone || 'UTC')
+  const [timezoneSearch, setTimezoneSearch] = useState('')
+  const [locale, setLocale] = useState(user?.locale || 'en')
+
+  const localeOptions = [
+    { value: 'en', label: 'English' },
+    { value: 'he', label: 'Hebrew' },
+    { value: 'fr', label: 'French' },
+    { value: 'de', label: 'German' },
+  ] as const
 
   useEffect(() => {
     setFullName(user?.full_name || '')
-  }, [user?.full_name])
+    setTimezone(user?.timezone || 'UTC')
+    setLocale(user?.locale || 'en')
+  }, [user?.full_name, user?.timezone, user?.locale])
+
+  const timezoneOptions = useMemo(() => {
+    const intlWithSupportedValues = Intl as unknown as {
+      supportedValuesOf?: (key: 'timeZone') => string[]
+    }
+    const availableTimezones = intlWithSupportedValues.supportedValuesOf
+      ? intlWithSupportedValues.supportedValuesOf('timeZone')
+      : ['UTC']
+    const search = timezoneSearch.trim().toLowerCase()
+
+    const filtered = search
+      ? availableTimezones.filter((zone) => zone.toLowerCase().includes(search))
+      : availableTimezones
+
+    if (timezone && !filtered.includes(timezone)) {
+      return [timezone, ...filtered]
+    }
+    return filtered
+  }, [timezone, timezoneSearch])
 
   const updateProfileMutation = useMutation({
-    mutationFn: (nextFullName: string) =>
+    mutationFn: (payload: { full_name: string; timezone: string; locale: string }) =>
       api.updateMyProfile({
-        full_name: nextFullName,
+        full_name: payload.full_name,
+        timezone: payload.timezone,
+        locale: payload.locale,
       }),
     onSuccess: async () => {
       await refreshUser()
@@ -90,13 +123,65 @@ export default function ProfileSettingsPage() {
               className="input-field bg-slate-100 text-slate-500 capitalize"
             />
           </div>
+
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-sm font-medium text-slate-700">Search Timezone</label>
+            <input
+              type="search"
+              value={timezoneSearch}
+              onChange={(event) => setTimezoneSearch(event.target.value)}
+              placeholder="Search timezones..."
+              className="input-field"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">Timezone</label>
+            <select
+              value={timezone}
+              onChange={(event) => setTimezone(event.target.value)}
+              className="select-field"
+            >
+              {timezoneOptions.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-slate-700">Locale</label>
+            <select
+              value={locale}
+              onChange={(event) => setLocale(event.target.value)}
+              className="select-field"
+            >
+              {localeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <button
           type="button"
           className="btn-primary"
-          disabled={updateProfileMutation.isPending || fullName.trim().length === 0}
-          onClick={() => updateProfileMutation.mutate(fullName.trim())}
+          disabled={
+            updateProfileMutation.isPending ||
+            fullName.trim().length === 0 ||
+            timezone.trim().length === 0 ||
+            locale.trim().length === 0
+          }
+          onClick={() =>
+            updateProfileMutation.mutate({
+              full_name: fullName.trim(),
+              timezone: timezone.trim(),
+              locale: locale.trim(),
+            })
+          }
         >
           {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile'}
         </button>

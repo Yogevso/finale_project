@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom'
 
 import PageHeader from '@/components/PageHeader'
 import { api } from '@/lib/api'
+import { formatDate } from '@/lib/dateUtils'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
 
 const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
@@ -57,7 +58,7 @@ const formatTime = (dateString: string) => {
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleString()
+  return formatDate(dateString)
 }
 
 export default function NotificationsPage() {

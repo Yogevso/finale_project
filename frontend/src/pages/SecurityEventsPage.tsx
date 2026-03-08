@@ -6,6 +6,7 @@ import PageHeader from '@/components/PageHeader'
 import ProfileSettingsNav from '@/components/ProfileSettingsNav'
 import Skeleton from '@/components/Skeleton'
 import { api } from '@/lib/api'
+import { formatDate } from '@/lib/dateUtils'
 import type { SecurityEvent } from '@/types'
 
 const PAGE_SIZE = 20
@@ -91,7 +92,7 @@ export default function SecurityEventsPage() {
                       {event.ip_address || 'Unknown'}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700">
-                      {new Date(event.created_at).toLocaleString()}
+                      {formatDate(event.created_at)}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700" title={event.user_agent || undefined}>
                       {getAgentSnippet(event.user_agent)}

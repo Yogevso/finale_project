@@ -31,7 +31,9 @@ ALLOWED_AVATAR_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 class ProfileUpdateRequest(BaseModel):
-    full_name: str = Field(..., min_length=1, max_length=255)
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    timezone: Optional[str] = Field(None, min_length=1, max_length=64)
+    locale: Optional[str] = Field(None, min_length=1, max_length=10)
 
 
 class NotificationPreferencesUpdateRequest(BaseModel):
@@ -125,7 +127,33 @@ def update_my_profile(
     db: Session = Depends(get_db),
 ):
     """Update current user profile fields."""
-    current_user.full_name = payload.full_name.strip()
+    if payload.full_name is None and payload.timezone is None and payload.locale is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No profile fields provided",
+        )
+
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip()
+
+    if payload.timezone is not None:
+        normalized_timezone = payload.timezone.strip()
+        if not normalized_timezone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="timezone must not be empty",
+            )
+        current_user.timezone = normalized_timezone
+
+    if payload.locale is not None:
+        normalized_locale = payload.locale.strip()
+        if not normalized_locale:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="locale must not be empty",
+            )
+        current_user.locale = normalized_locale
+
     db.commit()
     db.refresh(current_user)
     return users_controller._serialize_user(current_user, db)

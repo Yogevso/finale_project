@@ -8,6 +8,7 @@ import ProfileSettingsNav from '@/components/ProfileSettingsNav'
 import Skeleton from '@/components/Skeleton'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { formatDate } from '@/lib/dateUtils'
 import { useToast } from '@/lib/toast'
 import type { UserSession } from '@/types'
 
@@ -45,7 +46,7 @@ function formatRelativeTime(isoDateTime: string): string {
   if (diffMinutes < 60) return `${diffMinutes}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 30) return `${diffDays}d ago`
-  return date.toLocaleString()
+  return formatDate(isoDateTime)
 }
 
 export default function SessionsPage() {
@@ -171,12 +172,12 @@ export default function SessionsPage() {
                     </td>
                     <td
                       className="px-4 py-4 text-sm text-slate-700"
-                      title={new Date(session.last_active_at).toLocaleString()}
+                      title={formatDate(session.last_active_at)}
                     >
                       {formatRelativeTime(session.last_active_at)}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700">
-                      {new Date(session.created_at).toLocaleString()}
+                      {formatDate(session.created_at)}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end">

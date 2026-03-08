@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { 
+import {
   X, 
   FileText, 
   User, 
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { ReviewRequest, Version } from '@/types'
 import { api } from '@/lib/api'
+import { formatDate } from '@/lib/dateUtils'
 
 interface ReviewDialogProps {
   review: ReviewRequest
@@ -105,7 +106,7 @@ export default function ReviewDialog({
               </div>
               <div className="flex items-center gap-2 text-slate-600">
                 <Calendar className="w-4 h-4" />
-                <span>Date: {new Date(review.submitted_at).toLocaleString()}</span>
+                <span>Date: {formatDate(review.submitted_at)}</span>
               </div>
             </div>
 

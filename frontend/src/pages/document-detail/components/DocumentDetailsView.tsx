@@ -1,5 +1,6 @@
 import CompanySelector from '@/components/CompanySelector'
 import VisibilityBadge from '@/components/VisibilityBadge'
+import { formatDate } from '@/lib/dateUtils'
 import type { AudienceAccessPreview, Company, Document, ReviewRequest } from '@/types'
 import { Building2, CheckCircle, Clock, History, X, XCircle } from 'lucide-react'
 
@@ -78,11 +79,11 @@ export function DocumentDetailsView({
         </div>
         <div>
           <label className="text-sm text-slate-500">Created</label>
-          <p className="mt-1 text-slate-900">{new Date(document.created_at).toLocaleString()}</p>
+          <p className="mt-1 text-slate-900">{formatDate(document.created_at)}</p>
         </div>
         <div>
           <label className="text-sm text-slate-500">Updated</label>
-          <p className="mt-1 text-slate-900">{new Date(document.updated_at).toLocaleString()}</p>
+          <p className="mt-1 text-slate-900">{formatDate(document.updated_at)}</p>
         </div>
       </div>
 

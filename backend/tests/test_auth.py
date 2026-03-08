@@ -121,6 +121,27 @@ def test_change_password_wrong_old_password(client, auth_headers):
     assert response.status_code == 400
 
 
+def test_update_my_profile_timezone_and_locale(client, auth_headers, db, test_user):
+    """Users can update timezone/locale via PATCH /users/me."""
+    response = client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers,
+        json={
+            "full_name": "Test User",
+            "timezone": "Asia/Jerusalem",
+            "locale": "he",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["timezone"] == "Asia/Jerusalem"
+    assert payload["locale"] == "he"
+
+    db.refresh(test_user)
+    assert test_user.timezone == "Asia/Jerusalem"
+    assert test_user.locale == "he"
+
+
 def test_login_returns_refresh_token(client, test_user):
     """Test that login returns a refresh token"""
     response = client.post(

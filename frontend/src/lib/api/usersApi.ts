@@ -62,7 +62,11 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       return mapUserDto(data)
     }
 
-    async updateMyProfile(profile: { full_name: string }): Promise<User> {
+    async updateMyProfile(profile: {
+      full_name?: string
+      timezone?: string
+      locale?: string
+    }): Promise<User> {
       const { data } = await this.client.patch<UserDto>('/users/me', profile)
       return mapUserDto(data)
     }
