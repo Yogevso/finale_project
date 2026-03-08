@@ -37,20 +37,27 @@ export default function Layout() {
           {/* Navigation */}
           <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label="Primary">
             {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `px-4 py-2 rounded-full transition-colors ${
-                    isActive
-                      ? 'bg-white text-sky-800 font-semibold border border-sky-200'
-                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                  }`
-                }
-              >
-                <span className="mr-1.5">{item.icon}</span>
-                {item.label}
-              </NavLink>
+              (() => {
+                const Icon = item.icon
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `px-4 py-2 rounded-full transition-colors ${
+                        isActive
+                          ? 'bg-white text-sky-800 font-semibold border border-sky-200'
+                          : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+                      }`
+                    }
+                  >
+                    <span className="mr-1.5 inline-flex align-middle">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    {item.label}
+                  </NavLink>
+                )
+              })()
             ))}
           </nav>
 

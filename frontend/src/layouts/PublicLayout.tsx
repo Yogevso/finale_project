@@ -14,7 +14,7 @@ export default function PublicLayout() {
     <div className="min-h-screen flex flex-col">
       {/* Zip B Style Header */}
       {!isFullscreen && (
-      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
+      <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
         <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
           <div className="flex items-center justify-between">

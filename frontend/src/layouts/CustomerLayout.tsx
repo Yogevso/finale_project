@@ -4,22 +4,15 @@
  */
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
-import {
-  Menu,
-  X,
-  Search,
-} from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 
-const navigation = [
-  { name: 'Dashboard', href: '/portal/dashboard', icon: '📊' },
-  { name: 'Documents', href: '/portal/documents', icon: '📄' },
-  { name: 'My Feedback', href: '/portal/feedback', icon: '💬' },
-]
+import { getNavigationForRole } from '@/config/routes'
+import { useAuth } from '@/lib/auth'
 
 export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, logout } = useAuth()
+  const navigation = getNavigationForRole(user?.role || null)
   const location = useLocation()
   const navigate = useNavigate()
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
@@ -46,7 +39,7 @@ export default function CustomerLayout() {
                 <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </Link>
-            
+
             {/* Mobile menu button */}
             <button
               className="md:hidden p-2 rounded-lg hover:bg-slate-100"
@@ -62,22 +55,27 @@ export default function CustomerLayout() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                className={({ isActive }) =>
-                  `px-4 py-2 rounded-full transition-colors ${
-                    isActive
-                      ? 'bg-white text-sky-800 font-semibold border border-sky-200'
-                      : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
-                  }`
-                }
-              >
-                <span className="mr-1.5">{item.icon}</span>
-                {item.name}
-              </NavLink>
-            ))}
+            {navigation.map((item) => {
+              const Icon = item.icon
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `px-4 py-2 rounded-full transition-colors ${
+                      isActive
+                        ? 'bg-white text-sky-800 font-semibold border border-sky-200'
+                        : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
+                    }`
+                  }
+                >
+                  <span className="mr-1.5 inline-flex align-middle">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {item.label}
+                </NavLink>
+              )
+            })}
           </nav>
 
           {/* Search & User */}
@@ -99,13 +97,13 @@ export default function CustomerLayout() {
                 }}
               />
             </div>
-            
+
             {/* User info */}
             <div className="flex items-center gap-2 text-sm">
               <span className="text-slate-500">{user?.full_name || user?.email}</span>
               <span className="pill bg-white border-sky-200">Customer</span>
             </div>
-            
+
             <button onClick={handleLogout} className="btn-ghost">
               Sign Out
             </button>
@@ -116,23 +114,28 @@ export default function CustomerLayout() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-sky-200 bg-sky-50/90">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
-              {navigation.map((item) => (
-                <NavLink
-                  key={item.href}
-                  to={item.href}
-                  className={({ isActive }) =>
-                    `flex items-center px-4 py-2 rounded-xl transition-colors ${
-                      isActive
-                        ? 'bg-white text-sky-800 font-semibold'
-                        : 'text-slate-600 hover:bg-white'
-                    }`
-                  }
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <span className="mr-2">{item.icon}</span>
-                  {item.name}
-                </NavLink>
-              ))}
+              {navigation.map((item) => {
+                const Icon = item.icon
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `flex items-center px-4 py-2 rounded-xl transition-colors ${
+                        isActive
+                          ? 'bg-white text-sky-800 font-semibold'
+                          : 'text-slate-600 hover:bg-white'
+                      }`
+                    }
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span className="mr-2 inline-flex align-middle">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    {item.label}
+                  </NavLink>
+                )
+              })}
               <hr className="my-3 border-slate-200" />
               {/* Mobile search */}
               <div className="relative">
@@ -174,7 +177,7 @@ export default function CustomerLayout() {
       <footer className="border-t border-slate-200 bg-white/85 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
           <p>Customer Portal</p>
-          <p className="text-xs mt-1">© {new Date().getFullYear()} Developer Portal</p>
+          <p className="text-xs mt-1">(c) {new Date().getFullYear()} Developer Portal</p>
         </div>
       </footer>
     </div>

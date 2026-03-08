@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
@@ -22,17 +22,6 @@ export default function LoginPage() {
   useEffect(() => {
     if (!authLoading && user) {
       navigate(getHomeRouteForRole(user.role), { replace: true })
-    }
-  }, [user, authLoading, navigate])
-
-  // First-time visitors should land on viewer portal before login
-  useEffect(() => {
-    if (!authLoading && !user) {
-      const visited = sessionStorage.getItem('viewer_landed')
-      if (!visited) {
-        sessionStorage.setItem('viewer_landed', '1')
-        navigate('/docs', { replace: true })
-      }
     }
   }, [user, authLoading, navigate])
 
@@ -98,7 +87,7 @@ export default function LoginPage() {
         <div className="surface-card rounded-2xl p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
                 <span className="text-white font-bold text-lg">DP</span>
               </div>
             </div>

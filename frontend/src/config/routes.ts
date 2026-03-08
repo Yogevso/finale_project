@@ -1,3 +1,17 @@
+import type { LucideIcon } from 'lucide-react'
+import {
+  BookOpen,
+  Building2,
+  CheckCircle2,
+  FileText,
+  House,
+  LayoutDashboard,
+  LineChart,
+  MessageSquare,
+  Search,
+  Settings,
+  Users,
+} from 'lucide-react'
 import type { UserRole } from '@/types'
 
 /**
@@ -7,7 +21,7 @@ import type { UserRole } from '@/types'
 export interface RouteConfig {
   path: string
   label: string
-  icon: string
+  icon: LucideIcon
   /** Roles that can access this route. Empty array = all authenticated users */
   allowedRoles?: UserRole[]
   /** If true, only internal users (non-customer) can access */
@@ -25,56 +39,56 @@ export const internalNavItems: RouteConfig[] = [
   {
     path: '/dashboard',
     label: 'Dashboard',
-    icon: '📊',
+    icon: LayoutDashboard,
     section: 'main',
     internalOnly: true,
   },
   {
     path: '/documents',
     label: 'Documents',
-    icon: '📄',
+    icon: FileText,
     section: 'main',
     internalOnly: true,
   },
   {
     path: '/reviews',
     label: 'Reviews',
-    icon: '✅',
+    icon: CheckCircle2,
     section: 'management',
     allowedRoles: ['system_admin', 'admin', 'manager', 'editor'],
   },
   {
     path: '/admin/feedback',
     label: 'Feedback',
-    icon: '💬',
+    icon: MessageSquare,
     section: 'management',
     allowedRoles: ['system_admin', 'admin', 'manager'],
   },
   {
     path: '/analytics',
     label: 'Analytics',
-    icon: '📈',
+    icon: LineChart,
     section: 'management',
     allowedRoles: ['system_admin', 'admin', 'manager'],
   },
   {
     path: '/users',
     label: 'Users',
-    icon: '👥',
+    icon: Users,
     section: 'admin',
     allowedRoles: ['system_admin', 'admin', 'manager'],
   },
   {
     path: '/admin/companies',
     label: 'Companies',
-    icon: '🏢',
+    icon: Building2,
     section: 'admin',
     allowedRoles: ['system_admin', 'admin'],
   },
   {
     path: '/admin/system-setup',
     label: 'System Setup',
-    icon: '🛠️',
+    icon: Settings,
     section: 'admin',
     allowedRoles: ['system_admin'],
   },
@@ -85,19 +99,19 @@ export const customerNavItems: RouteConfig[] = [
   {
     path: '/portal/dashboard',
     label: 'Dashboard',
-    icon: '📊',
+    icon: LayoutDashboard,
     customerOnly: true,
   },
   {
     path: '/portal/documents',
     label: 'Documents',
-    icon: '📄',
+    icon: FileText,
     customerOnly: true,
   },
   {
     path: '/portal/feedback',
     label: 'My Feedback',
-    icon: '💬',
+    icon: MessageSquare,
     customerOnly: true,
   },
 ]
@@ -107,17 +121,17 @@ export const publicNavItems: RouteConfig[] = [
   {
     path: '/',
     label: 'Home',
-    icon: '🏠',
+    icon: House,
   },
   {
     path: '/docs',
     label: 'Docs',
-    icon: '📚',
+    icon: BookOpen,
   },
   {
     path: '/search',
     label: 'Search',
-    icon: '🔍',
+    icon: Search,
   },
 ]
 
@@ -157,7 +171,7 @@ export function canAccessRoute(route: RouteConfig, userRole: UserRole | null): b
  */
 export function getHomeRouteForRole(role: UserRole | null): string {
   if (!role) return '/'
-  
+
   switch (role) {
     case 'customer':
       return '/portal/dashboard'
@@ -177,11 +191,11 @@ export function getHomeRouteForRole(role: UserRole | null): string {
  */
 export function getNavigationForRole(role: UserRole | null): RouteConfig[] {
   if (!role) return []
-  
+
   if (role === 'customer') {
     return customerNavItems
   }
-  
+
   return internalNavItems.filter(item => canAccessRoute(item, role))
 }
 
