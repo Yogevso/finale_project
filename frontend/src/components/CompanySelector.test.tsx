@@ -1,31 +1,26 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useQuery } from '@tanstack/react-query'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import CompanySelector from '@/components/CompanySelector'
+import { api } from '@/lib/api'
+import type { Company, CompanyListResponse } from '@/types'
 
-vi.mock('@tanstack/react-query', async () => {
-  const actual = await vi.importActual<typeof import('@tanstack/react-query')>(
-    '@tanstack/react-query',
-  )
+const createdQueryClients: QueryClient[] = []
+const getCompaniesMock = vi.spyOn(api, 'getCompanies')
 
-  return {
-    ...actual,
-    useQuery: vi.fn(),
-  }
-})
-
-const mockedUseQuery = vi.mocked(useQuery)
-
-function buildCompany(id: number, name: string) {
+function buildCompany(id: number, name: string): Company {
   return {
     id,
     name,
     slug: name.toLowerCase().replace(/\s+/g, '-'),
-    company_type: 'customer' as const,
+    company_type: 'customer',
     is_active: true,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    contact_email: null,
+    company_logo: null,
     user_count: 0,
     owned_document_count: 0,
     assigned_document_count: 0,
@@ -34,222 +29,201 @@ function buildCompany(id: number, name: string) {
   }
 }
 
+function buildCompanyListResponse(
+  items: Company[],
+  page = 1,
+  pages = 1,
+  perPage = 25,
+): CompanyListResponse {
+  return {
+    items,
+    total: items.length,
+    page,
+    pages,
+    per_page: perPage,
+  }
+}
+
+function createQueryClient(): QueryClient {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  })
+  createdQueryClients.push(queryClient)
+  return queryClient
+}
+
+function renderCompanySelector(
+  props: Partial<ComponentProps<typeof CompanySelector>> = {},
+) {
+  const queryClient = createQueryClient()
+  const defaultProps: ComponentProps<typeof CompanySelector> = {
+    selectedIds: [],
+    onChange: vi.fn(),
+  }
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <CompanySelector {...defaultProps} {...props} />
+    </QueryClientProvider>,
+  )
+}
+
 describe('CompanySelector', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    getCompaniesMock.mockResolvedValue(buildCompanyListResponse([]))
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     cleanup()
+    for (const queryClient of createdQueryClients) {
+      queryClient.clear()
+    }
+    createdQueryClients.length = 0
   })
 
-  it('renders loading state', () => {
-    mockedUseQuery.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      isError: false,
-      isFetching: false,
-    } as never)
+  it('renders loading state', async () => {
+    getCompaniesMock.mockImplementation(
+      () =>
+        new Promise<CompanyListResponse>(() => {
+          // Keep the query pending so loading content remains visible.
+        }),
+    )
 
-    render(<CompanySelector selectedIds={[]} onChange={vi.fn()} />)
+    renderCompanySelector()
     fireEvent.click(screen.getByTestId('company-selector-trigger'))
 
-    expect(screen.getByTestId('company-selector-loading')).toBeInTheDocument()
+    expect(await screen.findByTestId('company-selector-loading')).toBeInTheDocument()
     expect(screen.getByText('Loading companies...')).toBeInTheDocument()
   })
 
-  it('emits selection changes when choosing a company', () => {
+  it('emits selection changes when choosing a company', async () => {
     const onChange = vi.fn()
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
+    getCompaniesMock.mockResolvedValue(
+      buildCompanyListResponse([buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')]),
+    )
 
-    render(<CompanySelector selectedIds={[]} onChange={onChange} />)
+    renderCompanySelector({ onChange })
 
     fireEvent.click(screen.getByTestId('company-selector-trigger'))
-    fireEvent.click(screen.getByTestId('company-selector-option-1'))
+    fireEvent.click(await screen.findByTestId('company-selector-option-1'))
 
     expect(onChange).toHaveBeenCalledWith([1])
   })
 
-  it('emits removal changes from selected chips', () => {
+  it('emits removal changes from selected chips', async () => {
     const onChange = vi.fn()
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(7, 'Delta Team')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
+    const selectedCompany = buildCompany(7, 'Delta Team')
 
-    render(<CompanySelector selectedIds={[7]} onChange={onChange} />)
+    renderCompanySelector({
+      selectedIds: [7],
+      selectedCompanyOptions: [selectedCompany],
+      onChange,
+    })
 
+    expect(await screen.findByText('Delta Team')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('company-selector-remove-7'))
     expect(onChange).toHaveBeenCalledWith([])
   })
 
   it('supports bulk clear for selected companies', () => {
     const onChange = vi.fn()
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
-
-    render(<CompanySelector selectedIds={[1, 2]} onChange={onChange} />)
+    renderCompanySelector({
+      selectedIds: [1, 2],
+      selectedCompanyOptions: [buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')],
+      onChange,
+    })
 
     fireEvent.click(screen.getByTestId('company-selector-clear-all'))
     expect(onChange).toHaveBeenCalledWith([])
   })
 
-  it('supports keyboard navigation and option selection', () => {
+  it('supports keyboard navigation and option selection', async () => {
     const onChange = vi.fn()
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
+    getCompaniesMock.mockResolvedValue(
+      buildCompanyListResponse([buildCompany(1, 'Acme Corp'), buildCompany(2, 'Beta Labs')]),
+    )
 
-    render(<CompanySelector selectedIds={[]} onChange={onChange} />)
+    renderCompanySelector({ onChange })
 
     fireEvent.keyDown(screen.getByTestId('company-selector-trigger'), { key: 'Enter' })
-    const searchInput = screen.getByTestId('company-selector-search')
+    const searchInput = await screen.findByTestId('company-selector-search')
+    await screen.findByTestId('company-selector-option-2')
     fireEvent.keyDown(searchInput, { key: 'End' })
     fireEvent.keyDown(searchInput, { key: 'Enter' })
 
     expect(onChange).toHaveBeenCalledWith([2])
   })
 
-  it('closes the dropdown on Escape key', () => {
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(1, 'Acme Corp')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
+  it('closes the dropdown on Escape key', async () => {
+    getCompaniesMock.mockResolvedValue(buildCompanyListResponse([buildCompany(1, 'Acme Corp')]))
 
-    render(<CompanySelector selectedIds={[]} onChange={vi.fn()} />)
+    renderCompanySelector()
 
     fireEvent.keyDown(screen.getByTestId('company-selector-trigger'), { key: 'Enter' })
-    fireEvent.keyDown(screen.getByTestId('company-selector-search'), { key: 'Escape' })
+    const searchInput = await screen.findByTestId('company-selector-search')
+    fireEvent.keyDown(searchInput, { key: 'Escape' })
 
-    expect(screen.queryByTestId('company-selector-search')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('company-selector-search')).not.toBeInTheDocument()
+    })
   })
 
-  it('respects disabled mode', () => {
-    mockedUseQuery.mockReturnValue({
-      data: {
-        items: [buildCompany(3, 'Gamma Group')],
-        page: 1,
-        pages: 1,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never)
-
-    render(<CompanySelector selectedIds={[3]} onChange={vi.fn()} disabled />)
+  it('respects disabled mode', async () => {
+    renderCompanySelector({
+      selectedIds: [3],
+      selectedCompanyOptions: [buildCompany(3, 'Gamma Group')],
+      onChange: vi.fn(),
+      disabled: true,
+    })
 
     expect(screen.getByTestId('company-selector-trigger')).toBeDisabled()
+    expect(await screen.findByText('Gamma Group')).toBeInTheDocument()
     expect(screen.queryByTestId('company-selector-remove-3')).not.toBeInTheDocument()
     expect(screen.queryByTestId('company-selector-clear-all')).not.toBeInTheDocument()
   })
 
-  it('supports API-backed pagination controls', () => {
-    const pageOneResult = {
-      data: {
-        items: [buildCompany(10, 'Page One Company')],
-        page: 1,
-        pages: 2,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never
-    const pageTwoResult = {
-      data: {
-        items: [buildCompany(20, 'Page Two Company')],
-        page: 2,
-        pages: 2,
-      },
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-    } as never
-
-    mockedUseQuery.mockImplementation((queryOptions: any) => {
-      const params = queryOptions.queryKey[2] as { page: number }
-      if (params.page === 2) {
-        return pageTwoResult
+  it('supports API-backed pagination controls', async () => {
+    getCompaniesMock.mockImplementation(async (params) => {
+      if (params?.page === 2) {
+        return buildCompanyListResponse([buildCompany(20, 'Page Two Company')], 2, 2, 1)
       }
-      return pageOneResult
+      return buildCompanyListResponse([buildCompany(10, 'Page One Company')], 1, 2, 1)
     })
 
-    render(<CompanySelector selectedIds={[]} onChange={vi.fn()} perPage={1} />)
+    renderCompanySelector({ perPage: 1 })
 
     fireEvent.click(screen.getByTestId('company-selector-trigger'))
-    expect(screen.getByTestId('company-selector-option-10')).toBeInTheDocument()
+    expect(await screen.findByTestId('company-selector-option-10')).toBeInTheDocument()
     expect(screen.getByTestId('company-selector-page-indicator')).toHaveTextContent('Page 1 of 2')
 
     fireEvent.click(screen.getByTestId('company-selector-next-page'))
-    expect(screen.getByTestId('company-selector-option-20')).toBeInTheDocument()
+    expect(await screen.findByTestId('company-selector-option-20')).toBeInTheDocument()
     expect(screen.getByTestId('company-selector-page-indicator')).toHaveTextContent('Page 2 of 2')
   })
 
   it('applies search input to the selector query params', async () => {
-    vi.useFakeTimers()
-    const observedParams: Array<{ search?: string }> = []
-    mockedUseQuery.mockImplementation((queryOptions: any) => {
-      observedParams.push((queryOptions.queryKey?.[2] ?? {}) as { search?: string })
-      return {
-        data: {
-          items: [buildCompany(31, 'Acme Search Target')],
-          page: 1,
-          pages: 1,
-        },
-        isLoading: false,
-        isError: false,
-        isFetching: false,
-      } as never
+    const observedSearches: Array<string | undefined> = []
+    getCompaniesMock.mockImplementation(async (params) => {
+      observedSearches.push(params?.search)
+      return buildCompanyListResponse([buildCompany(31, 'Acme Search Target')])
     })
 
-    render(<CompanySelector selectedIds={[]} onChange={vi.fn()} />)
+    renderCompanySelector()
 
     fireEvent.click(screen.getByTestId('company-selector-trigger'))
-    fireEvent.change(screen.getByTestId('company-selector-search'), {
+    fireEvent.change(await screen.findByTestId('company-selector-search'), {
       target: { value: 'Acme' },
-    })
-    act(() => {
-      vi.advanceTimersByTime(300)
     })
 
     await waitFor(() => {
-      expect(observedParams[observedParams.length - 1]?.search).toBe('Acme')
+      expect(observedSearches).toContain('Acme')
     })
-    vi.useRealTimers()
   })
 })
