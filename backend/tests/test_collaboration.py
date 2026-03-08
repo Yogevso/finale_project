@@ -123,6 +123,7 @@ class TestCollabToken:
             role=UserRole.ADMIN,
             tenant_id=tenant.id,
             is_active=True,
+            is_email_verified=True,
         )
         editor = User(
             email="collab-editor-2@example.com",
@@ -132,6 +133,7 @@ class TestCollabToken:
             role=UserRole.EDITOR,
             tenant_id=tenant.id,
             is_active=True,
+            is_email_verified=True,
         )
         db.add_all([owner, editor])
         db.commit()

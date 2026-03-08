@@ -28,6 +28,8 @@ env/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+temp/
+tmp_pytest/
 
 # Tests (not needed in production image)
 tests/

@@ -394,6 +394,7 @@ class TestPeerReview:
             hashed_password=get_password_hash("editor123"),
             role=UserRole.EDITOR,
             is_active=True,
+            is_email_verified=True,
         )
         db.add(editor)
         db.commit()

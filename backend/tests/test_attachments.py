@@ -362,6 +362,7 @@ class TestAttachments:
             role=UserRole.ADMIN,
             tenant_id=tenant_a.id,
             is_active=True,
+            is_email_verified=True,
         )
         outsider = User(
             email="outsider-attachment@example.com",
@@ -371,6 +372,7 @@ class TestAttachments:
             role=UserRole.EDITOR,
             tenant_id=tenant_b.id,
             is_active=True,
+            is_email_verified=True,
         )
         db.add_all([owner, outsider])
         db.commit()
@@ -431,6 +433,7 @@ class TestAttachments:
             role=UserRole.ADMIN,
             tenant_id=tenant_a.id,
             is_active=True,
+            is_email_verified=True,
         )
         outsider = User(
             email="outsider-download@example.com",
@@ -440,6 +443,7 @@ class TestAttachments:
             role=UserRole.EDITOR,
             tenant_id=tenant_b.id,
             is_active=True,
+            is_email_verified=True,
         )
         db.add_all([owner, outsider])
         db.commit()

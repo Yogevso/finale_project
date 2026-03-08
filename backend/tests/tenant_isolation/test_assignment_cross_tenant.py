@@ -40,6 +40,7 @@ def _build_tenant_scoped_assignment_scenario(db):
         role=UserRole.MANAGER,
         tenant_id=tenant_a.id,
         is_active=True,
+        is_email_verified=True,
     )
     db.add(tenant_a_manager)
     db.flush()

@@ -634,6 +634,7 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
             hashed_password="not-used-in-test",
             role=UserRole.EDITOR,
             is_active=True,
+            is_email_verified=True,
         )
         platform = Platform(name="Unspecified", slug="unspecified")
         setup_db.add(user)
@@ -976,6 +977,7 @@ def test_assign_company_endpoints_require_document_in_same_tenant(client, db):
         role=UserRole.MANAGER,
         tenant_id=owner_tenant.id,
         is_active=True,
+        is_email_verified=True,
     )
     other_manager = User(
         email="other-manager@example.com",
@@ -985,6 +987,7 @@ def test_assign_company_endpoints_require_document_in_same_tenant(client, db):
         role=UserRole.MANAGER,
         tenant_id=other_tenant.id,
         is_active=True,
+        is_email_verified=True,
     )
     other_viewer = User(
         email="other-viewer@example.com",
@@ -994,6 +997,7 @@ def test_assign_company_endpoints_require_document_in_same_tenant(client, db):
         role=UserRole.VIEWER,
         tenant_id=other_tenant.id,
         is_active=True,
+        is_email_verified=True,
     )
     db.add_all([owner_manager, other_manager, other_viewer])
     db.flush()

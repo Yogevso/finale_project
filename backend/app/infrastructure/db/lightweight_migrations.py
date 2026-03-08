@@ -25,6 +25,7 @@ def run_lightweight_migrations(
         _ensure_domain_event_outbox(conn)
         _ensure_idempotency_keys(conn)
         _ensure_document_assignment_indexes(conn)
+        _ensure_audit_log_columns(conn)
         if not skip_versions_semantic_migration:
             _ensure_versions_semantic_columns(conn)
         conn.commit()
@@ -609,6 +610,27 @@ def _ensure_document_assignment_indexes(conn: Connection) -> None:
             CREATE INDEX IF NOT EXISTS ix_document_company_assignments_document_id_tenant_id
             ON document_company_assignments (document_id, tenant_id)
             """
+        )
+    )
+
+
+def _ensure_audit_log_columns(conn: Connection) -> None:
+    audit_columns = conn.execute(text("PRAGMA table_info(audit_logs)")).fetchall()
+    existing_audit_columns = {row[1] for row in audit_columns}
+    required_audit_columns = {
+        "audience_event_type": "ALTER TABLE audit_logs ADD COLUMN audience_event_type VARCHAR(32)",
+        "assignment_diff": "ALTER TABLE audit_logs ADD COLUMN assignment_diff TEXT",
+        "signature_key_id": "ALTER TABLE audit_logs ADD COLUMN signature_key_id VARCHAR(32)",
+        "signature": "ALTER TABLE audit_logs ADD COLUMN signature VARCHAR(128)",
+    }
+    for column_name, ddl in required_audit_columns.items():
+        if column_name not in existing_audit_columns:
+            conn.execute(text(ddl))
+
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_audience_event_type "
+            "ON audit_logs (audience_event_type)"
         )
     )
 
