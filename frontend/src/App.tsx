@@ -14,6 +14,7 @@ const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
 const CompanyDetailPage = lazy(() => import('./pages/CompanyDetailPage'))
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const ProfileSettingsPage = lazy(() => import('./pages/ProfileSettingsPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
@@ -217,6 +218,20 @@ function App() {
           }
         >
           <Route index element={<NotificationsPage />} />
+        </Route>
+
+        {/* Profile settings - all authenticated internal users */}
+        <Route
+          path="/profile"
+          element={
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<ProfileSettingsPage />} />
         </Route>
 
         {/* ==================== MANAGEMENT ROUTES ==================== */}

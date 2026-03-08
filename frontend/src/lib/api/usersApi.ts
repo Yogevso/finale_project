@@ -56,6 +56,32 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       return mapUserDto(data)
     }
 
+    async updateMyProfile(profile: { full_name: string }): Promise<User> {
+      const { data } = await this.client.patch<UserDto>('/users/me', profile)
+      return mapUserDto(data)
+    }
+
+    async updateMyNotificationPreferences(
+      notificationPreferences: Record<string, boolean>,
+    ): Promise<Record<string, boolean>> {
+      const { data } = await this.client.patch<{ notification_preferences: Record<string, boolean> }>(
+        '/users/me/notification-preferences',
+        { notification_preferences: notificationPreferences },
+      )
+      return data.notification_preferences
+    }
+
+    async uploadMyAvatar(file: File): Promise<{ avatar_url: string; message: string }> {
+      const formData = new FormData()
+      formData.append('file', file)
+      const { data } = await this.client.post<{ avatar_url: string; message: string }>(
+        '/users/me/avatar',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      return data
+    }
+
     async deleteUser(id: number): Promise<void> {
       await this.client.delete(`/users/${id}`)
     }

@@ -62,6 +62,8 @@ class UserResponse(UserBase):
     is_active: bool
     tenant_id: Optional[int] = None
     permissions: List[str] = Field(default_factory=list)
+    notification_preferences: Optional[dict[str, bool]] = None
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

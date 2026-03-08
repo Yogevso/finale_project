@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Search,
   Settings,
+  UserCog,
   Users,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
@@ -70,6 +71,13 @@ export const internalNavItems: RouteConfig[] = [
     icon: LineChart,
     section: 'management',
     allowedRoles: ['system_admin', 'admin', 'manager'],
+  },
+  {
+    path: '/profile',
+    label: 'Profile',
+    icon: UserCog,
+    section: 'management',
+    internalOnly: true,
   },
   {
     path: '/users',

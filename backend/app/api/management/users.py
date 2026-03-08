@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from PIL import Image, ImageOps
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -15,10 +18,31 @@ from app.models import User, UserRole
 from app.schemas import MessageResponse, UserCreate, UserUpdate, UserWithCompanyResponse
 from app.security import get_current_active_user
 from app.services.auth_service import AuthService
+from app.services.storage_service import get_storage_backend
 from app.web.controllers.management import UsersController
 
 router = APIRouter()
 users_controller = UsersController()
+storage_backend = get_storage_backend()
+AVATAR_SIZE = (200, 200)
+ALLOWED_AVATAR_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=255)
+
+
+class NotificationPreferencesUpdateRequest(BaseModel):
+    notification_preferences: dict[str, bool]
+
+
+class NotificationPreferencesResponse(BaseModel):
+    notification_preferences: dict[str, bool]
+
+
+class AvatarUploadResponse(BaseModel):
+    avatar_url: str
+    message: str
 
 
 @router.get("/users", response_model=list[UserWithCompanyResponse])
@@ -54,6 +78,85 @@ def create_user(
         current_user=current_user,
         tenant_ctx=tenant_ctx,
         db=db,
+    )
+
+
+@router.patch("/users/me", response_model=UserWithCompanyResponse)
+def update_my_profile(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Update current user profile fields."""
+    current_user.full_name = payload.full_name.strip()
+    db.commit()
+    db.refresh(current_user)
+    return users_controller._serialize_user(current_user, db)
+
+
+@router.patch(
+    "/users/me/notification-preferences",
+    response_model=NotificationPreferencesResponse,
+)
+def update_my_notification_preferences(
+    payload: NotificationPreferencesUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Update notification preference toggles for current user."""
+    current_user.notification_preferences = payload.notification_preferences
+    db.commit()
+    return NotificationPreferencesResponse(
+        notification_preferences=current_user.notification_preferences or {}
+    )
+
+
+@router.post("/users/me/avatar", response_model=AvatarUploadResponse)
+def upload_my_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Upload and resize user avatar to a 200x200 image."""
+    if file.content_type not in ALLOWED_AVATAR_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported avatar format",
+        )
+
+    file_bytes = file.file.read()
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Avatar file is empty",
+        )
+
+    try:
+        with Image.open(io.BytesIO(file_bytes)) as image:
+            normalized = image.convert("RGB")
+            resized = ImageOps.fit(normalized, AVATAR_SIZE, method=Image.Resampling.LANCZOS)
+            output_stream = io.BytesIO()
+            resized.save(output_stream, format="JPEG", quality=90)
+            output_stream.seek(0)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid avatar image",
+        ) from exc
+
+    storage_key = storage_backend.upload(
+        output_stream,
+        filename=f"avatar_{current_user.id}.jpg",
+        content_type="image/jpeg",
+    )
+    avatar_url = storage_backend.get_url(storage_key)
+
+    current_user.avatar_url = avatar_url
+    db.commit()
+
+    return AvatarUploadResponse(
+        avatar_url=avatar_url,
+        message="Avatar uploaded successfully",
     )
 
 

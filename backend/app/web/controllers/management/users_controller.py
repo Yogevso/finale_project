@@ -474,6 +474,8 @@ class UsersController:
             "role": user.role,
             "is_active": user.is_active,
             "tenant_id": user.tenant_id,
+            "notification_preferences": user.notification_preferences or {},
+            "avatar_url": user.avatar_url,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
             "company_name": None,
