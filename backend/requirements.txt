@@ -31,6 +31,9 @@ pydantic-settings==2.6.1
 # PDF Generation
 reportlab>=4.0.0
 
+# Image processing
+Pillow>=12.1.1
+
 # Document Conversion
 PyMuPDF>=1.24.0
 python-docx>=1.1.0

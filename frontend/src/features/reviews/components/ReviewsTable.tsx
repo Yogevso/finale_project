@@ -1,6 +1,7 @@
 import { Calendar, FileText, MessageSquare, User } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import Skeleton from '@/components/Skeleton'
 import type { ReviewRequest } from '@/types'
 
 import { reviewStatusConfig, type ReviewsTabType } from '../constants'
@@ -27,7 +28,13 @@ export function ReviewsTable({
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
       {isLoading ? (
-        <div className="p-8 text-center text-slate-500">Loading reviews...</div>
+        <div className="p-8">
+          <div className="space-y-3 max-w-md mx-auto">
+            <Skeleton className="h-4 w-52" />
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
       ) : !reviews?.length ? (
         <div className="p-8 text-center text-slate-500">
           <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />

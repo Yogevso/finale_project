@@ -112,6 +112,7 @@ class UsersController:
             role=user_data.role,
             tenant_id=target_tenant_id,
             is_active=True,
+            is_email_verified=True,
         )
         db.add(user)
         db.commit()
@@ -473,6 +474,10 @@ class UsersController:
             "role": user.role,
             "is_active": user.is_active,
             "tenant_id": user.tenant_id,
+            "timezone": user.timezone or "UTC",
+            "locale": user.locale or "en",
+            "notification_preferences": user.notification_preferences or {},
+            "avatar_url": user.avatar_url,
             "created_at": user.created_at,
             "updated_at": user.updated_at,
             "company_name": None,

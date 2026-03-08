@@ -4,18 +4,20 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { portalApi } from '../../lib/portalApi'
-import PageHeader from '@/components/PageHeader'
 import {
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Folder,
-  Search,
   LayoutGrid,
   List,
   Paperclip,
-  ChevronLeft,
-  ChevronRight,
+  Search,
 } from 'lucide-react'
+
+import PageHeader from '@/components/PageHeader'
+
+import { portalApi } from '../../lib/portalApi'
 
 export default function CustomerDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -23,12 +25,24 @@ export default function CustomerDocumentsPage() {
 
   const page = parseInt(searchParams.get('page') || '1')
   const category = searchParams.get('category') || undefined
-  const search = searchParams.get('search') || undefined
+  const search = searchParams.get('search') || ''
+
+  const updateSearchParams = (updater: (params: URLSearchParams) => void) => {
+    const nextParams = new URLSearchParams(searchParams)
+    updater(nextParams)
+    setSearchParams(nextParams)
+  }
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
     queryKey: ['portal', 'documents', { page, category, search }],
-    queryFn: () => portalApi.getDocuments({ page, category, search, per_page: 12 }),
+    queryFn: () =>
+      portalApi.getDocuments({
+        page,
+        category,
+        search: search || undefined,
+        per_page: 12,
+      }),
   })
 
   // Fetch categories for filter
@@ -37,31 +51,33 @@ export default function CustomerDocumentsPage() {
     queryFn: () => portalApi.getCategories(),
   })
 
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const query = formData.get('search') as string
-    if (query) {
-      setSearchParams({ search: query })
-    } else {
-      searchParams.delete('search')
-      setSearchParams(searchParams)
-    }
+  const handleSearchChange = (nextSearch: string) => {
+    updateSearchParams((params) => {
+      const trimmed = nextSearch.trim()
+      if (trimmed) {
+        params.set('search', nextSearch)
+      } else {
+        params.delete('search')
+      }
+      params.delete('page')
+    })
   }
 
   const handleCategoryChange = (cat: string | null) => {
-    if (cat) {
-      searchParams.set('category', cat)
-    } else {
-      searchParams.delete('category')
-    }
-    searchParams.delete('page')
-    setSearchParams(searchParams)
+    updateSearchParams((params) => {
+      if (cat) {
+        params.set('category', cat)
+      } else {
+        params.delete('category')
+      }
+      params.delete('page')
+    })
   }
 
   const handlePageChange = (newPage: number) => {
-    searchParams.set('page', String(newPage))
-    setSearchParams(searchParams)
+    updateSearchParams((params) => {
+      params.set('page', String(newPage))
+    })
   }
 
   return (
@@ -76,18 +92,19 @@ export default function CustomerDocumentsPage() {
       <div className="surface-card rounded-2xl p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1">
+          <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input
                 type="search"
                 name="search"
-                defaultValue={search}
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search documents..."
                 className="input-field pl-10"
               />
             </div>
-          </form>
+          </div>
 
           {/* Category filter */}
           <select
@@ -132,21 +149,15 @@ export default function CustomerDocumentsPage() {
                   onClick={() => handleCategoryChange(null)}
                   className="ml-2 hover:text-sky-900"
                 >
-                  ×
+                  &times;
                 </button>
               </span>
             )}
             {search && (
               <span className="inline-flex items-center px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">
                 "{search}"
-                <button
-                  onClick={() => {
-                    searchParams.delete('search')
-                    setSearchParams(searchParams)
-                  }}
-                  className="ml-2 hover:text-slate-900"
-                >
-                  ×
+                <button onClick={() => handleSearchChange('')} className="ml-2 hover:text-slate-900">
+                  &times;
                 </button>
               </span>
             )}
@@ -191,9 +202,7 @@ export default function CustomerDocumentsPage() {
                   {doc.category && (
                     <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.category}</span>
                   )}
-                  {doc.has_attachments && (
-                    <Paperclip className="h-4 w-4" />
-                  )}
+                  {doc.has_attachments && <Paperclip className="h-4 w-4" />}
                 </div>
                 <span>v{doc.version}</span>
               </div>
@@ -212,9 +221,7 @@ export default function CustomerDocumentsPage() {
                 <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
                 <div className="ml-4 flex-1 min-w-0">
                   <h3 className="font-medium text-slate-900">{doc.title}</h3>
-                  {doc.description && (
-                    <p className="text-sm text-slate-500 truncate">{doc.description}</p>
-                  )}
+                  {doc.description && <p className="text-sm text-slate-500 truncate">{doc.description}</p>}
                 </div>
                 <div className="ml-4 flex items-center gap-3 text-sm text-slate-400">
                   {doc.category && (

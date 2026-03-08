@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
 
@@ -15,6 +16,11 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotIdentifier, setForgotIdentifier] = useState('')
+  const [forgotMessage, setForgotMessage] = useState('')
+  const [forgotError, setForgotError] = useState('')
+  const [isForgotLoading, setIsForgotLoading] = useState(false)
   const { login, user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
 
@@ -22,17 +28,6 @@ export default function LoginPage() {
   useEffect(() => {
     if (!authLoading && user) {
       navigate(getHomeRouteForRole(user.role), { replace: true })
-    }
-  }, [user, authLoading, navigate])
-
-  // First-time visitors should land on viewer portal before login
-  useEffect(() => {
-    if (!authLoading && !user) {
-      const visited = sessionStorage.getItem('viewer_landed')
-      if (!visited) {
-        sessionStorage.setItem('viewer_landed', '1')
-        navigate('/docs', { replace: true })
-      }
     }
   }, [user, authLoading, navigate])
 
@@ -85,10 +80,42 @@ export default function LoginPage() {
       const isRateLimited = applyCooldownFromError(err)
       if (!isRateLimited) {
         const loginError = err as { response?: { data?: LoginErrorResponse } }
-        setError(loginError.response?.data?.detail || 'Login failed. Please check your credentials.')
+        const detail = loginError.response?.data?.detail
+        if (detail === 'email_not_verified') {
+          setError('Please verify your email before signing in. Check your inbox for a verification link.')
+        } else if (detail === 'account_locked') {
+          setError('Your account is temporarily locked after multiple failed attempts. Try again later or contact an admin.')
+        } else {
+          setError(detail || 'Login failed. Please check your credentials.')
+        }
       }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleForgotPasswordSubmit = async () => {
+    if (isForgotLoading) {
+      return
+    }
+
+    const identifier = forgotIdentifier.trim()
+    if (!identifier) {
+      setForgotError('Email is required')
+      return
+    }
+
+    setForgotError('')
+    setForgotMessage('')
+    setIsForgotLoading(true)
+
+    try {
+      const response = await api.forgotPassword(identifier)
+      setForgotMessage(response.message)
+    } catch {
+      setForgotError('Unable to request password reset right now. Please try again later.')
+    } finally {
+      setIsForgotLoading(false)
     }
   }
 
@@ -98,7 +125,7 @@ export default function LoginPage() {
         <div className="surface-card rounded-2xl p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
                 <span className="text-white font-bold text-lg">DP</span>
               </div>
             </div>
@@ -134,9 +161,22 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
-                Password
-              </label>
+              <div className="mb-2 flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword((previous) => !previous)
+                    setForgotError('')
+                    setForgotMessage('')
+                  }}
+                  className="text-xs text-sky-600 hover:text-sky-700"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <input
                 type="password"
                 id="password"
@@ -147,6 +187,45 @@ export default function LoginPage() {
                 required
               />
             </div>
+
+            {showForgotPassword && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <p className="text-sm text-slate-700">Enter your email to receive password reset instructions.</p>
+                {forgotMessage && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    {forgotMessage}
+                  </div>
+                )}
+                {forgotError && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {forgotError}
+                  </div>
+                )}
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    value={forgotIdentifier}
+                    onChange={(event) => setForgotIdentifier(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void handleForgotPasswordSubmit()
+                      }
+                    }}
+                    placeholder="you@example.com"
+                    className="input-field flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleForgotPasswordSubmit()}
+                    className="btn-secondary"
+                    disabled={isForgotLoading}
+                  >
+                    {isForgotLoading ? 'Sending...' : 'Send Reset Link'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"

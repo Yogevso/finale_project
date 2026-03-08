@@ -52,6 +52,8 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
     tenant_id: Optional[int] = None  # Company ID
+    timezone: Optional[str] = Field(None, min_length=1, max_length=64)
+    locale: Optional[str] = Field(None, min_length=1, max_length=10)
 
 
 class UserResponse(UserBase):
@@ -62,6 +64,10 @@ class UserResponse(UserBase):
     is_active: bool
     tenant_id: Optional[int] = None
     permissions: List[str] = Field(default_factory=list)
+    timezone: str
+    locale: str
+    notification_preferences: Optional[dict[str, bool]] = None
+    avatar_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

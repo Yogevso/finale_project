@@ -34,7 +34,10 @@ export function PreviewToolbar({
   }
 
   return (
-    <div className="border-b border-slate-200 p-3 bg-slate-50 flex flex-wrap items-center gap-3 justify-between">
+    <div
+      className="border-b border-slate-200 p-3 bg-slate-50 flex flex-wrap items-center gap-3 justify-between"
+      data-tour="document-preview-toolbar"
+    >
       {previewableAttachments.length > 1 ? (
         <select
           value={selectedAttachment?.id || ''}

@@ -1,8 +1,10 @@
 """Authentication API Routes"""
 
+import asyncio
 from datetime import datetime
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -28,6 +30,7 @@ from app.security import get_current_active_user, get_password_hash
 from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
+from app.services.email_service import email_service
 from app.services.permissions import get_user_permissions
 from app.utils.request_ip import get_client_ip
 
@@ -60,6 +63,47 @@ class ForgotPasswordRequest(BaseModel):
     """Request for password reset instructions."""
 
     identifier: str = Field(..., min_length=1, max_length=255, description="Username or email")
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request body for completing a password reset."""
+
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+
+def _run_async_email(coro):
+    """Execute async email calls from sync endpoints/background tasks."""
+    try:
+        asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+
+def _send_password_reset_email_task(to_email: str, reset_url: str, expires_minutes: int) -> None:
+    _run_async_email(
+        email_service.send_password_reset(
+            to_email=to_email,
+            reset_url=reset_url,
+            expires_minutes=expires_minutes,
+        )
+    )
+
+
+def _send_email_verification_task(
+    to_email: str, verification_url: str, expires_minutes: int
+) -> None:
+    _run_async_email(
+        email_service.send_email_verification(
+            to_email=to_email,
+            verification_url=verification_url,
+            expires_minutes=expires_minutes,
+        )
+    )
 
 
 def _rate_limited_response(detail: str, retry_after: int) -> JSONResponse:
@@ -106,7 +150,12 @@ def login(
             )
 
     try:
-        token_response = auth_service.login(credentials.username, credentials.password)
+        token_response = auth_service.login(
+            credentials.username,
+            credentials.password,
+            client_ip=client_ip,
+            user_agent=request.headers.get("user-agent"),
+        )
     except HTTPException as exc:
         if (
             settings.RATE_LIMIT_ENABLED
@@ -131,6 +180,8 @@ def login(
 def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
+    auth_service: AuthService = Depends(get_auth_service),
     _db: Session = Depends(get_db),
 ):
     """
@@ -160,9 +211,30 @@ def forgot_password(
                 lock_retry_after,
             )
 
+    reset_payload = auth_service.request_password_reset(identifier)
+    if reset_payload is not None:
+        recipient_email, reset_token = reset_payload
+        reset_url = f"{settings.BASE_URL}/login?reset_token={quote(reset_token)}"
+        background_tasks.add_task(
+            _send_password_reset_email_task,
+            recipient_email,
+            reset_url,
+            settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+        )
+
     return MessageResponse(
         message="If an account exists for that identifier, reset instructions will be sent."
     )
+
+
+@router.post("/auth/reset-password", response_model=MessageResponse)
+def reset_password(
+    payload: ResetPasswordRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Complete password reset using a one-time token."""
+    auth_service.reset_password(payload.token, payload.new_password)
+    return MessageResponse(message="Password has been reset successfully")
 
 
 @router.post("/auth/refresh", response_model=TokenResponse)
@@ -193,6 +265,7 @@ def logout(
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(
     user_data: UserCreate,
+    background_tasks: BackgroundTasks,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """
@@ -200,7 +273,28 @@ def register(
 
     Only admins can set role other than viewer (enforced in frontend).
     """
-    return auth_service.register(user_data)
+    user = auth_service.register(user_data)
+    verification_token = auth_service.issue_email_verification_token(user)
+    verification_url = (
+        f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
+    )
+    background_tasks.add_task(
+        _send_email_verification_task,
+        user.email,
+        verification_url,
+        settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
+    )
+    return user
+
+
+@router.get("/auth/verify-email", response_model=MessageResponse)
+def verify_email(
+    token: str,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Verify account email using token sent at registration."""
+    auth_service.verify_email(token)
+    return MessageResponse(message="Email verified successfully")
 
 
 @router.get("/auth/me", response_model=UserResponse)
@@ -352,6 +446,7 @@ def accept_invitation(
         role=invitation.role,
         tenant_id=invitation.tenant_id,
         is_active=True,
+        is_email_verified=True,
     )
     db.add(user)
     db.flush()  # Get user ID

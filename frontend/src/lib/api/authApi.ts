@@ -41,6 +41,21 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
       return payload
     }
 
+    async forgotPassword(identifier: string): Promise<MessageResponse> {
+      const { data } = await this.client.post<MessageResponseDto>('/auth/forgot-password', {
+        identifier,
+      })
+      return mapMessageResponseDto(data)
+    }
+
+    async resetPassword(token: string, newPassword: string): Promise<MessageResponse> {
+      const { data } = await this.client.post<MessageResponseDto>('/auth/reset-password', {
+        token,
+        new_password: newPassword,
+      })
+      return mapMessageResponseDto(data)
+    }
+
     async register(userData: UserCreate): Promise<User> {
       const { data } = await this.client.post<UserDto>('/auth/register', userData)
       return mapUserDto(data)

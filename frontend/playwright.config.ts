@@ -1,7 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Allow running on either port 3000 or 3001
-const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:3100';
+process.env.BASE_URL = baseURL;
+const backendUrl = process.env.E2E_BACKEND_URL || 'http://127.0.0.1:8010';
+const isWindows = process.platform === 'win32';
+const skipWebServer = process.env.PW_SKIP_WEBSERVER === '1';
+const backendCommand = isWindows
+  ? 'cmd /c "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\start_e2e_backend.ps1"'
+  : 'node ./scripts/start-e2e-backend.mjs';
+const backendCwd = isWindows ? '../backend' : '.';
+const frontendCommand = isWindows
+  ? 'cmd /c npm run dev -- --host 127.0.0.1 --port 3100'
+  : 'npm run dev -- --host 127.0.0.1 --port 3100';
 
 export default defineConfig({
   testDir: './e2e',
@@ -29,19 +39,25 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // WebServer config disabled - servers must be started manually before running tests
-  // webServer: [
-  //   {
-  //     command: 'cd ../backend && .\\venv\\Scripts\\Activate.ps1 && python -m uvicorn app.main:app --port 8000',
-  //     url: 'http://localhost:8000/health',
-  //     reuseExistingServer: true,
-  //     timeout: 120000,
-  //   },
-  //   {
-  //     command: 'npm run dev',
-  //     url: 'http://localhost:3000',
-  //     reuseExistingServer: true,
-  //     timeout: 120000,
-  //   },
-  // ],
+  webServer: skipWebServer
+    ? undefined
+    : [
+        {
+          command: backendCommand,
+          url: `${backendUrl}/health`,
+          reuseExistingServer: false,
+          timeout: 180000,
+          cwd: backendCwd,
+        },
+        {
+          command: frontendCommand,
+          url: `${baseURL}/login`,
+          reuseExistingServer: false,
+          timeout: 180000,
+          env: {
+            ...process.env,
+            VITE_API_PROXY_TARGET: backendUrl,
+          },
+        },
+      ],
 });

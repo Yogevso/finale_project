@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
+import { syncDateFormatPreferences } from './dateUtils'
 import type { LoginRequest, Permission, User, UserCreate } from '@/types'
 
 interface AuthContextType {
@@ -37,16 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async (): Promise<User | null> => {
     if (!api.hasToken()) {
       setUser(null)
+      syncDateFormatPreferences(undefined, undefined)
       return null
     }
 
     try {
       const currentUser = await api.getCurrentUser()
       setUser(currentUser)
+      syncDateFormatPreferences(currentUser.timezone, currentUser.locale)
       return currentUser
     } catch {
       api.clearTokens()
       setUser(null)
+      syncDateFormatPreferences(undefined, undefined)
       return null
     }
   }, [])
@@ -81,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear all cached queries on logout so next user gets fresh data
     queryClient.clear()
     setUser(null)
+    syncDateFormatPreferences(undefined, undefined)
   }
 
   // Role checks

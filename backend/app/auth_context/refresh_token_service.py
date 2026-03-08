@@ -29,14 +29,30 @@ class RefreshTokenService:
     def build_refresh_token(
         *,
         refresh_token_expire_days: int = REFRESH_TOKEN_EXPIRE_DAYS,
+        session_identifier: str | None = None,
     ) -> tuple[str, datetime]:
         token = secrets.token_urlsafe(32)
+        if session_identifier:
+            token = f"{session_identifier}.{token}"
         expires_at = datetime.utcnow() + timedelta(days=refresh_token_expire_days)
         return token, expires_at
 
-    def issue_refresh_token(self, user_id: int) -> tuple[str, datetime]:
+    @staticmethod
+    def parse_session_identifier(refresh_token: str) -> str | None:
+        if "." not in refresh_token:
+            return None
+        session_identifier, _ = refresh_token.split(".", 1)
+        return session_identifier or None
+
+    def issue_refresh_token(
+        self,
+        user_id: int,
+        *,
+        session_identifier: str | None = None,
+    ) -> tuple[str, datetime]:
         refresh_token, expires_at = self.build_refresh_token(
-            refresh_token_expire_days=self.refresh_token_expire_days
+            refresh_token_expire_days=self.refresh_token_expire_days,
+            session_identifier=session_identifier,
         )
         token_hash = get_password_hash(refresh_token)
         refresh_record = PasswordReset(
@@ -49,6 +65,10 @@ class RefreshTokenService:
         return refresh_token, expires_at
 
     def find_valid_record(self, refresh_token: str) -> PasswordReset | None:
+        # Keep refresh-token and password-reset/email-verification token families isolated.
+        if refresh_token.startswith("pr_") or refresh_token.startswith("ev_"):
+            return None
+
         now = datetime.utcnow()
         refresh_records = (
             self.db.query(PasswordReset)

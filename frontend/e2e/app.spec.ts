@@ -217,6 +217,9 @@ test.describe('Accessibility', () => {
     await expect(page.locator('input#username')).toBeFocused();
 
     await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: /forgot password\?/i })).toBeFocused();
+
+    await page.keyboard.press('Tab');
     await expect(page.locator('input#password')).toBeFocused();
 
     await page.keyboard.press('Tab');

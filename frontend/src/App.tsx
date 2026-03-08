@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
+import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -12,6 +14,10 @@ const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
 const CompanyDetailPage = lazy(() => import('./pages/CompanyDetailPage'))
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage'))
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
+const ProfileSettingsPage = lazy(() => import('./pages/ProfileSettingsPage'))
+const SessionsPage = lazy(() => import('./pages/SessionsPage'))
+const SecurityEventsPage = lazy(() => import('./pages/SecurityEventsPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
@@ -86,11 +92,18 @@ function RouteLoadingFallback() {
 function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-right" richColors />
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
         {/* ==================== PUBLIC PORTAL ==================== */}
         {/* No auth required - accessible to everyone */}
-        <Route element={<PublicLayout />}>
+        <Route
+          element={(
+            <ErrorBoundary>
+              <PublicLayout />
+            </ErrorBoundary>
+          )}
+        >
           <Route path="/" element={<RoleBasedRedirect />} />
           <Route path="/docs" element={<PublicDocumentsPage />} />
           <Route path="/platforms" element={<PublicPlatformsPage />} />
@@ -105,21 +118,59 @@ function App() {
         </Route>
 
         {/* Legacy viewer routes */}
-        <Route path="/viewer" element={<Navigate to="/" replace />} />
-        <Route path="/viewer/documents/:id" element={<ViewerDocumentPage />} />
+        <Route
+          path="/viewer"
+          element={(
+            <ErrorBoundary>
+              <Navigate to="/" replace />
+            </ErrorBoundary>
+          )}
+        />
+        <Route
+          path="/viewer/documents/:id"
+          element={(
+            <ErrorBoundary>
+              <ViewerDocumentPage />
+            </ErrorBoundary>
+          )}
+        />
 
         {/* ==================== AUTH ROUTES ==================== */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+        <Route
+          path="/login"
+          element={(
+            <ErrorBoundary>
+              <LoginPage />
+            </ErrorBoundary>
+          )}
+        />
+        <Route
+          path="/reset-password"
+          element={(
+            <ErrorBoundary>
+              <ResetPasswordPage />
+            </ErrorBoundary>
+          )}
+        />
+        <Route
+          path="/accept-invitation"
+          element={(
+            <ErrorBoundary>
+              <AcceptInvitationPage />
+            </ErrorBoundary>
+          )}
+        />
 
         {/* ==================== INTERNAL STAFF ROUTES ==================== */}
         {/* Dashboard - all internal users */}
         <Route
           path="/dashboard"
           element={
-            <InternalGuard>
-              <Layout />
-            </InternalGuard>
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<DashboardPage />} />
@@ -129,9 +180,11 @@ function App() {
         <Route
           path="/documents"
           element={
-            <InternalGuard>
-              <Layout />
-            </InternalGuard>
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<DocumentsPage />} />
@@ -142,9 +195,11 @@ function App() {
         <Route
           path="/documents/:id/fullscreen"
           element={
-            <InternalGuard>
-              <DocumentDetailPage />
-            </InternalGuard>
+            <ErrorBoundary>
+              <InternalGuard>
+                <DocumentDetailPage />
+              </InternalGuard>
+            </ErrorBoundary>
           }
         />
 
@@ -152,9 +207,11 @@ function App() {
         <Route
           path="/reviews"
           element={
-            <RoleGuard allowedRoles={['system_admin', 'admin', 'manager', 'editor']}>
-              <Layout />
-            </RoleGuard>
+            <ErrorBoundary>
+              <RoleGuard allowedRoles={['system_admin', 'admin', 'manager', 'editor']}>
+                <Layout />
+              </RoleGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<ReviewsPage />} />
@@ -164,12 +221,30 @@ function App() {
         <Route
           path="/notifications"
           element={
-            <InternalGuard>
-              <Layout />
-            </InternalGuard>
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<NotificationsPage />} />
+        </Route>
+
+        {/* Profile settings - all authenticated internal users */}
+        <Route
+          path="/profile"
+          element={
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<ProfileSettingsPage />} />
+          <Route path="sessions" element={<SessionsPage />} />
+          <Route path="security-events" element={<SecurityEventsPage />} />
         </Route>
 
         {/* ==================== MANAGEMENT ROUTES ==================== */}
@@ -177,9 +252,11 @@ function App() {
         <Route
           path="/users"
           element={
-            <ManagerGuard>
-              <Layout />
-            </ManagerGuard>
+            <ErrorBoundary>
+              <ManagerGuard>
+                <Layout />
+              </ManagerGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<UsersPage />} />
@@ -189,9 +266,11 @@ function App() {
         <Route
           path="/admin/feedback"
           element={
-            <ManagerGuard>
-              <Layout />
-            </ManagerGuard>
+            <ErrorBoundary>
+              <ManagerGuard>
+                <Layout />
+              </ManagerGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<FeedbackPage />} />
@@ -201,9 +280,11 @@ function App() {
         <Route
           path="/analytics"
           element={
-            <ManagerGuard>
-              <Layout />
-            </ManagerGuard>
+            <ErrorBoundary>
+              <ManagerGuard>
+                <Layout />
+              </ManagerGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<AnalyticsDashboardPage />} />
@@ -214,9 +295,11 @@ function App() {
         <Route
           path="/admin/companies"
           element={
-            <AdminGuard>
-              <Layout />
-            </AdminGuard>
+            <ErrorBoundary>
+              <AdminGuard>
+                <Layout />
+              </AdminGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<CompaniesPage />} />
@@ -226,9 +309,11 @@ function App() {
         <Route
           path="/admin/system-setup"
           element={
-            <RoleGuard allowedRoles={['system_admin']}>
-              <Layout />
-            </RoleGuard>
+            <ErrorBoundary>
+              <RoleGuard allowedRoles={['system_admin']}>
+                <Layout />
+              </RoleGuard>
+            </ErrorBoundary>
           }
         >
           <Route index element={<SystemSetupPage />} />
@@ -239,9 +324,11 @@ function App() {
         <Route
           path="/portal"
           element={
-            <CustomerRoute>
-              <CustomerLayout />
-            </CustomerRoute>
+            <ErrorBoundary>
+              <CustomerRoute>
+                <CustomerLayout />
+              </CustomerRoute>
+            </ErrorBoundary>
           }
         >
           <Route index element={<Navigate to="/portal/dashboard" replace />} />

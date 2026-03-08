@@ -1,32 +1,52 @@
-import { useState, useEffect, useRef } from 'react'
-import { Bell, Check, CheckCheck, Trash2, X, MessageSquare, FileText, AlertCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  AlertCircle,
+  Bell,
+  Check,
+  CheckCheck,
+  FileText,
+  MessageSquare,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+
 import { api } from '@/lib/api'
-import type { Notification, NotificationType } from '@/types'
-import { useNavigate } from 'react-router-dom'
+import type { Notification, NotificationListResponse, NotificationType } from '@/types'
+
+const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
+const BELL_NOTIFICATIONS_LIMIT = 20
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [loading, setLoading] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const location = useLocation()
+  const queryClient = useQueryClient()
+  const isNotificationsPage = location.pathname === '/notifications'
 
-  // Fetch notification count on mount and periodically
-  useEffect(() => {
-    fetchNotificationCount()
-    const interval = setInterval(fetchNotificationCount, 30000) // Every 30 seconds
-    return () => clearInterval(interval)
-  }, [])
+  const {
+    data,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: NOTIFICATIONS_QUERY_KEY,
+    queryFn: () => api.getNotifications(false, BELL_NOTIFICATIONS_LIMIT),
+    enabled: !isNotificationsPage,
+    refetchInterval: isNotificationsPage ? false : 30000,
+  })
 
-  // Fetch full notifications when dropdown opens
+  const notifications = (data?.items || []).slice(0, BELL_NOTIFICATIONS_LIMIT)
+  const unreadCount = data?.unread_count || 0
+
   useEffect(() => {
-    if (isOpen) {
-      fetchNotifications()
+    if (isOpen && !isNotificationsPage) {
+      void refetch()
     }
-  }, [isOpen])
+  }, [isOpen, isNotificationsPage, refetch])
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -37,80 +57,94 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const fetchNotificationCount = async () => {
-    try {
-      const { unread_count } = await api.getNotificationCount()
-      setUnreadCount(unread_count)
-    } catch (error) {
-      console.error('Failed to fetch notification count:', error)
-    }
-  }
+  const setReadStatusInCache = (notificationId: number, isRead: boolean) => {
+    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
+      if (!previous) return previous
 
-  const fetchNotifications = async () => {
-    setLoading(true)
-    try {
-      const { items, unread_count } = await api.getNotifications(false, 20)
-      setNotifications(items)
-      setUnreadCount(unread_count)
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+      let unreadDelta = 0
+      const items = previous.items.map((item) => {
+        if (item.id !== notificationId) return item
+        if (item.is_read === isRead) return item
+        unreadDelta = isRead ? -1 : 1
+        return {
+          ...item,
+          is_read: isRead,
+          read_at: isRead ? new Date().toISOString() : null,
+        }
+      })
 
-  const handleMarkAsRead = async (notificationId: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    try {
-      await api.markNotificationRead(notificationId)
-      setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
-      )
-      setUnreadCount(prev => Math.max(0, prev - 1))
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error)
-    }
-  }
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await api.markAllNotificationsRead()
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-      setUnreadCount(0)
-    } catch (error) {
-      console.error('Failed to mark all as read:', error)
-    }
-  }
-
-  const handleDelete = async (notificationId: number, e: React.MouseEvent) => {
-    e.stopPropagation()
-    try {
-      await api.deleteNotification(notificationId)
-      const notification = notifications.find(n => n.id === notificationId)
-      setNotifications(prev => prev.filter(n => n.id !== notificationId))
-      if (notification && !notification.is_read) {
-        setUnreadCount(prev => Math.max(0, prev - 1))
+      return {
+        ...previous,
+        items,
+        unread_count: Math.max(0, previous.unread_count + unreadDelta),
       }
-    } catch (error) {
-      console.error('Failed to delete notification:', error)
-    }
+    })
   }
+
+  const removeNotificationFromCache = (notificationId: number) => {
+    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
+      if (!previous) return previous
+      const removed = previous.items.find((item) => item.id === notificationId)
+      if (!removed) return previous
+
+      return {
+        ...previous,
+        items: previous.items.filter((item) => item.id !== notificationId),
+        total: Math.max(0, previous.total - 1),
+        unread_count: removed.is_read ? previous.unread_count : Math.max(0, previous.unread_count - 1),
+      }
+    })
+  }
+
+  const markReadMutation = useMutation({
+    mutationFn: (notificationId: number) => api.markNotificationRead(notificationId),
+    onSuccess: (_, notificationId) => {
+      setReadStatusInCache(notificationId, true)
+    },
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.markAllNotificationsRead(),
+    onSuccess: () => {
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
+        if (!previous) return previous
+        const nowIso = new Date().toISOString()
+        return {
+          ...previous,
+          unread_count: 0,
+          items: previous.items.map((item) => ({
+            ...item,
+            is_read: true,
+            read_at: item.read_at || nowIso,
+          })),
+        }
+      })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (notificationId: number) => api.deleteNotification(notificationId),
+    onSuccess: (_, notificationId) => {
+      removeNotificationFromCache(notificationId)
+    },
+  })
 
   const handleNotificationClick = async (notification: Notification) => {
-    // Mark as read
     if (!notification.is_read) {
-      await api.markNotificationRead(notification.id)
-      setNotifications(prev => 
-        prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
-      )
-      setUnreadCount(prev => Math.max(0, prev - 1))
+      await markReadMutation.mutateAsync(notification.id)
     }
 
-    // Navigate to link if present
-    if (notification.link) {
-      setIsOpen(false)
-      navigate(notification.link)
+    if (!notification.link) {
+      return
     }
+
+    setIsOpen(false)
+    const link = notification.link
+    if (link.startsWith('http://') || link.startsWith('https://')) {
+      window.open(link, '_blank', 'noopener,noreferrer')
+      return
+    }
+    navigate(link)
   }
 
   const getNotificationIcon = (type: NotificationType) => {
@@ -144,11 +178,14 @@ export default function NotificationBell() {
     return date.toLocaleDateString()
   }
 
+  const isBusy = markReadMutation.isPending || markAllReadMutation.isPending || deleteMutation.isPending
+  const showSpinner = isLoading || (!data && isFetching)
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell Icon Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen((previous) => !previous)}
         className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
         aria-label="Notifications"
       >
@@ -169,17 +206,15 @@ export default function NotificationBell() {
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
-                  onClick={handleMarkAllAsRead}
+                  onClick={() => markAllReadMutation.mutate()}
                   className="text-xs text-sky-600 hover:text-sky-800 flex items-center gap-1"
+                  disabled={isBusy}
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   Mark all read
                 </button>
               )}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -187,7 +222,7 @@ export default function NotificationBell() {
 
           {/* Notification List */}
           <div className="max-h-96 overflow-y-auto">
-            {loading ? (
+            {showSpinner ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-600"></div>
               </div>
@@ -200,10 +235,10 @@ export default function NotificationBell() {
               notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
+                  onClick={() => void handleNotificationClick(notification)}
                   className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer transition-colors ${
-                    notification.is_read 
-                      ? 'bg-white hover:bg-slate-50' 
+                    notification.is_read
+                      ? 'bg-white hover:bg-slate-50'
                       : 'bg-sky-50 hover:bg-sky-100'
                   }`}
                 >
@@ -226,17 +261,25 @@ export default function NotificationBell() {
                   <div className="flex-shrink-0 flex gap-1">
                     {!notification.is_read && (
                       <button
-                        onClick={(e) => handleMarkAsRead(notification.id, e)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          markReadMutation.mutate(notification.id)
+                        }}
                         className="p-1 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-full"
                         title="Mark as read"
+                        disabled={isBusy}
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                     )}
                     <button
-                      onClick={(e) => handleDelete(notification.id, e)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteMutation.mutate(notification.id)
+                      }}
                       className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
                       title="Delete"
+                      disabled={isBusy}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

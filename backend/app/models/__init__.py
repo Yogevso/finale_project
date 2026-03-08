@@ -4,6 +4,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -282,6 +283,17 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(SQLEnum(UserRole), default=UserRole.VIEWER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_token_hash = Column(String(255), nullable=True)
+    email_verification_expires_at = Column(DateTime, nullable=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    last_login_ip = Column(String(45), nullable=True)
+    last_login_user_agent = Column(String(512), nullable=True)
+    timezone = Column(String(64), default="UTC", nullable=False)
+    locale = Column(String(10), default="en", nullable=False)
+    notification_preferences = Column(JSON, nullable=True)
+    avatar_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -290,6 +302,8 @@ class User(Base):
     documents = relationship("Document", back_populates="created_by_user")
     comments = relationship("Comment", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    security_events = relationship("SecurityEvent", back_populates="user")
+    user_sessions = relationship("UserSession", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
     password_resets = relationship("PasswordReset", back_populates="user")
     saved_searches = relationship(
@@ -613,6 +627,40 @@ class AuditLog(Base):
     document = relationship("Document", back_populates="audit_logs")
 
 
+class SecurityEvent(Base):
+    """Security event log for user account anomalies and security actions."""
+
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="security_events")
+
+
+class UserSession(Base):
+    """Persisted user session metadata for active-session management."""
+
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    last_active_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+
+    # Relationships
+    user = relationship("User", back_populates="user_sessions")
+
+
 class Section(Base):
     """Document section model - for rich content within versions"""
 
@@ -901,6 +949,8 @@ __all__ = [
     "IdempotencyKeyRecord",
     "Comment",
     "AuditLog",
+    "SecurityEvent",
+    "UserSession",
     "Notification",
     "PasswordReset",
     "SavedSearch",

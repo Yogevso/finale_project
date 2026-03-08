@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { formatDate } from '@/lib/dateUtils'
 import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentVersionsQuery } from '@/hooks/useDocumentQueries'
 import type { Version, VersionBumpType, VersionCreate } from '@/types'
@@ -284,7 +285,7 @@ function VersionCard({
             </p>
             <p>
               <span className="text-slate-500">Created:</span>{' '}
-              {new Date(version.created_at).toLocaleString()}
+              {formatDate(version.created_at)}
             </p>
             {review?.submitter && (
               <p>
@@ -301,7 +302,7 @@ function VersionCard({
             {version.published_at && (
               <p>
                 <span className="text-slate-500">Published:</span>{' '}
-                {new Date(version.published_at).toLocaleString()}
+                {formatDate(version.published_at)}
               </p>
             )}
             {version.published_by_user && (

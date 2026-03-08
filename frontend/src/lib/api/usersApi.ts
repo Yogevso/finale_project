@@ -1,4 +1,10 @@
-import type { User, UserRole } from '@/types'
+import type {
+  SecurityEventListResponse,
+  SessionBulkRevokeResponse,
+  User,
+  UserRole,
+  UserSessionListResponse,
+} from '@/types'
 import {
   type UserCreateDto,
   type UserDto,
@@ -54,6 +60,61 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
       const payload = toUserUpdateDto(userData)
       const { data } = await this.client.put<UserDto>(`/users/${id}`, payload as UserUpdateDto)
       return mapUserDto(data)
+    }
+
+    async updateMyProfile(profile: {
+      full_name?: string
+      timezone?: string
+      locale?: string
+    }): Promise<User> {
+      const { data } = await this.client.patch<UserDto>('/users/me', profile)
+      return mapUserDto(data)
+    }
+
+    async updateMyNotificationPreferences(
+      notificationPreferences: Record<string, boolean>,
+    ): Promise<Record<string, boolean>> {
+      const { data } = await this.client.patch<{ notification_preferences: Record<string, boolean> }>(
+        '/users/me/notification-preferences',
+        { notification_preferences: notificationPreferences },
+      )
+      return data.notification_preferences
+    }
+
+    async uploadMyAvatar(file: File): Promise<{ avatar_url: string; message: string }> {
+      const formData = new FormData()
+      formData.append('file', file)
+      const { data } = await this.client.post<{ avatar_url: string; message: string }>(
+        '/users/me/avatar',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      return data
+    }
+
+    async getMySessions(): Promise<UserSessionListResponse> {
+      const { data } = await this.client.get<UserSessionListResponse>('/users/me/sessions')
+      return data
+    }
+
+    async revokeMySession(sessionId: number): Promise<{ message: string }> {
+      const { data } = await this.client.delete<{ message: string }>(`/users/me/sessions/${sessionId}`)
+      return data
+    }
+
+    async revokeAllMyOtherSessions(): Promise<SessionBulkRevokeResponse> {
+      const { data } = await this.client.delete<SessionBulkRevokeResponse>('/users/me/sessions')
+      return data
+    }
+
+    async getMySecurityEvents(params?: {
+      page?: number
+      page_size?: number
+    }): Promise<SecurityEventListResponse> {
+      const { data } = await this.client.get<SecurityEventListResponse>('/users/me/security-events', {
+        params,
+      })
+      return data
     }
 
     async deleteUser(id: number): Promise<void> {

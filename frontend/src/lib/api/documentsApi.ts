@@ -5,6 +5,7 @@ import type {
   Company,
   Document,
   DocumentCreate,
+  DocumentDashboardStats,
   DocumentListResponse,
   DocumentQueryParams,
   DocumentUpdate,
@@ -52,6 +53,11 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
     async getDocuments(params?: DocumentQueryParams): Promise<DocumentListResponse> {
       const { data } = await this.client.get<DocumentListResponseDto>('/documents', { params })
       return mapDocumentListResponseDto(data)
+    }
+
+    async getDocumentStats(): Promise<DocumentDashboardStats> {
+      const { data } = await this.client.get<DocumentDashboardStats>('/documents/stats')
+      return data
     }
 
     async getDocument(id: number): Promise<Document> {

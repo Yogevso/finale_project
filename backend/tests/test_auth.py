@@ -1,6 +1,10 @@
 """Authentication Tests"""
 
+from datetime import datetime, timedelta
+from urllib.parse import parse_qs, urlparse
+
 from app.config import settings
+from app.models import SecurityEvent
 from app.services.auth_rate_limit_service import AuthRateLimitService
 
 
@@ -117,6 +121,27 @@ def test_change_password_wrong_old_password(client, auth_headers):
     assert response.status_code == 400
 
 
+def test_update_my_profile_timezone_and_locale(client, auth_headers, db, test_user):
+    """Users can update timezone/locale via PATCH /users/me."""
+    response = client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers,
+        json={
+            "full_name": "Test User",
+            "timezone": "Asia/Jerusalem",
+            "locale": "he",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["timezone"] == "Asia/Jerusalem"
+    assert payload["locale"] == "he"
+
+    db.refresh(test_user)
+    assert test_user.timezone == "Asia/Jerusalem"
+    assert test_user.locale == "he"
+
+
 def test_login_returns_refresh_token(client, test_user):
     """Test that login returns a refresh token"""
     response = client.post(
@@ -177,6 +202,7 @@ def test_logout(client, auth_headers, test_user):
 def test_login_rate_limited_by_ip_and_username(client, test_user, monkeypatch):
     """Rapid failed logins should be rate-limited per ip+username key."""
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 999)
     AuthRateLimitService.reset()
 
     headers = {"x-forwarded-for": "127.0.0.10"}
@@ -264,3 +290,175 @@ def test_forgot_password_lock_expires_cleanly(client, monkeypatch):
         json={"identifier": "test@example.com"},
     )
     assert first_after_lock.status_code == 200
+
+
+def test_email_verification_register_verify_allows_login(client, monkeypatch):
+    """Register -> verify email -> login succeeds."""
+    captured_verification_url: dict[str, str] = {}
+
+    def _capture_email_verification(
+        _to_email: str,
+        verification_url: str,
+        _expires_minutes: int,
+    ) -> None:
+        captured_verification_url["url"] = verification_url
+
+    monkeypatch.setattr(
+        "app.api.management.auth._send_email_verification_task",
+        _capture_email_verification,
+    )
+
+    registration_payload = {
+        "email": "verify-flow@example.com",
+        "username": "verify_flow_user",
+        "full_name": "Verify Flow User",
+        "password": "verifypass123",
+        "role": "viewer",
+    }
+    register_response = client.post("/api/v1/auth/register", json=registration_payload)
+    assert register_response.status_code == 201
+    assert "url" in captured_verification_url
+
+    login_before_verify = client.post(
+        "/api/v1/auth/login",
+        json={"username": "verify_flow_user", "password": "verifypass123"},
+    )
+    assert login_before_verify.status_code == 403
+    assert login_before_verify.json()["detail"] == "email_not_verified"
+
+    verification_url = captured_verification_url["url"]
+    token = parse_qs(urlparse(verification_url).query)["token"][0]
+    verify_response = client.get("/api/v1/auth/verify-email", params={"token": token})
+    assert verify_response.status_code == 200
+
+    login_after_verify = client.post(
+        "/api/v1/auth/login",
+        json={"username": "verify_flow_user", "password": "verifypass123"},
+    )
+    assert login_after_verify.status_code == 200
+    assert "access_token" in login_after_verify.json()
+
+
+def test_email_verification_register_without_verify_blocks_login(client, monkeypatch):
+    """Register without verification should return 403 on login."""
+    monkeypatch.setattr(
+        "app.api.management.auth._send_email_verification_task",
+        lambda *_args, **_kwargs: None,
+    )
+
+    registration_payload = {
+        "email": "verify-skip@example.com",
+        "username": "verify_skip_user",
+        "full_name": "Verify Skip User",
+        "password": "skipverify123",
+        "role": "viewer",
+    }
+    register_response = client.post("/api/v1/auth/register", json=registration_payload)
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "verify_skip_user", "password": "skipverify123"},
+    )
+    assert login_response.status_code == 403
+    assert login_response.json()["detail"] == "email_not_verified"
+
+
+def test_login_lockout_then_auto_unlock_after_window(client, test_user, monkeypatch):
+    """After max failed attempts user is locked, then auto-unlocked after window."""
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 5)
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_DURATION_MINUTES", 30)
+
+    fake_now = {"value": datetime(2026, 1, 1, 9, 0, 0)}
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return fake_now["value"]
+
+    monkeypatch.setattr("app.services.auth_service.datetime", _FrozenDateTime)
+
+    for _ in range(4):
+        failed_response = client.post(
+            "/api/v1/auth/login",
+            json={"username": "testuser", "password": "wrongpassword"},
+        )
+        assert failed_response.status_code == 401
+
+    locked_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "wrongpassword"},
+    )
+    assert locked_response.status_code == 403
+    assert locked_response.json()["detail"] == "account_locked"
+
+    while_locked_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+    )
+    assert while_locked_response.status_code == 403
+    assert while_locked_response.json()["detail"] == "account_locked"
+
+    fake_now["value"] = fake_now["value"] + timedelta(minutes=31)
+    unlocked_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+    )
+    assert unlocked_response.status_code == 200
+    assert "access_token" in unlocked_response.json()
+
+
+def test_login_anomaly_detection_records_security_event(client, test_user, db, monkeypatch):
+    """Successful logins from new IP/device should create a security event."""
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+    monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", ["testclient"])
+
+    initial_headers = {"x-forwarded-for": "10.10.0.1", "user-agent": "BrowserA/1.0"}
+    same_headers = {"x-forwarded-for": "10.10.0.1", "user-agent": "BrowserA/1.0"}
+    changed_headers = {"x-forwarded-for": "10.10.0.2", "user-agent": "BrowserA/1.0"}
+
+    first_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=initial_headers,
+    )
+    assert first_login.status_code == 200
+
+    db.refresh(test_user)
+    assert test_user.last_login_ip == "10.10.0.1"
+    assert test_user.last_login_user_agent == "BrowserA/1.0"
+    assert (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .count()
+        == 0
+    )
+
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=same_headers,
+    )
+    assert second_login.status_code == 200
+    assert (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .count()
+        == 0
+    )
+
+    third_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=changed_headers,
+    )
+    assert third_login.status_code == 200
+
+    events = (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .all()
+    )
+    assert len(events) == 1
+    assert events[0].ip_address == "10.10.0.2"
+    assert events[0].user_agent == "BrowserA/1.0"

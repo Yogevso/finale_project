@@ -106,6 +106,7 @@ def test_visibility_update_rejects_stale_if_match_between_two_admins(
         hashed_password=get_password_hash("second-admin-pass-123"),
         role=UserRole.ADMIN,
         is_active=True,
+        is_email_verified=True,
     )
     db.add(second_admin)
     db.commit()

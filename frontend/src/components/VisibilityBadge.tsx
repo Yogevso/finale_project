@@ -1,4 +1,4 @@
-import { Globe, Building2, Lock } from 'lucide-react'
+import { Building2, Globe, Lock, Users } from 'lucide-react'
 import type { DocumentVisibility } from '@/types'
 
 type VisibilityBadgeMode = DocumentVisibility | 'client' | 'draft'
@@ -38,12 +38,12 @@ const visibilityConfig = {
     description: 'Visible to assigned companies + staff',
   },
   client: {
-    icon: Lock,
+    icon: Users,
     label: 'Client',
-    bgColor: 'bg-amber-50',
-    textColor: 'text-amber-700',
-    iconColor: 'text-amber-600',
-    borderColor: 'border-amber-200',
+    bgColor: 'bg-sky-50',
+    textColor: 'text-sky-700',
+    iconColor: 'text-sky-600',
+    borderColor: 'border-sky-200',
     description: 'Visible to assigned client companies + staff',
   },
   draft: {

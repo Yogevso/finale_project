@@ -30,6 +30,10 @@ export interface User {
   role: UserRole
   is_active: boolean
   tenant_id?: number
+  timezone?: string
+  locale?: string
+  notification_preferences?: Record<string, boolean>
+  avatar_url?: string | null
   permissions?: Permission[]
   tenant?: Tenant
   company_name?: string
@@ -53,6 +57,41 @@ export interface UserUpdate {
   role?: UserRole
   is_active?: boolean
   tenant_id?: number
+}
+
+export interface UserSession {
+  id: number
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at: string
+  last_active_at: string
+  is_current: boolean
+}
+
+export interface UserSessionListResponse {
+  items: UserSession[]
+  total: number
+}
+
+export interface SessionBulkRevokeResponse {
+  message: string
+  revoked_count: number
+}
+
+export interface SecurityEvent {
+  id: number
+  event_type: string
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at: string
+}
+
+export interface SecurityEventListResponse {
+  items: SecurityEvent[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
 }
 
 // Auth types
@@ -137,6 +176,13 @@ export interface DocumentListResponse {
   page: number
   page_size: number
   pages: number
+}
+
+export interface DocumentDashboardStats {
+  total: number
+  published: number
+  approved: number
+  draft: number
 }
 
 export interface AudienceAccessTargetCompany {

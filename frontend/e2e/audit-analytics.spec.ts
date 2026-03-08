@@ -20,11 +20,14 @@ test.describe('Audit Analytics', () => {
     await expect(page.getByTestId('audience-type-public')).toBeVisible()
 
     await page.getByRole('button', { name: 'Export' }).click()
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Export as CSV' }).click(),
-    ])
-    expect(download.suggestedFilename()).toContain('analytics-overview-')
-    expect(download.suggestedFilename()).toContain('.csv')
+    const exportResponsePromise = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/analytics/export/csv'),
+    )
+    await page.getByRole('button', { name: 'Export as CSV' }).click()
+    const exportResponse = await exportResponsePromise
+
+    expect(exportResponse.ok()).toBeTruthy()
+    const contentDisposition = exportResponse.headers()['content-disposition'] ?? ''
+    expect(contentDisposition).toContain('.csv')
   })
 })

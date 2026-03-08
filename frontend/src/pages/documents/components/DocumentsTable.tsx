@@ -1,4 +1,5 @@
 import VisibilityBadge from '@/components/VisibilityBadge'
+import Skeleton from '@/components/Skeleton'
 import type { DocumentListResponse, DocumentVisibility } from '@/types'
 
 type VisibilityChangeRequest = {
@@ -48,7 +49,11 @@ export function DocumentsTable({
             {isLoading ? (
               <tr className="admin-table-row">
                 <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                  Loading...
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-48 mx-auto" />
+                    <Skeleton className="h-4 w-40 mx-auto" />
+                    <Skeleton className="h-4 w-44 mx-auto" />
+                  </div>
                 </td>
               </tr>
             ) : data?.items.length === 0 ? (

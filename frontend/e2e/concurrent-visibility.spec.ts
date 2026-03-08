@@ -8,29 +8,9 @@ type Credentials = {
 }
 
 const E2E_BYPASS_HEADERS = { 'x-e2e-test': '1' }
-
-async function ensureAdminUser(page: Page, credentials: Credentials) {
-  const response = await page.request.post('/api/v1/auth/register', {
-    headers: E2E_BYPASS_HEADERS,
-    data: {
-      email: `${credentials.username}@example.com`,
-      username: credentials.username,
-      full_name: 'Concurrent Visibility Admin',
-      password: credentials.password,
-      role: 'system_admin',
-    },
-    failOnStatusCode: false,
-  })
-  if (response.status() === 201) {
-    return
-  }
-  if (response.status() === 400) {
-    const payload = (await response.json().catch(() => ({}))) as { detail?: string }
-    if ((payload.detail ?? '').toLowerCase().includes('already registered')) {
-      return
-    }
-  }
-  throw new Error(`Failed to provision E2E admin user (${response.status()}).`)
+const ADMIN: Credentials = {
+  username: 'admin',
+  password: 'admin123',
 }
 
 async function loginAsAdmin(page: Page, credentials: Credentials) {
@@ -85,25 +65,20 @@ async function submitVisibilityChange(page: Page, reason: string) {
 
 test.describe('Concurrent visibility changes', () => {
   test('shows conflict feedback in the second tab when visibility is updated concurrently', async ({ browser }) => {
-    const credentials: Credentials = {
-      username: `e2e_admin_${Date.now()}`,
-      password: 'admin12345',
-    }
     const contextOne = await browser.newContext()
     const contextTwo = await browser.newContext()
     const pageOne = await contextOne.newPage()
     const pageTwo = await contextTwo.newPage()
 
     try {
-      await ensureAdminUser(pageOne, credentials)
-      await loginAsAdmin(pageOne, credentials)
+      await loginAsAdmin(pageOne, ADMIN)
       const documentPath = await resolveDocumentPathForConcurrencyTest(pageOne)
       if (!documentPath) {
         test.skip(true, 'No documents available for concurrency visibility test.')
         return
       }
 
-      await loginAsAdmin(pageTwo, credentials)
+      await loginAsAdmin(pageTwo, ADMIN)
       await pageTwo.goto(documentPath)
       await expect(pageTwo).toHaveURL(/\/documents\/\d+/)
       await prepareVisibilityChangeToPublic(pageTwo)

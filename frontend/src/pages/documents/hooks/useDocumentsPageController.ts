@@ -6,6 +6,7 @@ import {
   buildDocumentsListQueryParams,
   documentsUseCases,
 } from '@/features/documents'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
 import type { DocumentStatus, DocumentVisibility } from '@/types'
@@ -52,6 +53,7 @@ export function useDocumentsPageController() {
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 300)
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('')
   const [visibilityFilter, setVisibilityFilter] = useState<DocumentVisibility | ''>('')
   const statusDetailsRef = useRef<HTMLDetailsElement>(null)
@@ -77,7 +79,7 @@ export function useDocumentsPageController() {
   const listQueryParams = buildDocumentsListQueryParams({
     page,
     pageSize: 10,
-    search,
+    search: debouncedSearch,
     statusFilter,
     visibilityFilter,
   })
@@ -188,6 +190,13 @@ export function useDocumentsPageController() {
     })
   }
 
+  const resetFilters = () => {
+    setSearch('')
+    setStatusFilter('')
+    setVisibilityFilter('')
+    setPage(1)
+  }
+
   return {
     isEditor,
     isManager,
@@ -199,6 +208,7 @@ export function useDocumentsPageController() {
     setStatusFilter,
     visibilityFilter,
     setVisibilityFilter,
+    resetFilters,
     statusDetailsRef,
     visibilityDetailsRef,
     showCreateModal,

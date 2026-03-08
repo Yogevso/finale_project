@@ -127,6 +127,7 @@ export function EditForm({
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
             <select
+              name="status"
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
               className="select-field"
@@ -141,6 +142,7 @@ export function EditForm({
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
             <select
+              name="visibility"
               value={formData.visibility}
               onChange={(e) =>
                 setFormData({ ...formData, visibility: e.target.value as DocumentVisibility })

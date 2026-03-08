@@ -22,9 +22,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     AUDIENCE_AUDIT_HMAC_KEYS: str = "v1:dev-audience-audit-signing-key"
     AUDIENCE_AUDIT_ACTIVE_KEY_ID: str = "v1"
     AUDIENCE_ASSIGNMENT_SCHEMA_VERSION: str = "1.0.0"
+    ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
+    ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
+    SESSION_INACTIVITY_DAYS: int = 30
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

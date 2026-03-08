@@ -11,11 +11,13 @@ import {
 } from '@/features/documents'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
   const defaultVisibility = getDefaultAudienceForRole(user?.role)
 
   const [formData, setFormData] = useState<DocumentCreateFormData>({
@@ -68,12 +70,14 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
       documentsUseCases.createDraftDocument(data, { generateWord }),
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document created', 'Opening the editor...')
       onClose()
       navigate(`/documents/${doc.id}/fullscreen`)
     },
     onError: (err: unknown) => {
-      const apiError = err as { response?: { data?: { detail?: string } }; message?: string }
-      setError(apiError.response?.data?.detail || apiError.message || 'Failed to create document')
+      const message = extractApiErrorMessage(err, 'Failed to create document')
+      setError(message)
+      toast.error('Failed to create document', message)
     },
   })
 

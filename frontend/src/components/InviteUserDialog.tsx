@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import {
   X,
   Mail,
@@ -25,6 +26,7 @@ export default function InviteUserDialog({
   preselectedCompanyId,
 }: InviteUserDialogProps) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const initialTenantId =
     preselectedCompanyId ??
     (currentUserRole !== 'system_admin' ? (currentUserTenantId ?? '') : '')
@@ -64,11 +66,13 @@ export default function InviteUserDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
+      toast.success('Invitation sent', 'The user will receive an invitation email shortly.')
       onClose()
     },
     onError: (err: unknown) => {
-      const apiError = err as { response?: { data?: { detail?: string } } }
-      setError(apiError.response?.data?.detail || 'Failed to send invitation')
+      const message = extractApiErrorMessage(err, 'Failed to send invitation')
+      setError(message)
+      toast.error('Failed to send invitation', message)
     },
   })
 
