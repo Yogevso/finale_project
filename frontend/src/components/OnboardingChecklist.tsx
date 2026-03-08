@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Circle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import type { UserRole } from '@/types'
 
 type OnboardingChecklistProps = {
   storageKey: string
-  isCustomer: boolean
+  role: UserRole
+  documentsPath: string
 }
 
 type ChecklistState = {
@@ -26,13 +28,82 @@ const DEFAULT_STATE: ChecklistState = {
 
 export default function OnboardingChecklist({
   storageKey,
-  isCustomer,
+  role,
+  documentsPath,
 }: OnboardingChecklistProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [state, setState] = useState<ChecklistState>(DEFAULT_STATE)
 
   const steps = useMemo<ChecklistStep[]>(() => {
-    const documentsPath = isCustomer ? '/portal/documents' : '/documents'
+    if (role === 'viewer') {
+      return [
+        {
+          id: 'browse_documents',
+          title: 'Browse documents',
+          description: 'Open the documents area and review available content.',
+          href: documentsPath,
+        },
+        {
+          id: 'follow_document',
+          title: 'Follow a document',
+          description: 'Open a document and use notifications/bookmarks to follow updates.',
+          href: documentsPath,
+        },
+        {
+          id: 'set_notification_preferences',
+          title: 'Set notification preferences',
+          description: 'Choose which updates should trigger email notifications.',
+          href: '/profile#notifications',
+        },
+      ]
+    }
+
+    if (role === 'editor') {
+      return [
+        {
+          id: 'create_first_document',
+          title: 'Create your first document',
+          description: 'Start a new document draft from the documents page.',
+          href: '/documents?action=create',
+        },
+        {
+          id: 'invite_reviewer',
+          title: 'Invite a reviewer',
+          description: 'Open user management and invite a reviewer for your content.',
+          href: '/users',
+        },
+        {
+          id: 'publish_document',
+          title: 'Publish a document',
+          description: 'Submit and publish a reviewed document.',
+          href: '/reviews',
+        },
+      ]
+    }
+
+    if (role === 'admin' || role === 'system_admin') {
+      return [
+        {
+          id: 'invite_team',
+          title: 'Invite your team',
+          description: 'Send invitations so your team can start collaborating.',
+          href: '/users',
+        },
+        {
+          id: 'set_up_categories',
+          title: 'Set up categories',
+          description: 'Create category structure for your documentation.',
+          href: '/documents',
+        },
+        {
+          id: 'review_pending_approvals',
+          title: 'Review pending approvals',
+          description: 'Process pending approvals in the review queue.',
+          href: '/reviews',
+        },
+      ]
+    }
+
     return [
       {
         id: 'set_up_profile',
@@ -53,7 +124,7 @@ export default function OnboardingChecklist({
         href: '/profile#notifications',
       },
     ]
-  }, [isCustomer])
+  }, [documentsPath, role])
 
   useEffect(() => {
     const rawState = window.localStorage.getItem(storageKey)

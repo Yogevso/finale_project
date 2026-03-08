@@ -68,6 +68,12 @@ export default function ProfileSettingsPage() {
     },
   })
 
+  const replayTours = () => {
+    window.localStorage.removeItem('tour-completed-documents-page')
+    window.localStorage.removeItem('tour-completed-document-detail')
+    toast.success('Tours reset', 'Visit Documents or a document detail page to replay the tour.')
+  }
+
   if (!user) {
     return (
       <div className="surface-card rounded-2xl p-6 text-slate-600">
@@ -200,6 +206,16 @@ export default function ProfileSettingsPage() {
           void refreshUser()
         }}
       />
+
+      <div className="surface-card rounded-2xl p-6 space-y-3">
+        <h3 className="text-lg font-display font-semibold text-slate-900">Product Tour</h3>
+        <p className="text-sm text-slate-600">
+          Replay onboarding tours for the documents list and document detail screens.
+        </p>
+        <button type="button" className="btn-secondary" onClick={replayTours}>
+          Replay tour
+        </button>
+      </div>
     </div>
   )
 }

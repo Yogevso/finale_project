@@ -105,6 +105,7 @@ export function PreviewCanvas({
         <div className={documentPaperClass}>
           <div
             id="document-content-area"
+            data-tour="document-inline-comment-area"
             className={`document-preview-content ${
               showingReaderView ? 'document-preview-content--reader' : ''
             }`}

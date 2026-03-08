@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import Joyride from 'react-joyride'
 import { DocumentPreview } from '@/pages/document-detail/DocumentPreview'
 import { EditForm } from '@/pages/document-detail/EditForm'
 import { DocumentDetailsView } from '@/pages/document-detail/components/DocumentDetailsView'
@@ -8,6 +9,8 @@ import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenT
 import { ReviewSubmitModal } from '@/pages/document-detail/components/ReviewSubmitModal'
 import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState'
 import EngagementBar from '@/components/EngagementBar'
+import { useTour } from '@/hooks/useTour'
+import { documentDetailTour } from '@/lib/tour'
 import NotFoundState from '@/components/NotFoundState'
 
 const VersionsSection = lazy(() => import('@/components/VersionsSection'))
@@ -15,6 +18,7 @@ const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
 const CommentsSection = lazy(() => import('@/components/CommentsSection'))
 
 export default function DocumentDetailPage() {
+  const tour = useTour('document-detail', documentDetailTour)
   const {
     documentId,
     document,
@@ -86,6 +90,16 @@ export default function DocumentDetailPage() {
 
   return (
     <div className={`${isFullscreen ? 'min-h-screen bg-slate-50 px-6 md:px-10 lg:px-14 py-6' : ''}`}>
+      <Joyride
+        steps={documentDetailTour}
+        run={tour.run}
+        callback={tour.onJoyrideCallback}
+        continuous
+        showProgress
+        showSkipButton
+        disableScrolling
+      />
+
       <FullscreenTopBar
         isFullscreen={isFullscreen}
         documentTitle={document.title}

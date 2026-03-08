@@ -29,6 +29,7 @@ export function TocPanel({
       className={`bg-slate-50 border-r border-slate-200 transition-all duration-300 ${
         tocCollapsed ? 'w-10' : 'w-56'
       } flex-shrink-0`}
+      data-tour="document-toc-panel"
     >
       <div className="sticky top-0">
         <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-white">

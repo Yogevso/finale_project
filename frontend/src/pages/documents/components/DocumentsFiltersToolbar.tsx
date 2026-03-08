@@ -28,7 +28,7 @@ export function DocumentsFiltersToolbar({
   visibilityDetailsRef,
 }: DocumentsFiltersToolbarProps) {
   return (
-    <div className="admin-sticky-toolbar">
+    <div className="admin-sticky-toolbar" data-tour="documents-filter-panel">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="inline-flex items-center gap-2 text-sm text-slate-600">
           <span className="admin-summary-badge">
@@ -39,6 +39,7 @@ export function DocumentsFiltersToolbar({
           <div className="relative w-full sm:w-72">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
             <input
+              data-tour="documents-search-bar"
               type="text"
               placeholder="Search documents..."
               value={search}

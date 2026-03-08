@@ -1,7 +1,9 @@
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BookMarked, BookOpen, CheckCircle2, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+import AdminFirstCompanyWizard from '@/components/AdminFirstCompanyWizard'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
@@ -23,8 +25,21 @@ interface DashboardProgressItem {
 }
 
 export default function DashboardPage() {
-  const { user, isCustomer } = useAuth()
+  const { user, isCustomer, isAdmin } = useAuth()
+  const [isAdminWizardDismissed, setIsAdminWizardDismissed] = useState(false)
   const onboardingStorageKey = `onboarding_completed_${user?.id ?? 'unknown'}`
+  const adminWizardStorageKey = useMemo(
+    () => `admin-wizard-dismissed-${user?.id ?? 'unknown'}`,
+    [user?.id],
+  )
+
+  useEffect(() => {
+    if (!user || !isAdmin || isCustomer) {
+      setIsAdminWizardDismissed(false)
+      return
+    }
+    setIsAdminWizardDismissed(window.localStorage.getItem(adminWizardStorageKey) === '1')
+  }, [adminWizardStorageKey, isAdmin, isCustomer, user])
 
   const { data: documents, isLoading: isDocumentsLoading } = useQuery({
     queryKey: ['documents', 'dashboard'],
@@ -34,6 +49,12 @@ export default function DashboardPage() {
   const { data: documentStats, isLoading: isStatsLoading } = useQuery({
     queryKey: ['documents', 'stats'],
     queryFn: () => api.getDocumentStats(),
+  })
+
+  const companiesOnboardingQuery = useQuery({
+    queryKey: ['companies', 'onboarding-check'],
+    queryFn: () => api.getCompanies({ page: 1, per_page: 1 }),
+    enabled: Boolean(user && isAdmin && !isCustomer),
   })
 
   const { data: bookmarks = [] } = useQuery<DashboardBookmark[]>({
@@ -49,6 +70,13 @@ export default function DashboardPage() {
     { label: 'Drafts', value: documentStats?.draft ?? 0, icon: BookOpen },
   ]
 
+  const shouldShowAdminWizard =
+    Boolean(user && isAdmin && !isCustomer) &&
+    !isAdminWizardDismissed &&
+    !companiesOnboardingQuery.isLoading &&
+    (companiesOnboardingQuery.data?.total ?? 0) === 0
+  const documentsPath = isCustomer ? '/portal/documents' : '/documents'
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -57,7 +85,24 @@ export default function DashboardPage() {
         eyebrow="Internal Portal"
       />
 
-      <OnboardingChecklist storageKey={onboardingStorageKey} isCustomer={isCustomer} />
+      {user && !shouldShowAdminWizard && (
+        <OnboardingChecklist
+          storageKey={onboardingStorageKey}
+          role={user.role}
+          documentsPath={documentsPath}
+        />
+      )}
+
+      {user && shouldShowAdminWizard && (
+        <AdminFirstCompanyWizard
+          isOpen
+          userId={user.id}
+          onDismiss={() => {
+            setIsAdminWizardDismissed(true)
+            void companiesOnboardingQuery.refetch()
+          }}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => {
