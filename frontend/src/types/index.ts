@@ -139,6 +139,13 @@ export interface DocumentListResponse {
   pages: number
 }
 
+export interface DocumentDashboardStats {
+  total: number
+  published: number
+  approved: number
+  draft: number
+}
+
 export interface AudienceAccessTargetCompany {
   id: number
   name: string

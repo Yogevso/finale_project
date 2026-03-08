@@ -270,6 +270,39 @@ def test_list_documents_with_pagination(client, auth_headers, db, test_user):
     assert data["page"] == 1
 
 
+def test_get_document_stats(client, auth_headers, db, test_user):
+    """Test dashboard document stats endpoint."""
+    statuses = [
+        DocumentStatus.ACTIVE,
+        DocumentStatus.ACTIVE,
+        DocumentStatus.ACTIVE,
+        DocumentStatus.APPROVED,
+        DocumentStatus.APPROVED,
+        DocumentStatus.DRAFT,
+        DocumentStatus.ARCHIVED,
+    ]
+    for index, doc_status in enumerate(statuses, start=1):
+        db.add(
+            Document(
+                title=f"Stats doc {index}",
+                document_number=f"DOC-STATS-{index:04d}",
+                status=doc_status,
+                created_by=test_user.id,
+            )
+        )
+    db.commit()
+
+    response = client.get("/api/v1/documents/stats", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "total": 7,
+        "published": 3,
+        "approved": 2,
+        "draft": 1,
+    }
+
+
 def test_get_document(client, auth_headers, db, test_user):
     """Test getting a single document"""
     # Create document

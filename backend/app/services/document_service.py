@@ -9,7 +9,7 @@ from datetime import datetime
 from time import monotonic
 from typing import List, Optional
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -517,6 +517,32 @@ class DocumentService(TenantAwareService[Document]):
         documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
 
         return documents, total
+
+    def get_document_stats(self) -> dict[str, int]:
+        """Return aggregate document counts for dashboard summary cards."""
+        stats_row = (
+            self._base_query()
+            .with_entities(
+                func.count(Document.id).label("total"),
+                func.sum(case((Document.status == DocumentStatus.ACTIVE, 1), else_=0)).label(
+                    "published"
+                ),
+                func.sum(case((Document.status == DocumentStatus.APPROVED, 1), else_=0)).label(
+                    "approved"
+                ),
+                func.sum(case((Document.status == DocumentStatus.DRAFT, 1), else_=0)).label(
+                    "draft"
+                ),
+            )
+            .one()
+        )
+
+        return {
+            "total": int(stats_row.total or 0),
+            "published": int(stats_row.published or 0),
+            "approved": int(stats_row.approved or 0),
+            "draft": int(stats_row.draft or 0),
+        }
 
     def update_document(
         self,

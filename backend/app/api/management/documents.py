@@ -94,6 +94,15 @@ class GenerateWordRequest(BaseModel):
     filename: Optional[str] = None
 
 
+class DocumentStatsResponse(BaseModel):
+    """Dashboard summary counts for documents in current tenant scope."""
+
+    total: int
+    published: int
+    approved: int
+    draft: int
+
+
 def _apply_company_set_update(
     *,
     document_id: int,
@@ -230,6 +239,16 @@ def list_documents(
         page_size=page_size,
         pages=ceil(query_result.total / page_size) if query_result.total > 0 else 0,
     )
+
+
+@router.get("/documents/stats", response_model=DocumentStatsResponse)
+def get_document_stats(
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Get dashboard document counts for the current tenant/user scope."""
+    _ = current_user
+    return DocumentStatsResponse(**document_service.get_document_stats())
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
