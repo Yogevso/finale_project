@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import PageHeader from '@/components/PageHeader'
+import Skeleton from '@/components/Skeleton'
 
 interface DashboardBookmark {
   id: number
@@ -57,9 +58,11 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="eyebrow">{stat.label}</p>
-                <p className="text-3xl font-display font-bold text-slate-900 mt-1">
-                  {isLoading ? '...' : stat.value}
-                </p>
+                {isLoading ? (
+                  <Skeleton className="mt-1 h-9 w-16" />
+                ) : (
+                  <p className="text-3xl font-display font-bold text-slate-900 mt-1">{stat.value}</p>
+                )}
               </div>
               <div className="text-3xl">{stat.icon}</div>
             </div>
@@ -74,7 +77,11 @@ export default function DashboardPage() {
         </div>
         <div className="divide-y divide-slate-100">
           {isLoading ? (
-            <div className="p-6 text-center text-slate-500">Loading...</div>
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-4 w-44" />
+            </div>
           ) : documents?.items.length === 0 ? (
             <div className="p-6 text-center text-slate-500">No documents yet</div>
           ) : (
@@ -163,7 +170,11 @@ function BookmarksWidget() {
       </div>
       <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-slate-500">Loading...</div>
+          <div className="p-4 space-y-2">
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3 w-36" />
+          </div>
         ) : bookmarks.length === 0 ? (
           <div className="p-6 text-center text-slate-500">
             <div className="text-2xl mb-2">☆</div>
@@ -208,7 +219,11 @@ function ReadingProgressWidget() {
       </div>
       <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-slate-500">Loading...</div>
+          <div className="p-4 space-y-2">
+            <Skeleton className="h-3 w-44" />
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 w-40" />
+          </div>
         ) : inProgress.length === 0 && completed.length === 0 ? (
           <div className="p-6 text-center text-slate-500">
             <div className="text-2xl mb-2">📚</div>

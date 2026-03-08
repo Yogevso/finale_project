@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -13,11 +14,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+
+import PageHeader from '@/components/PageHeader'
 import { api } from '@/lib/api'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
-import PageHeader from '@/components/PageHeader'
 
-const NOTIFICATIONS_QUERY_KEY = ['notifications', 'all-page'] as const
+const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
+const NOTIFICATIONS_PAGE_SIZE = 20
 
 const getNotificationIcon = (type: NotificationType) => {
   switch (type) {
@@ -60,14 +63,26 @@ const formatTime = (dateString: string) => {
 export default function NotificationsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const hasMounted = useRef(false)
+  const currentLimit = page * NOTIFICATIONS_PAGE_SIZE
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
-    queryFn: () => api.getNotifications(false, 500),
+    queryFn: () => api.getNotifications(false, currentLimit),
   })
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true
+      return
+    }
+    void refetch()
+  }, [currentLimit, refetch])
 
   const notifications = data?.items || []
   const unreadCount = data?.unread_count || 0
+  const hasMore = (data?.total || 0) > notifications.length
 
   const setReadStatusInCache = (notificationId: number, isRead: boolean) => {
     queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
@@ -194,11 +209,7 @@ export default function NotificationsPage() {
         }
         actions={
           <>
-            <button
-              onClick={() => refetch()}
-              className="btn-ghost inline-flex items-center gap-2"
-              disabled={isFetching}
-            >
+            <button onClick={() => refetch()} className="btn-ghost inline-flex items-center gap-2" disabled={isFetching}>
               <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh
             </button>
@@ -246,103 +257,118 @@ export default function NotificationsPage() {
             <p className="text-sm">No notifications yet</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Status</th>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Notification</th>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Received</th>
-                <th className="text-right text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {notifications.map((notification) => (
-                <tr
-                  key={notification.id}
-                  className={`border-b border-slate-100 hover:bg-slate-50 ${
-                    notification.is_read ? 'bg-white' : 'bg-sky-50/60'
-                  }`}
-                >
-                  <td className="px-4 py-4 align-top">
-                    <span
-                      className={`pill ${
-                        notification.is_read
-                          ? 'bg-slate-100 text-slate-700 border-slate-200'
-                          : 'bg-sky-100 text-sky-700 border-sky-200'
-                      }`}
-                    >
-                      {notification.is_read ? 'Read' : 'Unread'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-start gap-3">
-                      <div className="pt-0.5 text-base">{getNotificationIcon(notification.type)}</div>
-                      <div className="min-w-0">
-                        <p
-                          className={`text-sm ${
-                            notification.is_read ? 'text-slate-800' : 'text-slate-900 font-semibold'
-                          }`}
-                        >
-                          {notification.title}
-                        </p>
-                        {notification.message && (
-                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notification.message}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top text-sm text-slate-600 whitespace-nowrap">
-                    {formatTime(notification.created_at)}
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="flex items-center justify-end gap-2">
-                      {notification.link && (
-                        <button
-                          onClick={() => openNotificationLink(notification)}
-                          className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-                          title="Open link"
-                          disabled={anyActionPending}
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
-                      )}
-                      {notification.is_read ? (
-                        <button
-                          onClick={() => markUnreadMutation.mutate(notification.id)}
-                          className="p-2 rounded-lg border border-slate-200 text-amber-700 hover:bg-amber-50"
-                          title="Mark as unread"
-                          disabled={anyActionPending}
-                        >
-                          <Mail className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => markReadMutation.mutate(notification.id)}
-                          className="p-2 rounded-lg border border-slate-200 text-emerald-700 hover:bg-emerald-50"
-                          title="Mark as read"
-                          disabled={anyActionPending}
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this notification?')) {
-                            deleteMutation.mutate(notification.id)
-                          }
-                        }}
-                        className="p-2 rounded-lg border border-slate-200 text-rose-700 hover:bg-rose-50"
-                        title="Delete notification"
-                        disabled={anyActionPending}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+          <>
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Status</th>
+                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Notification</th>
+                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Received</th>
+                  <th className="text-right text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {notifications.map((notification) => (
+                  <tr
+                    key={notification.id}
+                    className={`border-b border-slate-100 hover:bg-slate-50 ${
+                      notification.is_read ? 'bg-white' : 'bg-sky-50/60'
+                    }`}
+                  >
+                    <td className="px-4 py-4 align-top">
+                      <span
+                        className={`pill ${
+                          notification.is_read
+                            ? 'bg-slate-100 text-slate-700 border-slate-200'
+                            : 'bg-sky-100 text-sky-700 border-sky-200'
+                        }`}
+                      >
+                        {notification.is_read ? 'Read' : 'Unread'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-start gap-3">
+                        <div className="pt-0.5 text-base">{getNotificationIcon(notification.type)}</div>
+                        <div className="min-w-0">
+                          <p
+                            className={`text-sm ${
+                              notification.is_read ? 'text-slate-800' : 'text-slate-900 font-semibold'
+                            }`}
+                          >
+                            {notification.title}
+                          </p>
+                          {notification.message && (
+                            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notification.message}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-top text-sm text-slate-600 whitespace-nowrap">
+                      {formatTime(notification.created_at)}
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      <div className="flex items-center justify-end gap-2">
+                        {notification.link && (
+                          <button
+                            onClick={() => openNotificationLink(notification)}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
+                            title="Open link"
+                            disabled={anyActionPending}
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </button>
+                        )}
+                        {notification.is_read ? (
+                          <button
+                            onClick={() => markUnreadMutation.mutate(notification.id)}
+                            className="p-2 rounded-lg border border-slate-200 text-amber-700 hover:bg-amber-50"
+                            title="Mark as unread"
+                            disabled={anyActionPending}
+                          >
+                            <Mail className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => markReadMutation.mutate(notification.id)}
+                            className="p-2 rounded-lg border border-slate-200 text-emerald-700 hover:bg-emerald-50"
+                            title="Mark as read"
+                            disabled={anyActionPending}
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this notification?')) {
+                              deleteMutation.mutate(notification.id)
+                            }
+                          }}
+                          className="p-2 rounded-lg border border-slate-200 text-rose-700 hover:bg-rose-50"
+                          title="Delete notification"
+                          disabled={anyActionPending}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-4 py-4 border-t border-slate-200 bg-slate-50 flex justify-center">
+              {hasMore ? (
+                <button
+                  onClick={() => setPage((previous) => previous + 1)}
+                  className="btn-secondary"
+                  disabled={isFetching || anyActionPending}
+                >
+                  {isFetching ? 'Loading...' : 'Load more'}
+                </button>
+              ) : (
+                <p className="text-sm text-slate-500">Showing all notifications</p>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>

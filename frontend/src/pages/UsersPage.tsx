@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import {
   Search,
   Plus,
@@ -18,6 +19,7 @@ import {
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
 import PageHeader from '@/components/PageHeader'
+import Skeleton from '@/components/Skeleton'
 
 type UserCreateFormData = {
   email: string
@@ -42,7 +44,8 @@ export default function UsersPage() {
   const { isAdmin, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const debouncedSearch = useDebouncedValue(searchInput, 300)
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('')
   const [companyFilter, setCompanyFilter] = useState<number | ''>('')
   const [statusFilter, setStatusFilter] = useState<boolean | ''>('')
@@ -51,12 +54,12 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
 
   const { data: users, isLoading, error } = useQuery({
-    queryKey: ['users', roleFilter, companyFilter, statusFilter, search],
+    queryKey: ['users', roleFilter, companyFilter, statusFilter, debouncedSearch],
     queryFn: () => api.getUsers({
       role: roleFilter || undefined,
       company_id: companyFilter || undefined,
       is_active: statusFilter === '' ? undefined : statusFilter,
-      search: search || undefined,
+      search: debouncedSearch || undefined,
     }),
     enabled: isAdmin,
   })
@@ -174,7 +177,7 @@ export default function UsersPage() {
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">
             <span className="admin-summary-badge">
-              {isLoading ? 'Loading...' : `${totalUsers} users`}
+              {isLoading ? <Skeleton className="h-4 w-20" /> : `${totalUsers} users`}
             </span>
             {pendingInvitations.length > 0 && (
               <span className="pill bg-amber-50 border-amber-200 text-amber-700">
@@ -188,8 +191,8 @@ export default function UsersPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search users..."
                 className="input-field pl-10"
               />
@@ -253,7 +256,11 @@ export default function UsersPage() {
               {isLoading ? (
                 <tr className="admin-table-row">
                   <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                    Loading users...
+                    <div className="space-y-3">
+                      <Skeleton className="h-4 w-44 mx-auto" />
+                      <Skeleton className="h-4 w-36 mx-auto" />
+                      <Skeleton className="h-4 w-40 mx-auto" />
+                    </div>
                   </td>
                 </tr>
               ) : error ? (

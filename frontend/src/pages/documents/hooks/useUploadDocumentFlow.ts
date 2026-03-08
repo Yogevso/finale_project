@@ -13,6 +13,7 @@ import {
 import { useAuth } from '@/lib/auth'
 import type { DocumentVisibility } from '@/types'
 import { queryKeys } from '@/lib/queryKeys'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 export const ACCEPTED_FILE_TYPES = DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES
 
@@ -20,6 +21,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
   const defaultVisibility = getDefaultAudienceForRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -78,12 +80,14 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
       }),
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document uploaded', 'Opening the document...')
       onClose()
       navigate(`/documents/${doc.id}/fullscreen`)
     },
     onError: (err: unknown) => {
-      const apiError = err as { response?: { data?: { detail?: string } } }
-      setError(apiError.response?.data?.detail || 'Failed to upload document')
+      const message = extractApiErrorMessage(err, 'Failed to upload document')
+      setError(message)
+      toast.error('Upload failed', message)
     },
   })
 
