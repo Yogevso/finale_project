@@ -150,7 +150,12 @@ def login(
             )
 
     try:
-        token_response = auth_service.login(credentials.username, credentials.password)
+        token_response = auth_service.login(
+            credentials.username,
+            credentials.password,
+            client_ip=client_ip,
+            user_agent=request.headers.get("user-agent"),
+        )
     except HTTPException as exc:
         if (
             settings.RATE_LIMIT_ENABLED

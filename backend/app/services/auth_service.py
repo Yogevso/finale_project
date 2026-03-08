@@ -7,8 +7,9 @@ from typing import Optional
 from fastapi import HTTPException, status
 
 from app.auth_context import RefreshTokenService, TokenService
+from app.auth_context.session_tokens import hash_session_identifier
 from app.config import settings
-from app.models import PasswordReset, Tenant, User, UserRole
+from app.models import PasswordReset, SecurityEvent, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
 from app.schemas import TokenResponse, UserCreate
 from app.security import get_password_hash, verify_password
@@ -184,6 +185,7 @@ class AuthService(SessionService):
             PasswordReset.user_id == user.id,
             PasswordReset.used_at.is_(None),
         ).update({"used_at": now})
+        self.db.add(SecurityEvent(user_id=user.id, event_type="password_reset"))
         self.db.commit()
 
     def unlock_user_account(self, user_id: int) -> None:
@@ -211,7 +213,59 @@ class AuthService(SessionService):
 
         return user
 
-    def login(self, username: str, password: str) -> TokenResponse:
+    @staticmethod
+    def _normalize_user_agent(user_agent: str | None) -> str | None:
+        if user_agent is None:
+            return None
+        normalized = user_agent.strip()
+        if not normalized:
+            return None
+        return normalized[:512]
+
+    def _record_login_context(
+        self,
+        *,
+        user: User,
+        client_ip: str | None,
+        user_agent: str | None,
+    ) -> None:
+        normalized_ip = (client_ip or "").strip() or None
+        normalized_user_agent = self._normalize_user_agent(user_agent)
+
+        has_prior_login = bool(user.last_login_ip or user.last_login_user_agent)
+        ip_changed = user.last_login_ip != normalized_ip
+        user_agent_changed = user.last_login_user_agent != normalized_user_agent
+
+        self.db.add(
+            SecurityEvent(
+                user_id=user.id,
+                event_type="login",
+                ip_address=normalized_ip,
+                user_agent=normalized_user_agent,
+            )
+        )
+
+        if has_prior_login and (ip_changed or user_agent_changed):
+            self.db.add(
+                SecurityEvent(
+                    user_id=user.id,
+                    event_type="new_device_login",
+                    ip_address=normalized_ip,
+                    user_agent=normalized_user_agent,
+                )
+            )
+
+        user.last_login_ip = normalized_ip
+        user.last_login_user_agent = normalized_user_agent
+
+    def login(
+        self,
+        username: str,
+        password: str,
+        *,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> TokenResponse:
         """Login user and return JWT token with refresh token"""
         user = self.user_repository.get_by_username(username)
         if user is None:
@@ -257,15 +311,33 @@ class AuthService(SessionService):
                 detail="email_not_verified",
             )
 
+        self._record_login_context(user=user, client_ip=client_ip, user_agent=user_agent)
+        session_identifier = secrets.token_urlsafe(32)
+        now = datetime.utcnow()
+        self.db.add(
+            UserSession(
+                user_id=user.id,
+                session_token_hash=hash_session_identifier(session_identifier),
+                ip_address=(client_ip or "").strip() or None,
+                user_agent=self._normalize_user_agent(user_agent),
+                created_at=now,
+                last_active_at=now,
+            )
+        )
+
         # Create access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = self.token_service.create_access_token_for_user(
             user,
             expires_delta=access_token_expires,
+            session_identifier=session_identifier,
         )
 
         # Create refresh token
-        refresh_token, _ = self.refresh_token_service.issue_refresh_token(user.id)
+        refresh_token, _ = self.refresh_token_service.issue_refresh_token(
+            user.id,
+            session_identifier=session_identifier,
+        )
 
         return TokenResponse(
             access_token=access_token, refresh_token=refresh_token, token_type="bearer"
@@ -292,9 +364,11 @@ class AuthService(SessionService):
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        session_identifier = self.refresh_token_service.parse_session_identifier(refresh_token)
         access_token = self.token_service.create_access_token_for_user(
             user,
             expires_delta=access_token_expires,
+            session_identifier=session_identifier,
         )
 
         return TokenResponse(access_token=access_token, token_type="bearer")
@@ -348,4 +422,5 @@ class AuthService(SessionService):
 
         # Update password
         user.hashed_password = get_password_hash(new_password)
+        self.db.add(SecurityEvent(user_id=user.id, event_type="password_changed"))
         self.db.commit()

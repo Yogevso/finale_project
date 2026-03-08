@@ -28,23 +28,28 @@ class AccessTokenContract:
     username: str
     role: str
     tenant_id: int | None
+    sid: str | None = None
 
     @classmethod
-    def from_user(cls, user: User) -> "AccessTokenContract":
+    def from_user(cls, user: User, *, session_identifier: str | None = None) -> "AccessTokenContract":
         return cls(
             sub=str(user.id),
             username=user.username,
             role=_serialize_role(user.role),
             tenant_id=user.tenant_id,
+            sid=session_identifier,
         )
 
     def to_payload(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "sub": self.sub,
             "username": self.username,
             "role": self.role,
             "tenant_id": self.tenant_id,
         }
+        if self.sid:
+            payload["sid"] = self.sid
+        return payload
 
 
 @dataclass(frozen=True)

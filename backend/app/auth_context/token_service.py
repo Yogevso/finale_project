@@ -45,8 +45,9 @@ class TokenService:
         user: User,
         *,
         expires_delta: timedelta | None = None,
+        session_identifier: str | None = None,
     ) -> str:
-        claims = AccessTokenContract.from_user(user)
+        claims = AccessTokenContract.from_user(user, session_identifier=session_identifier)
         return self.create_access_token(claims.to_payload(), expires_delta=expires_delta)
 
     def verify_token(self, token: str) -> dict[str, Any] | None:

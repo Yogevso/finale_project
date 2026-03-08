@@ -57,6 +57,41 @@ export interface UserUpdate {
   tenant_id?: number
 }
 
+export interface UserSession {
+  id: number
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at: string
+  last_active_at: string
+  is_current: boolean
+}
+
+export interface UserSessionListResponse {
+  items: UserSession[]
+  total: number
+}
+
+export interface SessionBulkRevokeResponse {
+  message: string
+  revoked_count: number
+}
+
+export interface SecurityEvent {
+  id: number
+  event_type: string
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at: string
+}
+
+export interface SecurityEventListResponse {
+  items: SecurityEvent[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
 // Auth types
 export interface LoginRequest {
   username: string

@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.auth_context.refresh_token_service import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     RefreshTokenService,
 )
+from app.auth_context.session_tokens import hash_session_identifier
 from app.auth_context.token_service import TokenService
 from app.config import settings
 from app.db import get_db
@@ -55,9 +56,13 @@ def verify_token(token: str) -> Optional[dict]:
     return _token_service.verify_token(token)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     """Dependency to get current authenticated user"""
-    from app.models import User  # Import here to avoid circular dependency
+    from app.models import User, UserSession  # Import here to avoid circular dependency
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -76,6 +81,34 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(User).filter(User.id == int(user_id)).first()
     if user is None:
         raise credentials_exception
+
+    session_identifier = payload.get("sid")
+    if isinstance(session_identifier, str) and session_identifier.strip():
+        now = datetime.utcnow()
+        inactivity_cutoff = now - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
+        session_hash = hash_session_identifier(session_identifier)
+        user_session = (
+            db.query(UserSession)
+            .filter(
+                UserSession.user_id == user.id,
+                UserSession.session_token_hash == session_hash,
+            )
+            .first()
+        )
+        if (
+            user_session is None
+            or user_session.revoked_at is not None
+            or user_session.last_active_at < inactivity_cutoff
+        ):
+            raise credentials_exception
+
+        user_session.last_active_at = now
+        db.commit()
+        request.state.current_session_hash = session_hash
+        request.state.current_session_id = user_session.id
+    else:
+        request.state.current_session_hash = None
+        request.state.current_session_id = None
 
     return user
 

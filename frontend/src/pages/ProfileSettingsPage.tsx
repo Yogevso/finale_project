@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import AvatarUpload from '@/components/AvatarUpload'
 import NotificationPreferences from '@/components/NotificationPreferences'
 import PageHeader from '@/components/PageHeader'
+import ProfileSettingsNav from '@/components/ProfileSettingsNav'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useToast } from '@/lib/toast'
@@ -48,6 +49,8 @@ export default function ProfileSettingsPage() {
         title="Profile Settings"
         subtitle="Manage your profile information and personal preferences."
       />
+
+      <ProfileSettingsNav />
 
       <div className="surface-card rounded-2xl p-6 space-y-5">
         <h3 className="text-lg font-display font-semibold text-slate-900">Profile</h3>

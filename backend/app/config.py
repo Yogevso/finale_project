@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     AUDIENCE_ASSIGNMENT_SCHEMA_VERSION: str = "1.0.0"
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
+    SESSION_INACTIVITY_DAYS: int = 30
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

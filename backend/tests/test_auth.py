@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from app.config import settings
+from app.models import SecurityEvent
 from app.services.auth_rate_limit_service import AuthRateLimitService
 
 
@@ -384,3 +385,59 @@ def test_login_lockout_then_auto_unlock_after_window(client, test_user, monkeypa
     )
     assert unlocked_response.status_code == 200
     assert "access_token" in unlocked_response.json()
+
+
+def test_login_anomaly_detection_records_security_event(client, test_user, db, monkeypatch):
+    """Successful logins from new IP/device should create a security event."""
+    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
+    monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", ["testclient"])
+
+    initial_headers = {"x-forwarded-for": "10.10.0.1", "user-agent": "BrowserA/1.0"}
+    same_headers = {"x-forwarded-for": "10.10.0.1", "user-agent": "BrowserA/1.0"}
+    changed_headers = {"x-forwarded-for": "10.10.0.2", "user-agent": "BrowserA/1.0"}
+
+    first_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=initial_headers,
+    )
+    assert first_login.status_code == 200
+
+    db.refresh(test_user)
+    assert test_user.last_login_ip == "10.10.0.1"
+    assert test_user.last_login_user_agent == "BrowserA/1.0"
+    assert (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .count()
+        == 0
+    )
+
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=same_headers,
+    )
+    assert second_login.status_code == 200
+    assert (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .count()
+        == 0
+    )
+
+    third_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers=changed_headers,
+    )
+    assert third_login.status_code == 200
+
+    events = (
+        db.query(SecurityEvent)
+        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .all()
+    )
+    assert len(events) == 1
+    assert events[0].ip_address == "10.10.0.2"
+    assert events[0].user_agent == "BrowserA/1.0"

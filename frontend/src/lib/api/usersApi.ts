@@ -1,4 +1,10 @@
-import type { User, UserRole } from '@/types'
+import type {
+  SecurityEventListResponse,
+  SessionBulkRevokeResponse,
+  User,
+  UserRole,
+  UserSessionListResponse,
+} from '@/types'
 import {
   type UserCreateDto,
   type UserDto,
@@ -79,6 +85,31 @@ export const UsersApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TB
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
       )
+      return data
+    }
+
+    async getMySessions(): Promise<UserSessionListResponse> {
+      const { data } = await this.client.get<UserSessionListResponse>('/users/me/sessions')
+      return data
+    }
+
+    async revokeMySession(sessionId: number): Promise<{ message: string }> {
+      const { data } = await this.client.delete<{ message: string }>(`/users/me/sessions/${sessionId}`)
+      return data
+    }
+
+    async revokeAllMyOtherSessions(): Promise<SessionBulkRevokeResponse> {
+      const { data } = await this.client.delete<SessionBulkRevokeResponse>('/users/me/sessions')
+      return data
+    }
+
+    async getMySecurityEvents(params?: {
+      page?: number
+      page_size?: number
+    }): Promise<SecurityEventListResponse> {
+      const { data } = await this.client.get<SecurityEventListResponse>('/users/me/security-events', {
+        params,
+      })
       return data
     }
 

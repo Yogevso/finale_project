@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import io
+from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.dependencies.permissions import require_admin
 from app.dependencies.services import get_auth_service
 from app.dependencies.tenant import TenantContext, get_tenant_context
-from app.models import User, UserRole
+from app.models import SecurityEvent, User, UserRole, UserSession
 from app.schemas import MessageResponse, UserCreate, UserUpdate, UserWithCompanyResponse
 from app.security import get_current_active_user
 from app.services.auth_service import AuthService
@@ -43,6 +45,41 @@ class NotificationPreferencesResponse(BaseModel):
 class AvatarUploadResponse(BaseModel):
     avatar_url: str
     message: str
+
+
+class UserSessionResponse(BaseModel):
+    id: int
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+    last_active_at: datetime
+    is_current: bool
+
+
+class UserSessionListResponse(BaseModel):
+    items: list[UserSessionResponse]
+    total: int
+
+
+class SessionBulkRevokeResponse(BaseModel):
+    message: str
+    revoked_count: int
+
+
+class SecurityEventResponse(BaseModel):
+    id: int
+    event_type: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+
+
+class SecurityEventListResponse(BaseModel):
+    items: list[SecurityEventResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 @router.get("/users", response_model=list[UserWithCompanyResponse])
@@ -157,6 +194,140 @@ def upload_my_avatar(
     return AvatarUploadResponse(
         avatar_url=avatar_url,
         message="Avatar uploaded successfully",
+    )
+
+
+@router.get("/users/me/sessions", response_model=UserSessionListResponse)
+def list_my_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """List active, non-revoked user sessions ordered by latest activity."""
+    inactivity_cutoff = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
+    sessions = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == current_user.id,
+            UserSession.revoked_at.is_(None),
+            UserSession.last_active_at >= inactivity_cutoff,
+        )
+        .order_by(UserSession.last_active_at.desc())
+        .all()
+    )
+    current_session_id = getattr(request.state, "current_session_id", None)
+    return UserSessionListResponse(
+        items=[
+            UserSessionResponse(
+                id=session.id,
+                ip_address=session.ip_address,
+                user_agent=session.user_agent,
+                created_at=session.created_at,
+                last_active_at=session.last_active_at,
+                is_current=session.id == current_session_id,
+            )
+            for session in sessions
+        ],
+        total=len(sessions),
+    )
+
+
+@router.delete("/users/me/sessions/{session_id}", response_model=MessageResponse)
+def revoke_my_session(
+    session_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Revoke a single active session by id for the current user."""
+    user_session = (
+        db.query(UserSession)
+        .filter(
+            UserSession.id == session_id,
+            UserSession.user_id == current_user.id,
+            UserSession.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if user_session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    user_session.revoked_at = datetime.utcnow()
+    db.add(
+        SecurityEvent(
+            user_id=current_user.id,
+            event_type="session_revoked",
+            ip_address=user_session.ip_address,
+            user_agent=user_session.user_agent,
+        )
+    )
+    db.commit()
+    return MessageResponse(message="Session revoked")
+
+
+@router.delete("/users/me/sessions", response_model=SessionBulkRevokeResponse)
+def revoke_all_other_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Revoke all active sessions for the current user except current session."""
+    now = datetime.utcnow()
+    current_session_id = getattr(request.state, "current_session_id", None)
+    query = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.revoked_at.is_(None),
+    )
+    if current_session_id is not None:
+        query = query.filter(UserSession.id != current_session_id)
+
+    revoked_count = query.update({UserSession.revoked_at: now}, synchronize_session=False)
+    if revoked_count > 0:
+        db.add(
+            SecurityEvent(
+                user_id=current_user.id,
+                event_type="sessions_revoked_all",
+            )
+        )
+    db.commit()
+    return SessionBulkRevokeResponse(
+        message="All other sessions revoked",
+        revoked_count=revoked_count,
+    )
+
+
+@router.get("/users/me/security-events", response_model=SecurityEventListResponse)
+def list_my_security_events(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """List paginated security events for the current user (newest first)."""
+    query = db.query(SecurityEvent).filter(SecurityEvent.user_id == current_user.id)
+    total = query.count()
+    pages = (total + page_size - 1) // page_size if total > 0 else 0
+    events = (
+        query.order_by(SecurityEvent.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return SecurityEventListResponse(
+        items=[
+            SecurityEventResponse(
+                id=event.id,
+                event_type=event.event_type,
+                ip_address=event.ip_address,
+                user_agent=event.user_agent,
+                created_at=event.created_at,
+            )
+            for event in events
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages,
     )
 
 
