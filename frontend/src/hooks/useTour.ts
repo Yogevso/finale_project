@@ -10,15 +10,17 @@ type UseTourResult = {
 export function useTour(tourKey: string, steps: Step[]): UseTourResult {
   const completionStorageKey = useMemo(() => `tour-completed-${tourKey}`, [tourKey])
   const [run, setRun] = useState(false)
+  const isTestMode = import.meta.env.MODE === 'test'
+  const isAutomatedBrowser = typeof navigator !== 'undefined' && navigator.webdriver
 
   useEffect(() => {
-    if (steps.length === 0) {
+    if (steps.length === 0 || isTestMode || isAutomatedBrowser) {
       setRun(false)
       return
     }
     const completed = window.localStorage.getItem(completionStorageKey) === '1'
     setRun(!completed)
-  }, [completionStorageKey, steps.length])
+  }, [completionStorageKey, isAutomatedBrowser, isTestMode, steps.length])
 
   const onJoyrideCallback = useCallback(
     (data: CallBackProps) => {

@@ -18,7 +18,7 @@ test.describe('Mobile navigation', () => {
     await expect(page.getByRole('button', { name: /close navigation menu/i })).toBeVisible()
 
     const documentsLink = page
-      .locator('a[href="/documents"]')
+      .locator('a[href="/documents"]:visible')
       .filter({ hasText: 'Documents' })
       .first()
     await expect(documentsLink).toBeVisible()
