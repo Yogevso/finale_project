@@ -8,10 +8,13 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.dependencies.permissions import require_admin
+from app.dependencies.services import get_auth_service
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import User, UserRole
-from app.schemas import UserCreate, UserUpdate, UserWithCompanyResponse
+from app.schemas import MessageResponse, UserCreate, UserUpdate, UserWithCompanyResponse
 from app.security import get_current_active_user
+from app.services.auth_service import AuthService
 from app.web.controllers.management import UsersController
 
 router = APIRouter()
@@ -120,3 +123,15 @@ def check_company_binding(
         tenant_ctx=tenant_ctx,
         db=db,
     )
+
+
+@router.post("/admin/users/{user_id}/unlock", response_model=MessageResponse)
+def unlock_user_account(
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Admin unlock endpoint for account lockout recovery."""
+    _ = current_user
+    auth_service.unlock_user_account(user_id)
+    return MessageResponse(message="User account unlocked")

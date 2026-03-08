@@ -177,6 +177,7 @@ def test_logout(client, auth_headers, test_user):
 def test_login_rate_limited_by_ip_and_username(client, test_user, monkeypatch):
     """Rapid failed logins should be rate-limited per ip+username key."""
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(settings, "ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 999)
     AuthRateLimitService.reset()
 
     headers = {"x-forwarded-for": "127.0.0.10"}

@@ -143,6 +143,31 @@ class EmailService:
         ).render(to_email=to_email)
         return await self.send_message(message)
 
+    async def send_email_verification(
+        self,
+        to_email: str,
+        verification_url: str,
+        expires_minutes: int = 24 * 60,
+    ) -> bool:
+        """Send email-verification link."""
+        subject = "Verify your email address"
+        text_content = (
+            "Please verify your email address by opening the following link:\n"
+            f"{verification_url}\n\n"
+            f"This link expires in {expires_minutes} minutes."
+        )
+        html_content = (
+            "<p>Please verify your email address by opening the link below:</p>"
+            f'<p><a href="{verification_url}">{verification_url}</a></p>'
+            f"<p>This link expires in {expires_minutes} minutes.</p>"
+        )
+        return await self.send_email(
+            to_email=to_email,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_content,
+        )
+
     async def send_welcome(
         self,
         to_email: str,

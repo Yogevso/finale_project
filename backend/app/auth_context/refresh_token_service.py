@@ -49,6 +49,10 @@ class RefreshTokenService:
         return refresh_token, expires_at
 
     def find_valid_record(self, refresh_token: str) -> PasswordReset | None:
+        # Keep refresh-token and password-reset/email-verification token families isolated.
+        if refresh_token.startswith("pr_") or refresh_token.startswith("ev_"):
+            return None
+
         now = datetime.utcnow()
         refresh_records = (
             self.db.query(PasswordReset)

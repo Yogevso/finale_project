@@ -112,6 +112,7 @@ class UsersController:
             role=user_data.role,
             tenant_id=target_tenant_id,
             is_active=True,
+            is_email_verified=True,
         )
         db.add(user)
         db.commit()

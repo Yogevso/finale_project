@@ -45,6 +45,7 @@ def build_user(
     hashed_password: str | None = None,
     tenant_id: int | None = None,
     is_active: bool = True,
+    is_email_verified: bool = True,
 ) -> User:
     suffix = _unique_suffix()
     resolved_username = username or f"user-{suffix}"
@@ -57,6 +58,7 @@ def build_user(
         role=role,
         tenant_id=tenant_id,
         is_active=is_active,
+        is_email_verified=is_email_verified,
     )
 
 

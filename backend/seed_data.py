@@ -168,6 +168,7 @@ def create_users(db, tenants):
                 hashed_password=get_password_hash(user_data["password"]),
                 role=user_data["role"],
                 is_active=True,
+                is_email_verified=True,
                 tenant_id=user_data["tenant"].id
             )
             db.add(user)
