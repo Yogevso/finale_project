@@ -17,6 +17,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 const ProfileSettingsPage = lazy(() => import('./pages/ProfileSettingsPage'))
 const SessionsPage = lazy(() => import('./pages/SessionsPage'))
 const SecurityEventsPage = lazy(() => import('./pages/SecurityEventsPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
@@ -140,6 +141,14 @@ function App() {
           element={(
             <ErrorBoundary>
               <LoginPage />
+            </ErrorBoundary>
+          )}
+        />
+        <Route
+          path="/reset-password"
+          element={(
+            <ErrorBoundary>
+              <ResetPasswordPage />
             </ErrorBoundary>
           )}
         />
