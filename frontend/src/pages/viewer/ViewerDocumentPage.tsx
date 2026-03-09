@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
 import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
 import { api } from '@/lib/api'
+import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type {
   Attachment,
@@ -183,6 +184,7 @@ export default function ViewerDocumentPage() {
     selectedVersion && hasRenderableContent(selectedVersion.content) ? selectedVersion.content : ''
   const content = typeof contentSource === 'string' ? contentSource : ''
   const isHtmlContent = /<\/?[a-z][\s\S]*>/i.test(content)
+  const renderedContent = useMemo(() => parseDocumentHtml(content), [content])
   const versionLabel = (version: { semantic_version?: string | null; version_number?: number }) =>
     version?.semantic_version || `${version?.version_number || 1}.0.0`
   const documentPaperClass =
@@ -309,10 +311,7 @@ export default function ViewerDocumentPage() {
           <div className="prose prose-lg max-w-none mb-8">
             {content ? (
               isHtmlContent ? (
-                <div
-                  className="document-preview-content"
-                  dangerouslySetInnerHTML={{ __html: content }}
-                />
+                <div className="document-preview-content">{renderedContent}</div>
               ) : (
                 <div className="whitespace-pre-wrap text-slate-700">{content}</div>
               )
@@ -506,10 +505,7 @@ export default function ViewerDocumentPage() {
             ) : showTextMode && content ? (
               isHtmlContent ? (
                 <div className={documentPaperClass}>
-                  <div
-                    className="document-preview-content"
-                    dangerouslySetInnerHTML={{ __html: content }}
-                  />
+                  <div className="document-preview-content">{renderedContent}</div>
                 </div>
               ) : (
                 <div className="prose prose-lg max-w-none">

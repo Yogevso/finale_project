@@ -1,4 +1,4 @@
-import type { MessageResponse } from '@/types'
+import type { MessageResponse, SavedSearch } from '@/types'
 import {
   type BookmarkDto,
   type BookmarkStatusDto,
@@ -60,7 +60,7 @@ export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient
       return mapSearchFacetsResponseDto(data)
     }
 
-    async getSavedSearches(): Promise<SavedSearchDto[]> {
+    async getSavedSearches(): Promise<SavedSearch[]> {
       const { data } = await this.client.get<SavedSearchDto[]>('/search/saved')
       return mapSavedSearchesDto(data)
     }
@@ -69,7 +69,9 @@ export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient
       name: string
       query?: string
       category?: string
-    }): Promise<SavedSearchDto> {
+      date_from?: string | null
+      date_to?: string | null
+    }): Promise<SavedSearch> {
       const payload = toSavedSearchCreateDto(search as SavedSearchCreateDto)
       const { data } = await this.client.post<SavedSearchDto>(
         '/search/saved',

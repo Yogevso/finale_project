@@ -11,6 +11,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     createVersion: vi.fn(),
     getDocument: vi.fn(),
+    getVersion: vi.fn(),
+    getVersions: vi.fn(),
     updateDocument: vi.fn(),
     submitForReview: vi.fn(),
   },
@@ -115,6 +117,17 @@ describe('useContentEditingFlow', () => {
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
     mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 70,
+          content: '<h2>Introduction</h2><p>Body</p>',
+          created_at: '2026-03-09T00:00:00.000Z',
+          is_published: true,
+          published_at: '2026-03-09T00:00:00.000Z',
+        },
+      ],
+    } as never)
     mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 

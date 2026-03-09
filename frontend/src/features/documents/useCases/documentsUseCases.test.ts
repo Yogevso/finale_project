@@ -10,11 +10,14 @@ import {
 
 function createClientMocks(): DocumentsUseCasesClient {
   return {
+    archiveDocument: vi.fn(),
     createDocument: vi.fn(),
     createVersion: vi.fn(),
     deleteDocument: vi.fn(),
     generateWordAttachment: vi.fn(),
+    getDocumentCalendarExport: vi.fn(),
     getDocuments: vi.fn(),
+    restoreDocument: vi.fn(),
     updateDocument: vi.fn(),
     uploadDocument: vi.fn(),
   }
@@ -28,6 +31,10 @@ describe('documents use cases', () => {
       search: '',
       statusFilter: '',
       visibilityFilter: '',
+      categoryFilter: '',
+      companyIdFilter: null,
+      dateFrom: '',
+      dateTo: '',
     })
 
     expect(params).toEqual({
@@ -36,6 +43,10 @@ describe('documents use cases', () => {
       search: undefined,
       status: undefined,
       visibility: undefined,
+      category: undefined,
+      company_id: undefined,
+      date_from: undefined,
+      date_to: undefined,
     })
   })
 

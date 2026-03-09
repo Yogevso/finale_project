@@ -20,7 +20,12 @@ from app.application.queries.dependencies import (
     get_analytics_query_handler,
     get_system_analytics_query_handler,
 )
-from app.dependencies.permissions import require_admin, require_manager, require_system_admin
+from app.dependencies.permissions import (
+    require_admin,
+    require_internal_user,
+    require_manager,
+    require_system_admin,
+)
 from app.dependencies.services import get_analytics_service
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.models import User
@@ -101,14 +106,14 @@ def get_analytics_overview(
 @router.get("/recent-activity")
 def get_recent_activity(
     limit: int = Query(10, ge=1, le=50, description="Number of items to return"),
-    current_user: User = Depends(require_manager),
+    current_user: User = Depends(require_internal_user),
     analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
 ):
     """
     Get recent activity feed.
 
-    Requires: MANAGER role or above.
-    Returns the most recent actions in the system.
+    Requires: any internal user.
+    Returns the most recent actions in the current tenant/system scope.
     """
     return analytics_query_handler.execute_recent_activity(RecentActivityQuery(limit=limit))
 

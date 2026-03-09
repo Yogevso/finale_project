@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Edit3, Save, Send, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Edit3, RefreshCw, Save, Send, X } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -8,18 +8,54 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
+import DraftRecoveryNotice from '@/components/DraftRecoveryNotice'
+import VersionDiffView from '@/components/VersionDiffView'
+import {
+  clearDraftRecovery,
+  isDraftRecoveryDifferent,
+  loadDraftRecovery,
+  saveDraftRecovery,
+} from '@/lib/draftRecovery'
 import type { SectionEditTarget } from '@/pages/document-detail/helpers/previewHelpers'
+import type { SectionSaveResult } from '@/pages/document-detail/hooks/useContentEditingFlow'
 
 interface SectionEditPopupProps {
+  documentId: number
   section: SectionEditTarget
   onClose: () => void
-  onSave: (newHtml: string, submitForReview: boolean) => Promise<void>
+  onSave: (
+    newHtml: string,
+    submitForReview: boolean,
+    options?: { force?: boolean; comparisonHtml?: string },
+  ) => Promise<SectionSaveResult>
   onBack?: () => void
 }
 
-export function SectionEditPopup({ section, onClose, onSave, onBack }: SectionEditPopupProps) {
+type ConflictState = Extract<SectionSaveResult, { status: 'conflict' }>
+
+export function SectionEditPopup({
+  documentId,
+  section,
+  onClose,
+  onSave,
+  onBack,
+}: SectionEditPopupProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [submitForReview, setSubmitForReview] = useState(true)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [baselineHtml, setBaselineHtml] = useState(section.html)
+  const [restorableDraftSavedAt, setRestorableDraftSavedAt] = useState<string | null>(null)
+  const [conflictState, setConflictState] = useState<ConflictState | null>(null)
+  const hasPendingRecoveredDraftRef = useRef(false)
+
+  const draftRecoveryTarget = useMemo(
+    () => ({
+      documentId,
+      sectionId: section.id,
+      editMode: section.editMode,
+    }),
+    [documentId, section.editMode, section.id],
+  )
 
   const editor = useEditor({
     extensions: [
@@ -43,17 +79,147 @@ export function SectionEditPopup({ section, onClose, onSave, onBack }: SectionEd
     },
   })
 
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+
+    const recoveredDraft = loadDraftRecovery(draftRecoveryTarget)
+    if (recoveredDraft && isDraftRecoveryDifferent(recoveredDraft.html, baselineHtml)) {
+      hasPendingRecoveredDraftRef.current = true
+      setRestorableDraftSavedAt(recoveredDraft.savedAt)
+      return
+    }
+
+    hasPendingRecoveredDraftRef.current = false
+    setRestorableDraftSavedAt(null)
+  }, [baselineHtml, draftRecoveryTarget, editor])
+
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+
+    let isInitialPersist = true
+    const persistDraft = () => {
+      const currentHtml = editor.getHTML()
+
+      if (
+        isInitialPersist &&
+        hasPendingRecoveredDraftRef.current &&
+        !isDraftRecoveryDifferent(currentHtml, baselineHtml)
+      ) {
+        isInitialPersist = false
+        return
+      }
+      isInitialPersist = false
+
+      if (isDraftRecoveryDifferent(currentHtml, baselineHtml)) {
+        saveDraftRecovery(draftRecoveryTarget, {
+          html: currentHtml,
+          baseHtml: baselineHtml,
+          savedAt: new Date().toISOString(),
+        })
+        return
+      }
+
+      clearDraftRecovery(draftRecoveryTarget)
+    }
+
+    persistDraft()
+    editor.on('update', persistDraft)
+
+    return () => {
+      editor.off('update', persistDraft)
+    }
+  }, [baselineHtml, draftRecoveryTarget, editor])
+
+  const handleRestoreDraft = () => {
+    if (!editor) {
+      return
+    }
+
+    const recoveredDraft = loadDraftRecovery(draftRecoveryTarget)
+    if (!recoveredDraft) {
+      setRestorableDraftSavedAt(null)
+      return
+    }
+
+    editor.commands.setContent(recoveredDraft.html)
+    hasPendingRecoveredDraftRef.current = false
+    setRestorableDraftSavedAt(null)
+    setConflictState(null)
+    setSaveError(null)
+  }
+
+  const handleDismissDraft = () => {
+    hasPendingRecoveredDraftRef.current = false
+    clearDraftRecovery(draftRecoveryTarget)
+    setRestorableDraftSavedAt(null)
+  }
+
   const handleSave = async () => {
     if (!editor) return
     setIsSaving(true)
+    setSaveError(null)
     try {
-      await onSave(editor.getHTML(), submitForReview)
+      const result = await onSave(editor.getHTML(), submitForReview, {
+        comparisonHtml: baselineHtml,
+      })
+      if (result.status === 'conflict') {
+        setConflictState(result)
+        return
+      }
+
+      hasPendingRecoveredDraftRef.current = false
+      clearDraftRecovery(draftRecoveryTarget)
       onClose()
     } catch (error) {
-      console.error('Failed to save section:', error)
+      setSaveError(error instanceof Error ? error.message : 'Failed to save section')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handleForceSaveAfterConflict = async () => {
+    if (!editor) {
+      return
+    }
+
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const result = await onSave(editor.getHTML(), submitForReview, {
+        force: true,
+        comparisonHtml: baselineHtml,
+      })
+      if (result.status === 'conflict') {
+        setConflictState(result)
+        return
+      }
+
+      hasPendingRecoveredDraftRef.current = false
+      clearDraftRecovery(draftRecoveryTarget)
+      onClose()
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save section')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleUseLiveVersion = () => {
+    if (!editor || !conflictState) {
+      return
+    }
+
+    editor.commands.setContent(conflictState.liveEditorHtml)
+    setBaselineHtml(conflictState.liveEditorHtml)
+    hasPendingRecoveredDraftRef.current = false
+    clearDraftRecovery(draftRecoveryTarget)
+    setConflictState(null)
+    setRestorableDraftSavedAt(null)
+    setSaveError(null)
   }
 
   const popupTitle =
@@ -78,6 +244,24 @@ export function SectionEditPopup({ section, onClose, onSave, onBack }: SectionEd
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {restorableDraftSavedAt && (
+          <div className="px-6 pt-6">
+            <DraftRecoveryNotice
+              savedAt={restorableDraftSavedAt}
+              onRestore={handleRestoreDraft}
+              onDismiss={handleDismissDraft}
+            />
+          </div>
+        )}
+
+        {saveError && (
+          <div className="px-6 pt-6">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {saveError}
+            </div>
+          </div>
+        )}
 
         {editor && (
           <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 bg-slate-50">
@@ -135,7 +319,7 @@ export function SectionEditPopup({ section, onClose, onSave, onBack }: SectionEd
               }`}
               title="Bullet List"
             >
-              • List
+              List
             </button>
             <button
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -152,6 +336,56 @@ export function SectionEditPopup({ section, onClose, onSave, onBack }: SectionEd
         <div className="flex-1 overflow-auto bg-white">
           <EditorContent editor={editor} className="min-h-[300px]" />
         </div>
+
+        {conflictState && (
+          <div className="border-t border-slate-200 bg-slate-50 px-6 py-6">
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
+                <div>
+                  <p className="font-semibold">Concurrent edits detected</p>
+                  <p className="mt-1 text-amber-800">
+                    The live document changed while you were editing. Review the diff below, then choose whether to keep your draft or refresh from the latest live content.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <VersionDiffView
+              leftHtml={conflictState.liveDocumentHtml}
+              rightHtml={conflictState.draftDocumentHtml}
+              leftLabel="Live version"
+              rightLabel="Your draft"
+            />
+
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConflictState(null)}
+                className="btn-ghost"
+              >
+                Continue editing
+              </button>
+              <button
+                type="button"
+                onClick={handleUseLiveVersion}
+                className="btn-secondary inline-flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Use live version
+              </button>
+              <button
+                type="button"
+                onClick={handleForceSaveAfterConflict}
+                disabled={isSaving}
+                className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {isSaving ? 'Saving...' : 'Keep my draft and save'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
           <div className="text-sm text-slate-600">

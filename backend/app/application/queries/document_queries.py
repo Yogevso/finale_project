@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 
 from app.domain.result import Result
@@ -41,6 +42,9 @@ class ListDocumentsQuery:
     visibility: DocumentVisibility | None = None
     category: str | None = None
     search: str | None = None
+    company_id: int | None = None
+    date_from: date | None = None
+    date_to: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,5 +87,8 @@ class ListDocumentsQueryHandler:
             visibility=query.visibility,
             category=query.category,
             search=query.search,
+            company_id=query.company_id,
+            date_from=query.date_from,
+            date_to=query.date_to,
         )
         return ListDocumentsQueryResult(items=documents, total=total)

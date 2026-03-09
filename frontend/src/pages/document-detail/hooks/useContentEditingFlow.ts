@@ -6,8 +6,14 @@ import {
   transitionContentEditingMachineState,
 } from '@/features/documentDetail'
 import { api } from '@/lib/api'
+import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import { queryKeys } from '@/lib/queryKeys'
-import type { SectionEditTarget, TocSection } from '@/pages/document-detail/helpers/previewHelpers'
+import {
+  getUsableVersionContent,
+  processHtmlIntoSections,
+  type SectionEditTarget,
+  type TocSection,
+} from '@/pages/document-detail/helpers/previewHelpers'
 
 interface UseContentEditingFlowParams {
   documentId: number
@@ -19,6 +25,96 @@ interface UseContentEditingFlowParams {
   sections: TocSection[]
   applyProcessedHtml: (html: string) => void
   onRequireOriginalPdf: () => void
+}
+
+export type SectionSaveResult =
+  | { status: 'saved' }
+  | {
+      status: 'conflict'
+      draftDocumentHtml: string
+      liveDocumentHtml: string
+      liveEditorHtml: string
+    }
+
+function normalizeComparableHtml(html: string | null | undefined): string {
+  return sanitizeHtmlForPreview(html || '')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function getLatestDocumentHtml(documentId: number): Promise<string | null> {
+  const versionsResponse = await api.getVersions(documentId)
+  const versionsWithContent = versionsResponse.items.filter((version) =>
+    Boolean(getUsableVersionContent(version.content)),
+  )
+
+  const publishedVersion = versionsWithContent
+    .filter((version) => version.is_published)
+    .sort(
+      (left, right) =>
+        new Date(right.published_at || right.created_at).getTime() -
+        new Date(left.published_at || left.created_at).getTime(),
+    )[0]
+  const latestVersion = versionsWithContent.sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  )[0]
+  let versionToShow = publishedVersion || latestVersion
+
+  if (!versionToShow && versionsResponse.items.length > 0) {
+    const prioritizedIds = [
+      ...new Set([
+        ...versionsResponse.items
+          .filter((version) => version.is_published)
+          .sort(
+            (left, right) =>
+              new Date(right.published_at || right.created_at).getTime() -
+              new Date(left.published_at || left.created_at).getTime(),
+          )
+          .map((version) => version.id),
+        ...versionsResponse.items
+          .sort(
+            (left, right) =>
+              new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+          )
+          .map((version) => version.id),
+      ]),
+    ]
+
+    for (const versionId of prioritizedIds) {
+      const fullVersion = await api.getVersion(documentId, versionId)
+      if (getUsableVersionContent(fullVersion.content)) {
+        versionToShow = fullVersion
+        break
+      }
+    }
+  }
+
+  return getUsableVersionContent(versionToShow?.content)
+}
+
+function resolveLiveEditorHtml(
+  editingSection: SectionEditTarget,
+  liveDocumentHtml: string,
+): string {
+  if (editingSection.editMode === 'full' || editingSection.index < 0) {
+    return liveDocumentHtml
+  }
+
+  if (editingSection.editMode === 'insert') {
+    return editingSection.html
+  }
+
+  const liveSections = processHtmlIntoSections(liveDocumentHtml).sections
+  const matchedSection =
+    liveSections.find(
+      (section) =>
+        section.anchorId === editingSection.anchorId ||
+        (section.text === editingSection.text && section.level === editingSection.level),
+    ) || liveSections[editingSection.index]
+
+  return matchedSection?.html || editingSection.html
 }
 
 export function useContentEditingFlow({
@@ -138,8 +234,14 @@ export function useContentEditingFlow({
   }, [])
 
   const handleSaveSection = useCallback(
-    async (newHtml: string, submitForReview: boolean) => {
-      if (!editingSection) return
+    async (
+      newHtml: string,
+      submitForReview: boolean,
+      options?: { force?: boolean; comparisonHtml?: string },
+    ): Promise<SectionSaveResult> => {
+      if (!editingSection) {
+        return { status: 'saved' }
+      }
 
       // Get old section content for comparison.
       const oldSectionHtml = editingSection.editMode === 'insert' ? '' : editingSection.html
@@ -168,7 +270,22 @@ export function useContentEditingFlow({
           .join('\n')
       }
 
-      applyProcessedHtml(newFullHtml)
+      const latestDocumentHtml = await getLatestDocumentHtml(documentId)
+      const baselineHtml = options?.comparisonHtml ?? activeHtmlContent ?? ''
+
+      if (
+        !options?.force &&
+        latestDocumentHtml &&
+        baselineHtml &&
+        normalizeComparableHtml(latestDocumentHtml) !== normalizeComparableHtml(baselineHtml)
+      ) {
+        return {
+          status: 'conflict',
+          draftDocumentHtml: newFullHtml,
+          liveDocumentHtml: latestDocumentHtml,
+          liveEditorHtml: resolveLiveEditorHtml(editingSection, latestDocumentHtml),
+        }
+      }
 
       const sectionAction = editingSection.editMode === 'insert' ? 'Section added' : 'Section edited'
       const oldContentSummary =
@@ -202,11 +319,15 @@ export function useContentEditingFlow({
         })
       }
 
+      applyProcessedHtml(newFullHtml)
+
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.bff.documentDetailBundle(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
+      return { status: 'saved' }
     },
-    [applyProcessedHtml, documentId, editingSection, queryClient, sections],
+    [activeHtmlContent, applyProcessedHtml, documentId, editingSection, queryClient, sections],
   )
 
   return {

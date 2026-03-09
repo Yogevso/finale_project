@@ -5,6 +5,7 @@ import { useTour } from '@/hooks/useTour'
 import { documentsPageTour } from '@/lib/tour'
 import PageHeader from '@/components/PageHeader'
 import {
+  BulkMetadataEditModal,
   CreateDocumentModal,
   DocumentsEmptyState,
   DocumentsFiltersToolbar,
@@ -31,7 +32,11 @@ export default function DocumentsPage() {
   const hasActiveFilters =
     controller.search.trim().length > 0 ||
     controller.statusFilter !== '' ||
-    controller.visibilityFilter !== ''
+    controller.visibilityFilter !== '' ||
+    controller.categoryFilter.trim().length > 0 ||
+    controller.companyIdFilter !== null ||
+    controller.dateFrom !== '' ||
+    controller.dateTo !== ''
   const showGuidedEmptyState =
     !controller.documentsQuery.isLoading &&
     (controller.documentsQuery.data?.items.length ?? 0) === 0
@@ -82,10 +87,48 @@ export default function DocumentsPage() {
           onStatusFilterChange={controller.setStatusFilter}
           visibilityFilter={controller.visibilityFilter}
           onVisibilityFilterChange={controller.setVisibilityFilter}
+          categoryFilter={controller.categoryFilter}
+          onCategoryFilterChange={controller.setCategoryFilter}
+          companyIdFilter={controller.companyIdFilter}
+          onCompanyIdFilterChange={controller.setCompanyIdFilter}
+          dateFrom={controller.dateFrom}
+          onDateFromChange={controller.setDateFrom}
+          dateTo={controller.dateTo}
+          onDateToChange={controller.setDateTo}
+          savedViews={controller.savedViews}
+          activeSavedViewId={controller.activeSavedViewId}
+          onApplySavedView={controller.applySavedView}
+          onSaveCurrentView={() => {
+            const viewName = window.prompt('Name this saved view')
+            if (viewName && viewName.trim()) {
+              controller.saveCurrentView(viewName.trim())
+            }
+          }}
+          onDeleteSavedView={controller.deleteSavedView}
+          companies={controller.companiesQuery.data?.items ?? []}
           statusDetailsRef={controller.statusDetailsRef}
           visibilityDetailsRef={controller.visibilityDetailsRef}
         />
       )}
+
+      {!controller.isQuickCreateMode && controller.isManager && controller.selectedDocumentIds.length > 0 ? (
+        <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-900">
+              {controller.selectedDocumentIds.length} document(s) selected
+            </p>
+            <p className="text-sm text-slate-500">Bulk-update category, visibility, and company assignments.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={controller.clearSelection} className="btn-ghost">
+              Clear selection
+            </button>
+            <button onClick={() => controller.setShowBulkEditModal(true)} className="btn-primary">
+              Bulk edit metadata
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {controller.isQuickCreateMode && (
         <DocumentsQuickCreatePanel
@@ -110,7 +153,10 @@ export default function DocumentsPage() {
             isManager={controller.isManager}
             page={controller.page}
             visibilityOverrides={controller.visibilityOverrides}
-            onDelete={controller.handleDelete}
+            selectedDocumentIds={controller.selectedDocumentIds}
+            onToggleDocumentSelection={controller.toggleDocumentSelection}
+            onToggleAllVisibleDocuments={controller.toggleAllVisibleDocuments}
+            onArchiveOrRestore={controller.handleArchiveOrRestore}
             onVisibilityChange={controller.handleVisibilityChange}
             onPageChange={controller.setPage}
           />
@@ -134,6 +180,16 @@ export default function DocumentsPage() {
       {controller.showUploadModal && (
         <UploadDocumentModal onClose={() => controller.setShowUploadModal(false)} />
       )}
+
+      {controller.showBulkEditModal ? (
+        <BulkMetadataEditModal
+          selectedCount={controller.selectedDocumentIds.length}
+          documentIds={controller.selectedDocumentIds}
+          isSubmitting={controller.bulkMetadataMutation.isPending}
+          onClose={() => controller.setShowBulkEditModal(false)}
+          onSubmit={(payload) => controller.bulkMetadataMutation.mutate(payload)}
+        />
+      ) : null}
 
       {controller.showQuickStartModal && (
         <QuickStartModal

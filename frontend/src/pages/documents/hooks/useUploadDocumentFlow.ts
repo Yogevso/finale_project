@@ -31,6 +31,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('')
   const [releaseBranch, setReleaseBranch] = useState('')
   const [tags, setTags] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [visibility, setVisibility] = useState<DocumentVisibility>(defaultVisibility)
   const [companyIds, setCompanyIds] = useState<number[]>([])
   const [error, setError] = useState('')
@@ -54,6 +55,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     category.trim() !== '' ||
     releaseBranch.trim() !== '' ||
     tags.trim() !== '' ||
+    dueDate.trim() !== '' ||
     audienceDirtyState.visibilityChanged ||
     audienceDirtyState.companyAssignmentsChanged
 
@@ -75,6 +77,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
         category,
         releaseBranch,
         tags,
+        dueDate,
         visibility,
         companyIds,
       }),
@@ -148,6 +151,8 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     setReleaseBranch,
     tags,
     setTags,
+    dueDate,
+    setDueDate,
     visibility,
     setVisibility,
     companyIds,

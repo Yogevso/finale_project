@@ -38,10 +38,12 @@ from app.schemas import (
     ReviewListResponse,
     ReviewReject,
     ReviewResponse,
+    ReviewSlaProcessResponse,
     ReviewSubmit,
 )
 from app.security import get_current_active_user
 from app.services.permissions import Permission, has_permission
+from app.services.review_sla_service import ReviewSlaService
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 review_policy = ReviewPolicy()
@@ -351,6 +353,22 @@ async def get_my_submissions(
     )
 
 
+@router.post("/sla/process", response_model=ReviewSlaProcessResponse)
+async def process_review_sla(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Process reminder and escalation notifications for overdue pending reviews."""
+    if current_user.role not in {UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to process review SLA reminders",
+        )
+
+    service = ReviewSlaService(db)
+    return service.process_pending_reviews(actor=current_user)
+
+
 # ========== Get Review Details ==========
 @router.get("/{review_id}", response_model=ReviewResponse)
 async def get_review(
@@ -398,6 +416,8 @@ async def get_review(
         review_comments=review.review_comments,
         submitted_at=review.submitted_at,
         reviewed_at=review.reviewed_at,
+        reviewer_reminded_at=review.reviewer_reminded_at,
+        manager_escalated_at=review.manager_escalated_at,
         created_at=review.created_at,
         audience_visibility_snapshot=review.audience_visibility_snapshot,
         audience_company_ids_snapshot=review.audience_company_ids_snapshot,
@@ -716,6 +736,8 @@ async def cancel_review(
         review_comments=review.review_comments,
         submitted_at=review.submitted_at,
         reviewed_at=review.reviewed_at,
+        reviewer_reminded_at=review.reviewer_reminded_at,
+        manager_escalated_at=review.manager_escalated_at,
         created_at=review.created_at,
         audience_visibility_snapshot=review.audience_visibility_snapshot,
         audience_company_ids_snapshot=review.audience_company_ids_snapshot,

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 import {
@@ -9,6 +9,8 @@ import {
   validateAudienceFormPayload,
   type DocumentCreateFormData,
 } from '@/features/documents'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
@@ -19,6 +21,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const { user } = useAuth()
   const toast = useToast()
   const defaultVisibility = getDefaultAudienceForRole(user?.role)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<DocumentCreateFormData>({
     title: '',
@@ -29,10 +32,12 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     category: '',
     release_branch: '',
     tags: '',
+    due_date: '',
     content: '',
   })
   const [error, setError] = useState('')
   const [generateWord, setGenerateWord] = useState(false)
+  const debouncedTitle = useDebouncedValue(formData.title, 250)
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: defaultVisibility,
@@ -52,6 +57,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     (formData.category?.trim() ?? '') !== '' ||
     (formData.release_branch?.trim() ?? '') !== '' ||
     (formData.tags?.trim() ?? '') !== '' ||
+    (formData.due_date?.trim() ?? '') !== '' ||
     audienceDirtyState.visibilityChanged ||
     audienceDirtyState.companyAssignmentsChanged
 
@@ -81,6 +87,12 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     },
   })
 
+  const duplicateCheckQuery = useQuery({
+    queryKey: queryKeys.documents.duplicateCheck(debouncedTitle.trim()),
+    queryFn: () => api.checkDocumentDuplicates(debouncedTitle.trim()),
+    enabled: debouncedTitle.trim().length >= 3,
+  })
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -106,7 +118,10 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     setError,
     generateWord,
     setGenerateWord,
+    selectedTemplateId,
+    setSelectedTemplateId,
     createMutation,
+    duplicateCheckQuery,
     audienceDirtyState,
     handleSubmit,
     hasUnsavedChanges,

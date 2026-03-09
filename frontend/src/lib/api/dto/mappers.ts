@@ -246,12 +246,25 @@ export function mapDocumentDetailPageBundleDto(
   }
 }
 
+function normalizeOptionalDate(value: string | null | undefined): string | null | undefined {
+  if (value === '') {
+    return null
+  }
+  return value
+}
+
 export function toDocumentCreateDto(payload: DocumentCreate): DocumentCreateDto {
-  return { ...payload }
+  return {
+    ...payload,
+    due_date: normalizeOptionalDate(payload.due_date),
+  }
 }
 
 export function toDocumentUpdateDto(payload: DocumentUpdate): DocumentUpdateDto {
-  return { ...payload }
+  return {
+    ...payload,
+    due_date: normalizeOptionalDate(payload.due_date),
+  }
 }
 
 export function mapVersionDto(dto: VersionDto): Version {

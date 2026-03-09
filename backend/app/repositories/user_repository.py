@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func, or_
+
 from app.models import User, UserRole
 from app.repositories.base import BaseRepository
 
@@ -26,6 +28,8 @@ class UserRepository(BaseRepository):
     def list_active_by_roles(
         self,
         roles: list[UserRole],
+        *,
+        tenant_id: int | None = None,
         exclude_user_id: int | None = None,
         exclude_user_ids: set[int] | None = None,
     ) -> list[User]:
@@ -33,8 +37,41 @@ class UserRepository(BaseRepository):
             User.role.in_(roles),
             User.is_active == True,  # noqa: E712
         )
+        if tenant_id is not None:
+            query = query.filter(
+                or_(User.tenant_id == tenant_id, User.role == UserRole.SYSTEM_ADMIN)
+            )
         if exclude_user_id is not None:
             query = query.filter(User.id != exclude_user_id)
         if exclude_user_ids:
             query = query.filter(User.id.notin_(exclude_user_ids))
+        return query.all()
+
+    def list_active_by_usernames(
+        self,
+        usernames: list[str],
+        *,
+        tenant_id: int | None = None,
+        exclude_user_id: int | None = None,
+        exclude_user_ids: set[int] | None = None,
+    ) -> list[User]:
+        normalized_usernames = list({username.strip().lower() for username in usernames if username.strip()})
+        if not normalized_usernames:
+            return []
+
+        query = self.db.query(User).filter(
+            func.lower(User.username).in_(normalized_usernames),
+            User.is_active == True,  # noqa: E712
+        )
+
+        if tenant_id is not None:
+            query = query.filter(
+                or_(User.tenant_id == tenant_id, User.role == UserRole.SYSTEM_ADMIN)
+            )
+
+        if exclude_user_id is not None:
+            query = query.filter(User.id != exclude_user_id)
+        if exclude_user_ids:
+            query = query.filter(User.id.notin_(exclude_user_ids))
+
         return query.all()

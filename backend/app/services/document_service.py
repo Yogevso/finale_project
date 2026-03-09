@@ -5,7 +5,7 @@ import logging
 import re
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from time import monotonic
 from typing import List, Optional
 
@@ -31,6 +31,8 @@ from app.models import (
     DocumentNumberSequence,
     DocumentStatus,
     DocumentVisibility,
+    DocumentWatcher,
+    NotificationType,
     Platform,
     Tenant,
     Topic,
@@ -40,6 +42,7 @@ from app.models import (
 )
 from app.schemas import DocumentCreate, DocumentUpdate
 from app.services.base_service import TenantAwareService
+from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
 from app.utils.audience_audit_signing import sign_payload
@@ -112,6 +115,7 @@ class DocumentService(TenantAwareService[Document]):
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+        self.notification_service = NotificationService(db)
         self._company_lookup_cache = _CompanyLookupLRU(
             max_entries=COMPANY_LOOKUP_CACHE_MAX_ENTRIES,
             ttl_seconds=COMPANY_LOOKUP_CACHE_TTL_SECONDS,
@@ -432,6 +436,7 @@ class DocumentService(TenantAwareService[Document]):
                         platform_id=platform.id,
                         release_branch=document_data.release_branch,
                         tags=document_data.tags,
+                        due_date=document_data.due_date,
                         created_by=user.id,
                         tenant_id=tenant_id,
                         parent_id=parent_id,
@@ -477,6 +482,62 @@ class DocumentService(TenantAwareService[Document]):
         document = self._base_query().filter(Document.id == document_id).first()
         return document
 
+    def get_watch_status(self, document_id: int, user: User) -> bool:
+        """Return whether the user follows the document."""
+        document = self.get_document(document_id)
+        self._verify_access(document)
+        return (
+            self.db.query(DocumentWatcher)
+            .filter(
+                DocumentWatcher.document_id == document_id,
+                DocumentWatcher.user_id == user.id,
+            )
+            .first()
+            is not None
+        )
+
+    def watch_document(self, document_id: int, user: User) -> DocumentWatcher:
+        """Follow a document to receive notifications about future updates."""
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        existing = (
+            self.db.query(DocumentWatcher)
+            .filter(
+                DocumentWatcher.document_id == document_id,
+                DocumentWatcher.user_id == user.id,
+            )
+            .first()
+        )
+        if existing:
+            return existing
+
+        watcher = DocumentWatcher(document_id=document_id, user_id=user.id)
+        with UnitOfWork(self.db):
+            self.db.add(watcher)
+
+        self.db.refresh(watcher)
+        return watcher
+
+    def unwatch_document(self, document_id: int, user: User) -> None:
+        """Stop following a document."""
+        document = self.get_document(document_id)
+        self._verify_access(document)
+
+        watcher = (
+            self.db.query(DocumentWatcher)
+            .filter(
+                DocumentWatcher.document_id == document_id,
+                DocumentWatcher.user_id == user.id,
+            )
+            .first()
+        )
+        if watcher is None:
+            return
+
+        with UnitOfWork(self.db):
+            self.db.delete(watcher)
+
     def get_documents(
         self,
         skip: int = 0,
@@ -485,6 +546,9 @@ class DocumentService(TenantAwareService[Document]):
         visibility: Optional[DocumentVisibility] = None,
         category: Optional[str] = None,
         search: Optional[str] = None,
+        company_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> tuple[List[Document], int]:
         """Get list of documents with filters, pagination, and tenant filtering"""
         query = self._base_query()
@@ -498,6 +562,17 @@ class DocumentService(TenantAwareService[Document]):
 
         if category:
             query = query.filter(Document.category == category)
+
+        if company_id:
+            query = query.filter(Document.assigned_companies.any(Tenant.id == company_id))
+
+        if date_from:
+            start_dt = datetime.combine(date_from, datetime.min.time())
+            query = query.filter(Document.created_at >= start_dt)
+
+        if date_to:
+            end_dt = datetime.combine(date_to + timedelta(days=1), datetime.min.time())
+            query = query.filter(Document.created_at < end_dt)
 
         if search:
             search_pattern = f"%{search}%"
@@ -517,6 +592,142 @@ class DocumentService(TenantAwareService[Document]):
         documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
 
         return documents, total
+
+    @staticmethod
+    def _normalize_title_for_similarity(value: str) -> str:
+        normalized = re.sub(r"[^a-z0-9]+", " ", value.strip().lower())
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    @staticmethod
+    def _levenshtein_distance(left: str, right: str) -> int:
+        if left == right:
+            return 0
+        if not left:
+            return len(right)
+        if not right:
+            return len(left)
+
+        previous_row = list(range(len(right) + 1))
+        for left_index, left_char in enumerate(left, start=1):
+            current_row = [left_index]
+            for right_index, right_char in enumerate(right, start=1):
+                insert_cost = current_row[right_index - 1] + 1
+                delete_cost = previous_row[right_index] + 1
+                replace_cost = previous_row[right_index - 1] + (left_char != right_char)
+                current_row.append(min(insert_cost, delete_cost, replace_cost))
+            previous_row = current_row
+        return previous_row[-1]
+
+    def list_tags(self, *, query: str | None = None, limit: int = 20) -> list[str]:
+        """Return distinct tenant-scoped tags for autocomplete."""
+        tag_values = self._base_query().with_entities(Document.tags).filter(Document.tags.isnot(None)).all()
+        normalized_query = (query or "").strip().lower()
+
+        unique_tags: list[str] = []
+        seen: set[str] = set()
+        for (raw_tags,) in tag_values:
+            if not raw_tags:
+                continue
+            for tag in raw_tags.split(","):
+                cleaned = tag.strip()
+                lowered = cleaned.lower()
+                if not cleaned or lowered in seen:
+                    continue
+                if normalized_query and normalized_query not in lowered:
+                    continue
+                seen.add(lowered)
+                unique_tags.append(cleaned)
+
+        unique_tags.sort(key=lambda value: value.lower())
+        return unique_tags[:limit]
+
+    def find_duplicate_titles(
+        self,
+        title: str,
+        *,
+        threshold: float = 0.8,
+        limit: int = 5,
+    ) -> list[dict[str, object]]:
+        """Return likely duplicate documents within the current tenant scope."""
+        normalized_title = self._normalize_title_for_similarity(title)
+        if not normalized_title:
+            return []
+
+        matches: list[dict[str, object]] = []
+        documents = self._base_query().with_entities(Document.id, Document.title, Document.document_number).all()
+        for document_id, document_title, document_number in documents:
+            candidate_title = self._normalize_title_for_similarity(document_title or "")
+            if not candidate_title:
+                continue
+            longest_length = max(len(normalized_title), len(candidate_title))
+            if longest_length == 0:
+                continue
+            distance = self._levenshtein_distance(normalized_title, candidate_title)
+            similarity = 1 - (distance / longest_length)
+            if similarity < threshold:
+                continue
+            matches.append(
+                {
+                    "document_id": int(document_id),
+                    "title": str(document_title),
+                    "document_number": str(document_number),
+                    "similarity": round(float(similarity), 3),
+                }
+            )
+
+        matches.sort(
+            key=lambda item: (
+                -float(item["similarity"]),
+                str(item["title"]).lower(),
+                int(item["document_id"]),
+            )
+        )
+        return matches[:limit]
+
+    def bulk_update_metadata(
+        self,
+        *,
+        document_ids: List[int],
+        user: User,
+        category: Optional[str] = None,
+        visibility: Optional[DocumentVisibility] = None,
+        company_ids: Optional[List[int]] = None,
+        reason: Optional[str] = None,
+    ) -> list[int]:
+        """Apply one metadata update payload to multiple documents."""
+        unique_document_ids = list(dict.fromkeys(document_ids))
+        if not unique_document_ids:
+            raise ValidationError("Select at least one document")
+
+        update_payload = DocumentUpdate(
+            category=category,
+            visibility=visibility,
+            company_ids=company_ids,
+            reason=reason,
+        )
+        if (
+            update_payload.category is None
+            and update_payload.visibility is None
+            and update_payload.company_ids is None
+        ):
+            raise ValidationError("Provide at least one metadata field to update")
+
+        updated_ids: list[int] = []
+        for document_id in unique_document_ids:
+            document = self.get_document(document_id)
+            self._verify_access(document)
+            if document is None:
+                continue
+            self.update_document(
+                document_id,
+                update_payload,
+                user,
+                if_match=str(document.row_version),
+            )
+            updated_ids.append(document_id)
+
+        return updated_ids
 
     def get_document_stats(self) -> dict[str, int]:
         """Return aggregate document counts for dashboard summary cards."""
@@ -651,6 +862,9 @@ class DocumentService(TenantAwareService[Document]):
             if document_data.tags is not None:
                 document.tags = document_data.tags
 
+            if "due_date" in document_data.model_fields_set:
+                document.due_date = document_data.due_date
+
             # Create new version if there are changes
             if changes:
                 latest_version = (
@@ -751,6 +965,17 @@ class DocumentService(TenantAwareService[Document]):
             self.db.add(audit)
 
         self.db.refresh(document)
+
+        if changes:
+            summary = "; ".join(changes)
+            self.notification_service.notify_document_watchers(
+                document=document,
+                actor_user=user,
+                notification_type=NotificationType.DOCUMENT_UPDATED,
+                title=f"{user.full_name or user.username} updated a document you follow",
+                message=f"{document.title}: {summary[:200]}",
+                link=f"/documents/{document.id}",
+            )
 
         # If visibility or company assignments changed, invalidate portal cache
         if has_visibility_update or has_company_assignment_update:

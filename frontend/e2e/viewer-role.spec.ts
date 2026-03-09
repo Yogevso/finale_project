@@ -39,6 +39,20 @@ async function loginAsViewer(page: Page) {
   await page.waitForTimeout(2000);
 }
 
+async function openPublishedDocument(page: Page): Promise<boolean> {
+  await page.goto('/documents');
+  await page.waitForTimeout(1000);
+
+  const publishedDocLink = page.locator('table tbody tr:has-text("Published") a').first();
+  if (await publishedDocLink.count() === 0) {
+    return false;
+  }
+
+  await publishedDocLink.click();
+  await page.waitForLoadState('networkidle');
+  return true;
+}
+
 test.describe('Internal Viewer Role', () => {
   
   // ==================== AUTHENTICATION ====================
@@ -74,26 +88,13 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should view document details', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
+      if (await openPublishedDocument(page)) {
         await expect(page.locator('body')).toContainText(/title|content|version/i);
       }
     });
 
     test('should view document versions', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const versionsTab = page.locator('button:has-text("Versions")');
         if (await versionsTab.count() > 0) {
           await versionsTab.click();
@@ -104,14 +105,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should view comments on document', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const commentsTab = page.locator('button:has-text("Comments")');
         if (await commentsTab.count() > 0) {
           await commentsTab.click();
@@ -122,14 +116,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should download attachments', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const attachmentsTab = page.locator('button:has-text("Attachments")');
         if (await attachmentsTab.count() > 0) {
           await attachmentsTab.click();
@@ -183,14 +170,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should NOT see edit button on documents', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const editBtn = page.locator('button:has-text("Edit")');
         expect(await editBtn.count()).toBe(0);
       }
@@ -203,14 +183,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should NOT see delete button on documents', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const deleteBtn = page.locator('button:has-text("Delete")');
         expect(await deleteBtn.count()).toBe(0);
       }
@@ -223,14 +196,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should NOT see publish button on versions', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const versionsTab = page.locator('button:has-text("Versions")');
         if (await versionsTab.count() > 0) {
           await versionsTab.click();
@@ -257,14 +223,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should NOT submit for review', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const submitReviewBtn = page.locator('button:has-text("Submit for Review")');
         expect(await submitReviewBtn.count()).toBe(0);
       }
@@ -277,14 +236,7 @@ test.describe('Internal Viewer Role', () => {
     });
 
     test('should NOT see add comment form', async ({ page }) => {
-      await page.goto('/documents');
-      await page.waitForTimeout(1000);
-      
-      const docLink = page.locator('table tbody tr a').first();
-      if (await docLink.count() > 0) {
-        await docLink.click();
-        await page.waitForTimeout(500);
-        
+      if (await openPublishedDocument(page)) {
         const commentsTab = page.locator('button:has-text("Comments")');
         if (await commentsTab.count() > 0) {
           await commentsTab.click();

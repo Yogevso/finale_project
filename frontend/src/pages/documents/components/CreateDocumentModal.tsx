@@ -1,3 +1,4 @@
+import TemplateLibrary from '@/components/TemplateLibrary'
 import CompanySelector from '@/components/CompanySelector'
 import RichTextEditor from '@/components/RichTextEditor'
 import {
@@ -6,6 +7,7 @@ import {
   getAudienceVisibilityHelperText,
   listAudiencePresets,
 } from '@/features/documents'
+import type { DocumentTemplate } from '@/lib/documentTemplates'
 import { useCreateDocumentFlow } from '@/pages/documents/hooks/useCreateDocumentFlow'
 
 export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
@@ -16,7 +18,10 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     setError,
     generateWord,
     setGenerateWord,
+    selectedTemplateId,
+    setSelectedTemplateId,
     createMutation,
+    duplicateCheckQuery,
     audienceDirtyState,
     handleSubmit,
     confirmClose,
@@ -24,6 +29,20 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
   const visibilityHelperText = getAudienceVisibilityHelperText(formData.visibility || 'internal')
+  const duplicateMatches = duplicateCheckQuery.data?.matches ?? []
+
+  const handleTemplateSelect = (template: DocumentTemplate) => {
+    setSelectedTemplateId(template.id)
+    setFormData((previous) => ({
+      ...previous,
+      title: previous.title || template.name,
+      category: template.category,
+      tags: template.tags.join(', '),
+      content: template.content,
+      description: template.description,
+    }))
+    setError('')
+  }
 
   const handlePresetApply = (presetId: (typeof audiencePresets)[number]['id']) => {
     setFormData((previous) => {
@@ -60,6 +79,11 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
           <div className="flex-1 flex overflow-hidden">
             <div className="w-80 p-4 border-r border-slate-200 overflow-y-auto space-y-4 surface-muted">
+              <TemplateLibrary
+                selectedTemplateId={selectedTemplateId}
+                onSelectTemplate={handleTemplateSelect}
+              />
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
                 <input
@@ -70,6 +94,25 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   placeholder="Enter document title"
                   required
                 />
+                {duplicateCheckQuery.data?.has_matches ? (
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-medium">Possible duplicate documents found</p>
+                    <div className="mt-2 space-y-1">
+                      {duplicateMatches.map((match) => (
+                        <a
+                          key={match.document_id}
+                          href={`/documents/${match.document_id}`}
+                          className="block rounded-lg px-2 py-1 transition-colors hover:bg-white/70"
+                        >
+                          <span className="font-medium">{match.title}</span>
+                          <span className="ml-2 text-xs text-amber-800">
+                            {match.document_number} · {Math.round(match.similarity * 100)}% match
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -174,6 +217,16 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setFormData({ ...formData, release_branch: e.target.value })}
                   className="input-field"
                   placeholder="e.g., R580"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+                <input
+                  type="date"
+                  value={formData.due_date || ''}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                  className="input-field"
                 />
               </div>
 

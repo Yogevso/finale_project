@@ -36,6 +36,8 @@ const getNotificationIcon = (type: NotificationType) => {
     case 'review_submitted':
     case 'review_approved':
     case 'review_rejected':
+    case 'review_reminder':
+    case 'review_escalated':
       return <ClipboardCheck className="w-4 h-4 text-amber-500" />
     case 'feedback_received':
     case 'feedback_responded':

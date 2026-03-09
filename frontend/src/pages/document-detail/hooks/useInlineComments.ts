@@ -101,6 +101,7 @@ export function useInlineComments(documentId: number) {
   }, [commentPopup.anchorId, commentPopup.text, commentText, createCommentMutation, isPrivateComment])
 
   const handleCloseCommentPopup = useCallback(() => {
+    setSelectionPopup(EMPTY_SELECTION_POPUP)
     setCommentPopup(EMPTY_COMMENT_POPUP)
     setCommentText('')
     setIsPrivateComment(false)

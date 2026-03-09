@@ -1,4 +1,4 @@
-import { Send, X } from 'lucide-react'
+import { Loader2, Lock, Send, X } from 'lucide-react'
 import type {
   CommentPopupState,
   SelectionPopupState,
@@ -11,6 +11,7 @@ interface InlineCommentPopupsProps {
   commentText: string
   isPrivateComment: boolean
   isSubmittingComment: boolean
+  topOffset?: number
   onOpenCommentForm: () => void
   onCloseCommentPopup: () => void
   onCommentTextChange: (value: string) => void
@@ -25,6 +26,7 @@ export function InlineCommentPopups({
   commentText,
   isPrivateComment,
   isSubmittingComment,
+  topOffset = 0,
   onOpenCommentForm,
   onCloseCommentPopup,
   onCommentTextChange,
@@ -36,7 +38,7 @@ export function InlineCommentPopups({
       {selectionPopup.show && !commentPopup.show && (
         <div
           className="fixed z-50 transform -translate-x-1/2 -translate-y-full"
-          style={{ left: selectionPopup.x, top: selectionPopup.y }}
+          style={{ left: selectionPopup.x, top: Math.max(selectionPopup.y, topOffset + 12) }}
         >
           <button
             onClick={onOpenCommentForm}
@@ -63,7 +65,7 @@ export function InlineCommentPopups({
           className="inline-comment-popup fixed z-50 transform -translate-x-1/2"
           style={{
             left: Math.max(180, Math.min(commentPopup.x, window.innerWidth - 180)),
-            top: commentPopup.y,
+            top: Math.max(commentPopup.y, topOffset + 24),
           }}
         >
           <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-80 overflow-hidden">
@@ -111,7 +113,10 @@ export function InlineCommentPopups({
                     onChange={(event) => onPrivateCommentChange(event.target.checked)}
                     className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
                   />
-                  <span className="flex items-center gap-1">?? Private</span>
+                  <span className="flex items-center gap-1">
+                    <Lock className="h-3.5 w-3.5" />
+                    Private
+                  </span>
                 </label>
 
                 <div className="flex items-center gap-2">
@@ -125,7 +130,7 @@ export function InlineCommentPopups({
                   >
                     {isSubmittingComment ? (
                       <>
-                        <span className="animate-spin">?</span>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         Posting...
                       </>
                     ) : (
@@ -139,7 +144,7 @@ export function InlineCommentPopups({
               </div>
 
               <p className="text-xs text-slate-400 text-center">
-                Press Ctrl+Enter to submit • Esc to cancel
+                Press Ctrl+Enter to submit | Esc to cancel
               </p>
             </div>
           </div>

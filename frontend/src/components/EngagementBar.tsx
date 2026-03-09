@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
+import { Bell, BellRing } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { queryKeys } from '@/lib/queryKeys'
 
 interface EngagementBarProps {
   documentId: number
@@ -11,13 +13,19 @@ interface EngagementBarProps {
 export default function EngagementBar({ documentId, scrollProgress }: EngagementBarProps) {
   const queryClient = useQueryClient()
   const lastSavedProgress = useRef<number>(0)
-  const { isCustomer } = useAuth()
+  const { isCustomer, isInternal } = useAuth()
 
   // Bookmark status
   const { data: bookmarkStatus } = useQuery({
     queryKey: ['bookmark-status', documentId],
     queryFn: () => api.checkBookmarkStatus(documentId),
     enabled: isCustomer,
+  })
+
+  const { data: watchStatus } = useQuery({
+    queryKey: queryKeys.documents.watchStatus(documentId),
+    queryFn: () => api.getDocumentWatchStatus(documentId),
+    enabled: isInternal,
   })
 
   // Reading progress
@@ -36,6 +44,15 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookmark-status', documentId] })
       queryClient.invalidateQueries({ queryKey: ['bookmarks'] })
+    },
+  })
+
+  const toggleWatch = useMutation({
+    mutationFn: () =>
+      watchStatus?.is_watching ? api.unwatchDocument(documentId) : api.watchDocument(documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.watchStatus(documentId) })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 
@@ -70,7 +87,7 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
     : (progress?.progress_percent || 0)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
+    <div className="document-detail-engagement bg-white rounded-xl shadow-sm border p-4 mb-6">
       <div className="flex flex-wrap items-center gap-6">
         {/* Bookmark */}
         {isCustomer && (
@@ -86,6 +103,27 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
             <span>{bookmarkStatus?.is_bookmarked ? '★' : '☆'}</span>
             <span className="text-sm font-medium">
               {bookmarkStatus?.is_bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </span>
+          </button>
+        )}
+
+        {isInternal && (
+          <button
+            onClick={() => toggleWatch.mutate()}
+            disabled={toggleWatch.isPending}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+              watchStatus?.is_watching
+                ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            {watchStatus?.is_watching ? (
+              <BellRing className="h-4 w-4" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+            <span className="text-sm font-medium">
+              {watchStatus?.is_watching ? 'Following updates' : 'Follow updates'}
             </span>
           </button>
         )}

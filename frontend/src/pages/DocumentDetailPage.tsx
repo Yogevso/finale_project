@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import Joyride from 'react-joyride'
 import { DocumentPreview } from '@/pages/document-detail/DocumentPreview'
 import { EditForm } from '@/pages/document-detail/EditForm'
@@ -19,6 +19,8 @@ const CommentsSection = lazy(() => import('@/components/CommentsSection'))
 
 export default function DocumentDetailPage() {
   const tour = useTour('document-detail', documentDetailTour)
+  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null)
+  const [pendingPrint, setPendingPrint] = useState(false)
   const {
     documentId,
     document,
@@ -61,8 +63,12 @@ export default function DocumentDetailPage() {
     navigateToDocuments,
     navigateToFullscreen,
     navigateToDetail,
-    handleDelete,
+    exportCalendar,
+    handleArchive,
     handleEditAction,
+    handleRestore,
+    isArchivingDocument,
+    isOverdue,
     updateDocument,
     isUpdatingDocument,
     isAssigningCompanies,
@@ -70,6 +76,40 @@ export default function DocumentDetailPage() {
     isRemovingCompany,
     isSubmittingReview,
   } = useDocumentDetailPageState()
+
+  useEffect(() => {
+    setReadingTimeMinutes(null)
+  }, [documentId])
+
+  useEffect(() => {
+    if (!pendingPrint || activeTab !== 'preview') {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      window.print()
+      setPendingPrint(false)
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [activeTab, pendingPrint])
+
+  const tabCounts = {
+    versions: document?.versions_count ?? 0,
+    attachments: document?.attachments_count ?? attachments.length,
+    comments: document?.comments_count ?? 0,
+  }
+
+  const handlePrint = () => {
+    if (activeTab === 'preview') {
+      window.print()
+      return
+    }
+
+    if (setActiveTab('preview')) {
+      setPendingPrint(true)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -89,7 +129,7 @@ export default function DocumentDetailPage() {
   }
 
   return (
-    <div className={`${isFullscreen ? 'min-h-screen bg-slate-50 px-6 md:px-10 lg:px-14 py-6' : ''}`}>
+    <div className={`document-detail-page ${isFullscreen ? 'min-h-screen bg-slate-50 px-6 md:px-10 lg:px-14 py-6' : ''}`}>
       <Joyride
         steps={documentDetailTour}
         run={tour.run}
@@ -115,8 +155,12 @@ export default function DocumentDetailPage() {
         }`}
       >
         <DocumentHeaderCard
+          documentId={document.id}
           documentTitle={document.title}
           documentNumber={document.document_number}
+          readingTimeMinutes={readingTimeMinutes}
+          dueDate={document.due_date}
+          isOverdue={isOverdue}
           isFullscreen={isFullscreen}
           isEditor={isEditor}
           documentStatus={document.status}
@@ -125,9 +169,12 @@ export default function DocumentDetailPage() {
           onBackToDocuments={navigateToDocuments}
           onEnterFullscreen={navigateToFullscreen}
           onExitFullscreen={navigateToDetail}
+          onPrint={handlePrint}
+          onExportCalendar={document.due_date ? exportCalendar : undefined}
           onOpenSubmitReview={openSubmitReview}
           onEditAction={handleEditAction}
-          onDelete={handleDelete}
+          onArchive={handleArchive}
+          onRestore={handleRestore}
         />
 
         <EngagementBar
@@ -135,7 +182,7 @@ export default function DocumentDetailPage() {
           scrollProgress={activeTab === 'preview' ? scrollProgress : undefined}
         />
 
-        <DocumentTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <DocumentTabs activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
 
         {activeTab === 'preview' && (
           <DocumentPreview
@@ -143,9 +190,14 @@ export default function DocumentDetailPage() {
             attachments={attachments}
             documentTitle={document.title}
             onScrollProgress={handleScrollProgress}
+            onReadingTimeChange={setReadingTimeMinutes}
             isEditor={isEditor}
+            isFullscreen={isFullscreen}
+            showCanvasTitle={isFullscreen}
+            sectionLinkBasePath={`/documents/${documentId}`}
             widthMode={contentWidth}
             contentEditRequestToken={contentEditRequestToken}
+            onToggleFullscreen={isFullscreen ? navigateToDetail : navigateToFullscreen}
           />
         )}
 
@@ -176,6 +228,8 @@ export default function DocumentDetailPage() {
                 isAssigningCompanies={isAssigningCompanies}
                 onRemoveCompany={removeCompany}
                 isRemovingCompany={isRemovingCompany}
+                onSaveTags={(tags) => updateDocument({ tags: tags.join(', ') })}
+                isSavingTags={isUpdatingDocument || isArchivingDocument}
                 reviewHistoryItems={reviewHistoryItems}
               />
             )}

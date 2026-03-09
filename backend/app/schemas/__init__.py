@@ -1,6 +1,6 @@
 """Pydantic Schemas - API Contracts"""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -123,6 +123,7 @@ class DocumentBase(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    due_date: Optional[date] = None
     thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
@@ -151,6 +152,7 @@ class DocumentUpdate(BaseModel):
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
     tags: Optional[str] = None
+    due_date: Optional[date] = None
     thumbnail_url: Optional[str] = Field(None, max_length=500)
     reason: Optional[str] = Field(None, min_length=3, max_length=1000)
 
@@ -187,6 +189,48 @@ class DocumentListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class DocumentTagSuggestionsResponse(BaseModel):
+    """Tenant-scoped tag suggestions for document metadata editors."""
+
+    items: List[str]
+
+
+class DuplicateDocumentMatch(BaseModel):
+    """One similar document match for duplicate-title warnings."""
+
+    document_id: int
+    title: str
+    document_number: str
+    similarity: float
+
+
+class DuplicateCheckResponse(BaseModel):
+    """Similarity check result for a prospective document title."""
+
+    title: str
+    threshold: float
+    has_matches: bool
+    matches: List[DuplicateDocumentMatch] = []
+
+
+class BulkDocumentMetadataUpdateRequest(BaseModel):
+    """Batch metadata update payload for list-view editing."""
+
+    document_ids: List[int] = Field(..., min_length=1)
+    category: Optional[str] = Field(None, max_length=100)
+    visibility: Optional[DocumentVisibility] = None
+    company_ids: Optional[List[int]] = None
+    reason: Optional[str] = Field(None, min_length=3, max_length=1000)
+
+
+class BulkDocumentMetadataUpdateResponse(BaseModel):
+    """Result payload for bulk metadata updates."""
+
+    updated_count: int
+    document_ids: List[int]
+    message: str
 
 
 # ========== Version Schemas ==========
@@ -476,6 +520,8 @@ class ReviewResponse(BaseModel):
     review_comments: Optional[str] = None
     submitted_at: datetime
     reviewed_at: Optional[datetime] = None
+    reviewer_reminded_at: Optional[datetime] = None
+    manager_escalated_at: Optional[datetime] = None
     created_at: datetime
     audience_visibility_snapshot: Optional[str] = None
     audience_company_ids_snapshot: Optional[str] = None
@@ -495,6 +541,29 @@ class ReviewListResponse(BaseModel):
     page: int
     per_page: int
     has_more: bool
+
+
+class ReviewSlaItem(BaseModel):
+    """One review evaluated by the SLA processor."""
+
+    review_id: int
+    document_id: int
+    reminder_sent: bool = False
+    escalation_sent: bool = False
+    reminder_recipient_ids: List[int] = []
+    escalation_recipient_ids: List[int] = []
+
+
+class ReviewSlaProcessResponse(BaseModel):
+    """Summary of one SLA processing pass."""
+
+    processed_at: datetime
+    reminder_threshold_hours: int
+    escalation_threshold_hours: int
+    reviews_scanned: int
+    reminders_sent: int
+    escalations_sent: int
+    items: List[ReviewSlaItem] = []
 
 
 # ========== BFF Schemas ==========
@@ -531,10 +600,35 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class DocumentWatchStatusResponse(BaseModel):
+    """Current user's watch state for a document."""
+
+    is_watching: bool
+
+
+class DocumentWatchResponse(BaseModel):
+    """Response payload for watch/unwatch state changes."""
+
+    document_id: int
+    user_id: int
+    is_watching: bool
+    watched_at: Optional[datetime] = None
+
+
 class ErrorResponse(BaseModel):
     """Error response schema"""
 
     detail: str
+
+
+class DocumentCalendarExportResponse(BaseModel):
+    """JSON payload used by the frontend to download an iCal file."""
+
+    document_id: int
+    filename: str
+    content_type: str = "text/calendar"
+    due_date: date
+    ical: str
 
 
 class ForcePublishRequest(BaseModel):
@@ -629,6 +723,11 @@ __all__ = [
     "DocumentUpdate",
     "DocumentResponse",
     "DocumentListResponse",
+    "DocumentTagSuggestionsResponse",
+    "DuplicateDocumentMatch",
+    "DuplicateCheckResponse",
+    "BulkDocumentMetadataUpdateRequest",
+    "BulkDocumentMetadataUpdateResponse",
     # Version
     "VersionBase",
     "VersionCreate",
@@ -653,6 +752,8 @@ __all__ = [
     "ReviewReject",
     "ReviewResponse",
     "ReviewListResponse",
+    "ReviewSlaItem",
+    "ReviewSlaProcessResponse",
     # BFF
     "AudienceAccessPreviewResponse",
     "DocumentDetailPageBundleResponse",
@@ -660,6 +761,7 @@ __all__ = [
     "AuditLogResponse",
     # General
     "MessageResponse",
+    "DocumentCalendarExportResponse",
     "ErrorResponse",
     # Publish preflight
     "PublishPreflightCheckItem",

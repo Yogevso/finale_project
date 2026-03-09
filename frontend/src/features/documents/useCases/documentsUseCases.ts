@@ -21,6 +21,10 @@ export type DocumentListFilters = {
   search: string
   statusFilter: DocumentStatus | ''
   visibilityFilter: DocumentVisibility | ''
+  categoryFilter: string
+  companyIdFilter: number | null
+  dateFrom: string
+  dateTo: string
 }
 
 export type DocumentUploadMetadataInput = {
@@ -29,17 +33,21 @@ export type DocumentUploadMetadataInput = {
   category: string
   releaseBranch: string
   tags: string
+  dueDate?: string | null
   visibility?: DocumentVisibility
   companyIds?: number[]
 }
 
 export type DocumentsUseCasesClient = Pick<
   typeof api,
+  | 'archiveDocument'
   | 'createDocument'
   | 'createVersion'
   | 'deleteDocument'
   | 'generateWordAttachment'
+  | 'getDocumentCalendarExport'
   | 'getDocuments'
+  | 'restoreDocument'
   | 'updateDocument'
   | 'uploadDocument'
 >
@@ -62,6 +70,10 @@ export function buildDocumentsListQueryParams(filters: DocumentListFilters): Doc
     search: filters.search || undefined,
     status: filters.statusFilter || undefined,
     visibility: filters.visibilityFilter || undefined,
+    category: filters.categoryFilter || undefined,
+    company_id: filters.companyIdFilter ?? undefined,
+    date_from: filters.dateFrom || undefined,
+    date_to: filters.dateTo || undefined,
   }
 }
 
@@ -101,6 +113,7 @@ function toUploadMetadata(input: DocumentUploadMetadataInput) {
     category: toOptionalString(input.category),
     release_branch: toOptionalString(input.releaseBranch),
     tags: toOptionalString(input.tags),
+    due_date: input.dueDate || undefined,
     visibility: audience.visibility,
     company_ids: audience.company_ids.length > 0 ? audience.company_ids : undefined,
   }
@@ -114,6 +127,18 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
 
     deleteDocument(documentId: number): Promise<MessageResponse> {
       return client.deleteDocument(documentId)
+    },
+
+    archiveDocument(documentId: number) {
+      return client.archiveDocument(documentId)
+    },
+
+    restoreDocument(documentId: number) {
+      return client.restoreDocument(documentId)
+    },
+
+    getDocumentCalendarExport(documentId: number) {
+      return client.getDocumentCalendarExport(documentId)
     },
 
     updateVisibility(
@@ -153,6 +178,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         category: formData.category,
         release_branch: formData.release_branch,
         tags: formData.tags,
+        due_date: formData.due_date || undefined,
       })
 
       const content = formData.content?.trim() || ''

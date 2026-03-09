@@ -1,6 +1,9 @@
+import { Link } from 'react-router-dom'
+import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 import VisibilityBadge from '@/components/VisibilityBadge'
+import { formatDueDate, isOverdueDueDate } from '@/lib/documentDueDates'
 import Skeleton from '@/components/Skeleton'
-import type { DocumentListResponse, DocumentVisibility } from '@/types'
+import type { DocumentListResponse, DocumentStatus, DocumentVisibility } from '@/types'
 
 type VisibilityChangeRequest = {
   id: number
@@ -16,7 +19,10 @@ type DocumentsTableProps = {
   isManager: boolean
   page: number
   visibilityOverrides: Record<number, DocumentVisibility>
-  onDelete: (id: number, title: string) => void
+  selectedDocumentIds: number[]
+  onToggleDocumentSelection: (documentId: number) => void
+  onToggleAllVisibleDocuments: () => void
+  onArchiveOrRestore: (id: number, title: string, status: DocumentStatus) => void
   onVisibilityChange: (change: VisibilityChangeRequest) => void
   onPageChange: (nextPage: number) => void
 }
@@ -27,17 +33,34 @@ export function DocumentsTable({
   isManager,
   page,
   visibilityOverrides,
-  onDelete,
+  selectedDocumentIds,
+  onToggleDocumentSelection,
+  onToggleAllVisibleDocuments,
+  onArchiveOrRestore,
   onVisibilityChange,
   onPageChange,
 }: DocumentsTableProps) {
+  const currentPageIds = data?.items.map((document) => document.id) ?? []
+  const areAllVisibleDocumentsSelected =
+    currentPageIds.length > 0 && currentPageIds.every((documentId) => selectedDocumentIds.includes(documentId))
+
   return (
     <div className="admin-table-shell">
       <div className="admin-table-scroll">
         <table className="admin-table">
           <thead className="admin-table-head">
             <tr>
-              <th className="w-[40%]">Document</th>
+              {isManager ? (
+                <th className="w-12">
+                  <input
+                    type="checkbox"
+                    checked={areAllVisibleDocumentsSelected}
+                    onChange={() => onToggleAllVisibleDocuments()}
+                    aria-label="Select all visible documents"
+                  />
+                </th>
+              ) : null}
+              <th className="w-[36%]">Document</th>
               <th className="w-[14%]">Status</th>
               <th>Visibility</th>
               <th>Category</th>
@@ -48,28 +71,51 @@ export function DocumentsTable({
           <tbody>
             {isLoading ? (
               <tr className="admin-table-row">
-                <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={isManager ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
                   <div className="space-y-3">
-                    <Skeleton className="h-4 w-48 mx-auto" />
-                    <Skeleton className="h-4 w-40 mx-auto" />
-                    <Skeleton className="h-4 w-44 mx-auto" />
+                    <Skeleton className="mx-auto h-4 w-48" />
+                    <Skeleton className="mx-auto h-4 w-40" />
+                    <Skeleton className="mx-auto h-4 w-44" />
                   </div>
                 </td>
               </tr>
             ) : data?.items.length === 0 ? (
               <tr className="admin-table-row">
-                <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={isManager ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
                   No documents found
                 </td>
               </tr>
             ) : (
               data?.items.map((doc) => (
                 <tr key={doc.id} className="admin-table-row">
-                  <td className="admin-table-cell w-[40%]">
-                    <a href={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700">
-                      <div className="font-medium text-slate-900">{doc.title}</div>
-                      <div className="text-sm text-slate-500">{doc.document_number}</div>
-                    </a>
+                  {isManager ? (
+                    <td className="admin-table-cell w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentIds.includes(doc.id)}
+                        onChange={() => onToggleDocumentSelection(doc.id)}
+                        aria-label={`Select ${doc.title}`}
+                      />
+                    </td>
+                  ) : null}
+                  <td className="admin-table-cell w-[36%]">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700">
+                        <div className="font-medium text-slate-900">{doc.title}</div>
+                        <div className="text-sm text-slate-500">{doc.document_number}</div>
+                        {doc.due_date ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span>Due {formatDueDate(doc.due_date)}</span>
+                            {isOverdueDueDate(doc.due_date) ? (
+                              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
+                                Overdue
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </Link>
+                      <BookmarkToggleButton documentId={doc.id} showLabel={false} />
+                    </div>
                   </td>
                   <td className="admin-table-cell w-[14%]">
                     <span
@@ -99,29 +145,29 @@ export function DocumentsTable({
                         <div className="space-y-1.5">
                           <select
                             value={effectiveVisibility}
-                            onChange={(e) =>
+                            onChange={(event) =>
                               onVisibilityChange({
                                 id: doc.id,
                                 currentVisibility: doc.visibility || 'internal',
-                                nextVisibility: e.target.value as DocumentVisibility,
+                                nextVisibility: event.target.value as DocumentVisibility,
                                 ifMatch: doc.etag || String(doc.row_version || ''),
                                 title: doc.title,
                               })
                             }
-                            className="select-field w-40 min-w-[9.5rem]"
+                            className="select-field min-w-[9.5rem] w-40"
                           >
                             <option value="internal">Internal</option>
                             <option value="public">Public</option>
                             <option value="company">Company</option>
                           </select>
-                          {effectiveVisibility === 'company' && (
-                            <a
-                              href={`/documents/${doc.id}`}
+                          {effectiveVisibility === 'company' ? (
+                            <Link
+                              to={`/documents/${doc.id}`}
                               className="inline-flex text-xs font-medium text-sky-700 hover:text-sky-800"
                             >
                               Manage companies
-                            </a>
-                          )}
+                            </Link>
+                          ) : null}
                         </div>
                       ) : (
                         <VisibilityBadge visibility={doc.visibility || 'internal'} size="sm" />
@@ -129,19 +175,23 @@ export function DocumentsTable({
                     })()}
                   </td>
                   <td className="admin-table-cell text-slate-500">{doc.category || '-'}</td>
-                  <td className="admin-table-cell text-slate-500 whitespace-nowrap">
+                  <td className="admin-table-cell whitespace-nowrap text-slate-500">
                     {new Date(doc.created_at).toLocaleDateString()}
                   </td>
-                  <td className="admin-table-cell text-right whitespace-nowrap">
+                  <td className="admin-table-cell whitespace-nowrap text-right">
                     {isManager ? (
                       <button
-                        onClick={() => onDelete(doc.id, doc.title)}
-                        className="text-rose-600 hover:text-rose-700 font-semibold text-xs uppercase tracking-wide"
+                        onClick={() => onArchiveOrRestore(doc.id, doc.title, doc.status)}
+                        className={`text-xs font-semibold uppercase tracking-wide ${
+                          doc.status === 'archived'
+                            ? 'text-emerald-600 hover:text-emerald-700'
+                            : 'text-amber-600 hover:text-amber-700'
+                        }`}
                       >
-                        Delete
+                        {doc.status === 'archived' ? 'Restore' : 'Archive'}
                       </button>
                     ) : (
-                      <span className="text-slate-400 text-xs">-</span>
+                      <span className="text-xs text-slate-400">-</span>
                     )}
                   </td>
                 </tr>
@@ -151,8 +201,8 @@ export function DocumentsTable({
         </table>
       </div>
 
-      {data && data.pages > 1 && (
-        <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between">
+      {data && data.pages > 1 ? (
+        <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
           <div className="text-sm text-slate-500">
             Page {data.page} of {data.pages} ({data.total} total)
           </div>
@@ -173,7 +223,7 @@ export function DocumentsTable({
             </button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

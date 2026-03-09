@@ -22,12 +22,20 @@ export const queryKeys = {
       search?: string
       status?: string
       visibility?: string
+      category?: string
+      company_id?: number
+      date_from?: string
+      date_to?: string
     }) => ['documents', 'list', params ?? {}] as const,
     detail: (documentId: QueryEntityId) => ['documents', 'detail', normalizeId(documentId)] as const,
+    tags: (query?: string, limit?: number) => ['documents', 'tags', query ?? '', limit ?? 20] as const,
+    duplicateCheck: (title: string) => ['documents', 'duplicate-check', title] as const,
     assignedCompanies: (documentId: QueryEntityId) =>
       ['documents', 'detail', normalizeId(documentId), 'assigned-companies'] as const,
     versions: (documentId: QueryEntityId) =>
       ['documents', 'detail', normalizeId(documentId), 'versions'] as const,
+    watchStatus: (documentId: QueryEntityId) =>
+      ['documents', 'detail', normalizeId(documentId), 'watch-status'] as const,
   },
 
   attachments: {

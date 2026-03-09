@@ -126,6 +126,7 @@ export interface Document {
   description: string | null
   version_label?: string | null
   release_branch?: string | null
+  due_date?: string | null
   status: DocumentStatus
   visibility: DocumentVisibility
   category: string | null
@@ -148,6 +149,7 @@ export interface DocumentCreate {
   description?: string
   version_label?: string
   release_branch?: string
+  due_date?: string | null
   document_number?: string
   parent_id?: number
   status?: DocumentStatus
@@ -162,6 +164,7 @@ export interface DocumentUpdate {
   description?: string
   version_label?: string
   release_branch?: string
+  due_date?: string | null
   status?: DocumentStatus
   visibility?: DocumentVisibility
   reason?: string
@@ -176,6 +179,32 @@ export interface DocumentListResponse {
   page: number
   page_size: number
   pages: number
+}
+
+export interface DocumentWatchStatus {
+  is_watching: boolean
+}
+
+export interface DocumentWatchResponse {
+  document_id: number
+  user_id: number
+  is_watching: boolean
+  watched_at: string | null
+}
+
+export interface DocumentArchiveResult {
+  document_id: number
+  status: DocumentStatus | 'archived'
+  previous_status?: DocumentStatus | null
+  visibility?: DocumentVisibility
+}
+
+export interface DocumentCalendarExport {
+  document_id: number
+  filename: string
+  content_type: string
+  due_date: string
+  ical: string
 }
 
 export interface DocumentDashboardStats {
@@ -384,6 +413,47 @@ export interface DocumentQueryParams {
   visibility?: DocumentVisibility
   category?: string
   search?: string
+  company_id?: number
+  date_from?: string
+  date_to?: string
+}
+
+export interface DuplicateDocumentMatch {
+  document_id: number
+  title: string
+  document_number: string
+  similarity: number
+}
+
+export interface DuplicateCheckResponse {
+  title: string
+  threshold: number
+  has_matches: boolean
+  matches: DuplicateDocumentMatch[]
+}
+
+export interface BulkDocumentMetadataUpdate {
+  document_ids: number[]
+  category?: string
+  visibility?: DocumentVisibility
+  company_ids?: number[]
+  reason?: string
+}
+
+export interface BulkDocumentMetadataUpdateResponse {
+  updated_count: number
+  document_ids: number[]
+  message: string
+}
+
+export interface SavedSearch {
+  id: number
+  name: string
+  query: string | null
+  category: string | null
+  date_from?: string | null
+  date_to?: string | null
+  created_at: string
 }
 
 // Notification types
@@ -397,6 +467,8 @@ export type NotificationType =
   | 'review_submitted'
   | 'review_approved'
   | 'review_rejected'
+  | 'review_reminder'
+  | 'review_escalated'
   | 'feedback_received'
   | 'feedback_responded'
   | 'invitation_sent'

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BookMarked, BookOpen, CheckCircle2, FileText } from 'lucide-react'
+import { Activity, BookMarked, BookOpen, CheckCircle2, FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import AdminFirstCompanyWizard from '@/components/AdminFirstCompanyWizard'
+import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
@@ -60,11 +61,11 @@ export default function DashboardPage() {
   const { data: bookmarks = [] } = useQuery<DashboardBookmark[]>({
     queryKey: ['bookmarks', 'dashboard'],
     queryFn: () => api.getBookmarks(),
-    enabled: isCustomer,
+    enabled: Boolean(user),
   })
 
   const stats = [
-    { label: 'Favorites', value: isCustomer ? bookmarks.length : 0, icon: BookMarked },
+    { label: 'Favorites', value: bookmarks.length, icon: BookMarked },
     { label: 'Published', value: documentStats?.published ?? 0, icon: FileText },
     { label: 'Approved', value: documentStats?.approved ?? 0, icon: CheckCircle2 },
     { label: 'Drafts', value: documentStats?.draft ?? 0, icon: BookOpen },
@@ -148,29 +149,34 @@ export default function DashboardPage() {
                       <p className="text-sm text-slate-500">{doc.document_number}</p>
                     </Link>
                   </div>
-                  <span
-                    className={`pill ${
-                      doc.status === 'active'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  <div className="flex items-center gap-3">
+                    <BookmarkToggleButton documentId={doc.id} showLabel={false} />
+                    <span
+                      className={`pill ${
+                        doc.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : doc.status === 'approved'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                            : doc.status === 'draft'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {doc.status === 'active'
+                        ? 'Published'
                         : doc.status === 'approved'
-                          ? 'bg-sky-50 text-sky-700 border-sky-200'
-                          : doc.status === 'draft'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    {doc.status === 'active'
-                      ? 'Published'
-                      : doc.status === 'approved'
-                        ? 'Approved'
-                        : doc.status}
-                  </span>
+                          ? 'Approved'
+                          : doc.status}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {!isCustomer && <RecentActivityWidget />}
 
       <div className="surface-card rounded-2xl p-6">
         <h2 className="text-lg font-display font-semibold text-slate-900 mb-4">Quick Actions</h2>
@@ -185,7 +191,7 @@ export default function DashboardPage() {
       </div>
 
       <div className={`grid gap-6 ${isCustomer ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-        {isCustomer && <BookmarksWidget />}
+        <BookmarksWidget />
         {isCustomer && <ReadingProgressWidget />}
       </div>
     </div>
@@ -193,11 +199,11 @@ export default function DashboardPage() {
 }
 
 function BookmarksWidget() {
-  const { isCustomer } = useAuth()
+  const { user } = useAuth()
   const { data: bookmarks = [], isLoading } = useQuery<DashboardBookmark[]>({
     queryKey: ['bookmarks'],
     queryFn: () => api.getBookmarks(),
-    enabled: isCustomer,
+    enabled: Boolean(user),
   })
 
   return (
@@ -237,6 +243,84 @@ function BookmarksWidget() {
       </div>
     </div>
   )
+}
+
+function RecentActivityWidget() {
+  const { isCustomer } = useAuth()
+  const { data: activities = [], isLoading } = useQuery({
+    queryKey: ['analytics', 'recent-activity'],
+    queryFn: () => api.getRecentActivity(20),
+    enabled: !isCustomer,
+  })
+
+  return (
+    <div className="surface-card rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-200 p-4">
+        <h2 className="flex items-center gap-2 font-display font-semibold text-slate-900">
+          <Activity className="h-4 w-4 text-sky-600" />
+          Recent Activity
+        </h2>
+        <span className="pill border-slate-200 bg-slate-100 text-slate-600">{activities.length} items</span>
+      </div>
+      <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+        {isLoading ? (
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-3 w-52" />
+            <Skeleton className="h-3 w-44" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="p-6 text-center text-slate-500">No recent activity yet</div>
+        ) : (
+          activities.map((activity) => (
+            <div key={activity.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm text-slate-900">
+                    <span className="font-medium">{activity.user_name}</span>{' '}
+                    <span className="text-slate-600">{formatActivityAction(activity.action, activity.details)}</span>
+                  </p>
+                  {activity.document_id && activity.document_title ? (
+                    <Link
+                      to={`/documents/${activity.document_id}`}
+                      className="mt-1 inline-block text-sm text-sky-700 hover:text-sky-800"
+                    >
+                      {activity.document_title}
+                    </Link>
+                  ) : null}
+                </div>
+                <span className="whitespace-nowrap text-xs text-slate-500">
+                  {new Date(activity.created_at).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function formatActivityAction(action: string, details?: string) {
+  if (details?.toLowerCase().includes('comment')) {
+    return 'commented on a document'
+  }
+  if (details?.toLowerCase().includes('published')) {
+    return 'published a document'
+  }
+  if (action === 'create') {
+    return 'created a document'
+  }
+  if (action === 'update') {
+    return 'updated a document'
+  }
+  if (action === 'delete') {
+    return 'deleted a document'
+  }
+  if (action === 'download') {
+    return 'downloaded a document'
+  }
+  return 'viewed a document'
 }
 
 function ReadingProgressWidget() {

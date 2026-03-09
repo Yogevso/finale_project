@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { getAudienceDirtyState } from '@/features/documents'
+import { isOverdueDueDate } from '@/lib/documentDueDates'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
 import {
@@ -21,18 +22,43 @@ export interface PendingAnchor {
 interface ApiMutationError {
   response?: {
     data?: {
-      detail?: string
+      detail?: unknown
       error_code?: string
+      message?: unknown
     }
   }
-  message?: string
+  message?: unknown
 }
 
 const UNKNOWN_DOCUMENT_KEY = 'unknown'
 
+const extractErrorText = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  if (value && typeof value === 'object') {
+    const nestedValue = value as {
+      detail?: unknown
+      message?: unknown
+      error?: unknown
+    }
+
+    return (
+      extractErrorText(nestedValue.detail) ||
+      extractErrorText(nestedValue.message) ||
+      extractErrorText(nestedValue.error)
+    )
+  }
+
+  return null
+}
+
 const getMutationErrorMessage = (error: unknown, fallback: string) =>
-  (error as ApiMutationError)?.response?.data?.detail ||
-  (error as ApiMutationError)?.message ||
+  extractErrorText((error as ApiMutationError)?.response?.data?.detail) ||
+  extractErrorText((error as ApiMutationError)?.response?.data?.message) ||
+  extractErrorText((error as ApiMutationError)?.message) ||
   fallback
 
 const getVisibilityUpdateErrorMessage = (error: unknown) => {
@@ -165,6 +191,28 @@ export function useDocumentDetailPageState() {
     },
   })
 
+  const archiveMutation = useMutation({
+    mutationFn: () => api.archiveDocument(documentId),
+    onSuccess: () => {
+      invalidateDocumentDetailState()
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+    },
+    onError: (mutationError: unknown) => {
+      alert(getMutationErrorMessage(mutationError, 'Failed to archive document'))
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: () => api.restoreDocument(documentId),
+    onSuccess: () => {
+      invalidateDocumentDetailState()
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+    },
+    onError: (mutationError: unknown) => {
+      alert(getMutationErrorMessage(mutationError, 'Failed to restore document'))
+    },
+  })
+
   const assignCompaniesMutation = useMutation({
     mutationFn: (companyIds: number[]) => {
       const ifMatch = document?.etag || (document?.row_version ? String(document.row_version) : '')
@@ -294,6 +342,40 @@ export function useDocumentDetailPageState() {
     }
   }, [confirmDiscardUnsavedAssignments, deleteMutation])
 
+  const handleArchive = useCallback(() => {
+    if (!confirmDiscardUnsavedAssignments()) {
+      return
+    }
+    if (!confirm(`Archive "${document?.title || 'this document'}"? You can restore it later.`)) {
+      return
+    }
+    archiveMutation.mutate()
+  }, [archiveMutation, confirmDiscardUnsavedAssignments, document?.title])
+
+  const handleRestore = useCallback(() => {
+    if (!confirmDiscardUnsavedAssignments()) {
+      return
+    }
+    restoreMutation.mutate()
+  }, [confirmDiscardUnsavedAssignments, restoreMutation])
+
+  const exportCalendar = useCallback(async () => {
+    try {
+      const payload = await api.getDocumentCalendarExport(documentId)
+      const blob = new Blob([payload.ical], { type: payload.content_type })
+      const objectUrl = window.URL.createObjectURL(blob)
+      const anchor = window.document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = payload.filename
+      window.document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (exportError) {
+      alert(getMutationErrorMessage(exportError, 'Failed to export due date calendar'))
+    }
+  }, [documentId])
+
   const handleEditAction = useCallback(() => {
     if (activeTab === 'details') {
       if (isEditing) {
@@ -315,13 +397,13 @@ export function useDocumentDetailPageState() {
   const setActiveTab = useCallback(
     (nextTab: DocumentDetailTab) => {
       if (nextTab === activeTab) {
-        return
+        return true
       }
 
       const isLeavingDetailsTab = activeTab === 'details' && nextTab !== 'details'
       if (isLeavingDetailsTab) {
         if (!confirmDiscardUnsavedAssignments()) {
-          return
+          return false
         }
         if (showCompanySelector) {
           closeCompanySelector({ force: true })
@@ -330,6 +412,7 @@ export function useDocumentDetailPageState() {
       }
 
       setActiveTabState(nextTab)
+      return true
     },
     [activeTab, closeCompanySelector, confirmDiscardUnsavedAssignments, showCompanySelector],
   )
@@ -398,6 +481,7 @@ export function useDocumentDetailPageState() {
   const submitReviewErrorMessage = submitReviewMutation.isError
     ? getMutationErrorMessage(submitReviewMutation.error, 'Error submitting for review. Please try again.')
     : null
+  const isOverdue = isOverdueDueDate(document?.due_date)
 
   return {
     id,
@@ -442,8 +526,14 @@ export function useDocumentDetailPageState() {
     navigateToDocuments,
     navigateToFullscreen,
     navigateToDetail,
+    exportCalendar,
+    handleArchive,
     handleDelete,
     handleEditAction,
+    handleRestore,
+    isArchivingDocument: archiveMutation.isPending,
+    isOverdue,
+    isRestoringDocument: restoreMutation.isPending,
     updateDocument: updateMutation.mutate,
     isUpdatingDocument: updateMutation.isPending,
     isAssigningCompanies: assignCompaniesMutation.isPending,

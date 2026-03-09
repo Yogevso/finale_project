@@ -1,8 +1,10 @@
 import CompanySelector from '@/components/CompanySelector'
+import TagEditor from '@/components/TagEditor'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import { formatDate } from '@/lib/dateUtils'
+import { formatDueDate, isOverdueDueDate } from '@/lib/documentDueDates'
 import type { AudienceAccessPreview, Company, Document, ReviewRequest } from '@/types'
-import { Building2, CheckCircle, Clock, History, X, XCircle } from 'lucide-react'
+import { AlertTriangle, Building2, CheckCircle, Clock, History, X, XCircle } from 'lucide-react'
 
 interface DocumentDetailsViewProps {
   document: Document
@@ -19,6 +21,8 @@ interface DocumentDetailsViewProps {
   isAssigningCompanies: boolean
   onRemoveCompany: (companyId: number) => void
   isRemovingCompany: boolean
+  onSaveTags: (tags: string[]) => void
+  isSavingTags: boolean
   reviewHistoryItems: ReviewRequest[]
 }
 
@@ -37,10 +41,13 @@ export function DocumentDetailsView({
   isAssigningCompanies,
   onRemoveCompany,
   isRemovingCompany,
+  onSaveTags,
+  isSavingTags,
   reviewHistoryItems,
 }: DocumentDetailsViewProps) {
   const showAssignmentSection =
     document.visibility === 'company' || isEditor || assignedCompanies.length > 0
+  const isOverdue = isOverdueDueDate(document.due_date)
 
   return (
     <div className="surface-card rounded-2xl p-6 space-y-6">
@@ -84,6 +91,18 @@ export function DocumentDetailsView({
         <div>
           <label className="text-sm text-slate-500">Updated</label>
           <p className="mt-1 text-slate-900">{formatDate(document.updated_at)}</p>
+        </div>
+        <div>
+          <label className="text-sm text-slate-500">Due Date</label>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-900">
+            <span>{formatDueDate(document.due_date)}</span>
+            {isOverdue ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Overdue
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -142,18 +161,20 @@ export function DocumentDetailsView({
         </div>
       )}
 
-      {document.tags && (
-        <div>
-          <label className="text-sm text-slate-500">Tags</label>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {document.tags.split(',').map((tag, index) => (
-              <span key={index} className="pill bg-slate-100 text-slate-700">
-                {tag.trim()}
-              </span>
-            ))}
-          </div>
+      <div>
+        <label className="text-sm text-slate-500">Tags</label>
+        <div className="mt-2">
+          <TagEditor
+            tags={(document.tags || '')
+              .split(',')
+              .map((tag) => tag.trim())
+              .filter(Boolean)}
+            canEdit={isEditor}
+            isSaving={isSavingTags}
+            onSave={onSaveTags}
+          />
         </div>
-      )}
+      </div>
 
       {showAssignmentSection && (
         <div className="border-t border-slate-200 pt-6">

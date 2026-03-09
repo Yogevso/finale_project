@@ -7,6 +7,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -124,6 +125,8 @@ class NotificationType(str, enum.Enum):
     REVIEW_SUBMITTED = "review_submitted"
     REVIEW_APPROVED = "review_approved"
     REVIEW_REJECTED = "review_rejected"
+    REVIEW_REMINDER = "review_reminder"
+    REVIEW_ESCALATED = "review_escalated"
     FEEDBACK_RECEIVED = "feedback_received"
     FEEDBACK_RESPONDED = "feedback_responded"
     INVITATION_SENT = "invitation_sent"
@@ -310,6 +313,9 @@ class User(Base):
         "SavedSearch", back_populates="user", cascade="all, delete-orphan"
     )
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
+    watched_documents = relationship(
+        "DocumentWatcher", back_populates="user", cascade="all, delete-orphan"
+    )
     feedbacks = relationship(
         "Feedback",
         back_populates="user",
@@ -357,6 +363,7 @@ class Document(Base):
     platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
+    due_date = Column(Date, nullable=True, index=True)
     thumbnail_url = Column(String(500), nullable=True)  # Cover image / thumbnail URL
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -377,6 +384,9 @@ class Document(Base):
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="document")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
+    watchers = relationship(
+        "DocumentWatcher", back_populates="document", cascade="all, delete-orphan"
+    )
     feedbacks = relationship("Feedback", back_populates="document", cascade="all, delete-orphan")
     reading_progress = relationship(
         "ReadingProgress", back_populates="document", cascade="all, delete-orphan"
@@ -746,6 +756,23 @@ class Bookmark(Base):
     document = relationship("Document", back_populates="bookmarks")
 
 
+class DocumentWatcher(Base):
+    """Users following document updates."""
+
+    __tablename__ = "document_watchers"
+    __table_args__ = (
+        UniqueConstraint("user_id", "document_id", name="uq_document_watchers_user_document"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="watched_documents")
+    document = relationship("Document", back_populates="watchers")
+
+
 class Feedback(Base):
     """Document feedback from customers"""
 
@@ -808,6 +835,8 @@ class ReviewRequest(Base):
     review_comments = Column(Text, nullable=True)  # Reviewer's comments
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
+    reviewer_reminded_at = Column(DateTime, nullable=True)
+    manager_escalated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Audience state snapshot at submission time

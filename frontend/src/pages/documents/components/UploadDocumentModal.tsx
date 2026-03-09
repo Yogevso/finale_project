@@ -21,6 +21,8 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     setReleaseBranch,
     tags,
     setTags,
+    dueDate,
+    setDueDate,
     visibility,
     setVisibility,
     companyIds,
@@ -213,6 +215,16 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setReleaseBranch(e.target.value)}
               className="input-field"
               placeholder="e.g., R580"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="input-field"
             />
           </div>
 

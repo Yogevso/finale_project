@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 from app.domain.value_objects import SemanticVersion
@@ -35,6 +36,7 @@ class DocumentFactory:
         platform_id: Optional[int] = None,
         release_branch: Optional[str] = None,
         tags: Optional[str] = None,
+        due_date: Optional[date] = None,
         tenant_id: Optional[int] = None,
         parent_id: Optional[int] = None,
     ) -> Document:
@@ -51,6 +53,7 @@ class DocumentFactory:
             platform_id=platform_id,
             release_branch=release_branch,
             tags=tags,
+            due_date=due_date,
             created_by=created_by,
             tenant_id=tenant_id,
             parent_id=parent_id,
@@ -101,4 +104,3 @@ class DocumentFactory:
             action=ActionType.CREATE,
             details=f"Created document: {title}",
         )
-

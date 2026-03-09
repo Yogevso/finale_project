@@ -1,6 +1,8 @@
 """Document Management API Routes"""
 
 import logging
+import re
+from datetime import date, datetime, timedelta
 from math import ceil
 from typing import List, Optional
 
@@ -64,10 +66,17 @@ from app.errors.audience_errors import AudienceErrorCode
 from app.models import DocumentStatus, DocumentVisibility, Tenant, User, UserRole
 from app.schemas import (
     AttachmentResponse,
+    BulkDocumentMetadataUpdateRequest,
+    BulkDocumentMetadataUpdateResponse,
+    DocumentCalendarExportResponse,
     DocumentCreate,
     DocumentListResponse,
     DocumentResponse,
+    DocumentTagSuggestionsResponse,
     DocumentUpdate,
+    DocumentWatchResponse,
+    DocumentWatchStatusResponse,
+    DuplicateCheckResponse,
     MessageResponse,
     TenantSummary,
 )
@@ -79,6 +88,52 @@ from app.utils.html_to_docx import html_to_docx_bytes
 router = APIRouter()
 logger = logging.getLogger(__name__)
 AUDIENCE_ASSIGNMENT_SCHEMA_VERSION = settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+
+
+def _escape_ical_text(value: str) -> str:
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+    )
+
+
+def _build_document_calendar_export(*, document: object, due_date: date) -> str:
+    document_title = getattr(document, "title", "Document due date")
+    document_number = getattr(document, "document_number", None)
+    document_id = getattr(document, "id", None)
+    escaped_title = _escape_ical_text(str(document_title))
+    escaped_description = _escape_ical_text(
+        f"{document_number or 'Document'} due date"
+    )
+    uid = f"document-due-{document_id or 'unknown'}@finale-project"
+    dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    start = due_date.strftime("%Y%m%d")
+    end = (due_date + timedelta(days=1)).strftime("%Y%m%d")
+    return (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Finale Project//Document Workflow//EN\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "BEGIN:VEVENT\r\n"
+        f"UID:{uid}\r\n"
+        f"DTSTAMP:{dtstamp}\r\n"
+        f"DTSTART;VALUE=DATE:{start}\r\n"
+        f"DTEND;VALUE=DATE:{end}\r\n"
+        f"SUMMARY:{escaped_title}\r\n"
+        f"DESCRIPTION:{escaped_description}\r\n"
+        "STATUS:CONFIRMED\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+
+
+def _calendar_filename(document_number: str | None, document_id: int) -> str:
+    seed = document_number or f"document-{document_id}"
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", seed.strip()).strip("-").lower()
+    return f"{slug or f'document-{document_id}'}-due-date.ics"
 
 
 class CompanyAssignRequest(BaseModel):
@@ -203,6 +258,9 @@ def list_documents(
     visibility: Optional[DocumentVisibility] = Query(None, description="Filter by visibility"),
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search in title, description, tags"),
+    company_id: Optional[int] = Query(None, description="Filter by assigned company"),
+    date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
+    date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
     current_user: User = Depends(require_internal_user),
     list_documents_query_handler: ListDocumentsQueryHandler = Depends(
         get_list_documents_query_handler
@@ -229,6 +287,9 @@ def list_documents(
             visibility=visibility,
             category=category,
             search=search,
+            company_id=company_id,
+            date_from=date_from,
+            date_to=date_to,
         )
     )
 
@@ -238,6 +299,59 @@ def list_documents(
         page=page,
         page_size=page_size,
         pages=ceil(query_result.total / page_size) if query_result.total > 0 else 0,
+    )
+
+
+@router.get("/documents/tags", response_model=DocumentTagSuggestionsResponse)
+def list_document_tags(
+    q: Optional[str] = Query(None, description="Optional tag search term"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of tags to return"),
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Return tenant-scoped tag suggestions for autocomplete editors."""
+    _ = current_user
+    return DocumentTagSuggestionsResponse(items=document_service.list_tags(query=q, limit=limit))
+
+
+@router.get("/documents/duplicate-check", response_model=DuplicateCheckResponse)
+def check_duplicate_documents(
+    title: str = Query(..., min_length=3, description="Prospective document title"),
+    threshold: float = Query(0.8, ge=0.5, le=1.0, description="Similarity threshold"),
+    limit: int = Query(5, ge=1, le=20, description="Maximum number of matches to return"),
+    current_user: User = Depends(require_editor),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Return likely duplicate documents for a draft title."""
+    _ = current_user
+    matches = document_service.find_duplicate_titles(title, threshold=threshold, limit=limit)
+    return DuplicateCheckResponse(
+        title=title,
+        threshold=threshold,
+        has_matches=len(matches) > 0,
+        matches=matches,
+    )
+
+
+@router.post("/documents/bulk-metadata", response_model=BulkDocumentMetadataUpdateResponse)
+def bulk_update_document_metadata(
+    payload: BulkDocumentMetadataUpdateRequest,
+    current_user: User = Depends(require_manager),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Apply one metadata change-set to multiple documents."""
+    updated_ids = document_service.bulk_update_metadata(
+        document_ids=payload.document_ids,
+        user=current_user,
+        category=payload.category,
+        visibility=payload.visibility,
+        company_ids=payload.company_ids,
+        reason=payload.reason,
+    )
+    return BulkDocumentMetadataUpdateResponse(
+        updated_count=len(updated_ids),
+        document_ids=updated_ids,
+        message=f"Updated metadata for {len(updated_ids)} document(s)",
     )
 
 
@@ -270,6 +384,50 @@ def get_document(
     document = result.value
     response.headers["ETag"] = f"\"{document.etag}\""
     return document
+
+
+@router.get("/documents/{document_id}/watch-status", response_model=DocumentWatchStatusResponse)
+def get_document_watch_status(
+    document_id: int,
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Return whether the current internal user follows the document."""
+    return DocumentWatchStatusResponse(
+        is_watching=document_service.get_watch_status(document_id, current_user)
+    )
+
+
+@router.post("/documents/{document_id}/watch", response_model=DocumentWatchResponse)
+def watch_document(
+    document_id: int,
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Follow a document and receive future update notifications."""
+    watcher = document_service.watch_document(document_id, current_user)
+    return DocumentWatchResponse(
+        document_id=watcher.document_id,
+        user_id=watcher.user_id,
+        is_watching=True,
+        watched_at=watcher.created_at,
+    )
+
+
+@router.delete("/documents/{document_id}/watch", response_model=DocumentWatchResponse)
+def unwatch_document(
+    document_id: int,
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Stop following a document."""
+    document_service.unwatch_document(document_id, current_user)
+    return DocumentWatchResponse(
+        document_id=document_id,
+        user_id=current_user.id,
+        is_watching=False,
+        watched_at=None,
+    )
 
 
 @router.put("/documents/{document_id}", response_model=DocumentResponse)
@@ -355,6 +513,7 @@ async def upload_document(
     topic: Optional[str] = Form(None),
     platform: Optional[str] = Form(None),
     release_branch: Optional[str] = Form(None),
+    due_date: Optional[date] = Form(None),
     release_notes: Optional[UploadFile] = File(None),
     content_file: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_editor),
@@ -436,6 +595,7 @@ async def upload_document(
         platform=platform,
         release_branch=release_branch,
         tags=tags or "",
+        due_date=due_date,
         document_number=document_number,
         version_label=version_label,
         parent_id=parent_id,
@@ -646,3 +806,30 @@ def restore_document(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except PermissionDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
+
+
+@router.get(
+    "/documents/{document_id}/calendar-export",
+    response_model=DocumentCalendarExportResponse,
+)
+def export_document_due_date_calendar(
+    document_id: int,
+    current_user: User = Depends(require_internal_user),
+    document_query_handler: GetDocumentQueryHandler = Depends(get_document_query_handler),
+):
+    """Return an iCal payload for the document due date."""
+    _ = current_user
+    result = document_query_handler.execute(GetDocumentQuery(document_id=document_id))
+    if result.is_err:
+        raise NotFoundError(result.error.message)
+
+    document = result.value
+    if document.due_date is None:
+        raise HTTPException(status_code=404, detail="Document does not have a due date")
+
+    return DocumentCalendarExportResponse(
+        document_id=document.id,
+        filename=_calendar_filename(document.document_number, document.id),
+        due_date=document.due_date,
+        ical=_build_document_calendar_export(document=document, due_date=document.due_date),
+    )

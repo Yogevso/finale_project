@@ -1,12 +1,19 @@
 import type {
+  DocumentArchiveResult,
+  DocumentCalendarExport,
+  BulkDocumentMetadataUpdate,
+  BulkDocumentMetadataUpdateResponse,
   Comment,
   CommentCreate,
   CommentUpdate,
   Company,
   Document,
+  DuplicateCheckResponse,
   DocumentCreate,
   DocumentDashboardStats,
   DocumentListResponse,
+  DocumentWatchResponse,
+  DocumentWatchStatus,
   DocumentQueryParams,
   DocumentUpdate,
   DocumentVisibility,
@@ -60,6 +67,33 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return data
     }
 
+    async getDocumentTags(query?: string, limit: number = 20): Promise<string[]> {
+      const { data } = await this.client.get<{ items: string[] }>('/documents/tags', {
+        params: { q: query, limit },
+      })
+      return data.items
+    }
+
+    async checkDocumentDuplicates(
+      title: string,
+      options?: { threshold?: number; limit?: number },
+    ): Promise<DuplicateCheckResponse> {
+      const { data } = await this.client.get<DuplicateCheckResponse>('/documents/duplicate-check', {
+        params: { title, ...options },
+      })
+      return data
+    }
+
+    async bulkUpdateDocumentMetadata(
+      payload: BulkDocumentMetadataUpdate,
+    ): Promise<BulkDocumentMetadataUpdateResponse> {
+      const { data } = await this.client.post<BulkDocumentMetadataUpdateResponse>(
+        '/documents/bulk-metadata',
+        payload,
+      )
+      return data
+    }
+
     async getDocument(id: number): Promise<Document> {
       const { data } = await this.client.get<DocumentDto>(`/documents/${id}`)
       return mapDocumentDto(data)
@@ -94,6 +128,21 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return mapMessageResponseDto(data)
     }
 
+    async archiveDocument(id: number): Promise<DocumentArchiveResult> {
+      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/archive`)
+      return data
+    }
+
+    async restoreDocument(id: number): Promise<DocumentArchiveResult> {
+      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/restore`)
+      return data
+    }
+
+    async getDocumentCalendarExport(id: number): Promise<DocumentCalendarExport> {
+      const { data } = await this.client.get<DocumentCalendarExport>(`/documents/${id}/calendar-export`)
+      return data
+    }
+
     async generateWordAttachment(documentId: number, htmlContent: string, filename?: string) {
       const { data } = await this.client.post(`/documents/${documentId}/generate-word`, {
         html_content: htmlContent,
@@ -115,6 +164,7 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       parent_id?: number
       topic?: string
       platform?: string
+      due_date?: string | null
       release_notes?: File | null
       content_file?: File | null
     }): Promise<Document> {
@@ -136,6 +186,7 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       if (metadata?.parent_id) formData.append('parent_id', metadata.parent_id.toString())
       if (metadata?.topic) formData.append('topic', metadata.topic)
       if (metadata?.platform) formData.append('platform', metadata.platform)
+      if (metadata?.due_date) formData.append('due_date', metadata.due_date)
       if (metadata?.release_notes) formData.append('release_notes', metadata.release_notes)
       if (metadata?.content_file) formData.append('content_file', metadata.content_file)
 
@@ -150,6 +201,27 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
         `/documents/${documentId}/assigned-companies`,
       )
       return data.map(mapCompanyDto)
+    }
+
+    async getDocumentWatchStatus(documentId: number): Promise<DocumentWatchStatus> {
+      const { data } = await this.client.get<DocumentWatchStatus>(
+        `/documents/${documentId}/watch-status`,
+      )
+      return data
+    }
+
+    async watchDocument(documentId: number): Promise<DocumentWatchResponse> {
+      const { data } = await this.client.post<DocumentWatchResponse>(
+        `/documents/${documentId}/watch`,
+      )
+      return data
+    }
+
+    async unwatchDocument(documentId: number): Promise<DocumentWatchResponse> {
+      const { data } = await this.client.delete<DocumentWatchResponse>(
+        `/documents/${documentId}/watch`,
+      )
+      return data
     }
 
     async assignCompanies(

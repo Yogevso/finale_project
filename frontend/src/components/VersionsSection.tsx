@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { GitCompareArrows } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import { queryKeys } from '@/lib/queryKeys'
@@ -85,11 +87,22 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
     <div className="surface-card rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-900">Versions ({versions.length})</h2>
-        {isEditor && !isCreating && (
-          <button onClick={() => setIsCreating(true)} className="btn-primary text-sm">
-            + New Version
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {versions.length > 1 && (
+            <Link
+              to={`/documents/${documentId}/compare`}
+              className="btn-secondary inline-flex items-center gap-2 text-sm"
+            >
+              <GitCompareArrows className="h-4 w-4" />
+              Compare versions
+            </Link>
+          )}
+          {isEditor && !isCreating && (
+            <button onClick={() => setIsCreating(true)} className="btn-primary text-sm">
+              + New Version
+            </button>
+          )}
+        </div>
       </div>
 
       {isCreating && (

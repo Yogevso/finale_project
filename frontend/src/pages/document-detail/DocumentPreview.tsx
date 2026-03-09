@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import type { CSSProperties } from 'react'
 import type { ReadingWidth } from '@/lib/readingWidth'
 import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
 import {
@@ -23,24 +24,74 @@ import { TocPanel } from '@/pages/document-detail/components/TocPanel'
 import { useContentEditingFlow } from '@/pages/document-detail/hooks/useContentEditingFlow'
 import { useInlineComments } from '@/pages/document-detail/hooks/useInlineComments'
 import { useReaderView } from '@/pages/document-detail/hooks/useReaderView'
+import {
+  DOCUMENT_FONT_SIZE_VALUES,
+  getDocumentFontSize,
+  getDocumentTheme,
+  getDocumentThemeClassName,
+  setDocumentFontSize,
+  setDocumentTheme,
+  type DocumentFontSize,
+  type DocumentTheme,
+} from '@/lib/documentReadingPreferences'
 
 // Document Preview Component
+const WORDS_PER_MINUTE = 200
+
+function estimateReadingTimeMinutes(html: string | null): number | null {
+  if (!html) {
+    return null
+  }
+
+  const textContent = new DOMParser().parseFromString(html, 'text/html').body.textContent ?? ''
+  const wordCount = textContent.trim().split(/\s+/).filter(Boolean).length
+
+  if (wordCount === 0) {
+    return null
+  }
+
+  return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE))
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select'
+}
+
 export function DocumentPreview({
   documentId,
   attachments,
   documentTitle,
   onScrollProgress,
+  onReadingTimeChange,
   isEditor,
+  isFullscreen = false,
+  showCanvasTitle = true,
+  sectionLinkBasePath,
   widthMode = 'reading',
   contentEditRequestToken = 0,
+  onToggleFullscreen,
 }: {
   documentId: number
   attachments: Attachment[]
   documentTitle?: string
   onScrollProgress?: (progress: number) => void
+  onReadingTimeChange?: (minutes: number | null) => void
   isEditor?: boolean
+  isFullscreen?: boolean
+  showCanvasTitle?: boolean
+  sectionLinkBasePath: string
   widthMode?: ReadingWidth
   contentEditRequestToken?: number
+  onToggleFullscreen?: () => void
 }) {
   const { user } = useAuth()
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -52,8 +103,15 @@ export function DocumentPreview({
   const [sections, setSections] = useState<TocSection[]>([])
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchMatchCount, setSearchMatchCount] = useState(0)
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
   const [hasInlineContent, setHasInlineContent] = useState(false)
+  const [previewScrollProgress, setPreviewScrollProgress] = useState(0)
+  const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
+  const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme())
   const previewPaneRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const restoredProgressKeyRef = useRef<string | null>(null)
   const {
     selectionPopup,
     commentPopup,
@@ -70,6 +128,16 @@ export function DocumentPreview({
 
   // All attachments participate in preview-pdf pipeline.
   const previewableAttachments = useMemo(() => attachments, [attachments])
+
+  const handleSetFontSize = useCallback((value: DocumentFontSize) => {
+    setFontSizeState(value)
+    setDocumentFontSize(value)
+  }, [])
+
+  const handleSetTheme = useCallback((value: DocumentTheme) => {
+    setThemeState(value)
+    setDocumentTheme(value)
+  }, [])
 
   const isWordDoc = (att: Attachment | null) => {
     if (!att) return false
@@ -139,6 +207,51 @@ export function DocumentPreview({
   const shouldRenderHtmlPreview = showingReaderView
     ? !!activeHtmlContent
     : !isSelectedPdf && !!activeHtmlContent
+  const contentStyle = useMemo(
+    () =>
+      ({
+        '--doc-font-size': DOCUMENT_FONT_SIZE_VALUES[fontSize],
+      }) as CSSProperties,
+    [fontSize],
+  )
+
+  const focusSearchMatch = useCallback((targetIndex: number, behavior: ScrollBehavior = 'smooth') => {
+    const container = document.getElementById('document-content-area')
+    if (!container) {
+      setSearchMatchCount(0)
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+
+    const matches = Array.from(container.querySelectorAll<HTMLElement>('mark.doc-highlight'))
+    if (matches.length === 0) {
+      setSearchMatchCount(0)
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+
+    const normalizedIndex = ((targetIndex % matches.length) + matches.length) % matches.length
+    matches.forEach((match, index) => {
+      match.classList.toggle('doc-highlight--active', index === normalizedIndex)
+    })
+    matches[normalizedIndex]?.scrollIntoView({ behavior, block: 'center' })
+    setSearchMatchCount(matches.length)
+    setActiveSearchMatchIndex(normalizedIndex)
+  }, [])
+
+  const handlePreviousSearchMatch = useCallback(() => {
+    if (searchMatchCount === 0) {
+      return
+    }
+    focusSearchMatch(activeSearchMatchIndex - 1)
+  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount])
+
+  const handleNextSearchMatch = useCallback(() => {
+    if (searchMatchCount === 0) {
+      return
+    }
+    focusSearchMatch(activeSearchMatchIndex + 1)
+  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount])
 
   const applyProcessedHtml = useCallback(
     (html: string) => {
@@ -178,7 +291,10 @@ export function DocumentPreview({
 
     if (scrollHeight > 0) {
       const progress = Math.min(100, Math.round((scrollTop / scrollHeight) * 100))
+      setPreviewScrollProgress(progress)
       onScrollProgress?.(progress)
+    } else {
+      setPreviewScrollProgress(0)
     }
 
     if (showingReaderView) {
@@ -208,12 +324,100 @@ export function DocumentPreview({
   }
 
   useEffect(() => {
-    if (!activeHtmlContent) return
-
     const container = document.getElementById('document-content-area')
-    if (!container) return
+    if (!activeHtmlContent || !container) {
+      setSearchMatchCount(0)
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+
     applyHighlights(container, searchTerm)
-  }, [activeHtmlContent, searchTerm])
+    const matches = container.querySelectorAll('mark.doc-highlight')
+    if (matches.length === 0) {
+      setSearchMatchCount(0)
+      setActiveSearchMatchIndex(-1)
+      return
+    }
+
+    focusSearchMatch(0, 'auto')
+  }, [activeHtmlContent, focusSearchMatch, searchTerm])
+
+  useEffect(() => {
+    onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent))
+  }, [activeHtmlContent, onReadingTimeChange])
+
+  useEffect(() => {
+    if (!activeHtmlContent) {
+      setPreviewScrollProgress(0)
+      return
+    }
+
+    setPreviewScrollProgress(0)
+  }, [activeHtmlContent])
+
+  useEffect(() => {
+    if (!user || !activeHtmlContent || !previewPaneRef.current) {
+      return
+    }
+
+    const restoreKey = `${documentId}:${selectedAttachment?.id ?? 'inline'}:${
+      showingReaderView ? 'reader' : 'html'
+    }`
+    if (restoredProgressKeyRef.current === restoreKey) {
+      return
+    }
+    restoredProgressKeyRef.current = restoreKey
+
+    let cancelled = false
+    let rafOne: number | null = null
+    let rafTwo: number | null = null
+
+    api
+      .getDocumentProgress(documentId)
+      .then((progress) => {
+        if (cancelled || !progress.has_progress || !previewPaneRef.current) {
+          return
+        }
+
+        rafOne = window.requestAnimationFrame(() => {
+          rafTwo = window.requestAnimationFrame(() => {
+            const pane = previewPaneRef.current
+            if (!pane) {
+              return
+            }
+
+            const scrollRange = pane.scrollHeight - pane.clientHeight
+            if (scrollRange <= 0) {
+              return
+            }
+
+            pane.scrollTop = Math.round(scrollRange * (progress.progress_percent / 100))
+            setPreviewScrollProgress(progress.progress_percent)
+            onScrollProgress?.(progress.progress_percent)
+          })
+        })
+      })
+      .catch(() => {
+        // Ignore unavailable progress records or role-gated responses.
+      })
+
+    return () => {
+      cancelled = true
+      if (rafOne !== null) {
+        window.cancelAnimationFrame(rafOne)
+      }
+      if (rafTwo !== null) {
+        window.cancelAnimationFrame(rafTwo)
+      }
+    }
+  }, [
+    activeHtmlContent,
+    documentId,
+    onScrollProgress,
+    selectedAttachment?.id,
+    showingReaderView,
+    user,
+  ])
 
   useEffect(() => {
     const nextSelection = resolveSelectedAttachment(
@@ -389,6 +593,124 @@ export function DocumentPreview({
     setPdfPreviewUnavailableError('PDF preview unavailable. Please download original.')
   }, [])
 
+  const activeSectionIndex = useMemo(() => {
+    const activeSections = shouldRenderHtmlPreview ? tocSectionsForHtml : pdfOutlineSections
+    if (activeSections.length === 0) {
+      return -1
+    }
+
+    return activeSections.findIndex((item) => {
+      const pageStart = resolveSectionPageStart(item)
+      const anchorId = item.anchorId || (pageStart ? `pdf-page-${pageStart}` : `heading-${item.index}`)
+      return activeHeading === anchorId || (!!pageStart && readerCurrentPage === pageStart)
+    })
+  }, [activeHeading, pdfOutlineSections, readerCurrentPage, shouldRenderHtmlPreview, tocSectionsForHtml])
+
+  const activeCurrentSection = useMemo(() => {
+    if (!shouldRenderHtmlPreview || tocSectionsForHtml.length === 0 || activeSectionIndex < 0) {
+      return null
+    }
+
+    const currentSection = tocSectionsForHtml[activeSectionIndex]
+    const h2Section = [...tocSectionsForHtml.slice(0, activeSectionIndex + 1)]
+      .reverse()
+      .find((item) => item.level === 2)
+
+    return h2Section || currentSection || null
+  }, [activeSectionIndex, shouldRenderHtmlPreview, tocSectionsForHtml])
+
+  const showCurrentSectionIndicator =
+    !!activeCurrentSection && previewScrollProgress > 6 && activeSectionIndex > 0
+
+  const navigateBetweenSections = useCallback(
+    (direction: 1 | -1) => {
+      const activeSections = showingOriginalPdf ? pdfOutlineSections : tocSectionsForHtml
+      if (activeSections.length === 0) {
+        return
+      }
+
+      const currentIndex = activeSectionIndex >= 0 ? activeSectionIndex : 0
+      const nextIndex = Math.max(0, Math.min(activeSections.length - 1, currentIndex + direction))
+      const targetSection = activeSections[nextIndex]
+      if (!targetSection) {
+        return
+      }
+
+      if (showingOriginalPdf) {
+        handlePdfTocClick(targetSection)
+        return
+      }
+
+      handleReaderTocClick(targetSection)
+    },
+    [activeSectionIndex, handlePdfTocClick, handleReaderTocClick, pdfOutlineSections, showingOriginalPdf, tocSectionsForHtml],
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        handleCloseCommentPopup()
+        if (editingSection) {
+          handleCloseSectionEdit()
+        }
+        if (showContentEditChooser) {
+          handleCloseContentEditChooser()
+        }
+        return
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+
+      if (isTypingTarget(event.target)) {
+        return
+      }
+
+      const normalizedKey = event.key.toLowerCase()
+      if (normalizedKey === '/') {
+        if (searchInputRef.current) {
+          event.preventDefault()
+          searchInputRef.current.focus()
+          searchInputRef.current.select()
+        }
+        return
+      }
+
+      if (normalizedKey === 'j') {
+        event.preventDefault()
+        navigateBetweenSections(1)
+        return
+      }
+
+      if (normalizedKey === 'k') {
+        event.preventDefault()
+        navigateBetweenSections(-1)
+        return
+      }
+
+      if (normalizedKey === 'f' && onToggleFullscreen) {
+        event.preventDefault()
+        onToggleFullscreen()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    editingSection,
+    handleCloseCommentPopup,
+    handleCloseContentEditChooser,
+    handleCloseSectionEdit,
+    navigateBetweenSections,
+    onToggleFullscreen,
+    showContentEditChooser,
+  ])
+
   // Show content if we have inline content OR attachments
   if (attachments.length === 0 && !hasInlineContent && !activeHtmlContent) {
     return (
@@ -445,7 +767,9 @@ export function DocumentPreview({
   }
 
   const documentPaperClass =
-    widthMode === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'
+    widthMode === 'fluid'
+      ? `document-preview-paper document-preview-paper-fluid ${getDocumentThemeClassName(theme)}`
+      : `document-preview-paper ${getDocumentThemeClassName(theme)}`
   const effectivePdfPage = pdfOutlinePage || readerCurrentPage
   const pdfPreviewSrc = previewUrl && effectivePdfPage ? `${previewUrl}#page=${effectivePdfPage}` : previewUrl
   const pdfTocItems: PdfTocItem[] = pdfOutlineSections
@@ -474,7 +798,7 @@ export function DocumentPreview({
   }
 
   return (
-    <div className="surface-card rounded-2xl overflow-hidden">
+    <div className="document-preview-shell surface-card rounded-2xl overflow-hidden">
       <PreviewToolbar
         previewableAttachments={previewableAttachments}
         selectedAttachment={selectedAttachment}
@@ -488,10 +812,36 @@ export function DocumentPreview({
         onSwitchToOriginalPdf={handleSwitchToOriginalPdf}
         onSwitchToReaderView={handleSwitchToReaderView}
         onRetryReaderView={handleRetryReaderView}
+        fontSize={fontSize}
+        onSetFontSize={handleSetFontSize}
+        theme={theme}
+        onSetTheme={handleSetTheme}
       />
 
+      <div
+        className={`document-current-section-indicator overflow-hidden border-b border-slate-200 bg-white transition-all duration-200 ${
+          showCurrentSectionIndicator ? 'max-h-11 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        {activeCurrentSection && (
+          <button
+            type="button"
+            onClick={() => handleReaderTocClick(activeCurrentSection)}
+            className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-sky-50 hover:text-sky-700"
+            title="Current section (J/K)"
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
+              Current section
+            </span>
+            <span className="flex-1 truncate font-medium text-slate-700">
+              {activeCurrentSection.text}
+            </span>
+          </button>
+        )}
+      </div>
+
       {/* Preview area */}
-      <div className="relative" style={{ minHeight: '600px' }}>
+      <div className="document-preview-stage relative" style={{ minHeight: '600px' }}>
         {error ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
@@ -510,7 +860,7 @@ export function DocumentPreview({
           </div>
         ) : shouldRenderHtmlPreview ? (
           // Word document rendered as HTML (read-only) with TOC sidebar
-          <div className="flex h-[70vh]">
+          <div className="document-preview-html-layout flex h-[70vh]">
             <TocPanel
               sections={tocSectionsForHtml}
               tocCollapsed={tocCollapsed}
@@ -519,6 +869,7 @@ export function DocumentPreview({
               readerCurrentPage={readerCurrentPage}
               isEditor={isEditor}
               showingReaderView={showingReaderView}
+              sectionLinkBasePath={sectionLinkBasePath}
               onSectionClick={handleReaderTocClick}
               onEditSection={handleStartEditingSection}
             />
@@ -528,13 +879,23 @@ export function DocumentPreview({
               documentPaperClass={documentPaperClass}
               activeHtmlContent={activeHtmlContent}
               showingReaderView={showingReaderView}
+              showDocumentTitle={showCanvasTitle}
               documentTitle={documentTitle}
               selectedAttachmentFilename={selectedAttachment?.filename}
               searchTerm={searchTerm}
+              searchMatchCount={searchMatchCount}
+              activeSearchMatchIndex={activeSearchMatchIndex}
               onSearchTermChange={setSearchTerm}
+              onPreviousSearchMatch={handlePreviousSearchMatch}
+              onNextSearchMatch={handleNextSearchMatch}
+              searchInputRef={searchInputRef}
               tocSectionsCount={tocSectionsForHtml.length}
               readerCurrentPage={readerCurrentPage}
               isEditor={isEditor}
+              commentPopupTopOffset={isFullscreen ? 76 : 0}
+              scrollProgress={previewScrollProgress}
+              contentStyle={contentStyle}
+              sectionLinkBasePath={sectionLinkBasePath}
               onScroll={handleScroll}
               onMouseUp={handleMouseUp}
               hasUser={!!user}
@@ -607,7 +968,7 @@ export function DocumentPreview({
 
       {/* Download button */}
       {selectedAttachment && (
-        <div className="border-t border-slate-200 p-3 bg-slate-50 flex justify-between items-center">
+        <div className="document-preview-downloads border-t border-slate-200 p-3 bg-slate-50 flex justify-between items-center">
           <span className="text-sm text-slate-600">
             {documentTitle || selectedAttachment.filename}
             {isWordDoc(selectedAttachment) && (
@@ -665,6 +1026,8 @@ export function DocumentPreview({
       {/* Section Edit Popup */}
       {editingSection && (
         <SectionEditPopup
+          key={`${editingSection.id}:${editingSection.editMode ?? 'edit'}`}
+          documentId={documentId}
           section={editingSection}
           onClose={handleCloseSectionEdit}
           onBack={editingSection.fromChooser ? handleBackToChooser : undefined}

@@ -25,6 +25,7 @@ from app.models import (
     AudienceEventType,
     AuditLog,
     Document,
+    NotificationType,
     ReviewRequest,
     ReviewStatus,
     User,
@@ -35,6 +36,7 @@ from app.models import (
 from app.repositories import DocumentRepository, VersionRepository
 from app.schemas import VersionCreate, VersionUpdate
 from app.services.base_service import SessionService
+from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
 from app.utils.concurrency import ensure_if_match_matches
@@ -54,7 +56,24 @@ class VersionService(SessionService):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.version_repository = VersionRepository(db)
+        self.notification_service = NotificationService(db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+
+    @staticmethod
+    def _actor_display_name(current_user: User) -> str:
+        full_name = getattr(current_user, "full_name", None)
+        if isinstance(full_name, str) and full_name.strip():
+            return full_name.strip()
+
+        username = getattr(current_user, "username", None)
+        if isinstance(username, str) and username.strip():
+            return username.strip()
+
+        user_id = getattr(current_user, "id", None)
+        if isinstance(user_id, int):
+            return f"User #{user_id}"
+
+        return "A teammate"
 
     def _get_document_for_user(self, document_id: int, current_user: User) -> Document:
         document = self.document_repository.get_by_id(document_id)
@@ -176,6 +195,47 @@ class VersionService(SessionService):
     def _run_publish_audience_validation_gate(document: Document) -> None:
         DocumentAggregate(document).ensure_audience_ready_for_submit()
 
+    def _notify_version_mentions(
+        self,
+        *,
+        document: Document,
+        version: Version,
+        current_user: User,
+        content: str | None,
+    ) -> set[int]:
+        preview_text = " ".join((content or "").split())[:160]
+        actor_display_name = self._actor_display_name(current_user)
+        return self.notification_service.notify_mentions(
+            content=content,
+            actor_user=current_user,
+            document=document,
+            notification_type=NotificationType.DOCUMENT_UPDATED,
+            title_builder=lambda _user: f"{actor_display_name} mentioned you in a document draft",
+            message_builder=lambda _user: f"{document.title}: {preview_text}" if preview_text else document.title,
+            link=f"/documents/{document.id}?tab=versions&version={version.id}",
+        )
+
+    def _notify_version_watchers(
+        self,
+        *,
+        document: Document,
+        current_user: User,
+        notification_type: NotificationType,
+        title: str,
+        message: str,
+        link: str,
+        exclude_user_ids: set[int] | None = None,
+    ) -> None:
+        self.notification_service.notify_document_watchers(
+            document=document,
+            actor_user=current_user,
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            link=link,
+            exclude_user_ids=exclude_user_ids,
+        )
+
     def get_versions(self, document_id: int, current_user: User) -> List[dict]:
         """Get all versions for a document"""
         self._get_document_for_user(document_id, current_user)
@@ -206,6 +266,7 @@ class VersionService(SessionService):
         """Create a new version for a document"""
         document = self._get_document_for_user(document_id, current_user)
         document_aggregate = DocumentAggregate(document)
+        actor_display_name = self._actor_display_name(current_user)
 
         if current_user.role not in [
             UserRole.SYSTEM_ADMIN,
@@ -240,6 +301,21 @@ class VersionService(SessionService):
         with UnitOfWork(self.db):
             self.db.add(version)
             document_aggregate.prepare_for_new_version_candidate()
+            mentioned_user_ids = self._notify_version_mentions(
+                document=document,
+                version=version,
+                current_user=current_user,
+                content=version.content,
+            )
+            self._notify_version_watchers(
+                document=document,
+                current_user=current_user,
+                notification_type=NotificationType.DOCUMENT_UPDATED,
+                title=f"{actor_display_name} created a draft on a document you follow",
+                message=f"{document.title}: {(version.changes_summary or 'Draft version created')[:200]}",
+                link=f"/documents/{document.id}?tab=versions",
+                exclude_user_ids=mentioned_user_ids,
+            )
 
         version = self.version_repository.get_by_id_for_document(
             version.id,
@@ -258,7 +334,8 @@ class VersionService(SessionService):
         if_match: str | None = None,
     ) -> dict:
         """Update an unpublished version"""
-        self._get_document_for_user(document_id, current_user)
+        document = self._get_document_for_user(document_id, current_user)
+        actor_display_name = self._actor_display_name(current_user)
 
         version = self.version_repository.get_by_id_for_document(
             version_id,
@@ -298,6 +375,21 @@ class VersionService(SessionService):
                 version.content = version_data.content
             if version_data.changes_summary is not None:
                 version.changes_summary = version_data.changes_summary
+            mentioned_user_ids = self._notify_version_mentions(
+                document=document,
+                version=version,
+                current_user=current_user,
+                content=version.content,
+            )
+            self._notify_version_watchers(
+                document=document,
+                current_user=current_user,
+                notification_type=NotificationType.DOCUMENT_UPDATED,
+                title=f"{actor_display_name} updated a draft on a document you follow",
+                message=f"{document.title}: {(version.changes_summary or 'Draft version updated')[:200]}",
+                link=f"/documents/{document.id}?tab=versions",
+                exclude_user_ids=mentioned_user_ids,
+            )
 
         self.db.refresh(version)
 
@@ -316,6 +408,7 @@ class VersionService(SessionService):
     def publish_version(self, document_id: int, version_id: int, current_user: User) -> dict:
         """Publish a version (requires approval and makes it immutable)."""
         document = self._get_document_for_user(document_id, current_user)
+        actor_display_name = self._actor_display_name(current_user)
         # Ensure assigned_companies is loaded for audience snapshot
         self.db.refresh(document, attribute_names=["assigned_companies"])
         audience_warnings: list[str] = []
@@ -498,6 +591,14 @@ class VersionService(SessionService):
             raise
 
         self.db.refresh(version)
+        self._notify_version_watchers(
+            document=document,
+            current_user=current_user,
+            notification_type=NotificationType.DOCUMENT_PUBLISHED,
+            title=f"{actor_display_name} published a document you follow",
+            message=document.title,
+            link=f"/documents/{document.id}",
+        )
 
         version = self.version_repository.get_by_id_for_document(
             version_id,
@@ -902,6 +1003,16 @@ class VersionService(SessionService):
                     published_by_user_id=current_user.id,
                 )
             )
+
+        actor_display_name = self._actor_display_name(current_user)
+        self._notify_version_watchers(
+            document=document,
+            current_user=current_user,
+            notification_type=NotificationType.DOCUMENT_PUBLISHED,
+            title=f"{actor_display_name} force-published a document you follow",
+            message=document.title,
+            link=f"/documents/{document.id}",
+        )
 
         logging.getLogger(__name__).warning(
             "FORCED PUBLISH by user=%d for document=%d version=%d. "

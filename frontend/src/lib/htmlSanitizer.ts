@@ -25,6 +25,7 @@ const ALLOWED_TAGS = new Set([
   'p',
   'pre',
   's',
+  'section',
   'span',
   'strong',
   'sub',
@@ -56,7 +57,7 @@ const DROP_TAGS = new Set([
   'option',
 ])
 
-const GLOBAL_ATTRIBUTES = new Set(['class'])
+const GLOBAL_ATTRIBUTES = new Set(['class', 'data-page', 'id'])
 const PER_TAG_ATTRIBUTES: Record<string, Set<string>> = {
   a: new Set(['href', 'title', 'target', 'rel']),
   img: new Set(['src', 'alt', 'title', 'width', 'height']),
@@ -68,6 +69,12 @@ const PER_TAG_ATTRIBUTES: Record<string, Set<string>> = {
 }
 
 const SAFE_LINK_PROTOCOLS = ['http:', 'https:', 'mailto:', 'tel:']
+const CALLOUT_CLASS_VARIANTS: Record<'info' | 'warning' | 'tip' | 'danger', string[]> = {
+  info: ['callout', 'callout-info', 'callout-note', 'info', 'note', 'alert', 'notice'],
+  warning: ['callout-warning', 'warning', 'warn', 'caution', 'alert-warning'],
+  tip: ['callout-tip', 'tip', 'hint', 'success', 'pro-tip'],
+  danger: ['callout-danger', 'danger', 'error', 'critical', 'alert-danger'],
+}
 
 function isSafeHref(value: string): boolean {
   const trimmed = value.trim()
@@ -121,6 +128,41 @@ function sanitizeNumericAttribute(element: Element, name: string): void {
   element.setAttribute(name, String(parsed))
 }
 
+function normalizeClassAttribute(tagName: string, value: string): string | null {
+  const normalizedTokens = value
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter((item) => /^[a-z0-9_-]+$/i.test(item))
+
+  if (normalizedTokens.length === 0) {
+    return null
+  }
+
+  const canBeCallout = tagName === 'div' || tagName === 'p' || tagName === 'blockquote'
+  if (!canBeCallout) {
+    return normalizedTokens.join(' ')
+  }
+
+  const variant = (
+    Object.entries(CALLOUT_CLASS_VARIANTS) as Array<
+      [keyof typeof CALLOUT_CLASS_VARIANTS, string[]]
+    >
+  ).find(([, candidates]) =>
+    normalizedTokens.some((token) =>
+      candidates.some((candidate) => token === candidate || token.includes(candidate)),
+    ),
+  )?.[0]
+
+  if (!variant) {
+    return normalizedTokens.join(' ')
+  }
+
+  const calloutTokens = new Set(Object.values(CALLOUT_CLASS_VARIANTS).flat())
+  const filteredTokens = normalizedTokens.filter((token) => !calloutTokens.has(token))
+  const nextTokens = [...filteredTokens, `callout-${variant}`]
+  return Array.from(new Set(nextTokens)).join(' ')
+}
+
 function unwrapElement(element: Element): void {
   const parent = element.parentNode
   if (!parent) return
@@ -150,15 +192,21 @@ function sanitizeAttributes(element: Element): void {
     }
 
     if (name === 'class') {
-      const normalizedClass = value
-        .split(/\s+/)
-        .map((item) => item.trim())
-        .filter((item) => /^[a-z0-9_-]+$/i.test(item))
-        .join(' ')
+      const normalizedClass = normalizeClassAttribute(tagName, value)
       if (!normalizedClass) {
         element.removeAttribute(attribute.name)
       } else {
         element.setAttribute('class', normalizedClass)
+      }
+      return
+    }
+
+    if (name === 'id') {
+      const normalizedId = value.trim()
+      if (!/^[a-z0-9][a-z0-9:_-]*$/i.test(normalizedId)) {
+        element.removeAttribute(attribute.name)
+      } else {
+        element.setAttribute('id', normalizedId)
       }
       return
     }
@@ -173,7 +221,14 @@ function sanitizeAttributes(element: Element): void {
       return
     }
 
-    if ((name === 'colspan' || name === 'rowspan' || name === 'span' || name === 'width' || name === 'height')) {
+    if (
+      name === 'data-page' ||
+      name === 'colspan' ||
+      name === 'rowspan' ||
+      name === 'span' ||
+      name === 'width' ||
+      name === 'height'
+    ) {
       sanitizeNumericAttribute(element, name)
       return
     }

@@ -273,6 +273,8 @@ export type SavedSearchCreateDto = Contract<'SavedSearchCreate', {
   name: string
   query?: string
   category?: string
+  date_from?: string | null
+  date_to?: string | null
 }>
 
 export type BookmarkDto = Contract<'BookmarkResponse', {

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TypeVar
 from uuid import uuid4
 
@@ -99,6 +99,7 @@ def build_document(
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL,
     category: str | None = None,
     tags: str | None = None,
+    due_date: date | None = None,
     tenant_id: int | None = None,
     parent_id: int | None = None,
 ) -> Document:
@@ -112,6 +113,7 @@ def build_document(
         visibility=visibility,
         category=category,
         tags=tags,
+        due_date=due_date,
         created_by=created_by,
         tenant_id=tenant_id,
         parent_id=parent_id,
