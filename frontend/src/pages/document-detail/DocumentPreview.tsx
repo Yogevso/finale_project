@@ -273,12 +273,17 @@ export function DocumentPreview({
   }, [activeHtmlContent, onReadingTimeChange])
 
   useEffect(() => {
+    let cancelled = false
+
     const loadInlineContent = async () => {
       setIsLoading(true)
       setError(null)
 
       try {
         const versionsResponse = await api.getVersions(documentId)
+        if (cancelled) {
+          return
+        }
         const withContent = versionsResponse.items.filter((version) =>
           Boolean(getUsableVersionContent(version.content)),
         )
@@ -316,11 +321,18 @@ export function DocumentPreview({
 
           for (const versionId of prioritizedIds) {
             const fullVersion = await api.getVersion(documentId, versionId)
+            if (cancelled) {
+              return
+            }
             if (getUsableVersionContent(fullVersion?.content)) {
               versionToShow = fullVersion
               break
             }
           }
+        }
+
+        if (cancelled) {
+          return
         }
 
         const versionContent = getUsableVersionContent(versionToShow?.content)
@@ -337,6 +349,9 @@ export function DocumentPreview({
           }
         }
       } catch (loadError) {
+        if (cancelled) {
+          return
+        }
         console.error('Preview load error:', loadError)
         setError('Failed to load preview')
         setHtmlContent(null)
@@ -344,12 +359,18 @@ export function DocumentPreview({
           setSections([])
         }
       } finally {
-        setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
     void loadInlineContent()
-  }, [documentId, processHtmlWithSections, selectedAttachment, setSections])
+
+    return () => {
+      cancelled = true
+    }
+  }, [documentId, selectedAttachment])
 
   const tocSectionsForHtml = sections
 

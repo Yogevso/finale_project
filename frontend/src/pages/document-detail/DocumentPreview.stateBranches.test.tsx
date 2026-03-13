@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Attachment } from '@/types'
+import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 import { DocumentPreview } from './DocumentPreview'
 
 const useReaderViewMock = vi.fn()
@@ -76,7 +78,13 @@ vi.mock('@/pages/document-detail/components/PreviewToolbar', () => ({
 }))
 
 vi.mock('@/pages/document-detail/components/TocPanel', () => ({
-  TocPanel: () => <div data-testid="toc-panel" />,
+  TocPanel: ({ sections }: { sections: TocSection[] }) => (
+    <div data-testid="toc-panel">
+      {sections.map((section) => (
+        <div key={section.id}>{section.text}</div>
+      ))}
+    </div>
+  ),
 }))
 
 vi.mock('@/pages/document-detail/components/PreviewCanvas', () => ({
@@ -128,6 +136,17 @@ function buildReaderViewState(overrides: Record<string, unknown> = {}) {
     hasReaderSections: false,
     ...overrides,
   }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
 }
 
 describe('DocumentPreview state branches', () => {
@@ -241,5 +260,84 @@ describe('DocumentPreview state branches', () => {
     })
 
     consoleErrorSpy.mockRestore()
+  })
+
+  it('does not let a stale inline load overwrite reader toc sections after attachment selection', async () => {
+    const inlineResponse = createDeferred<{ items: Array<{ id: number; content: string; created_at: string; is_published: boolean }> }>()
+    const attachment = buildAttachment({
+      id: 9,
+      filename: 'reentry.docx',
+      original_filename: 'reentry.docx',
+      reader_html_status: 'ready',
+    })
+
+    mockedApi.getVersions
+      .mockImplementationOnce(() => inlineResponse.promise as never)
+      .mockResolvedValue({ items: [] } as never)
+
+    useReaderViewMock.mockImplementation(
+      ({ selectedAttachment, setSections }: { selectedAttachment: Attachment | null; setSections: (value: TocSection[]) => void }) => {
+        useEffect(() => {
+          if (!selectedAttachment) {
+            return
+          }
+
+          setSections([
+            {
+              id: 'reader-0',
+              text: 'Intel Converged Security and Management Engine',
+              level: 1,
+              html: '<h1>Intel Converged Security and Management Engine</h1>',
+              index: 0,
+              anchorId: 'heading-reader-0',
+            },
+            {
+              id: 'reader-1',
+              text: 'Scope of Document',
+              level: 2,
+              html: '<h2>Scope of Document</h2>',
+              index: 1,
+              anchorId: 'heading-reader-1',
+            },
+          ])
+        }, [selectedAttachment, setSections])
+
+        return buildReaderViewState({
+          readerHtmlContent: selectedAttachment ? '<h1>Reader body</h1>' : null,
+          readerStatus: selectedAttachment ? 'ready' : null,
+        })
+      },
+    )
+
+    render(
+      <DocumentPreview
+        documentId={42}
+        attachments={[attachment]}
+        documentTitle="Re-entry Document"
+        sectionLinkBasePath="/documents/42"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Scope of Document')).toBeInTheDocument()
+    })
+
+    inlineResponse.resolve({
+      items: [
+        {
+          id: 101,
+          content: '<h1>Inline Intro</h1><h2>Appendix A</h2>',
+          created_at: '2026-01-01T00:00:00Z',
+          is_published: true,
+        },
+      ],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Scope of Document')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('Inline Intro')).not.toBeInTheDocument()
+    expect(screen.queryByText('Appendix A')).not.toBeInTheDocument()
   })
 })
