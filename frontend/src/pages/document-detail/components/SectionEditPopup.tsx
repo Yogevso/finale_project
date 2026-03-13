@@ -18,6 +18,7 @@ import {
 } from '@/lib/draftRecovery'
 import type { SectionEditTarget } from '@/pages/document-detail/helpers/previewHelpers'
 import type { SectionSaveResult } from '@/pages/document-detail/hooks/useContentEditingFlow'
+import { getDomParser } from '@/env/dom'
 
 interface SectionEditPopupProps {
   documentId: number
@@ -32,6 +33,77 @@ interface SectionEditPopupProps {
 }
 
 type ConflictState = Extract<SectionSaveResult, { status: 'conflict' }>
+type EditingFrame = {
+  editorHtml: string
+  toPersistedHtml: (editorHtml: string) => string
+}
+
+function unwrapElement(element: Element): void {
+  const parent = element.parentNode
+  if (!parent) {
+    return
+  }
+
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element)
+  }
+
+  parent.removeChild(element)
+}
+
+function isStructuralEditingRoot(element: Element | null): element is HTMLElement {
+  return (
+    element instanceof HTMLElement &&
+    element.matches('article.docx-document, div.pptx-presentation, section.pptx-slide')
+  )
+}
+
+function createWrapperSerializer(root: HTMLElement): (editorHtml: string) => string {
+  const tagName = root.tagName.toLowerCase()
+  const attributes = Array.from(root.attributes).map((attribute) => ({
+    name: attribute.name,
+    value: attribute.value,
+  }))
+
+  return (editorHtml: string) => {
+    const parser = getDomParser()
+    const doc = parser.parseFromString('', 'text/html')
+    const wrapper = doc.createElement(tagName)
+    attributes.forEach((attribute) => {
+      wrapper.setAttribute(attribute.name, attribute.value)
+    })
+    wrapper.innerHTML = editorHtml
+    doc.body.appendChild(wrapper)
+    return doc.body.innerHTML
+  }
+}
+
+function createEditingFrame(html: string): EditingFrame {
+  const parser = getDomParser()
+  const doc = parser.parseFromString(html || '', 'text/html')
+  const structuralRoot =
+    doc.body.children.length === 1 && isStructuralEditingRoot(doc.body.firstElementChild)
+      ? (doc.body.firstElementChild as HTMLElement)
+      : null
+
+  doc
+    .querySelectorAll('div.table-wrapper, div.document-table-scroll')
+    .forEach((element) => {
+      unwrapElement(element)
+    })
+
+  if (structuralRoot) {
+    return {
+      editorHtml: structuralRoot.innerHTML,
+      toPersistedHtml: createWrapperSerializer(structuralRoot),
+    }
+  }
+
+  return {
+    editorHtml: doc.body.innerHTML,
+    toPersistedHtml: (editorHtml: string) => editorHtml,
+  }
+}
 
 export function SectionEditPopup({
   documentId,
@@ -40,10 +112,13 @@ export function SectionEditPopup({
   onSave,
   onBack,
 }: SectionEditPopupProps) {
+  const initialEditingFrame = useMemo(() => createEditingFrame(section.html), [section.html])
+  const [editingFrame, setEditingFrame] = useState(initialEditingFrame)
   const [isSaving, setIsSaving] = useState(false)
   const [submitForReview, setSubmitForReview] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [baselineHtml, setBaselineHtml] = useState(section.html)
+  const [baselineHtml, setBaselineHtml] = useState(initialEditingFrame.editorHtml)
+  const [comparisonHtml, setComparisonHtml] = useState<string | null>(null)
   const [restorableDraftSavedAt, setRestorableDraftSavedAt] = useState<string | null>(null)
   const [conflictState, setConflictState] = useState<ConflictState | null>(null)
   const hasPendingRecoveredDraftRef = useRef(false)
@@ -56,6 +131,11 @@ export function SectionEditPopup({
     }),
     [documentId, section.editMode, section.id],
   )
+
+  useEffect(() => {
+    setEditingFrame(initialEditingFrame)
+    setBaselineHtml(initialEditingFrame.editorHtml)
+  }, [initialEditingFrame])
 
   const editor = useEditor({
     extensions: [
@@ -71,7 +151,7 @@ export function SectionEditPopup({
       TableHeader,
       TableCell,
     ],
-    content: section.html,
+    content: editingFrame.editorHtml,
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[200px] p-4',
@@ -163,8 +243,9 @@ export function SectionEditPopup({
     setIsSaving(true)
     setSaveError(null)
     try {
-      const result = await onSave(editor.getHTML(), submitForReview, {
-        comparisonHtml: baselineHtml,
+      const persistedHtml = editingFrame.toPersistedHtml(editor.getHTML())
+      const result = await onSave(persistedHtml, submitForReview, {
+        comparisonHtml: comparisonHtml ?? undefined,
       })
       if (result.status === 'conflict') {
         setConflictState(result)
@@ -189,9 +270,10 @@ export function SectionEditPopup({
     setIsSaving(true)
     setSaveError(null)
     try {
-      const result = await onSave(editor.getHTML(), submitForReview, {
+      const persistedHtml = editingFrame.toPersistedHtml(editor.getHTML())
+      const result = await onSave(persistedHtml, submitForReview, {
         force: true,
-        comparisonHtml: baselineHtml,
+        comparisonHtml: comparisonHtml ?? undefined,
       })
       if (result.status === 'conflict') {
         setConflictState(result)
@@ -213,8 +295,11 @@ export function SectionEditPopup({
       return
     }
 
-    editor.commands.setContent(conflictState.liveEditorHtml)
-    setBaselineHtml(conflictState.liveEditorHtml)
+    const liveEditingFrame = createEditingFrame(conflictState.liveEditorHtml)
+    editor.commands.setContent(liveEditingFrame.editorHtml)
+    setEditingFrame(liveEditingFrame)
+    setBaselineHtml(liveEditingFrame.editorHtml)
+    setComparisonHtml(conflictState.liveDocumentHtml)
     hasPendingRecoveredDraftRef.current = false
     clearDraftRecovery(draftRecoveryTarget)
     setConflictState(null)
@@ -226,8 +311,12 @@ export function SectionEditPopup({
     section.editMode === 'insert'
       ? 'Add New Section'
       : section.editMode === 'full'
-        ? 'Edit Document Content'
+        ? section.text && section.text !== 'Document Content'
+          ? `Edit Document Content: ${section.text}`
+          : 'Edit Document Content'
         : `Edit Section: ${section.text}`
+
+  const showTableControls = true
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -267,6 +356,7 @@ export function SectionEditPopup({
           <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 bg-slate-50">
             <button
               onClick={() => editor.chain().focus().toggleBold().run()}
+              aria-label="Bold"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('bold') ? 'bg-slate-200' : ''
               }`}
@@ -276,6 +366,7 @@ export function SectionEditPopup({
             </button>
             <button
               onClick={() => editor.chain().focus().toggleItalic().run()}
+              aria-label="Italic"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('italic') ? 'bg-slate-200' : ''
               }`}
@@ -285,6 +376,7 @@ export function SectionEditPopup({
             </button>
             <button
               onClick={() => editor.chain().focus().toggleUnderline().run()}
+              aria-label="Underline"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('underline') ? 'bg-slate-200' : ''
               }`}
@@ -295,6 +387,7 @@ export function SectionEditPopup({
             <div className="w-px bg-slate-300 mx-1" />
             <button
               onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              aria-label="Heading 2"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('heading', { level: 2 }) ? 'bg-slate-200' : ''
               }`}
@@ -304,6 +397,7 @@ export function SectionEditPopup({
             </button>
             <button
               onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              aria-label="Heading 3"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('heading', { level: 3 }) ? 'bg-slate-200' : ''
               }`}
@@ -314,6 +408,7 @@ export function SectionEditPopup({
             <div className="w-px bg-slate-300 mx-1" />
             <button
               onClick={() => editor.chain().focus().toggleBulletList().run()}
+              aria-label="Bullet List"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('bulletList') ? 'bg-slate-200' : ''
               }`}
@@ -323,6 +418,7 @@ export function SectionEditPopup({
             </button>
             <button
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              aria-label="Numbered List"
               className={`p-2 rounded hover:bg-slate-200 ${
                 editor.isActive('orderedList') ? 'bg-slate-200' : ''
               }`}
@@ -330,6 +426,73 @@ export function SectionEditPopup({
             >
               1. List
             </button>
+            {showTableControls && (
+              <>
+                <div className="w-px bg-slate-300 mx-1" />
+                <button
+                  onClick={() =>
+                    editor
+                      .chain()
+                      .focus()
+                      .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                      .run()
+                  }
+                  aria-label="Insert Table"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Insert Table"
+                >
+                  Table
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().addRowAfter().run()}
+                  aria-label="Add Table Row"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Add Table Row"
+                >
+                  +Row
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().addColumnAfter().run()}
+                  aria-label="Add Table Column"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Add Table Column"
+                >
+                  +Col
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteRow().run()}
+                  aria-label="Delete Table Row"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Delete Table Row"
+                >
+                  -Row
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteColumn().run()}
+                  aria-label="Delete Table Column"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Delete Table Column"
+                >
+                  -Col
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteTable().run()}
+                  aria-label="Delete Table"
+                  className="p-2 rounded hover:bg-slate-200"
+                  title="Delete Table"
+                >
+                  Del Table
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {section.editMode === 'full' && (
+          <div className="border-b border-slate-200 bg-sky-50 px-6 py-3 text-sm text-slate-700">
+            {section.text && section.text !== 'Document Content'
+              ? `This TOC item does not map to a standalone editable block, so editing opened the full document around "${section.text}".`
+              : 'Full document mode keeps complex content editable in one place, including tables and mixed layout blocks.'}
           </div>
         )}
 

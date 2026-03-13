@@ -5,10 +5,13 @@ import {
   toSectionEditTarget,
   transitionContentEditingMachineState,
 } from '@/features/documentDetail'
+import { getDomParser } from '@/env/dom'
 import { api } from '@/lib/api'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import { queryKeys } from '@/lib/queryKeys'
 import {
+  findSectionMatchInRoot,
+  getEditableHtmlRoot,
   getUsableVersionContent,
   processHtmlIntoSections,
   type SectionEditTarget,
@@ -37,7 +40,7 @@ export type SectionSaveResult =
     }
 
 function normalizeComparableHtml(html: string | null | undefined): string {
-  return sanitizeHtmlForPreview(html || '')
+  return processHtmlIntoSections(sanitizeHtmlForPreview(html || '')).html
     .replace(/>\s+</g, '><')
     .replace(/\s+/g, ' ')
     .trim()
@@ -117,6 +120,160 @@ function resolveLiveEditorHtml(
   return matchedSection?.html || editingSection.html
 }
 
+function buildFullDocumentEditTarget(
+  html: string,
+  options?: { requestedSectionText?: string; fromChooser?: boolean },
+): SectionEditTarget {
+  return toSectionEditTarget(
+    {
+      id: 'document-content',
+      text: options?.requestedSectionText || 'Document Content',
+      level: 1,
+      html,
+      index: -1,
+      anchorId: 'document-content-area',
+    },
+    {
+      fromChooser: options?.fromChooser ?? false,
+      forceMode: 'full',
+    },
+  )
+}
+
+function normalizeSectionText(value: string | null | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function resolveSectionMatchBounds(
+  root: HTMLElement,
+  sections: TocSection[],
+  sectionIndex: number,
+): { minTopLevelIndex: number; maxTopLevelIndex: number } {
+  let minTopLevelIndex = -1
+  for (let index = 0; index < sectionIndex; index += 1) {
+    const match = findSectionMatchInRoot(root, sections[index], {
+      minTopLevelIndex,
+    })
+    if (match) {
+      minTopLevelIndex = match.topLevelIndex
+    }
+  }
+
+  let maxTopLevelIndex = Number.POSITIVE_INFINITY
+  for (let index = sectionIndex + 1; index < sections.length; index += 1) {
+    const match = findSectionMatchInRoot(root, sections[index], {
+      minTopLevelIndex,
+    })
+    if (match) {
+      maxTopLevelIndex = match.topLevelIndex
+      break
+    }
+  }
+
+  return {
+    minTopLevelIndex,
+    maxTopLevelIndex,
+  }
+}
+
+function buildFragmentEditTarget(
+  section: TocSection,
+  sections: TocSection[],
+  documentHtml: string,
+  options?: { fromChooser?: boolean },
+): SectionEditTarget | null {
+  const parser = getDomParser()
+  const doc = parser.parseFromString(documentHtml || '', 'text/html')
+  const root = getEditableHtmlRoot(doc)
+  const topLevelElements = Array.from(root.children) as HTMLElement[]
+  const matchedSectionIndex = sections.findIndex(
+    (candidate) =>
+      candidate.id === section.id ||
+      (candidate.anchorId === section.anchorId && candidate.text === section.text),
+  )
+  const sectionPosition = matchedSectionIndex >= 0 ? matchedSectionIndex : Math.max(0, section.index)
+  const { minTopLevelIndex, maxTopLevelIndex } = resolveSectionMatchBounds(
+    root,
+    sections,
+    sectionPosition,
+  )
+  const currentMatch = findSectionMatchInRoot(root, section, {
+    minTopLevelIndex,
+    maxTopLevelIndex,
+  })
+
+  if (!currentMatch) {
+    return null
+  }
+
+  const endIndex =
+    Number.isFinite(maxTopLevelIndex) && maxTopLevelIndex > currentMatch.topLevelIndex
+      ? maxTopLevelIndex
+      : topLevelElements.length
+
+  const selectedNodes = topLevelElements.slice(currentMatch.topLevelIndex, endIndex)
+  if (selectedNodes.length === 0) {
+    return null
+  }
+
+  const replaceAnchorId =
+    selectedNodes[0].id ||
+    `editable-fragment-${sectionPosition}-${normalizeSectionText(section.text).replace(/[^a-z0-9]+/g, '-') || 'section'}`
+  selectedNodes[0].id = replaceAnchorId
+
+  return {
+    ...toSectionEditTarget(
+      {
+        ...section,
+        html: selectedNodes.map((node) => node.outerHTML).join('\n'),
+        anchorId: replaceAnchorId,
+      },
+      {
+        fromChooser: options?.fromChooser ?? false,
+      },
+    ),
+    replaceAnchorId,
+    replaceStartIndex: currentMatch.topLevelIndex,
+    replaceNodeCount: selectedNodes.length,
+  }
+}
+
+function replaceFragmentInDocumentHtml(
+  documentHtml: string,
+  editingSection: SectionEditTarget,
+  newHtml: string,
+): string | null {
+  if (!editingSection.replaceAnchorId || !editingSection.replaceNodeCount) {
+    return null
+  }
+
+  const parser = getDomParser()
+  const doc = parser.parseFromString(documentHtml || '', 'text/html')
+  const root = getEditableHtmlRoot(doc)
+  const topLevelElements = Array.from(root.children) as HTMLElement[]
+  const startIndex =
+    typeof editingSection.replaceStartIndex === 'number'
+      ? editingSection.replaceStartIndex
+      : topLevelElements.findIndex((element) => element.id === editingSection.replaceAnchorId)
+  if (startIndex < 0) {
+    return null
+  }
+
+  const insertionBoundary = topLevelElements[startIndex + editingSection.replaceNodeCount] || null
+  for (let offset = 0; offset < editingSection.replaceNodeCount; offset += 1) {
+    const node = topLevelElements[startIndex + offset]
+    node?.remove()
+  }
+
+  const fragmentDoc = parser.parseFromString(newHtml || '', 'text/html')
+  const newNodes = Array.from(fragmentDoc.body.childNodes)
+  newNodes.forEach((node) => {
+    root.insertBefore(doc.importNode(node, true), insertionBoundary)
+  })
+
+  return doc.body.innerHTML
+}
+
 export function useContentEditingFlow({
   documentId,
   isEditor,
@@ -180,20 +337,74 @@ export function useContentEditingFlow({
   }, [])
 
   const handleStartEditingSection = useCallback((section: TocSection) => {
+    if (!section.html.trim() && activeHtmlContent) {
+      const fragmentTarget = buildFragmentEditTarget(section, sections, activeHtmlContent)
+      if (fragmentTarget) {
+        dispatchEditingFlow({
+          type: 'START_EDITING',
+          section: fragmentTarget,
+        })
+        return
+      }
+
+      dispatchEditingFlow({
+        type: 'START_EDITING',
+        section: buildFullDocumentEditTarget(activeHtmlContent, {
+          requestedSectionText: section.text,
+        }),
+      })
+      return
+    }
+
     dispatchEditingFlow({
       type: 'START_EDITING',
       section: toSectionEditTarget(section),
     })
-  }, [])
+  }, [activeHtmlContent, sections])
 
   const handleChooseEditSection = useCallback((section: TocSection) => {
+    if (!section.html.trim() && activeHtmlContent) {
+      const fragmentTarget = buildFragmentEditTarget(section, sections, activeHtmlContent, {
+        fromChooser: true,
+      })
+      if (fragmentTarget) {
+        dispatchEditingFlow({
+          type: 'START_EDITING',
+          section: fragmentTarget,
+        })
+        return
+      }
+
+      dispatchEditingFlow({
+        type: 'START_EDITING',
+        section: buildFullDocumentEditTarget(activeHtmlContent, {
+          requestedSectionText: section.text,
+          fromChooser: true,
+        }),
+      })
+      return
+    }
+
     dispatchEditingFlow({
       type: 'START_EDITING',
       section: toSectionEditTarget(section, {
         fromChooser: true,
       }),
     })
-  }, [])
+  }, [activeHtmlContent, sections])
+
+  const handleEditFullDocument = useCallback(() => {
+    if (!activeHtmlContent) {
+      return
+    }
+
+    dispatchEditingFlow({
+      type: 'START_EDITING',
+      section: buildFullDocumentEditTarget(activeHtmlContent, {
+        fromChooser: true,
+      }),
+    })
+  }, [activeHtmlContent])
 
   const handleChooseAddSection = useCallback(
     (insertAfterIndex: number) => {
@@ -261,6 +472,9 @@ export function useContentEditingFlow({
         newFullHtml = updatedSections.map((section) => section.html).join('\n')
       } else if (editingSection.index < 0 || editingSection.editMode === 'full') {
         newFullHtml = newHtml
+      } else if (editingSection.replaceAnchorId && editingSection.replaceNodeCount && activeHtmlContent) {
+        newFullHtml =
+          replaceFragmentInDocumentHtml(activeHtmlContent, editingSection, newHtml) || activeHtmlContent
       } else {
         newFullHtml = sections
           .map((section, idx) =>
@@ -335,6 +549,7 @@ export function useContentEditingFlow({
     editingSection,
     handleCloseContentEditChooser,
     handleStartEditingSection,
+    handleEditFullDocument,
     handleChooseEditSection,
     handleChooseAddSection,
     handleCloseSectionEdit,

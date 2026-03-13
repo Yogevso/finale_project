@@ -4,6 +4,7 @@ import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 interface ContentEditChooserPopupProps {
   sections: TocSection[]
   onClose: () => void
+  onEditFullDocument: () => void
   onEditSection: (section: TocSection) => void
   onAddSection: (insertAfterIndex: number) => void
 }
@@ -11,6 +12,7 @@ interface ContentEditChooserPopupProps {
 export function ContentEditChooserPopup({
   sections,
   onClose,
+  onEditFullDocument,
   onEditSection,
   onAddSection,
 }: ContentEditChooserPopupProps) {
@@ -32,7 +34,26 @@ export function ContentEditChooserPopup({
           </button>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 p-6 overflow-auto">
+        <div className="space-y-6 p-6 overflow-auto">
+          <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="font-display font-semibold text-slate-900">Edit Entire Document</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Use this when you need to edit tables, mixed layouts, or content that spans multiple sections.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onEditFullDocument}
+                className="btn-primary"
+              >
+                Open Full Document Editor
+              </button>
+            </div>
+          </section>
+
+          <div className="grid md:grid-cols-2 gap-6">
           <section className="space-y-3">
             <h3 className="font-display font-semibold text-slate-900">Edit Existing Section</h3>
             <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
@@ -99,6 +120,7 @@ export function ContentEditChooserPopup({
               )}
             </div>
           </section>
+          </div>
         </div>
       </div>
     </div>

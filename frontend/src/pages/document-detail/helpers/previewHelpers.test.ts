@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyHighlights,
   clearHighlights,
+  filterOutlineSectionsByHtml,
   getUsableVersionContent,
   mapOutlineItemsToSections,
   mergeTocSections,
@@ -160,22 +161,38 @@ describe('processHtmlIntoSections', () => {
   it('keeps backend TOC order while reusing html anchor ids for matching headings', () => {
     const outlineSections = mapOutlineItemsToSections([
       { id: 'toc-0', title: 'Intro', level: 1, page: 1, page_start: 1, anchor_id: 'page-1' },
-      { id: 'toc-1', title: 'Release Kit Summary', level: 1, page: 2, page_start: 2, anchor_id: 'page-2' },
-      { id: 'toc-2', title: 'Appendix A', level: 1, page: 3, page_start: 3, anchor_id: 'page-3' },
+      { id: 'toc-1', title: 'Status Summary', level: 1, page: 2, page_start: 2, anchor_id: 'page-2' },
+      { id: 'toc-2', title: 'Reference Appendix', level: 1, page: 3, page_start: 3, anchor_id: 'page-3' },
     ])
     const htmlSections = processHtmlIntoSections(
-      '<article class="docx-document"><h1 id="heading-intro">Intro</h1><p>Body</p><h2 id="heading-appendix-a">Appendix A</h2><p>Appendix</p></article>',
+      '<article class="docx-document"><h1 id="heading-intro">Intro</h1><p>Body</p><h2 id="heading-reference-appendix">Reference Appendix</h2><p>Appendix</p></article>',
     ).sections
 
     const merged = mergeTocSections(outlineSections, htmlSections)
 
     expect(merged.map((section) => section.text)).toEqual([
       'Intro',
-      'Release Kit Summary',
-      'Appendix A',
+      'Status Summary',
+      'Reference Appendix',
     ])
     expect(merged[0]?.anchorId).toBe('heading-intro')
     expect(merged[1]?.anchorId).toBe('page-2')
-    expect(merged[2]?.anchorId).toBe('heading-appendix-a')
+    expect(merged[2]?.anchorId).toBe('heading-reference-appendix')
+  })
+
+  it('drops stale outline items that no longer match the current html while keeping outline-only matches', () => {
+    const outlineSections = mapOutlineItemsToSections([
+      { id: 'toc-0', title: 'Overview Notes', level: 2, page: 2, page_start: 2, anchor_id: 'page-2' },
+      { id: 'toc-1', title: 'Obsolete Section', level: 2, page: 3, page_start: 3, anchor_id: 'page-3' },
+      { id: 'toc-2', title: 'Reference Appendix', level: 2, page: 4, page_start: 4, anchor_id: 'page-4' },
+    ])
+
+    const filtered = filterOutlineSectionsByHtml(
+      outlineSections,
+      '<article class="docx-document"><p><strong>Overview Notes</strong></p><p>Body</p><h2 id="heading-appendix">Reference Appendix</h2><p>Appendix</p></article>',
+    )
+
+    expect(filtered.map((section) => section.text)).toEqual(['Overview Notes', 'Reference Appendix'])
+    expect(filtered[1]?.anchorId).toBe('heading-appendix')
   })
 })

@@ -8,7 +8,9 @@ import type { ReadingWidth } from '@/lib/readingWidth'
 import type { Attachment } from '@/types'
 import {
   applyHighlights,
+  filterOutlineSectionsByHtml,
   getUsableVersionContent,
+  mergeTocSections,
   processHtmlIntoSections,
   resolveSectionPageStart,
   type TocSection,
@@ -85,6 +87,7 @@ export function DocumentPreview({
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [sections, setSections] = useState<TocSection[]>([])
+  const [outlineSectionsTemplate, setOutlineSectionsTemplate] = useState<TocSection[]>([])
   const [tocCollapsed, setTocCollapsed] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [searchMatchCount, setSearchMatchCount] = useState(0)
@@ -121,6 +124,31 @@ export function DocumentPreview({
   const processHtmlWithSections = useCallback((html: string) => {
     return processHtmlIntoSections(html).html
   }, [])
+
+  const mergeWithOutlineTemplate = useCallback(
+    (html: string, nextSections: TocSection[]) => {
+      if (outlineSectionsTemplate.length === 0) {
+        return {
+          mergedSections: nextSections,
+          filteredTemplate: [] as TocSection[],
+        }
+      }
+
+      const filteredTemplate = filterOutlineSectionsByHtml(outlineSectionsTemplate, html)
+      if (filteredTemplate.length === 0) {
+        return {
+          mergedSections: nextSections,
+          filteredTemplate,
+        }
+      }
+
+      return {
+        mergedSections: mergeTocSections(filteredTemplate, nextSections),
+        filteredTemplate,
+      }
+    },
+    [outlineSectionsTemplate],
+  )
 
   const {
     readerHtmlContent,
@@ -208,9 +236,24 @@ export function DocumentPreview({
     (html: string) => {
       const processed = processHtmlIntoSections(html)
       setHtmlContent(processed.html)
-      setSections(processed.sections)
+
+      if (processed.sections.length === 0) {
+        setSections([])
+        setOutlineSectionsTemplate([])
+        return
+      }
+
+      const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
+        processed.html,
+        processed.sections,
+      )
+      setSections(mergedSections)
+
+      if (outlineSectionsTemplate.length > 0) {
+        setOutlineSectionsTemplate(filteredTemplate)
+      }
     },
-    [],
+    [mergeWithOutlineTemplate, outlineSectionsTemplate.length],
   )
 
   const {
@@ -218,6 +261,7 @@ export function DocumentPreview({
     editingSection,
     handleCloseContentEditChooser,
     handleStartEditingSection,
+    handleEditFullDocument,
     handleChooseEditSection,
     handleChooseAddSection,
     handleCloseSectionEdit,
@@ -271,6 +315,16 @@ export function DocumentPreview({
   useEffect(() => {
     onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent))
   }, [activeHtmlContent, onReadingTimeChange])
+
+  useEffect(() => {
+    setOutlineSectionsTemplate([])
+  }, [documentId])
+
+  useEffect(() => {
+    if (selectedAttachment && readerHtmlContent && sections.length > 0) {
+      setOutlineSectionsTemplate(sections)
+    }
+  }, [readerHtmlContent, sections, selectedAttachment])
 
   useEffect(() => {
     let cancelled = false
@@ -340,12 +394,20 @@ export function DocumentPreview({
           const processed = processHtmlIntoSections(versionContent)
           setHtmlContent(processed.html)
           if (!selectedAttachment) {
-            setSections(processed.sections)
+            const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
+              processed.html,
+              processed.sections,
+            )
+            setSections(mergedSections)
+            if (outlineSectionsTemplate.length > 0) {
+              setOutlineSectionsTemplate(filteredTemplate)
+            }
           }
         } else {
           setHtmlContent(null)
           if (!selectedAttachment) {
             setSections([])
+            setOutlineSectionsTemplate([])
           }
         }
       } catch (loadError) {
@@ -357,6 +419,7 @@ export function DocumentPreview({
         setHtmlContent(null)
         if (!selectedAttachment) {
           setSections([])
+          setOutlineSectionsTemplate([])
         }
       } finally {
         if (!cancelled) {
@@ -370,7 +433,7 @@ export function DocumentPreview({
     return () => {
       cancelled = true
     }
-  }, [documentId, selectedAttachment])
+  }, [documentId, mergeWithOutlineTemplate, outlineSectionsTemplate.length, selectedAttachment])
 
   const tocSectionsForHtml = sections
 
@@ -626,6 +689,7 @@ export function DocumentPreview({
         <ContentEditChooserPopup
           sections={tocSectionsForHtml}
           onClose={handleCloseContentEditChooser}
+          onEditFullDocument={handleEditFullDocument}
           onEditSection={handleChooseEditSection}
           onAddSection={handleChooseAddSection}
         />

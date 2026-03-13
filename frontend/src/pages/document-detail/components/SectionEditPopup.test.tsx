@@ -16,6 +16,12 @@ type CommandChain = {
   toggleHeading: (_options?: { level: number }) => CommandChain
   toggleBulletList: () => CommandChain
   toggleOrderedList: () => CommandChain
+  insertTable: (_options: { rows: number; cols: number; withHeaderRow: boolean }) => CommandChain
+  addRowAfter: () => CommandChain
+  addColumnAfter: () => CommandChain
+  deleteRow: () => CommandChain
+  deleteColumn: () => CommandChain
+  deleteTable: () => CommandChain
   run: () => boolean
 }
 
@@ -31,6 +37,15 @@ type MockEditor = {
   isActive: (_name: string, _options?: Record<string, unknown>) => boolean
 }
 
+const commandSpies = {
+  insertTable: vi.fn(),
+  addRowAfter: vi.fn(),
+  addColumnAfter: vi.fn(),
+  deleteRow: vi.fn(),
+  deleteColumn: vi.fn(),
+  deleteTable: vi.fn(),
+}
+
 function buildCommandChain(): CommandChain {
   return {
     focus: () => buildCommandChain(),
@@ -40,6 +55,30 @@ function buildCommandChain(): CommandChain {
     toggleHeading: () => buildCommandChain(),
     toggleBulletList: () => buildCommandChain(),
     toggleOrderedList: () => buildCommandChain(),
+    insertTable: (options) => {
+      commandSpies.insertTable(options)
+      return buildCommandChain()
+    },
+    addRowAfter: () => {
+      commandSpies.addRowAfter()
+      return buildCommandChain()
+    },
+    addColumnAfter: () => {
+      commandSpies.addColumnAfter()
+      return buildCommandChain()
+    },
+    deleteRow: () => {
+      commandSpies.deleteRow()
+      return buildCommandChain()
+    },
+    deleteColumn: () => {
+      commandSpies.deleteColumn()
+      return buildCommandChain()
+    },
+    deleteTable: () => {
+      commandSpies.deleteTable()
+      return buildCommandChain()
+    },
     run: () => true,
   }
 }
@@ -112,6 +151,7 @@ const baseSection: SectionEditTarget = {
 describe('DraftRecovery in SectionEditPopup', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    Object.values(commandSpies).forEach((spy) => spy.mockReset())
   })
 
   it('shows a stored draft notice and restores the saved draft into the editor', async () => {
@@ -154,5 +194,66 @@ describe('DraftRecovery in SectionEditPopup', () => {
       expect(document.querySelector('.ProseMirror')).toHaveTextContent('Recovered draft copy')
     })
     expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('Original body')
+  })
+
+  it('shows full document and table controls for complex editing', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn(
+      async (
+        _newHtml: string,
+        _submitForReview: boolean,
+        _options?: { force?: boolean; comparisonHtml?: string },
+      ): Promise<SectionSaveResult> => ({ status: 'saved' }),
+    )
+
+    render(
+      <SectionEditPopup
+        documentId={42}
+        section={{
+          ...baseSection,
+          editMode: 'full',
+          index: -1,
+          text: 'Document Content',
+          html:
+            '<article class="docx-document"><h2>Introduction</h2><div class="table-wrapper">' +
+            '<table><tbody><tr><td>Cell</td></tr></tbody></table>' +
+            '</div></article>',
+        }}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />,
+    )
+
+    expect(screen.getByText(/including tables and mixed layout blocks/i)).toBeInTheDocument()
+    expect(document.querySelector('.ProseMirror table')).not.toBeNull()
+    expect(document.querySelector('.ProseMirror .table-wrapper')).toBeNull()
+    expect(document.querySelector('.ProseMirror article')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /insert table/i }))
+    await user.click(screen.getByRole('button', { name: /add table row/i }))
+    await user.click(screen.getByRole('button', { name: /add table column/i }))
+
+    expect(commandSpies.insertTable).toHaveBeenCalledWith({
+      rows: 3,
+      cols: 3,
+      withHeaderRow: true,
+    })
+    expect(commandSpies.addRowAfter).toHaveBeenCalledTimes(1)
+    expect(commandSpies.addColumnAfter).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: /save & submit for review/i }))
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.stringContaining('<article class="docx-document">'),
+        true,
+        { comparisonHtml: undefined },
+      )
+    })
+    expect(onSave).toHaveBeenCalledWith(
+      expect.not.stringContaining('table-wrapper'),
+      true,
+      { comparisonHtml: undefined },
+    )
   })
 })

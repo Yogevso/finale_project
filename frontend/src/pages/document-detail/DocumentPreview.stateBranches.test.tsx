@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Attachment } from '@/types'
 import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 import { DocumentPreview } from './DocumentPreview'
 
 const useReaderViewMock = vi.fn()
+const useContentEditingFlowMock = vi.fn()
 const downloadAttachmentMock = vi.fn()
 
 vi.mock('@/lib/api', () => ({
@@ -45,17 +46,7 @@ vi.mock('@/pages/document-detail/hooks/useInlineComments', () => ({
 }))
 
 vi.mock('@/pages/document-detail/hooks/useContentEditingFlow', () => ({
-  useContentEditingFlow: () => ({
-    showContentEditChooser: false,
-    editingSection: null,
-    handleCloseContentEditChooser: vi.fn(),
-    handleStartEditingSection: vi.fn(),
-    handleChooseEditSection: vi.fn(),
-    handleChooseAddSection: vi.fn(),
-    handleCloseSectionEdit: vi.fn(),
-    handleBackToChooser: vi.fn(),
-    handleSaveSection: vi.fn(),
-  }),
+  useContentEditingFlow: (...args: unknown[]) => useContentEditingFlowMock(...args),
 }))
 
 vi.mock('@/pages/document-detail/hooks/useReaderView', () => ({
@@ -156,6 +147,18 @@ describe('DocumentPreview state branches', () => {
     mockedApi.getVersion.mockResolvedValue(null as never)
     downloadAttachmentMock.mockResolvedValue(undefined)
     useReaderViewMock.mockReturnValue(buildReaderViewState())
+    useContentEditingFlowMock.mockReturnValue({
+      showContentEditChooser: false,
+      editingSection: null,
+      handleCloseContentEditChooser: vi.fn(),
+      handleStartEditingSection: vi.fn(),
+      handleEditFullDocument: vi.fn(),
+      handleChooseEditSection: vi.fn(),
+      handleChooseAddSection: vi.fn(),
+      handleCloseSectionEdit: vi.fn(),
+      handleBackToChooser: vi.fn(),
+      handleSaveSection: vi.fn(),
+    })
   })
 
   it('shows a loading spinner for previewable attachments while reader content is pending', async () => {
@@ -285,17 +288,17 @@ describe('DocumentPreview state branches', () => {
           setSections([
             {
               id: 'reader-0',
-              text: 'Intel Converged Security and Management Engine',
+              text: 'Program Overview',
               level: 1,
-              html: '<h1>Intel Converged Security and Management Engine</h1>',
+              html: '<h1>Program Overview</h1>',
               index: 0,
               anchorId: 'heading-reader-0',
             },
             {
               id: 'reader-1',
-              text: 'Scope of Document',
+              text: 'Overview Notes',
               level: 2,
-              html: '<h2>Scope of Document</h2>',
+              html: '<h2>Overview Notes</h2>',
               index: 1,
               anchorId: 'heading-reader-1',
             },
@@ -319,14 +322,14 @@ describe('DocumentPreview state branches', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Scope of Document')).toBeInTheDocument()
+      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
     })
 
     inlineResponse.resolve({
       items: [
         {
           id: 101,
-          content: '<h1>Inline Intro</h1><h2>Appendix A</h2>',
+          content: '<h1>Inline Intro</h1><h2>Reference Appendix</h2>',
           created_at: '2026-01-01T00:00:00Z',
           is_published: true,
         },
@@ -334,10 +337,140 @@ describe('DocumentPreview state branches', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Scope of Document')).toBeInTheDocument()
+      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
     })
 
     expect(screen.queryByText('Inline Intro')).not.toBeInTheDocument()
-    expect(screen.queryByText('Appendix A')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reference Appendix')).not.toBeInTheDocument()
+  })
+
+  it('keeps matched outline items after inline save while dropping stale entries', async () => {
+    const attachment = buildAttachment({
+      id: 11,
+      filename: 'edited.docx',
+      original_filename: 'edited.docx',
+      reader_html_status: 'ready',
+    })
+
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 201,
+          content: '<h1>Inline Intro</h1><h2>Reference Appendix</h2>',
+          created_at: '2026-01-01T00:00:00Z',
+          is_published: true,
+        },
+      ],
+    } as never)
+
+    useReaderViewMock.mockImplementation(
+      ({ selectedAttachment, setSections }: { selectedAttachment: Attachment | null; setSections: (value: TocSection[]) => void }) => {
+        useEffect(() => {
+          if (!selectedAttachment) {
+            return
+          }
+
+          setSections([
+            {
+              id: 'reader-0',
+              text: 'Program Overview',
+              level: 1,
+              html: '<h1>Program Overview</h1>',
+              index: 0,
+              anchorId: 'heading-reader-0',
+            },
+            {
+              id: 'reader-1',
+              text: 'Overview Notes',
+              level: 2,
+              html: '',
+              index: 1,
+              anchorId: 'page-2',
+            },
+            {
+              id: 'reader-2',
+              text: 'Obsolete Section',
+              level: 2,
+              html: '',
+              index: 2,
+              anchorId: 'page-3',
+            },
+            {
+              id: 'reader-3',
+              text: 'Reference Appendix',
+              level: 2,
+              html: '<h2>Reference Appendix</h2>',
+              index: 3,
+              anchorId: 'heading-reader-3',
+            },
+          ])
+        }, [selectedAttachment, setSections])
+
+        return buildReaderViewState({
+          readerHtmlContent: selectedAttachment ? '<h1>Reader body</h1>' : null,
+          readerStatus: selectedAttachment ? 'ready' : null,
+        })
+      },
+    )
+
+    useContentEditingFlowMock.mockImplementation(
+      ({
+        sections,
+        applyProcessedHtml,
+      }: {
+        sections: TocSection[]
+        applyProcessedHtml: (html: string) => void
+      }) => {
+        const armedRef = useRef(false)
+        const savedRef = useRef(false)
+
+        useEffect(() => {
+          if (!sections.some((section) => section.text === 'Overview Notes')) {
+            return
+          }
+
+          if (!armedRef.current) {
+            armedRef.current = true
+            return
+          }
+
+          if (!savedRef.current) {
+            savedRef.current = true
+            applyProcessedHtml(
+              '<article class="docx-document"><h1>Inline Intro</h1><p><strong>Overview Notes</strong></p><p>Body</p><h2>Reference Appendix</h2></article>',
+            )
+          }
+        }, [applyProcessedHtml, sections])
+
+        return {
+          showContentEditChooser: false,
+          editingSection: null,
+          handleCloseContentEditChooser: vi.fn(),
+          handleStartEditingSection: vi.fn(),
+          handleEditFullDocument: vi.fn(),
+          handleChooseEditSection: vi.fn(),
+          handleChooseAddSection: vi.fn(),
+          handleCloseSectionEdit: vi.fn(),
+          handleBackToChooser: vi.fn(),
+          handleSaveSection: vi.fn(),
+        }
+      },
+    )
+
+    render(
+      <DocumentPreview
+        documentId={42}
+        attachments={[attachment]}
+        documentTitle="Edited Reader Document"
+        sectionLinkBasePath="/documents/42"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Reference Appendix')).toBeInTheDocument()
+    expect(screen.queryByText('Obsolete Section')).not.toBeInTheDocument()
   })
 })

@@ -19,6 +19,19 @@ export interface SectionEditTarget extends TocSection {
   editMode?: SectionEditMode
   insertAfterIndex?: number
   fromChooser?: boolean
+  replaceAnchorId?: string
+  replaceStartIndex?: number
+  replaceNodeCount?: number
+}
+
+export interface SectionHtmlMatch {
+  element: HTMLElement
+  topLevelElement: HTMLElement
+  topLevelIndex: number
+}
+
+function normalizeSectionLabel(value: string | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): TocSection[] {
@@ -39,8 +52,184 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
     .filter((item) => item.text.trim().length > 0)
 }
 
-function normalizeSectionLabel(value: string | undefined): string {
-  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+export function getEditableHtmlRoot(doc: Document): HTMLElement {
+  const root = doc.body.firstElementChild
+  if (doc.body.children.length === 1 && root?.classList.contains('docx-document')) {
+    return root as HTMLElement
+  }
+
+  return doc.body
+}
+
+function getTopLevelEditableChild(element: HTMLElement, root: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = element
+  while (current && current.parentElement && current.parentElement !== root) {
+    current = current.parentElement
+  }
+
+  return current?.parentElement === root ? current : null
+}
+
+export function findSectionMatchInRoot(
+  root: HTMLElement,
+  section: Pick<TocSection, 'anchorId' | 'text'>,
+  options?: { minTopLevelIndex?: number; maxTopLevelIndex?: number },
+): SectionHtmlMatch | null {
+  const doc = root.ownerDocument
+  const topLevelElements = Array.from(root.children) as HTMLElement[]
+  const minTopLevelIndex = options?.minTopLevelIndex ?? -1
+  const maxTopLevelIndex = options?.maxTopLevelIndex ?? Number.POSITIVE_INFINITY
+  const genericPageAnchor = parsePageFromAnchorId(section.anchorId)
+
+  if (section.anchorId && !genericPageAnchor) {
+    const byId = doc.getElementById(section.anchorId)
+    if (byId instanceof HTMLElement) {
+      const topLevelElement = getTopLevelEditableChild(byId, root)
+      if (topLevelElement) {
+        const topLevelIndex = topLevelElements.indexOf(topLevelElement)
+        if (topLevelIndex > minTopLevelIndex && topLevelIndex < maxTopLevelIndex) {
+          return { element: byId, topLevelElement, topLevelIndex }
+        }
+      }
+    }
+  }
+
+  const normalizedLabel = normalizeSectionLabel(section.text)
+  if (!normalizedLabel) {
+    return null
+  }
+
+  const candidates = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'h1, h2, h3, h4, h5, h6, li, p, dt, dd, figcaption, summary, td, th, strong, b, table',
+    ),
+  )
+
+  const getSemanticRank = (element: HTMLElement): number => {
+    const tagName = element.tagName.toLowerCase()
+    if (/^h[1-6]$/.test(tagName)) {
+      return 0
+    }
+    if (tagName === 'li') {
+      return 1
+    }
+    if (tagName === 'p' || tagName === 'dt' || tagName === 'dd' || tagName === 'summary') {
+      return 2
+    }
+    if (tagName === 'table') {
+      return 3
+    }
+    return 4
+  }
+
+  let bestMatch:
+    | {
+        element: HTMLElement
+        topLevelElement: HTMLElement
+        topLevelIndex: number
+        score: number
+        semanticRank: number
+        domIndex: number
+      }
+    | null = null
+
+  for (const [domIndex, element] of candidates.entries()) {
+    const topLevelElement = getTopLevelEditableChild(element, root)
+    if (!topLevelElement) {
+      continue
+    }
+
+    const topLevelIndex = topLevelElements.indexOf(topLevelElement)
+    if (topLevelIndex <= minTopLevelIndex || topLevelIndex >= maxTopLevelIndex) {
+      continue
+    }
+
+    const label = normalizeSectionLabel(element.textContent || undefined)
+    if (!label) {
+      continue
+    }
+
+    let score: number | null = null
+    if (label === normalizedLabel) {
+      score = 0
+    } else if (label.startsWith(normalizedLabel)) {
+      score = 1
+    } else if (label.includes(normalizedLabel)) {
+      score = 2
+    }
+
+    if (score === null) {
+      continue
+    }
+
+    const candidate = {
+      element,
+      topLevelElement,
+      topLevelIndex,
+      score,
+      semanticRank: getSemanticRank(element),
+      domIndex,
+    }
+
+    if (
+      !bestMatch ||
+      candidate.score < bestMatch.score ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank < bestMatch.semanticRank) ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank === bestMatch.semanticRank &&
+        candidate.topLevelIndex < bestMatch.topLevelIndex) ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank === bestMatch.semanticRank &&
+        candidate.topLevelIndex === bestMatch.topLevelIndex &&
+        candidate.domIndex < bestMatch.domIndex)
+    ) {
+      bestMatch = candidate
+    }
+  }
+
+  if (!bestMatch) {
+    return null
+  }
+
+  return {
+    element: bestMatch.element,
+    topLevelElement: bestMatch.topLevelElement,
+    topLevelIndex: bestMatch.topLevelIndex,
+  }
+}
+
+export function filterOutlineSectionsByHtml(
+  outlineSections: TocSection[],
+  html: string,
+): TocSection[] {
+  if (outlineSections.length === 0 || !html.trim()) {
+    return outlineSections
+  }
+
+  const parser = getDomParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const root = getEditableHtmlRoot(doc)
+  let previousTopLevelIndex = -1
+
+  return outlineSections.flatMap((section) => {
+    const match = findSectionMatchInRoot(root, section, {
+      minTopLevelIndex: previousTopLevelIndex,
+    })
+
+    if (!match) {
+      return []
+    }
+
+    previousTopLevelIndex = match.topLevelIndex
+
+    return [
+      {
+        ...section,
+        anchorId: match.element.id || section.anchorId,
+      },
+    ]
+  })
 }
 
 function removeSectionFromTextMap(
