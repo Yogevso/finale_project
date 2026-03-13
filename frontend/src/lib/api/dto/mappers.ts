@@ -2,7 +2,6 @@ import type {
   AudienceAccessPreview,
   AnalyticsOverview,
   Attachment,
-  AttachmentOutlineResponse,
   AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   Company,
@@ -52,7 +51,6 @@ import type {
   AcceptInvitationRequestDto,
   AnalyticsOverviewDto,
   AttachmentDto,
-  AttachmentOutlineResponseDto,
   AttachmentReaderViewResponseDto,
   AttachmentUploadResponseDto,
   CollaborationActiveSessionsResponseDto,
@@ -277,9 +275,11 @@ export function mapVersionDto(dto: VersionDto): Version {
 }
 
 export function mapVersionListResponseDto(dto: VersionListResponseDto): VersionListResponse {
+  const items = (dto.items as VersionDto[]).map((item) => mapVersionDto(item))
+
   return {
     ...dto,
-    items: dto.items.map(mapVersionDto),
+    items,
   }
 }
 
@@ -384,15 +384,7 @@ export function mapAttachmentReaderViewResponseDto(
   return {
     ...dto,
     toc_items: dto.toc_items.map((item) => ({ ...item })),
-  }
-}
-
-export function mapAttachmentOutlineResponseDto(
-  dto: AttachmentOutlineResponseDto,
-): AttachmentOutlineResponse {
-  return {
-    ...dto,
-    items: dto.items.map((item) => ({ ...item })),
+    warnings: (dto.warnings || []).map((item) => ({ ...item })),
   }
 }
 

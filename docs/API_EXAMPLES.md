@@ -147,14 +147,14 @@ curl http://localhost:8001/api/v1/documents/1/attachments \
 ```bash
 curl -X POST http://localhost:8001/api/v1/documents/1/attachments \
   -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/path/to/document.pdf"
+  -F "file=@/path/to/document.docx"
 ```
 
 ### Download Attachment
 ```bash
 curl http://localhost:8001/api/v1/attachments/1/download \
   -H "Authorization: Bearer $TOKEN" \
-  -o downloaded_file.pdf
+  -o downloaded_file.docx
 ```
 
 ### Delete Attachment

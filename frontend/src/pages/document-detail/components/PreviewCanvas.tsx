@@ -11,13 +11,14 @@ import {
   type UIEventHandler,
 } from 'react'
 import { attributesToProps } from 'html-react-parser'
-import { Check, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
 import type {
   CommentPopupState,
   SelectionPopupState,
 } from '@/pages/document-detail/hooks/useInlineComments'
 import { InlineCommentPopups } from '@/pages/document-detail/components/InlineCommentPopups'
 import { parseDocumentHtml, type DocumentHtmlReplace } from '@/lib/documentRenderer'
+import type { AttachmentExtractionWarning } from '@/types'
 
 interface PreviewCanvasProps {
   previewPaneRef: RefObject<HTMLDivElement>
@@ -30,6 +31,8 @@ interface PreviewCanvasProps {
   searchTerm: string
   searchMatchCount: number
   activeSearchMatchIndex: number
+  extractionWarnings?: AttachmentExtractionWarning[]
+  readerConfidence?: number | null
   onSearchTermChange: (value: string) => void
   onPreviousSearchMatch: () => void
   onNextSearchMatch: () => void
@@ -67,6 +70,8 @@ export function PreviewCanvas({
   searchTerm,
   searchMatchCount,
   activeSearchMatchIndex,
+  extractionWarnings = [],
+  readerConfidence = null,
   onSearchTermChange,
   onPreviousSearchMatch,
   onNextSearchMatch,
@@ -187,6 +192,7 @@ export function PreviewCanvas({
   const headerTitle = documentTitle || selectedAttachmentFilename
   const hasSearchTerm = searchTerm.trim().length > 0
   const searchCountLabel = searchMatchCount > 0 ? `${activeSearchMatchIndex + 1} of ${searchMatchCount}` : '0 of 0'
+  const visibleWarnings = extractionWarnings.filter((warning) => warning.message.trim().length > 0)
 
   return (
     <div className="document-preview-canvas flex-1 flex flex-col overflow-hidden">
@@ -260,6 +266,23 @@ export function PreviewCanvas({
           )}
         </div>
       </div>
+
+      {visibleWarnings.length > 0 && (
+        <div className="document-extraction-banner" role="status" aria-live="polite">
+          <div className="document-extraction-banner__icon">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="document-extraction-banner__body">
+            <p className="document-extraction-banner__title">
+              Some document elements were only partially extracted.
+            </p>
+            <p className="document-extraction-banner__details">
+              {visibleWarnings.map((warning) => warning.message).join(' ')}
+              {readerConfidence !== null ? ` Extraction confidence: ${Math.round(readerConfidence * 100)}%.` : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div
         ref={previewPaneRef}

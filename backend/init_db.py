@@ -72,10 +72,7 @@ def main():
             CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
                 title,
                 description,
-                content,
-                category,
-                content='documents',
-                content_rowid='id'
+                category
             )
         """))
         db.commit()

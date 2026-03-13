@@ -37,13 +37,18 @@ class DocumentConverterStranglerWrapper:
         self._record_legacy_usage()
         return self._conversion_pipeline().convert_document_to_html(content, mime_type, filename)
 
-    def convert_pdf_to_reader_artifact(self, pdf_bytes: bytes) -> dict[str, Any]:
+    def convert_document_to_reader_artifact(
+        self,
+        content: bytes,
+        mime_type: str,
+        filename: str = "",
+    ) -> Optional[dict[str, Any]]:
         self._record_legacy_usage()
-        return self._conversion_pipeline().convert_pdf_to_reader_artifact(pdf_bytes)
-
-    def extract_pdf_toc(self, pdf_bytes: bytes) -> dict[str, Any]:
-        self._record_legacy_usage()
-        return self._conversion_pipeline().extract_pdf_toc(pdf_bytes)
+        return self._conversion_pipeline().convert_document_to_reader_artifact(
+            content,
+            mime_type,
+            filename,
+        )
 
 
 _document_converter_wrapper = DocumentConverterStranglerWrapper()

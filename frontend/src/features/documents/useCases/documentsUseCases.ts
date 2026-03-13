@@ -52,16 +52,15 @@ export type DocumentsUseCasesClient = Pick<
   | 'uploadDocument'
 >
 
-export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx'
+export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx'
 export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024
 
 export const DOCUMENT_UPLOAD_ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
-export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx'])
+export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.docx', '.pptx'])
 
 export function buildDocumentsListQueryParams(filters: DocumentListFilters): DocumentQueryParams {
   return {
@@ -86,7 +85,7 @@ export function validateDocumentUploadFile(file: File): string | null {
     DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS.has(extension)
 
   if (!isSupported) {
-    return 'Only PDF and Word documents are allowed'
+    return 'Only DOCX and PPTX files are allowed'
   }
 
   if (file.size > DOCUMENT_UPLOAD_MAX_SIZE_BYTES) {

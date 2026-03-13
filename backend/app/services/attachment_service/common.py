@@ -38,7 +38,6 @@ class AttachmentServiceCommonMixin:
 
     # Allowed MIME types
     ALLOWED_TYPES = {
-        "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.ms-excel",
@@ -59,15 +58,10 @@ class AttachmentServiceCommonMixin:
     # Max file size: 10MB
     MAX_FILE_SIZE = 10 * 1024 * 1024
     STREAM_CHUNK_SIZE = 1024 * 1024
-    PREVIEW_STATUS_PENDING = "pending"
-    PREVIEW_STATUS_PROCESSING = "processing"
-    PREVIEW_STATUS_READY = "ready"
-    PREVIEW_STATUS_FAILED = "failed"
     READER_STATUS_PENDING = "pending"
     READER_STATUS_PROCESSING = "processing"
     READER_STATUS_READY = "ready"
     READER_STATUS_FAILED = "failed"
-    ARTIFACT_KIND_PREVIEW_PDF = "preview_pdf"
     ARTIFACT_KIND_READER_HTML = "reader_html"
     OFFICE_MIME_TYPES = {
         "application/msword",
@@ -81,8 +75,13 @@ class AttachmentServiceCommonMixin:
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
+    STRUCTURED_READER_MIME_TYPES = {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
     OFFICE_EXTENSIONS = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
     WORD_EXTENSIONS = {".doc", ".docx"}
+    STRUCTURED_READER_EXTENSIONS = {".docx", ".pptx"}
     TEXT_MIME_TYPES = {
         "text/plain",
         "text/markdown",
@@ -105,6 +104,15 @@ class AttachmentServiceCommonMixin:
         return upload_dir
 
     @staticmethod
+    def _supports_structured_reader_artifact(mime_type: str, filename: str) -> bool:
+        normalized_mime = (mime_type or "").lower()
+        suffix = Path(filename or "").suffix.lower()
+        return (
+            normalized_mime in AttachmentService.STRUCTURED_READER_MIME_TYPES
+            or suffix in AttachmentService.STRUCTURED_READER_EXTENSIONS
+        )
+
+    @staticmethod
     def _next_patch_semver(raw_value: Optional[str], fallback_version_number: int) -> str:
         return str(
             SemanticVersion.from_raw(raw_value, fallback_version_number).bump_patch()
@@ -122,20 +130,6 @@ class AttachmentServiceCommonMixin:
             )
             .first()
         )
-
-    @staticmethod
-    def _apply_preview_artifact_to_attachment(
-        attachment: Attachment, artifact: Optional[AttachmentArtifact]
-    ) -> None:
-        if not artifact:
-            return
-        attachment.preview_pdf_status = artifact.status
-        attachment.preview_pdf_storage_key = artifact.storage_key
-        attachment.preview_pdf_mime_type = artifact.mime_type
-        attachment.preview_pdf_size_bytes = artifact.size_bytes
-        attachment.preview_pdf_sha256 = artifact.sha256
-        attachment.preview_pdf_error = artifact.error
-        attachment.preview_pdf_generated_at = artifact.generated_at
 
     @staticmethod
     def _apply_reader_artifact_to_attachment(
@@ -174,9 +168,6 @@ class AttachmentServiceCommonMixin:
 
         for attachment in attachments:
             by_kind = artifact_map.get(attachment.id, {})
-            AttachmentService._apply_preview_artifact_to_attachment(
-                attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_PREVIEW_PDF)
-            )
             AttachmentService._apply_reader_artifact_to_attachment(
                 attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_READER_HTML)
             )
@@ -187,42 +178,8 @@ class AttachmentServiceCommonMixin:
         attachment: Attachment,
         *,
         persist: bool = False,
-    ) -> tuple[AttachmentArtifact, AttachmentArtifact]:
-        """Backfill artifact rows from legacy attachment columns when needed."""
-        preview_artifact = AttachmentService._get_artifact_record(
-            db, attachment.id, AttachmentService.ARTIFACT_KIND_PREVIEW_PDF
-        )
-        if not preview_artifact:
-            preview_artifact = AttachmentArtifact(
-                attachment_id=attachment.id,
-                kind=AttachmentService.ARTIFACT_KIND_PREVIEW_PDF,
-                status=attachment.preview_pdf_status
-                or (
-                    AttachmentService.PREVIEW_STATUS_READY
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else AttachmentService.PREVIEW_STATUS_PENDING
-                ),
-                mime_type=attachment.preview_pdf_mime_type
-                or (
-                    "application/pdf"
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else None
-                ),
-                storage_key=attachment.preview_pdf_storage_key
-                or (
-                    (attachment.storage_key or attachment.storage_path)
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else None
-                ),
-                size_bytes=attachment.preview_pdf_size_bytes
-                or attachment.size_bytes
-                or attachment.file_size,
-                sha256=attachment.preview_pdf_sha256 or attachment.sha256,
-                error=attachment.preview_pdf_error,
-                generated_at=attachment.preview_pdf_generated_at,
-            )
-            db.add(preview_artifact)
-
+    ) -> AttachmentArtifact:
+        """Backfill reader artifact rows from attachment columns when needed."""
         reader_artifact = AttachmentService._get_artifact_record(
             db, attachment.id, AttachmentService.ARTIFACT_KIND_READER_HTML
         )
@@ -239,17 +196,14 @@ class AttachmentServiceCommonMixin:
             )
             db.add(reader_artifact)
 
-        # Keep legacy columns synchronized from artifact records for API compatibility.
-        AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
         AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
 
         if persist:
             db.commit()
             db.refresh(attachment)
-            db.refresh(preview_artifact)
             db.refresh(reader_artifact)
 
-        return preview_artifact, reader_artifact
+        return reader_artifact
 
     @staticmethod
     def _chunk_bytes(data: bytes, chunk_size: int = STREAM_CHUNK_SIZE) -> Iterator[bytes]:
@@ -416,7 +370,6 @@ class AttachmentServiceCommonMixin:
         original_filename = file.filename or "unnamed"
         file_ext = Path(original_filename).suffix.lower()
         allowed_extensions = {
-            ".pdf",
             ".doc",
             ".docx",
             ".xls",

@@ -24,7 +24,7 @@ interface UseContentEditingFlowParams {
   isLoading: boolean
   sections: TocSection[]
   applyProcessedHtml: (html: string) => void
-  onRequireOriginalPdf: () => void
+  onRequireInlineContent: () => void
 }
 
 export type SectionSaveResult =
@@ -126,7 +126,7 @@ export function useContentEditingFlow({
   isLoading,
   sections,
   applyProcessedHtml,
-  onRequireOriginalPdf,
+  onRequireInlineContent,
 }: UseContentEditingFlowParams) {
   const queryClient = useQueryClient()
   const [editingFlowState, dispatchEditingFlow] = useReducer(
@@ -151,9 +151,9 @@ export function useContentEditingFlow({
       return
     }
 
-    // Reader mode is non-editable; switch back to original first and continue on next render.
+    // Reader mode is non-editable; switch back to the editable document content first.
     if (showingReaderView) {
-      onRequireOriginalPdf()
+      onRequireInlineContent()
       return
     }
 
@@ -171,7 +171,7 @@ export function useContentEditingFlow({
     handledContentEditToken,
     isEditor,
     isLoading,
-    onRequireOriginalPdf,
+    onRequireInlineContent,
     showingReaderView,
   ])
 

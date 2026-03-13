@@ -120,43 +120,6 @@ async def download_customer_attachment(
     )
 
 
-@router.get("/documents/{document_id}/attachments/{attachment_id}/preview")
-async def preview_customer_attachment(
-    document_id: int,
-    attachment_id: int,
-    current_user: User = Depends(require_customer),
-    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
-        get_portal_documents_query_handler
-    ),
-):
-    """Preview (PDF) an attachment through the portal's own access checks."""
-    db: Session = portal_documents_query_handler.db
-    doc = db.query(Document).filter_by(id=document_id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    portal_documents_query_handler._ensure_customer_document_access(doc, current_user)
-
-    attachment, content_stream, media_type, content_length = AttachmentService.open_preview_stream(
-        db, document_id, attachment_id, current_user=current_user,
-    )
-    original_name = attachment.original_filename or attachment.filename or "preview"
-    base_name = original_name.rsplit(".", 1)[0] if "." in original_name else original_name
-    preview_filename = f"{base_name}.pdf"
-    embed = ExternalEmbedPolicySpec.for_document(doc)
-    sharing = LinkSharingPolicySpec.for_document(doc)
-    headers = {
-        "Content-Disposition": build_content_disposition(preview_filename, inline=True),
-        "Content-Length": str(content_length),
-        "X-Frame-Options": embed.x_frame_options_header,
-        "X-Sharing-Policy": ",".join(sorted(a.value for a in sharing.allowed_actions)),
-    }
-    return StreamingResponse(
-        content=content_stream,
-        media_type=media_type,
-        headers=headers,
-    )
-
-
 @router.get("/categories")
 async def get_customer_categories(
     current_user: User = Depends(require_customer),

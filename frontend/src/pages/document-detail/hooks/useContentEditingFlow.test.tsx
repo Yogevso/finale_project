@@ -47,7 +47,7 @@ describe('useContentEditingFlow', () => {
 
   it('opens chooser when edit request token is received for editable HTML content', async () => {
     const queryClient = createQueryClient()
-    const onRequireOriginalPdf = vi.fn()
+    const onRequireInlineContent = vi.fn()
     const applyProcessedHtml = vi.fn()
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -65,7 +65,7 @@ describe('useContentEditingFlow', () => {
           isLoading: false,
           sections: baseSections,
           applyProcessedHtml,
-          onRequireOriginalPdf,
+          onRequireInlineContent,
         }),
       { wrapper },
     )
@@ -74,12 +74,12 @@ describe('useContentEditingFlow', () => {
       expect(result.current.showContentEditChooser).toBe(true)
     })
 
-    expect(onRequireOriginalPdf).not.toHaveBeenCalled()
+    expect(onRequireInlineContent).not.toHaveBeenCalled()
   })
 
-  it('requests switch back to original PDF when edit is triggered in reader view', async () => {
+  it('requests a switch back to inline content when edit is triggered in reader view', async () => {
     const queryClient = createQueryClient()
-    const onRequireOriginalPdf = vi.fn()
+    const onRequireInlineContent = vi.fn()
     const applyProcessedHtml = vi.fn()
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -97,13 +97,13 @@ describe('useContentEditingFlow', () => {
           isLoading: false,
           sections: baseSections,
           applyProcessedHtml,
-          onRequireOriginalPdf,
+          onRequireInlineContent,
         }),
       { wrapper },
     )
 
     await waitFor(() => {
-      expect(onRequireOriginalPdf).toHaveBeenCalledTimes(1)
+      expect(onRequireInlineContent).toHaveBeenCalledTimes(1)
     })
 
     expect(result.current.showContentEditChooser).toBe(false)
@@ -112,7 +112,7 @@ describe('useContentEditingFlow', () => {
   it('saves edited section, submits review, and invalidates related queries', async () => {
     const queryClient = createQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-    const onRequireOriginalPdf = vi.fn()
+    const onRequireInlineContent = vi.fn()
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
@@ -146,7 +146,7 @@ describe('useContentEditingFlow', () => {
           isLoading: false,
           sections: baseSections,
           applyProcessedHtml,
-          onRequireOriginalPdf,
+          onRequireInlineContent,
         }),
       { wrapper },
     )

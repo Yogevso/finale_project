@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from app.conversion.document_strategies import (
     DocumentConverterStrategy,
     HtmlPassthroughStrategy,
-    PdfConverterStrategy,
+    PowerPointConverterStrategy,
     TextConverterStrategy,
     WordConverterStrategy,
 )
@@ -51,16 +51,16 @@ class DocumentConverterPluginRegistry:
 
 def build_default_document_converter_registry(
     *,
-    pdf_converter: PdfConverterStrategy | None = None,
     word_converter: WordConverterStrategy | None = None,
+    powerpoint_converter: PowerPointConverterStrategy | None = None,
 ) -> DocumentConverterPluginRegistry:
     """Load default converter plugins in deterministic precedence order."""
-    pdf_plugin = pdf_converter or PdfConverterStrategy()
     word_plugin = word_converter or WordConverterStrategy()
+    powerpoint_plugin = powerpoint_converter or PowerPointConverterStrategy()
     registry = DocumentConverterPluginRegistry(
         plugins=[
-            pdf_plugin,
             word_plugin,
+            powerpoint_plugin,
             HtmlPassthroughStrategy(),
             TextConverterStrategy(),
         ]

@@ -27,7 +27,7 @@ def create_conversion_job_scenario(
     *,
     created_by: int,
     document_title: str = "Conversion Job Doc",
-    job_type: str = "preview_pdf",
+    job_type: str = "reader_html",
     job_status: str = "pending",
     job_attempts: int = 0,
     job_max_attempts: int = 3,
@@ -45,7 +45,7 @@ def create_conversion_job_scenario(
         db,
         document_id=document.id,
         uploaded_by=created_by,
-        filename="conversion-source.pdf",
+        filename="conversion-source.docx",
     )
     job = create_attachment_conversion_job(
         db,

@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from app.conversion.docx_extractor import DocxExtractor
+from app.conversion.docx_extractor import ExtractionResult as DocxExtractionResult
 from app.conversion.models import DocumentConversionRequest
+from app.conversion.pptx_extractor import (
+    ExtractionResult as PptxExtractionResult,
+)
+from app.conversion.pptx_extractor import (
+    PptxExtractor,
+)
+from app.conversion.reader_artifact import build_reader_artifact_from_extraction_result
 
 
 class DocumentConverterStrategy(Protocol):
@@ -18,29 +27,8 @@ class DocumentConverterStrategy(Protocol):
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         """Convert the request payload to HTML, or return None if unsupported."""
 
-
-class PdfConverterStrategy:
-    """PDF conversion strategy with reader artifact helpers."""
-
-    name = "pdf"
-
-    @staticmethod
-    def _legacy_module():
-        from app.utils import document_converter
-
-        return document_converter
-
-    def supports(self, request: DocumentConversionRequest) -> bool:
-        return request.normalized_mime_type == "application/pdf" or request.extension == ".pdf"
-
-    def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
-        return self._legacy_module().convert_pdf_to_html(request.content)
-
-    def convert_pdf_to_reader_artifact(self, content: bytes) -> dict[str, Any]:
-        return self._legacy_module().convert_pdf_to_reader_artifact(content)
-
-    def extract_pdf_toc(self, content: bytes) -> dict[str, Any]:
-        return self._legacy_module().extract_pdf_toc(content)
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+        """Convert the request payload into a reader-artifact payload when supported."""
 
 
 class WordConverterStrategy:
@@ -52,12 +40,16 @@ class WordConverterStrategy:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
     _word_extensions = {".doc", ".docx"}
+    _docx_mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     @staticmethod
     def _legacy_module():
         from app.utils import document_converter
 
         return document_converter
+
+    def __init__(self, *, extractor: DocxExtractor | None = None) -> None:
+        self._extractor = extractor or DocxExtractor()
 
     def supports(self, request: DocumentConversionRequest) -> bool:
         return (
@@ -66,10 +58,61 @@ class WordConverterStrategy:
         )
 
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
+        if request.normalized_mime_type == self._docx_mime_type or request.extension == ".docx":
+            return self._extract_ready_html(self._extractor.extract_bytes(request.content))
         return self._legacy_module().convert_word_to_html(request.content)
 
     def convert_word_to_html(self, content: bytes) -> str | None:
+        extracted_html = self._extract_ready_html(self._extractor.extract_bytes(content))
+        if extracted_html:
+            return extracted_html
         return self._legacy_module().convert_word_to_html(content)
+
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+        if request.normalized_mime_type != self._docx_mime_type and request.extension != ".docx":
+            return None
+        return build_reader_artifact_from_extraction_result(
+            self._extractor.extract_bytes(request.content)
+        )
+
+    @staticmethod
+    def _extract_ready_html(result: DocxExtractionResult) -> str | None:
+        if result.status != "ready":
+            return None
+        return result.html or None
+
+
+class PowerPointConverterStrategy:
+    """PowerPoint presentation conversion strategy."""
+
+    name = "powerpoint"
+    _powerpoint_mime_types = {
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+    _powerpoint_extensions = {".pptx"}
+
+    def __init__(self, *, extractor: PptxExtractor | None = None) -> None:
+        self._extractor = extractor or PptxExtractor()
+
+    def supports(self, request: DocumentConversionRequest) -> bool:
+        return (
+            request.normalized_mime_type in self._powerpoint_mime_types
+            or request.extension in self._powerpoint_extensions
+        )
+
+    def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
+        return self._extract_ready_html(self._extractor.extract_bytes(request.content))
+
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any]:
+        return build_reader_artifact_from_extraction_result(
+            self._extractor.extract_bytes(request.content)
+        )
+
+    @staticmethod
+    def _extract_ready_html(result: PptxExtractionResult) -> str | None:
+        if result.status != "ready":
+            return None
+        return result.html or None
 
 
 class TextConverterStrategy:
@@ -100,6 +143,9 @@ class TextConverterStrategy:
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         return self._legacy_module().convert_text_to_html(request.content)
 
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+        return None
+
 
 class HtmlPassthroughStrategy:
     """HTML passthrough strategy that decodes bytes as HTML text."""
@@ -119,3 +165,6 @@ class HtmlPassthroughStrategy:
             return request.content.decode("utf-8")
         except UnicodeDecodeError:
             return request.content.decode("utf-8", errors="replace")
+
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+        return None

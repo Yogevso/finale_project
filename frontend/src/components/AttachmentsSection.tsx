@@ -44,8 +44,8 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
     },
   })
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
     if (file) {
       uploadMutation.mutate(file)
     }
@@ -63,14 +63,14 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   }
 
   const getFileIcon = (mimeType: string): string => {
-    if (mimeType.startsWith('image/')) return '🖼️'
-    if (mimeType.startsWith('video/')) return '🎬'
-    if (mimeType.startsWith('audio/')) return '🎵'
-    if (mimeType === 'application/pdf') return '📄'
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊'
-    if (mimeType.includes('document') || mimeType.includes('word')) return '📝'
-    if (mimeType.includes('zip') || mimeType.includes('archive')) return '📦'
-    return '📎'
+    if (mimeType.startsWith('image/')) return 'IMG'
+    if (mimeType.startsWith('video/')) return 'VID'
+    if (mimeType.startsWith('audio/')) return 'AUD'
+    if (mimeType.includes('presentation')) return 'PPT'
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'XLS'
+    if (mimeType.includes('document') || mimeType.includes('word')) return 'DOC'
+    if (mimeType.includes('zip') || mimeType.includes('archive')) return 'ZIP'
+    return 'ATT'
   }
 
   if (isLoading) {
@@ -105,7 +105,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
 
       {attachments.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-2">📎</div>
+          <div className="text-4xl mb-2">ATT</div>
           <p className="text-slate-500 text-sm">No attachments yet</p>
           {isEditor && (
             <p className="text-slate-400 text-xs mt-1">Upload files to attach them to this document</p>
@@ -123,8 +123,8 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
                 <div className="min-w-0">
                   <p className="font-medium text-slate-900 truncate">{attachment.filename}</p>
                   <p className="text-xs text-slate-500">
-                    {formatFileSize(attachment.file_size)} • {new Date(attachment.uploaded_at).toLocaleDateString()}
-                    {attachment.uploader_name && ` • ${attachment.uploader_name}`}
+                    {formatFileSize(attachment.file_size)} · {new Date(attachment.uploaded_at).toLocaleDateString()}
+                    {attachment.uploader_name && ` · ${attachment.uploader_name}`}
                   </p>
                 </div>
               </div>

@@ -29,6 +29,7 @@ export default function LightboxImage(props: ImgHTMLAttributes<HTMLImageElement>
         decoding="async"
         loading="lazy"
         className={[props.className, 'cursor-zoom-in'].filter(Boolean).join(' ')}
+        aria-haspopup="dialog"
         role="button"
         tabIndex={0}
         onClick={(event) => {

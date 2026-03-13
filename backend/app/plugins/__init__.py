@@ -8,7 +8,6 @@ from app.plugins.exporters import (
     AnalyticsExporterPlugin,
     AnalyticsExportPluginRegistry,
     CsvAnalyticsExporterPlugin,
-    PdfAnalyticsExporterPlugin,
     get_analytics_export_plugin_registry,
 )
 from app.plugins.notifications import (
@@ -26,7 +25,6 @@ __all__ = [
     "EmailNotificationChannelPlugin",
     "NotificationChannelPlugin",
     "NotificationChannelPluginRegistry",
-    "PdfAnalyticsExporterPlugin",
     "build_default_document_converter_registry",
     "get_analytics_export_plugin_registry",
     "get_notification_channel_plugin_registry",

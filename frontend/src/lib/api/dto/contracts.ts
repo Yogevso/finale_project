@@ -2,7 +2,6 @@ import type { OpenApiSchema, OpenApiSchemas } from '@/lib/api/generated/openapi-
 import type {
   AnalyticsOverview,
   Attachment,
-  AttachmentOutlineResponse,
   AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   Company,
@@ -103,7 +102,6 @@ export type TenantAnalyticsDto = Contract<'TenantAnalytics', TenantAnalytics>
 export type AttachmentDto = Contract<'AttachmentResponse', Attachment>
 export type AttachmentUploadResponseDto = Contract<'AttachmentUploadResponse', AttachmentUploadResponse>
 export type AttachmentReaderViewResponseDto = Contract<'AttachmentReaderViewResponse', AttachmentReaderViewResponse>
-export type AttachmentOutlineResponseDto = Contract<'AttachmentOutlineResponse', AttachmentOutlineResponse>
 
 export type CompanyDto = Contract<'CompanyResponse', Company>
 export type CompanyCreateDto = Contract<'CompanyCreate', CompanyCreate>

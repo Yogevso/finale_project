@@ -25,20 +25,3 @@ class DocumentConversionRequest:
     @property
     def extension(self) -> str:
         return Path(self.normalized_filename).suffix
-
-
-@dataclass(frozen=True, slots=True)
-class PreviewPdfConversionRequest:
-    """Input payload for non-PDF to preview-PDF conversion."""
-
-    content: bytes
-    mime_type: str
-    filename: str
-
-    @property
-    def normalized_mime_type(self) -> str:
-        return (self.mime_type or "").lower()
-
-    @property
-    def extension(self) -> str:
-        return Path((self.filename or "").lower()).suffix

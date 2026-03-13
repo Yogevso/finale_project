@@ -93,21 +93,25 @@ async def test_smtp_email_adapter_preserves_underlying_boolean_result():
 def test_storage_backend_adapter_falls_back_for_bool_checks_on_backend_failures():
     adapter = StorageBackendAdapter(_RaisingStorageBackend())
 
-    assert adapter.delete("documents/a.pdf") is False
-    assert adapter.exists("documents/a.pdf") is False
+    assert adapter.delete("documents/a.docx") is False
+    assert adapter.exists("documents/a.docx") is False
 
 
 def test_storage_backend_adapter_keeps_pass_through_for_core_read_write_methods():
     adapter = StorageBackendAdapter(_RaisingStorageBackend())
     payload = io.BytesIO(b"abc123")
 
-    storage_key = adapter.upload(payload, "demo.pdf", "application/pdf")
-    downloaded = adapter.download("documents/demo.pdf")
-    url = adapter.get_url("documents/demo.pdf", expires_in=120)
+    storage_key = adapter.upload(
+        payload,
+        "demo.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    downloaded = adapter.download("documents/demo.docx")
+    url = adapter.get_url("documents/demo.docx", expires_in=120)
 
-    assert storage_key == "demo.pdf:6"
-    assert downloaded == b"documents/demo.pdf"
-    assert url == "https://storage.example/documents/demo.pdf?exp=120"
+    assert storage_key == "demo.docx:6"
+    assert downloaded == b"documents/demo.docx"
+    assert url == "https://storage.example/documents/demo.docx?exp=120"
 
 
 def test_sqlalchemy_collaboration_state_adapter_rolls_back_on_save_commit_failure(
@@ -171,4 +175,3 @@ def test_sqlalchemy_collaboration_state_adapter_rolls_back_on_clear_commit_failu
     reloaded = db.get(Document, test_document.id)
     assert reloaded is not None
     assert reloaded.yjs_state == b"\x09\x09"
-

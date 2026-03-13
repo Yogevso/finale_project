@@ -49,14 +49,7 @@ function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) 
           previewableAttachments={[]}
           selectedAttachment={null}
           onSelectAttachment={() => undefined}
-          isSelectedPdf={false}
-          isWordDoc={() => false}
-          pdfPreviewMode="original"
-          showingReaderView={false}
-          readerStatus={null}
           readerError={null}
-          onSwitchToOriginalPdf={() => undefined}
-          onSwitchToReaderView={() => undefined}
           onRetryReaderView={() => undefined}
           fontSize={fontSize}
           onSetFontSize={handleSetFontSize}
@@ -72,6 +65,8 @@ function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) 
           searchTerm=""
           searchMatchCount={0}
           activeSearchMatchIndex={-1}
+          extractionWarnings={[]}
+          readerConfidence={null}
           onSearchTermChange={() => undefined}
           onPreviousSearchMatch={() => undefined}
           onNextSearchMatch={() => undefined}
@@ -159,5 +154,56 @@ describe('ReadingUX controls', () => {
 
     const expectedUrl = new URL('/documents/42#intro', window.location.origin).toString()
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(expectedUrl)
+  })
+
+  it('shows an extraction warning banner when reader warnings are present', () => {
+    const previewPaneRef = { current: null }
+    const searchInputRef = { current: null }
+
+    render(
+      <MemoryRouter>
+        <PreviewCanvas
+          previewPaneRef={previewPaneRef}
+          documentPaperClass="document-preview-paper document-preview-paper--light"
+          activeHtmlContent={'<article class="docx-document"><p>Body copy</p></article>'}
+          showingReaderView
+          showDocumentTitle={false}
+          searchTerm=""
+          searchMatchCount={0}
+          activeSearchMatchIndex={-1}
+          extractionWarnings={[{ code: 'MISSING_IMAGES', message: '1 images failed', count: 1 }]}
+          readerConfidence={0.91}
+          onSearchTermChange={() => undefined}
+          onPreviousSearchMatch={() => undefined}
+          onNextSearchMatch={() => undefined}
+          searchInputRef={searchInputRef}
+          tocSectionsCount={0}
+          readerCurrentPage={1}
+          commentPopupTopOffset={0}
+          scrollProgress={0}
+          sectionLinkBasePath="/documents/42"
+          onScroll={() => undefined}
+          onMouseUp={() => undefined}
+          hasUser={false}
+          selectionPopup={{ show: false, x: 0, y: 0, text: '' }}
+          commentPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
+          commentText=""
+          isPrivateComment={false}
+          isSubmittingComment={false}
+          onOpenCommentForm={() => undefined}
+          onCloseCommentPopup={() => undefined}
+          onCommentTextChange={() => undefined}
+          onPrivateCommentChange={() => undefined}
+          onSubmitComment={() => undefined}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(
+      screen.getByText(/some document elements were only partially extracted/i),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '1 images failed Extraction confidence: 91%.',
+    )
   })
 })

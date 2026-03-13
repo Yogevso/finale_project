@@ -1,11 +1,4 @@
-"""Task 190 – Attachment access parity tests.
-
-Verifies:
-1. Portal download endpoint exists and is routed correctly.
-2. Portal preview endpoint exists and is routed correctly.
-3. Portal attachment metadata download_url now points to portal route.
-4. Both endpoints apply audience policy headers.
-"""
+"""Attachment access parity tests."""
 
 from fastapi.testclient import TestClient
 
@@ -15,25 +8,17 @@ client = TestClient(app, raise_server_exceptions=False)
 
 
 class TestPortalAttachmentRouteRegistration:
-    """Verify new portal download / preview routes are registered."""
+    """Verify portal download routes are registered."""
 
     def test_download_route_exists(self):
-        """The /portal/documents/{id}/attachments/{aid}/download route should exist (401 without auth)."""
         resp = client.get("/api/v1/portal/documents/1/attachments/1/download")
-        # Without auth we expect 401 or 403, NOT 404 (route not found) or 405 (method not allowed)
-        assert resp.status_code in (401, 403), f"Unexpected status: {resp.status_code}"
-
-    def test_preview_route_exists(self):
-        """The /portal/documents/{id}/attachments/{aid}/preview route should exist."""
-        resp = client.get("/api/v1/portal/documents/1/attachments/1/preview")
         assert resp.status_code in (401, 403), f"Unexpected status: {resp.status_code}"
 
 
 class TestPortalDownloadUrlParity:
-    """Verify the portal attachment metadata now points to the portal download route."""
+    """Verify portal attachment metadata points to the portal download route."""
 
     def test_download_url_uses_portal_prefix(self):
-        """The download_url returned by portal attachment metadata should use /api/portal/."""
         import inspect
 
         from app.application.queries.portal_queries import PortalDocumentsQueryHandler

@@ -116,15 +116,7 @@ export function useDocumentDetailPageState() {
   const bffQueryKey = queryKeys.bff.documentDetailBundle(documentIdKey)
 
   const { data: detailPageBundle, isLoading, error } = useDocumentDetailPageBundleQuery(id, {
-    refetchInterval: (query) => {
-      const items = query.state.data?.attachments ?? []
-      const hasPendingPreview = items.some(
-        (attachment) =>
-          attachment.preview_pdf_status === 'pending' ||
-          attachment.preview_pdf_status === 'processing',
-      )
-      return hasPendingPreview ? 2500 : false
-    },
+    refetchInterval: false,
   })
 
   const document = detailPageBundle?.document

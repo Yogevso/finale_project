@@ -127,11 +127,11 @@ class TestPortalDocumentDetailEndpoint:
         """Attachment URLs in portal detail should match document-scoped download route."""
         attachment = Attachment(
             document_id=public_document.id,
-            filename="portal-test.pdf",
-            original_filename="portal-test.pdf",
+            filename="portal-test.docx",
+            original_filename="portal-test.docx",
             file_size=128,
-            mime_type="application/pdf",
-            storage_path="/tmp/portal-test.pdf",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path="/tmp/portal-test.docx",
             uploaded_by=test_admin.id,
         )
         db.add(attachment)
@@ -146,7 +146,7 @@ class TestPortalDocumentDetailEndpoint:
         entry = next(item for item in attachments if item["id"] == attachment.id)
         assert (
             entry["download_url"]
-            == f"/api/v1/documents/{public_document.id}/attachments/{attachment.id}/download"
+            == f"/api/v1/portal/documents/{public_document.id}/attachments/{attachment.id}/download"
         )
 
     def test_list_and_detail_use_same_published_version_when_newer_draft_exists(

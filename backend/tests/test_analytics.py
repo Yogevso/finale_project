@@ -1,6 +1,4 @@
 """Unit tests for Analytics API"""
-
-import builtins
 from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
@@ -543,50 +541,6 @@ class TestExportCSV:
         )
         assert response.status_code == 400
         assert "Unsupported CSV report" in response.json()["detail"]
-
-
-class TestExportPDF:
-    """Tests for /analytics/export/pdf endpoint"""
-
-    def test_export_overview_pdf_without_reportlab(
-        self, client: TestClient, admin_headers, monkeypatch
-    ):
-        """PDF export should gracefully handle missing reportlab"""
-        original_import = builtins.__import__
-
-        def import_without_reportlab(name, *args, **kwargs):
-            if name.startswith("reportlab"):
-                raise ImportError("reportlab intentionally unavailable for test")
-            return original_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, "__import__", import_without_reportlab)
-
-        response = client.get(
-            "/api/v1/analytics/export/pdf",
-            headers=admin_headers,
-            params={"report": "overview"},
-        )
-        assert response.status_code == 501
-
-    def test_export_pdf_as_editor(self, client: TestClient, auth_headers):
-        """Editor should NOT be able to export PDF"""
-        response = client.get(
-            "/api/v1/analytics/export/pdf",
-            headers=auth_headers,
-            params={"report": "overview"},
-        )
-        assert response.status_code == 403
-
-    def test_export_pdf_invalid_report_returns_client_error(self, client: TestClient, admin_headers):
-        """Unknown report should return explicit client error status."""
-        response = client.get(
-            "/api/v1/analytics/export/pdf",
-            headers=admin_headers,
-            params={"report": "unknown-report"},
-        )
-        assert response.status_code == 400
-        assert "Unsupported PDF report" in response.json()["detail"]
-
 
 class TestAnalyticsDataIntegrity:
     """Tests for analytics data accuracy"""

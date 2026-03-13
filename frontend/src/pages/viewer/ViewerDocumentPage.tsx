@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
-import PdfPreviewPanel, { type PdfTocItem } from '@/components/PdfPreviewPanel'
-import { api } from '@/lib/api'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type {
   Attachment,
-  AttachmentOutlineItem,
   Comment,
   Document,
   Version,
@@ -18,11 +15,6 @@ export default function ViewerDocumentPage() {
   const { id } = useParams<{ id: string }>()
   const [isPrintMode, setIsPrintMode] = useState(false)
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null)
-  const [showTextMode, setShowTextMode] = useState(false)
-  const [pdfOutlineItems, setPdfOutlineItems] = useState<AttachmentOutlineItem[]>([])
-  const [pdfOutlineLoading, setPdfOutlineLoading] = useState(false)
-  const [pdfOutlineError, setPdfOutlineError] = useState<string | null>(null)
-  const [pdfOutlinePage, setPdfOutlinePage] = useState<number | null>(null)
   const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
   const location = useLocation()
   const navigate = useNavigate()
@@ -33,13 +25,14 @@ export default function ViewerDocumentPage() {
     setReadingWidth(value)
   }
 
-  // Fetch document details
   const { data: document, isLoading: docLoading, error } = useQuery<Document>({
     queryKey: ['viewer-document', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}`)
       if (!response.ok) {
-        if (response.status === 404) throw new Error('Document not found')
+        if (response.status === 404) {
+          throw new Error('Document not found')
+        }
         throw new Error('Failed to fetch document')
       }
       return response.json() as Promise<Document>
@@ -47,12 +40,13 @@ export default function ViewerDocumentPage() {
     enabled: !!id,
   })
 
-  // Fetch versions
   const { data: versions = [] } = useQuery<Version[]>({
     queryKey: ['viewer-document-versions', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}/versions`)
-      if (!response.ok) return []
+      if (!response.ok) {
+        return []
+      }
       return response.json() as Promise<Version[]>
     },
     enabled: !!id,
@@ -62,41 +56,41 @@ export default function ViewerDocumentPage() {
     useQuery<Attachment[]>({
       queryKey: ['viewer-document-version-attachments', id, selectedVersionId],
       queryFn: async () => {
-        if (!selectedVersionId) return []
+        if (!selectedVersionId) {
+          return []
+        }
         const response = await fetch(`/api/v1/viewer/documents/${id}/versions/${selectedVersionId}/attachments`)
-        if (!response.ok) return []
+        if (!response.ok) {
+          return []
+        }
         return response.json() as Promise<Attachment[]>
       },
       enabled: !!id && !!selectedVersionId,
-      refetchInterval: (query) => {
-        const items = (query.state.data as Attachment[] | undefined) ?? []
-        const hasPendingPreview = items.some(
-          (attachment) =>
-            attachment.preview_pdf_status === 'pending' ||
-            attachment.preview_pdf_status === 'processing',
-        )
-        return hasPendingPreview ? 2500 : false
-      },
     })
 
-  // Fetch comments
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ['viewer-document-comments', id],
     queryFn: async () => {
       const response = await fetch(`/api/v1/viewer/documents/${id}/comments`)
-      if (!response.ok) return []
+      if (!response.ok) {
+        return []
+      }
       return response.json() as Promise<Comment[]>
     },
     enabled: !!id,
   })
 
   const isSyntheticUploadPlaceholder = (value?: string | null) => {
-    if (!value) return false
+    if (!value) {
+      return false
+    }
     return value.trim().toLowerCase().startsWith('uploaded from file:')
   }
 
   const hasRenderableContent = (value?: string | null) => {
-    if (!value) return false
+    if (!value) {
+      return false
+    }
     const trimmed = value.trim()
     return trimmed.length > 0 && !isSyntheticUploadPlaceholder(trimmed)
   }
@@ -126,10 +120,6 @@ export default function ViewerDocumentPage() {
     setSelectedVersionId(null)
   }, [normalizedVersions, requestedVersionId, selectedVersionId])
 
-  useEffect(() => {
-    setShowTextMode(false)
-  }, [selectedVersionId])
-
   const handleVersionSelect = (versionId: number) => {
     setSelectedVersionId(versionId)
     const params = new URLSearchParams(location.search)
@@ -148,37 +138,6 @@ export default function ViewerDocumentPage() {
       ? null
       : normalizedVersions.find((version) => version.id === selectedVersionId) || null
   const effectiveAttachments = selectedVersionId ? selectedVersionAttachments : []
-  const selectedPreviewAttachment = effectiveAttachments.find((attachment) => {
-    if (attachment.preview_pdf_status === 'ready') return true
-    return (attachment.mime_type || '').startsWith('application/pdf')
-  })
-  const pendingPreviewAttachment = effectiveAttachments.find((attachment) =>
-    attachment.preview_pdf_status === 'pending' || attachment.preview_pdf_status === 'processing',
-  )
-  const failedPreviewAttachment = effectiveAttachments.find(
-    (attachment) => attachment.preview_pdf_status === 'failed',
-  )
-
-  const pdfPreviewUrl = selectedPreviewAttachment && id
-    ? (() => {
-        const basePreviewUrl = api.getAttachmentPreviewUrl(Number(id), selectedPreviewAttachment.id)
-        const separator = basePreviewUrl.includes('?') ? '&' : '?'
-        return `${basePreviewUrl}${separator}version=${selectedVersionId || 'none'}`
-      })()
-    : null
-  const pdfPreviewSrc =
-    pdfPreviewUrl && pdfOutlinePage ? `${pdfPreviewUrl}#page=${pdfOutlinePage}` : pdfPreviewUrl
-  const pdfTocItems: PdfTocItem[] = pdfOutlineItems
-    .map((item, index) => {
-      const pageStart = item.page_start || item.page
-      return {
-        id: item.id || `outline-${index}`,
-        title: item.title,
-        level: Math.max(1, item.level || 1),
-        pageStart,
-      }
-    })
-    .filter((item) => item.title.trim().length > 0)
 
   const contentSource =
     selectedVersion && hasRenderableContent(selectedVersion.content) ? selectedVersion.content : ''
@@ -191,43 +150,6 @@ export default function ViewerDocumentPage() {
     contentWidth === 'fluid'
       ? 'document-preview-paper document-preview-paper-fluid'
       : 'document-preview-paper'
-
-  useEffect(() => {
-    if (!selectedPreviewAttachment || !id) {
-      setPdfOutlineItems([])
-      setPdfOutlineLoading(false)
-      setPdfOutlineError(null)
-      setPdfOutlinePage(null)
-      return
-    }
-
-    let cancelled = false
-    setPdfOutlineLoading(true)
-    setPdfOutlineError(null)
-    setPdfOutlinePage(null)
-
-    api.getAttachmentOutline(Number(id), selectedPreviewAttachment.id)
-      .then((payload) => {
-        if (cancelled) return
-        setPdfOutlineItems(payload.items || [])
-        setPdfOutlineError(payload.error || null)
-      })
-      .catch((outlineError) => {
-        if (cancelled) return
-        console.error('Failed loading PDF outline:', outlineError)
-        setPdfOutlineItems([])
-        setPdfOutlineError('Failed to load TOC')
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setPdfOutlineLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [id, selectedPreviewAttachment])
 
   if (docLoading) {
     return (
@@ -258,7 +180,7 @@ export default function ViewerDocumentPage() {
             description="The document you're looking for doesn't exist or is not published."
             action={
               <Link to="/viewer" className="btn-primary inline-block">
-                ← Back to Documents
+                Back to Documents
               </Link>
             }
           />
@@ -267,29 +189,19 @@ export default function ViewerDocumentPage() {
     )
   }
 
-  // Print-friendly view
   if (isPrintMode) {
     return (
       <div className="min-h-screen bg-white print:bg-white">
-        {/* Print Header - hidden when printing */}
         <div className="print:hidden bg-slate-100 p-4 flex items-center justify-between">
-          <button
-            onClick={() => setIsPrintMode(false)}
-            className="btn-ghost"
-          >
-            ← Back to Document
+          <button onClick={() => setIsPrintMode(false)} className="btn-ghost">
+            Back to Document
           </button>
-          <button
-            onClick={() => window.print()}
-            className="btn-primary"
-          >
-            🖨️ Print Document
+          <button onClick={() => window.print()} className="btn-primary">
+            Print Document
           </button>
         </div>
 
-        {/* Printable Content */}
         <div className="max-w-3xl mx-auto p-8 print:p-0 print:max-w-none">
-          {/* Document Header */}
           <div className="border-b-2 border-slate-300 pb-4 mb-6">
             <div className="flex justify-between text-sm text-slate-500 mb-2">
               <span>{document.document_number}</span>
@@ -307,7 +219,6 @@ export default function ViewerDocumentPage() {
             </div>
           </div>
 
-          {/* Content */}
           <div className="prose prose-lg max-w-none mb-8">
             {content ? (
               isHtmlContent ? (
@@ -320,22 +231,18 @@ export default function ViewerDocumentPage() {
             )}
           </div>
 
-          {/* Attachments List */}
           {effectiveAttachments.length > 0 && (
             <div className="border-t border-slate-200 pt-4 mt-8">
               <h2 className="text-lg font-display font-semibold mb-2">Attachments</h2>
               <ul className="list-disc list-inside text-sm text-slate-600">
-                {effectiveAttachments.map((a) => (
-                  <li key={a.id}>{a.filename} ({formatFileSize(a.file_size)})</li>
+                {effectiveAttachments.map((attachment) => (
+                  <li key={attachment.id}>
+                    {attachment.filename} ({formatFileSize(attachment.file_size)})
+                  </li>
                 ))}
               </ul>
             </div>
           )}
-
-          {/* Print Footer */}
-          <div className="border-t border-slate-200 pt-4 mt-8 text-xs text-slate-400 print:block">
-            <p>Printed from Documentation Platform • {new Date().toLocaleDateString()}</p>
-          </div>
         </div>
       </div>
     )
@@ -384,7 +291,6 @@ export default function ViewerDocumentPage() {
       )}
 
       <main className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `h-[calc(100vh-56px)] overflow-y-auto w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : `${contentWidth === 'reading' ? 'max-w-4xl mx-auto px-4' : 'max-w-none px-6 md:px-10 lg:px-16'}`} py-8`}>
-        {/* Breadcrumb */}
         <nav className="mb-6 text-sm flex items-center justify-between">
           <Link to="/viewer" className="text-sky-600 hover:underline">
             Documents
@@ -407,7 +313,6 @@ export default function ViewerDocumentPage() {
           )}
         </nav>
 
-        {/* Document Header */}
         <div className="surface-card rounded-2xl p-8 mb-6">
           <div className="flex items-start justify-between mb-4">
             <span className="pill bg-sky-100 text-sky-700">
@@ -442,21 +347,15 @@ export default function ViewerDocumentPage() {
               </div>
             )}
             <div className="ml-auto flex gap-2">
-              <button
-                onClick={() => setIsPrintMode(true)}
-                className="btn-ghost text-sm"
-              >
-                🖨️ Print View
+              <button onClick={() => setIsPrintMode(true)} className="btn-ghost text-sm">
+                Print View
               </button>
             </div>
           </div>
         </div>
 
-        {/* Document Content */}
         <div className="surface-card rounded-2xl p-8 mb-6">
-          <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            📄 Content
-          </h2>
+          <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">Content</h2>
           <div className="max-w-none">
             {!selectedVersion ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
@@ -466,43 +365,13 @@ export default function ViewerDocumentPage() {
                 </p>
               </div>
             ) : selectedVersionAttachmentsLoading ? (
-              <div className="h-[65vh] flex items-center justify-center">
+              <div className="h-[40vh] flex items-center justify-center">
                 <div className="text-center text-slate-500">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600 mx-auto mb-3"></div>
-                  Loading version preview...
+                  Loading version content...
                 </div>
               </div>
-            ) : selectedPreviewAttachment && pdfPreviewUrl ? (
-              <PdfPreviewPanel
-                tocItems={pdfTocItems}
-                tocLoading={pdfOutlineLoading}
-                tocError={pdfOutlineError}
-                selectedPage={pdfOutlinePage}
-                onSelectItem={(item) => setPdfOutlinePage(item.pageStart)}
-                iframeSrc={pdfPreviewSrc}
-                iframeKey={`${selectedVersion.id}-${selectedPreviewAttachment.id}-${pdfOutlinePage || 'base'}`}
-                iframeTitle={`${document.title} PDF Preview`}
-                containerClassName="rounded-xl border border-slate-200 overflow-hidden"
-              />
-            ) : pendingPreviewAttachment ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-                <p className="text-slate-700 font-medium">
-                  Generating PDF preview for this version...
-                </p>
-                <p className="text-sm text-slate-500 mt-1">
-                  Reader and TOC will be available once preview generation completes.
-                </p>
-              </div>
-            ) : failedPreviewAttachment ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
-                <p className="text-rose-900 font-medium">
-                  PDF preview generation failed for the selected version.
-                </p>
-                <p className="text-sm text-rose-700 mt-1">
-                  {failedPreviewAttachment.preview_pdf_error || 'Unable to build preview PDF.'}
-                </p>
-              </div>
-            ) : showTextMode && content ? (
+            ) : content ? (
               isHtmlContent ? (
                 <div className={documentPaperClass}>
                   <div className="document-preview-content">{renderedContent}</div>
@@ -512,36 +381,27 @@ export default function ViewerDocumentPage() {
                   <div className="whitespace-pre-wrap text-slate-700">{content}</div>
                 </div>
               )
-            ) : (
+            ) : effectiveAttachments.length > 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
                 <p className="text-amber-900 font-medium">
-                  No PDF attachment is available for the selected version.
+                  No inline preview is available for the selected version.
                 </p>
                 <p className="text-sm text-amber-800 mt-1">
-                  Visual preview requires a PDF attachment for this version.
+                  Download one of the attached files below to view the original document.
                 </p>
-                {content && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTextMode(true)}
-                    className="mt-4 btn-secondary text-sm"
-                  >
-                    Open Text Mode
-                  </button>
-                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+                <p className="text-slate-700 font-medium">No content available for this version.</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Attachments */}
         {effectiveAttachments.length > 0 && (
           <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              📎 Attachments
-              <span className="text-sm font-normal text-slate-400">
-                ({effectiveAttachments.length})
-              </span>
+            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
+              Attachments ({effectiveAttachments.length})
             </h2>
             <div className="space-y-3">
               {effectiveAttachments.map((attachment) => (
@@ -550,13 +410,9 @@ export default function ViewerDocumentPage() {
                   className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">
-                      {getFileIcon(attachment.mime_type)}
-                    </span>
+                    <span className="text-2xl">{getFileIcon(attachment.mime_type)}</span>
                     <div>
-                      <p className="font-medium text-slate-900">
-                        {attachment.filename}
-                      </p>
+                      <p className="font-medium text-slate-900">{attachment.filename}</p>
                       <p className="text-sm text-slate-500">
                         {formatFileSize(attachment.file_size)}
                       </p>
@@ -578,14 +434,10 @@ export default function ViewerDocumentPage() {
           </div>
         )}
 
-        {/* Version History */}
         {versions.length > 0 && (
           <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              📋 Version History
-              <span className="text-sm font-normal text-slate-400">
-                ({versions.length})
-              </span>
+            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
+              Version History ({versions.length})
             </h2>
             <div className="space-y-3">
               {versions.map((version) => (
@@ -630,14 +482,10 @@ export default function ViewerDocumentPage() {
           </div>
         )}
 
-        {/* Comments */}
         {comments.length > 0 && (
           <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4 flex items-center gap-2">
-              💬 Comments
-              <span className="text-sm font-normal text-slate-400">
-                ({comments.length})
-              </span>
+            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
+              Comments ({comments.length})
             </h2>
             <div className="space-y-4">
               {comments.map((comment) => (
@@ -660,25 +508,12 @@ export default function ViewerDocumentPage() {
           </div>
         )}
 
-        {/* Back Link */}
         <div className="text-center pt-4">
-          <Link
-            to="/viewer"
-            className="btn-ghost inline-block"
-          >
-            ← Back to All Documents
+          <Link to="/viewer" className="btn-ghost inline-block">
+            Back to All Documents
           </Link>
         </div>
       </main>
-
-      {/* Footer */}
-      {!isFullscreen && (
-        <footer className="bg-white border-t border-slate-200 mt-16">
-          <div className="max-w-7xl mx-auto px-4 py-8 text-center text-slate-500 text-sm">
-            <p>Documentation Platform • Built with React + FastAPI</p>
-          </div>
-        </footer>
-      )}
     </div>
   )
 }
@@ -689,13 +524,13 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between">
           <Link to="/viewer" className="flex items-center gap-2">
-            <h1 className="text-2xl font-display font-bold text-slate-900">📚 Documentation Platform</h1>
+            <h1 className="text-2xl font-display font-bold text-slate-900">Documentation Platform</h1>
           </Link>
           <Link
             to="/login"
             className="text-sm text-sky-600 hover:text-sky-700 font-medium"
           >
-            Staff Login →
+            Staff Login
           </Link>
         </div>
       </div>
@@ -704,12 +539,12 @@ function Header() {
 }
 
 function getFileIcon(mimeType: string): string {
-  if (mimeType?.startsWith('image/')) return '🖼️'
-  if (mimeType?.includes('pdf')) return '📕'
-  if (mimeType?.includes('word') || mimeType?.includes('document')) return '📘'
-  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return '📗'
-  if (mimeType?.includes('zip') || mimeType?.includes('archive')) return '📦'
-  return '📄'
+  if (mimeType?.startsWith('image/')) return 'IMG'
+  if (mimeType?.includes('presentation')) return 'PPT'
+  if (mimeType?.includes('word') || mimeType?.includes('document')) return 'DOC'
+  if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return 'XLS'
+  if (mimeType?.includes('zip') || mimeType?.includes('archive')) return 'ZIP'
+  return 'FILE'
 }
 
 function formatFileSize(bytes: number): string {

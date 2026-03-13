@@ -10,7 +10,6 @@ from app.db import get_db
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import Attachment, Comment, Document, DocumentStatus, DocumentVisibility, Version
 from app.schemas import (
-    AttachmentOutlineResponse,
     AttachmentResponse,
     CommentResponse,
     DocumentListResponse,
@@ -237,35 +236,6 @@ def _stream_public_attachment(
     )
 
 
-def _stream_public_preview_attachment(
-    db: Session,
-    document_id: int,
-    attachment_id: int,
-) -> StreamingResponse:
-    attachment, content_stream, media_type, content_length = AttachmentService.open_preview_stream(
-        db,
-        document_id,
-        attachment_id,
-        current_user=None,
-    )
-    original_name = attachment.original_filename or attachment.filename or "preview"
-    base_name = original_name.rsplit(".", 1)[0] if "." in original_name else original_name
-    preview_filename = f"{base_name}.pdf"
-    headers = {
-        "Content-Disposition": build_content_disposition(preview_filename, inline=True),
-        "Content-Length": str(content_length),
-        **_audience_policy_headers(DocumentVisibility.PUBLIC),
-    }
-    if attachment.preview_pdf_sha256:
-        headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256
-
-    return StreamingResponse(
-        content=content_stream,
-        media_type=media_type,
-        headers=headers,
-    )
-
-
 @router.get("/{document_id}/attachments/{attachment_id}/download")
 def download_attachment(
     document_id: int,
@@ -275,37 +245,6 @@ def download_attachment(
     """Download a published document attachment without authentication."""
     _get_active_document_or_404(db, document_id)
     return _stream_public_attachment(db, document_id, attachment_id, inline=False)
-
-
-@router.get("/{document_id}/attachments/{attachment_id}/preview")
-def preview_attachment(
-    document_id: int,
-    attachment_id: int,
-    db: Session = Depends(get_db),
-):
-    """Preview a published document attachment inline without authentication."""
-    _get_active_document_or_404(db, document_id)
-    return _stream_public_preview_attachment(db, document_id, attachment_id)
-
-
-@router.get(
-    "/{document_id}/attachments/{attachment_id}/outline",
-    response_model=AttachmentOutlineResponse,
-)
-def get_attachment_outline(
-    document_id: int,
-    attachment_id: int,
-    db: Session = Depends(get_db),
-):
-    """Get PDF outline metadata for a published document attachment."""
-    _get_active_document_or_404(db, document_id)
-    payload = AttachmentService.get_pdf_outline(
-        db,
-        document_id,
-        attachment_id,
-        current_user=None,
-    )
-    return AttachmentOutlineResponse(**payload)
 
 
 @router.get("/{document_id}/comments", response_model=list[CommentResponse])

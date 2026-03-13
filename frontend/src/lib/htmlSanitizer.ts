@@ -1,5 +1,6 @@
 const ALLOWED_TAGS = new Set([
   'a',
+  'article',
   'b',
   'blockquote',
   'br',
@@ -7,6 +8,8 @@ const ALLOWED_TAGS = new Set([
   'code',
   'col',
   'colgroup',
+  'del',
+  'details',
   'div',
   'em',
   'figure',
@@ -29,6 +32,7 @@ const ALLOWED_TAGS = new Set([
   'span',
   'strong',
   'sub',
+  'summary',
   'sup',
   'table',
   'tbody',
@@ -57,7 +61,16 @@ const DROP_TAGS = new Set([
   'option',
 ])
 
-const GLOBAL_ATTRIBUTES = new Set(['class', 'data-page', 'id'])
+const GLOBAL_ATTRIBUTES = new Set([
+  'aria-expanded',
+  'aria-label',
+  'class',
+  'data-page',
+  'data-slide-count',
+  'data-slide-number',
+  'id',
+  'role',
+])
 const PER_TAG_ATTRIBUTES: Record<string, Set<string>> = {
   a: new Set(['href', 'title', 'target', 'rel']),
   img: new Set(['src', 'alt', 'title', 'width', 'height']),
@@ -223,6 +236,8 @@ function sanitizeAttributes(element: Element): void {
 
     if (
       name === 'data-page' ||
+      name === 'data-slide-count' ||
+      name === 'data-slide-number' ||
       name === 'colspan' ||
       name === 'rowspan' ||
       name === 'span' ||

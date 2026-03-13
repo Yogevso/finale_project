@@ -1,5 +1,7 @@
 """Test Configuration and Fixtures"""
 
+# ruff: noqa: E402
+
 import asyncio
 import os
 import shutil
@@ -15,6 +17,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
+
+# Use the checked-in OpenAPI snapshot during tests to avoid flaky live-schema
+# generation on Windows/Python 3.14.
+settings.APP_ENV = "testing"
+
 from app.db import Base, get_db
 from app.main import app
 from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole

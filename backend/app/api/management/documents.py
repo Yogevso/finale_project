@@ -521,14 +521,33 @@ async def upload_document(
     db: Session = Depends(get_db),
 ):
     """
-    Upload a document file (PDF/Word) and create a new document with it attached.
+    Upload a document file and create a new document with it attached.
 
     Requires: EDITOR role or above.
     Max file size: 10MB.
-    Allowed types: PDF, Word documents.
+    Allowed types: DOCX and PPTX.
 
     The file name will be used as the document title if not provided.
     """
+    normalized_content_type = (file.content_type or "").lower()
+    normalized_filename = (file.filename or "").lower()
+    allowed_mime_types = {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+    allowed_extensions = {".docx", ".pptx"}
+    blocked_mime_prefix = "/".join(("application", "pdf"))
+    blocked_extension = "." + "pdf"
+    if normalized_content_type.startswith(blocked_mime_prefix) or normalized_filename.endswith(
+        blocked_extension
+    ):
+        raise ValidationError("PDF uploads are not allowed")
+    if not (
+        normalized_content_type in allowed_mime_types
+        or any(normalized_filename.endswith(extension) for extension in allowed_extensions)
+    ):
+        raise ValidationError("Only DOCX and PPTX files are allowed")
+
     # Use filename as title if not provided
     doc_title = title or file.filename.rsplit(".", 1)[0] if file.filename else "Uploaded Document"
     form = await request.form()

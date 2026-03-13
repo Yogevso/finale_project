@@ -46,7 +46,6 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 _EXPORT_PLUGIN_REGISTRY = get_analytics_export_plugin_registry()
 CSV_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("csv").supported_reports
-PDF_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("pdf").supported_reports
 
 
 def _validate_export_report(report: str, *, allowed: tuple[str, ...], format_name: str) -> None:
@@ -367,32 +366,3 @@ def export_csv(
         analytics_query_handler=analytics_query_handler,
     )
 
-
-@router.get("/export/pdf")
-def export_pdf(
-    report: str = Query(..., description="Report type"),
-    date_from: Optional[date] = Query(None, description="Start date"),
-    date_to: Optional[date] = Query(None, description="End date"),
-    current_user: User = Depends(require_manager),
-    analytics_query_handler: AnalyticsQueryHandler = Depends(get_analytics_query_handler),
-):
-    """
-    Export analytics data as PDF.
-
-    Requires: MANAGER role or above.
-    Note: Requires reportlab package to be installed.
-    """
-    exporter = _resolve_exporter("pdf")
-    _validate_export_report(report, allowed=exporter.supported_reports, format_name="PDF")
-
-    if not date_from or not date_to:
-        default_from, default_to = get_default_date_range()
-        date_from = date_from or default_from
-        date_to = date_to or default_to
-
-    return exporter.export(
-        report=report,
-        date_from=date_from,
-        date_to=date_to,
-        analytics_query_handler=analytics_query_handler,
-    )

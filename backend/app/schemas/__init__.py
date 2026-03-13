@@ -318,11 +318,6 @@ class AttachmentResponse(BaseModel):
     size_bytes: Optional[int] = None
     mime_type: str
     sha256: Optional[str] = None
-    preview_pdf_status: Optional[str] = None
-    preview_pdf_mime_type: Optional[str] = None
-    preview_pdf_size_bytes: Optional[int] = None
-    preview_pdf_sha256: Optional[str] = None
-    preview_pdf_error: Optional[str] = None
     reader_html_status: Optional[str] = None
     reader_toc_source: Optional[str] = None
     uploaded_by: int
@@ -341,20 +336,30 @@ class AttachmentUploadResponse(BaseModel):
     message: str = "File uploaded successfully"
 
 
+class AttachmentExtractionWarningResponse(BaseModel):
+    """Non-fatal warning emitted during attachment extraction."""
+
+    code: str
+    message: str
+    count: Optional[int] = None
+
+
 class AttachmentReaderViewResponse(BaseModel):
-    """Derived reader-view artifact status/content for PDF attachments."""
+    """Derived reader-view artifact status/content for attachment previews."""
 
     attachment_id: int
     status: str
     html_content: Optional[str] = None
     toc_items: List["AttachmentOutlineItem"] = Field(default_factory=list)
     toc_source: Optional[str] = None
+    warnings: List["AttachmentExtractionWarningResponse"] = Field(default_factory=list)
+    confidence: Optional[float] = None
     error: Optional[str] = None
     generated_at: Optional[datetime] = None
 
 
 class AttachmentOutlineItem(BaseModel):
-    """PDF outline/bookmark item for TOC navigation."""
+    """Reader-view outline item for TOC navigation."""
 
     id: str
     level: int
@@ -363,17 +368,6 @@ class AttachmentOutlineItem(BaseModel):
     page_start: int
     page_end: Optional[int] = None
     anchor_id: Optional[str] = None
-
-
-class AttachmentOutlineResponse(BaseModel):
-    """PDF outline payload for attachment preview TOC."""
-
-    attachment_id: int
-    has_outline: bool
-    items: List[AttachmentOutlineItem]
-    source: Optional[str] = None
-    error: Optional[str] = None
-
 
 AttachmentReaderViewResponse.model_rebuild()
 
@@ -738,9 +732,9 @@ __all__ = [
     # Attachment
     "AttachmentResponse",
     "AttachmentUploadResponse",
+    "AttachmentExtractionWarningResponse",
     "AttachmentReaderViewResponse",
     "AttachmentOutlineItem",
-    "AttachmentOutlineResponse",
     # Comment
     "CommentBase",
     "CommentCreate",

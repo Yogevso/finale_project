@@ -5,10 +5,9 @@ from __future__ import annotations
 import csv
 from collections.abc import Sequence
 from datetime import date
-from io import BytesIO, StringIO
+from io import StringIO
 from typing import Protocol
 
-from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.application.queries.analytics_queries import (
@@ -190,118 +189,11 @@ class CsvAnalyticsExporterPlugin:
         raise ValueError(f"Unsupported CSV report '{report}'")
 
 
-class PdfAnalyticsExporterPlugin:
-    """PDF analytics export plugin."""
-
-    format_name = "pdf"
-    supported_reports = ("overview", "engagement")
-
-    def export(
-        self,
-        *,
-        report: str,
-        date_from: date,
-        date_to: date,
-        analytics_query_handler: AnalyticsQueryHandler,
-    ) -> StreamingResponse:
-        try:
-            from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-        except ImportError:
-            raise HTTPException(
-                status_code=501,
-                detail="PDF export requires reportlab package. Install with: pip install reportlab",
-            ) from None
-
-        title, table_data = self._build_table_data(
-            report=report,
-            date_from=date_from,
-            date_to=date_to,
-            analytics_query_handler=analytics_query_handler,
-        )
-
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4)
-        elements = []
-
-        styles = getSampleStyleSheet()
-        elements.append(Paragraph(title, styles["Title"]))
-        elements.append(Paragraph(f"Period: {date_from} to {date_to}", styles["Normal"]))
-        elements.append(Spacer(1, 20))
-
-        table = Table(table_data)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 12),
-                    ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                    ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                    ("GRID", (0, 0), (-1, -1), 1, colors.black),
-                ]
-            )
-        )
-        elements.append(table)
-
-        doc.build(elements)
-        buffer.seek(0)
-
-        filename = f"analytics_{report}_{date_to.isoformat()}.pdf"
-        return StreamingResponse(
-            buffer,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
-
-    def _build_table_data(
-        self,
-        *,
-        report: str,
-        date_from: date,
-        date_to: date,
-        analytics_query_handler: AnalyticsQueryHandler,
-    ) -> tuple[str, list[list[str]]]:
-        if report == "overview":
-            data = analytics_query_handler.execute_overview(
-                AnalyticsOverviewQuery(date_from=date_from, date_to=date_to)
-            )
-            table_data = [
-                ["Metric", "Value"],
-                ["Total Documents", str(data["total_documents"])],
-                ["Total Users", str(data["total_users"])],
-                ["Total Views", str(data["total_views"])],
-                ["Total Downloads", str(data["total_downloads"])],
-                ["Pending Reviews", str(data["pending_reviews"])],
-            ]
-            return "Analytics Overview Report", table_data
-
-        if report == "engagement":
-            data = analytics_query_handler.execute_engagement(
-                EngagementAnalyticsQuery(date_from=date_from, date_to=date_to)
-            )
-            table_data = [
-                ["Metric", "Value"],
-                ["Unique Visitors", str(data["unique_visitors"])],
-                ["Avg Reading Progress", f"{data['avg_reading_progress']}%"],
-                ["Completion Rate", f"{data['completion_rate']}%"],
-                ["Total Time Spent", f"{data['total_time_spent_minutes']} minutes"],
-            ]
-            return "Engagement Analytics Report", table_data
-
-        raise ValueError(f"Unsupported PDF report '{report}'")
-
-
 def build_default_analytics_export_plugin_registry() -> AnalyticsExportPluginRegistry:
     """Load default export plugins."""
     return AnalyticsExportPluginRegistry(
         plugins=[
             CsvAnalyticsExporterPlugin(),
-            PdfAnalyticsExporterPlugin(),
         ]
     )
 

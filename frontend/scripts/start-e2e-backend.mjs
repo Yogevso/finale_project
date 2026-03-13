@@ -7,6 +7,12 @@ const scriptFile = fileURLToPath(import.meta.url)
 const scriptDir = path.dirname(scriptFile)
 const backendDir = path.resolve(scriptDir, '../../backend')
 const backendTempDir = path.resolve(backendDir, 'temp')
+const repoPythonPath = process.platform === 'win32'
+  ? path.resolve(backendDir, '../.venv/Scripts/python.exe')
+  : path.resolve(backendDir, '../.venv/bin/python')
+const windowsPythonShim = process.platform === 'win32' && process.env.LOCALAPPDATA
+  ? path.resolve(process.env.LOCALAPPDATA, 'Python/bin/python.exe')
+  : null
 const defaultDbPath = path.resolve(backendTempDir, `playwright-e2e-${Date.now()}.db`)
 const defaultDatabaseUrl = `sqlite:///${defaultDbPath.replace(/\\/g, '/')}`
 const databaseUrl = process.env.DATABASE_URL?.trim() || defaultDatabaseUrl
@@ -22,9 +28,9 @@ const backendEnv = {
   PYTHONUTF8: process.env.PYTHONUTF8 ?? '1',
 }
 
-const pythonCandidates = [process.env.PYTHON, 'python', 'py'].filter(Boolean)
+const pythonCandidates = [process.env.PYTHON, repoPythonPath, windowsPythonShim, 'python', 'py'].filter(Boolean)
 const pythonCommand = pythonCandidates.find((candidate) => {
-  const probe = spawnSync(candidate, ['--version'], {
+  const probe = spawnSync(candidate, ['-c', 'import sqlalchemy'], {
     cwd: backendDir,
     env: backendEnv,
     stdio: 'ignore',
@@ -55,8 +61,12 @@ function runOrThrow(args) {
 
 console.log(`Using Python command: ${pythonCommand}`)
 console.log(`Using E2E database: ${backendEnv.DATABASE_URL}`)
-runOrThrow(['-m', 'alembic', 'upgrade', 'heads'])
+runOrThrow(['-c', 'from app.db import init_db; init_db()'])
 runOrThrow(['seed_data.py'])
+runOrThrow([
+  '-c',
+  'from app.db import SessionLocal; from app.services.search_index_service import SearchIndexSyncService; db = SessionLocal(); SearchIndexSyncService(db).rebuild_index(); db.commit(); db.close()',
+])
 
 const server = spawn(
   pythonCommand,

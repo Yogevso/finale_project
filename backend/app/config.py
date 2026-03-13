@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
-    ALLOWED_EXTENSIONS: set[str] = {".pdf", ".doc", ".docx", ".txt"}
+    ALLOWED_EXTENSIONS: set[str] = {".docx", ".pptx", ".txt"}
     LIBREOFFICE_BIN: Optional[str] = None
 
     # Logging

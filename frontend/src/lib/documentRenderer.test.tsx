@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { Link, MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
@@ -50,7 +51,20 @@ describe('parseDocumentHtml', () => {
       </MemoryRouter>,
     )
 
-    expect(container.querySelector('.overflow-x-auto > table')).not.toBeNull()
+    expect(container.querySelector('.document-table-scroll > table')).not.toBeNull()
+  })
+
+  it('preserves extracted table wrappers without nesting duplicate scroll containers', () => {
+    const { container } = render(
+      <MemoryRouter>
+        {parseDocumentHtml(
+          '<div class="table-wrapper"><table class="extracted-table"><tbody><tr><td>Cell</td></tr></tbody></table></div>',
+        )}
+      </MemoryRouter>,
+    )
+
+    expect(container.querySelector('.table-wrapper.document-table-scroll > table.extracted-table')).not.toBeNull()
+    expect(container.querySelectorAll('.document-table-scroll').length).toBe(1)
   })
 
   it('applies lazy image loading attributes', () => {
@@ -63,6 +77,23 @@ describe('parseDocumentHtml', () => {
     const image = screen.getByAltText('Diagram')
     expect(image).toHaveAttribute('loading', 'lazy')
     expect(image).toHaveAttribute('decoding', 'async')
+  })
+
+  it('opens extracted images in a lightbox using the figure caption as the title', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        {parseDocumentHtml(
+          '<figure class="extracted-image"><img src="/files/diagram.png" alt="Diagram" /><figcaption class="extracted-image-caption">Architecture diagram</figcaption></figure>',
+        )}
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Diagram' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Diagram' })
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('Architecture diagram')
   })
 
   it('adds target and rel to external links', () => {
@@ -110,5 +141,20 @@ describe('parseDocumentHtml', () => {
     expect(unsafeLink).not.toHaveAttribute('href')
 
     expect(screen.getByText('Safe text')).toBeInTheDocument()
+  })
+
+  it('keeps extracted article wrappers and speaker notes semantics', () => {
+    const { container } = render(
+      <MemoryRouter>
+        {parseDocumentHtml(
+          '<article class="docx-document" role="article"><h1>Intro</h1></article><details class="speaker-notes"><summary aria-expanded="false">Speaker Notes</summary><div class="notes-content"><p>Notes here</p></div></details>',
+        )}
+      </MemoryRouter>,
+    )
+
+    expect(container.querySelector('article.docx-document')).not.toBeNull()
+    expect(container.querySelector('details.speaker-notes')).not.toBeNull()
+    expect(screen.getByText('Speaker Notes')).toBeInTheDocument()
+    expect(screen.getByText('Notes here')).toBeInTheDocument()
   })
 })

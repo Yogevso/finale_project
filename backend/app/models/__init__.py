@@ -456,13 +456,13 @@ class Attachment(Base):
     storage_path = Column(String(500), nullable=False)  # S3 key or local path
     storage_key = Column(String(500), nullable=True, index=True)
     sha256 = Column(String(64), nullable=True, index=True)
-    preview_pdf_status = Column(String(20), nullable=True, index=True)
-    preview_pdf_storage_key = Column(String(500), nullable=True, index=True)
-    preview_pdf_mime_type = Column(String(100), nullable=True)
-    preview_pdf_size_bytes = Column(Integer, nullable=True)
-    preview_pdf_sha256 = Column(String(64), nullable=True, index=True)
-    preview_pdf_error = Column(Text, nullable=True)
-    preview_pdf_generated_at = Column(DateTime, nullable=True)
+    preview_pdf_status = Column(String(20), nullable=True, index=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_storage_key = Column(String(500), nullable=True, index=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_mime_type = Column(String(100), nullable=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_size_bytes = Column(Integer, nullable=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_sha256 = Column(String(64), nullable=True, index=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_error = Column(Text, nullable=True)  # Legacy field - not used for new uploads (PDF support removed)
+    preview_pdf_generated_at = Column(DateTime, nullable=True)  # Legacy field - not used for new uploads (PDF support removed)
     reader_html_status = Column(String(20), nullable=True, index=True)
     reader_html_content = Column(Text, nullable=True)
     reader_toc_json = Column(Text, nullable=True)
@@ -493,7 +493,7 @@ class AttachmentArtifact(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     attachment_id = Column(Integer, ForeignKey("attachments.id"), nullable=False, index=True)
-    kind = Column(String(40), nullable=False, index=True)  # e.g. preview_pdf, reader_html
+    kind = Column(String(40), nullable=False, index=True)  # e.g. reader_html
     status = Column(String(20), nullable=False, default="pending", index=True)
     mime_type = Column(String(100), nullable=True)
     storage_key = Column(String(500), nullable=True, index=True)
@@ -521,7 +521,7 @@ class AttachmentConversionJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     attachment_id = Column(Integer, ForeignKey("attachments.id"), nullable=False, index=True)
-    job_type = Column(String(40), nullable=False, index=True)  # preview_pdf
+    job_type = Column(String(40), nullable=False, index=True)  # e.g. reader_html
     status = Column(String(20), nullable=False, default="pending", index=True)
     force = Column(Boolean, default=False, nullable=False)
     attempts = Column(Integer, default=0, nullable=False)

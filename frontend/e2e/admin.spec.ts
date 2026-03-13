@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * ADMIN Role Tests
@@ -23,15 +24,12 @@ import { test, expect, Page } from '@playwright/test';
 const ADMIN = { username: 'admin', password: 'admin123' };
 
 async function loginAsAdmin(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', ADMIN.username);
-  await page.fill('input#password', ADMIN.password);
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await loginByApi(
+    page,
+    ADMIN,
+    /\/(dashboard|documents|users|reviews|companies|admin|settings)/,
+    '/dashboard',
+  );
 }
 
 test.describe('Admin Role', () => {

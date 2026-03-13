@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.testclient import TestClient
 
+from app import app_factory as app_factory_module
 from app.app_factory import FastAPIAppFactory
 from app.web.router_registry import (
     FastAPIRouterRegistry,
@@ -41,3 +43,33 @@ def test_app_factory_allows_custom_router_registry():
 
     assert "/factory-probe" in route_paths
     assert "/" in route_paths
+
+
+def test_app_factory_startup_initializes_runtime_once(monkeypatch):
+    class _StubSession:
+        def close(self) -> None:
+            return None
+
+    init_calls: list[str] = []
+    publish_calls: list[str] = []
+
+    monkeypatch.setattr(app_factory_module, "init_db", lambda: init_calls.append("init"))
+    monkeypatch.setattr(app_factory_module, "SessionLocal", lambda: _StubSession())
+
+    from app.services.rbac_service import RbacService
+
+    monkeypatch.setattr(
+        RbacService,
+        "publish_policies",
+        staticmethod(lambda _db: publish_calls.append("publish")),
+    )
+
+    app = FastAPIAppFactory().create()
+
+    with TestClient(app):
+        pass
+    with TestClient(app):
+        pass
+
+    assert init_calls == ["init"]
+    assert publish_calls == ["publish", "publish"]

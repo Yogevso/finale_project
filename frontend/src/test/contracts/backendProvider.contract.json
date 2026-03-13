@@ -72,13 +72,13 @@
         {
           "id": 100,
           "document_id": 42,
-          "filename": "ops.pdf",
-          "original_filename": "ops.pdf",
+          "filename": "ops.docx",
+          "original_filename": "ops.docx",
           "file_size": 1024,
           "size_bytes": 1024,
-          "mime_type": "application/pdf",
+          "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "sha256": "abc123",
-          "preview_pdf_status": "ready",
+          "reader_html_status": "ready",
           "uploaded_by": 7,
           "uploaded_at": "2026-02-28T10:01:00Z"
         }
@@ -114,4 +114,3 @@
     }
   }
 }
-

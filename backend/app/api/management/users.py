@@ -335,7 +335,7 @@ def list_my_security_events(
     total = query.count()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
     events = (
-        query.order_by(SecurityEvent.created_at.desc())
+        query.order_by(SecurityEvent.created_at.desc(), SecurityEvent.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

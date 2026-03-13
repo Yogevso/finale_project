@@ -225,14 +225,24 @@ describe('documents use cases', () => {
   it('validates upload files by type and size', () => {
     const unsupportedFile = { name: 'notes.txt', type: 'text/plain', size: 128 } as File
     const oversizedFile = {
-      name: 'archive.pdf',
-      type: 'application/pdf',
+      name: 'deck.pptx',
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       size: DOCUMENT_UPLOAD_MAX_SIZE_BYTES + 1,
     } as File
     const validFile = { name: 'guide.docx', type: '', size: 200 } as File
 
-    expect(validateDocumentUploadFile(unsupportedFile)).toBe('Only PDF and Word documents are allowed')
+    expect(validateDocumentUploadFile(unsupportedFile)).toBe('Only DOCX and PPTX files are allowed')
     expect(validateDocumentUploadFile(oversizedFile)).toBe('File size must be less than 10MB')
     expect(validateDocumentUploadFile(validFile)).toBeNull()
+  })
+
+  it('rejects PDF uploads in the client validation layer', () => {
+    const pdfFile = {
+      name: 'legacy.pdf',
+      type: 'application/pdf',
+      size: 2048,
+    } as File
+
+    expect(validateDocumentUploadFile(pdfFile)).toBe('Only DOCX and PPTX files are allowed')
   })
 })

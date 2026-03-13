@@ -1,4 +1,4 @@
-"""Reader-view artifact generation and retrieval."""
+"""Reader-view artifact generation and retrieval for structured office documents."""
 
 from __future__ import annotations
 
@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 
 AttachmentService = None  # Assigned by package facade at import time.
 
+_UNSUPPORTED_READER_VIEW_ERROR = "Reader View is only available for DOCX and PPTX attachments"
+
 
 class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
-    """Reader artifact lifecycle and TOC retrieval endpoints."""
+    """Reader artifact lifecycle and retrieval endpoints."""
 
     @staticmethod
     def schedule_reader_artifact_generation(
@@ -32,23 +34,23 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
-        """Schedule asynchronous generation of a derived PDF reader artifact."""
+        """Schedule asynchronous generation of a derived reader artifact."""
         if background_tasks:
             background_tasks.add_task(
-                AttachmentService.generate_pdf_reader_artifact,
+                AttachmentService.generate_reader_artifact,
                 attachment_id,
                 force,
             )
             return
 
         worker = threading.Thread(
-            target=AttachmentService.generate_pdf_reader_artifact,
+            target=AttachmentService.generate_reader_artifact,
             args=(attachment_id, force),
             daemon=True,
         )
         worker.start()
 
-
+    @staticmethod
     def _normalize_toc_items(raw_items: Any) -> list[dict[str, Any]]:
         normalized_items: list[dict[str, Any]] = []
         if not isinstance(raw_items, list):
@@ -80,7 +82,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             if page_end is not None and page_end < page_start:
                 page_end = page_start
 
-            anchor_id = str(raw_item.get("anchor_id") or f"pdf-page-{page_start}").strip()
+            anchor_id = str(raw_item.get("anchor_id") or f"page-{page_start}").strip()
             item_id = str(raw_item.get("id") or f"toc-{index}").strip() or f"toc-{index}"
 
             normalized_items.append(
@@ -98,37 +100,71 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         return normalized_items
 
     @staticmethod
-    def _normalize_outline_source(source: Optional[str]) -> str:
-        normalized = (source or "").strip().lower()
-        if normalized in {"bookmarks", "outline"}:
-            return "bookmarks"
-        if normalized in {"contents-fallback", "contents_page", "heuristic"}:
-            return "contents-fallback"
-        return "none"
-
-    @staticmethod
     def _get_stored_reader_toc_items(
         attachment: Attachment, *, reader_artifact: Optional[AttachmentArtifact] = None
     ) -> list[dict[str, Any]]:
+        payload = AttachmentService._get_stored_reader_payload(
+            attachment,
+            reader_artifact=reader_artifact,
+        )
+        return AttachmentService._normalize_toc_items(payload.get("toc_items") or [])
+
+    @staticmethod
+    def _get_stored_reader_payload(
+        attachment: Attachment, *, reader_artifact: Optional[AttachmentArtifact] = None
+    ) -> dict[str, Any]:
         raw_json = (
             reader_artifact.content_json
             if reader_artifact and reader_artifact.content_json is not None
             else attachment.reader_toc_json
         )
         if not raw_json:
-            return []
+            return {}
 
         try:
             payload = json.loads(raw_json)
         except Exception:
             logger.warning("Invalid reader_toc_json for attachment %s", attachment.id)
-            return []
+            return {}
 
-        return AttachmentService._normalize_toc_items(payload)
+        if isinstance(payload, dict):
+            return payload
+        if isinstance(payload, list):
+            return {"toc_items": payload}
+        return {}
 
     @staticmethod
-    def generate_pdf_reader_artifact(attachment_id: int, force: bool = False) -> None:
-        """Generate HTML reader artifact for a PDF attachment."""
+    def _normalize_reader_warnings(raw_warnings: Any) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        if not isinstance(raw_warnings, list):
+            return normalized
+
+        for item in raw_warnings:
+            if not isinstance(item, dict):
+                continue
+            code = str(item.get("code") or "").strip()
+            message = str(item.get("message") or "").strip()
+            if not code or not message:
+                continue
+            count = item.get("count")
+            if count is not None:
+                try:
+                    count = int(count)
+                except (TypeError, ValueError):
+                    count = None
+            normalized.append({"code": code, "message": message, "count": count})
+        return normalized
+
+    @staticmethod
+    def _attachment_supports_structured_reader_artifact(attachment: Attachment) -> bool:
+        return AttachmentService._supports_structured_reader_artifact(
+            attachment.mime_type or "",
+            attachment.original_filename or attachment.filename or "",
+        )
+
+    @staticmethod
+    def generate_reader_artifact(attachment_id: int, force: bool = False) -> None:
+        """Generate HTML reader artifact for supported DOCX and PPTX attachments."""
         db = SessionLocal()
         try:
             attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
@@ -138,43 +174,14 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
                 )
                 return
 
-            preview_artifact, reader_artifact = AttachmentService._ensure_artifact_rows(
-                db, attachment, persist=True
-            )
-            preview_status = preview_artifact.status or (
-                AttachmentService.PREVIEW_STATUS_READY
-                if (attachment.mime_type or "").lower().startswith("application/pdf")
-                else AttachmentService.PREVIEW_STATUS_PENDING
-            )
-            preview_artifact.status = preview_status
-            AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
+            reader_artifact = AttachmentService._ensure_artifact_rows(db, attachment, persist=True)
 
-            if preview_status in (
-                AttachmentService.PREVIEW_STATUS_PENDING,
-                AttachmentService.PREVIEW_STATUS_PROCESSING,
-            ):
-                reader_artifact.status = AttachmentService.READER_STATUS_PENDING
-                reader_artifact.error = None
-                AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
-                db.commit()
-                AttachmentService.schedule_preview_pdf_generation(attachment.id, force=force)
-                return
-
-            if preview_status == AttachmentService.PREVIEW_STATUS_FAILED:
+            if not AttachmentService._attachment_supports_structured_reader_artifact(attachment):
                 reader_artifact.status = AttachmentService.READER_STATUS_FAILED
-                reader_artifact.error = preview_artifact.error or "Preview PDF generation failed"
-                reader_artifact.generated_at = datetime.utcnow()
-                AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
-                db.commit()
-                return
-
-            if (
-                not (preview_artifact.mime_type or "application/pdf")
-                .lower()
-                .startswith("application/pdf")
-            ):
-                reader_artifact.status = AttachmentService.READER_STATUS_FAILED
-                reader_artifact.error = "Preview artifact is not a PDF"
+                reader_artifact.content_text = None
+                reader_artifact.content_json = None
+                reader_artifact.source = None
+                reader_artifact.error = _UNSUPPORTED_READER_VIEW_ERROR
                 reader_artifact.generated_at = datetime.utcnow()
                 AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
                 db.commit()
@@ -193,31 +200,32 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
 
-            pdf_bytes = AttachmentService._load_preview_pdf_bytes_for_attachment(attachment)
             wrapper = get_document_converter_wrapper()
-            artifact = wrapper.convert_pdf_to_reader_artifact(pdf_bytes)
+            original_bytes = AttachmentService._load_original_bytes_for_attachment(attachment)
+            artifact = wrapper.convert_document_to_reader_artifact(
+                original_bytes,
+                attachment.mime_type or "application/octet-stream",
+                attachment.original_filename or attachment.filename or "document",
+            )
+            if not artifact:
+                raise ValueError("Structured reader extraction is not available")
+
             html_content = (artifact.get("html_content") or "").strip()
             toc_items = AttachmentService._normalize_toc_items(artifact.get("toc_items") or [])
-            toc_source = str(artifact.get("toc_source") or "none")
+            toc_source = str(artifact.get("toc_source") or "headings").strip() or "headings"
             artifact_error = str(artifact.get("error") or "").strip() or None
+            payload = artifact.get("payload") or {}
+            if not isinstance(payload, dict):
+                payload = {"toc_items": toc_items}
+            payload.setdefault("toc_items", toc_items)
 
-            conversion_error_markers = (
-                "conversion not available",
-                "error converting pdf",
-            )
-            has_error_marker = any(
-                marker in html_content.lower() for marker in conversion_error_markers
-            )
-
-            if not html_content or has_error_marker or artifact_error:
+            if not html_content or artifact_error or artifact.get("status") != "ready":
                 reader_artifact.status = AttachmentService.READER_STATUS_FAILED
                 reader_artifact.content_text = None
                 reader_artifact.content_json = None
                 reader_artifact.source = None
                 reader_artifact.error = (
-                    "Failed to generate Reader View artifact"
-                    if not html_content and not artifact_error
-                    else (artifact_error or html_content)
+                    artifact_error or "Failed to generate Reader View artifact"
                 )
                 reader_artifact.generated_at = datetime.utcnow()
                 AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
@@ -226,7 +234,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
 
             reader_artifact.status = AttachmentService.READER_STATUS_READY
             reader_artifact.content_text = html_content
-            reader_artifact.content_json = json.dumps(toc_items)
+            reader_artifact.content_json = json.dumps(payload)
             reader_artifact.source = toc_source
             reader_artifact.error = None
             reader_artifact.generated_at = datetime.utcnow()
@@ -236,10 +244,11 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             logger.exception("Reader artifact generation failed for attachment %s", attachment_id)
             attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
             if attachment:
-                preview_artifact, reader_artifact = AttachmentService._ensure_artifact_rows(
+                reader_artifact = AttachmentService._ensure_artifact_rows(
                     db, attachment, persist=False
                 )
                 reader_artifact.status = AttachmentService.READER_STATUS_FAILED
+                reader_artifact.content_text = None
                 reader_artifact.content_json = None
                 reader_artifact.source = None
                 reader_artifact.error = str(exc)
@@ -259,78 +268,57 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         background_tasks: Optional[BackgroundTasks] = None,
         force_retry: bool = False,
     ) -> dict:
-        """Get derived Reader View HTML/status for a PDF attachment."""
+        """Get derived Reader View HTML/status for a supported attachment."""
         attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
-        preview_artifact, reader_artifact = AttachmentService._ensure_artifact_rows(
-            db, attachment, persist=True
-        )
-        mime_lower = (attachment.mime_type or "").lower()
+        reader_artifact = AttachmentService._ensure_artifact_rows(db, attachment, persist=True)
 
-        if not preview_artifact.status:
-            preview_artifact.status = (
-                AttachmentService.PREVIEW_STATUS_READY
-                if mime_lower.startswith("application/pdf")
-                else AttachmentService.PREVIEW_STATUS_PENDING
-            )
-            if preview_artifact.status == AttachmentService.PREVIEW_STATUS_READY:
-                preview_artifact.storage_key = attachment.storage_key or attachment.storage_path
-                preview_artifact.mime_type = "application/pdf"
-                preview_artifact.size_bytes = attachment.size_bytes or attachment.file_size
-                preview_artifact.sha256 = attachment.sha256
-            AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
-            db.commit()
-            db.refresh(preview_artifact)
-            db.refresh(attachment)
+        if not AttachmentService._attachment_supports_structured_reader_artifact(attachment):
+            if force_retry or reader_artifact.status != AttachmentService.READER_STATUS_FAILED:
+                reader_artifact.status = AttachmentService.READER_STATUS_FAILED
+                reader_artifact.content_text = None
+                reader_artifact.content_json = None
+                reader_artifact.source = None
+                reader_artifact.error = _UNSUPPORTED_READER_VIEW_ERROR
+                reader_artifact.generated_at = datetime.utcnow()
+                AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
+                db.commit()
+                db.refresh(reader_artifact)
+                db.refresh(attachment)
+
+            return {
+                "attachment_id": attachment.id,
+                "status": reader_artifact.status,
+                "html_content": reader_artifact.content_text,
+                "toc_items": [],
+                "toc_source": reader_artifact.source,
+                "warnings": [],
+                "confidence": None,
+                "error": reader_artifact.error,
+                "generated_at": reader_artifact.generated_at,
+            }
 
         if force_retry:
-            preview_artifact.error = None
-            preview_artifact.generated_at = None
-            if not mime_lower.startswith("application/pdf"):
-                preview_artifact.status = AttachmentService.PREVIEW_STATUS_PENDING
-                preview_artifact.storage_key = None
-                preview_artifact.mime_type = None
-                preview_artifact.size_bytes = None
-                preview_artifact.sha256 = None
             reader_artifact.status = AttachmentService.READER_STATUS_PENDING
             reader_artifact.error = None
             reader_artifact.content_text = None
             reader_artifact.content_json = None
             reader_artifact.source = None
             reader_artifact.generated_at = None
-            AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
-            db.refresh(preview_artifact)
             db.refresh(reader_artifact)
             db.refresh(attachment)
 
-        if preview_artifact.status in (
-            AttachmentService.PREVIEW_STATUS_PENDING,
-            AttachmentService.PREVIEW_STATUS_PROCESSING,
-        ):
-            if not reader_artifact.status:
-                reader_artifact.status = AttachmentService.READER_STATUS_PENDING
-                AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
-                db.commit()
-                db.refresh(reader_artifact)
-                db.refresh(attachment)
-            AttachmentService.schedule_preview_pdf_generation(
-                attachment.id,
-                background_tasks=background_tasks,
-                force=force_retry,
+        should_schedule = (not reader_artifact.status) or (
+            reader_artifact.status
+            in (
+                AttachmentService.READER_STATUS_PENDING,
+                AttachmentService.READER_STATUS_PROCESSING,
             )
-        elif preview_artifact.status == AttachmentService.PREVIEW_STATUS_FAILED:
-            reader_artifact.status = AttachmentService.READER_STATUS_FAILED
-            reader_artifact.error = preview_artifact.error or "Preview PDF generation failed"
-            reader_artifact.generated_at = datetime.utcnow()
-            AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
-            db.commit()
-            db.refresh(reader_artifact)
-            db.refresh(attachment)
-        elif (not reader_artifact.status) or (
-            reader_artifact.status == AttachmentService.READER_STATUS_PENDING
             and not reader_artifact.content_text
-        ):
+        )
+
+        if should_schedule:
             reader_artifact.status = AttachmentService.READER_STATUS_PENDING
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
@@ -345,12 +333,26 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         toc_items = AttachmentService._get_stored_reader_toc_items(
             attachment, reader_artifact=reader_artifact
         )
+        reader_payload = AttachmentService._get_stored_reader_payload(
+            attachment,
+            reader_artifact=reader_artifact,
+        )
+        reader_warnings = AttachmentService._normalize_reader_warnings(
+            reader_payload.get("warnings") or []
+        )
+        confidence_value = reader_payload.get("confidence")
+        try:
+            confidence = float(confidence_value) if confidence_value is not None else None
+        except (TypeError, ValueError):
+            confidence = None
         return {
             "attachment_id": attachment.id,
             "status": reader_artifact.status,
             "html_content": reader_artifact.content_text,
             "toc_items": toc_items,
             "toc_source": reader_artifact.source,
+            "warnings": reader_warnings,
+            "confidence": confidence,
             "error": reader_artifact.error,
             "generated_at": reader_artifact.generated_at,
         }
@@ -373,102 +375,3 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             background_tasks=background_tasks,
             force_retry=True,
         )
-
-    @staticmethod
-    def get_pdf_outline(
-        db: Session,
-        document_id: int,
-        attachment_id: int,
-        current_user: Optional[User] = None,
-    ) -> dict:
-        """Extract PDF outline/bookmarks for an attachment preview TOC."""
-        attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
-        preview_artifact, reader_artifact = AttachmentService._ensure_artifact_rows(
-            db, attachment, persist=True
-        )
-
-        if not preview_artifact.status:
-            if (attachment.mime_type or "").lower().startswith("application/pdf"):
-                preview_artifact.status = AttachmentService.PREVIEW_STATUS_READY
-                preview_artifact.storage_key = attachment.storage_key or attachment.storage_path
-                preview_artifact.mime_type = "application/pdf"
-                preview_artifact.size_bytes = attachment.size_bytes or attachment.file_size
-                preview_artifact.sha256 = attachment.sha256
-            else:
-                preview_artifact.status = AttachmentService.PREVIEW_STATUS_PENDING
-            AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
-            db.commit()
-            db.refresh(preview_artifact)
-            db.refresh(attachment)
-
-        if preview_artifact.status in (
-            AttachmentService.PREVIEW_STATUS_PENDING,
-            AttachmentService.PREVIEW_STATUS_PROCESSING,
-        ):
-            AttachmentService.schedule_preview_pdf_generation(attachment.id)
-            return {
-                "attachment_id": attachment.id,
-                "has_outline": False,
-                "items": [],
-                "source": "none",
-                "error": "Preview PDF is being generated",
-            }
-
-        if preview_artifact.status == AttachmentService.PREVIEW_STATUS_FAILED:
-            return {
-                "attachment_id": attachment.id,
-                "has_outline": False,
-                "items": [],
-                "source": "none",
-                "error": preview_artifact.error or "Preview PDF generation failed",
-            }
-
-        stored_toc_items = AttachmentService._get_stored_reader_toc_items(
-            attachment, reader_artifact=reader_artifact
-        )
-        if stored_toc_items:
-            source = AttachmentService._normalize_outline_source(reader_artifact.source)
-            if source == "none":
-                source = "contents-fallback"
-            return {
-                "attachment_id": attachment.id,
-                "has_outline": True,
-                "items": stored_toc_items,
-                "source": source,
-                "error": None,
-            }
-
-        try:
-            wrapper = get_document_converter_wrapper()
-            pdf_bytes = AttachmentService._load_preview_pdf_bytes_for_attachment(attachment)
-            toc_payload = wrapper.extract_pdf_toc(pdf_bytes)
-            normalized_items = AttachmentService._normalize_toc_items(
-                toc_payload.get("toc_items") or []
-            )
-
-            source = AttachmentService._normalize_outline_source(
-                str(toc_payload.get("toc_source") or "")
-            )
-            if source == "none" and normalized_items:
-                source = "contents-fallback"
-
-            return {
-                "attachment_id": attachment.id,
-                "has_outline": bool(normalized_items),
-                "items": normalized_items,
-                "source": source,
-                "error": toc_payload.get("error"),
-            }
-        except Exception as exc:
-            logger.warning(
-                "Failed extracting PDF outline for attachment %s: %s",
-                attachment.id,
-                exc,
-            )
-            return {
-                "attachment_id": attachment.id,
-                "has_outline": False,
-                "items": [],
-                "source": "none",
-                "error": "Failed to extract PDF outline",
-            }

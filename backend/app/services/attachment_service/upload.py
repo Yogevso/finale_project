@@ -6,7 +6,6 @@ import hashlib
 import io
 import logging
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -77,6 +76,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path = str(file_path)
 
         # Create attachment record
+        supports_reader_artifact = AttachmentService._supports_structured_reader_artifact(
+            content_type,
+            original_filename,
+        )
         attachment = Attachment(
             document_id=document_id,
             filename=unique_filename,
@@ -87,27 +90,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path=storage_path,
             storage_key=storage_path,
             sha256=checksum_sha256,
-            preview_pdf_status=(
-                AttachmentService.PREVIEW_STATUS_READY
-                if content_type.lower().startswith("application/pdf")
-                else AttachmentService.PREVIEW_STATUS_PENDING
+            reader_html_status=(
+                AttachmentService.READER_STATUS_PENDING if supports_reader_artifact else None
             ),
-            preview_pdf_storage_key=(
-                storage_path if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_mime_type=(
-                "application/pdf" if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_size_bytes=(
-                file_size if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_sha256=(
-                checksum_sha256 if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_generated_at=(
-                datetime.utcnow() if content_type.lower().startswith("application/pdf") else None
-            ),
-            reader_html_status=AttachmentService.READER_STATUS_PENDING,
             uploaded_by=current_user.id,
         )
 
@@ -116,12 +101,8 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         db.refresh(attachment)
         AttachmentService._ensure_artifact_rows(db, attachment, persist=True)
 
-        if (attachment.mime_type or "").lower().startswith("application/pdf"):
+        if supports_reader_artifact:
             AttachmentService.schedule_reader_artifact_generation(
-                attachment.id, background_tasks=background_tasks
-            )
-        else:
-            AttachmentService.schedule_preview_pdf_generation(
                 attachment.id, background_tasks=background_tasks
             )
 
@@ -180,7 +161,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
-        """Enqueue async generation of preview_pdf for the given attachment."""
+        """Enqueue async generation of the reader artifact for the given attachment."""
         from app.services.conversion_jobs import enqueue_conversion as enqueue_conversion_job
 
         enqueue_conversion_job(

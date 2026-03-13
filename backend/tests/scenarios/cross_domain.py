@@ -79,11 +79,11 @@ def create_document_detail_bundle_scenario(
         db,
         document_id=document.id,
         uploaded_by=user.id,
-        filename="spec.pdf",
+        filename="spec.docx",
         file_size=128,
         size_bytes=128,
-        storage_path="uploads/spec.pdf",
-        storage_key="uploads/spec.pdf",
+        storage_path="uploads/spec.docx",
+        storage_key="uploads/spec.docx",
     )
 
     review = ReviewRequest(

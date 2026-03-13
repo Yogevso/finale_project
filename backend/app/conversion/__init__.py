@@ -7,36 +7,19 @@ from app.conversion.document_pipeline import (
 from app.conversion.document_strategies import (
     DocumentConverterStrategy,
     HtmlPassthroughStrategy,
-    PdfConverterStrategy,
+    PowerPointConverterStrategy,
     TextConverterStrategy,
     WordConverterStrategy,
 )
-from app.conversion.models import DocumentConversionRequest, PreviewPdfConversionRequest
-from app.conversion.preview_pipeline import (
-    GenericDocumentPreviewPdfStrategy,
-    HtmlPreviewPdfStrategy,
-    ImagePreviewPdfStrategy,
-    OfficePreviewPdfStrategy,
-    PreviewPdfConversionPipeline,
-    PreviewPdfStrategy,
-    TextPreviewPdfStrategy,
-)
+from app.conversion.models import DocumentConversionRequest
 
 __all__ = [
     "DocumentConversionPipeline",
     "DocumentConversionRequest",
     "DocumentConverterStrategy",
-    "GenericDocumentPreviewPdfStrategy",
     "HtmlPassthroughStrategy",
-    "HtmlPreviewPdfStrategy",
-    "ImagePreviewPdfStrategy",
-    "OfficePreviewPdfStrategy",
-    "PdfConverterStrategy",
-    "PreviewPdfConversionPipeline",
-    "PreviewPdfConversionRequest",
-    "PreviewPdfStrategy",
+    "PowerPointConverterStrategy",
     "TextConverterStrategy",
-    "TextPreviewPdfStrategy",
     "WordConverterStrategy",
     "get_document_conversion_pipeline",
 ]

@@ -163,6 +163,20 @@
       "AnalyticsOverview": {
         "description": "Overview analytics response",
         "properties": {
+          "assignment_churn_90d": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentChurnItem"
+            },
+            "title": "Assignment Churn 90D",
+            "type": "array"
+          },
+          "by_audience_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Audience Type",
+            "type": "object"
+          },
           "documents_by_category": {
             "items": {
               "$ref": "#/components/schemas/CategoryCount"
@@ -176,6 +190,11 @@
             },
             "title": "Documents By Status",
             "type": "object"
+          },
+          "exposure_risk_transitions_30d": {
+            "default": 0,
+            "title": "Exposure Risk Transitions 30D",
+            "type": "integer"
           },
           "new_docs_this_week": {
             "default": 0,
@@ -227,13 +246,98 @@
           "total_downloads",
           "documents_by_status",
           "documents_by_category",
+          "by_audience_type",
           "pending_reviews"
         ],
         "title": "AnalyticsOverview",
         "type": "object"
       },
+      "ApprovalPolicyCheck": {
+        "description": "Individual policy check result for approval.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed"
+        ],
+        "title": "ApprovalPolicyCheck",
+        "type": "object"
+      },
+      "AssignmentChurnItem": {
+        "description": "Assignment churn count per document.",
+        "properties": {
+          "churn_count": {
+            "title": "Churn Count",
+            "type": "integer"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "churn_count"
+        ],
+        "title": "AssignmentChurnItem",
+        "type": "object"
+      },
+      "AttachmentExtractionWarningResponse": {
+        "description": "Non-fatal warning emitted during attachment extraction.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "AttachmentExtractionWarningResponse",
+        "type": "object"
+      },
       "AttachmentOutlineItem": {
-        "description": "PDF outline/bookmark item for TOC navigation.",
+        "description": "Reader-view outline item for TOC navigation.",
         "properties": {
           "anchor_id": {
             "anyOf": [
@@ -288,61 +392,23 @@
         "title": "AttachmentOutlineItem",
         "type": "object"
       },
-      "AttachmentOutlineResponse": {
-        "description": "PDF outline payload for attachment preview TOC.",
-        "properties": {
-          "attachment_id": {
-            "title": "Attachment Id",
-            "type": "integer"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "has_outline": {
-            "title": "Has Outline",
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/AttachmentOutlineItem"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          }
-        },
-        "required": [
-          "attachment_id",
-          "has_outline",
-          "items"
-        ],
-        "title": "AttachmentOutlineResponse",
-        "type": "object"
-      },
       "AttachmentReaderViewResponse": {
-        "description": "Derived reader-view artifact status/content for PDF attachments.",
+        "description": "Derived reader-view artifact status/content for attachment previews.",
         "properties": {
           "attachment_id": {
             "title": "Attachment Id",
             "type": "integer"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
           },
           "error": {
             "anyOf": [
@@ -399,6 +465,13 @@
               }
             ],
             "title": "Toc Source"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentExtractionWarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -434,61 +507,6 @@
           "original_filename": {
             "title": "Original Filename",
             "type": "string"
-          },
-          "preview_pdf_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview Pdf Error"
-          },
-          "preview_pdf_mime_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview Pdf Mime Type"
-          },
-          "preview_pdf_sha256": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview Pdf Sha256"
-          },
-          "preview_pdf_size_bytes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview Pdf Size Bytes"
-          },
-          "preview_pdf_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview Pdf Status"
           },
           "reader_html_status": {
             "anyOf": [
@@ -603,6 +621,260 @@
         "title": "AttachmentUploadResponse",
         "type": "object"
       },
+      "AudienceAccessPreviewResponse": {
+        "description": "Computed audience preview for a document's current visibility state.",
+        "properties": {
+          "access_summary": {
+            "title": "Access Summary",
+            "type": "string"
+          },
+          "audience_changed_since_publish": {
+            "default": false,
+            "title": "Audience Changed Since Publish",
+            "type": "boolean"
+          },
+          "includes_internal_users": {
+            "title": "Includes Internal Users",
+            "type": "boolean"
+          },
+          "is_public": {
+            "title": "Is Public",
+            "type": "boolean"
+          },
+          "published_company_ids_snapshot": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Company Ids Snapshot"
+          },
+          "published_visibility_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Visibility Snapshot"
+          },
+          "target_companies": {
+            "items": {
+              "$ref": "#/components/schemas/TenantSummary"
+            },
+            "title": "Target Companies",
+            "type": "array"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/DocumentVisibility"
+          }
+        },
+        "required": [
+          "visibility",
+          "is_public",
+          "includes_internal_users",
+          "target_companies",
+          "access_summary"
+        ],
+        "title": "AudienceAccessPreviewResponse",
+        "type": "object"
+      },
+      "AudienceAlertRule": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "window_minutes": {
+            "title": "Window Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "metric",
+          "threshold",
+          "window_minutes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AudienceAlertRule",
+        "type": "object"
+      },
+      "AudienceAlertRuleCreate": {
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "metric": {
+            "maxLength": 120,
+            "minLength": 3,
+            "title": "Metric",
+            "type": "string"
+          },
+          "threshold": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "window_minutes": {
+            "maximum": 10080.0,
+            "minimum": 1.0,
+            "title": "Window Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "metric",
+          "threshold",
+          "window_minutes"
+        ],
+        "title": "AudienceAlertRuleCreate",
+        "type": "object"
+      },
+      "AudienceDiff": {
+        "description": "Diff between review snapshot and current document audience state.",
+        "properties": {
+          "companies_added": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Companies Added",
+            "type": "array"
+          },
+          "companies_removed": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Companies Removed",
+            "type": "array"
+          },
+          "current_company_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Current Company Ids",
+            "type": "array"
+          },
+          "current_visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Visibility"
+          },
+          "has_changes": {
+            "default": false,
+            "title": "Has Changes",
+            "type": "boolean"
+          },
+          "snapshot_company_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Snapshot Company Ids",
+            "type": "array"
+          },
+          "snapshot_visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Visibility"
+          },
+          "visibility_changed": {
+            "default": false,
+            "title": "Visibility Changed",
+            "type": "boolean"
+          }
+        },
+        "title": "AudienceDiff",
+        "type": "object"
+      },
+      "AvatarUploadResponse": {
+        "properties": {
+          "avatar_url": {
+            "title": "Avatar Url",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "avatar_url",
+          "message"
+        ],
+        "title": "AvatarUploadResponse",
+        "type": "object"
+      },
       "Body_upload_attachment_api_v1_documents__document_id__attachments_post": {
         "properties": {
           "file": {
@@ -663,6 +935,18 @@
               }
             ],
             "title": "Document Number"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
           },
           "file": {
             "format": "binary",
@@ -787,6 +1071,20 @@
         "title": "Body_upload_document_api_v1_documents_upload_post",
         "type": "object"
       },
+      "Body_upload_my_avatar_api_v1_users_me_avatar_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_my_avatar_api_v1_users_me_avatar_post",
+        "type": "object"
+      },
       "BookmarkResponse": {
         "properties": {
           "created_at": {
@@ -819,6 +1117,124 @@
           "created_at"
         ],
         "title": "BookmarkResponse",
+        "type": "object"
+      },
+      "BulkDocumentMetadataUpdateRequest": {
+        "description": "Batch metadata update payload for list-view editing.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "company_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Ids"
+          },
+          "document_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Document Ids",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "document_ids"
+        ],
+        "title": "BulkDocumentMetadataUpdateRequest",
+        "type": "object"
+      },
+      "BulkDocumentMetadataUpdateResponse": {
+        "description": "Result payload for bulk metadata updates.",
+        "properties": {
+          "document_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Document Ids",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "updated_count": {
+            "title": "Updated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated_count",
+          "document_ids",
+          "message"
+        ],
+        "title": "BulkDocumentMetadataUpdateResponse",
+        "type": "object"
+      },
+      "CancelScheduledPublishResponse": {
+        "description": "Response for cancelled scheduled publish.",
+        "properties": {
+          "cancelled_scheduled_at": {
+            "title": "Cancelled Scheduled At",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version_id",
+          "document_id",
+          "cancelled_scheduled_at"
+        ],
+        "title": "CancelScheduledPublishResponse",
         "type": "object"
       },
       "CategoryCount": {
@@ -1181,6 +1597,61 @@
         "title": "CommentUpdate",
         "type": "object"
       },
+      "CompanyArchiveValidation": {
+        "description": "Validation result for company archive operation.",
+        "properties": {
+          "active_users": {
+            "title": "Active Users",
+            "type": "integer"
+          },
+          "assigned_documents": {
+            "title": "Assigned Documents",
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "can_archive": {
+            "title": "Can Archive",
+            "type": "boolean"
+          },
+          "company_id": {
+            "title": "Company Id",
+            "type": "integer"
+          },
+          "owned_documents": {
+            "title": "Owned Documents",
+            "type": "integer"
+          },
+          "pending_invitations": {
+            "title": "Pending Invitations",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "can_archive",
+          "company_id",
+          "active_users",
+          "pending_invitations",
+          "owned_documents",
+          "assigned_documents",
+          "warnings",
+          "blockers"
+        ],
+        "title": "CompanyArchiveValidation",
+        "type": "object"
+      },
       "CompanyAssignRequest": {
         "description": "Request body for assigning companies to a document",
         "properties": {
@@ -1196,6 +1667,55 @@
           "company_ids"
         ],
         "title": "CompanyAssignRequest",
+        "type": "object"
+      },
+      "CompanyAudienceAnalytics": {
+        "description": "Company-scoped audience analytics summary.",
+        "properties": {
+          "active_document_count": {
+            "title": "Active Document Count",
+            "type": "integer"
+          },
+          "assignment_churn_90d": {
+            "title": "Assignment Churn 90D",
+            "type": "integer"
+          },
+          "company_id": {
+            "title": "Company Id",
+            "type": "integer"
+          },
+          "company_name": {
+            "title": "Company Name",
+            "type": "string"
+          },
+          "company_visible_document_count": {
+            "title": "Company Visible Document Count",
+            "type": "integer"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "download_count_30d": {
+            "title": "Download Count 30D",
+            "type": "integer"
+          },
+          "view_count_30d": {
+            "title": "View Count 30D",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "company_id",
+          "company_name",
+          "document_count",
+          "active_document_count",
+          "company_visible_document_count",
+          "view_count_30d",
+          "download_count_30d",
+          "assignment_churn_90d"
+        ],
+        "title": "CompanyAudienceAnalytics",
         "type": "object"
       },
       "CompanyCreate": {
@@ -1363,6 +1883,24 @@
         "title": "CompanyDetailResponse",
         "type": "object"
       },
+      "CompanyHierarchyParentUpdate": {
+        "description": "Hierarchy parent update request.",
+        "properties": {
+          "parent_company_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Company Id"
+          }
+        },
+        "title": "CompanyHierarchyParentUpdate",
+        "type": "object"
+      },
       "CompanyListResponse": {
         "description": "Paginated company list response",
         "properties": {
@@ -1491,6 +2029,129 @@
           "updated_at"
         ],
         "title": "CompanyResponse",
+        "type": "object"
+      },
+      "CompanyScopeConflict": {
+        "description": "A scope conflict for a user.",
+        "properties": {
+          "conflict_type": {
+            "title": "Conflict Type",
+            "type": "string"
+          },
+          "current_tenant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Tenant Id"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "role",
+          "current_tenant_id",
+          "conflict_type",
+          "description"
+        ],
+        "title": "CompanyScopeConflict",
+        "type": "object"
+      },
+      "CompanyScopeConflictReport": {
+        "description": "Report of all company scope conflicts.",
+        "properties": {
+          "conflict_count": {
+            "title": "Conflict Count",
+            "type": "integer"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyScopeConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "conflict_count",
+          "conflicts"
+        ],
+        "title": "CompanyScopeConflictReport",
+        "type": "object"
+      },
+      "CompanyTransferValidation": {
+        "description": "Validation result for company ownership transfer.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "can_transfer": {
+            "title": "Can Transfer",
+            "type": "boolean"
+          },
+          "documents_to_reassign": {
+            "title": "Documents To Reassign",
+            "type": "integer"
+          },
+          "invitations_to_update": {
+            "title": "Invitations To Update",
+            "type": "integer"
+          },
+          "source_company_id": {
+            "title": "Source Company Id",
+            "type": "integer"
+          },
+          "target_company_id": {
+            "title": "Target Company Id",
+            "type": "integer"
+          },
+          "users_to_transfer": {
+            "title": "Users To Transfer",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "can_transfer",
+          "source_company_id",
+          "target_company_id",
+          "users_to_transfer",
+          "documents_to_reassign",
+          "invitations_to_update",
+          "warnings",
+          "blockers"
+        ],
+        "title": "CompanyTransferValidation",
         "type": "object"
       },
       "CompanyUpdate": {
@@ -1739,6 +2400,41 @@
         "title": "ContentAnalytics",
         "type": "object"
       },
+      "DocumentCalendarExportResponse": {
+        "description": "JSON payload used by the frontend to download an iCal file.",
+        "properties": {
+          "content_type": {
+            "default": "text/calendar",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "ical": {
+            "title": "Ical",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "filename",
+          "due_date",
+          "ical"
+        ],
+        "title": "DocumentCalendarExportResponse",
+        "type": "object"
+      },
       "DocumentCreate": {
         "description": "Document creation schema",
         "properties": {
@@ -1753,6 +2449,20 @@
               }
             ],
             "title": "Category"
+          },
+          "company_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Ids"
           },
           "description": {
             "anyOf": [
@@ -1776,6 +2486,18 @@
               }
             ],
             "title": "Document Number"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
           },
           "parent_id": {
             "anyOf": [
@@ -1838,6 +2560,18 @@
             ],
             "title": "Tags"
           },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
           "title": {
             "maxLength": 500,
             "minLength": 1,
@@ -1877,6 +2611,57 @@
           "title"
         ],
         "title": "DocumentCreate",
+        "type": "object"
+      },
+      "DocumentDetailPageBundleResponse": {
+        "description": "Aggregated payload for the internal document detail page.",
+        "properties": {
+          "assigned_companies": {
+            "items": {
+              "$ref": "#/components/schemas/TenantSummary"
+            },
+            "title": "Assigned Companies",
+            "type": "array"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentResponse"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "audience_access_preview": {
+            "$ref": "#/components/schemas/AudienceAccessPreviewResponse"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DocumentResponse"
+          },
+          "partial_errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Errors"
+          },
+          "review_history": {
+            "$ref": "#/components/schemas/ReviewListResponse"
+          }
+        },
+        "required": [
+          "document",
+          "attachments",
+          "assigned_companies",
+          "audience_access_preview",
+          "review_history"
+        ],
+        "title": "DocumentDetailPageBundleResponse",
         "type": "object"
       },
       "DocumentListResponse": {
@@ -2001,6 +2786,18 @@
             "title": "Document Number",
             "type": "string"
           },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
           "etag": {
             "title": "Etag",
             "type": "string"
@@ -2073,6 +2870,18 @@
               }
             ],
             "title": "Tags"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
           },
           "title": {
             "maxLength": 500,
@@ -2172,6 +2981,35 @@
         "title": "DocumentStats",
         "type": "object"
       },
+      "DocumentStatsResponse": {
+        "description": "Dashboard summary counts for documents in current tenant scope.",
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "integer"
+          },
+          "draft": {
+            "title": "Draft",
+            "type": "integer"
+          },
+          "published": {
+            "title": "Published",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "published",
+          "approved",
+          "draft"
+        ],
+        "title": "DocumentStatsResponse",
+        "type": "object"
+      },
       "DocumentStatus": {
         "description": "Document statuses",
         "enum": [
@@ -2184,6 +3022,23 @@
         ],
         "title": "DocumentStatus",
         "type": "string"
+      },
+      "DocumentTagSuggestionsResponse": {
+        "description": "Tenant-scoped tag suggestions for document metadata editors.",
+        "properties": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "DocumentTagSuggestionsResponse",
+        "type": "object"
       },
       "DocumentUpdate": {
         "description": "Document update schema",
@@ -2200,6 +3055,20 @@
             ],
             "title": "Category"
           },
+          "company_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Ids"
+          },
           "description": {
             "anyOf": [
               {
@@ -2210,6 +3079,18 @@
               }
             ],
             "title": "Description"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
           },
           "platform": {
             "anyOf": [
@@ -2233,6 +3114,19 @@
               }
             ],
             "title": "Platform Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "release_branch": {
             "anyOf": [
@@ -2266,6 +3160,18 @@
               }
             ],
             "title": "Tags"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
           },
           "title": {
             "anyOf": [
@@ -2327,6 +3233,117 @@
         ],
         "title": "DocumentVisibility",
         "type": "string"
+      },
+      "DocumentWatchResponse": {
+        "description": "Response payload for watch/unwatch state changes.",
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "is_watching": {
+            "title": "Is Watching",
+            "type": "boolean"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "integer"
+          },
+          "watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watched At"
+          }
+        },
+        "required": [
+          "document_id",
+          "user_id",
+          "is_watching"
+        ],
+        "title": "DocumentWatchResponse",
+        "type": "object"
+      },
+      "DocumentWatchStatusResponse": {
+        "description": "Current user's watch state for a document.",
+        "properties": {
+          "is_watching": {
+            "title": "Is Watching",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_watching"
+        ],
+        "title": "DocumentWatchStatusResponse",
+        "type": "object"
+      },
+      "DuplicateCheckResponse": {
+        "description": "Similarity check result for a prospective document title.",
+        "properties": {
+          "has_matches": {
+            "title": "Has Matches",
+            "type": "boolean"
+          },
+          "matches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DuplicateDocumentMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "threshold",
+          "has_matches"
+        ],
+        "title": "DuplicateCheckResponse",
+        "type": "object"
+      },
+      "DuplicateDocumentMatch": {
+        "description": "One similar document match for duplicate-title warnings.",
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "document_number": {
+            "title": "Document Number",
+            "type": "string"
+          },
+          "similarity": {
+            "title": "Similarity",
+            "type": "number"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "title",
+          "document_number",
+          "similarity"
+        ],
+        "title": "DuplicateDocumentMatch",
+        "type": "object"
       },
       "EngagementAnalytics": {
         "description": "Engagement analytics response",
@@ -2762,6 +3779,71 @@
         "title": "FeedbackType",
         "type": "string"
       },
+      "ForcePublishRequest": {
+        "description": "Request body for forced publish override.",
+        "properties": {
+          "acknowledge_risks": {
+            "description": "Confirm acknowledgment of risks",
+            "title": "Acknowledge Risks",
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "Admin justification for forced publish",
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "acknowledge_risks"
+        ],
+        "title": "ForcePublishRequest",
+        "type": "object"
+      },
+      "ForcePublishResponse": {
+        "description": "Response for forced publish override.",
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "forced_by_user_id": {
+            "title": "Forced By User Id",
+            "type": "integer"
+          },
+          "published_at": {
+            "title": "Published At",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "integer"
+          },
+          "warnings_overridden": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings Overridden",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version_id",
+          "document_id",
+          "published_at",
+          "forced_by_user_id",
+          "reason"
+        ],
+        "title": "ForcePublishResponse",
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "description": "Request for password reset instructions.",
         "properties": {
@@ -3163,6 +4245,38 @@
         "title": "NotificationMarkRead",
         "type": "object"
       },
+      "NotificationPreferencesResponse": {
+        "properties": {
+          "notification_preferences": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Notification Preferences",
+            "type": "object"
+          }
+        },
+        "required": [
+          "notification_preferences"
+        ],
+        "title": "NotificationPreferencesResponse",
+        "type": "object"
+      },
+      "NotificationPreferencesUpdateRequest": {
+        "properties": {
+          "notification_preferences": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Notification Preferences",
+            "type": "object"
+          }
+        },
+        "required": [
+          "notification_preferences"
+        ],
+        "title": "NotificationPreferencesUpdateRequest",
+        "type": "object"
+      },
       "NotificationResponse": {
         "description": "Notification response schema",
         "properties": {
@@ -3230,6 +4344,26 @@
           "created_at"
         ],
         "title": "NotificationResponse",
+        "type": "object"
+      },
+      "OrphanDetectorResponse": {
+        "description": "Response from orphan detector jobs.",
+        "properties": {
+          "orphan_count": {
+            "title": "Orphan Count",
+            "type": "integer"
+          },
+          "orphans": {
+            "items": {},
+            "title": "Orphans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "orphan_count",
+          "orphans"
+        ],
+        "title": "OrphanDetectorResponse",
         "type": "object"
       },
       "PasswordChange": {
@@ -3407,9 +4541,54 @@
             ],
             "title": "Description"
           },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "release_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Branch"
           },
           "tags": {
             "default": [],
@@ -3419,9 +4598,31 @@
             "title": "Tags",
             "type": "array"
           },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
           },
           "updated_at": {
             "format": "date-time",
@@ -3500,6 +4701,18 @@
             ],
             "title": "Category"
           },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
           "description": {
             "anyOf": [
               {
@@ -3511,6 +4724,17 @@
             ],
             "title": "Description"
           },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
           "has_attachments": {
             "default": false,
             "title": "Has Attachments",
@@ -3520,9 +4744,76 @@
             "title": "Id",
             "type": "integer"
           },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "release_branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Branch"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
           },
           "updated_at": {
             "format": "date-time",
@@ -3546,6 +4837,92 @@
           "updated_at"
         ],
         "title": "PortalDocumentSummary",
+        "type": "object"
+      },
+      "PreApprovePolicy": {
+        "description": "Pre-approve policy explanation payload.",
+        "properties": {
+          "audience_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Summary"
+          },
+          "can_approve": {
+            "title": "Can Approve",
+            "type": "boolean"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalPolicyCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "can_approve",
+          "checks"
+        ],
+        "title": "PreApprovePolicy",
+        "type": "object"
+      },
+      "ProfileUpdateRequest": {
+        "properties": {
+          "full_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          }
+        },
+        "title": "ProfileUpdateRequest",
         "type": "object"
       },
       "PublicAttachmentInfo": {
@@ -3744,6 +5121,17 @@
             ],
             "title": "Tags"
           },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -3781,6 +5169,11 @@
               }
             ],
             "title": "Version Number"
+          },
+          "visibility": {
+            "default": "public",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -3850,6 +5243,17 @@
             "title": "Document Number",
             "type": "string"
           },
+          "embed_policy": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Policy"
+          },
           "has_attachments": {
             "default": false,
             "title": "Has Attachments",
@@ -3893,6 +5297,17 @@
             ],
             "title": "Release Branch"
           },
+          "sharing_policy": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing Policy"
+          },
           "tags": {
             "anyOf": [
               {
@@ -3903,6 +5318,17 @@
               }
             ],
             "title": "Tags"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
           },
           "title": {
             "title": "Title",
@@ -3941,6 +5367,11 @@
               }
             ],
             "title": "Version Number"
+          },
+          "visibility": {
+            "default": "public",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -4505,6 +5936,11 @@
               }
             ],
             "title": "Topic"
+          },
+          "visibility": {
+            "default": "public",
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -4581,6 +6017,63 @@
           "total"
         ],
         "title": "PublicTopicsResponse",
+        "type": "object"
+      },
+      "PublishPreflightCheckItem": {
+        "description": "A single preflight check item for publish readiness",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "passed"
+        ],
+        "title": "PublishPreflightCheckItem",
+        "type": "object"
+      },
+      "PublishPreflightResponse": {
+        "description": "Response containing all preflight checks for publishing a version",
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/PublishPreflightCheckItem"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "checks"
+        ],
+        "title": "PublishPreflightResponse",
         "type": "object"
       },
       "RbacPoliciesResponse": {
@@ -4733,6 +6226,28 @@
         "title": "RefreshTokenRequest",
         "type": "object"
       },
+      "ResetPasswordRequest": {
+        "description": "Request body for completing a password reset.",
+        "properties": {
+          "new_password": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "New Password",
+            "type": "string"
+          },
+          "token": {
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "ResetPasswordRequest",
+        "type": "object"
+      },
       "ReviewAction": {
         "description": "Approve or reject a review",
         "properties": {
@@ -4808,6 +6323,38 @@
       "ReviewResponse": {
         "description": "Review response with document info",
         "properties": {
+          "audience_company_ids_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Company Ids Snapshot"
+          },
+          "audience_diff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudienceDiff"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "audience_visibility_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Visibility Snapshot"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4830,6 +6377,18 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "manager_escalated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager Escalated At"
           },
           "message": {
             "anyOf": [
@@ -4886,6 +6445,18 @@
               }
             ]
           },
+          "reviewer_reminded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Reminded At"
+          },
           "status": {
             "$ref": "#/components/schemas/ReviewStatus"
           },
@@ -4929,6 +6500,99 @@
           "created_at"
         ],
         "title": "ReviewResponse",
+        "type": "object"
+      },
+      "ReviewSlaItem": {
+        "description": "One review evaluated by the SLA processor.",
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "escalation_recipient_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Escalation Recipient Ids",
+            "type": "array"
+          },
+          "escalation_sent": {
+            "default": false,
+            "title": "Escalation Sent",
+            "type": "boolean"
+          },
+          "reminder_recipient_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Reminder Recipient Ids",
+            "type": "array"
+          },
+          "reminder_sent": {
+            "default": false,
+            "title": "Reminder Sent",
+            "type": "boolean"
+          },
+          "review_id": {
+            "title": "Review Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "review_id",
+          "document_id"
+        ],
+        "title": "ReviewSlaItem",
+        "type": "object"
+      },
+      "ReviewSlaProcessResponse": {
+        "description": "Summary of one SLA processing pass.",
+        "properties": {
+          "escalation_threshold_hours": {
+            "title": "Escalation Threshold Hours",
+            "type": "integer"
+          },
+          "escalations_sent": {
+            "title": "Escalations Sent",
+            "type": "integer"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewSlaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "processed_at": {
+            "format": "date-time",
+            "title": "Processed At",
+            "type": "string"
+          },
+          "reminder_threshold_hours": {
+            "title": "Reminder Threshold Hours",
+            "type": "integer"
+          },
+          "reminders_sent": {
+            "title": "Reminders Sent",
+            "type": "integer"
+          },
+          "reviews_scanned": {
+            "title": "Reviews Scanned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "processed_at",
+          "reminder_threshold_hours",
+          "escalation_threshold_hours",
+          "reviews_scanned",
+          "reminders_sent",
+          "escalations_sent"
+        ],
+        "title": "ReviewSlaProcessResponse",
         "type": "object"
       },
       "ReviewStatus": {
@@ -5105,6 +6769,87 @@
         "title": "SavedSearchResponse",
         "type": "object"
       },
+      "SchedulePublishRequest": {
+        "description": "Request to schedule a version for future publish.",
+        "properties": {
+          "scheduled_publish_at": {
+            "format": "date-time",
+            "title": "Scheduled Publish At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scheduled_publish_at"
+        ],
+        "title": "SchedulePublishRequest",
+        "type": "object"
+      },
+      "SchedulePublishResponse": {
+        "description": "Response for scheduled publish.",
+        "properties": {
+          "audience_validated_at": {
+            "title": "Audience Validated At",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "integer"
+          },
+          "scheduled_publish_at": {
+            "title": "Scheduled Publish At",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version_id",
+          "document_id",
+          "scheduled_publish_at",
+          "audience_validated_at"
+        ],
+        "title": "SchedulePublishResponse",
+        "type": "object"
+      },
+      "ScheduledPublishReport": {
+        "description": "Report from processing scheduled publishes.",
+        "properties": {
+          "errors": {
+            "default": [],
+            "items": {
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed_stale_company": {
+            "title": "Failed Stale Company",
+            "type": "integer"
+          },
+          "failed_validation": {
+            "title": "Failed Validation",
+            "type": "integer"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "published": {
+            "title": "Published",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "processed",
+          "published",
+          "failed_validation",
+          "failed_stale_company"
+        ],
+        "title": "ScheduledPublishReport",
+        "type": "object"
+      },
       "SearchResponse": {
         "properties": {
           "items": {
@@ -5206,6 +6951,106 @@
           "updated_at"
         ],
         "title": "SearchResult",
+        "type": "object"
+      },
+      "SecurityEventListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecurityEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages"
+        ],
+        "title": "SecurityEventListResponse",
+        "type": "object"
+      },
+      "SecurityEventResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "event_type",
+          "created_at"
+        ],
+        "title": "SecurityEventResponse",
+        "type": "object"
+      },
+      "SessionBulkRevokeResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "revoked_count": {
+            "title": "Revoked Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message",
+          "revoked_count"
+        ],
+        "title": "SessionBulkRevokeResponse",
         "type": "object"
       },
       "SessionEndRequest": {
@@ -6084,6 +7929,17 @@
       "UserResponse": {
         "description": "User response schema",
         "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -6108,6 +7964,24 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "notification_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Preferences"
+          },
           "permissions": {
             "items": {
               "type": "string"
@@ -6129,6 +8003,10 @@
             ],
             "title": "Tenant Id"
           },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -6148,6 +8026,8 @@
           "id",
           "role",
           "is_active",
+          "timezone",
+          "locale",
           "created_at",
           "updated_at"
         ],
@@ -6166,6 +8046,79 @@
         ],
         "title": "UserRole",
         "type": "string"
+      },
+      "UserSessionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserSessionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "UserSessionListResponse",
+        "type": "object"
+      },
+      "UserSessionResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "last_active_at": {
+            "format": "date-time",
+            "title": "Last Active At",
+            "type": "string"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_active_at",
+          "is_current"
+        ],
+        "title": "UserSessionResponse",
+        "type": "object"
       },
       "UserUpdate": {
         "description": "User update schema",
@@ -6206,6 +8159,19 @@
             ],
             "title": "Is Active"
           },
+          "locale": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
           "role": {
             "anyOf": [
               {
@@ -6226,6 +8192,19 @@
               }
             ],
             "title": "Tenant Id"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
           }
         },
         "title": "UserUpdate",
@@ -6234,6 +8213,17 @@
       "UserWithCompanyResponse": {
         "description": "User response with company details",
         "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
           "company_name": {
             "anyOf": [
               {
@@ -6280,6 +8270,24 @@
             "title": "Is Active",
             "type": "boolean"
           },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "notification_preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Preferences"
+          },
           "permissions": {
             "items": {
               "type": "string"
@@ -6301,6 +8309,10 @@
             ],
             "title": "Tenant Id"
           },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -6320,6 +8332,8 @@
           "id",
           "role",
           "is_active",
+          "timezone",
+          "locale",
           "created_at",
           "updated_at"
         ],
@@ -6427,6 +8441,28 @@
       "VersionResponse": {
         "description": "Version response schema",
         "properties": {
+          "audience_company_ids_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Company Ids Snapshot"
+          },
+          "audience_visibility_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience Visibility Snapshot"
+          },
           "bump_type": {
             "$ref": "#/components/schemas/VersionBumpType",
             "default": "patch"
@@ -6551,6 +8587,14 @@
           "version_number": {
             "title": "Version Number",
             "type": "integer"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -6992,6 +9036,302 @@
         ]
       }
     },
+    "/api/v1/admin/access-history/{company_id}": {
+      "get": {
+        "description": "Timeline of document access gain/loss events for one company.",
+        "operationId": "get_company_access_history_api_v1_admin_access_history__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Company Access History",
+        "tags": [
+          "Audience Governance"
+        ]
+      }
+    },
+    "/api/v1/admin/alerts/audience-rules": {
+      "get": {
+        "operationId": "list_audience_alert_rules_api_v1_admin_alerts_audience_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AudienceAlertRule"
+                  },
+                  "title": "Response List Audience Alert Rules Api V1 Admin Alerts Audience Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Audience Alert Rules",
+        "tags": [
+          "Audience Governance"
+        ]
+      },
+      "post": {
+        "operationId": "create_audience_alert_rule_api_v1_admin_alerts_audience_rules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudienceAlertRuleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudienceAlertRule"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Create Audience Alert Rule",
+        "tags": [
+          "Audience Governance"
+        ]
+      }
+    },
+    "/api/v1/admin/alerts/audience-rules/{rule_id}": {
+      "delete": {
+        "operationId": "delete_audience_alert_rule_api_v1_admin_alerts_audience_rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Delete Audience Alert Rule",
+        "tags": [
+          "Audience Governance"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{user_id}/unlock": {
+      "post": {
+        "description": "Admin unlock endpoint for account lockout recovery.",
+        "operationId": "unlock_user_account_api_v1_admin_users__user_id__unlock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Unlock User Account",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/analytics/company/{company_id}": {
+      "get": {
+        "description": "Company-scoped audience analytics summary.\n\nRequires: ADMIN role or above.\nNon-system-admin callers are restricted to their own tenant.",
+        "operationId": "get_company_audience_analytics_api_v1_analytics_company__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyAudienceAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Company Audience Analytics",
+        "tags": [
+          "Analytics",
+          "Analytics"
+        ]
+      }
+    },
     "/api/v1/analytics/content": {
       "get": {
         "description": "Get content production analytics.\n\nRequires: MANAGER role or above.\nReturns document creation trends, version publishing, review metrics.",
@@ -7082,6 +9422,53 @@
           }
         ],
         "summary": "Get Content Analytics",
+        "tags": [
+          "Analytics",
+          "Analytics"
+        ]
+      }
+    },
+    "/api/v1/analytics/documents/{document_id}/audience-churn": {
+      "get": {
+        "description": "Return assignment churn count for one document over trailing 90 days.",
+        "operationId": "get_document_audience_churn_api_v1_analytics_documents__document_id__audience_churn_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Document Audience Churn",
         "tags": [
           "Analytics",
           "Analytics"
@@ -7363,93 +9750,6 @@
         ]
       }
     },
-    "/api/v1/analytics/export/pdf": {
-      "get": {
-        "description": "Export analytics data as PDF.\n\nRequires: MANAGER role or above.\nNote: Requires reportlab package to be installed.",
-        "operationId": "export_pdf_api_v1_analytics_export_pdf_get",
-        "parameters": [
-          {
-            "description": "Report type",
-            "in": "query",
-            "name": "report",
-            "required": true,
-            "schema": {
-              "description": "Report type",
-              "title": "Report",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Start date",
-            "in": "query",
-            "name": "date_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Start date",
-              "title": "Date From"
-            }
-          },
-          {
-            "description": "End date",
-            "in": "query",
-            "name": "date_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "End date",
-              "title": "Date To"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "summary": "Export Pdf",
-        "tags": [
-          "Analytics",
-          "Analytics"
-        ]
-      }
-    },
     "/api/v1/analytics/feedback": {
       "get": {
         "description": "Get feedback analytics.\n\nRequires: MANAGER role or above.\nReturns feedback counts, type distribution, response times.",
@@ -7626,7 +9926,7 @@
     },
     "/api/v1/analytics/recent-activity": {
       "get": {
-        "description": "Get recent activity feed.\n\nRequires: MANAGER role or above.\nReturns the most recent actions in the system.",
+        "description": "Get recent activity feed.\n\nRequires: any internal user.\nReturns the most recent actions in the current tenant/system scope.",
         "operationId": "get_recent_activity_api_v1_analytics_recent_activity_get",
         "parameters": [
           {
@@ -7847,6 +10147,91 @@
         "tags": [
           "Analytics",
           "Analytics"
+        ]
+      }
+    },
+    "/api/v1/audit/export": {
+      "get": {
+        "description": "Export audit logs in JSON or CSV.\n\nNon-system-admin callers receive redacted PII fields.",
+        "operationId": "export_audit_logs_api_v1_audit_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "json",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export Audit Logs",
+        "tags": [
+          "Audience Governance"
         ]
       }
     },
@@ -8248,6 +10633,139 @@
         "summary": "Register",
         "tags": [
           "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "description": "Complete password reset using a one-time token.",
+        "operationId": "reset_password_api_v1_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "get": {
+        "description": "Verify account email using token sent at registration.",
+        "operationId": "verify_email_api_v1_auth_verify_email_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Email",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/bff/documents/{document_id}/detail-page": {
+      "get": {
+        "description": "Return an aggregated payload for the internal document detail page.",
+        "operationId": "get_document_detail_page_bundle_api_v1_bff_documents__document_id__detail_page_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetailPageBundleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Document Detail Page Bundle",
+        "tags": [
+          "BFF"
         ]
       }
     },
@@ -9270,9 +11788,700 @@
         ]
       }
     },
+    "/api/v1/companies/maintenance/archive-validation/{company_id}": {
+      "get": {
+        "description": "Validate whether a company can be safely archived.\n\nReturns information about what would be affected by archiving.",
+        "operationId": "validate_company_archive_api_v1_companies_maintenance_archive_validation__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyArchiveValidation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Validate Company Archive",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/deactivate-impact/{company_id}": {
+      "get": {
+        "description": "Return impact preview for deactivating a company.",
+        "operationId": "get_company_deactivate_impact_api_v1_companies_maintenance_deactivate_impact__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Company Deactivate Impact",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/deletion-safety/{company_id}": {
+      "get": {
+        "description": "Check hard-delete safety and return exact blockers.",
+        "operationId": "company_deletion_hard_safety_checks_api_v1_companies_maintenance_deletion_safety__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Company Deletion Hard Safety Checks",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/hierarchy/{company_id}": {
+      "get": {
+        "description": "Return baseline hierarchy metadata for a company.",
+        "operationId": "get_company_hierarchy_baseline_api_v1_companies_maintenance_hierarchy__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Company Hierarchy Baseline",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/hierarchy/{company_id}/parent": {
+      "put": {
+        "description": "Set or clear parent company relationship in hierarchy baseline metadata.",
+        "operationId": "set_company_hierarchy_parent_api_v1_companies_maintenance_hierarchy__company_id__parent_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyHierarchyParentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Set Company Hierarchy Parent",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/merge-plan/{source_company_id}/{target_company_id}": {
+      "get": {
+        "description": "Build a dry-run merge plan for document/user/invitation reassignment.",
+        "operationId": "company_merge_reassignment_plan_api_v1_companies_maintenance_merge_plan__source_company_id___target_company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_company_id",
+            "required": true,
+            "schema": {
+              "title": "Source Company Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_company_id",
+            "required": true,
+            "schema": {
+              "title": "Target Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Company Merge Reassignment Plan",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/multi-company-policy": {
+      "get": {
+        "description": "Get the current multi-company user policy definition.\n\nThis defines the rules for users that could belong to multiple companies.\nCurrently, the system enforces single-company binding for customers.",
+        "operationId": "get_multi_company_policy_api_v1_companies_maintenance_multi_company_policy_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Multi Company Policy",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/onboarding-validation/{company_id}": {
+      "get": {
+        "description": "Validate company onboarding requirements.\n\nChecks that a company meets minimum requirements for active use.",
+        "operationId": "validate_company_onboarding_api_v1_companies_maintenance_onboarding_validation__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Validate Company Onboarding",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/orphan-customers": {
+      "get": {
+        "description": "Detect customer users with invalid company assignments.\n\nOrphan conditions:\n- Customer without tenant_id (null company)\n- Customer with tenant_id pointing to non-existent company\n- Customer with tenant_id pointing to inactive company",
+        "operationId": "detect_orphan_customers_api_v1_companies_maintenance_orphan_customers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanDetectorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Detect Orphan Customers",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/orphan-invitations": {
+      "get": {
+        "description": "Detect pending invitations with invalid company assignments.\n\nOrphan conditions:\n- Customer invitation without tenant_id\n- Invitation with tenant_id pointing to non-existent company\n- Pending invitation for inactive company",
+        "operationId": "detect_orphan_invitations_api_v1_companies_maintenance_orphan_invitations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanDetectorResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Detect Orphan Invitations",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/rename-propagation/{company_id}": {
+      "get": {
+        "description": "Check where company rename changes propagate and detect blockers.",
+        "operationId": "company_rename_propagation_checks_api_v1_companies_maintenance_rename_propagation__company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "new_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "New Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "new_slug",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "New Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Company Rename Propagation Checks",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/resolve-orphan-customers": {
+      "post": {
+        "description": "Resolve orphan customer users.\n\nActions:\n- report_only: Just return what would be affected\n- deactivate: Deactivate all orphan customer users",
+        "operationId": "resolve_orphan_customers_api_v1_companies_maintenance_resolve_orphan_customers_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Resolve Orphan Customers",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/resolve-orphan-invitations": {
+      "post": {
+        "description": "Resolve orphan invitations.\n\nActions:\n- report_only: Just return what would be affected\n- cancel: Cancel all orphan pending invitations",
+        "operationId": "resolve_orphan_invitations_api_v1_companies_maintenance_resolve_orphan_invitations_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Resolve Orphan Invitations",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/scope-conflicts": {
+      "get": {
+        "description": "Detect users with company scope conflicts.\n\nIdentifies situations where user roles/permissions conflict with their company assignment.",
+        "operationId": "detect_scope_conflicts_api_v1_companies_maintenance_scope_conflicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyScopeConflictReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Detect Scope Conflicts",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
+    "/api/v1/companies/maintenance/transfer-validation/{source_company_id}/{target_company_id}": {
+      "get": {
+        "description": "Validate a company ownership transfer operation.\n\nChecks what would happen when transferring users and documents\nfrom source company to target company.",
+        "operationId": "validate_company_transfer_api_v1_companies_maintenance_transfer_validation__source_company_id___target_company_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_company_id",
+            "required": true,
+            "schema": {
+              "title": "Source Company Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target_company_id",
+            "required": true,
+            "schema": {
+              "title": "Target Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyTransferValidation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Validate Company Transfer",
+        "tags": [
+          "Company Maintenance",
+          "Company Maintenance"
+        ]
+      }
+    },
     "/api/v1/companies/{company_id}": {
       "delete": {
-        "description": "Soft delete a company (set is_active=False).\nAdmin access required.",
+        "description": "Soft delete a company (set is_active=False).\nAdmin access required.\nCascades: cancels pending invitations for the company.",
         "operationId": "delete_company_api_v1_companies__company_id__delete",
         "parameters": [
           {
@@ -9364,7 +12573,7 @@
         ]
       },
       "put": {
-        "description": "Update a company.\nAdmin access required.",
+        "description": "Update a company.\nAdmin access required.\nIf deactivating (is_active=False), cascades: cancels pending invitations.\nIf reactivating (is_active=True), returns company state info in headers.",
         "operationId": "update_company_api_v1_companies__company_id__put",
         "parameters": [
           {
@@ -9421,6 +12630,53 @@
         ]
       }
     },
+    "/api/v1/companies/{company_id}/audience-blockers": {
+      "get": {
+        "description": "Get audience dependency graph showing what blocks company deactivation.\n\nReturns documents that depend on this company for audience visibility,\nalong with statistics showing the impact of deactivating this company.\n\nAdmin access required.",
+        "operationId": "get_audience_blockers_api_v1_companies__company_id__audience_blockers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "company_id",
+            "required": true,
+            "schema": {
+              "title": "Company Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Audience Blockers",
+        "tags": [
+          "Companies",
+          "Companies"
+        ]
+      }
+    },
     "/api/v1/companies/{company_id}/documents": {
       "get": {
         "description": "List company documents by scope:\n- assigned: documents explicitly assigned to the company\n- owned: documents owned by the company tenant\n- customer_visible: documents visible in customer portal for the company\nAdmin access required.",
@@ -9467,6 +12723,24 @@
               "pattern": "^(assigned|owned|customer_visible)$",
               "title": "Scope",
               "type": "string"
+            }
+          },
+          {
+            "description": "Keyset cursor in the format '<updated_at_iso>|<document_id>'",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keyset cursor in the format '<updated_at_iso>|<document_id>'",
+              "title": "Cursor"
             }
           }
         ],
@@ -9769,6 +13043,62 @@
               "description": "Search in title, description, tags",
               "title": "Search"
             }
+          },
+          {
+            "description": "Filter by assigned company",
+            "in": "query",
+            "name": "company_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by assigned company",
+              "title": "Company Id"
+            }
+          },
+          {
+            "description": "Filter documents created on or after date",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter documents created on or after date",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "Filter documents created on or before date",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter documents created on or before date",
+              "title": "Date To"
+            }
           }
         ],
         "responses": {
@@ -9849,9 +13179,233 @@
         ]
       }
     },
+    "/api/v1/documents/bulk-metadata": {
+      "post": {
+        "description": "Apply one metadata change-set to multiple documents.",
+        "operationId": "bulk_update_document_metadata_api_v1_documents_bulk_metadata_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDocumentMetadataUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDocumentMetadataUpdateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Bulk Update Document Metadata",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/duplicate-check": {
+      "get": {
+        "description": "Return likely duplicate documents for a draft title.",
+        "operationId": "check_duplicate_documents_api_v1_documents_duplicate_check_get",
+        "parameters": [
+          {
+            "description": "Prospective document title",
+            "in": "query",
+            "name": "title",
+            "required": true,
+            "schema": {
+              "description": "Prospective document title",
+              "minLength": 3,
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Similarity threshold",
+            "in": "query",
+            "name": "threshold",
+            "required": false,
+            "schema": {
+              "default": 0.8,
+              "description": "Similarity threshold",
+              "maximum": 1.0,
+              "minimum": 0.5,
+              "title": "Threshold",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Maximum number of matches to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "description": "Maximum number of matches to return",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Check Duplicate Documents",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/stats": {
+      "get": {
+        "description": "Get dashboard document counts for the current tenant/user scope.",
+        "operationId": "get_document_stats_api_v1_documents_stats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Document Stats",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/tags": {
+      "get": {
+        "description": "Return tenant-scoped tag suggestions for autocomplete editors.",
+        "operationId": "list_document_tags_api_v1_documents_tags_get",
+        "parameters": [
+          {
+            "description": "Optional tag search term",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional tag search term",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Maximum number of tags to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Maximum number of tags to return",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTagSuggestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List Document Tags",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/api/v1/documents/upload": {
       "post": {
-        "description": "Upload a document file (PDF/Word) and create a new document with it attached.\n\nRequires: EDITOR role or above.\nMax file size: 10MB.\nAllowed types: PDF, Word documents.\n\nThe file name will be used as the document title if not provided.",
+        "description": "Upload a document file and create a new document with it attached.\n\nRequires: EDITOR role or above.\nMax file size: 10MB.\nAllowed types: DOCX and PPTX.\n\nThe file name will be used as the document title if not provided.",
         "operationId": "upload_document_api_v1_documents_upload_post",
         "requestBody": {
           "content": {
@@ -10062,6 +13616,55 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/archive": {
+      "post": {
+        "description": "Soft-delete (archive) a document.\nPreserves all data including audience snapshot for potential restore.\nManager+ access required.",
+        "operationId": "archive_document_api_v1_documents__document_id__archive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Archive Document Api V1 Documents  Document Id  Archive Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Archive Document",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/assign-companies": {
       "post": {
         "description": "Replace the companies assigned to a document.\nManager+ access required.",
@@ -10074,6 +13677,22 @@
             "schema": {
               "title": "Document Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           }
         ],
@@ -10141,6 +13760,22 @@
             "schema": {
               "title": "Company Id",
               "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
             }
           }
         ],
@@ -10281,7 +13916,7 @@
         ]
       },
       "post": {
-        "description": "Upload a new attachment.\n\nOnly admins and editors can upload attachments.\nMax file size: 10MB.\nAllowed types: PDF, Office docs, images, text files.",
+        "description": "Upload a new attachment.\n\nOnly admins and editors can upload attachments.\nMax file size: 10MB.\nAllowed types: Office docs, images, text files.",
         "operationId": "upload_attachment_api_v1_documents__document_id__attachments_post",
         "parameters": [
           {
@@ -10451,7 +14086,7 @@
     },
     "/api/v1/documents/{document_id}/attachments/{attachment_id}/download": {
       "get": {
-        "description": "Download preview PDF rendition for an attachment.",
+        "description": "Download the original attachment bytes.",
         "operationId": "download_attachment_api_v1_documents__document_id__attachments__attachment_id__download_get",
         "parameters": [
           {
@@ -10585,147 +14220,9 @@
         ]
       }
     },
-    "/api/v1/documents/{document_id}/attachments/{attachment_id}/outline": {
-      "get": {
-        "description": "Return PDF outline/bookmarks for attachment TOC.",
-        "operationId": "get_attachment_outline_api_v1_documents__document_id__attachments__attachment_id__outline_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "document_id",
-            "required": true,
-            "schema": {
-              "title": "Document Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "attachment_id",
-            "required": true,
-            "schema": {
-              "title": "Attachment Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "JWT token for authentication (alternative to Authorization header)",
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "JWT token for authentication (alternative to Authorization header)",
-              "title": "Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttachmentOutlineResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Attachment Outline",
-        "tags": [
-          "Attachments"
-        ]
-      }
-    },
-    "/api/v1/documents/{document_id}/attachments/{attachment_id}/preview": {
-      "get": {
-        "description": "Stream preview PDF artifact bytes with inline content disposition.",
-        "operationId": "preview_attachment_api_v1_documents__document_id__attachments__attachment_id__preview_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "document_id",
-            "required": true,
-            "schema": {
-              "title": "Document Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "attachment_id",
-            "required": true,
-            "schema": {
-              "title": "Attachment Id",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "JWT token for authentication (alternative to Authorization header)",
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "JWT token for authentication (alternative to Authorization header)",
-              "title": "Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Preview Attachment",
-        "tags": [
-          "Attachments"
-        ]
-      }
-    },
     "/api/v1/documents/{document_id}/attachments/{attachment_id}/reader-view": {
       "get": {
-        "description": "Get Reader View derived artifact for PDF attachments.",
+        "description": "Get Reader View derived artifact for supported attachment types.",
         "operationId": "get_attachment_reader_view_api_v1_documents__document_id__attachments__attachment_id__reader_view_get",
         "parameters": [
           {
@@ -10807,7 +14304,7 @@
     },
     "/api/v1/documents/{document_id}/attachments/{attachment_id}/reader-view/retry": {
       "post": {
-        "description": "Retry Reader View artifact generation for a PDF attachment.",
+        "description": "Retry Reader View artifact generation for a supported attachment.",
         "operationId": "retry_attachment_reader_view_api_v1_documents__document_id__attachments__attachment_id__reader_view_retry_post",
         "parameters": [
           {
@@ -10872,6 +14369,54 @@
         "summary": "Retry Attachment Reader View",
         "tags": [
           "Attachments"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/calendar-export": {
+      "get": {
+        "description": "Return an iCal payload for the document due date.",
+        "operationId": "export_document_due_date_calendar_api_v1_documents__document_id__calendar_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCalendarExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Export Document Due Date Calendar",
+        "tags": [
+          "Documents"
         ]
       }
     },
@@ -11263,6 +14808,80 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/companies/batch": {
+      "put": {
+        "description": "Batch replace company assignments in a single command transaction.\n\nThis endpoint is intended for high-volume assignment workflows and applies\nthe same optimistic-concurrency and idempotency safeguards as the existing\nassignment endpoints.",
+        "operationId": "assign_companies_batch_api_v1_documents__document_id__companies_batch_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyAssignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Assign Companies Batch",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/generate-word": {
       "post": {
         "description": "Generate a Word file from HTML content and attach it to the document.",
@@ -11316,6 +14935,55 @@
           }
         ],
         "summary": "Generate Word Attachment",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/restore": {
+      "post": {
+        "description": "Restore an archived document.\nReconciles audience: removes stale/deleted companies, adjusts visibility if needed.\nManager+ access required.",
+        "operationId": "restore_document_api_v1_documents__document_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Restore Document Api V1 Documents  Document Id  Restore Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Restore Document",
         "tags": [
           "Documents"
         ]
@@ -11618,6 +15286,73 @@
         ]
       }
     },
+    "/api/v1/documents/{document_id}/versions/{version_id}/force-publish": {
+      "post": {
+        "description": "Force publish a version with admin override.\n\nThis bypasses normal review requirements and creates an enhanced audit trail.\nRequires system_admin role and explicit acknowledgment of risks.\n\nUse cases:\n- Emergency fixes that must be published immediately\n- Documents that don't require review approval\n- Repairing stuck publishing workflows",
+        "operationId": "force_publish_version_api_v1_documents__document_id__versions__version_id__force_publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForcePublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForcePublishResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Force Publish Version",
+        "tags": [
+          "Versions"
+        ]
+      }
+    },
     "/api/v1/documents/{document_id}/versions/{version_id}/publish": {
       "post": {
         "description": "Publish a version.\n\nPublished versions become immutable and cannot be modified or deleted.\nOnly admins can publish versions.",
@@ -11672,6 +15407,382 @@
         "summary": "Publish Version",
         "tags": [
           "Versions"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/versions/{version_id}/publish/preflight": {
+      "get": {
+        "description": "Get a preflight checklist for publishing a version.\n\nReturns a list of checks that must pass before the version can be published:\n- version_exists: The version exists for the document\n- not_already_published: Version is not already published\n- user_can_publish: User has permission to publish\n- review_approved: The version has an approved review\n- audience_ready: Audience configuration is valid (company visibility requires assignments)",
+        "operationId": "publish_preflight_api_v1_documents__document_id__versions__version_id__publish_preflight_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishPreflightResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Publish Preflight",
+        "tags": [
+          "Versions"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/versions/{version_id}/restore-audience": {
+      "post": {
+        "description": "Restore document audience state from a published version's snapshot.\n\nThis provides rollback capability if audience settings were changed incorrectly\nafter a version was published. Only admins can perform this operation.\n\nReturns the restored visibility and company IDs.",
+        "operationId": "restore_audience_from_version_api_v1_documents__document_id__versions__version_id__restore_audience_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Restore Audience From Version",
+        "tags": [
+          "Versions"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/versions/{version_id}/schedule-publish": {
+      "delete": {
+        "description": "Cancel a scheduled publish for a version.",
+        "operationId": "cancel_scheduled_publish_api_v1_documents__document_id__versions__version_id__schedule_publish_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelScheduledPublishResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Cancel Scheduled Publish",
+        "tags": [
+          "Versions"
+        ]
+      },
+      "post": {
+        "description": "Schedule a version to be published at a specific future time.\n\nAudience is validated at schedule time and re-validated at publish time.\nRequires an approved review for the version.",
+        "operationId": "schedule_publish_api_v1_documents__document_id__versions__version_id__schedule_publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulePublishResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Schedule Publish",
+        "tags": [
+          "Versions"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/watch": {
+      "delete": {
+        "description": "Stop following a document.",
+        "operationId": "unwatch_document_api_v1_documents__document_id__watch_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentWatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Unwatch Document",
+        "tags": [
+          "Documents"
+        ]
+      },
+      "post": {
+        "description": "Follow a document and receive future update notifications.",
+        "operationId": "watch_document_api_v1_documents__document_id__watch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentWatchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Watch Document",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/watch-status": {
+      "get": {
+        "description": "Return whether the current internal user follows the document.",
+        "operationId": "get_document_watch_status_api_v1_documents__document_id__watch_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentWatchStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Document Watch Status",
+        "tags": [
+          "Documents"
         ]
       }
     },
@@ -12719,6 +16830,52 @@
         ]
       }
     },
+    "/api/v1/invitations/{invitation_id}/company-binding": {
+      "get": {
+        "description": "Check an invitation's company binding status.\nReturns validation info about the invitation-company relationship.\nAdmin+ access required.",
+        "operationId": "check_invitation_company_binding_api_v1_invitations__invitation_id__company_binding_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "required": true,
+            "schema": {
+              "title": "Invitation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Check Invitation Company Binding",
+        "tags": [
+          "Invitations"
+        ]
+      }
+    },
     "/api/v1/invitations/{invitation_id}/resend": {
       "post": {
         "description": "Resend an invitation by generating a new token and extending expiration.",
@@ -13439,6 +17596,62 @@
         ]
       }
     },
+    "/api/v1/portal/documents/{document_id}/attachments/{attachment_id}/download": {
+      "get": {
+        "description": "Stream-download an attachment through the portal's own access checks.",
+        "operationId": "download_customer_attachment_api_v1_portal_documents__document_id__attachments__attachment_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Download Customer Attachment",
+        "tags": [
+          "Customer Portal",
+          "Customer Portal"
+        ]
+      }
+    },
     "/api/v1/portal/feedback": {
       "get": {
         "description": "List all feedback submitted by the current customer.",
@@ -13989,6 +18202,66 @@
         ]
       }
     },
+    "/api/v1/public/feed.xml": {
+      "get": {
+        "description": "Returns an RSS 2.0 XML feed containing the most recent PUBLIC + ACTIVE documents.",
+        "operationId": "get_public_rss_feed_api_v1_public_feed_xml_get",
+        "parameters": [
+          {
+            "description": "Maximum number of items in the feed",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Maximum number of items in the feed",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Override base URL for feed <link> entries. Defaults to request origin.",
+            "in": "query",
+            "name": "base_url",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override base URL for feed <link> entries. Defaults to request origin.",
+              "title": "Base Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "RSS 2.0 feed of recent public documents",
+        "tags": [
+          "Public",
+          "Public"
+        ]
+      }
+    },
     "/api/v1/public/platforms/history": {
       "get": {
         "description": "Group public documents by platform -> category -> year (from published_at).\n\nFalls back to updated_at/created_at when published_at is not available.",
@@ -14134,6 +18407,52 @@
           }
         },
         "summary": "Search Public Documents",
+        "tags": [
+          "Public",
+          "Public"
+        ]
+      }
+    },
+    "/api/v1/public/sitemap.xml": {
+      "get": {
+        "description": "Returns an XML sitemap containing only PUBLIC + ACTIVE documents. Useful for SEO crawlers.",
+        "operationId": "get_public_sitemap_api_v1_public_sitemap_xml_get",
+        "parameters": [
+          {
+            "description": "Override base URL for sitemap <loc> entries. Defaults to request origin.",
+            "in": "query",
+            "name": "base_url",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override base URL for sitemap <loc> entries. Defaults to request origin.",
+              "title": "Base Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sitemap of all public documents",
         "tags": [
           "Public",
           "Public"
@@ -14600,9 +18919,37 @@
         ]
       }
     },
+    "/api/v1/reviews/sla/process": {
+      "post": {
+        "description": "Process reminder and escalation notifications for overdue pending reviews.",
+        "operationId": "process_review_sla_api_v1_reviews_sla_process_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewSlaProcessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Process Review Sla",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      }
+    },
     "/api/v1/reviews/{review_id}": {
       "get": {
-        "description": "Get review details",
+        "description": "Get review details with audience diff compared to current document state.",
         "operationId": "get_review_api_v1_reviews__review_id__get",
         "parameters": [
           {
@@ -14708,9 +19055,58 @@
         ]
       }
     },
+    "/api/v1/reviews/{review_id}/approve/preflight": {
+      "get": {
+        "description": "Get pre-approval policy explanation payload.\n\nReturns a checklist of policy requirements that must be satisfied before\napproving the review, along with human-readable explanations.",
+        "operationId": "pre_approve_policy_api_v1_reviews__review_id__approve_preflight_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "title": "Review Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreApprovePolicy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Pre Approve Policy",
+        "tags": [
+          "Reviews",
+          "Reviews"
+        ]
+      }
+    },
     "/api/v1/reviews/{review_id}/cancel": {
       "post": {
-        "description": "Cancel own review submission",
+        "description": "Cancel own review submission.\n\nThis restores the document to draft status. Note that any company assignments\nmade after submission are preserved - the cancellation does NOT roll back\naudience changes. The review's audience snapshot remains for audit purposes.",
         "operationId": "cancel_review_api_v1_reviews__review_id__cancel_post",
         "parameters": [
           {
@@ -14813,6 +19209,55 @@
         "tags": [
           "Reviews",
           "Reviews"
+        ]
+      }
+    },
+    "/api/v1/scheduled-publishes/process": {
+      "post": {
+        "description": "Process scheduled publishes that are due.\n\nThis is an admin endpoint for manually triggering the scheduled publish processor.\nIn production, this should be called by a background job.\n\nRe-validates audience before each publish and handles:\n- Audience drift since scheduling\n- Stale (deactivated) companies\n- Validation failures",
+        "operationId": "process_scheduled_publishes_api_v1_scheduled_publishes_process_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "batch_size",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "title": "Batch Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledPublishReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Process Scheduled Publishes",
+        "tags": [
+          "Versions"
         ]
       }
     },
@@ -15662,6 +20107,309 @@
         ]
       }
     },
+    "/api/v1/users/me": {
+      "patch": {
+        "description": "Update current user profile fields.",
+        "operationId": "update_my_profile_api_v1_users_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserWithCompanyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update My Profile",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/avatar": {
+      "post": {
+        "description": "Upload and resize user avatar to a 200x200 image.",
+        "operationId": "upload_my_avatar_api_v1_users_me_avatar_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_my_avatar_api_v1_users_me_avatar_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Upload My Avatar",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/notification-preferences": {
+      "patch": {
+        "description": "Update notification preference toggles for current user.",
+        "operationId": "update_my_notification_preferences_api_v1_users_me_notification_preferences_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferencesUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update My Notification Preferences",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/security-events": {
+      "get": {
+        "description": "List paginated security events for the current user (newest first).",
+        "operationId": "list_my_security_events_api_v1_users_me_security_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityEventListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List My Security Events",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/sessions": {
+      "delete": {
+        "description": "Revoke all active sessions for the current user except current session.",
+        "operationId": "revoke_all_other_sessions_api_v1_users_me_sessions_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBulkRevokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke All Other Sessions",
+        "tags": [
+          "Users"
+        ]
+      },
+      "get": {
+        "description": "List active, non-revoked user sessions ordered by latest activity.",
+        "operationId": "list_my_sessions_api_v1_users_me_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSessionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "List My Sessions",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/sessions/{session_id}": {
+      "delete": {
+        "description": "Revoke a single active session by id for the current user.",
+        "operationId": "revoke_my_session_api_v1_users_me_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Revoke My Session",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/api/v1/users/{user_id}": {
       "delete": {
         "operationId": "delete_user_api_v1_users__user_id__delete",
@@ -15797,6 +20545,52 @@
           }
         ],
         "summary": "Update User",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/company-binding": {
+      "get": {
+        "description": "Check a user's company binding status.\nReturns validation info about the user-company relationship.\nAdmin+ or self access required.",
+        "operationId": "check_company_binding_api_v1_users__user_id__company_binding_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Check Company Binding",
         "tags": [
           "Users"
         ]
@@ -16050,110 +20844,6 @@
           }
         },
         "summary": "Download Attachment",
-        "tags": [
-          "Viewer",
-          "viewer"
-        ]
-      }
-    },
-    "/api/v1/viewer/documents/{document_id}/attachments/{attachment_id}/outline": {
-      "get": {
-        "description": "Get PDF outline metadata for a published document attachment.",
-        "operationId": "get_attachment_outline_api_v1_viewer_documents__document_id__attachments__attachment_id__outline_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "document_id",
-            "required": true,
-            "schema": {
-              "title": "Document Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "attachment_id",
-            "required": true,
-            "schema": {
-              "title": "Attachment Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttachmentOutlineResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Attachment Outline",
-        "tags": [
-          "Viewer",
-          "viewer"
-        ]
-      }
-    },
-    "/api/v1/viewer/documents/{document_id}/attachments/{attachment_id}/preview": {
-      "get": {
-        "description": "Preview a published document attachment inline without authentication.",
-        "operationId": "preview_attachment_api_v1_viewer_documents__document_id__attachments__attachment_id__preview_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "document_id",
-            "required": true,
-            "schema": {
-              "title": "Document Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "attachment_id",
-            "required": true,
-            "schema": {
-              "title": "Attachment Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Preview Attachment",
         "tags": [
           "Viewer",
           "viewer"

@@ -41,6 +41,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
   const visibilityHelperText = getAudienceVisibilityHelperText(visibility)
+  const isUploading = uploadMutation.isPending
 
   const handlePresetApply = (presetId: (typeof audiencePresets)[number]['id']) => {
     const nextAudience = applyAudiencePreset(
@@ -94,7 +95,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               <div>
                 <span className="text-3xl">UP</span>
                 <p className="mt-2 text-slate-600">Drag & drop a file here, or click to browse</p>
-                <p className="text-sm text-slate-400 mt-1">PDF, DOC, DOCX (max 10MB)</p>
+                <p className="text-sm text-slate-400 mt-1">DOCX, PPTX (max 10MB)</p>
               </div>
             )}
           </div>
@@ -229,17 +230,27 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={confirmClose} className="btn-ghost">
+            <button
+              type="button"
+              onClick={confirmClose}
+              disabled={isUploading}
+              className="btn-ghost disabled:cursor-not-allowed disabled:opacity-60"
+            >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!selectedFile || uploadMutation.isPending}
+              disabled={!selectedFile || isUploading}
               className="btn-primary disabled:opacity-50"
             >
-              {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+              {isUploading ? 'Uploading...' : 'Upload'}
             </button>
           </div>
+          {isUploading && (
+            <p className="text-right text-xs text-slate-500">
+              Uploading... Please wait to close this window.
+            </p>
+          )}
         </form>
       </div>
     </div>

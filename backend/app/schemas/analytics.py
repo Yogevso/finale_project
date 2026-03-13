@@ -276,7 +276,7 @@ class ExportRequest(BaseModel):
     report_type: str  # overview, engagement, users, content, feedback, tenant-comparison
     date_from: date
     date_to: date
-    format: str = "csv"  # csv or pdf
+    format: str = "csv"
 
 
 class ExportResponse(BaseModel):

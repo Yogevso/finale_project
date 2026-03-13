@@ -30,7 +30,7 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
         level: Math.max(1, item.level || 1),
         html: '',
         index,
-        anchorId: item.anchor_id || `pdf-page-${pageStart}`,
+        anchorId: item.anchor_id || `page-${pageStart}`,
         pageStart,
         pageEnd: item.page_end ?? null,
       }
@@ -40,9 +40,17 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
 
 export function parsePageFromAnchorId(anchorId?: string | null): number | null {
   if (!anchorId) return null
-  const pdfPageMatch = anchorId.match(/^pdf-page-(\d+)$/i)
-  if (pdfPageMatch) {
-    const parsed = Number(pdfPageMatch[1])
+  const normalizedAnchorParts = anchorId
+    .trim()
+    .toLowerCase()
+    .split('-')
+    .filter(Boolean)
+  const genericPageToken =
+    normalizedAnchorParts.length === 2
+      ? normalizedAnchorParts[0] === 'page'
+      : normalizedAnchorParts.length === 3 && normalizedAnchorParts[1] === 'page'
+  if (genericPageToken) {
+    const parsed = Number(normalizedAnchorParts[normalizedAnchorParts.length - 1])
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null
   }
   const readerPageMatch = anchorId.match(/^reader-p(\d+)-/i)
@@ -138,8 +146,38 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
   const sanitizedHtml = sanitizeHtmlForPreview(html)
   const parser = new DOMParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
-  const elements = Array.from(doc.body.children)
   const sections: TocSection[] = []
+  const rootElement = doc.body.firstElementChild
+  const elements = resolveSectionElements(doc)
+
+  if (
+    doc.body.children.length === 1 &&
+    rootElement?.classList.contains('pptx-presentation')
+  ) {
+    Array.from(rootElement.children)
+      .filter((element) => element.classList.contains('pptx-slide'))
+      .forEach((slide, index) => {
+        const title = slide.querySelector('h1, h2, h3, h4, h5, h6')
+        const sectionId =
+          title?.getAttribute('id') || slide.getAttribute('id') || `slide-${index + 1}`
+        const titleText = title?.textContent?.trim() || `Slide ${index + 1}`
+        const level = title ? parseInt(title.tagName.charAt(1), 10) : 2
+        sections.push({
+          id: `section-${index}-${titleText.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`,
+          text: titleText,
+          level: Number.isFinite(level) ? level : 2,
+          html: slide.outerHTML,
+          index,
+          anchorId: sectionId,
+        })
+      })
+
+    return {
+      html: doc.body.innerHTML,
+      sections,
+    }
+  }
+
   const allHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
   const hasPrimaryHeadings = elements.some((element) => {
     const tagName = element.tagName.toLowerCase()
@@ -188,6 +226,23 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
     html: doc.body.innerHTML,
     sections,
   }
+}
+
+function resolveSectionElements(doc: Document): Element[] {
+  if (doc.body.children.length !== 1) {
+    return Array.from(doc.body.children)
+  }
+
+  const root = doc.body.firstElementChild
+  if (!root) {
+    return []
+  }
+
+  if (root.classList.contains('docx-document')) {
+    return Array.from(root.children)
+  }
+
+  return Array.from(doc.body.children)
 }
 
 function buildSectionEntry(

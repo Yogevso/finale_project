@@ -24,36 +24,27 @@ function buildAttachment(
 }
 
 describe('attachmentSelection helpers', () => {
-  it('prefers ready preview attachment over plain pdf and others', () => {
+  it('prefers DOCX and PPTX attachments for preview selection', () => {
     const generic = buildAttachment(1)
-    const pdf = buildAttachment(2, { mime_type: 'application/pdf' })
-    const readyPreview = buildAttachment(3, {
+    const pptx = buildAttachment(2, {
+      mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    })
+    const docx = buildAttachment(3, {
       mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      preview_pdf_status: 'ready',
     })
 
-    const selected = getPreferredPreviewAttachment([generic, pdf, readyPreview])
-
-    expect(selected?.id).toBe(3)
-  })
-
-  it('falls back to pdf for preview selection when no ready artifact exists', () => {
-    const generic = buildAttachment(1)
-    const pdf = buildAttachment(2, { mime_type: 'application/pdf' })
-
-    const selected = getPreferredPreviewAttachment([generic, pdf])
-
-    expect(selected?.id).toBe(2)
+    expect(getPreferredPreviewAttachment([generic, pptx, docx])?.id).toBe(2)
+    expect(getPreferredPreviewAttachment([generic, docx])?.id).toBe(3)
   })
 
   it('refreshes selected attachment from updated list entry by id', () => {
     const oldSelection = buildAttachment(10, {
-      filename: 'old-name.pdf',
-      mime_type: 'application/pdf',
+      filename: 'old-name.docx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     })
     const refreshedSelection = buildAttachment(10, {
-      filename: 'new-name.pdf',
-      mime_type: 'application/pdf',
+      filename: 'new-name.docx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     })
 
     const resolved = resolveSelectedAttachment(
@@ -63,18 +54,19 @@ describe('attachmentSelection helpers', () => {
     )
 
     expect(resolved).toBe(refreshedSelection)
-    expect(resolved?.filename).toBe('new-name.pdf')
+    expect(resolved?.filename).toBe('new-name.docx')
   })
 
   it('falls back to preferred attachment when selected id is removed', () => {
-    const removed = buildAttachment(99, { mime_type: 'application/pdf' })
-    const readyPreview = buildAttachment(3, {
+    const removed = buildAttachment(99, {
       mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      preview_pdf_status: 'ready',
+    })
+    const replacement = buildAttachment(3, {
+      mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     })
 
     const resolved = resolveSelectedAttachment(
-      [readyPreview],
+      [replacement],
       removed,
       getPreferredPreviewAttachment,
     )
@@ -82,15 +74,16 @@ describe('attachmentSelection helpers', () => {
     expect(resolved?.id).toBe(3)
   })
 
-  it('prefers word attachments for editor selection, then pdf, then null', () => {
+  it('prefers DOCX attachments for editor selection', () => {
     const generic = buildAttachment(1)
-    const pdf = buildAttachment(2, { mime_type: 'application/pdf' })
-    const word = buildAttachment(3, {
+    const docx = buildAttachment(2, {
       mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     })
+    const pptx = buildAttachment(3, {
+      mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    })
 
-    expect(getPreferredEditorAttachment([generic, pdf, word])?.id).toBe(3)
-    expect(getPreferredEditorAttachment([generic, pdf])?.id).toBe(2)
-    expect(getPreferredEditorAttachment([generic])).toBeNull()
+    expect(getPreferredEditorAttachment([generic, pptx, docx])?.id).toBe(2)
+    expect(getPreferredEditorAttachment([generic, pptx])).toBeNull()
   })
 })

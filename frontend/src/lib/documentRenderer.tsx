@@ -201,8 +201,17 @@ function replaceTable(
     return undefined
   }
 
+  const parent = node.parent
+  if (parent && isElementNode(parent) && hasClassName(parent, 'table-wrapper')) {
+    return createElement(
+      'table',
+      attributesToProps(node.attribs),
+      domToReact(toDomNodes(node.children), parserOptions),
+    )
+  }
+
   return (
-    <div className="overflow-x-auto">
+    <div className="document-table-scroll">
       {createElement(
         'table',
         attributesToProps(node.attribs),
@@ -217,7 +226,46 @@ function replaceImage(node: Element): ParserReplaceResult {
     return undefined
   }
 
-  return <LightboxImage {...attributesToProps(node.attribs)} />
+  const parent = node.parent
+  const figureCaption =
+    parent && isElementNode(parent) && parent.name === 'figure'
+      ? parent.children.find(
+          (child): child is Element => isElementNode(child) && child.name === 'figcaption',
+        )
+      : null
+  const derivedTitle = figureCaption
+    ? getTextContent(toDomNodes(figureCaption.children)).trim() || undefined
+    : undefined
+
+  return (
+    <LightboxImage
+      {...attributesToProps(node.attribs)}
+      title={
+        typeof node.attribs.title === 'string' && node.attribs.title.trim()
+          ? node.attribs.title
+          : derivedTitle
+      }
+    />
+  )
+}
+
+function replaceTableWrapper(
+  node: Element,
+  parserOptions: HTMLReactParserOptions,
+): ParserReplaceResult {
+  if (node.name !== 'div' || !hasClassName(node, 'table-wrapper')) {
+    return undefined
+  }
+
+  return createElement(
+    'div',
+    {
+      ...attributesToProps(node.attribs),
+      className: [node.attribs.class, 'document-table-scroll'].filter(Boolean).join(' '),
+      tabIndex: 0,
+    },
+    domToReact(toDomNodes(node.children), parserOptions),
+  )
 }
 
 function replaceLink(
@@ -273,6 +321,7 @@ function buildParserOptions(customReplace?: DocumentHtmlReplace): HTMLReactParse
       if (isElementNode(domNode)) {
         const builtInReplacement =
           replaceCodeBlock(domNode) ??
+          replaceTableWrapper(domNode, parserOptions) ??
           replaceTable(domNode, parserOptions) ??
           replaceImage(domNode) ??
           replaceLink(domNode, parserOptions)
@@ -287,6 +336,14 @@ function buildParserOptions(customReplace?: DocumentHtmlReplace): HTMLReactParse
   }
 
   return parserOptions
+}
+
+function hasClassName(node: Element, className: string): boolean {
+  return (node.attribs.class || '')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .includes(className)
 }
 
 export function parseDocumentHtml(

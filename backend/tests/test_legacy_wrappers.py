@@ -60,6 +60,27 @@ def test_document_converter_wrapper_tracks_call_volume(monkeypatch):
     assert status.migration_completion_percent == 0
 
 
+def test_document_converter_wrapper_tracks_reader_artifact_call_volume(monkeypatch):
+    tracker = get_legacy_wrapper_tracker()
+    tracker.reset()
+    wrapper = get_document_converter_wrapper()
+
+    monkeypatch.setattr(
+        "app.conversion.document_pipeline.DocumentConversionPipeline.convert_document_to_reader_artifact",
+        lambda _self, *_args, **_kwargs: {"html_content": "<article>wrapped</article>"},
+    )
+
+    output = wrapper.convert_document_to_reader_artifact(
+        b"content",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "sample.docx",
+    )
+    assert output == {"html_content": "<article>wrapped</article>"}
+
+    status = _status_map()["document_converter"]
+    assert status.call_volume >= 1
+
+
 def test_attachment_service_modules_do_not_import_legacy_converter_directly():
     project_root = Path(__file__).resolve().parents[1]
     target_files = [

@@ -128,11 +128,11 @@ def build_attachment(
     *,
     document_id: int,
     uploaded_by: int,
-    filename: str = "test-document.pdf",
+    filename: str = "test-document.docx",
     original_filename: str | None = None,
     file_size: int = 10,
     size_bytes: int | None = None,
-    mime_type: str = "application/pdf",
+    mime_type: str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     storage_path: str | None = None,
     storage_key: str | None = None,
 ) -> Attachment:
@@ -160,7 +160,7 @@ def create_attachment(db: Session, **kwargs) -> Attachment:
 def build_attachment_conversion_job(
     *,
     attachment_id: int,
-    job_type: str = "preview_pdf",
+    job_type: str = "reader_html",
     status: str = "pending",
     force: bool = False,
     attempts: int = 0,
