@@ -2,39 +2,37 @@ Project Plan
 Last updated: 2026-03-13
 
 Current checkpoint
-- Stable return point: `f82ba36` (`test(coverage): cover storage helpers and preview branches`)
+- Stable return point: `de87b74` (`refactor(wave-y1): harden conversion and preview browser deps`)
 - Active wave: Wave Y.1
-- Status: core delivery is done; remaining work is cleanup, hardening, and UX polish
+- Status: core delivery is done; upload UX polish is implemented and verified in the working tree; only optional coverage polish remains
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
 - Backend refactors: Y1-010, Y1-011, Y1-012, Y1-013, Y1-014, Y1-015, Y1-016, Y1-017
 - Frontend refactors: Y1-020, Y1-021, Y1-022, Y1-023, Y1-024, Y1-025, Y1-026
+- Upload UX polish: Y1-030, Y1-031, Y1-032, Y1-033
 - Coverage/test work: Y1-040, Y1-041, Y1-042, and most of Y1-043
 - PDF removal tranche: Y1-050 through Y1-072
 
 Verification snapshot
 - Backend full suite: 967 passed, 3 skipped
-- Frontend full unit suite: 158 passed
+- Frontend full unit suite: 171 passed
 - Playwright matrix in slices: 300 passed, 1 skipped
 - Focused AttachmentService regression slice: 53 passed
 - Focused conversion/reader/container regression slice: 36 passed
 - Focused backend Ruff check: clean for conversion, legacy wrapper, container, dependencies, and attachment-service modules
 - Focused frontend preview/browser/DTO slice: 40 passed
+- Focused frontend upload UX slice: 23 passed
 - Focused frontend ESLint slice: clean
 - Frontend TypeScript check (`tsc`): clean
+- Dedicated upload-modal UI E2E: 3 passed
 
 Highest-priority remaining items
-1. Upload UX polish
-   - Y1-030: real upload progress bar
-   - Y1-031: replace placeholder dropzone icons
-   - Y1-032: expose manager/admin upload options
-   - Y1-033: dedicated upload-modal UI E2E
-2. Optional extra coverage
+1. Optional extra coverage
    - Y1-043: warning banner and anchor-copying viewer coverage polish
 
 Recommended next item
-- Start with Y1-030 through Y1-033. The main hardening work is now in place on both backend and frontend, so the next meaningful tranche is upload UX polish and the dedicated upload-modal E2E.
+- Either stop here as a stable, verified implementation checkpoint, or do the remaining Y1-043 coverage polish in the viewer warning/anchor-copy paths.
 
 Guardrails
 - Do not rerun full Playwright or full coverage unless a real code change needs it.

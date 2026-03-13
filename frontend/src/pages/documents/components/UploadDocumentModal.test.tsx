@@ -17,10 +17,14 @@ vi.mock('@/features/documents', () => ({
 
 vi.mock('@/pages/documents/hooks/useUploadDocumentFlow', () => ({
   ACCEPTED_FILE_TYPES: '.docx,.pptx',
+  MANAGER_UPLOAD_STATUS_OPTIONS: [
+    { value: 'draft', label: 'Draft' },
+    { value: 'approved', label: 'Approved' },
+  ],
   useUploadDocumentFlow: (...args: unknown[]) => useUploadDocumentFlowMock(...args),
 }))
 
-function buildHookState(isPending: boolean) {
+function buildHookState(isPending: boolean, overrides: Record<string, unknown> = {}) {
   return {
     fileInputRef: { current: null },
     selectedFile: null,
@@ -36,14 +40,20 @@ function buildHookState(isPending: boolean) {
     setTags: vi.fn(),
     dueDate: '',
     setDueDate: vi.fn(),
+    uploadStatus: 'draft',
+    setUploadStatus: vi.fn(),
     visibility: 'internal' as const,
     setVisibility: vi.fn(),
     companyIds: [],
     setCompanyIds: vi.fn(),
+    canManageAdvancedUploadOptions: false,
+    contentFile: null,
+    releaseNotesFile: null,
     error: '',
     setError: vi.fn(),
     dragActive: false,
     setDragActive: vi.fn(),
+    uploadProgressPercent: isPending ? 48 : null,
     audienceDirtyState: {
       visibilityChanged: false,
       companyAssignmentsChanged: false,
@@ -52,9 +62,11 @@ function buildHookState(isPending: boolean) {
       isPending,
     },
     handleFileSelect: vi.fn(),
+    handleSupplementalFileSelect: vi.fn(),
     handleDrop: vi.fn(),
     handleSubmit: vi.fn((event?: { preventDefault?: () => void }) => event?.preventDefault?.()),
     confirmClose: vi.fn(),
+    ...overrides,
   }
 }
 
@@ -66,6 +78,10 @@ describe('UploadDocumentModal', () => {
 
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     expect(screen.getByText(/uploading\.\.\. please wait to close this window/i)).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: /upload progress/i })).toHaveAttribute(
+      'aria-valuenow',
+      '48',
+    )
   })
 
   it('keeps cancel available when idle', () => {
@@ -75,5 +91,34 @@ describe('UploadDocumentModal', () => {
 
     expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeDisabled()
     expect(screen.queryByText(/please wait to close this window/i)).not.toBeInTheDocument()
+  })
+
+  it('shows manager upload extras when advanced options are available', () => {
+    useUploadDocumentFlowMock.mockReturnValue(
+      buildHookState(false, {
+        canManageAdvancedUploadOptions: true,
+        contentFile: { name: 'appendix.docx' },
+        releaseNotesFile: { name: 'release-notes.pptx' },
+      }),
+    )
+
+    render(<UploadDocumentModal onClose={vi.fn()} />)
+
+    expect(screen.getByText(/manager upload options/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/initial status/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/additional content file/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/release notes file/i)).toBeInTheDocument()
+    expect(screen.getByText('appendix.docx')).toBeInTheDocument()
+    expect(screen.getByText('release-notes.pptx')).toBeInTheDocument()
+  })
+
+  it('replaces placeholder dropzone text with icons and descriptive copy', () => {
+    useUploadDocumentFlowMock.mockReturnValue(buildHookState(false))
+
+    render(<UploadDocumentModal onClose={vi.fn()} />)
+
+    expect(screen.getByText(/upload docx or pptx/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^FILE$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^UP$/)).not.toBeInTheDocument()
   })
 })

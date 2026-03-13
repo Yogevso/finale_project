@@ -1,3 +1,4 @@
+import type { AxiosProgressEvent } from 'axios'
 import type {
   DocumentArchiveResult,
   DocumentCalendarExport,
@@ -50,6 +51,10 @@ import {
   toVersionUpdateDto,
 } from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
+
+export type DocumentUploadApiOptions = {
+  onUploadProgress?: (event: AxiosProgressEvent) => void
+}
 
 export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
   class extends Base {
@@ -151,23 +156,28 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return data
     }
 
-    async uploadDocument(file: File, metadata?: {
-      title?: string
-      description?: string
-      category?: string
-      release_branch?: string
-      tags?: string
-      document_number?: string
-      version_label?: string
-      visibility?: DocumentVisibility
-      company_ids?: number[]
-      parent_id?: number
-      topic?: string
-      platform?: string
-      due_date?: string | null
-      release_notes?: File | null
-      content_file?: File | null
-    }): Promise<Document> {
+    async uploadDocument(
+      file: File,
+      metadata?: {
+        title?: string
+        description?: string
+        category?: string
+        release_branch?: string
+        tags?: string
+        document_number?: string
+        version_label?: string
+        visibility?: DocumentVisibility
+        company_ids?: number[]
+        parent_id?: number
+        topic?: string
+        platform?: string
+        due_date?: string | null
+        status?: string
+        release_notes?: File | null
+        content_file?: File | null
+      },
+      options?: DocumentUploadApiOptions,
+    ): Promise<Document> {
       const formData = new FormData()
       formData.append('file', file)
       if (metadata?.title) formData.append('title', metadata.title)
@@ -187,11 +197,13 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       if (metadata?.topic) formData.append('topic', metadata.topic)
       if (metadata?.platform) formData.append('platform', metadata.platform)
       if (metadata?.due_date) formData.append('due_date', metadata.due_date)
+      if (metadata?.status) formData.append('status', metadata.status)
       if (metadata?.release_notes) formData.append('release_notes', metadata.release_notes)
       if (metadata?.content_file) formData.append('content_file', metadata.content_file)
 
       const { data } = await this.client.post<DocumentDto>('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: options?.onUploadProgress,
       })
       return mapDocumentDto(data)
     }
@@ -340,4 +352,3 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
       return mapMessageResponseDto(data)
     }
   }
-

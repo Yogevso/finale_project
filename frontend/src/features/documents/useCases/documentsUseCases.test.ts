@@ -126,6 +126,7 @@ describe('documents use cases', () => {
     vi.mocked(client.uploadDocument).mockResolvedValue({ id: 9 } as never)
     const useCases = createDocumentsUseCases(client)
     const file = { name: 'policy.docx', type: '', size: 10 } as File
+    const onUploadProgress = vi.fn()
 
     await useCases.uploadDocument(file, {
       title: '  Policy  ',
@@ -133,7 +134,8 @@ describe('documents use cases', () => {
       category: '  Security',
       releaseBranch: '',
       tags: 'tag-a,tag-b',
-    })
+      status: 'approved',
+    }, { onUploadProgress })
 
     expect(client.uploadDocument).toHaveBeenCalledWith(file, {
       title: 'Policy',
@@ -141,9 +143,12 @@ describe('documents use cases', () => {
       category: 'Security',
       release_branch: undefined,
       tags: 'tag-a,tag-b',
+      status: 'approved',
       visibility: 'internal',
       company_ids: undefined,
-    })
+      release_notes: undefined,
+      content_file: undefined,
+    }, { onUploadProgress })
   })
 
   it('requires company selection when creating a company-visible document', async () => {

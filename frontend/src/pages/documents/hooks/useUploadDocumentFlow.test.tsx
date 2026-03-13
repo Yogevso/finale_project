@@ -13,6 +13,13 @@ const getAudienceDirtyStateMock = vi.fn()
 const getDefaultAudienceForRoleMock = vi.fn()
 const uploadDocumentMock = vi.fn()
 const extractApiErrorMessageMock = vi.fn()
+const authState = {
+  user: {
+    id: 1,
+    role: 'admin',
+  },
+  isManager: true,
+}
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -34,12 +41,7 @@ vi.mock('@/features/documents', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({
-    user: {
-      id: 1,
-      role: 'admin',
-    },
-  }),
+  useAuth: () => authState,
 }))
 
 vi.mock('@/lib/toast', () => ({
@@ -72,6 +74,11 @@ function createWrapper() {
 describe('useUploadDocumentFlow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    authState.user = {
+      id: 1,
+      role: 'admin',
+    }
+    authState.isManager = true
     getDefaultAudienceForRoleMock.mockReturnValue('internal')
     getAudienceDirtyStateMock.mockImplementation(
       (_baseline, current) => ({
@@ -169,9 +176,14 @@ describe('useUploadDocumentFlow', () => {
         releaseBranch: '',
         tags: '',
         dueDate: '',
+        status: 'draft',
         visibility: 'internal',
         companyIds: [],
-      })
+        contentFile: null,
+        releaseNotesFile: null,
+      }, expect.objectContaining({
+        onUploadProgress: expect.any(Function),
+      }))
     })
 
     await waitFor(() => {
@@ -208,5 +220,99 @@ describe('useUploadDocumentFlow', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Upload failed', 'Upload exploded')
     expect(onClose).not.toHaveBeenCalled()
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('tracks upload progress and forwards manager-only upload metadata', async () => {
+    let resolveUpload: ((value: { id: number }) => void) | undefined
+    uploadDocumentMock.mockImplementation((_file, _metadata, options) => {
+      options?.onUploadProgress?.({ loaded: 55, total: 100 } as never)
+      return new Promise((resolve) => {
+        resolveUpload = resolve
+      })
+    })
+
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose }), { wrapper })
+    const primaryFile = new File(['docx'], 'guide.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    const contentFile = new File(['docx'], 'appendix.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    const releaseNotesFile = new File(['pptx'], 'release-notes.pptx', {
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    })
+
+    act(() => {
+      result.current.handleFileSelect(primaryFile)
+      result.current.setUploadStatus('approved')
+      result.current.handleSupplementalFileSelect('content', contentFile)
+      result.current.handleSupplementalFileSelect('releaseNotes', releaseNotesFile)
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(result.current.uploadProgressPercent).toBe(55)
+    })
+
+    expect(uploadDocumentMock).toHaveBeenCalledWith(primaryFile, {
+      title: 'guide',
+      description: '',
+      category: '',
+      releaseBranch: '',
+      tags: '',
+      dueDate: '',
+      status: 'approved',
+      visibility: 'internal',
+      companyIds: [],
+      contentFile,
+      releaseNotesFile,
+    }, expect.objectContaining({
+      onUploadProgress: expect.any(Function),
+    }))
+
+    act(() => {
+      resolveUpload?.({ id: 222 })
+    })
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/documents/222/fullscreen')
+    })
+  })
+
+  it('rejects invalid supplemental files before upload', () => {
+    validateDocumentUploadFileMock.mockImplementation((file: File) =>
+      file.name.endsWith('.pdf') ? 'Only DOCX and PPTX files are allowed' : null,
+    )
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose: vi.fn() }), { wrapper })
+
+    act(() => {
+      result.current.handleSupplementalFileSelect(
+        'releaseNotes',
+        new File(['pdf'], 'notes.pdf', { type: 'application/pdf' }),
+      )
+    })
+
+    expect(result.current.releaseNotesFile).toBeNull()
+    expect(result.current.error).toBe('Release notes file: Only DOCX and PPTX files are allowed')
+  })
+
+  it('hides manager upload extras for non-manager editors', () => {
+    authState.user = {
+      id: 2,
+      role: 'editor',
+    }
+    authState.isManager = false
+
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose: vi.fn() }), { wrapper })
+
+    expect(result.current.canManageAdvancedUploadOptions).toBe(false)
+    expect(result.current.uploadStatus).toBe('draft')
   })
 })

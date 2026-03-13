@@ -34,8 +34,11 @@ export type DocumentUploadMetadataInput = {
   releaseBranch: string
   tags: string
   dueDate?: string | null
+  status?: DocumentStatus
   visibility?: DocumentVisibility
   companyIds?: number[]
+  releaseNotesFile?: File | null
+  contentFile?: File | null
 }
 
 export type DocumentsUseCasesClient = Pick<
@@ -51,6 +54,8 @@ export type DocumentsUseCasesClient = Pick<
   | 'updateDocument'
   | 'uploadDocument'
 >
+
+export type UploadDocumentOptions = Parameters<DocumentsUseCasesClient['uploadDocument']>[2]
 
 export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx'
 export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024
@@ -113,8 +118,11 @@ function toUploadMetadata(input: DocumentUploadMetadataInput) {
     release_branch: toOptionalString(input.releaseBranch),
     tags: toOptionalString(input.tags),
     due_date: input.dueDate || undefined,
+    status: input.status,
     visibility: audience.visibility,
     company_ids: audience.company_ids.length > 0 ? audience.company_ids : undefined,
+    release_notes: input.releaseNotesFile ?? undefined,
+    content_file: input.contentFile ?? undefined,
   }
 }
 
@@ -201,7 +209,11 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return document
     },
 
-    async uploadDocument(file: File, metadata: DocumentUploadMetadataInput): Promise<Document> {
+    async uploadDocument(
+      file: File,
+      metadata: DocumentUploadMetadataInput,
+      options?: UploadDocumentOptions,
+    ): Promise<Document> {
       const audienceValidationIssue = validateAudienceFormPayload({
         visibility: metadata.visibility,
         company_ids: metadata.companyIds,
@@ -210,7 +222,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         throw new Error(audienceValidationIssue.message)
       }
 
-      return await client.uploadDocument(file, toUploadMetadata(metadata))
+      return await client.uploadDocument(file, toUploadMetadata(metadata), options)
     },
   }
 }
