@@ -4,14 +4,14 @@ Last updated: 2026-03-13
 Current checkpoint
 - Stable return point: `8e9a43e` (`feat(upload): polish modal progress and manager options`)
 - Active wave: Wave Y.1
-- Status: core delivery is done; upload UX polish is committed and verified; only optional coverage polish remains
+- Status: Wave Y.1 delivery is complete in the working tree; the last optional viewer coverage polish is implemented and verified
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
 - Backend refactors: Y1-010, Y1-011, Y1-012, Y1-013, Y1-014, Y1-015, Y1-016, Y1-017
 - Frontend refactors: Y1-020, Y1-021, Y1-022, Y1-023, Y1-024, Y1-025, Y1-026
 - Upload UX polish: Y1-030, Y1-031, Y1-032, Y1-033
-- Coverage/test work: Y1-040, Y1-041, Y1-042, and most of Y1-043
+- Coverage/test work: Y1-040, Y1-041, Y1-042, Y1-043
 - PDF removal tranche: Y1-050 through Y1-072
 
 Verification snapshot
@@ -23,16 +23,16 @@ Verification snapshot
 - Focused backend Ruff check: clean for conversion, legacy wrapper, container, dependencies, and attachment-service modules
 - Focused frontend preview/browser/DTO slice: 40 passed
 - Focused frontend upload UX slice: 23 passed
+- Focused frontend viewer coverage slice: 9 passed
 - Focused frontend ESLint slice: clean
 - Frontend TypeScript check (`tsc`): clean
 - Dedicated upload-modal UI E2E: 3 passed
 
 Highest-priority remaining items
-1. Optional extra coverage
-   - Y1-043: warning banner and anchor-copying viewer coverage polish
+- None inside Wave Y.1
 
 Recommended next item
-- Either stop here as a stable, verified implementation checkpoint, or do the remaining Y1-043 coverage polish in the viewer warning/anchor-copy paths.
+- Treat this as the finished Wave Y.1 checkpoint, then move to the next wave or separate warning-cleanup work.
 
 Guardrails
 - Do not rerun full Playwright or full coverage unless a real code change needs it.

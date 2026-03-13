@@ -205,4 +205,54 @@ describe('ReadingUX controls', () => {
       '1 images failed Extraction confidence: 91%.',
     )
   })
+
+  it('filters empty warning messages and omits the confidence suffix when it is unavailable', () => {
+    const previewPaneRef = { current: null }
+    const searchInputRef = { current: null }
+
+    render(
+      <MemoryRouter>
+        <PreviewCanvas
+          previewPaneRef={previewPaneRef}
+          documentPaperClass="document-preview-paper document-preview-paper--light"
+          activeHtmlContent={'<article class="docx-document"><p>Body copy</p></article>'}
+          showingReaderView
+          showDocumentTitle={false}
+          searchTerm=""
+          searchMatchCount={0}
+          activeSearchMatchIndex={-1}
+          extractionWarnings={[
+            { code: 'EMPTY', message: '   ', count: 0 },
+            { code: 'PARTIAL_TABLE', message: '1 table was simplified', count: 1 },
+          ]}
+          readerConfidence={null}
+          onSearchTermChange={() => undefined}
+          onPreviousSearchMatch={() => undefined}
+          onNextSearchMatch={() => undefined}
+          searchInputRef={searchInputRef}
+          tocSectionsCount={0}
+          readerCurrentPage={1}
+          commentPopupTopOffset={0}
+          scrollProgress={0}
+          sectionLinkBasePath="/documents/42"
+          onScroll={() => undefined}
+          onMouseUp={() => undefined}
+          hasUser={false}
+          selectionPopup={{ show: false, x: 0, y: 0, text: '' }}
+          commentPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
+          commentText=""
+          isPrivateComment={false}
+          isSubmittingComment={false}
+          onOpenCommentForm={() => undefined}
+          onCloseCommentPopup={() => undefined}
+          onCommentTextChange={() => undefined}
+          onPrivateCommentChange={() => undefined}
+          onSubmitComment={() => undefined}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('1 table was simplified')
+    expect(screen.getByRole('status')).not.toHaveTextContent(/extraction confidence/i)
+  })
 })
