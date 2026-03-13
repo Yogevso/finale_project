@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const DocumentsPage = lazy(() => import('./pages/DocumentsPage'))
 const DocumentDetailPage = lazy(() => import('./pages/DocumentDetailPage'))
+const VersionComparePage = lazy(() => import('./pages/VersionComparePage'))
 const UsersPage = lazy(() => import('./pages/UsersPage'))
 const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
 const CompanyDetailPage = lazy(() => import('./pages/CompanyDetailPage'))
@@ -189,6 +190,7 @@ function App() {
         >
           <Route index element={<DocumentsPage />} />
           <Route path=":id" element={<DocumentDetailPage />} />
+          <Route path=":id/compare" element={<VersionComparePage />} />
         </Route>
 
         {/* Fullscreen Document View - use DocumentDetailPage */}

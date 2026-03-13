@@ -7,17 +7,18 @@ import io
 import pytest
 from fastapi import BackgroundTasks, HTTPException, UploadFile
 
-from app.application.process_managers import (
-    DocumentUploadProcessManager,
-    PreviewConversionProcessManager,
-)
+from app.application.process_managers import DocumentUploadProcessManager, PreviewConversionProcessManager
 from app.models import Document
 from app.services.document_service import DocumentService
 from tests.factories import build_attachment_conversion_job, build_document_create
 
 
-def _pdf_upload_file(name: str) -> UploadFile:
-    return UploadFile(filename=name, file=io.BytesIO(b"%PDF-1.4\n%EOF"))
+def _docx_upload_file(name: str) -> UploadFile:
+    return UploadFile(
+        filename=name,
+        file=io.BytesIO(b"PK\x03\x04minimal-docx-fixture"),
+        headers={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    )
 
 
 @pytest.mark.anyio
@@ -56,8 +57,8 @@ async def test_upload_process_manager_compensates_parent_and_child_on_release_no
             parent_document_data=parent_data,
             current_user=test_user,
             background_tasks=BackgroundTasks(),
-            primary_file=_pdf_upload_file("parent.pdf"),
-            release_notes_file=_pdf_upload_file("release-notes.pdf"),
+            primary_file=_docx_upload_file("parent.docx"),
+            release_notes_file=_docx_upload_file("release-notes.docx"),
             release_notes_document_data=release_data,
         )
 
@@ -72,7 +73,7 @@ async def test_upload_process_manager_compensates_parent_and_child_on_release_no
 def test_conversion_process_manager_marks_completed_when_preview_ready():
     job = build_attachment_conversion_job(
         attachment_id=42,
-        job_type="preview_pdf",
+        job_type="reader_html",
         status="processing",
         attempts=1,
         max_attempts=3,
@@ -106,7 +107,7 @@ def test_conversion_process_manager_marks_completed_when_preview_ready():
 def test_conversion_process_manager_retries_on_generation_exception():
     job = build_attachment_conversion_job(
         attachment_id=7,
-        job_type="preview_pdf",
+        job_type="reader_html",
         status="processing",
         attempts=1,
         max_attempts=3,
@@ -139,7 +140,7 @@ def test_conversion_process_manager_retries_on_generation_exception():
 def test_conversion_process_manager_marks_failed_when_attempts_exhausted():
     job = build_attachment_conversion_job(
         attachment_id=8,
-        job_type="preview_pdf",
+        job_type="reader_html",
         status="processing",
         attempts=3,
         max_attempts=3,

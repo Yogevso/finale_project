@@ -8,6 +8,7 @@ interface FullscreenTopBarProps {
   onExitFullscreen: () => void
   onSetReadingWidth: () => void
   onSetFluidWidth: () => void
+  wrapperClassName?: string
 }
 
 export function FullscreenTopBar({
@@ -17,16 +18,22 @@ export function FullscreenTopBar({
   onExitFullscreen,
   onSetReadingWidth,
   onSetFluidWidth,
+  wrapperClassName,
 }: FullscreenTopBarProps) {
   if (!isFullscreen) {
     return null
   }
 
   return (
-    <div className="sticky top-0 z-30 -mx-6 md:-mx-10 lg:-mx-14 px-6 md:px-10 lg:px-14 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg flex items-center justify-between gap-4">
+    <div
+      className={`document-detail-fullscreen-topbar sticky top-0 z-30 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg flex items-center justify-between gap-4 ${
+        wrapperClassName ?? '-mx-6 md:-mx-10 lg:-mx-14 px-6 md:px-10 lg:px-14'
+      }`}
+    >
       <button
         onClick={onExitFullscreen}
         className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/15 rounded-lg hover:bg-white/25 transition-colors"
+        title="Toggle fullscreen (F)"
       >
         <Minimize2 className="w-4 h-4" />
         Exit Fullscreen

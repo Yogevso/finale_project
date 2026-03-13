@@ -20,7 +20,6 @@ from app.db import get_db
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import Document, User
 from app.schemas import (
-    AttachmentOutlineResponse,
     AttachmentReaderViewResponse,
     AttachmentResponse,
     AttachmentUploadResponse,
@@ -133,35 +132,6 @@ def _stream_original_attachment(
     )
 
 
-def _stream_preview_pdf(
-    db: Session,
-    document_id: int,
-    attachment_id: int,
-    current_user: User,
-    *,
-    inline: bool = True,
-) -> StreamingResponse:
-    attachment, content_stream, media_type, content_length = AttachmentService.open_preview_stream(
-        db, document_id, attachment_id, current_user
-    )
-    original_name = attachment.original_filename or attachment.filename or "preview"
-    if "." in original_name:
-        base_name = original_name.rsplit(".", 1)[0]
-    else:
-        base_name = original_name
-    preview_filename = f"{base_name}.pdf"
-
-    headers = {
-        "Content-Disposition": build_content_disposition(preview_filename, inline=inline),
-        "Content-Length": str(content_length),
-        **_audience_headers_for_document(db, document_id),
-    }
-    if attachment.preview_pdf_sha256:
-        headers["X-Preview-SHA256"] = attachment.preview_pdf_sha256
-
-    return StreamingResponse(content=content_stream, media_type=media_type, headers=headers)
-
-
 @router.get("/documents/{document_id}/attachments", response_model=List[AttachmentResponse])
 def list_attachments(
     document_id: int,
@@ -197,9 +167,9 @@ def download_attachment(
     current_user: User = Depends(_get_current_active_user_or_token),
 ):
     """
-    Download preview PDF rendition for an attachment.
+    Download the original attachment bytes.
     """
-    return _stream_preview_pdf(db, document_id, attachment_id, current_user, inline=False)
+    return _stream_original_attachment(db, document_id, attachment_id, current_user, inline=False)
 
 
 @router.get("/documents/{document_id}/attachments/{attachment_id}/download-original")
@@ -215,41 +185,6 @@ def download_attachment_original(
     return _stream_original_attachment(db, document_id, attachment_id, current_user, inline=False)
 
 
-@router.get("/documents/{document_id}/attachments/{attachment_id}/preview")
-def preview_attachment(
-    document_id: int,
-    attachment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_active_user_or_token),
-):
-    """
-    Stream preview PDF artifact bytes with inline content disposition.
-    """
-    return _stream_preview_pdf(db, document_id, attachment_id, current_user)
-
-
-@router.get(
-    "/documents/{document_id}/attachments/{attachment_id}/outline",
-    response_model=AttachmentOutlineResponse,
-)
-def get_attachment_outline(
-    document_id: int,
-    attachment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_active_user_or_token),
-):
-    """
-    Return PDF outline/bookmarks for attachment TOC.
-    """
-    payload = AttachmentService.get_pdf_outline(
-        db,
-        document_id,
-        attachment_id,
-        current_user,
-    )
-    return AttachmentOutlineResponse(**payload)
-
-
 @router.get(
     "/documents/{document_id}/attachments/{attachment_id}/reader-view",
     response_model=AttachmentReaderViewResponse,
@@ -263,7 +198,7 @@ def get_attachment_reader_view(
     current_user: User = Depends(_get_current_active_user_or_token),
 ):
     """
-    Get Reader View derived artifact for PDF attachments.
+    Get Reader View derived artifact for supported attachment types.
     """
     payload = AttachmentService.get_reader_view(
         db,
@@ -288,7 +223,7 @@ def retry_attachment_reader_view(
     current_user: User = Depends(_get_current_active_user_or_token),
 ):
     """
-    Retry Reader View artifact generation for a PDF attachment.
+    Retry Reader View artifact generation for a supported attachment.
     """
     payload = AttachmentService.retry_reader_view_generation(
         db,
@@ -364,7 +299,7 @@ async def upload_attachment(
 
     Only admins and editors can upload attachments.
     Max file size: 10MB.
-    Allowed types: PDF, Office docs, images, text files.
+    Allowed types: Office docs, images, text files.
     """
     attachment = await AttachmentService.upload_attachment(
         db,

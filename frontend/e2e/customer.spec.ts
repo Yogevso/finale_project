@@ -189,11 +189,12 @@ test.describe('Customer Role', () => {
         await docLink.click();
         await page.waitForTimeout(500);
         
-        // Should NOT have edit button
-        const editBtn = page.locator('button:has-text("Edit"), a:has-text("Edit")');
-        const hasEdit = await editBtn.count() > 0;
-        // Customer portal should not show edit controls
-        expect(hasEdit).toBeFalsy();
+        const editControls = page.locator([
+          'button:has-text("Edit Details")',
+          'button:has-text("Edit Content")',
+          'button[title="Edit section"]',
+        ].join(', '));
+        expect(await editControls.count()).toBe(0);
       }
     });
 

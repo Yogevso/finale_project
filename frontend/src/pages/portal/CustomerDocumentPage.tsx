@@ -1,12 +1,13 @@
 /**
  * CustomerDocumentPage - Document detail view for customer portal
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { portalApi } from '../../lib/portalApi'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { parseDocumentHtml } from '@/lib/documentRenderer'
 import FeedbackForm from '../../components/FeedbackForm'
 import {
   FileText,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import NotFoundState from '@/components/NotFoundState'
+import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -54,6 +56,7 @@ export default function CustomerDocumentPage() {
     queryFn: () => portalApi.getDocument(Number(id)),
     enabled: !!id,
   })
+  const renderedContent = useMemo(() => parseDocumentHtml(document?.content ?? ''), [document?.content])
 
   // Feedback mutation
   const feedbackMutation = useMutation({
@@ -171,39 +174,15 @@ export default function CustomerDocumentPage() {
 
   return (
     <div className={`${isFullscreen ? 'min-h-screen bg-white py-6' : ''}`}>
-      {isFullscreen && (
-        <div className="flex items-center justify-between bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white rounded-2xl px-4 py-3 mx-6 md:mx-10 lg:mx-16 gap-4">
-          <button
-            onClick={() => navigate(`/portal/documents/${id}`)}
-            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
-          >
-            Exit Fullscreen
-          </button>
-          <div className="flex-1 text-center font-display font-semibold truncate">{document.title}</div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => applyWidth('reading')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                contentWidth === 'reading'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
-              }`}
-            >
-              Reading width
-            </button>
-            <button
-              onClick={() => applyWidth('fluid')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                contentWidth === 'fluid'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
-              }`}
-            >
-              Full width
-            </button>
-          </div>
-        </div>
-      )}
+      <FullscreenTopBar
+        isFullscreen={isFullscreen}
+        documentTitle={document.title}
+        contentWidth={contentWidth}
+        onExitFullscreen={() => navigate(`/portal/documents/${id}`)}
+        onSetReadingWidth={() => applyWidth('reading')}
+        onSetFluidWidth={() => applyWidth('fluid')}
+        wrapperClassName="mx-6 md:mx-10 lg:mx-16 rounded-2xl px-4"
+      />
 
       <div className={`space-y-6 ${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'max-w-5xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : ''}`}>
         <div className="flex items-center justify-between">
@@ -274,8 +253,9 @@ export default function CustomerDocumentPage() {
           <div
             ref={contentRef}
             className="prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: document.content }}
-          />
+          >
+            {renderedContent}
+          </div>
         </div>
       </div>
 

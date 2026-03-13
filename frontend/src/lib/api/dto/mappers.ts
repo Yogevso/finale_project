@@ -2,7 +2,6 @@ import type {
   AudienceAccessPreview,
   AnalyticsOverview,
   Attachment,
-  AttachmentOutlineResponse,
   AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   Company,
@@ -52,7 +51,6 @@ import type {
   AcceptInvitationRequestDto,
   AnalyticsOverviewDto,
   AttachmentDto,
-  AttachmentOutlineResponseDto,
   AttachmentReaderViewResponseDto,
   AttachmentUploadResponseDto,
   CollaborationActiveSessionsResponseDto,
@@ -124,6 +122,15 @@ import type {
   VersionListResponseDto,
   VersionUpdateDto,
 } from './contracts'
+
+function devAssertPresent<T>(
+  value: T | null | undefined,
+  path: string,
+): asserts value is T {
+  if (import.meta.env.DEV && (value === null || value === undefined)) {
+    throw new Error(`DTO mapping invariant failed: ${path} is required`)
+  }
+}
 
 export function mapTokenResponseDto(dto: TokenResponseDto): TokenResponse {
   return { ...dto }
@@ -213,6 +220,13 @@ export function mapDocumentListResponseDto(
 export function mapDocumentDetailPageBundleDto(
   dto: DocumentDetailPageBundleDto,
 ): DocumentDetailPageBundle {
+  devAssertPresent(dto.document, 'DocumentDetailPageBundleDto.document')
+  devAssertPresent(dto.attachments, 'DocumentDetailPageBundleDto.attachments')
+  devAssertPresent(dto.assigned_companies, 'DocumentDetailPageBundleDto.assigned_companies')
+  devAssertPresent(dto.review_history, 'DocumentDetailPageBundleDto.review_history')
+
+  // Older snapshots may omit `audience_access_preview`; synthesize the minimal
+  // view model from the document visibility and assigned companies in that case.
   const fallbackAudienceAccessPreview = {
     visibility: dto.document.visibility,
     is_public: dto.document.visibility === 'public',
@@ -246,12 +260,25 @@ export function mapDocumentDetailPageBundleDto(
   }
 }
 
+function normalizeOptionalDate(value: string | null | undefined): string | null | undefined {
+  if (value === '') {
+    return null
+  }
+  return value
+}
+
 export function toDocumentCreateDto(payload: DocumentCreate): DocumentCreateDto {
-  return { ...payload }
+  return {
+    ...payload,
+    due_date: normalizeOptionalDate(payload.due_date),
+  }
 }
 
 export function toDocumentUpdateDto(payload: DocumentUpdate): DocumentUpdateDto {
-  return { ...payload }
+  return {
+    ...payload,
+    due_date: normalizeOptionalDate(payload.due_date),
+  }
 }
 
 export function mapVersionDto(dto: VersionDto): Version {
@@ -264,9 +291,11 @@ export function mapVersionDto(dto: VersionDto): Version {
 }
 
 export function mapVersionListResponseDto(dto: VersionListResponseDto): VersionListResponse {
+  const items = (dto.items as VersionDto[]).map((item) => mapVersionDto(item))
+
   return {
     ...dto,
-    items: dto.items.map(mapVersionDto),
+    items,
   }
 }
 
@@ -368,18 +397,14 @@ export function mapAttachmentUploadResponseDto(
 export function mapAttachmentReaderViewResponseDto(
   dto: AttachmentReaderViewResponseDto,
 ): AttachmentReaderViewResponse {
+  devAssertPresent(dto.status, 'AttachmentReaderViewResponseDto.status')
+
+  // Keep the UI-facing reader metadata and intentionally drop any transport-only
+  // fields the backend may add to the raw payload later.
   return {
     ...dto,
     toc_items: dto.toc_items.map((item) => ({ ...item })),
-  }
-}
-
-export function mapAttachmentOutlineResponseDto(
-  dto: AttachmentOutlineResponseDto,
-): AttachmentOutlineResponse {
-  return {
-    ...dto,
-    items: dto.items.map((item) => ({ ...item })),
+    warnings: (dto.warnings || []).map((item) => ({ ...item })),
   }
 }
 

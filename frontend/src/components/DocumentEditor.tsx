@@ -37,7 +37,6 @@ export default function DocumentEditor({
   const [originalContent, setOriginalContent] = useState<string>('')
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
 
-  // Collaboration hook
   const collaboration = useCollaboration({
     documentId,
     username: user?.username || 'Anonymous',
@@ -46,16 +45,14 @@ export default function DocumentEditor({
     onError: (err) => console.error('Collaboration error:', err),
   })
 
-  // Get user color for collaboration
   const userColor = getUserColor(user?.id || 0)
 
-  // Find Word documents
-  const wordDocs = useMemo(
+  const editableDocs = useMemo(
     () =>
       attachments.filter(
-        (a) =>
-          a.mime_type === 'application/msword' ||
-          a.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        (attachment) =>
+          attachment.mime_type ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       ),
     [attachments],
   )
@@ -93,36 +90,35 @@ export default function DocumentEditor({
       setError(null)
 
       try {
-        const blob = await api.getAttachmentOriginalBlob(documentId, activeSelection.id)
-        
+        const blob = await api.getAttachmentBlob(documentId, activeSelection.id)
+
         if (
-          activeSelection.mime_type === 'application/msword' ||
           activeSelection.mime_type ===
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ) {
-          // Convert Word to HTML using mammoth
           const arrayBuffer = await blob.arrayBuffer()
           const result = await mammoth.convertToHtml({ arrayBuffer })
           setContent(result.value)
           setOriginalContent(result.value)
-          
+
           if (result.messages.length > 0) {
             console.warn('Mammoth conversion messages:', result.messages)
           }
-        } else if (activeSelection.mime_type === 'application/pdf') {
-          // PDFs can't be edited - show message
-          setContent('<p><em>PDF documents cannot be edited. Use the Preview tab to view.</em></p>')
+        } else {
+          setContent(
+            '<p><em>This attachment cannot be edited here. Use the Preview tab to view it.</em></p>',
+          )
           setOriginalContent('')
         }
-      } catch (e) {
-        console.error('Failed to load document:', e)
+      } catch (loadError) {
+        console.error('Failed to load document:', loadError)
         setError('Failed to load document content')
       } finally {
         setLoading(false)
       }
     }
 
-    loadDocument()
+    void loadDocument()
   }, [attachments, documentId, selectedAttachment])
 
   const handleContentChange = (newContent: string) => {
@@ -131,7 +127,9 @@ export default function DocumentEditor({
   }
 
   const handleSave = async () => {
-    if (!onSave || !hasChanges) return
+    if (!onSave || !hasChanges) {
+      return
+    }
 
     setSaving(true)
     try {
@@ -139,8 +137,8 @@ export default function DocumentEditor({
       setOriginalContent(content)
       setHasChanges(false)
       setIsEditing(false)
-    } catch (e) {
-      console.error('Failed to save:', e)
+    } catch (saveError) {
+      console.error('Failed to save:', saveError)
       setError('Failed to save changes')
     } finally {
       setSaving(false)
@@ -165,7 +163,7 @@ export default function DocumentEditor({
   if (error) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-        <div className="text-4xl mb-4">⚠️</div>
+        <div className="text-4xl mb-4">Warning</div>
         <h3 className="text-lg font-medium text-rose-600 mb-2">{error}</h3>
         <button
           onClick={() => window.location.reload()}
@@ -180,58 +178,53 @@ export default function DocumentEditor({
   if (attachments.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-        <div className="text-6xl mb-4">📄</div>
+        <div className="text-6xl mb-4">FILE</div>
         <h3 className="text-lg font-medium text-slate-900 mb-2">No Document Attached</h3>
-        <p className="text-slate-500">Upload a Word document to edit it here.</p>
+        <p className="text-slate-500">Upload a DOCX document to edit it here.</p>
       </div>
     )
   }
 
-  if (wordDocs.length === 0) {
+  if (editableDocs.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-        <div className="text-6xl mb-4">📎</div>
+        <div className="text-6xl mb-4">ATTACH</div>
         <h3 className="text-lg font-medium text-slate-900 mb-2">Editing Not Available</h3>
         <p className="text-slate-500">
-          Only Word documents (.doc, .docx) can be edited.
+          Only DOCX documents can be edited here.
           <br />
-          PDF files are read-only.
+          Use the Preview tab to read other attachment types.
         </p>
       </div>
     )
   }
 
-  const isPdf = selectedAttachment?.mime_type === 'application/pdf'
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      {/* Toolbar */}
       <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-slate-50">
         <div className="flex items-center gap-3">
-          {wordDocs.length > 1 && (
+          {editableDocs.length > 1 && (
             <select
               value={selectedAttachment?.id || ''}
-              onChange={(e) => {
-                const att = wordDocs.find((a) => a.id === Number(e.target.value))
-                setSelectedAttachment(att || null)
+              onChange={(event) => {
+                const attachment = editableDocs.find((item) => item.id === Number(event.target.value))
+                setSelectedAttachment(attachment || null)
               }}
               className="px-3 py-1.5 border rounded-lg text-sm"
             >
-              {wordDocs.map((att) => (
-                <option key={att.id} value={att.id}>
-                  {att.original_filename}
+              {editableDocs.map((attachment) => (
+                <option key={attachment.id} value={attachment.id}>
+                  {attachment.original_filename}
                 </option>
               ))}
             </select>
           )}
-          {wordDocs.length === 1 && (
-            <span className="text-sm text-slate-600">
-              📄 {selectedAttachment?.original_filename}
-            </span>
+          {editableDocs.length === 1 && (
+            <span className="text-sm text-slate-600">DOCX {selectedAttachment?.original_filename}</span>
           )}
         </div>
 
-        {isEditor && !isPdf && (
+        {isEditor && (
           <div className="flex items-center gap-2">
             {isEditing ? (
               <>
@@ -272,7 +265,6 @@ export default function DocumentEditor({
         )}
       </div>
 
-      {/* Editor */}
       <div className="p-4">
         {hasChanges && !collaborationEnabled && (
           <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
@@ -280,7 +272,6 @@ export default function DocumentEditor({
           </div>
         )}
 
-        {/* Use CollaborativeEditor when collaboration is enabled and editing */}
         {collaborationEnabled && isEditing && user ? (
           <CollaborativeEditor
             ydoc={collaboration.ydoc}
@@ -297,7 +288,7 @@ export default function DocumentEditor({
             }}
             content={content}
             onChange={handleContentChange}
-            editable={isEditing && !isPdf}
+            editable={isEditing}
             className={isEditing ? 'ring-2 ring-sky-500' : ''}
             onRetry={collaboration.connect}
           />
@@ -305,7 +296,7 @@ export default function DocumentEditor({
           <RichTextEditor
             content={content}
             onChange={handleContentChange}
-            editable={isEditing && !isPdf}
+            editable={isEditing}
             className={isEditing ? 'ring-2 ring-sky-500' : ''}
           />
         )}

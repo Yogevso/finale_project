@@ -126,6 +126,7 @@ export interface Document {
   description: string | null
   version_label?: string | null
   release_branch?: string | null
+  due_date?: string | null
   status: DocumentStatus
   visibility: DocumentVisibility
   category: string | null
@@ -148,6 +149,7 @@ export interface DocumentCreate {
   description?: string
   version_label?: string
   release_branch?: string
+  due_date?: string | null
   document_number?: string
   parent_id?: number
   status?: DocumentStatus
@@ -162,6 +164,7 @@ export interface DocumentUpdate {
   description?: string
   version_label?: string
   release_branch?: string
+  due_date?: string | null
   status?: DocumentStatus
   visibility?: DocumentVisibility
   reason?: string
@@ -176,6 +179,32 @@ export interface DocumentListResponse {
   page: number
   page_size: number
   pages: number
+}
+
+export interface DocumentWatchStatus {
+  is_watching: boolean
+}
+
+export interface DocumentWatchResponse {
+  document_id: number
+  user_id: number
+  is_watching: boolean
+  watched_at: string | null
+}
+
+export interface DocumentArchiveResult {
+  document_id: number
+  status: DocumentStatus | 'archived'
+  previous_status?: DocumentStatus | null
+  visibility?: DocumentVisibility
+}
+
+export interface DocumentCalendarExport {
+  document_id: number
+  filename: string
+  content_type: string
+  due_date: string
+  ical: string
 }
 
 export interface DocumentDashboardStats {
@@ -267,13 +296,8 @@ export interface Attachment {
   size_bytes?: number
   mime_type: string
   sha256?: string
-  preview_pdf_status?: 'pending' | 'processing' | 'ready' | 'failed' | null
-  preview_pdf_mime_type?: string | null
-  preview_pdf_size_bytes?: number | null
-  preview_pdf_sha256?: string | null
-  preview_pdf_error?: string | null
   reader_html_status?: 'pending' | 'processing' | 'ready' | 'failed' | null
-  reader_toc_source?: 'outline' | 'heuristic' | 'none' | string | null
+  reader_toc_source?: 'headings' | 'slides' | 'none' | string | null
   uploaded_by: number
   uploaded_at: string
   uploader_name?: string  // populated from join
@@ -287,12 +311,20 @@ export interface AttachmentUploadResponse {
   message: string
 }
 
+export interface AttachmentExtractionWarning {
+  code: string
+  message: string
+  count?: number | null
+}
+
 export interface AttachmentReaderViewResponse {
   attachment_id: number
   status: 'pending' | 'processing' | 'ready' | 'failed' | string
   html_content: string | null
   toc_items: AttachmentOutlineItem[]
-  toc_source: 'outline' | 'heuristic' | 'none' | string | null
+  toc_source: 'headings' | 'slides' | 'none' | string | null
+  warnings?: AttachmentExtractionWarning[]
+  confidence?: number | null
   error: string | null
   generated_at: string | null
 }
@@ -305,14 +337,6 @@ export interface AttachmentOutlineItem {
   page_start: number
   page_end?: number | null
   anchor_id?: string | null
-}
-
-export interface AttachmentOutlineResponse {
-  attachment_id: number
-  has_outline: boolean
-  items: AttachmentOutlineItem[]
-  source?: 'outline' | 'heuristic' | 'none' | string | null
-  error: string | null
 }
 
 // Comment types
@@ -384,6 +408,47 @@ export interface DocumentQueryParams {
   visibility?: DocumentVisibility
   category?: string
   search?: string
+  company_id?: number
+  date_from?: string
+  date_to?: string
+}
+
+export interface DuplicateDocumentMatch {
+  document_id: number
+  title: string
+  document_number: string
+  similarity: number
+}
+
+export interface DuplicateCheckResponse {
+  title: string
+  threshold: number
+  has_matches: boolean
+  matches: DuplicateDocumentMatch[]
+}
+
+export interface BulkDocumentMetadataUpdate {
+  document_ids: number[]
+  category?: string
+  visibility?: DocumentVisibility
+  company_ids?: number[]
+  reason?: string
+}
+
+export interface BulkDocumentMetadataUpdateResponse {
+  updated_count: number
+  document_ids: number[]
+  message: string
+}
+
+export interface SavedSearch {
+  id: number
+  name: string
+  query: string | null
+  category: string | null
+  date_from?: string | null
+  date_to?: string | null
+  created_at: string
 }
 
 // Notification types
@@ -397,6 +462,8 @@ export type NotificationType =
   | 'review_submitted'
   | 'review_approved'
   | 'review_rejected'
+  | 'review_reminder'
+  | 'review_escalated'
   | 'feedback_received'
   | 'feedback_responded'
   | 'invitation_sent'

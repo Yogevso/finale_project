@@ -1,4 +1,4 @@
-"""Standalone worker process for preview PDF conversions.
+"""Standalone worker process for reader-artifact conversions.
 
 Run:
   python -m app.workers.conversion_worker
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run preview PDF conversion worker")
+    parser = argparse.ArgumentParser(description="Run reader-artifact conversion worker")
     parser.add_argument(
         "--poll-interval",
         type=float,
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Force regeneration even when preview_pdf is already ready",
+        help="Force regeneration even when the reader artifact is already ready",
     )
     return parser.parse_args()
 

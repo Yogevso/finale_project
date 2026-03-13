@@ -29,6 +29,8 @@ from app.application.queries.document_queries import (
 )
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.application.queries.search_queries import SearchQueryHandler
+from app.conversion.contracts import DocumentConversionService
+from app.conversion.document_pipeline import get_document_conversion_pipeline
 from app.dependencies.tenant import TenantContext
 from app.domain.ports import CollaborationStatePort, EmailPort, StoragePort
 from app.infrastructure.composition import (
@@ -114,6 +116,10 @@ class AppContainer:
             state_port=state_port,
             document_policy=self.document_access_policy,
         )
+
+    def document_conversion_service(self) -> DocumentConversionService:
+        """Resolve the shared conversion pipeline behind a stable abstraction."""
+        return get_document_conversion_pipeline()
 
     # -------- Use-cases --------
     def publish_approved_version_use_case(self, db: Session) -> PublishApprovedVersion:

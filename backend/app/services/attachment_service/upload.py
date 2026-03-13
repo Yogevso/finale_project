@@ -6,7 +6,6 @@ import hashlib
 import io
 import logging
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -20,14 +19,13 @@ from .common import AttachmentServiceCommonMixin, get_storage_backend
 
 logger = logging.getLogger(__name__)
 
-AttachmentService = None  # Assigned by package facade at import time.
-
 
 class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
     """Upload and create entry points."""
 
-    @staticmethod
+    @classmethod
     def create_attachment_from_bytes(
+        cls,
         db: Session,
         document_id: int,
         content: bytes,
@@ -45,10 +43,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         """
         # Validate file size
         file_size = len(content)
-        if file_size > AttachmentService.MAX_FILE_SIZE:
+        if file_size > cls.MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large. Max size: {AttachmentService.MAX_FILE_SIZE // (1024 * 1024)}MB",
+                detail=f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB",
             )
         checksum_sha256 = hashlib.sha256(content).hexdigest()
 
@@ -68,7 +66,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         except Exception as e:
             logger.error(f"Storage upload failed: {e}")
             # Fallback to local file storage
-            upload_dir = AttachmentService.get_upload_dir()
+            upload_dir = cls.get_upload_dir()
             doc_dir = upload_dir / str(document_id)
             doc_dir.mkdir(parents=True, exist_ok=True)
             file_path = doc_dir / unique_filename
@@ -77,6 +75,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path = str(file_path)
 
         # Create attachment record
+        supports_reader_artifact = cls._supports_structured_reader_artifact(
+            content_type,
+            original_filename,
+        )
         attachment = Attachment(
             document_id=document_id,
             filename=unique_filename,
@@ -87,43 +89,19 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path=storage_path,
             storage_key=storage_path,
             sha256=checksum_sha256,
-            preview_pdf_status=(
-                AttachmentService.PREVIEW_STATUS_READY
-                if content_type.lower().startswith("application/pdf")
-                else AttachmentService.PREVIEW_STATUS_PENDING
+            reader_html_status=(
+                cls.READER_STATUS_PENDING if supports_reader_artifact else None
             ),
-            preview_pdf_storage_key=(
-                storage_path if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_mime_type=(
-                "application/pdf" if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_size_bytes=(
-                file_size if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_sha256=(
-                checksum_sha256 if content_type.lower().startswith("application/pdf") else None
-            ),
-            preview_pdf_generated_at=(
-                datetime.utcnow() if content_type.lower().startswith("application/pdf") else None
-            ),
-            reader_html_status=AttachmentService.READER_STATUS_PENDING,
             uploaded_by=current_user.id,
         )
 
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
-        AttachmentService._ensure_artifact_rows(db, attachment, persist=True)
+        cls._ensure_artifact_rows(db, attachment, persist=True)
 
-        if (attachment.mime_type or "").lower().startswith("application/pdf"):
-            AttachmentService.schedule_reader_artifact_generation(
-                attachment.id, background_tasks=background_tasks
-            )
-        else:
-            AttachmentService.schedule_preview_pdf_generation(
-                attachment.id, background_tasks=background_tasks
-            )
+        if supports_reader_artifact:
+            cls.schedule_reader_artifact_generation(attachment.id, background_tasks=background_tasks)
 
         if convert_to_html:
             try:
@@ -145,7 +123,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     next_semantic = (
                         "1.0.0"
                         if not existing_version
-                        else AttachmentService._next_patch_semver(
+                        else cls._next_patch_semver(
                             existing_version.semantic_version, existing_version.version_number
                         )
                     )
@@ -174,13 +152,14 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         return attachment
 
+    @staticmethod
     def enqueue_conversion(
         attachment_id: int,
         *,
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
-        """Enqueue async generation of preview_pdf for the given attachment."""
+        """Enqueue async generation of the reader artifact for the given attachment."""
         from app.services.conversion_jobs import enqueue_conversion as enqueue_conversion_job
 
         enqueue_conversion_job(

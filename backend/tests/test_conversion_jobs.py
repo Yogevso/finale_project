@@ -23,7 +23,7 @@ def _create_job(
         db,
         created_by=test_user.id,
         document_title=f"Conversion Job Doc {status}",
-        job_type=conversion_jobs.JOB_TYPE_PREVIEW_PDF,
+        job_type=conversion_jobs.JOB_TYPE_READER_HTML,
         job_status=status,
         job_attempts=attempts,
         job_max_attempts=max_attempts,
@@ -127,7 +127,7 @@ def test_job_failure_requeues_with_backoff(db, test_user, monkeypatch):
 
     monkeypatch.setattr(
         AttachmentService,
-        "generate_preview_pdf_artifact",
+        "generate_reader_artifact",
         staticmethod(raise_conversion_error),
     )
 

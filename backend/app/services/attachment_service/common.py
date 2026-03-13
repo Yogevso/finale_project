@@ -30,15 +30,11 @@ def get_storage_backend():
     return _get_backend()
 
 
-AttachmentService = None  # Assigned by package facade at import time.
-
-
 class AttachmentServiceCommonMixin:
     """Core constants and shared attachment lookup logic."""
 
     # Allowed MIME types
     ALLOWED_TYPES = {
-        "application/pdf",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.ms-excel",
@@ -59,15 +55,10 @@ class AttachmentServiceCommonMixin:
     # Max file size: 10MB
     MAX_FILE_SIZE = 10 * 1024 * 1024
     STREAM_CHUNK_SIZE = 1024 * 1024
-    PREVIEW_STATUS_PENDING = "pending"
-    PREVIEW_STATUS_PROCESSING = "processing"
-    PREVIEW_STATUS_READY = "ready"
-    PREVIEW_STATUS_FAILED = "failed"
     READER_STATUS_PENDING = "pending"
     READER_STATUS_PROCESSING = "processing"
     READER_STATUS_READY = "ready"
     READER_STATUS_FAILED = "failed"
-    ARTIFACT_KIND_PREVIEW_PDF = "preview_pdf"
     ARTIFACT_KIND_READER_HTML = "reader_html"
     OFFICE_MIME_TYPES = {
         "application/msword",
@@ -81,8 +72,13 @@ class AttachmentServiceCommonMixin:
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
+    STRUCTURED_READER_MIME_TYPES = {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
     OFFICE_EXTENSIONS = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
     WORD_EXTENSIONS = {".doc", ".docx"}
+    STRUCTURED_READER_EXTENSIONS = {".docx", ".pptx"}
     TEXT_MIME_TYPES = {
         "text/plain",
         "text/markdown",
@@ -90,19 +86,23 @@ class AttachmentServiceCommonMixin:
         "application/json",
     }
     HTML_MIME_TYPES = {"text/html"}
-    CONVERSION_ERROR_MARKERS = (
-        "conversion not available",
-        "error converting",
-        "word conversion not available",
-    )
-
-    def get_upload_dir() -> Path:
+    @classmethod
+    def get_upload_dir(cls) -> Path:
         """Get upload directory path"""
         upload_dir = (
             Path(settings.UPLOAD_DIR) if hasattr(settings, "UPLOAD_DIR") else Path("data/uploads")
         )
         upload_dir.mkdir(parents=True, exist_ok=True)
         return upload_dir
+
+    @classmethod
+    def _supports_structured_reader_artifact(cls, mime_type: str, filename: str) -> bool:
+        normalized_mime = (mime_type or "").lower()
+        suffix = Path(filename or "").suffix.lower()
+        return (
+            normalized_mime in cls.STRUCTURED_READER_MIME_TYPES
+            or suffix in cls.STRUCTURED_READER_EXTENSIONS
+        )
 
     @staticmethod
     def _next_patch_semver(raw_value: Optional[str], fallback_version_number: int) -> str:
@@ -124,20 +124,6 @@ class AttachmentServiceCommonMixin:
         )
 
     @staticmethod
-    def _apply_preview_artifact_to_attachment(
-        attachment: Attachment, artifact: Optional[AttachmentArtifact]
-    ) -> None:
-        if not artifact:
-            return
-        attachment.preview_pdf_status = artifact.status
-        attachment.preview_pdf_storage_key = artifact.storage_key
-        attachment.preview_pdf_mime_type = artifact.mime_type
-        attachment.preview_pdf_size_bytes = artifact.size_bytes
-        attachment.preview_pdf_sha256 = artifact.sha256
-        attachment.preview_pdf_error = artifact.error
-        attachment.preview_pdf_generated_at = artifact.generated_at
-
-    @staticmethod
     def _apply_reader_artifact_to_attachment(
         attachment: Attachment, artifact: Optional[AttachmentArtifact]
     ) -> None:
@@ -150,13 +136,13 @@ class AttachmentServiceCommonMixin:
         attachment.reader_html_error = artifact.error
         attachment.reader_html_generated_at = artifact.generated_at
 
-    @staticmethod
-    def _apply_existing_artifacts_to_attachment(db: Session, attachment: Attachment) -> None:
-        AttachmentService._apply_existing_artifacts_to_attachments(db, [attachment])
+    @classmethod
+    def _apply_existing_artifacts_to_attachment(cls, db: Session, attachment: Attachment) -> None:
+        cls._apply_existing_artifacts_to_attachments(db, [attachment])
 
-    @staticmethod
+    @classmethod
     def _apply_existing_artifacts_to_attachments(
-        db: Session, attachments: List[Attachment]
+        cls, db: Session, attachments: List[Attachment]
     ) -> None:
         if not attachments:
             return
@@ -174,63 +160,25 @@ class AttachmentServiceCommonMixin:
 
         for attachment in attachments:
             by_kind = artifact_map.get(attachment.id, {})
-            AttachmentService._apply_preview_artifact_to_attachment(
-                attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_PREVIEW_PDF)
-            )
-            AttachmentService._apply_reader_artifact_to_attachment(
-                attachment, by_kind.get(AttachmentService.ARTIFACT_KIND_READER_HTML)
+            cls._apply_reader_artifact_to_attachment(
+                attachment, by_kind.get(cls.ARTIFACT_KIND_READER_HTML)
             )
 
-    @staticmethod
+    @classmethod
     def _ensure_artifact_rows(
+        cls,
         db: Session,
         attachment: Attachment,
         *,
         persist: bool = False,
-    ) -> tuple[AttachmentArtifact, AttachmentArtifact]:
-        """Backfill artifact rows from legacy attachment columns when needed."""
-        preview_artifact = AttachmentService._get_artifact_record(
-            db, attachment.id, AttachmentService.ARTIFACT_KIND_PREVIEW_PDF
-        )
-        if not preview_artifact:
-            preview_artifact = AttachmentArtifact(
-                attachment_id=attachment.id,
-                kind=AttachmentService.ARTIFACT_KIND_PREVIEW_PDF,
-                status=attachment.preview_pdf_status
-                or (
-                    AttachmentService.PREVIEW_STATUS_READY
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else AttachmentService.PREVIEW_STATUS_PENDING
-                ),
-                mime_type=attachment.preview_pdf_mime_type
-                or (
-                    "application/pdf"
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else None
-                ),
-                storage_key=attachment.preview_pdf_storage_key
-                or (
-                    (attachment.storage_key or attachment.storage_path)
-                    if (attachment.mime_type or "").lower().startswith("application/pdf")
-                    else None
-                ),
-                size_bytes=attachment.preview_pdf_size_bytes
-                or attachment.size_bytes
-                or attachment.file_size,
-                sha256=attachment.preview_pdf_sha256 or attachment.sha256,
-                error=attachment.preview_pdf_error,
-                generated_at=attachment.preview_pdf_generated_at,
-            )
-            db.add(preview_artifact)
-
-        reader_artifact = AttachmentService._get_artifact_record(
-            db, attachment.id, AttachmentService.ARTIFACT_KIND_READER_HTML
-        )
+    ) -> AttachmentArtifact:
+        """Backfill reader artifact rows from attachment columns when needed."""
+        reader_artifact = cls._get_artifact_record(db, attachment.id, cls.ARTIFACT_KIND_READER_HTML)
         if not reader_artifact:
             reader_artifact = AttachmentArtifact(
                 attachment_id=attachment.id,
-                kind=AttachmentService.ARTIFACT_KIND_READER_HTML,
-                status=attachment.reader_html_status or AttachmentService.READER_STATUS_PENDING,
+                kind=cls.ARTIFACT_KIND_READER_HTML,
+                status=attachment.reader_html_status or cls.READER_STATUS_PENDING,
                 content_text=attachment.reader_html_content,
                 content_json=attachment.reader_toc_json,
                 source=attachment.reader_toc_source,
@@ -239,44 +187,45 @@ class AttachmentServiceCommonMixin:
             )
             db.add(reader_artifact)
 
-        # Keep legacy columns synchronized from artifact records for API compatibility.
-        AttachmentService._apply_preview_artifact_to_attachment(attachment, preview_artifact)
-        AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
+        cls._apply_reader_artifact_to_attachment(attachment, reader_artifact)
 
         if persist:
             db.commit()
             db.refresh(attachment)
-            db.refresh(preview_artifact)
             db.refresh(reader_artifact)
 
-        return preview_artifact, reader_artifact
+        return reader_artifact
 
-    @staticmethod
-    def _chunk_bytes(data: bytes, chunk_size: int = STREAM_CHUNK_SIZE) -> Iterator[bytes]:
+    @classmethod
+    def _chunk_bytes(cls, data: bytes, chunk_size: Optional[int] = None) -> Iterator[bytes]:
+        resolved_chunk_size = chunk_size or cls.STREAM_CHUNK_SIZE
         offset = 0
         while offset < len(data):
-            next_offset = offset + chunk_size
+            next_offset = offset + resolved_chunk_size
             yield data[offset:next_offset]
             offset = next_offset
 
-    @staticmethod
-    def _stream_file(file_path: str, chunk_size: int = STREAM_CHUNK_SIZE) -> Iterator[bytes]:
+    @classmethod
+    def _stream_file(cls, file_path: str, chunk_size: Optional[int] = None) -> Iterator[bytes]:
+        resolved_chunk_size = chunk_size or cls.STREAM_CHUNK_SIZE
         with open(file_path, "rb") as file_obj:
             while True:
-                chunk = file_obj.read(chunk_size)
+                chunk = file_obj.read(resolved_chunk_size)
                 if not chunk:
                     break
                 yield chunk
 
-    @staticmethod
-    def _resolve_local_attachment_path(attachment: Attachment, document_id: int) -> Optional[str]:
+    @classmethod
+    def _resolve_local_attachment_path(
+        cls, attachment: Attachment, document_id: int
+    ) -> Optional[str]:
         storage_ref = attachment.storage_key or attachment.storage_path
 
         # Try storage key/path as-is first (might be an absolute path).
         if storage_ref and os.path.exists(storage_ref):
             return storage_ref
 
-        upload_dir = AttachmentService.get_upload_dir()
+        upload_dir = cls.get_upload_dir()
 
         if storage_ref:
             # Try key relative to uploads directory.
@@ -333,8 +282,9 @@ class AttachmentServiceCommonMixin:
                 detail="You don't have permission to access attachments",
             )
 
-    @staticmethod
+    @classmethod
     def _get_document_for_attachment_access(
+        cls,
         db: Session,
         document_id: int,
         current_user: Optional[User],
@@ -343,31 +293,32 @@ class AttachmentServiceCommonMixin:
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-        AttachmentService._enforce_attachment_access(document, current_user)
+        cls._enforce_attachment_access(document, current_user)
         return document
 
-    @staticmethod
-    def get_attachments(db: Session, document_id: int, current_user: User) -> List[Attachment]:
+    @classmethod
+    def get_attachments(cls, db: Session, document_id: int, current_user: User) -> List[Attachment]:
         """Get all attachments for a document"""
-        AttachmentService._get_document_for_attachment_access(db, document_id, current_user)
+        cls._get_document_for_attachment_access(db, document_id, current_user)
         attachments = (
             db.query(Attachment)
             .filter(Attachment.document_id == document_id)
             .order_by(Attachment.uploaded_at.desc())
             .all()
         )
-        AttachmentService._apply_existing_artifacts_to_attachments(db, attachments)
+        cls._apply_existing_artifacts_to_attachments(db, attachments)
         return attachments
 
-    @staticmethod
+    @classmethod
     def get_attachment(
+        cls,
         db: Session,
         document_id: int,
         attachment_id: int,
         current_user: Optional[User] = None,
     ) -> Attachment:
         """Get a specific attachment"""
-        AttachmentService._get_document_for_attachment_access(db, document_id, current_user)
+        cls._get_document_for_attachment_access(db, document_id, current_user)
 
         attachment = (
             db.query(Attachment)
@@ -380,11 +331,12 @@ class AttachmentServiceCommonMixin:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
             )
 
-        AttachmentService._apply_existing_artifacts_to_attachment(db, attachment)
+        cls._apply_existing_artifacts_to_attachment(db, attachment)
         return attachment
 
-    @staticmethod
+    @classmethod
     async def upload_attachment(
+        cls,
         db: Session,
         document_id: int,
         file: UploadFile,
@@ -416,7 +368,6 @@ class AttachmentServiceCommonMixin:
         original_filename = file.filename or "unnamed"
         file_ext = Path(original_filename).suffix.lower()
         allowed_extensions = {
-            ".pdf",
             ".doc",
             ".docx",
             ".xls",
@@ -437,7 +388,7 @@ class AttachmentServiceCommonMixin:
         }
 
         if (
-            content_type not in AttachmentService.ALLOWED_TYPES
+            content_type not in cls.ALLOWED_TYPES
             and file_ext not in allowed_extensions
         ):
             raise HTTPException(
@@ -447,7 +398,7 @@ class AttachmentServiceCommonMixin:
 
         # Read file content
         content = await file.read()
-        attachment = AttachmentService.create_attachment_from_bytes(
+        attachment = cls.create_attachment_from_bytes(
             db=db,
             document_id=document_id,
             content=content,

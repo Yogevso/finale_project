@@ -260,7 +260,9 @@ class PortalDocumentsQueryHandler:
                         file_size=att.file_size,
                         mime_type=att.mime_type,
                         created_at=att.uploaded_at,
-                        download_url=f"/api/v1/documents/{document.id}/attachments/{att.id}/download",
+                        download_url=(
+                            f"/api/v1/portal/documents/{document.id}/attachments/{att.id}/download"
+                        ),
                     )
                     for att in attachments
                 ],

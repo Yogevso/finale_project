@@ -19,11 +19,10 @@ test.describe('Audit Analytics', () => {
     await expect(page.getByTestId('audience-type-company')).toBeVisible()
     await expect(page.getByTestId('audience-type-public')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Export' }).click()
     const exportResponsePromise = page.waitForResponse((response) =>
       response.url().includes('/api/v1/analytics/export/csv'),
     )
-    await page.getByRole('button', { name: 'Export as CSV' }).click()
+    await page.getByRole('button', { name: 'Export CSV' }).click()
     const exportResponse = await exportResponsePromise
 
     expect(exportResponse.ok()).toBeTruthy()

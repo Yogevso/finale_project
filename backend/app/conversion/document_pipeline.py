@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from typing import Any
 
 from app.conversion.document_strategies import (
+    DocumentConversionOutput,
     DocumentConverterStrategy,
-    PdfConverterStrategy,
+    PowerPointConverterStrategy,
     WordConverterStrategy,
 )
 from app.conversion.models import DocumentConversionRequest
@@ -26,21 +28,36 @@ class DocumentConversionPipeline:
         self,
         *,
         strategies: Sequence[DocumentConverterStrategy] | None = None,
-        pdf_converter: PdfConverterStrategy | None = None,
         word_converter: WordConverterStrategy | None = None,
+        powerpoint_converter: PowerPointConverterStrategy | None = None,
         converter_registry: DocumentConverterPluginRegistry | None = None,
     ) -> None:
-        self._pdf_converter = pdf_converter or PdfConverterStrategy()
         self._word_converter = word_converter or WordConverterStrategy()
+        self._powerpoint_converter = powerpoint_converter or PowerPointConverterStrategy()
         if converter_registry is not None:
             self._converter_registry = converter_registry
         elif strategies is not None:
             self._converter_registry = DocumentConverterPluginRegistry(strategies)
         else:
             self._converter_registry = build_default_document_converter_registry(
-                pdf_converter=self._pdf_converter,
                 word_converter=self._word_converter,
+                powerpoint_converter=self._powerpoint_converter,
             )
+
+    @staticmethod
+    def _build_request(content: bytes, mime_type: str, filename: str) -> DocumentConversionRequest:
+        return DocumentConversionRequest(
+            content=content,
+            mime_type=mime_type,
+            filename=filename,
+        )
+
+    def describe_strategy_capabilities(self) -> dict[str, tuple[str, ...]]:
+        """Expose registered strategy outputs for diagnostics and DI consumers."""
+        return {
+            plugin.name: plugin.capabilities.as_names()
+            for plugin in self._converter_registry.plugins
+        }
 
     def convert_document_to_html(
         self,
@@ -48,11 +65,7 @@ class DocumentConversionPipeline:
         mime_type: str,
         filename: str = "",
     ) -> str | None:
-        request = DocumentConversionRequest(
-            content=content,
-            mime_type=mime_type,
-            filename=filename,
-        )
+        request = self._build_request(content, mime_type, filename)
         converter_plugin = self._converter_registry.select(request)
         if converter_plugin:
             return converter_plugin.convert_to_html(request)
@@ -67,12 +80,36 @@ class DocumentConversionPipeline:
     def convert_word_to_html(self, content: bytes) -> str | None:
         return self._word_converter.convert_word_to_html(content)
 
-    def convert_pdf_to_reader_artifact(self, content: bytes) -> dict:
-        return self._pdf_converter.convert_pdf_to_reader_artifact(content)
+    def convert_document_to_reader_artifact(
+        self,
+        content: bytes,
+        mime_type: str,
+        filename: str = "",
+    ) -> dict[str, Any] | None:
+        request = self._build_request(content, mime_type, filename)
+        converter_plugin = self._converter_registry.select(request)
+        if converter_plugin and converter_plugin.capabilities.supports(
+            DocumentConversionOutput.READER_ARTIFACT
+        ):
+            artifact = converter_plugin.convert_to_reader_artifact(request)
+            if artifact is not None:
+                return artifact
+        elif converter_plugin:
+            logger.info(
+                "Strategy %s matched mime_type=%s filename=%s but does not support reader artifacts; outputs=%s",
+                converter_plugin.name,
+                mime_type,
+                filename,
+                converter_plugin.capabilities.as_names(),
+            )
+            return None
 
-    def extract_pdf_toc(self, content: bytes) -> dict:
-        return self._pdf_converter.extract_pdf_toc(content)
-
+        logger.info(
+            "No reader-artifact conversion strategy matched mime_type=%s filename=%s",
+            mime_type,
+            filename,
+        )
+        return None
 
 _document_conversion_pipeline = DocumentConversionPipeline()
 

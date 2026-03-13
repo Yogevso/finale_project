@@ -27,10 +27,13 @@ export function useDocumentDetailPageBundleQuery(
   documentId: DocumentIdInput,
   options?: {
     enabled?: boolean
-    refetchInterval?: (query: {
-      state: { data: DocumentDetailPageBundle | undefined }
-    }) => number | false
-  },
+    refetchInterval?:
+      | number
+      | false
+      | ((query: {
+          state: { data: DocumentDetailPageBundle | undefined }
+        }) => number | false)
+  }
 ) {
   const parsedDocumentId = parseDocumentId(documentId)
 
@@ -46,8 +49,11 @@ export function useDocumentAttachmentsQuery(
   documentId: DocumentIdInput,
   options?: {
     enabled?: boolean
-    refetchInterval?: (query: { state: { data: Attachment[] | undefined } }) => number | false
-  },
+    refetchInterval?:
+      | number
+      | false
+      | ((query: { state: { data: Attachment[] | undefined } }) => number | false)
+  }
 ) {
   const parsedDocumentId = parseDocumentId(documentId)
 

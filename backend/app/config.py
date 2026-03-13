@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
     SESSION_INACTIVITY_DAYS: int = 30
+    REVIEW_SLA_REMINDER_HOURS: int = 48
+    REVIEW_SLA_ESCALATION_HOURS: int = 96
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -72,7 +74,7 @@ class Settings(BaseSettings):
 
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
-    ALLOWED_EXTENSIONS: set[str] = {".pdf", ".doc", ".docx", ".txt"}
+    ALLOWED_EXTENSIONS: set[str] = {".docx", ".pptx", ".txt"}
     LIBREOFFICE_BIN: Optional[str] = None
 
     # Logging

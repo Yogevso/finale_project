@@ -116,7 +116,7 @@ export const AnalyticsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
 
     getAnalyticsExportUrl(
       report: 'overview' | 'engagement' | 'users' | 'content' | 'feedback',
-      format: 'csv' | 'pdf',
+      format: 'csv',
       params?: AnalyticsQueryParams,
     ): string {
       const searchParams = new URLSearchParams({ report })
@@ -127,7 +127,7 @@ export const AnalyticsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base
 
     async downloadAnalyticsExport(
       report: 'overview' | 'engagement' | 'users' | 'content' | 'feedback',
-      format: 'csv' | 'pdf',
+      format: 'csv',
       params?: AnalyticsQueryParams,
     ): Promise<Blob> {
       const response = await this.client.get(`/analytics/export/${format}`, {

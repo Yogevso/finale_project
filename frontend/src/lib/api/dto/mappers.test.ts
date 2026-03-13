@@ -2,16 +2,21 @@ import { describe, expect, it } from 'vitest'
 
 import type {
   CollaborationSnapshotListResponseDto,
+  DocumentDetailPageBundleDto,
   DocumentListResponseDto,
   RbacPoliciesResponseDto,
 } from './contracts'
 import {
   mapCollaborationSnapshotListResponseDto,
+  mapDocumentDetailPageBundleDto,
   mapDocumentListResponseDto,
   mapRbacPoliciesResponseDto,
+  toDocumentCreateDto,
+  toDocumentUpdateDto,
 } from './mappers'
 import {
   buildCollaborationSnapshotListResponseDto,
+  buildDocumentDetailPageBundleDto,
   buildDocumentDto,
   buildDocumentListResponseDto,
   buildRbacPoliciesResponseDto,
@@ -61,5 +66,39 @@ describe('api dto mappers', () => {
     expect(mapped.document_id).toBe(42)
     expect(mapped.snapshots[0].name).toBe('S1')
     expect(mapped.total).toBe(1)
+  })
+
+  it('normalizes empty due dates in document write payloads', () => {
+    expect(
+      toDocumentCreateDto({
+        title: 'Policy',
+        due_date: '',
+      }),
+    ).toEqual({
+      title: 'Policy',
+      due_date: null,
+    })
+
+    expect(
+      toDocumentUpdateDto({
+        visibility: 'public',
+        reason: 'Expand audience',
+        due_date: '',
+      }),
+    ).toEqual({
+      visibility: 'public',
+      reason: 'Expand audience',
+      due_date: null,
+    })
+  })
+
+  it('fails loudly in development when the document detail bundle is missing required fields', () => {
+    const source = buildDocumentDetailPageBundleDto({
+      document: undefined,
+    }) as unknown as DocumentDetailPageBundleDto
+
+    expect(() => mapDocumentDetailPageBundleDto(source)).toThrow(
+      'DTO mapping invariant failed: DocumentDetailPageBundleDto.document is required',
+    )
   })
 })

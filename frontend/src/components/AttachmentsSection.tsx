@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
+import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -15,6 +16,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const { downloadAttachment, downloadingAttachmentId } = useAttachmentDownload(documentId)
 
   const { data: attachments = [], isLoading } = useDocumentAttachmentsQuery(documentId)
 
@@ -44,16 +46,11 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
     },
   })
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
     if (file) {
       uploadMutation.mutate(file)
     }
-  }
-
-  const handleDownload = (attachment: Attachment) => {
-    const url = api.getAttachmentDownloadUrl(documentId, attachment.id)
-    window.open(url, '_blank')
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -63,14 +60,14 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   }
 
   const getFileIcon = (mimeType: string): string => {
-    if (mimeType.startsWith('image/')) return '🖼️'
-    if (mimeType.startsWith('video/')) return '🎬'
-    if (mimeType.startsWith('audio/')) return '🎵'
-    if (mimeType === 'application/pdf') return '📄'
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊'
-    if (mimeType.includes('document') || mimeType.includes('word')) return '📝'
-    if (mimeType.includes('zip') || mimeType.includes('archive')) return '📦'
-    return '📎'
+    if (mimeType.startsWith('image/')) return 'IMG'
+    if (mimeType.startsWith('video/')) return 'VID'
+    if (mimeType.startsWith('audio/')) return 'AUD'
+    if (mimeType.includes('presentation')) return 'PPT'
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return 'XLS'
+    if (mimeType.includes('document') || mimeType.includes('word')) return 'DOC'
+    if (mimeType.includes('zip') || mimeType.includes('archive')) return 'ZIP'
+    return 'ATT'
   }
 
   if (isLoading) {
@@ -105,7 +102,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
 
       {attachments.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-2">📎</div>
+          <div className="text-4xl mb-2">ATT</div>
           <p className="text-slate-500 text-sm">No attachments yet</p>
           {isEditor && (
             <p className="text-slate-400 text-xs mt-1">Upload files to attach them to this document</p>
@@ -123,17 +120,20 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
                 <div className="min-w-0">
                   <p className="font-medium text-slate-900 truncate">{attachment.filename}</p>
                   <p className="text-xs text-slate-500">
-                    {formatFileSize(attachment.file_size)} • {new Date(attachment.uploaded_at).toLocaleDateString()}
-                    {attachment.uploader_name && ` • ${attachment.uploader_name}`}
+                    {formatFileSize(attachment.file_size)} · {new Date(attachment.uploaded_at).toLocaleDateString()}
+                    {attachment.uploader_name && ` · ${attachment.uploader_name}`}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => handleDownload(attachment)}
+                  onClick={() => {
+                    void downloadAttachment(attachment)
+                  }}
                   className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg"
                   title="Download"
+                  disabled={downloadingAttachmentId === attachment.id}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

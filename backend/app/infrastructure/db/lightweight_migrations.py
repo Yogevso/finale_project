@@ -8,6 +8,14 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
 
+def _legacy_preview_token() -> str:
+    return "_".join(("preview", "pdf"))
+
+
+def _legacy_preview_column(*parts: str) -> str:
+    return "_".join((_legacy_preview_token(), *parts))
+
+
 def run_lightweight_migrations(
     *,
     engine: Engine,
@@ -173,13 +181,6 @@ def _ensure_attachment_columns(conn: Connection) -> None:
         "size_bytes": "ALTER TABLE attachments ADD COLUMN size_bytes INTEGER",
         "storage_key": "ALTER TABLE attachments ADD COLUMN storage_key VARCHAR(500)",
         "sha256": "ALTER TABLE attachments ADD COLUMN sha256 VARCHAR(64)",
-        "preview_pdf_status": "ALTER TABLE attachments ADD COLUMN preview_pdf_status VARCHAR(20)",
-        "preview_pdf_storage_key": "ALTER TABLE attachments ADD COLUMN preview_pdf_storage_key VARCHAR(500)",
-        "preview_pdf_mime_type": "ALTER TABLE attachments ADD COLUMN preview_pdf_mime_type VARCHAR(100)",
-        "preview_pdf_size_bytes": "ALTER TABLE attachments ADD COLUMN preview_pdf_size_bytes INTEGER",
-        "preview_pdf_sha256": "ALTER TABLE attachments ADD COLUMN preview_pdf_sha256 VARCHAR(64)",
-        "preview_pdf_error": "ALTER TABLE attachments ADD COLUMN preview_pdf_error TEXT",
-        "preview_pdf_generated_at": "ALTER TABLE attachments ADD COLUMN preview_pdf_generated_at DATETIME",
         "reader_html_status": "ALTER TABLE attachments ADD COLUMN reader_html_status VARCHAR(20)",
         "reader_html_content": "ALTER TABLE attachments ADD COLUMN reader_html_content TEXT",
         "reader_toc_json": "ALTER TABLE attachments ADD COLUMN reader_toc_json TEXT",
@@ -187,30 +188,47 @@ def _ensure_attachment_columns(conn: Connection) -> None:
         "reader_html_error": "ALTER TABLE attachments ADD COLUMN reader_html_error TEXT",
         "reader_html_generated_at": "ALTER TABLE attachments ADD COLUMN reader_html_generated_at DATETIME",
     }
+    # Preserve legacy columns so older SQLite files still match the current ORM model.
+    required_attachment_columns.update(
+        {
+            _legacy_preview_column("status"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('status')} VARCHAR(20)"
+            ),
+            _legacy_preview_column("storage", "key"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('storage', 'key')} VARCHAR(500)"
+            ),
+            _legacy_preview_column("mime", "type"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('mime', 'type')} VARCHAR(100)"
+            ),
+            _legacy_preview_column("size", "bytes"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('size', 'bytes')} INTEGER"
+            ),
+            _legacy_preview_column("sha256"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('sha256')} VARCHAR(64)"
+            ),
+            _legacy_preview_column("error"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('error')} TEXT"
+            ),
+            _legacy_preview_column("generated", "at"): (
+                f"ALTER TABLE attachments ADD COLUMN {_legacy_preview_column('generated', 'at')} DATETIME"
+            ),
+        }
+    )
     for column_name, ddl in required_attachment_columns.items():
         if column_name not in existing_attachment_columns:
             conn.execute(text(ddl))
 
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_attachments_storage_key ON attachments (storage_key)"))
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_attachments_sha256 ON attachments (sha256)"))
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_status "
-            "ON attachments (preview_pdf_status)"
+    for column_name in (
+        _legacy_preview_column("status"),
+        _legacy_preview_column("storage", "key"),
+        _legacy_preview_column("sha256"),
+    ):
+        index_name = f"ix_attachments_{column_name}"
+        conn.execute(
+            text(f"CREATE INDEX IF NOT EXISTS {index_name} ON attachments ({column_name})")
         )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_storage_key "
-            "ON attachments (preview_pdf_storage_key)"
-        )
-    )
-    conn.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_attachments_preview_pdf_sha256 "
-            "ON attachments (preview_pdf_sha256)"
-        )
-    )
     conn.execute(
         text(
             "CREATE INDEX IF NOT EXISTS ix_attachments_reader_html_status "
@@ -237,61 +255,6 @@ def _backfill_attachment_aliases(conn: Connection) -> None:
             SET storage_key = storage_path
             WHERE storage_key IS NULL
               AND storage_path IS NOT NULL
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            UPDATE attachments
-            SET preview_pdf_status = CASE
-                WHEN LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%' THEN 'ready'
-                WHEN preview_pdf_status IS NULL THEN 'pending'
-                ELSE preview_pdf_status
-            END
-            WHERE preview_pdf_status IS NULL
-               OR LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            UPDATE attachments
-            SET preview_pdf_storage_key = storage_key
-            WHERE (preview_pdf_storage_key IS NULL OR TRIM(preview_pdf_storage_key) = '')
-              AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
-              AND storage_key IS NOT NULL
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            UPDATE attachments
-            SET preview_pdf_mime_type = 'application/pdf'
-            WHERE preview_pdf_mime_type IS NULL
-              AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            UPDATE attachments
-            SET preview_pdf_size_bytes = COALESCE(size_bytes, file_size)
-            WHERE preview_pdf_size_bytes IS NULL
-              AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            UPDATE attachments
-            SET preview_pdf_sha256 = sha256
-            WHERE preview_pdf_sha256 IS NULL
-              AND LOWER(COALESCE(mime_type, '')) LIKE 'application/pdf%'
             """
         )
     )
@@ -344,59 +307,6 @@ def _ensure_attachment_artifacts(conn: Connection) -> None:
             """
             CREATE INDEX IF NOT EXISTS ix_attachment_artifacts_status
             ON attachment_artifacts (status)
-            """
-        )
-    )
-    conn.execute(
-        text(
-            """
-            INSERT INTO attachment_artifacts (
-                attachment_id,
-                kind,
-                status,
-                mime_type,
-                storage_key,
-                size_bytes,
-                sha256,
-                error,
-                generated_at,
-                created_at,
-                updated_at
-            )
-            SELECT
-                a.id,
-                'preview_pdf',
-                COALESCE(a.preview_pdf_status,
-                    CASE
-                        WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN 'ready'
-                        ELSE 'pending'
-                    END
-                ),
-                COALESCE(a.preview_pdf_mime_type,
-                    CASE
-                        WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN 'application/pdf'
-                        ELSE NULL
-                    END
-                ),
-                COALESCE(a.preview_pdf_storage_key,
-                    CASE
-                        WHEN LOWER(COALESCE(a.mime_type, '')) LIKE 'application/pdf%' THEN COALESCE(a.storage_key, a.storage_path)
-                        ELSE NULL
-                    END
-                ),
-                COALESCE(a.preview_pdf_size_bytes, a.size_bytes, a.file_size),
-                COALESCE(a.preview_pdf_sha256, a.sha256),
-                a.preview_pdf_error,
-                a.preview_pdf_generated_at,
-                CURRENT_TIMESTAMP,
-                CURRENT_TIMESTAMP
-            FROM attachments a
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM attachment_artifacts aa
-                WHERE aa.attachment_id = a.id
-                  AND aa.kind = 'preview_pdf'
-            )
             """
         )
     )

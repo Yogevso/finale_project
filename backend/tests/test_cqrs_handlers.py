@@ -138,6 +138,9 @@ def test_list_documents_query_handler_delegates_to_service():
             "visibility": None,
             "category": "Guides",
             "search": "release",
+            "company_id": None,
+            "date_from": None,
+            "date_to": None,
         }
     ]
 

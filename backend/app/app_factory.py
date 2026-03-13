@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +49,7 @@ class FastAPIAppFactory:
         self._configure_lifecycle_events(app)
         self._register_internal_routes(app)
         self._router_registry.register(app)
+        self._configure_openapi(app)
         return app
 
     @staticmethod
@@ -53,6 +57,8 @@ class FastAPIAppFactory:
         # Shared composition root.
         app.state.container = build_container()
         app.state.feature_flags = get_backend_feature_flags()
+        app.state.runtime_init_lock = threading.Lock()
+        app.state.runtime_initialized = False
         if is_backend_feature_enabled(BackendFeatureFlag.PROJECTION_CACHE):
             app.state.projection_cache = get_projection_cache()
             register_projection_invalidation_listeners()
@@ -89,6 +95,24 @@ class FastAPIAppFactory:
             )
 
     @staticmethod
+    def _configure_openapi(app: FastAPI) -> None:
+        if settings.APP_ENV.lower() != "testing":
+            return
+
+        snapshot_path = Path(__file__).resolve().parents[1] / "openapi.contract.json"
+        if not snapshot_path.exists():
+            logger.warning("OpenAPI snapshot not found for testing mode: %s", snapshot_path)
+            return
+
+        def openapi_from_snapshot():
+            if app.openapi_schema is None:
+                with snapshot_path.open("r", encoding="utf-8") as snapshot_file:
+                    app.openapi_schema = json.load(snapshot_file)
+            return app.openapi_schema
+
+        app.openapi = openapi_from_snapshot
+
+    @staticmethod
     def _configure_lifecycle_events(app: FastAPI) -> None:
         @app.on_event("startup")
         async def startup_event():
@@ -100,7 +124,14 @@ class FastAPIAppFactory:
                 app.state.feature_flags.projection_cache,
                 app.state.feature_flags.idempotency_middleware,
             )
-            init_db()
+            with app.state.runtime_init_lock:
+                if app.state.runtime_initialized:
+                    logger.info("Runtime database initialization already completed; skipping repeat init")
+                else:
+                    init_db()
+                    app.state.runtime_initialized = True
+                    logger.info("Database initialized")
+
             try:
                 from app.services.rbac_service import RbacService
 
@@ -111,7 +142,6 @@ class FastAPIAppFactory:
                     db.close()
             except Exception as exc:
                 logger.warning("RBAC publish skipped: %s", exc)
-            logger.info("Database initialized")
 
     @staticmethod
     def _register_internal_routes(app: FastAPI) -> None:

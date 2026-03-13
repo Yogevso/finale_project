@@ -33,6 +33,7 @@ export function EditForm({
     category?: string | null
     release_branch?: string | null
     tags?: string | null
+    due_date?: string | null
   }
   onSave: (data: DocumentUpdate) => void
   onCancel: () => void
@@ -48,6 +49,7 @@ export function EditForm({
     category: document.category || '',
     release_branch: document.release_branch || '',
     tags: document.tags || '',
+    due_date: document.due_date || '',
   })
   const [pendingVisibilityConfirmation, setPendingVisibilityConfirmation] =
     useState<PendingVisibilityConfirmation | null>(null)
@@ -190,6 +192,16 @@ export function EditForm({
               placeholder="e.g., R580"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+          <input
+            type="date"
+            value={formData.due_date || ''}
+            onChange={(e) => setFormData({ ...formData, due_date: e.target.value || null })}
+            className="input-field"
+          />
         </div>
 
         <div>

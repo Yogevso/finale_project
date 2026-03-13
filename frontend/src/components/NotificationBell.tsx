@@ -5,6 +5,7 @@ import {
   Bell,
   Check,
   CheckCheck,
+  ClipboardCheck,
   FileText,
   MessageSquare,
   Trash2,
@@ -157,6 +158,12 @@ export default function NotificationBell() {
       case 'document_published':
       case 'version_published':
         return <FileText className="w-4 h-4 text-emerald-500" />
+      case 'review_submitted':
+      case 'review_approved':
+      case 'review_rejected':
+      case 'review_reminder':
+      case 'review_escalated':
+        return <ClipboardCheck className="w-4 h-4 text-amber-500" />
       case 'system':
       default:
         return <AlertCircle className="w-4 h-4 text-slate-500" />

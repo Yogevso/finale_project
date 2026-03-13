@@ -10,11 +10,14 @@ import {
 
 function createClientMocks(): DocumentsUseCasesClient {
   return {
+    archiveDocument: vi.fn(),
     createDocument: vi.fn(),
     createVersion: vi.fn(),
     deleteDocument: vi.fn(),
     generateWordAttachment: vi.fn(),
+    getDocumentCalendarExport: vi.fn(),
     getDocuments: vi.fn(),
+    restoreDocument: vi.fn(),
     updateDocument: vi.fn(),
     uploadDocument: vi.fn(),
   }
@@ -28,6 +31,10 @@ describe('documents use cases', () => {
       search: '',
       statusFilter: '',
       visibilityFilter: '',
+      categoryFilter: '',
+      companyIdFilter: null,
+      dateFrom: '',
+      dateTo: '',
     })
 
     expect(params).toEqual({
@@ -36,6 +43,10 @@ describe('documents use cases', () => {
       search: undefined,
       status: undefined,
       visibility: undefined,
+      category: undefined,
+      company_id: undefined,
+      date_from: undefined,
+      date_to: undefined,
     })
   })
 
@@ -115,6 +126,7 @@ describe('documents use cases', () => {
     vi.mocked(client.uploadDocument).mockResolvedValue({ id: 9 } as never)
     const useCases = createDocumentsUseCases(client)
     const file = { name: 'policy.docx', type: '', size: 10 } as File
+    const onUploadProgress = vi.fn()
 
     await useCases.uploadDocument(file, {
       title: '  Policy  ',
@@ -122,7 +134,8 @@ describe('documents use cases', () => {
       category: '  Security',
       releaseBranch: '',
       tags: 'tag-a,tag-b',
-    })
+      status: 'approved',
+    }, { onUploadProgress })
 
     expect(client.uploadDocument).toHaveBeenCalledWith(file, {
       title: 'Policy',
@@ -130,9 +143,12 @@ describe('documents use cases', () => {
       category: 'Security',
       release_branch: undefined,
       tags: 'tag-a,tag-b',
+      status: 'approved',
       visibility: 'internal',
       company_ids: undefined,
-    })
+      release_notes: undefined,
+      content_file: undefined,
+    }, { onUploadProgress })
   })
 
   it('requires company selection when creating a company-visible document', async () => {
@@ -214,14 +230,24 @@ describe('documents use cases', () => {
   it('validates upload files by type and size', () => {
     const unsupportedFile = { name: 'notes.txt', type: 'text/plain', size: 128 } as File
     const oversizedFile = {
-      name: 'archive.pdf',
-      type: 'application/pdf',
+      name: 'deck.pptx',
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       size: DOCUMENT_UPLOAD_MAX_SIZE_BYTES + 1,
     } as File
     const validFile = { name: 'guide.docx', type: '', size: 200 } as File
 
-    expect(validateDocumentUploadFile(unsupportedFile)).toBe('Only PDF and Word documents are allowed')
+    expect(validateDocumentUploadFile(unsupportedFile)).toBe('Only DOCX and PPTX files are allowed')
     expect(validateDocumentUploadFile(oversizedFile)).toBe('File size must be less than 10MB')
     expect(validateDocumentUploadFile(validFile)).toBeNull()
+  })
+
+  it('rejects PDF uploads in the client validation layer', () => {
+    const pdfFile = {
+      name: 'legacy.pdf',
+      type: 'application/pdf',
+      size: 2048,
+    } as File
+
+    expect(validateDocumentUploadFile(pdfFile)).toBe('Only DOCX and PPTX files are allowed')
   })
 })

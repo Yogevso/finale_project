@@ -83,10 +83,7 @@ The dashboard shows key metrics at a glance:
 4. Maximum file size: 10MB
 
 #### Supported File Types
-- Documents: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX
-- Images: JPG, PNG, GIF, SVG
-- Text: TXT, MD, CSV
-- Archives: ZIP
+- Documents: DOCX, PPTX
 
 #### Downloading Attachments
 - Click attachment name or download icon

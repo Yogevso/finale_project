@@ -18,7 +18,13 @@ class CommentRepository(BaseRepository):
                 Comment.document_id == document_id,
                 Comment.parent_id == None,  # noqa: E711
             )
-            .options(joinedload(Comment.user), joinedload(Comment.replies).joinedload(Comment.user))
+            .options(
+                joinedload(Comment.user),
+                joinedload(Comment.replies).joinedload(Comment.user),
+                joinedload(Comment.replies)
+                .joinedload(Comment.replies)
+                .joinedload(Comment.user),
+            )
             .order_by(Comment.created_at.desc())
             .all()
         )
@@ -40,6 +46,9 @@ class CommentRepository(BaseRepository):
             query = query.options(
                 joinedload(Comment.user),
                 joinedload(Comment.replies).joinedload(Comment.user),
+                joinedload(Comment.replies)
+                .joinedload(Comment.replies)
+                .joinedload(Comment.user),
             )
         return query.first()
 
@@ -54,4 +63,3 @@ class CommentRepository(BaseRepository):
 
     def delete_replies_for_parent(self, parent_comment_id: int) -> None:
         self.db.query(Comment).filter(Comment.parent_id == parent_comment_id).delete()
-

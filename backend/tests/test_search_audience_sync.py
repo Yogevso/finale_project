@@ -1,5 +1,7 @@
 """Tests for search index audience synchronization (Task 184)."""
 
+import uuid
+
 from sqlalchemy import text
 
 from app.domain.specifications.queries import VisibilitySpec
@@ -56,6 +58,36 @@ class TestVisibilitySpecSqlClauses:
 
 class TestSearchIndexSyncService:
     """SearchIndexSyncService keeps FTS5 in sync with audience changes."""
+
+    def test_sync_document_creates_missing_fts_table(self, db, test_user):
+        """sync_document should self-heal when the FTS table is missing."""
+        from app.models import Document, DocumentStatus
+        from app.services.search_index_service import SearchIndexSyncService
+
+        doc = Document(
+            title="FTS bootstrap document",
+            document_number=f"DOC-FTS-{uuid.uuid4().hex[:6].upper()}",
+            description="Search index bootstrap",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        svc = SearchIndexSyncService(db)
+        svc.sync_document(doc.id)
+
+        table_exists = db.execute(
+            text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'documents_fts'")
+        ).scalar()
+        indexed_row = db.execute(
+            text("SELECT rowid FROM documents_fts WHERE rowid = :doc_id"),
+            {"doc_id": doc.id},
+        ).scalar()
+
+        assert table_exists == 1
+        assert indexed_row == doc.id
 
     def test_sync_document_executes_delete_and_insert(self, db):
         """sync_document should run two SQL statements without error."""

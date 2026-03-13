@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
+import { api } from '@/lib/api'
 import {
   buildDocumentsListQueryParams,
   documentsUseCases,
@@ -9,7 +10,8 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
-import type { DocumentStatus, DocumentVisibility } from '@/types'
+import { buildSavedViewPayload, parseSavedDocumentsView } from '@/pages/documents/lib/savedViews'
+import type { BulkDocumentMetadataUpdate, DocumentStatus, DocumentVisibility } from '@/types'
 
 type VisibilityChangeRequest = {
   id: number
@@ -56,6 +58,13 @@ export function useDocumentsPageController() {
   const debouncedSearch = useDebouncedValue(search, 300)
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | ''>('')
   const [visibilityFilter, setVisibilityFilter] = useState<DocumentVisibility | ''>('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [companyIdFilter, setCompanyIdFilter] = useState<number | null>(null)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [activeSavedViewId, setActiveSavedViewId] = useState<number | null>(null)
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([])
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false)
   const statusDetailsRef = useRef<HTMLDetailsElement>(null)
   const visibilityDetailsRef = useRef<HTMLDetailsElement>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -82,12 +91,42 @@ export function useDocumentsPageController() {
     search: debouncedSearch,
     statusFilter,
     visibilityFilter,
+    categoryFilter,
+    companyIdFilter,
+    dateFrom,
+    dateTo,
   })
 
   const documentsQuery = useQuery({
     queryKey: queryKeys.documents.list(listQueryParams),
     queryFn: () => documentsUseCases.listDocuments(listQueryParams),
   })
+
+  const companiesQuery = useQuery({
+    queryKey: ['companies', 'documents-filter'],
+    queryFn: () => api.getCompanies({ page: 1, per_page: 100 }),
+    enabled: isManager,
+  })
+
+  const savedViewsQuery = useQuery({
+    queryKey: ['documents', 'saved-views'],
+    queryFn: () => api.getSavedSearches(),
+  })
+
+  const savedViews = useMemo(
+    () => (savedViewsQuery.data ?? []).map(parseSavedDocumentsView),
+    [savedViewsQuery.data],
+  )
+
+  useEffect(() => {
+    const currentItems = documentsQuery.data?.items
+    if (!currentItems) {
+      return
+    }
+
+    const currentPageIds = new Set(currentItems.map((document) => document.id))
+    setSelectedDocumentIds((previous) => previous.filter((documentId) => currentPageIds.has(documentId)))
+  }, [documentsQuery.data?.items])
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => documentsUseCases.deleteDocument(id),
@@ -96,12 +135,33 @@ export function useDocumentsPageController() {
     },
     onError: (error: unknown) => {
       const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
-      console.error('Delete error:', error)
       alert(
         apiError.response?.data?.detail ||
           apiError.message ||
           'Failed to delete document. You may need Manager or Admin role.',
       )
+    },
+  })
+
+  const archiveMutation = useMutation({
+    mutationFn: (id: number) => documentsUseCases.archiveDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to archive document.')
+    },
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: number) => documentsUseCases.restoreDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to restore document.')
     },
   })
 
@@ -120,22 +180,78 @@ export function useDocumentsPageController() {
       companyIds?: number[]
     }) => documentsUseCases.updateVisibility(id, visibility, ifMatch, reason, companyIds),
     onSuccess: (_, variables) => {
-      setVisibilityOverrides((prev) => {
-        const next = { ...prev }
-        delete next[variables.id]
-        return next
+      setVisibilityOverrides((previous) => {
+        const nextOverrides = { ...previous }
+        delete nextOverrides[variables.id]
+        return nextOverrides
       })
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     },
     onError: (error: unknown, variables) => {
-      setVisibilityOverrides((prev) => {
-        const next = { ...prev }
-        delete next[variables.id]
-        return next
+      setVisibilityOverrides((previous) => {
+        const nextOverrides = { ...previous }
+        delete nextOverrides[variables.id]
+        return nextOverrides
       })
       alert(getVisibilityUpdateErrorMessage(error))
     },
   })
+
+  const bulkMetadataMutation = useMutation({
+    mutationFn: (payload: BulkDocumentMetadataUpdate) => api.bulkUpdateDocumentMetadata(payload),
+    onSuccess: () => {
+      setShowBulkEditModal(false)
+      setSelectedDocumentIds([])
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to update document metadata.')
+    },
+  })
+
+  const saveViewMutation = useMutation({
+    mutationFn: (name: string) =>
+      api.createSavedSearch({
+        name,
+        ...buildSavedViewPayload({
+          search,
+          statusFilter,
+          visibilityFilter,
+          categoryFilter,
+          companyIdFilter,
+          dateFrom,
+          dateTo,
+        }),
+      }),
+    onSuccess: (savedView) => {
+      setActiveSavedViewId(savedView.id)
+      queryClient.invalidateQueries({ queryKey: ['documents', 'saved-views'] })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to save this view.')
+    },
+  })
+
+  const deleteViewMutation = useMutation({
+    mutationFn: (savedViewId: number) => api.deleteSavedSearch(savedViewId),
+    onSuccess: (_, savedViewId) => {
+      if (activeSavedViewId === savedViewId) {
+        setActiveSavedViewId(null)
+      }
+      queryClient.invalidateQueries({ queryKey: ['documents', 'saved-views'] })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to delete this view.')
+    },
+  })
+
+  const clearActiveSavedView = () => {
+    setActiveSavedViewId(null)
+    setPage(1)
+  }
 
   const handleDelete = (id: number, title: string) => {
     if (!isManager) {
@@ -146,19 +262,36 @@ export function useDocumentsPageController() {
     }
   }
 
+  const handleArchiveOrRestore = (
+    id: number,
+    title: string,
+    currentStatus: DocumentStatus,
+  ) => {
+    if (!isManager) {
+      return
+    }
+
+    if (currentStatus === 'archived') {
+      restoreMutation.mutate(id)
+      return
+    }
+
+    if (confirm(`Archive "${title}"? You can restore it later from the archived view.`)) {
+      archiveMutation.mutate(id)
+    }
+  }
+
   const handleVisibilityChange = (change: VisibilityChangeRequest) => {
     if (change.currentVisibility === change.nextVisibility) {
-      setVisibilityOverrides((prev) => {
-        const next = { ...prev }
-        delete next[change.id]
-        return next
+      setVisibilityOverrides((previous) => {
+        const nextOverrides = { ...previous }
+        delete nextOverrides[change.id]
+        return nextOverrides
       })
       return
     }
 
-    setVisibilityOverrides((prev) => ({ ...prev, [change.id]: change.nextVisibility }))
-
-    // Wave T reason-capture policy: all visibility changes require justification.
+    setVisibilityOverrides((previous) => ({ ...previous, [change.id]: change.nextVisibility }))
     setPendingVisibilityChange(change)
   }
 
@@ -183,10 +316,10 @@ export function useDocumentsPageController() {
     }
     const pendingId = pendingVisibilityChange.id
     setPendingVisibilityChange(null)
-    setVisibilityOverrides((prev) => {
-      const next = { ...prev }
-      delete next[pendingId]
-      return next
+    setVisibilityOverrides((previous) => {
+      const nextOverrides = { ...previous }
+      delete nextOverrides[pendingId]
+      return nextOverrides
     })
   }
 
@@ -194,7 +327,51 @@ export function useDocumentsPageController() {
     setSearch('')
     setStatusFilter('')
     setVisibilityFilter('')
+    setCategoryFilter('')
+    setCompanyIdFilter(null)
+    setDateFrom('')
+    setDateTo('')
+    setActiveSavedViewId(null)
     setPage(1)
+  }
+
+  const applySavedView = (savedViewId: number) => {
+    const targetView = savedViews.find((savedView) => savedView.id === savedViewId)
+    if (!targetView) {
+      return
+    }
+    setSearch(targetView.filters.search)
+    setStatusFilter(targetView.filters.statusFilter)
+    setVisibilityFilter(targetView.filters.visibilityFilter)
+    setCategoryFilter(targetView.filters.categoryFilter)
+    setCompanyIdFilter(targetView.filters.companyIdFilter)
+    setDateFrom(targetView.filters.dateFrom)
+    setDateTo(targetView.filters.dateTo)
+    setActiveSavedViewId(savedViewId)
+    setPage(1)
+  }
+
+  const toggleDocumentSelection = (documentId: number) => {
+    setSelectedDocumentIds((previous) =>
+      previous.includes(documentId)
+        ? previous.filter((value) => value !== documentId)
+        : [...previous, documentId],
+    )
+  }
+
+  const toggleAllVisibleDocuments = () => {
+    const currentPageIds = (documentsQuery.data?.items ?? []).map((document) => document.id)
+    if (currentPageIds.length === 0) {
+      return
+    }
+    const areAllSelected = currentPageIds.every((documentId) => selectedDocumentIds.includes(documentId))
+    if (areAllSelected) {
+      setSelectedDocumentIds((previous) =>
+        previous.filter((documentId) => !currentPageIds.includes(documentId)),
+      )
+      return
+    }
+    setSelectedDocumentIds((previous) => Array.from(new Set([...previous, ...currentPageIds])))
   }
 
   return {
@@ -203,11 +380,47 @@ export function useDocumentsPageController() {
     page,
     setPage,
     search,
-    setSearch,
+    setSearch: (value: string) => {
+      clearActiveSavedView()
+      setSearch(value)
+    },
     statusFilter,
-    setStatusFilter,
+    setStatusFilter: (value: DocumentStatus | '') => {
+      clearActiveSavedView()
+      setStatusFilter(value)
+    },
     visibilityFilter,
-    setVisibilityFilter,
+    setVisibilityFilter: (value: DocumentVisibility | '') => {
+      clearActiveSavedView()
+      setVisibilityFilter(value)
+    },
+    categoryFilter,
+    setCategoryFilter: (value: string) => {
+      clearActiveSavedView()
+      setCategoryFilter(value)
+    },
+    companyIdFilter,
+    setCompanyIdFilter: (value: number | null) => {
+      clearActiveSavedView()
+      setCompanyIdFilter(value)
+    },
+    dateFrom,
+    setDateFrom: (value: string) => {
+      clearActiveSavedView()
+      setDateFrom(value)
+    },
+    dateTo,
+    setDateTo: (value: string) => {
+      clearActiveSavedView()
+      setDateTo(value)
+    },
+    activeSavedViewId,
+    savedViews,
+    saveCurrentView: (name: string) => saveViewMutation.mutate(name),
+    isSavingCurrentView: saveViewMutation.isPending,
+    deleteSavedView: (savedViewId: number) => deleteViewMutation.mutate(savedViewId),
+    isDeletingSavedView: deleteViewMutation.isPending,
+    applySavedView,
     resetFilters,
     statusDetailsRef,
     visibilityDetailsRef,
@@ -221,8 +434,19 @@ export function useDocumentsPageController() {
     pendingVisibilityChange,
     isQuickCreateMode,
     documentsQuery,
+    companiesQuery,
     deleteMutation,
+    archiveMutation,
     visibilityMutation,
+    bulkMetadataMutation,
+    restoreMutation,
+    showBulkEditModal,
+    setShowBulkEditModal,
+    selectedDocumentIds,
+    toggleDocumentSelection,
+    toggleAllVisibleDocuments,
+    clearSelection: () => setSelectedDocumentIds([]),
+    handleArchiveOrRestore,
     handleDelete,
     handleVisibilityChange,
     confirmPendingVisibilityChange,

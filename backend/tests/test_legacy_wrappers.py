@@ -5,6 +5,7 @@ from pathlib import Path
 from app.container import build_container
 from app.legacy_wrappers import (
     AnalyticsServiceStranglerWrapper,
+    DocumentConverterStranglerWrapper,
     get_document_converter_wrapper,
     get_legacy_wrapper_tracker,
 )
@@ -58,6 +59,69 @@ def test_document_converter_wrapper_tracks_call_volume(monkeypatch):
     status = _status_map()["document_converter"]
     assert status.call_volume >= 1
     assert status.migration_completion_percent == 0
+
+
+def test_document_converter_wrapper_tracks_reader_artifact_call_volume(monkeypatch):
+    tracker = get_legacy_wrapper_tracker()
+    tracker.reset()
+    wrapper = get_document_converter_wrapper()
+
+    monkeypatch.setattr(
+        "app.conversion.document_pipeline.DocumentConversionPipeline.convert_document_to_reader_artifact",
+        lambda _self, *_args, **_kwargs: {"html_content": "<article>wrapped</article>"},
+    )
+
+    output = wrapper.convert_document_to_reader_artifact(
+        b"content",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "sample.docx",
+    )
+    assert output == {"html_content": "<article>wrapped</article>"}
+
+    status = _status_map()["document_converter"]
+    assert status.call_volume >= 1
+
+
+def test_document_converter_wrapper_can_use_injected_conversion_service():
+    tracker = get_legacy_wrapper_tracker()
+    tracker.reset()
+
+    class StubConversionService:
+        def convert_word_to_html(self, content):
+            return f"word:{content.decode('utf-8')}"
+
+        def convert_document_to_html(self, content, mime_type, filename=""):
+            return f"{mime_type}:{filename}:{content.decode('utf-8')}"
+
+        def convert_document_to_reader_artifact(self, content, mime_type, filename=""):
+            return {
+                "mime_type": mime_type,
+                "filename": filename,
+                "size": len(content),
+            }
+
+        def describe_strategy_capabilities(self):
+            return {"stub": ("html", "reader_artifact")}
+
+    wrapper = DocumentConverterStranglerWrapper(StubConversionService())
+
+    assert wrapper.convert_word_to_html(b"hello") == "word:hello"
+    assert (
+        wrapper.convert_document_to_html(b"body", "text/plain", "note.txt")
+        == "text/plain:note.txt:body"
+    )
+    assert wrapper.convert_document_to_reader_artifact(
+        b"abc",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "wave.docx",
+    ) == {
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "filename": "wave.docx",
+        "size": 3,
+    }
+
+    status = _status_map()["document_converter"]
+    assert status.call_volume == 3
 
 
 def test_attachment_service_modules_do_not_import_legacy_converter_directly():

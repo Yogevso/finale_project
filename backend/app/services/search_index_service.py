@@ -9,65 +9,99 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+FTS_TABLE_NAME = "documents_fts"
+FTS_EXISTS_STATEMENT = text(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :table_name LIMIT 1"
+)
+FTS_CREATE_STATEMENT = text(
+    f"""
+    CREATE VIRTUAL TABLE IF NOT EXISTS {FTS_TABLE_NAME} USING fts5(
+        title,
+        description,
+        category
+    )
+    """
+)
+FTS_CLEAR_STATEMENT = text(f"DELETE FROM {FTS_TABLE_NAME}")
+FTS_POPULATE_STATEMENT = text(
+    f"""
+    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category)
+    SELECT
+        id,
+        COALESCE(title, ''),
+        COALESCE(description, ''),
+        COALESCE(category, '')
+    FROM documents
+    """
+)
+FTS_DELETE_ROW_STATEMENT = text(f"DELETE FROM {FTS_TABLE_NAME} WHERE rowid = :doc_id")
+FTS_INSERT_ROW_STATEMENT = text(
+    f"""
+    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category)
+    SELECT
+        id,
+        COALESCE(title, ''),
+        COALESCE(description, ''),
+        COALESCE(category, '')
+    FROM documents
+    WHERE id = :doc_id
+    """
+)
+FTS_INTEGRITY_CHECK_STATEMENT = text(
+    f"INSERT INTO {FTS_TABLE_NAME}({FTS_TABLE_NAME}) VALUES('integrity-check')"
+)
+
 
 class SearchIndexSyncService:
     """Synchronises the ``documents_fts`` FTS5 virtual table with the
-    canonical ``documents`` content table.
+    canonical ``documents`` table.
 
-    SQLite FTS5 *content-sync* tables (``content='documents'``) do **not**
-    auto-update when the backing rows change.  This service provides helpers
-    to keep the index consistent after audience-relevant mutations (visibility,
-    status, company-assignment changes) as well as content edits.
+    The index is managed explicitly so startup paths can recover cleanly
+    even when the FTS table was never created.
     """
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _rebuild_index_contents(self) -> None:
+        self.db.execute(FTS_CLEAR_STATEMENT)
+        self.db.execute(FTS_POPULATE_STATEMENT)
+
+    def _ensure_index_exists(self) -> None:
+        index_exists = self.db.execute(
+            FTS_EXISTS_STATEMENT,
+            {"table_name": FTS_TABLE_NAME},
+        ).scalar()
+        if index_exists:
+            return
+
+        self.db.execute(FTS_CREATE_STATEMENT)
+        self._rebuild_index_contents()
+        logger.info("Initialized FTS5 search index")
 
     # ------------------------------------------------------------------
     # Single-document operations
     # ------------------------------------------------------------------
 
     def sync_document(self, document_id: int) -> None:
-        """Refresh the FTS5 entry for a single document.
-
-        This deletes the old FTS row (if any) and re-inserts it from the
-        current ``documents`` row.  Safe to call even if the document was
-        just created.
-        """
+        """Refresh the FTS5 entry for a single document."""
         try:
-            # Remove stale FTS row (using the FTS5 delete command)
-            self.db.execute(
-                text(
-                    "INSERT INTO documents_fts(documents_fts, rowid, title, description, content, category) "
-                    "SELECT 'delete', id, title, description, '', category "
-                    "FROM documents WHERE id = :doc_id"
-                ),
-                {"doc_id": document_id},
-            )
-            # Re-insert from canonical source
-            self.db.execute(
-                text(
-                    "INSERT INTO documents_fts(rowid, title, description, content, category) "
-                    "SELECT id, title, description, '', category "
-                    "FROM documents WHERE id = :doc_id"
-                ),
-                {"doc_id": document_id},
-            )
+            self._ensure_index_exists()
+            self.db.execute(FTS_DELETE_ROW_STATEMENT, {"doc_id": document_id})
+            self.db.execute(FTS_INSERT_ROW_STATEMENT, {"doc_id": document_id})
             logger.debug("FTS5 index synced for document %d", document_id)
         except Exception:
-            logger.warning("FTS5 sync failed for document %d – will be fixed on next rebuild", document_id, exc_info=True)
+            logger.warning(
+                "FTS5 sync failed for document %d; will be fixed on next rebuild",
+                document_id,
+                exc_info=True,
+            )
 
     def remove_document(self, document_id: int) -> None:
         """Remove a single document from the FTS5 index (e.g. on delete)."""
         try:
-            self.db.execute(
-                text(
-                    "INSERT INTO documents_fts(documents_fts, rowid, title, description, content, category) "
-                    "SELECT 'delete', id, title, description, '', category "
-                    "FROM documents WHERE id = :doc_id"
-                ),
-                {"doc_id": document_id},
-            )
+            self._ensure_index_exists()
+            self.db.execute(FTS_DELETE_ROW_STATEMENT, {"doc_id": document_id})
             logger.debug("FTS5 index entry removed for document %d", document_id)
         except Exception:
             logger.warning("FTS5 remove failed for document %d", document_id, exc_info=True)
@@ -77,23 +111,22 @@ class SearchIndexSyncService:
     # ------------------------------------------------------------------
 
     def rebuild_index(self) -> int:
-        """Full rebuild of the FTS5 index from the ``documents`` table.
-
-        Returns the number of rows indexed.
-        """
+        """Full rebuild of the FTS5 index from the ``documents`` table."""
         try:
-            self.db.execute(text("INSERT INTO documents_fts(documents_fts) VALUES('rebuild')"))
+            self._ensure_index_exists()
+            self._rebuild_index_contents()
             count = self.db.execute(text("SELECT COUNT(*) FROM documents")).scalar() or 0
-            logger.info("FTS5 search index rebuilt – %d documents indexed", count)
+            logger.info("FTS5 search index rebuilt - %d documents indexed", count)
             return int(count)
         except Exception:
             logger.error("FTS5 full rebuild failed", exc_info=True)
             raise
 
     def integrity_check(self) -> bool:
-        """Run the FTS5 integrity-check command.  Returns True if healthy."""
+        """Run the FTS5 integrity-check command. Returns True if healthy."""
         try:
-            self.db.execute(text("INSERT INTO documents_fts(documents_fts) VALUES('integrity-check')"))
+            self._ensure_index_exists()
+            self.db.execute(FTS_INTEGRITY_CHECK_STATEMENT)
             return True
         except Exception:
             logger.warning("FTS5 integrity check failed", exc_info=True)

@@ -1,17 +1,14 @@
 import type {
   Attachment,
-  AttachmentOutlineResponse,
   AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   MessageResponse,
 } from '@/types'
 import {
   type AttachmentDto,
-  type AttachmentOutlineResponseDto,
   type AttachmentReaderViewResponseDto,
   type AttachmentUploadResponseDto,
   type MessageResponseDto,
-  mapAttachmentOutlineResponseDto,
   mapAttachmentReaderViewResponseDto,
   mapAttachmentUploadResponseDto,
   mapAttachmentsDto,
@@ -58,24 +55,6 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
       return base
     }
 
-    getAttachmentPreviewUrl(documentId: number, attachmentId: number): string {
-      const token = this.resolveAttachmentAccessToken()
-      const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/preview`
-      if (token) {
-        return `${base}?token=${encodeURIComponent(token)}`
-      }
-      return base
-    }
-
-    getAttachmentOriginalDownloadUrl(documentId: number, attachmentId: number): string {
-      const token = this.resolveAttachmentAccessToken()
-      const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download-original`
-      if (token) {
-        return `${base}?token=${encodeURIComponent(token)}`
-      }
-      return base
-    }
-
     async getAttachmentReaderView(
       documentId: number,
       attachmentId: number,
@@ -100,16 +79,6 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
       return mapAttachmentReaderViewResponseDto(data)
     }
 
-    async getAttachmentOutline(
-      documentId: number,
-      attachmentId: number,
-    ): Promise<AttachmentOutlineResponse> {
-      const { data } = await this.client.get<AttachmentOutlineResponseDto>(
-        `/documents/${documentId}/attachments/${attachmentId}/outline`,
-      )
-      return mapAttachmentOutlineResponseDto(data)
-    }
-
     async getAttachmentBlob(documentId: number, attachmentId: number): Promise<Blob> {
       const response = await this.client.get(
         `/documents/${documentId}/attachments/${attachmentId}/download`,
@@ -117,13 +86,4 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
       )
       return response.data
     }
-
-    async getAttachmentOriginalBlob(documentId: number, attachmentId: number): Promise<Blob> {
-      const response = await this.client.get(
-        `/documents/${documentId}/attachments/${attachmentId}/download-original`,
-        { responseType: 'blob' },
-      )
-      return response.data
-    }
   }
-

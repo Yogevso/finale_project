@@ -1,4 +1,4 @@
-"""Durable preview-PDF conversion job queue.
+"""Durable reader-artifact conversion job queue.
 
 This module persists conversion jobs in the database, so pending work survives
 process restarts and can be handled by a dedicated worker process.
@@ -28,13 +28,13 @@ from app.models import AttachmentArtifact, AttachmentConversionJob
 
 logger = logging.getLogger(__name__)
 
-JOB_TYPE_PREVIEW_PDF = "preview_pdf"
+JOB_TYPE_READER_HTML = "reader_html"
 JOB_STATUS_PENDING = "pending"
 JOB_STATUS_PROCESSING = "processing"
 JOB_STATUS_COMPLETED = "completed"
 JOB_STATUS_FAILED = "failed"
 
-ARTIFACT_KIND_PREVIEW_PDF = "preview_pdf"
+ARTIFACT_KIND_READER_HTML = "reader_html"
 ARTIFACT_STATUS_READY = "ready"
 ARTIFACT_STATUS_FAILED = "failed"
 PROCESSING_TIMEOUT_SECONDS = max(
@@ -59,7 +59,7 @@ def _default_retry_policy() -> RetryPolicy:
 
 
 def _get_or_create_job(
-    db: Session, attachment_id: int, job_type: str = JOB_TYPE_PREVIEW_PDF
+    db: Session, attachment_id: int, job_type: str = JOB_TYPE_READER_HTML
 ) -> AttachmentConversionJob:
     job = (
         db.query(AttachmentConversionJob)
@@ -93,14 +93,14 @@ def _set_job_pending(job: AttachmentConversionJob, *, force: bool) -> None:
     job.next_run_at = None
 
 
-def _load_preview_artifact_status(
+def _load_reader_artifact_status(
     db: Session, attachment_id: int
 ) -> tuple[Optional[str], Optional[str]]:
     artifact = (
         db.query(AttachmentArtifact)
         .filter(
             AttachmentArtifact.attachment_id == attachment_id,
-            AttachmentArtifact.kind == ARTIFACT_KIND_PREVIEW_PDF,
+            AttachmentArtifact.kind == ARTIFACT_KIND_READER_HTML,
         )
         .first()
     )
@@ -114,7 +114,7 @@ def _recover_stale_processing_jobs(db: Session, now: datetime) -> int:
     stale_jobs = (
         db.query(AttachmentConversionJob)
         .filter(
-            AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+            AttachmentConversionJob.job_type == JOB_TYPE_READER_HTML,
             AttachmentConversionJob.status == JOB_STATUS_PROCESSING,
             AttachmentConversionJob.started_at.isnot(None),
             AttachmentConversionJob.started_at <= stale_before,
@@ -148,7 +148,7 @@ def _claim_job_by_id(db: Session, job_id: int, now: datetime) -> bool:
         db.query(AttachmentConversionJob)
         .filter(
             AttachmentConversionJob.id == job_id,
-            AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+            AttachmentConversionJob.job_type == JOB_TYPE_READER_HTML,
             AttachmentConversionJob.status == JOB_STATUS_PENDING,
             (AttachmentConversionJob.next_run_at.is_(None))
             | (AttachmentConversionJob.next_run_at <= now),
@@ -175,7 +175,7 @@ def _claim_next_runnable_job_id(
         row = (
             db.query(AttachmentConversionJob.id)
             .filter(
-                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.job_type == JOB_TYPE_READER_HTML,
                 AttachmentConversionJob.status == JOB_STATUS_PENDING,
                 (AttachmentConversionJob.next_run_at.is_(None))
                 | (AttachmentConversionJob.next_run_at <= now),
@@ -242,11 +242,11 @@ def process_conversion_job(
         )
 
         workflow = PreviewConversionProcessManager(
-            preview_generator=lambda attachment_id: AttachmentService.generate_preview_pdf_artifact(
+            preview_generator=lambda attachment_id: AttachmentService.generate_reader_artifact(
                 attachment_id,
                 force=bool(force or job.force),
             ),
-            preview_status_loader=lambda attachment_id: _load_preview_artifact_status(
+            preview_status_loader=lambda attachment_id: _load_reader_artifact_status(
                 db,
                 attachment_id,
             ),
@@ -367,7 +367,7 @@ def enqueue_conversion(
     background_tasks: Optional[BackgroundTasks] = None,
     force: bool = False,
 ) -> None:
-    """Enqueue preview_pdf conversion as a durable DB job."""
+    """Enqueue reader-artifact generation as a durable DB job."""
     db = SessionLocal()
     try:
         job = _get_or_create_job(db, attachment_id=attachment_id)
@@ -393,7 +393,7 @@ def list_dead_letter_conversion_jobs(
         return (
             session.query(AttachmentConversionJob)
             .filter(
-                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.job_type == JOB_TYPE_READER_HTML,
                 AttachmentConversionJob.status == JOB_STATUS_FAILED,
             )
             .order_by(AttachmentConversionJob.finished_at.desc(), AttachmentConversionJob.id.desc())
@@ -420,7 +420,7 @@ def requeue_dead_letter_conversion_job(
             session.query(AttachmentConversionJob)
             .filter(
                 AttachmentConversionJob.id == job_id,
-                AttachmentConversionJob.job_type == JOB_TYPE_PREVIEW_PDF,
+                AttachmentConversionJob.job_type == JOB_TYPE_READER_HTML,
                 AttachmentConversionJob.status == JOB_STATUS_FAILED,
             )
             .first()

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.domain.events import CommentCreated, InProcessDomainEventDispatcher
-from app.models import Attachment, Comment, Document, User, UserRole
+from app.models import Attachment, Comment, Document, NotificationType, User, UserRole
 from app.repositories import (
     CommentRepository,
     DocumentRepository,
@@ -15,12 +15,15 @@ from app.repositories import (
 )
 from app.schemas import CommentAuthor, CommentCreate, CommentResponse, CommentUpdate
 from app.services.base_service import SessionService
+from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
 
 
 class CommentService(SessionService):
     """Service for managing document comments with visibility controls"""
+
+    MAX_REPLY_DEPTH = 2
 
     def __init__(
         self,
@@ -32,6 +35,7 @@ class CommentService(SessionService):
         self.document_repository = DocumentRepository(db)
         self.comment_repository = CommentRepository(db)
         self.version_repository = VersionRepository(db)
+        self.notification_service = NotificationService(db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     @staticmethod
@@ -125,18 +129,26 @@ class CommentService(SessionService):
     @staticmethod
     def _to_comment_response(
         comment: Comment,
-        *,
-        visible_replies: Optional[List[Comment]] = None,
+        db: Session,
+        current_user: User,
+        contributors: Set[int],
     ) -> CommentResponse:
         """Build a detached response DTO without mutating ORM relationships."""
-        replies_source = visible_replies if visible_replies is not None else list(comment.replies or [])
-        reply_payload = [
-            CommentService._to_comment_response(reply, visible_replies=[])
-            for reply in replies_source
-        ]
+        reply_payload: list[CommentResponse] = []
+        for reply in list(comment.replies or []):
+            if CommentService.can_view_comment(db, reply, current_user, contributors):
+                reply_payload.append(
+                    CommentService._to_comment_response(
+                        reply,
+                        db,
+                        current_user,
+                        contributors,
+                    )
+                )
         author_payload = (
             CommentAuthor.model_validate(comment.user) if getattr(comment, "user", None) else None
         )
+        total_reply_count = sum(1 + reply.reply_count for reply in reply_payload)
         return CommentResponse(
             id=comment.id,
             document_id=comment.document_id,
@@ -151,8 +163,35 @@ class CommentService(SessionService):
             updated_at=comment.updated_at,
             user=author_payload,
             replies=reply_payload,
-            reply_count=len(reply_payload),
+            reply_count=total_reply_count,
         )
+
+    @staticmethod
+    def _comment_depth(comment: Comment | None) -> int:
+        depth = 0
+        current = comment
+        while current and current.parent_id is not None:
+            depth += 1
+            current = current.parent
+        return depth
+
+    def _delete_descendant_comments(self, root_comment_id: int) -> None:
+        pending_parent_ids = [root_comment_id]
+        descendant_ids: list[int] = []
+
+        while pending_parent_ids:
+            child_rows = (
+                self.db.query(Comment.id)
+                .filter(Comment.parent_id.in_(pending_parent_ids))
+                .all()
+            )
+            pending_parent_ids = [row[0] for row in child_rows]
+            descendant_ids.extend(pending_parent_ids)
+
+        if descendant_ids:
+            self.db.query(Comment).filter(Comment.id.in_(descendant_ids)).delete(
+                synchronize_session=False
+            )
 
     def get_comments(self, document_id: int, current_user: User) -> List[CommentResponse]:
         """
@@ -178,13 +217,13 @@ class CommentService(SessionService):
         visible_comments = []
         for comment in all_comments:
             if CommentService.can_view_comment(self.db, comment, current_user, contributors):
-                visible_replies = [
-                    r
-                    for r in comment.replies
-                    if CommentService.can_view_comment(self.db, r, current_user, contributors)
-                ]
                 visible_comments.append(
-                    CommentService._to_comment_response(comment, visible_replies=visible_replies)
+                    CommentService._to_comment_response(
+                        comment,
+                        self.db,
+                        current_user,
+                        contributors,
+                    )
                 )
 
         return visible_comments
@@ -210,12 +249,7 @@ class CommentService(SessionService):
                 detail="You don't have permission to view this comment",
             )
 
-        visible_replies = [
-            r
-            for r in comment.replies
-            if CommentService.can_view_comment(self.db, r, current_user, contributors)
-        ]
-        return CommentService._to_comment_response(comment, visible_replies=visible_replies)
+        return CommentService._to_comment_response(comment, self.db, current_user, contributors)
 
     def create_comment(
         self, document_id: int, comment_data: CommentCreate, current_user: User
@@ -232,11 +266,20 @@ class CommentService(SessionService):
         parent_comment = None
         if parent_id:
             parent_comment = (
-                self.comment_repository.get_by_id_for_document(parent_id, document_id)
+                self.comment_repository.get_by_id_for_document(
+                    parent_id,
+                    document_id,
+                    include_replies=True,
+                )
             )
             if not parent_comment:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Parent comment not found"
+                )
+            if self._comment_depth(parent_comment) >= self.MAX_REPLY_DEPTH:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Replies are limited to two nested levels",
                 )
 
         # Create comment with new fields
@@ -249,11 +292,41 @@ class CommentService(SessionService):
             anchor_text=comment_data.anchor_text,
             anchor_id=comment_data.anchor_id,
         )
+        commenter_name = current_user.full_name or current_user.username
+        truncated_content = " ".join(comment.content.split())[:160]
 
         with UnitOfWork(self.db) as uow:
             self.db.add(comment)
             uow.flush()
             self._publish_comment_created_event(document, comment, current_user, parent_comment)
+            comment_link = f"/documents/{document.id}?tab=comments&comment={comment.id}"
+            mention_type = (
+                NotificationType.COMMENT_REPLY if parent_comment else NotificationType.COMMENT_ADDED
+            )
+            mentioned_user_ids = self.notification_service.notify_mentions(
+                content=comment.content,
+                actor_user=current_user,
+                document=document,
+                notification_type=mention_type,
+                title_builder=lambda _user: f"{commenter_name} mentioned you in a comment",
+                message_builder=lambda _user: truncated_content,
+                link=comment_link,
+            )
+            watcher_title = (
+                f"{commenter_name} replied on a document you follow"
+                if parent_comment
+                else f"{commenter_name} commented on a document you follow"
+            )
+            watcher_message = f"{document.title}: {truncated_content}" if truncated_content else document.title
+            self.notification_service.notify_document_watchers(
+                document=document,
+                actor_user=current_user,
+                notification_type=mention_type,
+                title=watcher_title,
+                message=watcher_message,
+                link=comment_link,
+                exclude_user_ids=mentioned_user_ids,
+            )
 
         self.db.refresh(comment)
 
@@ -321,6 +394,15 @@ class CommentService(SessionService):
                         detail="Only the comment author can update the content",
                     )
                 comment.content = comment_data.content
+                self.notification_service.notify_mentions(
+                    content=comment.content,
+                    actor_user=current_user,
+                    document=comment.document,
+                    notification_type=NotificationType.COMMENT_ADDED,
+                    title_builder=lambda _user: f"{current_user.full_name or current_user.username} mentioned you in a comment",
+                    message_builder=lambda _user: " ".join(comment.content.split())[:160],
+                    link=f"/documents/{document_id}?tab=comments&comment={comment.id}",
+                )
 
             # Only admins/editors/managers can resolve comments
             if comment_data.is_resolved is not None:
@@ -352,8 +434,7 @@ class CommentService(SessionService):
             )
 
         with UnitOfWork(self.db):
-            # Delete replies first
-            self.comment_repository.delete_replies_for_parent(comment_id)
+            self._delete_descendant_comments(comment_id)
             self.db.delete(comment)
 
     def get_comment_count(

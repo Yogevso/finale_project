@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TypeVar
 from uuid import uuid4
 
@@ -99,6 +99,7 @@ def build_document(
     visibility: DocumentVisibility = DocumentVisibility.INTERNAL,
     category: str | None = None,
     tags: str | None = None,
+    due_date: date | None = None,
     tenant_id: int | None = None,
     parent_id: int | None = None,
 ) -> Document:
@@ -112,6 +113,7 @@ def build_document(
         visibility=visibility,
         category=category,
         tags=tags,
+        due_date=due_date,
         created_by=created_by,
         tenant_id=tenant_id,
         parent_id=parent_id,
@@ -126,11 +128,11 @@ def build_attachment(
     *,
     document_id: int,
     uploaded_by: int,
-    filename: str = "test-document.pdf",
+    filename: str = "test-document.docx",
     original_filename: str | None = None,
     file_size: int = 10,
     size_bytes: int | None = None,
-    mime_type: str = "application/pdf",
+    mime_type: str = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     storage_path: str | None = None,
     storage_key: str | None = None,
 ) -> Attachment:
@@ -158,7 +160,7 @@ def create_attachment(db: Session, **kwargs) -> Attachment:
 def build_attachment_conversion_job(
     *,
     attachment_id: int,
-    job_type: str = "preview_pdf",
+    job_type: str = "reader_html",
     status: str = "pending",
     force: bool = False,
     attempts: int = 0,

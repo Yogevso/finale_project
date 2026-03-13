@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import type { Attachment } from '@/types'
@@ -8,7 +8,6 @@ import { useReaderView } from '@/pages/document-detail/hooks/useReaderView'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    getAttachmentOutline: vi.fn(),
     getAttachmentReaderView: vi.fn(),
     retryAttachmentReaderView: vi.fn(),
   },
@@ -20,14 +19,13 @@ function createAttachment(overrides: Partial<Attachment> = {}): Attachment {
   return {
     id: 1,
     document_id: 42,
-    filename: 'document.pdf',
-    original_filename: 'document.pdf',
+    filename: 'document.docx',
+    original_filename: 'document.docx',
     file_size: 1024,
-    mime_type: 'application/pdf',
+    mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     uploaded_by: 7,
     uploaded_at: '2026-01-01T00:00:00Z',
-    preview_pdf_status: 'ready',
-    reader_html_status: 'ready',
+    reader_html_status: 'pending',
     ...overrides,
   }
 }
@@ -37,32 +35,14 @@ describe('useReaderView', () => {
     vi.clearAllMocks()
   })
 
-  it('loads outline and reader artifact when switched to reader view', async () => {
+  it('loads reader artifact content and sections for the selected attachment', async () => {
     const selectedAttachment = createAttachment()
     const processHtmlWithSections = vi.fn((html: string) => `processed:${html}`)
-
-    mockedApi.getAttachmentOutline.mockResolvedValue({
-      attachment_id: selectedAttachment.id,
-      has_outline: true,
-      items: [
-        {
-          id: 'outline-1',
-          level: 1,
-          title: 'Outline Intro',
-          page: 1,
-          page_start: 1,
-          page_end: null,
-          anchor_id: 'pdf-page-1',
-        },
-      ],
-      source: 'outline',
-      error: null,
-    } as never)
 
     mockedApi.getAttachmentReaderView.mockResolvedValue({
       attachment_id: selectedAttachment.id,
       status: 'ready',
-      html_content: '<h1>Reader Intro</h1><p>Reader body</p>',
+      html_content: '<h1 id="heading-1">Reader Intro</h1><p>Reader body</p>',
       toc_items: [
         {
           id: 'reader-1',
@@ -71,94 +51,66 @@ describe('useReaderView', () => {
           page: 1,
           page_start: 1,
           page_end: null,
-          anchor_id: 'pdf-page-1',
+          anchor_id: 'heading-1',
         },
       ],
-      toc_source: 'outline',
+      toc_source: 'headings',
       error: null,
       generated_at: '2026-01-01T00:00:00Z',
+      warnings: [],
+      confidence: 0.98,
     } as never)
 
     const { result } = renderHook(() => {
       const [sections, setSections] = useState<TocSection[]>([])
-      const previewPaneRef = useRef<HTMLDivElement>(null)
       const hook = useReaderView({
         documentId: 42,
         selectedAttachment,
-        isSelectedPdf: true,
         sections,
         setSections,
         processHtmlWithSections,
-        previewPaneRef,
       })
       return { ...hook, sections }
     })
 
     await waitFor(() => {
-      expect(mockedApi.getAttachmentOutline).toHaveBeenCalledWith(42, selectedAttachment.id)
-    })
-
-    act(() => {
-      result.current.handleSwitchToReaderView()
-    })
-
-    await waitFor(() => {
       expect(mockedApi.getAttachmentReaderView).toHaveBeenCalledWith(42, selectedAttachment.id)
-      expect(result.current.pdfPreviewMode).toBe('reader')
       expect(result.current.readerHtmlContent).toBe(
-        'processed:<h1>Reader Intro</h1><p>Reader body</p>',
+        'processed:<h1 id="heading-1">Reader Intro</h1><p>Reader body</p>',
       )
-      expect(result.current.sections.length).toBeGreaterThan(0)
-      expect(result.current.sections[0].text).toBe('Reader Intro')
+      expect(result.current.sections[0]?.text).toBe('Reader Intro')
+      expect(result.current.readerConfidence).toBe(0.98)
     })
-
-    expect(processHtmlWithSections).toHaveBeenCalledWith('<h1>Reader Intro</h1><p>Reader body</p>')
   })
 
-  it('resets reader state when PDF selection is removed', async () => {
+  it('resets reader state when the selected attachment is removed', async () => {
     const selectedAttachment = createAttachment()
-
-    mockedApi.getAttachmentOutline.mockResolvedValue({
-      attachment_id: selectedAttachment.id,
-      has_outline: false,
-      items: [],
-      source: 'none',
-      error: 'No TOC available',
-    } as never)
 
     mockedApi.getAttachmentReaderView.mockResolvedValue({
       attachment_id: selectedAttachment.id,
       status: 'ready',
-      html_content: '<h2>Section</h2><p>Text</p>',
+      html_content: '<h2 id="heading-2">Section</h2><p>Text</p>',
       toc_items: [],
-      toc_source: 'none',
+      toc_source: 'headings',
       error: null,
       generated_at: '2026-01-01T00:00:00Z',
+      warnings: [],
+      confidence: 1,
     } as never)
 
-    const initialProps: { attachment: Attachment | null; isSelectedPdf: boolean } = {
+    const initialProps: { attachment: Attachment | null } = {
       attachment: selectedAttachment,
-      isSelectedPdf: true,
     }
 
     const { result, rerender } = renderHook(
-      ({
-        attachment,
-        isSelectedPdf,
-      }: {
-        attachment: Attachment | null
-        isSelectedPdf: boolean
-      }) => {
+      ({ attachment }: { attachment: Attachment | null }) => {
         const [sections, setSections] = useState<TocSection[]>([])
-        const previewPaneRef = useRef<HTMLDivElement>(null)
         return useReaderView({
           documentId: 42,
           selectedAttachment: attachment,
-          isSelectedPdf,
           sections,
           setSections,
           processHtmlWithSections: (html) => html,
-          previewPaneRef,
         })
       },
       {
@@ -166,21 +118,66 @@ describe('useReaderView', () => {
       },
     )
 
-    act(() => {
-      result.current.handleSwitchToReaderView()
+    await waitFor(() => {
+      expect(result.current.readerHtmlContent).toContain('Section')
     })
 
-    await waitFor(() => {
-      expect(result.current.pdfPreviewMode).toBe('reader')
-    })
-
-    rerender({ attachment: null, isSelectedPdf: false })
+    rerender({ attachment: null })
 
     await waitFor(() => {
-      expect(result.current.pdfPreviewMode).toBe('original')
       expect(result.current.readerHtmlContent).toBeNull()
+      expect(result.current.readerStatus).toBeNull()
       expect(result.current.activeHeading).toBeNull()
-      expect(result.current.pdfOutlineSections).toEqual([])
     })
+  })
+
+  it('retries reader generation when requested', async () => {
+    const selectedAttachment = createAttachment()
+
+    mockedApi.getAttachmentReaderView.mockResolvedValue({
+      attachment_id: selectedAttachment.id,
+      status: 'failed',
+      html_content: null,
+      toc_items: [],
+      toc_source: 'none',
+      error: 'Extraction failed',
+      generated_at: '2026-01-01T00:00:00Z',
+      warnings: [],
+      confidence: null,
+    } as never)
+
+    mockedApi.retryAttachmentReaderView.mockResolvedValue({
+      attachment_id: selectedAttachment.id,
+      status: 'ready',
+      html_content: '<h2 id="retry-heading">Recovered</h2>',
+      toc_items: [],
+      toc_source: 'headings',
+      error: null,
+      generated_at: '2026-01-01T00:00:00Z',
+      warnings: [],
+      confidence: 0.91,
+    } as never)
+
+    const { result } = renderHook(() => {
+      const [sections, setSections] = useState<TocSection[]>([])
+      return useReaderView({
+        documentId: 42,
+        selectedAttachment,
+        sections,
+        setSections,
+        processHtmlWithSections: (html) => html,
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.readerError).toBe('Extraction failed')
+    })
+
+    await act(async () => {
+      await result.current.handleRetryReaderView()
+    })
+
+    expect(mockedApi.retryAttachmentReaderView).toHaveBeenCalledWith(42, selectedAttachment.id)
+    expect(result.current.readerHtmlContent).toContain('Recovered')
   })
 })

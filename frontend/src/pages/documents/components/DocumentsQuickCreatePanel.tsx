@@ -18,11 +18,10 @@ export function DocumentsQuickCreatePanel({ onCreate, onUpload }: DocumentsQuick
           <div className="text-3xl mb-3">📤</div>
           <div className="text-lg font-display font-semibold text-slate-900">Upload File</div>
           <p className="text-sm text-slate-500 mt-2">
-            Upload a PDF or Word file and generate a document.
+            Upload a DOCX or PPTX file and generate a document.
           </p>
         </button>
       </div>
     </div>
   )
 }
-

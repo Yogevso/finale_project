@@ -1,3 +1,4 @@
+import { getDomParser } from '@/env/dom'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import type { AttachmentOutlineItem } from '@/types'
 
@@ -18,6 +19,19 @@ export interface SectionEditTarget extends TocSection {
   editMode?: SectionEditMode
   insertAfterIndex?: number
   fromChooser?: boolean
+  replaceAnchorId?: string
+  replaceStartIndex?: number
+  replaceNodeCount?: number
+}
+
+export interface SectionHtmlMatch {
+  element: HTMLElement
+  topLevelElement: HTMLElement
+  topLevelIndex: number
+}
+
+function normalizeSectionLabel(value: string | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): TocSection[] {
@@ -30,7 +44,7 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
         level: Math.max(1, item.level || 1),
         html: '',
         index,
-        anchorId: item.anchor_id || `pdf-page-${pageStart}`,
+        anchorId: item.anchor_id || `page-${pageStart}`,
         pageStart,
         pageEnd: item.page_end ?? null,
       }
@@ -38,11 +52,294 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
     .filter((item) => item.text.trim().length > 0)
 }
 
+export function getEditableHtmlRoot(doc: Document): HTMLElement {
+  const root = doc.body.firstElementChild
+  if (doc.body.children.length === 1 && root?.classList.contains('docx-document')) {
+    return root as HTMLElement
+  }
+
+  return doc.body
+}
+
+function getTopLevelEditableChild(element: HTMLElement, root: HTMLElement): HTMLElement | null {
+  let current: HTMLElement | null = element
+  while (current && current.parentElement && current.parentElement !== root) {
+    current = current.parentElement
+  }
+
+  return current?.parentElement === root ? current : null
+}
+
+export function findSectionMatchInRoot(
+  root: HTMLElement,
+  section: Pick<TocSection, 'anchorId' | 'text'>,
+  options?: { minTopLevelIndex?: number; maxTopLevelIndex?: number },
+): SectionHtmlMatch | null {
+  const doc = root.ownerDocument
+  const topLevelElements = Array.from(root.children) as HTMLElement[]
+  const minTopLevelIndex = options?.minTopLevelIndex ?? -1
+  const maxTopLevelIndex = options?.maxTopLevelIndex ?? Number.POSITIVE_INFINITY
+  const genericPageAnchor = parsePageFromAnchorId(section.anchorId)
+
+  if (section.anchorId && !genericPageAnchor) {
+    const byId = doc.getElementById(section.anchorId)
+    if (byId instanceof HTMLElement) {
+      const topLevelElement = getTopLevelEditableChild(byId, root)
+      if (topLevelElement) {
+        const topLevelIndex = topLevelElements.indexOf(topLevelElement)
+        if (topLevelIndex > minTopLevelIndex && topLevelIndex < maxTopLevelIndex) {
+          return { element: byId, topLevelElement, topLevelIndex }
+        }
+      }
+    }
+  }
+
+  const normalizedLabel = normalizeSectionLabel(section.text)
+  if (!normalizedLabel) {
+    return null
+  }
+
+  const candidates = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'h1, h2, h3, h4, h5, h6, li, p, dt, dd, figcaption, summary, td, th, strong, b, table',
+    ),
+  )
+
+  const getSemanticRank = (element: HTMLElement): number => {
+    const tagName = element.tagName.toLowerCase()
+    if (/^h[1-6]$/.test(tagName)) {
+      return 0
+    }
+    if (tagName === 'li') {
+      return 1
+    }
+    if (tagName === 'p' || tagName === 'dt' || tagName === 'dd' || tagName === 'summary') {
+      return 2
+    }
+    if (tagName === 'table') {
+      return 3
+    }
+    return 4
+  }
+
+  let bestMatch:
+    | {
+        element: HTMLElement
+        topLevelElement: HTMLElement
+        topLevelIndex: number
+        score: number
+        semanticRank: number
+        domIndex: number
+      }
+    | null = null
+
+  for (const [domIndex, element] of candidates.entries()) {
+    const topLevelElement = getTopLevelEditableChild(element, root)
+    if (!topLevelElement) {
+      continue
+    }
+
+    const topLevelIndex = topLevelElements.indexOf(topLevelElement)
+    if (topLevelIndex <= minTopLevelIndex || topLevelIndex >= maxTopLevelIndex) {
+      continue
+    }
+
+    const label = normalizeSectionLabel(element.textContent || undefined)
+    if (!label) {
+      continue
+    }
+
+    let score: number | null = null
+    if (label === normalizedLabel) {
+      score = 0
+    } else if (label.startsWith(normalizedLabel)) {
+      score = 1
+    } else if (label.includes(normalizedLabel)) {
+      score = 2
+    }
+
+    if (score === null) {
+      continue
+    }
+
+    const candidate = {
+      element,
+      topLevelElement,
+      topLevelIndex,
+      score,
+      semanticRank: getSemanticRank(element),
+      domIndex,
+    }
+
+    if (
+      !bestMatch ||
+      candidate.score < bestMatch.score ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank < bestMatch.semanticRank) ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank === bestMatch.semanticRank &&
+        candidate.topLevelIndex < bestMatch.topLevelIndex) ||
+      (candidate.score === bestMatch.score &&
+        candidate.semanticRank === bestMatch.semanticRank &&
+        candidate.topLevelIndex === bestMatch.topLevelIndex &&
+        candidate.domIndex < bestMatch.domIndex)
+    ) {
+      bestMatch = candidate
+    }
+  }
+
+  if (!bestMatch) {
+    return null
+  }
+
+  return {
+    element: bestMatch.element,
+    topLevelElement: bestMatch.topLevelElement,
+    topLevelIndex: bestMatch.topLevelIndex,
+  }
+}
+
+export function filterOutlineSectionsByHtml(
+  outlineSections: TocSection[],
+  html: string,
+): TocSection[] {
+  if (outlineSections.length === 0 || !html.trim()) {
+    return outlineSections
+  }
+
+  const parser = getDomParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const root = getEditableHtmlRoot(doc)
+  let previousTopLevelIndex = -1
+
+  return outlineSections.flatMap((section) => {
+    const match = findSectionMatchInRoot(root, section, {
+      minTopLevelIndex: previousTopLevelIndex,
+    })
+
+    if (!match) {
+      return []
+    }
+
+    previousTopLevelIndex = match.topLevelIndex
+
+    return [
+      {
+        ...section,
+        anchorId: match.element.id || section.anchorId,
+      },
+    ]
+  })
+}
+
+function removeSectionFromTextMap(
+  map: Map<string, TocSection[]>,
+  section: TocSection,
+) {
+  const textKey = normalizeSectionLabel(section.text)
+  if (!textKey) {
+    return
+  }
+
+  const existing = map.get(textKey)
+  if (!existing) {
+    return
+  }
+
+  const remaining = existing.filter((candidate) => candidate !== section)
+  if (remaining.length === 0) {
+    map.delete(textKey)
+  } else {
+    map.set(textKey, remaining)
+  }
+}
+
+export function mergeTocSections(
+  outlineSections: TocSection[],
+  htmlSections: TocSection[],
+): TocSection[] {
+  if (outlineSections.length === 0) {
+    return htmlSections
+  }
+
+  if (htmlSections.length === 0) {
+    return outlineSections
+  }
+
+  const remainingHtmlById = new Map<string, TocSection>()
+  const remainingHtmlByText = new Map<string, TocSection[]>()
+
+  htmlSections.forEach((section) => {
+    if (section.anchorId) {
+      remainingHtmlById.set(section.anchorId, section)
+    }
+    const textKey = normalizeSectionLabel(section.text)
+    if (!textKey) {
+      return
+    }
+    const existing = remainingHtmlByText.get(textKey) || []
+    existing.push(section)
+    remainingHtmlByText.set(textKey, existing)
+  })
+
+  const usedHtmlSections = new Set<TocSection>()
+
+  const mergedOutlineSections = outlineSections.map((section) => {
+    let htmlMatch: TocSection | undefined
+    if (section.anchorId) {
+      htmlMatch = remainingHtmlById.get(section.anchorId)
+    }
+
+    if (!htmlMatch) {
+      const textKey = normalizeSectionLabel(section.text)
+      const textMatches = remainingHtmlByText.get(textKey)
+      htmlMatch = textMatches?.shift()
+      if (textMatches && textMatches.length === 0) {
+        remainingHtmlByText.delete(textKey)
+      }
+    }
+
+    if (!htmlMatch) {
+      return section
+    }
+
+    usedHtmlSections.add(htmlMatch)
+
+    if (htmlMatch.anchorId) {
+      remainingHtmlById.delete(htmlMatch.anchorId)
+    }
+    removeSectionFromTextMap(remainingHtmlByText, htmlMatch)
+
+    return {
+      ...htmlMatch,
+      id: section.id,
+      text: section.text,
+      level: section.level,
+      index: section.index,
+      anchorId: htmlMatch.anchorId || section.anchorId,
+      pageStart: section.pageStart ?? htmlMatch.pageStart,
+      pageEnd: section.pageEnd ?? htmlMatch.pageEnd,
+    }
+  })
+
+  const unmatchedHtmlSections = htmlSections.filter((section) => !usedHtmlSections.has(section))
+
+  return [...mergedOutlineSections, ...unmatchedHtmlSections]
+}
+
 export function parsePageFromAnchorId(anchorId?: string | null): number | null {
   if (!anchorId) return null
-  const pdfPageMatch = anchorId.match(/^pdf-page-(\d+)$/i)
-  if (pdfPageMatch) {
-    const parsed = Number(pdfPageMatch[1])
+  const normalizedAnchorParts = anchorId
+    .trim()
+    .toLowerCase()
+    .split('-')
+    .filter(Boolean)
+  const genericPageToken =
+    normalizedAnchorParts.length === 2
+      ? normalizedAnchorParts[0] === 'page'
+      : normalizedAnchorParts.length === 3 && normalizedAnchorParts[1] === 'page'
+  if (genericPageToken) {
+    const parsed = Number(normalizedAnchorParts[normalizedAnchorParts.length - 1])
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null
   }
   const readerPageMatch = anchorId.match(/^reader-p(\d+)-/i)
@@ -80,13 +377,15 @@ export function applyHighlights(container: HTMLElement, searchTerm: string) {
   if (!term) return
 
   const regex = new RegExp(escapeRegExp(term), 'gi')
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+  const documentRef = container.ownerDocument
+  const nodeFilter = documentRef.defaultView?.NodeFilter ?? NodeFilter
+  const walker = documentRef.createTreeWalker(container, nodeFilter.SHOW_TEXT, {
     acceptNode: (node) => {
-      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT
+      if (!node.nodeValue || !node.nodeValue.trim()) return nodeFilter.FILTER_REJECT
       const parent = (node as Text).parentElement
-      if (!parent) return NodeFilter.FILTER_REJECT
-      if (parent.tagName === 'MARK') return NodeFilter.FILTER_REJECT
-      return NodeFilter.FILTER_ACCEPT
+      if (!parent) return nodeFilter.FILTER_REJECT
+      if (parent.tagName === 'MARK') return nodeFilter.FILTER_REJECT
+      return nodeFilter.FILTER_ACCEPT
     },
   })
 
@@ -103,49 +402,75 @@ export function applyHighlights(container: HTMLElement, searchTerm: string) {
     if (!regex.test(text)) return
     regex.lastIndex = 0
 
-    const fragment = document.createDocumentFragment()
+    const fragment = documentRef.createDocumentFragment()
     let lastIndex = 0
     let match
     while ((match = regex.exec(text)) !== null) {
       const start = match.index
       const end = start + match[0].length
       if (start > lastIndex) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)))
+        fragment.appendChild(documentRef.createTextNode(text.slice(lastIndex, start)))
       }
-      const mark = document.createElement('mark')
+      const mark = documentRef.createElement('mark')
       mark.className = 'doc-highlight'
       mark.textContent = text.slice(start, end)
       fragment.appendChild(mark)
       lastIndex = end
     }
     if (lastIndex < text.length) {
-      fragment.appendChild(document.createTextNode(text.slice(lastIndex)))
+      fragment.appendChild(documentRef.createTextNode(text.slice(lastIndex)))
     }
     node.parentNode?.replaceChild(fragment, node)
   })
 }
 
 export function clearHighlights(container: HTMLElement) {
+  const documentRef = container.ownerDocument
   container.querySelectorAll('mark.doc-highlight').forEach((mark) => {
     const parent = mark.parentNode
     if (!parent) return
-    parent.replaceChild(document.createTextNode(mark.textContent || ''), mark)
+    parent.replaceChild(documentRef.createTextNode(mark.textContent || ''), mark)
     parent.normalize()
   })
 }
 
 export function processHtmlIntoSections(html: string): { html: string; sections: TocSection[] } {
   const sanitizedHtml = sanitizeHtmlForPreview(html)
-  const parser = new DOMParser()
+  const parser = getDomParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
-  const elements = Array.from(doc.body.children)
   const sections: TocSection[] = []
-  const allHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-  const hasPrimaryHeadings = elements.some((element) => {
-    const tagName = element.tagName.toLowerCase()
-    return tagName === 'h1' || tagName === 'h2' || tagName === 'h3'
-  })
-  const tocHeadingTags = hasPrimaryHeadings ? new Set(['h1', 'h2', 'h3']) : allHeadingTags
+  const rootElement = doc.body.firstElementChild
+  const elements = resolveSectionElements(doc)
+
+  if (
+    doc.body.children.length === 1 &&
+    rootElement?.classList.contains('pptx-presentation')
+  ) {
+    Array.from(rootElement.children)
+      .filter((element) => element.classList.contains('pptx-slide'))
+      .forEach((slide, index) => {
+        const title = slide.querySelector('h1, h2, h3, h4, h5, h6')
+        const sectionId =
+          title?.getAttribute('id') || slide.getAttribute('id') || `slide-${index + 1}`
+        const titleText = title?.textContent?.trim() || `Slide ${index + 1}`
+        const level = title ? parseInt(title.tagName.charAt(1), 10) : 2
+        sections.push({
+          id: `section-${index}-${titleText.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}`,
+          text: titleText,
+          level: Number.isFinite(level) ? level : 2,
+          html: slide.outerHTML,
+          index,
+          anchorId: sectionId,
+        })
+      })
+
+    return {
+      html: doc.body.innerHTML,
+      sections,
+    }
+  }
+
+  const tocHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 
   let currentSection: { heading: Element | null; content: Element[] } = { heading: null, content: [] }
 
@@ -188,6 +513,23 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
     html: doc.body.innerHTML,
     sections,
   }
+}
+
+function resolveSectionElements(doc: Document): Element[] {
+  if (doc.body.children.length !== 1) {
+    return Array.from(doc.body.children)
+  }
+
+  const root = doc.body.firstElementChild
+  if (!root) {
+    return []
+  }
+
+  if (root.classList.contains('docx-document')) {
+    return Array.from(root.children)
+  }
+
+  return Array.from(doc.body.children)
 }
 
 function buildSectionEntry(

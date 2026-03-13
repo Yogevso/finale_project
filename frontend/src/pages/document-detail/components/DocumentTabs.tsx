@@ -3,11 +3,24 @@ type TabType = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
 interface DocumentTabsProps {
   activeTab: TabType
   onTabChange: (tab: TabType) => void
+  counts: {
+    versions: number
+    attachments: number
+    comments: number
+  }
 }
 
-export function DocumentTabs({ activeTab, onTabChange }: DocumentTabsProps) {
+export function DocumentTabs({ activeTab, onTabChange, counts }: DocumentTabsProps) {
+  const labels: Record<TabType, string> = {
+    preview: 'Preview',
+    details: 'Details',
+    versions: `Versions (${counts.versions})`,
+    attachments: `Attachments (${counts.attachments})`,
+    comments: `Comments (${counts.comments})`,
+  }
+
   return (
-    <div className="border-b border-slate-200">
+    <div className="document-detail-tabs border-b border-slate-200">
       <nav className="flex gap-6">
         {(['preview', 'details', 'versions', 'attachments', 'comments'] as TabType[]).map((tab) => (
           <button
@@ -19,7 +32,7 @@ export function DocumentTabs({ activeTab, onTabChange }: DocumentTabsProps) {
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            {tab === 'preview' ? 'Preview' : tab}
+            {labels[tab]}
           </button>
         ))}
       </nav>

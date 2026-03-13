@@ -1,6 +1,15 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Folder, ChevronLeft, ChevronRight, Grid, List, Search } from 'lucide-react'
+import {
+  FileText,
+  Folder,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Grid,
+  List,
+  Search,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
@@ -19,14 +28,84 @@ type PlatformReleasePreview = {
   latestDoc: LatestPlatformRelease
 }
 
+type CategoryTreeNode = {
+  id: string
+  label: string
+  count: number
+  selfCount: number
+  filterCategory: string | null
+  children: CategoryTreeNode[]
+}
+
 const normalizePlatformName = (value: string) => value.trim().toLowerCase()
-const TOP_CATEGORIES_LIMIT = 8
+const CATEGORY_DELIMITER_PATTERN = /\s*(?:\/|>)\s*/
+
+const splitCategorySegments = (value: string) =>
+  value
+    .split(CATEGORY_DELIMITER_PATTERN)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+
+const buildCategoryTree = (items: Array<{ category: string; count: number }>): CategoryTreeNode[] => {
+  const roots: CategoryTreeNode[] = []
+  const nodeMap = new Map<string, CategoryTreeNode>()
+
+  for (const item of items) {
+    const segments = splitCategorySegments(item.category)
+    if (segments.length === 0) {
+      continue
+    }
+
+    let parentPath = ''
+    let currentLevel = roots
+
+    segments.forEach((segment, index) => {
+      const nodeId = parentPath ? `${parentPath} / ${segment}` : segment
+      let node = nodeMap.get(nodeId)
+
+      if (!node) {
+        node = {
+          id: nodeId,
+          label: segment,
+          count: 0,
+          selfCount: 0,
+          filterCategory: null,
+          children: [],
+        }
+        nodeMap.set(nodeId, node)
+        currentLevel.push(node)
+      }
+
+      node.count += item.count
+      if (index === segments.length - 1) {
+        node.selfCount += item.count
+        node.filterCategory = item.category
+      }
+
+      parentPath = nodeId
+      currentLevel = node.children
+    })
+  }
+
+  const sortNodes = (nodes: CategoryTreeNode[]) => {
+    nodes.sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count
+      }
+      return left.label.localeCompare(right.label)
+    })
+    nodes.forEach((node) => sortNodes(node.children))
+  }
+
+  sortNodes(roots)
+  return roots
+}
 
 export default function PublicDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [localSearch, setLocalSearch] = useState('')
-  const [showAllCategories, setShowAllCategories] = useState(false)
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([])
 
   const page = parseInt(searchParams.get('page') || '1')
   const category = searchParams.get('category') || undefined
@@ -118,21 +197,29 @@ export default function PublicDocumentsPage() {
     () => sortedCategories.reduce((sum, item) => sum + item.count, 0),
     [sortedCategories],
   )
+  const categoryTree = useMemo(() => buildCategoryTree(sortedCategories), [sortedCategories])
 
-  const visibleCategories = useMemo(() => {
-    if (showAllCategories) return sortedCategories
+  useEffect(() => {
+    if (!category) {
+      return
+    }
 
-    const top = sortedCategories.slice(0, TOP_CATEGORIES_LIMIT)
-    if (!category) return top
+    const nextExpanded = splitCategorySegments(category).reduce<string[]>((paths, segment) => {
+      const previous = paths[paths.length - 1]
+      paths.push(previous ? `${previous} / ${segment}` : segment)
+      return paths
+    }, [])
 
-    const selected = sortedCategories.find((item) => item.category === category)
-    if (!selected) return top
-    if (top.some((item) => item.category === selected.category)) return top
+    setExpandedCategoryIds((previous) => Array.from(new Set([...previous, ...nextExpanded])))
+  }, [category])
 
-    return [...top, selected]
-  }, [showAllCategories, sortedCategories, category])
-
-  const hiddenCategoryCount = Math.max(sortedCategories.length - visibleCategories.length, 0)
+  const toggleCategoryNode = (categoryId: string) => {
+    setExpandedCategoryIds((previous) =>
+      previous.includes(categoryId)
+        ? previous.filter((value) => value !== categoryId)
+        : [...previous, categoryId],
+    )
+  }
 
   const latestPlatformReleases = useMemo<PlatformReleasePreview[]>(() => {
     if (!platformHistory?.items) return []
@@ -190,6 +277,54 @@ export default function PublicDocumentsPage() {
       .slice(0, 3)
   }, [platformHistory, platformIdByName])
 
+  const renderCategoryNodes = (nodes: CategoryTreeNode[], level: number = 0) =>
+    nodes.map((node) => {
+      const hasChildren = node.children.length > 0
+      const isExpanded = expandedCategoryIds.includes(node.id)
+      const isSelected = node.filterCategory === category
+
+      return (
+        <li key={node.id}>
+          <div
+            className={`flex items-center gap-2 rounded-xl transition-colors ${
+              isSelected ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'
+            }`}
+            style={{ paddingLeft: `${0.75 + level * 0.8}rem` }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={() => toggleCategoryNode(node.id)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+            ) : (
+              <span className="inline-flex h-8 w-8 items-center justify-center text-slate-300">•</span>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                node.filterCategory ? handleCategoryClick(node.filterCategory) : toggleCategoryNode(node.id)
+              }
+              className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2 pr-3 text-left"
+            >
+              <span className={`truncate ${isSelected ? 'font-medium' : ''}`}>{node.label}</span>
+              <span className="pill bg-slate-100 text-slate-600 border-slate-200">{node.count}</span>
+            </button>
+          </div>
+          {hasChildren && isExpanded ? (
+            <ul className="mt-1 space-y-1">{renderCategoryNodes(node.children, level + 1)}</ul>
+          ) : null}
+        </li>
+      )
+    })
+
   return (
     <div className="min-h-screen bg-slate-50">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
@@ -226,7 +361,7 @@ export default function PublicDocumentsPage() {
             <div className="surface-card rounded-2xl p-4">
               <div className="mb-3">
                 <h3 className="font-display font-semibold text-slate-900">Categories</h3>
-                <p className="text-xs text-slate-500 mt-1">Filter by documentation domain</p>
+                <p className="text-xs text-slate-500 mt-1">Browse nested documentation areas</p>
               </div>
               <ul className="space-y-1">
                 <li>
@@ -244,35 +379,8 @@ export default function PublicDocumentsPage() {
                     </span>
                   </button>
                 </li>
-                {visibleCategories.map((cat) => (
-                  <li key={cat.category}>
-                    <button
-                      onClick={() => handleCategoryClick(cat.category)}
-                      className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex justify-between items-center ${
-                        category === cat.category
-                          ? 'bg-sky-50 text-sky-700 font-medium'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="truncate">{cat.category}</span>
-                      <span className="pill bg-slate-100 text-slate-600 border-slate-200">
-                        {cat.count}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                {renderCategoryNodes(categoryTree)}
               </ul>
-              {sortedCategories.length > TOP_CATEGORIES_LIMIT && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllCategories((prev) => !prev)}
-                  className="mt-3 w-full text-xs font-semibold text-sky-700 hover:text-sky-800 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2"
-                >
-                  {showAllCategories
-                    ? 'Show top categories only'
-                    : `Show ${hiddenCategoryCount} more categories`}
-                </button>
-              )}
             </div>
           </aside>
 

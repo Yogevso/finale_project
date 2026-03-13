@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 from app.models import (
     Attachment,
-    AttachmentArtifact,
     Comment,
     Document,
     DocumentStatus,
@@ -324,14 +323,13 @@ class TestViewerAttachments:
         db.commit()
         db.refresh(doc)
 
-        # Add attachment with correct field names
         attachment = Attachment(
             document_id=doc.id,
-            filename="test.pdf",
-            original_filename="test.pdf",
+            filename="test.docx",
+            original_filename="test.docx",
             file_size=1024,
-            mime_type="application/pdf",
-            storage_path="/uploads/test.pdf",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path="/uploads/test.docx",
             uploaded_by=test_user.id,
         )
         db.add(attachment)
@@ -382,21 +380,21 @@ class TestViewerAttachments:
 
         attachment_one = Attachment(
             document_id=doc.id,
-            filename="v1.pdf",
-            original_filename="v1.pdf",
+            filename="v1.docx",
+            original_filename="v1.docx",
             file_size=1024,
-            mime_type="application/pdf",
-            storage_path="/uploads/v1.pdf",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path="/uploads/v1.docx",
             uploaded_by=test_user.id,
             uploaded_at=v1_time - timedelta(minutes=5),
         )
         attachment_two = Attachment(
             document_id=doc.id,
-            filename="v2.pdf",
-            original_filename="v2.pdf",
+            filename="v2.docx",
+            original_filename="v2.docx",
             file_size=1024,
-            mime_type="application/pdf",
-            storage_path="/uploads/v2.pdf",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path="/uploads/v2.docx",
             uploaded_by=test_user.id,
             uploaded_at=v2_time - timedelta(minutes=5),
         )
@@ -419,8 +417,8 @@ class TestViewerAttachments:
         assert attachment_one.id in second_ids
         assert attachment_two.id in second_ids
 
-    def test_public_attachment_download_and_preview(self, client, db, test_user, tmp_path):
-        """Public viewer should stream attachment bytes without auth."""
+    def test_public_attachment_download(self, client, db, test_user, tmp_path):
+        """Public viewer should stream original attachment bytes without auth."""
         doc = Document(
             title="Viewer Stream Doc",
             document_number=f"DOC-VSD-{uuid.uuid4().hex[:6].upper()}",
@@ -432,17 +430,17 @@ class TestViewerAttachments:
         db.commit()
         db.refresh(doc)
 
-        file_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
-        file_path = tmp_path / "viewer-stream.pdf"
+        file_bytes = b"PK\x03\x04viewer-docx-bytes"
+        file_path = tmp_path / "viewer-stream.docx"
         file_path.write_bytes(file_bytes)
 
         attachment = Attachment(
             document_id=doc.id,
-            filename="viewer-stream.pdf",
-            original_filename="viewer-stream.pdf",
+            filename="viewer-stream.docx",
+            original_filename="viewer-stream.docx",
             file_size=len(file_bytes),
             size_bytes=len(file_bytes),
-            mime_type="application/pdf",
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             storage_path=str(file_path),
             storage_key=str(file_path),
             uploaded_by=test_user.id,
@@ -450,13 +448,6 @@ class TestViewerAttachments:
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
-
-        preview_response = client.get(
-            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/preview"
-        )
-        assert preview_response.status_code == 200
-        assert "inline;" in preview_response.headers["content-disposition"]
-        assert preview_response.content == file_bytes
 
         download_response = client.get(
             f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/download"
@@ -464,109 +455,4 @@ class TestViewerAttachments:
         assert download_response.status_code == 200
         assert "attachment;" in download_response.headers["content-disposition"]
         assert download_response.content == file_bytes
-
-    def test_public_attachment_outline(self, client, db, test_user, tmp_path):
-        """Public viewer should expose outline payload for PDF attachments."""
-        doc = Document(
-            title="Viewer Outline Doc",
-            document_number=f"DOC-VOD-{uuid.uuid4().hex[:6].upper()}",
-            status=DocumentStatus.ACTIVE,
-            visibility=DocumentVisibility.PUBLIC,
-            created_by=test_user.id,
-        )
-        db.add(doc)
-        db.commit()
-        db.refresh(doc)
-
-        file_bytes = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF"
-        file_path = tmp_path / "viewer-outline.pdf"
-        file_path.write_bytes(file_bytes)
-
-        attachment = Attachment(
-            document_id=doc.id,
-            filename="viewer-outline.pdf",
-            original_filename="viewer-outline.pdf",
-            file_size=len(file_bytes),
-            size_bytes=len(file_bytes),
-            mime_type="application/pdf",
-            storage_path=str(file_path),
-            storage_key=str(file_path),
-            uploaded_by=test_user.id,
-        )
-        db.add(attachment)
-        db.commit()
-        db.refresh(attachment)
-
-        response = client.get(
-            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/outline"
-        )
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["attachment_id"] == attachment.id
-        assert "items" in payload
-
-    def test_preview_stream_prefers_preview_artifact_over_original(
-        self, client, db, test_user, tmp_path
-    ):
-        """Public preview endpoint should stream preview PDF artifact bytes."""
-        doc = Document(
-            title="Preview Artifact Preference",
-            document_number=f"DOC-PAP-{uuid.uuid4().hex[:6].upper()}",
-            status=DocumentStatus.ACTIVE,
-            visibility=DocumentVisibility.PUBLIC,
-            created_by=test_user.id,
-        )
-        db.add(doc)
-        db.commit()
-        db.refresh(doc)
-
-        original_bytes = b"ORIGINAL-DOCX-BYTES"
-        preview_bytes = b"%PDF-1.4\nPREVIEW\n%%EOF"
-
-        original_path = tmp_path / "source.docx"
-        preview_path = tmp_path / "source.preview.pdf"
-        original_path.write_bytes(original_bytes)
-        preview_path.write_bytes(preview_bytes)
-
-        attachment = Attachment(
-            document_id=doc.id,
-            filename="source.docx",
-            original_filename="source.docx",
-            file_size=len(original_bytes),
-            size_bytes=len(original_bytes),
-            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            storage_path=str(original_path),
-            storage_key=str(original_path),
-            uploaded_by=test_user.id,
-            preview_pdf_status="ready",
-            preview_pdf_storage_key=str(preview_path),
-            preview_pdf_size_bytes=len(preview_bytes),
-            preview_pdf_mime_type="application/pdf",
-        )
-        db.add(attachment)
-        db.commit()
-        db.refresh(attachment)
-
-        preview_artifact = AttachmentArtifact(
-            attachment_id=attachment.id,
-            kind="preview_pdf",
-            status="ready",
-            storage_key=str(preview_path),
-            mime_type="application/pdf",
-            size_bytes=len(preview_bytes),
-        )
-        db.add(preview_artifact)
-        db.commit()
-
-        preview_response = client.get(
-            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/preview"
-        )
-        assert preview_response.status_code == 200
-        assert preview_response.content == preview_bytes
-
-        download_response = client.get(
-            f"/api/v1/viewer/documents/{doc.id}/attachments/{attachment.id}/download"
-        )
-        assert download_response.status_code == 200
-        assert download_response.content == original_bytes
 

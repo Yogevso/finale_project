@@ -177,13 +177,16 @@ test.describe('Attachment Upload/Download', () => {
         await attachmentsTab.click();
         await page.waitForTimeout(500);
         
-        // Check for file input
         const fileInput = page.locator('input[type="file"]');
-        const uploadBtn = page.locator('button:has-text("Upload"), button:has-text("Add")');
-        
-        // Either file input or upload button should exist
-        const hasUploadCapability = await fileInput.count() > 0 || await uploadBtn.count() > 0;
-        expect(hasUploadCapability).toBeTruthy();
+        const uploadControl = page.locator(
+          'label:has-text("Upload"), button:has-text("Upload"), button:has-text("Add")',
+        );
+
+        await expect
+          .poll(async () => (await fileInput.count()) + (await uploadControl.count()), {
+            timeout: 10000,
+          })
+          .toBeGreaterThan(0);
       }
     }
   });

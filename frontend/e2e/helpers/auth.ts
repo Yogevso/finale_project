@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-type Credentials = {
+export type Credentials = {
   username: string;
   password: string;
 };
@@ -11,7 +11,7 @@ type TokenPayload = {
 };
 
 const tokenCache = new Map<string, TokenPayload>();
-const E2E_BYPASS_HEADERS = { 'x-e2e-test': '1' };
+export const E2E_BYPASS_HEADERS = { 'x-e2e-test': '1' };
 
 function parseRetryAfterSeconds(headers: Record<string, string>, body: unknown): number {
   const retryHeader = Number(headers['retry-after'] ?? '');
@@ -129,4 +129,20 @@ export async function loginByApi(
     return;
   }
   throw new Error(`Failed to authenticate "${credentials.username}" and reach ${expectedUrl}. Final URL: ${page.url()}`);
+}
+
+export async function getApiAuthHeaders(
+  page: Page,
+  credentials: Credentials,
+): Promise<Record<string, string>> {
+  let payload = tokenCache.get(credentials.username);
+  if (!payload) {
+    payload = await requestTokens(page, credentials);
+    tokenCache.set(credentials.username, payload);
+  }
+
+  return {
+    ...E2E_BYPASS_HEADERS,
+    Authorization: `Bearer ${payload.access_token}`,
+  };
 }

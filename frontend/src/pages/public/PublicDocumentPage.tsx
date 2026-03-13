@@ -1,5 +1,5 @@
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   FileText, 
@@ -13,8 +13,10 @@ import {
   LogIn
 } from 'lucide-react'
 import { publicApi } from '@/lib/publicApi'
+import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import NotFoundState from '@/components/NotFoundState'
+import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
 
 export default function PublicDocumentPage() {
   const { id } = useParams<{ id: string }>()
@@ -35,6 +37,7 @@ export default function PublicDocumentPage() {
     queryFn: () => publicApi.getDocument(documentId),
     enabled: documentId > 0,
   })
+  const renderedContent = useMemo(() => parseDocumentHtml(doc?.content ?? ''), [doc?.content])
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -94,42 +97,29 @@ export default function PublicDocumentPage() {
 
   return (
     <div className={`${isFullscreen ? 'min-h-screen bg-white' : 'min-h-screen bg-slate-50'}`}>
-      {isFullscreen && (
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg gap-4">
-          <button
-            onClick={() => navigate(`/doc/${documentId}`)}
-            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
-          >
-            Exit Fullscreen
-          </button>
-          <div className="flex-1 text-center font-display font-semibold truncate">{doc.title}</div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => applyWidth('reading')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                contentWidth === 'reading'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
-              }`}
-            >
-              Reading width
-            </button>
-            <button
-              onClick={() => applyWidth('fluid')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                contentWidth === 'fluid'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
-              }`}
-            >
-              Full width
-            </button>
-          </div>
-        </div>
-      )}
+      <FullscreenTopBar
+        isFullscreen={isFullscreen}
+        documentTitle={doc.title}
+        contentWidth={contentWidth}
+        onExitFullscreen={() => navigate(`/doc/${documentId}`)}
+        onSetReadingWidth={() => applyWidth('reading')}
+        onSetFluidWidth={() => applyWidth('fluid')}
+        wrapperClassName="px-4"
+      />
 
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
         <div className={`${isFullscreen ? (contentWidth === 'reading' ? 'max-w-5xl mx-auto' : 'max-w-none') : 'max-w-5xl mx-auto'} px-6 py-12`}>
+          <nav className="mb-5 flex flex-wrap items-center gap-2 text-sm text-sky-100/80">
+            <Link to="/docs" className="hover:text-white">
+              Home
+            </Link>
+            <span>/</span>
+            <Link to="/docs" className="hover:text-white">
+              {doc.category || 'Documents'}
+            </Link>
+            <span>/</span>
+            <span className="truncate text-white">{doc.title}</span>
+          </nav>
           <Link
             to="/docs"
             className="inline-flex items-center gap-2 text-sky-100/80 hover:text-white mb-5"
@@ -226,10 +216,7 @@ export default function PublicDocumentPage() {
           <section className="mb-8">
             <h2 className="text-lg font-display font-semibold text-slate-900 mb-3">Content</h2>
             <div className="prose prose-slate max-w-none surface-card rounded-2xl p-6">
-              <div 
-                dangerouslySetInnerHTML={{ __html: doc.content }}
-                className="whitespace-pre-wrap"
-              />
+              <div className="whitespace-pre-wrap">{renderedContent}</div>
             </div>
           </section>
         )}

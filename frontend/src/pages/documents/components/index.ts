@@ -1,3 +1,4 @@
+export * from './BulkMetadataEditModal'
 export * from './CreateDocumentModal'
 export * from './DocumentsFiltersToolbar'
 export * from './DocumentsEmptyState'

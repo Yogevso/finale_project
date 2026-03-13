@@ -21,6 +21,10 @@ export type DocumentListFilters = {
   search: string
   statusFilter: DocumentStatus | ''
   visibilityFilter: DocumentVisibility | ''
+  categoryFilter: string
+  companyIdFilter: number | null
+  dateFrom: string
+  dateTo: string
 }
 
 export type DocumentUploadMetadataInput = {
@@ -29,31 +33,39 @@ export type DocumentUploadMetadataInput = {
   category: string
   releaseBranch: string
   tags: string
+  dueDate?: string | null
+  status?: DocumentStatus
   visibility?: DocumentVisibility
   companyIds?: number[]
+  releaseNotesFile?: File | null
+  contentFile?: File | null
 }
 
 export type DocumentsUseCasesClient = Pick<
   typeof api,
+  | 'archiveDocument'
   | 'createDocument'
   | 'createVersion'
   | 'deleteDocument'
   | 'generateWordAttachment'
+  | 'getDocumentCalendarExport'
   | 'getDocuments'
+  | 'restoreDocument'
   | 'updateDocument'
   | 'uploadDocument'
 >
 
-export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx'
+export type UploadDocumentOptions = Parameters<DocumentsUseCasesClient['uploadDocument']>[2]
+
+export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx'
 export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024
 
 export const DOCUMENT_UPLOAD_ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ])
 
-export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx'])
+export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.docx', '.pptx'])
 
 export function buildDocumentsListQueryParams(filters: DocumentListFilters): DocumentQueryParams {
   return {
@@ -62,6 +74,10 @@ export function buildDocumentsListQueryParams(filters: DocumentListFilters): Doc
     search: filters.search || undefined,
     status: filters.statusFilter || undefined,
     visibility: filters.visibilityFilter || undefined,
+    category: filters.categoryFilter || undefined,
+    company_id: filters.companyIdFilter ?? undefined,
+    date_from: filters.dateFrom || undefined,
+    date_to: filters.dateTo || undefined,
   }
 }
 
@@ -74,7 +90,7 @@ export function validateDocumentUploadFile(file: File): string | null {
     DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS.has(extension)
 
   if (!isSupported) {
-    return 'Only PDF and Word documents are allowed'
+    return 'Only DOCX and PPTX files are allowed'
   }
 
   if (file.size > DOCUMENT_UPLOAD_MAX_SIZE_BYTES) {
@@ -101,8 +117,12 @@ function toUploadMetadata(input: DocumentUploadMetadataInput) {
     category: toOptionalString(input.category),
     release_branch: toOptionalString(input.releaseBranch),
     tags: toOptionalString(input.tags),
+    due_date: input.dueDate || undefined,
+    status: input.status,
     visibility: audience.visibility,
     company_ids: audience.company_ids.length > 0 ? audience.company_ids : undefined,
+    release_notes: input.releaseNotesFile ?? undefined,
+    content_file: input.contentFile ?? undefined,
   }
 }
 
@@ -114,6 +134,18 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
 
     deleteDocument(documentId: number): Promise<MessageResponse> {
       return client.deleteDocument(documentId)
+    },
+
+    archiveDocument(documentId: number) {
+      return client.archiveDocument(documentId)
+    },
+
+    restoreDocument(documentId: number) {
+      return client.restoreDocument(documentId)
+    },
+
+    getDocumentCalendarExport(documentId: number) {
+      return client.getDocumentCalendarExport(documentId)
     },
 
     updateVisibility(
@@ -153,6 +185,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         category: formData.category,
         release_branch: formData.release_branch,
         tags: formData.tags,
+        due_date: formData.due_date || undefined,
       })
 
       const content = formData.content?.trim() || ''
@@ -176,7 +209,11 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return document
     },
 
-    async uploadDocument(file: File, metadata: DocumentUploadMetadataInput): Promise<Document> {
+    async uploadDocument(
+      file: File,
+      metadata: DocumentUploadMetadataInput,
+      options?: UploadDocumentOptions,
+    ): Promise<Document> {
       const audienceValidationIssue = validateAudienceFormPayload({
         visibility: metadata.visibility,
         company_ids: metadata.companyIds,
@@ -185,7 +222,7 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         throw new Error(audienceValidationIssue.message)
       }
 
-      return await client.uploadDocument(file, toUploadMetadata(metadata))
+      return await client.uploadDocument(file, toUploadMetadata(metadata), options)
     },
   }
 }

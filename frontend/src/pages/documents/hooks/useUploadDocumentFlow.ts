@@ -11,16 +11,24 @@ import {
   validateDocumentUploadFile,
 } from '@/features/documents'
 import { useAuth } from '@/lib/auth'
-import type { DocumentVisibility } from '@/types'
+import type { DocumentStatus, DocumentVisibility } from '@/types'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 export const ACCEPTED_FILE_TYPES = DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES
+export const MANAGER_UPLOAD_STATUS_OPTIONS: Array<{ value: DocumentStatus; label: string }> = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending_review', label: 'Pending Review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'active', label: 'Active' },
+]
+
+type SupplementalUploadSlot = 'content' | 'releaseNotes'
 
 export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isManager } = useAuth()
   const toast = useToast()
   const defaultVisibility = getDefaultAudienceForRole(user?.role)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -31,10 +39,15 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('')
   const [releaseBranch, setReleaseBranch] = useState('')
   const [tags, setTags] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [uploadStatus, setUploadStatus] = useState<DocumentStatus>('draft')
   const [visibility, setVisibility] = useState<DocumentVisibility>(defaultVisibility)
   const [companyIds, setCompanyIds] = useState<number[]>([])
+  const [contentFile, setContentFile] = useState<File | null>(null)
+  const [releaseNotesFile, setReleaseNotesFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [dragActive, setDragActive] = useState(false)
+  const [uploadProgressPercent, setUploadProgressPercent] = useState<number | null>(null)
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: defaultVisibility,
@@ -54,8 +67,54 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     category.trim() !== '' ||
     releaseBranch.trim() !== '' ||
     tags.trim() !== '' ||
+    dueDate.trim() !== '' ||
+    contentFile !== null ||
+    releaseNotesFile !== null ||
+    (isManager && uploadStatus !== 'draft') ||
     audienceDirtyState.visibilityChanged ||
     audienceDirtyState.companyAssignmentsChanged
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) =>
+      documentsUseCases.uploadDocument(file, {
+        title,
+        description,
+        category,
+        releaseBranch,
+        tags,
+        dueDate,
+        status: isManager ? uploadStatus : undefined,
+        visibility,
+        companyIds,
+        contentFile,
+        releaseNotesFile,
+      }, {
+        onUploadProgress: (event) => {
+          if (!event.total || event.total <= 0) {
+            return
+          }
+          setUploadProgressPercent(
+            Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))),
+          )
+        },
+      }),
+    onMutate: () => {
+      setUploadProgressPercent(0)
+    },
+    onSuccess: (doc) => {
+      setUploadProgressPercent(100)
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document uploaded', 'Opening the document...')
+      onClose()
+      navigate(`/documents/${doc.id}/fullscreen`)
+    },
+    onError: (err: unknown) => {
+      setUploadProgressPercent(null)
+      const message = extractApiErrorMessage(err, 'Failed to upload document')
+      setError(message)
+      toast.error('Upload failed', message)
+    },
+  })
 
   const confirmClose = useCallback(() => {
     if (!hasUnsavedChanges) {
@@ -66,30 +125,6 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
       onClose()
     }
   }, [hasUnsavedChanges, onClose])
-
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) =>
-      documentsUseCases.uploadDocument(file, {
-        title,
-        description,
-        category,
-        releaseBranch,
-        tags,
-        visibility,
-        companyIds,
-      }),
-    onSuccess: (doc) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
-      toast.success('Document uploaded', 'Opening the document...')
-      onClose()
-      navigate(`/documents/${doc.id}/fullscreen`)
-    },
-    onError: (err: unknown) => {
-      const message = extractApiErrorMessage(err, 'Failed to upload document')
-      setError(message)
-      toast.error('Upload failed', message)
-    },
-  })
 
   const handleFileSelect = (file: File) => {
     const validationError = validateDocumentUploadFile(file)
@@ -103,6 +138,31 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     if (!title) {
       setTitle(file.name.replace(/\.[^/.]+$/, ''))
     }
+  }
+
+  const handleSupplementalFileSelect = (slot: SupplementalUploadSlot, file: File | null) => {
+    if (file === null) {
+      if (slot === 'content') {
+        setContentFile(null)
+      } else {
+        setReleaseNotesFile(null)
+      }
+      return
+    }
+
+    const validationError = validateDocumentUploadFile(file)
+    if (validationError) {
+      const label = slot === 'content' ? 'Content file' : 'Release notes file'
+      setError(`${label}: ${validationError}`)
+      return
+    }
+
+    if (slot === 'content') {
+      setContentFile(file)
+    } else {
+      setReleaseNotesFile(file)
+    }
+    setError('')
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -148,17 +208,26 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     setReleaseBranch,
     tags,
     setTags,
+    dueDate,
+    setDueDate,
+    uploadStatus,
+    setUploadStatus,
     visibility,
     setVisibility,
     companyIds,
     setCompanyIds,
+    canManageAdvancedUploadOptions: isManager,
+    contentFile,
+    releaseNotesFile,
     error,
     setError,
     dragActive,
     setDragActive,
+    uploadProgressPercent,
     audienceDirtyState,
     uploadMutation,
     handleFileSelect,
+    handleSupplementalFileSelect,
     handleDrop,
     handleSubmit,
     hasUnsavedChanges,
