@@ -2,9 +2,9 @@ Project Plan
 Last updated: 2026-03-13
 
 Current checkpoint
-- Stable return point: `de87b74` (`refactor(wave-y1): harden conversion and preview browser deps`)
+- Stable return point: `8e9a43e` (`feat(upload): polish modal progress and manager options`)
 - Active wave: Wave Y.1
-- Status: core delivery is done; upload UX polish is implemented and verified in the working tree; only optional coverage polish remains
+- Status: core delivery is done; upload UX polish is committed and verified; only optional coverage polish remains
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
