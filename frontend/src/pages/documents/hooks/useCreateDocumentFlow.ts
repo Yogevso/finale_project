@@ -12,6 +12,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { createCustomDocumentTemplate } from '@/lib/documentTemplates'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
@@ -22,6 +23,9 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const defaultVisibility = getDefaultAudienceForRole(user?.role)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
 
   const [formData, setFormData] = useState<DocumentCreateFormData>({
     title: '',
@@ -58,6 +62,9 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     (formData.release_branch?.trim() ?? '') !== '' ||
     (formData.tags?.trim() ?? '') !== '' ||
     (formData.due_date?.trim() ?? '') !== '' ||
+    saveAsTemplate ||
+    templateName.trim() !== '' ||
+    templateDescription.trim() !== '' ||
     audienceDirtyState.visibilityChanged ||
     audienceDirtyState.companyAssignmentsChanged
 
@@ -90,7 +97,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const duplicateCheckQuery = useQuery({
     queryKey: queryKeys.documents.duplicateCheck(debouncedTitle.trim()),
     queryFn: () => api.checkDocumentDuplicates(debouncedTitle.trim()),
-    enabled: debouncedTitle.trim().length >= 3,
+    enabled: !saveAsTemplate && debouncedTitle.trim().length >= 3,
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -99,6 +106,30 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
 
     if (!formData.title.trim()) {
       setError('Title is required')
+      return
+    }
+
+    if (saveAsTemplate && !(templateName.trim() || formData.title.trim())) {
+      setError('Add a template name before saving to the Template Library')
+      return
+    }
+
+    if (saveAsTemplate) {
+      createCustomDocumentTemplate({
+        name: templateName.trim() || formData.title.trim(),
+        description:
+          templateDescription.trim() ||
+          formData.description?.trim() ||
+          'Reusable template saved from the document editor.',
+        category: formData.category?.trim() || 'Custom',
+        tags: (formData.tags || '')
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        content: formData.content?.trim() || '<p>Start writing here.</p>',
+      })
+      toast.success('Template saved', 'Added to your personal Template Library.')
+      onClose()
       return
     }
 
@@ -120,6 +151,12 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     setGenerateWord,
     selectedTemplateId,
     setSelectedTemplateId,
+    saveAsTemplate,
+    setSaveAsTemplate,
+    templateName,
+    setTemplateName,
+    templateDescription,
+    setTemplateDescription,
     createMutation,
     duplicateCheckQuery,
     audienceDirtyState,

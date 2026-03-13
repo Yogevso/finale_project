@@ -157,6 +157,7 @@ export default function DocumentsPage() {
             onToggleDocumentSelection={controller.toggleDocumentSelection}
             onToggleAllVisibleDocuments={controller.toggleAllVisibleDocuments}
             onArchiveOrRestore={controller.handleArchiveOrRestore}
+            onDelete={controller.handleDelete}
             onVisibilityChange={controller.handleVisibilityChange}
             onPageChange={controller.setPage}
           />
