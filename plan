@@ -2,7 +2,7 @@ Project Plan
 Last updated: 2026-03-13
 
 Current checkpoint
-- Stable return point: `8e9a43e` (`feat(upload): polish modal progress and manager options`)
+- Stable return point: `fa45412` (`test(coverage): cover viewer warning and toc copy flows`)
 - Active wave: Wave Y.1
 - Status: Wave Y.1 delivery is complete in the working tree; the last optional viewer coverage polish is implemented and verified
 
