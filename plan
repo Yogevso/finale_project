@@ -4,7 +4,7 @@ Last updated: 2026-03-13
 Current checkpoint
 - Stable return point: `fa45412` (`test(coverage): cover viewer warning and toc copy flows`)
 - Active wave: Wave Y.1
-- Status: Wave Y.1 delivery is complete in the working tree; the last optional viewer coverage polish is implemented and verified
+- Status: Wave Y.1 delivery is complete on this branch; the last optional viewer coverage polish is implemented and verified
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
@@ -16,7 +16,7 @@ Completed in Wave Y.1
 
 Verification snapshot
 - Backend full suite: 967 passed, 3 skipped
-- Frontend full unit suite: 171 passed
+- Frontend full unit suite: 175 passed
 - Playwright matrix in slices: 300 passed, 1 skipped
 - Focused AttachmentService regression slice: 53 passed
 - Focused conversion/reader/container regression slice: 36 passed
