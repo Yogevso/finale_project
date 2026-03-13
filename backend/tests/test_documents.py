@@ -27,6 +27,8 @@ from app.schemas import DocumentCreate, DocumentUpdate
 from app.security import get_password_hash
 from app.services.document_service import DocumentService
 
+DEFAULT_PLATFORM = "Core Platform"
+
 
 def _login_headers(client, username: str, password: str) -> dict[str, str]:
     response = client.post(
@@ -38,18 +40,26 @@ def _login_headers(client, username: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _document_create_payload(**overrides):
+    payload = {
+        "title": "Test Document",
+        "platform": DEFAULT_PLATFORM,
+        "status": "draft",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_create_document(client, auth_headers):
     """Test document creation"""
     response = client.post(
         "/api/v1/documents",
         headers=auth_headers,
-        json={
-            "title": "Test Document",
-            "description": "This is a test document",
-            "category": "Testing",
-            "tags": "test,sample",
-            "status": "draft",
-        },
+        json=_document_create_payload(
+            description="This is a test document",
+            category="Testing",
+            tags="test,sample",
+        ),
     )
 
     assert response.status_code == 201
@@ -64,15 +74,25 @@ def test_create_company_visible_document_requires_company_assignment(client, aut
     response = client.post(
         "/api/v1/documents",
         headers=auth_headers,
-        json={
-            "title": "Company Scoped Doc",
-            "visibility": "company",
-            "status": "draft",
-        },
+        json=_document_create_payload(
+            title="Company Scoped Doc",
+            visibility="company",
+        ),
     )
 
     assert response.status_code == 400
     assert "at least one assigned company" in response.json()["detail"]
+
+
+def test_create_document_requires_platform(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents",
+        headers=auth_headers,
+        json={"title": "Missing Platform", "status": "draft"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Platform is required"
 
 
 def test_create_company_visible_document_with_assignment(
@@ -81,12 +101,11 @@ def test_create_company_visible_document_with_assignment(
     response = client.post(
         "/api/v1/documents",
         headers=auth_headers,
-        json={
-            "title": "Company Scoped Doc",
-            "visibility": "company",
-            "status": "draft",
-            "company_ids": [test_tenant.id],
-        },
+        json=_document_create_payload(
+            title="Company Scoped Doc",
+            visibility="company",
+            company_ids=[test_tenant.id],
+        ),
     )
 
     assert response.status_code == 201
@@ -99,12 +118,11 @@ def test_create_non_company_document_rejects_company_assignments(client, auth_he
     response = client.post(
         "/api/v1/documents",
         headers=auth_headers,
-        json={
-            "title": "Internal Doc With Invalid Company Assignments",
-            "visibility": "internal",
-            "status": "draft",
-            "company_ids": [test_tenant.id],
-        },
+        json=_document_create_payload(
+            title="Internal Doc With Invalid Company Assignments",
+            visibility="internal",
+            company_ids=[test_tenant.id],
+        ),
     )
 
     assert response.status_code == 400
@@ -121,12 +139,11 @@ def test_create_company_visible_document_rejects_inactive_companies(
     response = client.post(
         "/api/v1/documents",
         headers=auth_headers,
-        json={
-            "title": "Company Doc With Inactive Assignment",
-            "visibility": "company",
-            "status": "draft",
-            "company_ids": [test_tenant.id],
-        },
+        json=_document_create_payload(
+            title="Company Doc With Inactive Assignment",
+            visibility="company",
+            company_ids=[test_tenant.id],
+        ),
     )
 
     assert response.status_code == 400
@@ -529,6 +546,7 @@ def test_create_document_rolls_back_when_initial_version_creation_fails(db, test
     document_data = DocumentCreate(
         title="Atomic rollback doc",
         description="Should rollback on failure",
+        platform=DEFAULT_PLATFORM,
     )
 
     original_add = db.add
@@ -546,6 +564,31 @@ def test_create_document_rolls_back_when_initial_version_creation_fails(db, test
         service.create_document(document_data, test_user)
 
     assert db.query(Document).filter(Document.title == "Atomic rollback doc").count() == 0
+
+
+def test_create_document_with_parent_inherits_platform_when_missing(db, test_user):
+    service = DocumentService(db)
+    parent = service.create_document(
+        DocumentCreate(
+            title="Parent With Platform",
+            description="parent",
+            platform="Meteor Lake",
+        ),
+        test_user,
+    )
+
+    child = service.create_document(
+        DocumentCreate(
+            title="Child Inherits Platform",
+            description="child",
+            parent_id=parent.id,
+        ),
+        test_user,
+    )
+
+    assert child.parent_id == parent.id
+    assert child.platform == parent.platform
+    assert child.platform_id == parent.platform_id
 
 
 def test_generate_document_number_seeds_from_existing_daily_documents(db, test_user):
@@ -1048,6 +1091,7 @@ def test_create_document_normalizes_topic_to_canonical_slug(db, test_user):
             title="Topic Normalized Create",
             description="Topic should normalize to canonical slug",
             topic="SDKs & Tools",
+            platform=DEFAULT_PLATFORM,
         ),
         test_user,
     )
@@ -1065,6 +1109,7 @@ def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
             title="Topic Normalized Update",
             description="Topic update normalization",
             topic="platform",
+            platform=DEFAULT_PLATFORM,
         ),
         test_user,
     )
@@ -1077,4 +1122,3 @@ def test_update_document_normalizes_topic_to_canonical_slug(db, test_user):
     )
 
     assert updated.topic == "sdk-tools"
-

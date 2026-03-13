@@ -125,6 +125,9 @@ export interface Document {
   document_number: string
   description: string | null
   version_label?: string | null
+  topic?: string | null
+  platform?: string | null
+  platform_id?: number | null
   release_branch?: string | null
   due_date?: string | null
   status: DocumentStatus
@@ -148,6 +151,9 @@ export interface DocumentCreate {
   title: string
   description?: string
   version_label?: string
+  topic?: string
+  platform?: string
+  platform_id?: number
   release_branch?: string
   due_date?: string | null
   document_number?: string
@@ -163,6 +169,9 @@ export interface DocumentUpdate {
   title?: string
   description?: string
   version_label?: string
+  topic?: string
+  platform?: string
+  platform_id?: number
   release_branch?: string
   due_date?: string | null
   status?: DocumentStatus

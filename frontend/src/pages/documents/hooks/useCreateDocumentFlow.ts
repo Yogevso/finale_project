@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
@@ -15,6 +15,9 @@ import { useAuth } from '@/lib/auth'
 import { createCustomDocumentTemplate } from '@/lib/documentTemplates'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import type { DocumentListResponse } from '@/types'
+
+type SourceDocumentSummary = Pick<DocumentListResponse['items'][number], 'id' | 'title' | 'document_number'>
 
 export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
@@ -26,6 +29,10 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
+  const [copySourceSearch, setCopySourceSearch] = useState('')
+  const [selectedSourceDocument, setSelectedSourceDocument] = useState<SourceDocumentSummary | null>(
+    null,
+  )
 
   const [formData, setFormData] = useState<DocumentCreateFormData>({
     title: '',
@@ -34,6 +41,8 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     visibility: defaultVisibility,
     company_ids: [],
     category: '',
+    topic: '',
+    platform: '',
     release_branch: '',
     tags: '',
     due_date: '',
@@ -42,6 +51,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('')
   const [generateWord, setGenerateWord] = useState(false)
   const debouncedTitle = useDebouncedValue(formData.title, 250)
+  const debouncedCopySourceSearch = useDebouncedValue(copySourceSearch, 250)
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: defaultVisibility,
@@ -59,6 +69,8 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     (formData.description?.trim() ?? '') !== '' ||
     (formData.content?.trim() ?? '') !== '' ||
     (formData.category?.trim() ?? '') !== '' ||
+    (formData.topic?.trim() ?? '') !== '' ||
+    (formData.platform?.trim() ?? '') !== '' ||
     (formData.release_branch?.trim() ?? '') !== '' ||
     (formData.tags?.trim() ?? '') !== '' ||
     (formData.due_date?.trim() ?? '') !== '' ||
@@ -100,12 +112,99 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     enabled: !saveAsTemplate && debouncedTitle.trim().length >= 3,
   })
 
+  const copySourceResultsQuery = useQuery({
+    queryKey: queryKeys.documents.list({
+      page: 1,
+      page_size: 8,
+      search: debouncedCopySourceSearch.trim(),
+    }),
+    queryFn: () =>
+      documentsUseCases.listDocuments({
+        page: 1,
+        page_size: 8,
+        search: debouncedCopySourceSearch.trim(),
+      }),
+    enabled: !saveAsTemplate && debouncedCopySourceSearch.trim().length >= 2,
+  })
+
+  const platformSuggestionsQuery = useQuery({
+    queryKey: queryKeys.documents.list({ page: 1, page_size: 100 }),
+    queryFn: () =>
+      documentsUseCases.listDocuments({
+        page: 1,
+        page_size: 100,
+      }),
+    enabled: !saveAsTemplate,
+    staleTime: 60_000,
+  })
+
+  const platformSuggestions = useMemo(() => {
+    const names = (platformSuggestionsQuery.data?.items ?? [])
+      .map((document) => document.platform?.trim())
+      .filter((platformName): platformName is string => Boolean(platformName))
+
+    return Array.from(new Set(names)).sort((left, right) => left.localeCompare(right))
+  }, [platformSuggestionsQuery.data?.items])
+
+  const copySourceMutation = useMutation({
+    mutationFn: (documentId: number) => documentsUseCases.loadDuplicateDocumentDraft(documentId),
+    onSuccess: (draft, documentId) => {
+      const matchedSourceDocument =
+        copySourceResultsQuery.data?.items.find((document) => document.id === documentId) || null
+
+      setFormData((previous) => ({
+        ...previous,
+        ...draft,
+      }))
+      setSelectedTemplateId(null)
+      setSelectedSourceDocument(
+        matchedSourceDocument
+          ? {
+              id: matchedSourceDocument.id,
+              title: matchedSourceDocument.title,
+              document_number: matchedSourceDocument.document_number,
+            }
+          : {
+              id: documentId,
+              title: draft.title.replace(/^Copy of\s+/i, ''),
+              document_number: '',
+            },
+      )
+      setCopySourceSearch('')
+      setError('')
+    },
+    onError: (err: unknown) => {
+      const message = extractApiErrorMessage(err, 'Failed to load source document')
+      setError(message)
+      toast.error('Failed to copy document', message)
+    },
+  })
+
+  const handleCopyFromDocument = async (document: SourceDocumentSummary) => {
+    await copySourceMutation.mutateAsync(document.id)
+    setSelectedSourceDocument(document)
+  }
+
+  const clearCopiedSource = () => {
+    setSelectedSourceDocument(null)
+    setCopySourceSearch('')
+    setFormData((previous) => ({
+      ...previous,
+      parent_id: undefined,
+    }))
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!formData.title.trim()) {
       setError('Title is required')
+      return
+    }
+
+    if (!saveAsTemplate && !formData.platform?.trim() && !formData.platform_id) {
+      setError('Platform is required')
       return
     }
 
@@ -157,6 +256,14 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     setTemplateName,
     templateDescription,
     setTemplateDescription,
+    copySourceSearch,
+    setCopySourceSearch,
+    selectedSourceDocument,
+    copySourceResultsQuery,
+    copySourceMutation,
+    handleCopyFromDocument,
+    clearCopiedSource,
+    platformSuggestions,
     createMutation,
     duplicateCheckQuery,
     audienceDirtyState,

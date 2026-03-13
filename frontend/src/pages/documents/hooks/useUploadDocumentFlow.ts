@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 import {
@@ -37,6 +37,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
+  const [platform, setPlatform] = useState('')
   const [releaseBranch, setReleaseBranch] = useState('')
   const [tags, setTags] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -65,6 +66,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     title.trim() !== '' ||
     description.trim() !== '' ||
     category.trim() !== '' ||
+    platform.trim() !== '' ||
     releaseBranch.trim() !== '' ||
     tags.trim() !== '' ||
     dueDate.trim() !== '' ||
@@ -74,12 +76,31 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     audienceDirtyState.visibilityChanged ||
     audienceDirtyState.companyAssignmentsChanged
 
+  const platformSuggestionsQuery = useQuery({
+    queryKey: queryKeys.documents.list({ page: 1, page_size: 100 }),
+    queryFn: () =>
+      documentsUseCases.listDocuments({
+        page: 1,
+        page_size: 100,
+      }),
+    staleTime: 60_000,
+  })
+
+  const platformSuggestions = useMemo(() => {
+    const names = (platformSuggestionsQuery.data?.items ?? [])
+      .map((document) => document.platform?.trim())
+      .filter((platformName): platformName is string => Boolean(platformName))
+
+    return Array.from(new Set(names)).sort((left, right) => left.localeCompare(right))
+  }, [platformSuggestionsQuery.data?.items])
+
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
       documentsUseCases.uploadDocument(file, {
         title,
         description,
         category,
+        platform,
         releaseBranch,
         tags,
         dueDate,
@@ -182,6 +203,11 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
       return
     }
 
+    if (!platform.trim()) {
+      setError('Platform is required')
+      return
+    }
+
     const audienceValidationIssue = validateAudienceFormPayload({
       visibility,
       company_ids: companyIds,
@@ -204,6 +230,9 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     setDescription,
     category,
     setCategory,
+    platform,
+    setPlatform,
+    platformSuggestions,
     releaseBranch,
     setReleaseBranch,
     tags,

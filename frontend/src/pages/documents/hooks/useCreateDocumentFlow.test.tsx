@@ -9,6 +9,8 @@ const navigateMock = vi.fn()
 const toastSuccessMock = vi.fn()
 const toastErrorMock = vi.fn()
 const createDraftDocumentMock = vi.fn()
+const loadDuplicateDocumentDraftMock = vi.fn()
+const listDocumentsMock = vi.fn()
 const getDefaultAudienceForRoleMock = vi.fn()
 const getAudienceDirtyStateMock = vi.fn()
 const validateAudienceFormPayloadMock = vi.fn()
@@ -26,6 +28,8 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/features/documents', () => ({
   documentsUseCases: {
     createDraftDocument: (...args: unknown[]) => createDraftDocumentMock(...args),
+    loadDuplicateDocumentDraft: (...args: unknown[]) => loadDuplicateDocumentDraftMock(...args),
+    listDocuments: (...args: unknown[]) => listDocumentsMock(...args),
   },
   getDefaultAudienceForRole: (...args: unknown[]) => getDefaultAudienceForRoleMock(...args),
   getAudienceDirtyState: (...args: unknown[]) => getAudienceDirtyStateMock(...args),
@@ -85,7 +89,28 @@ describe('useCreateDocumentFlow', () => {
     })
     validateAudienceFormPayloadMock.mockReturnValue(null)
     checkDocumentDuplicatesMock.mockResolvedValue({ has_matches: false, matches: [] })
+    listDocumentsMock.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 100,
+      pages: 1,
+    })
     createDraftDocumentMock.mockResolvedValue({ id: 321 })
+    loadDuplicateDocumentDraftMock.mockResolvedValue({
+      title: 'Copy of Source Document',
+      description: 'Copied body',
+      platform: 'Core Platform',
+      category: 'Guides',
+      tags: 'copy',
+      content: '<p>Copied</p>',
+      parent_id: 44,
+      visibility: 'internal',
+      company_ids: [],
+      release_branch: '',
+      due_date: '',
+      topic: '',
+    })
     extractApiErrorMessageMock.mockImplementation((_error, fallback) => fallback)
   })
 
@@ -144,6 +169,7 @@ describe('useCreateDocumentFlow', () => {
       result.current.setFormData((previous) => ({
         ...previous,
         title: 'Normal Draft',
+        platform: 'Core Platform',
         content: '<p>Body</p>',
       }))
     })
@@ -168,5 +194,57 @@ describe('useCreateDocumentFlow', () => {
       expect(onClose).toHaveBeenCalledTimes(1)
       expect(navigateMock).toHaveBeenCalledWith('/documents/321/fullscreen')
     })
+  })
+
+  it('prefills the form from an existing document copy source', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateDocumentFlow({ onClose }), { wrapper })
+
+    await act(async () => {
+      await result.current.handleCopyFromDocument({
+        id: 44,
+        title: 'Source Document',
+        document_number: 'DOC-44',
+      })
+    })
+
+    expect(loadDuplicateDocumentDraftMock).toHaveBeenCalledWith(44)
+    expect(result.current.formData).toEqual(
+      expect.objectContaining({
+        title: 'Copy of Source Document',
+        description: 'Copied body',
+        platform: 'Core Platform',
+        category: 'Guides',
+        tags: 'copy',
+        content: '<p>Copied</p>',
+        parent_id: 44,
+      }),
+    )
+    expect(result.current.selectedSourceDocument).toEqual({
+      id: 44,
+      title: 'Source Document',
+      document_number: 'DOC-44',
+    })
+  })
+
+  it('blocks document creation when platform is missing', () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateDocumentFlow({ onClose }), { wrapper })
+
+    act(() => {
+      result.current.setFormData((previous) => ({
+        ...previous,
+        title: 'No Platform Draft',
+      }))
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    expect(result.current.error).toBe('Platform is required')
+    expect(createDraftDocumentMock).not.toHaveBeenCalled()
   })
 })

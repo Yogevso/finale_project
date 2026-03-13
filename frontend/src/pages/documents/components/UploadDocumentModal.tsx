@@ -22,6 +22,9 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     setDescription,
     category,
     setCategory,
+    platform,
+    setPlatform,
+    platformSuggestions,
     releaseBranch,
     setReleaseBranch,
     tags,
@@ -217,6 +220,30 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               className="input-field"
               placeholder="Document title (uses filename if empty)"
             />
+          </div>
+
+          <div>
+            <label htmlFor="upload-platform" className="block text-sm font-medium text-slate-700 mb-1">
+              Platform *
+            </label>
+            <input
+              id="upload-platform"
+              type="text"
+              list="upload-platform-options"
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+              className="input-field"
+              placeholder="Choose an existing platform or type a new one"
+              required
+            />
+            <datalist id="upload-platform-options">
+              {platformSuggestions.map((platformName) => (
+                <option key={platformName} value={platformName} />
+              ))}
+            </datalist>
+            <p className="mt-1 text-xs text-slate-500">
+              Select an existing platform or type a new platform name to create it during upload.
+            </p>
           </div>
 
           <div>

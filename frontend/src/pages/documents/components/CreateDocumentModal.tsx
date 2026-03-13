@@ -26,6 +26,14 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     setTemplateName,
     templateDescription,
     setTemplateDescription,
+    copySourceSearch,
+    setCopySourceSearch,
+    selectedSourceDocument,
+    copySourceResultsQuery,
+    copySourceMutation,
+    handleCopyFromDocument,
+    clearCopiedSource,
+    platformSuggestions,
     createMutation,
     duplicateCheckQuery,
     audienceDirtyState,
@@ -86,6 +94,82 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
 
           <div className="flex-1 flex overflow-hidden">
             <div className="w-80 p-4 border-r border-slate-200 overflow-y-auto space-y-4 surface-muted">
+              {!isTemplateMode ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Start from existing document</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Load an existing document as an editable copy. The original document stays unchanged.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Search source document
+                    </label>
+                    <input
+                      type="text"
+                      value={copySourceSearch}
+                      onChange={(event) => setCopySourceSearch(event.target.value)}
+                      className="input-field"
+                      placeholder="Search by title or document number"
+                    />
+                  </div>
+
+                  {selectedSourceDocument ? (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                      <div className="font-medium">Copying from {selectedSourceDocument.title}</div>
+                      <div className="text-xs text-sky-700">{selectedSourceDocument.document_number}</div>
+                      <button
+                        type="button"
+                        onClick={clearCopiedSource}
+                        className="mt-2 text-xs font-semibold uppercase tracking-wide text-sky-700 hover:text-sky-800"
+                      >
+                        Clear source
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {copySourceSearch.trim().length >= 2 ? (
+                    <div className="space-y-2">
+                      {copySourceResultsQuery.isLoading ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                          Searching documents...
+                        </div>
+                      ) : null}
+
+                      {(copySourceResultsQuery.data?.items ?? []).map((document) => (
+                        <button
+                          key={document.id}
+                          type="button"
+                          onClick={() =>
+                            handleCopyFromDocument({
+                              id: document.id,
+                              title: document.title,
+                              document_number: document.document_number,
+                            })
+                          }
+                          disabled={copySourceMutation.isPending}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition-colors hover:border-slate-300 hover:bg-white disabled:opacity-60"
+                        >
+                          <div className="font-medium text-slate-900">{document.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {document.document_number}
+                            {document.platform ? ` · ${document.platform}` : ''}
+                          </div>
+                        </button>
+                      ))}
+
+                      {copySourceResultsQuery.data && copySourceResultsQuery.data.items.length === 0 ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                          No matching documents found.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <TemplateLibrary
                 selectedTemplateId={selectedTemplateId}
                 onSelectTemplate={handleTemplateSelect}
@@ -270,6 +354,29 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   placeholder="e.g., Policy, Guide"
                 />
               </div>
+
+              {!isTemplateMode ? (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Platform *</label>
+                  <input
+                    type="text"
+                    list="document-platform-options"
+                    value={formData.platform || ''}
+                    onChange={(e) => setFormData({ ...formData, platform: e.target.value, platform_id: undefined })}
+                    className="input-field"
+                    placeholder="Choose an existing platform or type a new one"
+                    required
+                  />
+                  <datalist id="document-platform-options">
+                    {platformSuggestions.map((platformName) => (
+                      <option key={platformName} value={platformName} />
+                    ))}
+                  </datalist>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Select a current platform or type a new platform name to create it with this document.
+                  </p>
+                </div>
+              ) : null}
 
               {!isTemplateMode ? (
                 <>

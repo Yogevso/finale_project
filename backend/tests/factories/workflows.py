@@ -11,6 +11,7 @@ def build_document_create(**overrides) -> DocumentCreate:
         "description": "workflow",
         "status": "draft",
         "visibility": "internal",
+        "platform": "Core Platform",
         "category": "Uploaded",
         "tags": "",
         "parent_id": None,
