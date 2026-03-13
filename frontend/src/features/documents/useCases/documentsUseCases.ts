@@ -4,6 +4,7 @@ import {
   validateAudienceFormPayload,
 } from '@/features/documents/forms'
 import type {
+  Company,
   Document,
   DocumentCreate,
   DocumentListResponse,
@@ -31,6 +32,7 @@ export type DocumentUploadMetadataInput = {
   title: string
   description: string
   category: string
+  platform?: string
   releaseBranch: string
   tags: string
   dueDate?: string | null
@@ -48,8 +50,12 @@ export type DocumentsUseCasesClient = Pick<
   | 'createVersion'
   | 'deleteDocument'
   | 'generateWordAttachment'
+  | 'getAssignedCompanies'
+  | 'getDocument'
   | 'getDocumentCalendarExport'
   | 'getDocuments'
+  | 'getVersion'
+  | 'getVersions'
   | 'restoreDocument'
   | 'updateDocument'
   | 'uploadDocument'
@@ -105,6 +111,79 @@ function toOptionalString(value: string): string | undefined {
   return normalized ? normalized : undefined
 }
 
+function getUsableVersionContent(content?: string | null): string | null {
+  if (!content) {
+    return null
+  }
+
+  const trimmed = content.trim()
+  if (!trimmed || trimmed.toLowerCase().startsWith('uploaded from file:')) {
+    return null
+  }
+
+  return trimmed
+}
+
+function requirePlatform(formData: Pick<DocumentCreateFormData, 'platform' | 'platform_id'>) {
+  if (!formData.platform_id && !formData.platform?.trim()) {
+    throw new Error('Platform is required.')
+  }
+}
+
+async function getLatestDuplicateContent(
+  client: Pick<DocumentsUseCasesClient, 'getVersion' | 'getVersions'>,
+  documentId: number,
+): Promise<string> {
+  const versionsResponse = await client.getVersions(documentId)
+  const versionsWithContent = versionsResponse.items.filter((version) =>
+    Boolean(getUsableVersionContent(version.content)),
+  )
+
+  const publishedVersion = versionsWithContent
+    .filter((version) => version.is_published)
+    .sort(
+      (left, right) =>
+        new Date(right.published_at || right.created_at).getTime() -
+        new Date(left.published_at || left.created_at).getTime(),
+    )[0]
+  const latestVersion = versionsWithContent.sort(
+    (left, right) =>
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  )[0]
+  let versionToUse = publishedVersion || latestVersion
+
+  if (!versionToUse && versionsResponse.items.length > 0) {
+    const prioritizedIds = [
+      ...new Set([
+        ...versionsResponse.items
+          .filter((version) => version.is_published)
+          .sort(
+            (left, right) =>
+              new Date(right.published_at || right.created_at).getTime() -
+              new Date(left.published_at || left.created_at).getTime(),
+          )
+          .map((version) => version.id),
+        ...versionsResponse.items
+          .sort(
+            (left, right) =>
+              new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+          )
+          .map((version) => version.id),
+      ]),
+    ]
+
+    for (const versionId of prioritizedIds) {
+      const version = await client.getVersion(documentId, versionId)
+      if (getUsableVersionContent(version.content)) {
+        versionToUse = version
+        break
+      }
+    }
+  }
+
+  return getUsableVersionContent(versionToUse?.content) || ''
+}
+
 function toUploadMetadata(input: DocumentUploadMetadataInput) {
   const audience = normalizeAudienceFormPayload({
     visibility: input.visibility,
@@ -115,6 +194,7 @@ function toUploadMetadata(input: DocumentUploadMetadataInput) {
     title: toOptionalString(input.title),
     description: toOptionalString(input.description),
     category: toOptionalString(input.category),
+    platform: toOptionalString(input.platform || ''),
     release_branch: toOptionalString(input.releaseBranch),
     tags: toOptionalString(input.tags),
     due_date: input.dueDate || undefined,
@@ -170,6 +250,8 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       formData: DocumentCreateFormData,
       options: { generateWord: boolean },
     ): Promise<Document> {
+      requirePlatform(formData)
+
       const audienceValidationIssue = validateAudienceFormPayload(formData)
       if (audienceValidationIssue) {
         throw new Error(audienceValidationIssue.message)
@@ -183,9 +265,13 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
         visibility: audience.visibility,
         company_ids: audience.company_ids,
         category: formData.category,
+        topic: formData.topic,
+        platform: formData.platform?.trim(),
+        platform_id: formData.platform_id,
         release_branch: formData.release_branch,
         tags: formData.tags,
         due_date: formData.due_date || undefined,
+        parent_id: formData.parent_id,
       })
 
       const content = formData.content?.trim() || ''
@@ -209,11 +295,39 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return document
     },
 
+    async loadDuplicateDocumentDraft(documentId: number): Promise<DocumentCreateFormData> {
+      const document = await client.getDocument(documentId)
+      const assignedCompanies: Company[] =
+        document.visibility === 'company' ? await client.getAssignedCompanies(documentId) : []
+      const content = await getLatestDuplicateContent(client, documentId)
+
+      return {
+        title: `Copy of ${document.title}`,
+        description: document.description ?? '',
+        status: 'draft',
+        visibility: document.visibility,
+        company_ids: assignedCompanies.map((company) => company.id),
+        category: document.category ?? '',
+        topic: document.topic ?? '',
+        platform: document.platform ?? '',
+        platform_id: document.platform_id ?? undefined,
+        release_branch: document.release_branch ?? '',
+        tags: document.tags ?? '',
+        due_date: document.due_date ?? '',
+        content,
+        parent_id: document.id,
+      }
+    },
+
     async uploadDocument(
       file: File,
       metadata: DocumentUploadMetadataInput,
       options?: UploadDocumentOptions,
     ): Promise<Document> {
+      if (!metadata.platform?.trim()) {
+        throw new Error('Platform is required.')
+      }
+
       const audienceValidationIssue = validateAudienceFormPayload({
         visibility: metadata.visibility,
         company_ids: metadata.companyIds,

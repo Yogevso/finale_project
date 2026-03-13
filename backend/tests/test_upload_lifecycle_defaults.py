@@ -12,16 +12,24 @@ from app.services.attachment_service import AttachmentService
 DOCX_MIME_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
+DEFAULT_PLATFORM = "Core Platform"
 
 
 def _docx_bytes() -> bytes:
     return b"PK\x03\x04minimal-docx-fixture"
 
 
+def _upload_data(**overrides):
+    payload = {"platform": DEFAULT_PLATFORM}
+    payload.update(overrides)
+    return payload
+
+
 def test_upload_rejects_pdf_documents(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
+        data=_upload_data(),
         files={"file": ("legacy.pdf", io.BytesIO(b"%PDF-1.4\n%EOF"), "application/pdf")},
     )
 
@@ -29,11 +37,23 @@ def test_upload_rejects_pdf_documents(client, auth_headers):
     assert response.json()["detail"] == "PDF uploads are not allowed"
 
 
-def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers):
-    """Upload without status/visibility should stay non-public draft by default."""
+def test_upload_requires_platform(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
+        files={"file": ("default-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Platform is required"
+
+
+def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers):
+    """Upload with a platform but without status/visibility should stay non-public draft."""
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data=_upload_data(),
         files={"file": ("default-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -48,7 +68,7 @@ def test_editor_cannot_direct_publish_via_upload_override(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"status": "active", "visibility": "public"},
+        data=_upload_data(status="active", visibility="public"),
         files={"file": ("editor-publish.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -60,7 +80,7 @@ def test_manager_can_explicitly_publish_via_upload_override(client, manager_head
     response = client.post(
         "/api/v1/documents/upload",
         headers=manager_headers,
-        data={"status": "active", "visibility": "public"},
+        data=_upload_data(status="active", visibility="public"),
         files={"file": ("manager-publish.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -74,7 +94,7 @@ def test_upload_company_visibility_requires_assignment(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"visibility": "company"},
+        data=_upload_data(visibility="company"),
         files={"file": ("company-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -89,7 +109,7 @@ def test_upload_non_company_visibility_rejects_company_assignments(
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"visibility": "internal", "company_ids": [str(test_tenant.id)]},
+        data=_upload_data(visibility="internal", company_ids=[str(test_tenant.id)]),
         files={"file": ("company-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -102,7 +122,7 @@ def test_upload_rejects_invalid_company_ids_value(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"visibility": "company", "company_ids": ["abc"]},
+        data=_upload_data(visibility="company", company_ids=["abc"]),
         files={"file": ("company-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -115,7 +135,7 @@ def test_upload_rejects_invalid_visibility_value(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"visibility": "external"},
+        data=_upload_data(visibility="external"),
         files={"file": ("invalid-visibility.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -128,7 +148,7 @@ def test_upload_rejects_invalid_status_value(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"status": "ready"},
+        data=_upload_data(status="ready"),
         files={"file": ("invalid-status.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -143,7 +163,7 @@ def test_upload_company_visibility_with_assignment_succeeds(
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"visibility": "company", "company_ids": [str(test_tenant.id)]},
+        data=_upload_data(visibility="company", company_ids=[str(test_tenant.id)]),
         files={"file": ("company-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )
 
@@ -158,6 +178,7 @@ def test_release_notes_child_uses_same_default_lifecycle_policy(client, auth_hea
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
+        data=_upload_data(),
         files={
             "file": ("main-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE),
             "release_notes": ("release-notes.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE),
@@ -172,6 +193,7 @@ def test_release_notes_child_uses_same_default_lifecycle_policy(client, auth_hea
     child = children[0]
     assert child.status.value == "draft"
     assert child.visibility.value == "internal"
+    assert child.platform == DEFAULT_PLATFORM
 
 
 def test_release_notes_upload_failure_rolls_back_parent_and_child(
@@ -193,7 +215,7 @@ def test_release_notes_upload_failure_rolls_back_parent_and_child(
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
-        data={"title": title},
+        data=_upload_data(title=title),
         files={
             "file": ("main-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE),
             "release_notes": ("release-notes.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE),

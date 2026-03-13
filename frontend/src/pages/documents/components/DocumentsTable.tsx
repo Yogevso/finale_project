@@ -23,6 +23,7 @@ type DocumentsTableProps = {
   onToggleDocumentSelection: (documentId: number) => void
   onToggleAllVisibleDocuments: () => void
   onArchiveOrRestore: (id: number, title: string, status: DocumentStatus) => void
+  onDelete: (id: number, title: string) => void
   onVisibilityChange: (change: VisibilityChangeRequest) => void
   onPageChange: (nextPage: number) => void
 }
@@ -37,6 +38,7 @@ export function DocumentsTable({
   onToggleDocumentSelection,
   onToggleAllVisibleDocuments,
   onArchiveOrRestore,
+  onDelete,
   onVisibilityChange,
   onPageChange,
 }: DocumentsTableProps) {
@@ -180,16 +182,24 @@ export function DocumentsTable({
                   </td>
                   <td className="admin-table-cell whitespace-nowrap text-right">
                     {isManager ? (
-                      <button
-                        onClick={() => onArchiveOrRestore(doc.id, doc.title, doc.status)}
-                        className={`text-xs font-semibold uppercase tracking-wide ${
-                          doc.status === 'archived'
-                            ? 'text-emerald-600 hover:text-emerald-700'
-                            : 'text-amber-600 hover:text-amber-700'
-                        }`}
-                      >
-                        {doc.status === 'archived' ? 'Restore' : 'Archive'}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => onArchiveOrRestore(doc.id, doc.title, doc.status)}
+                          className={`text-xs font-semibold uppercase tracking-wide ${
+                            doc.status === 'archived'
+                              ? 'text-emerald-600 hover:text-emerald-700'
+                              : 'text-amber-600 hover:text-amber-700'
+                          }`}
+                        >
+                          {doc.status === 'archived' ? 'Restore' : 'Archive'}
+                        </button>
+                        <button
+                          onClick={() => onDelete(doc.id, doc.title)}
+                          className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-400">-</span>
                     )}

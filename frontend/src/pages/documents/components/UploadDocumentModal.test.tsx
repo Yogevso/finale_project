@@ -34,6 +34,9 @@ function buildHookState(isPending: boolean, overrides: Record<string, unknown> =
     setDescription: vi.fn(),
     category: '',
     setCategory: vi.fn(),
+    platform: '',
+    setPlatform: vi.fn(),
+    platformSuggestions: ['Meteor Lake'],
     releaseBranch: '',
     setReleaseBranch: vi.fn(),
     tags: '',
@@ -118,6 +121,7 @@ describe('UploadDocumentModal', () => {
     render(<UploadDocumentModal onClose={vi.fn()} />)
 
     expect(screen.getByText(/upload docx or pptx/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/platform/i)).toBeInTheDocument()
     expect(screen.queryByText(/^FILE$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^UP$/)).not.toBeInTheDocument()
   })

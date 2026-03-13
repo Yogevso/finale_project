@@ -209,6 +209,16 @@ class DocumentService(TenantAwareService[Document]):
             return "Unspecified"
         return name.strip()
 
+    @staticmethod
+    def _require_platform_selection(
+        *, platform_name: Optional[str] = None, platform_id: Optional[int] = None
+    ) -> None:
+        if platform_id is not None:
+            return
+        if platform_name is not None and platform_name.strip():
+            return
+        raise ValidationError("Platform is required")
+
     def _normalize_topic(self, raw_topic: Optional[str]) -> Optional[str]:
         normalized = normalize_topic_to_slug(raw_topic)
         if normalized is None:
@@ -408,11 +418,20 @@ class DocumentService(TenantAwareService[Document]):
                 parent_company_ids = [c.id for c in parent.assigned_companies]
                 normalized_company_ids = self._normalize_company_ids(parent_company_ids)
                 assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+            if document_data.platform_id is None and not (document_data.platform and document_data.platform.strip()):
+                document_data = document_data.model_copy(
+                    update={"platform": parent.platform, "platform_id": parent.platform_id}
+                )
             # Re-validate after carry-over
             self._validate_company_visibility_assignment(
                 visibility=document_data.visibility,
                 company_ids=normalized_company_ids,
             )
+
+        self._require_platform_selection(
+            platform_name=document_data.platform,
+            platform_id=document_data.platform_id,
+        )
 
         # Create document with retry in case of document_number collision
         attempts = 0
@@ -846,6 +865,12 @@ class DocumentService(TenantAwareService[Document]):
 
             if document_data.topic is not None:
                 document.topic = self._normalize_topic(document_data.topic)
+
+            if "platform" in document_data.model_fields_set:
+                self._require_platform_selection(
+                    platform_name=document_data.platform,
+                    platform_id=document_data.platform_id,
+                )
 
             if document_data.platform is not None or document_data.platform_id is not None:
                 platform = self._get_or_create_platform(

@@ -12,6 +12,7 @@ const validateAudienceFormPayloadMock = vi.fn()
 const getAudienceDirtyStateMock = vi.fn()
 const getDefaultAudienceForRoleMock = vi.fn()
 const uploadDocumentMock = vi.fn()
+const listDocumentsMock = vi.fn()
 const extractApiErrorMessageMock = vi.fn()
 const authState = {
   user: {
@@ -32,6 +33,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/features/documents', () => ({
   DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES: '.docx,.pptx',
   documentsUseCases: {
+    listDocuments: (...args: unknown[]) => listDocumentsMock(...args),
     uploadDocument: (...args: unknown[]) => uploadDocumentMock(...args),
   },
   getDefaultAudienceForRole: (...args: unknown[]) => getDefaultAudienceForRoleMock(...args),
@@ -88,6 +90,13 @@ describe('useUploadDocumentFlow', () => {
     )
     validateDocumentUploadFileMock.mockReturnValue(null)
     validateAudienceFormPayloadMock.mockReturnValue(null)
+    listDocumentsMock.mockResolvedValue({
+      items: [{ id: 1, title: 'Seed Doc', document_number: 'DOC-1', platform: 'Meteor Lake' }],
+      total: 1,
+      page: 1,
+      page_size: 100,
+      pages: 1,
+    })
     uploadDocumentMock.mockResolvedValue({ id: 123 })
     extractApiErrorMessageMock.mockImplementation((_err, fallback) => fallback)
   })
@@ -120,6 +129,26 @@ describe('useUploadDocumentFlow', () => {
     })
 
     expect(result.current.error).toBe('Please select a file to upload')
+  })
+
+  it('requires a platform before submitting', () => {
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose: vi.fn() }), { wrapper })
+
+    act(() => {
+      result.current.handleFileSelect(
+        new File(['docx'], 'guide.docx', {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }),
+      )
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    expect(result.current.error).toBe('Platform is required')
+    expect(uploadDocumentMock).not.toHaveBeenCalled()
   })
 
   it('confirms before closing when unsaved changes exist', () => {
@@ -162,6 +191,7 @@ describe('useUploadDocumentFlow', () => {
 
     act(() => {
       result.current.handleFileSelect(file)
+      result.current.setPlatform('Meteor Lake')
     })
 
     act(() => {
@@ -173,6 +203,7 @@ describe('useUploadDocumentFlow', () => {
         title: 'guide',
         description: '',
         category: '',
+        platform: 'Meteor Lake',
         releaseBranch: '',
         tags: '',
         dueDate: '',
@@ -207,6 +238,7 @@ describe('useUploadDocumentFlow', () => {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         }),
       )
+      result.current.setPlatform('Meteor Lake')
     })
 
     act(() => {
@@ -246,6 +278,7 @@ describe('useUploadDocumentFlow', () => {
 
     act(() => {
       result.current.handleFileSelect(primaryFile)
+      result.current.setPlatform('Meteor Lake')
       result.current.setUploadStatus('approved')
       result.current.handleSupplementalFileSelect('content', contentFile)
       result.current.handleSupplementalFileSelect('releaseNotes', releaseNotesFile)
@@ -263,6 +296,7 @@ describe('useUploadDocumentFlow', () => {
       title: 'guide',
       description: '',
       category: '',
+      platform: 'Meteor Lake',
       releaseBranch: '',
       tags: '',
       dueDate: '',
