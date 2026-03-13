@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import type {
   CollaborationSnapshotListResponseDto,
+  DocumentDetailPageBundleDto,
   DocumentListResponseDto,
   RbacPoliciesResponseDto,
 } from './contracts'
 import {
   mapCollaborationSnapshotListResponseDto,
+  mapDocumentDetailPageBundleDto,
   mapDocumentListResponseDto,
   mapRbacPoliciesResponseDto,
   toDocumentCreateDto,
@@ -14,6 +16,7 @@ import {
 } from './mappers'
 import {
   buildCollaborationSnapshotListResponseDto,
+  buildDocumentDetailPageBundleDto,
   buildDocumentDto,
   buildDocumentListResponseDto,
   buildRbacPoliciesResponseDto,
@@ -87,5 +90,15 @@ describe('api dto mappers', () => {
       reason: 'Expand audience',
       due_date: null,
     })
+  })
+
+  it('fails loudly in development when the document detail bundle is missing required fields', () => {
+    const source = buildDocumentDetailPageBundleDto({
+      document: undefined,
+    }) as unknown as DocumentDetailPageBundleDto
+
+    expect(() => mapDocumentDetailPageBundleDto(source)).toThrow(
+      'DTO mapping invariant failed: DocumentDetailPageBundleDto.document is required',
+    )
   })
 })

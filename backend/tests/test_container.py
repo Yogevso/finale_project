@@ -25,10 +25,12 @@ from app.application.queries.dependencies import (
     get_system_analytics_query_handler,
 )
 from app.container import AppContainer, build_container, get_container
+from app.conversion import DocumentConversionPipeline
 from app.dependencies.services import (
     get_auth_service,
     get_collaboration_service,
     get_comment_service,
+    get_document_conversion_service,
     get_document_service,
     get_version_service,
 )
@@ -77,6 +79,7 @@ def test_service_dependency_providers_resolve_via_container(db, test_user):
     assert get_version_service(db=db, container=container) is not None
     assert get_collaboration_service(db=db, container=container) is not None
     assert get_document_service(db=db, tenant_ctx=tenant_ctx, container=container) is not None
+    assert isinstance(get_document_conversion_service(container=container), DocumentConversionPipeline)
 
 
 def test_use_case_and_handler_dependencies_resolve_via_container(db, test_user):

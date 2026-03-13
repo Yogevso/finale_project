@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Protocol
 
 from app.conversion.docx_extractor import DocxExtractor
@@ -16,10 +18,31 @@ from app.conversion.pptx_extractor import (
 from app.conversion.reader_artifact import build_reader_artifact_from_extraction_result
 
 
+class DocumentConversionOutput(str, Enum):
+    """Named outputs that a conversion strategy may provide."""
+
+    HTML = "html"
+    READER_ARTIFACT = "reader_artifact"
+
+
+@dataclass(frozen=True)
+class StrategyCapabilityDescriptor:
+    """Explicit output support metadata for a converter strategy."""
+
+    outputs: frozenset[DocumentConversionOutput]
+
+    def supports(self, output: DocumentConversionOutput) -> bool:
+        return output in self.outputs
+
+    def as_names(self) -> tuple[str, ...]:
+        return tuple(sorted(output.value for output in self.outputs))
+
+
 class DocumentConverterStrategy(Protocol):
     """Shared interface for document-to-HTML conversion strategies."""
 
     name: str
+    capabilities: StrategyCapabilityDescriptor
 
     def supports(self, request: DocumentConversionRequest) -> bool:
         """Return whether the strategy handles this conversion request."""
@@ -31,10 +54,24 @@ class DocumentConverterStrategy(Protocol):
         """Convert the request payload into a reader-artifact payload when supported."""
 
 
+_HTML_ONLY_CAPABILITIES = StrategyCapabilityDescriptor(
+    outputs=frozenset({DocumentConversionOutput.HTML})
+)
+_HTML_AND_READER_CAPABILITIES = StrategyCapabilityDescriptor(
+    outputs=frozenset(
+        {
+            DocumentConversionOutput.HTML,
+            DocumentConversionOutput.READER_ARTIFACT,
+        }
+    )
+)
+
+
 class WordConverterStrategy:
     """Word document conversion strategy."""
 
     name = "word"
+    capabilities = _HTML_AND_READER_CAPABILITIES
     _word_mime_types = {
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -86,6 +123,7 @@ class PowerPointConverterStrategy:
     """PowerPoint presentation conversion strategy."""
 
     name = "powerpoint"
+    capabilities = _HTML_AND_READER_CAPABILITIES
     _powerpoint_mime_types = {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
@@ -103,7 +141,7 @@ class PowerPointConverterStrategy:
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         return self._extract_ready_html(self._extractor.extract_bytes(request.content))
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any]:
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
         return build_reader_artifact_from_extraction_result(
             self._extractor.extract_bytes(request.content)
         )
@@ -119,6 +157,7 @@ class TextConverterStrategy:
     """Plain-text and text-like conversion strategy."""
 
     name = "text"
+    capabilities = _HTML_ONLY_CAPABILITIES
     _text_mime_types = {
         "text/markdown",
         "text/x-markdown",
@@ -151,6 +190,7 @@ class HtmlPassthroughStrategy:
     """HTML passthrough strategy that decodes bytes as HTML text."""
 
     name = "html"
+    capabilities = _HTML_ONLY_CAPABILITIES
     _html_mime_types = {"text/html", "application/xhtml+xml"}
     _html_extensions = {".html", ".htm"}
 

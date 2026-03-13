@@ -1,3 +1,5 @@
+import { getDomParser, getWindowLocation } from '@/env/dom'
+
 const ALLOWED_TAGS = new Set([
   'a',
   'article',
@@ -101,7 +103,7 @@ function isSafeHref(value: string): boolean {
     return true
   }
   try {
-    const parsed = new URL(trimmed, window.location.origin)
+    const parsed = new URL(trimmed, getWindowLocation().origin)
     return SAFE_LINK_PROTOCOLS.includes(parsed.protocol)
   } catch {
     return false
@@ -123,7 +125,7 @@ function isSafeImageSrc(value: string): boolean {
     return true
   }
   try {
-    const parsed = new URL(trimmed, window.location.origin)
+    const parsed = new URL(trimmed, getWindowLocation().origin)
     return parsed.protocol === 'http:' || parsed.protocol === 'https:'
   } catch {
     return false
@@ -279,7 +281,7 @@ function sanitizeElement(element: Element): void {
 }
 
 export function sanitizeHtmlForPreview(html: string): string {
-  const parser = new DOMParser()
+  const parser = getDomParser()
   const doc = parser.parseFromString(html || '', 'text/html')
   Array.from(doc.body.children).forEach((child) => sanitizeElement(child))
   return doc.body.innerHTML

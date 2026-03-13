@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as clipboardEnv from '@/env/clipboard'
 import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas'
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar'
 import {
@@ -16,7 +17,11 @@ import {
   type DocumentTheme,
 } from '@/lib/documentReadingPreferences'
 
-const clipboardWriteTextMock = vi.fn()
+vi.mock('@/env/clipboard', () => ({
+  writeText: vi.fn(),
+}))
+
+const clipboardWriteTextMock = vi.mocked(clipboardEnv.writeText)
 
 function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) {
   const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
@@ -101,12 +106,6 @@ describe('ReadingUX controls', () => {
     localStorage.clear()
     clipboardWriteTextMock.mockReset()
     clipboardWriteTextMock.mockResolvedValue(undefined)
-    Object.defineProperty(window.navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        writeText: clipboardWriteTextMock,
-      },
-    })
   })
 
   it('persists font size across remounts', async () => {

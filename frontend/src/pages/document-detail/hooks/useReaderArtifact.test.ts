@@ -110,7 +110,7 @@ describe('useReaderArtifact', () => {
     } as never)
 
     const { result } = renderHook(() => {
-      const [sections, setSections] = useState<TocSection[]>([])
+      const [, setSections] = useState<TocSection[]>([])
       return useReaderArtifact({
         documentId: 42,
         selectedAttachment,

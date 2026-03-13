@@ -33,7 +33,7 @@ describe('processHtmlIntoSections', () => {
 
   it('uses generic page anchors for outline items', () => {
     const sections = mapOutlineItemsToSections([
-      { id: 'toc-1', title: 'Intro', level: 1, page_start: 3 },
+      { id: 'toc-1', title: 'Intro', level: 1, page: 3, page_start: 3 },
     ])
 
     expect(sections[0]?.anchorId).toBe('page-3')
@@ -46,14 +46,14 @@ describe('processHtmlIntoSections', () => {
 
   it('normalizes outline metadata and filters blank titles', () => {
     const sections = mapOutlineItemsToSections([
-      { title: '  ', level: 0, page: 2 },
-      { title: 'Appendix', level: 0, page: 5, page_end: 7 },
-      { title: 'Reader page', level: 3, anchor_id: 'reader-p9-node', page_start: 9 },
+      { id: 'toc-blank', title: '  ', level: 0, page: 2, page_start: 2 },
+      { id: 'toc-appendix', title: 'Appendix', level: 0, page: 5, page_start: 5, page_end: 7 },
+      { id: 'toc-reader', title: 'Reader page', level: 3, anchor_id: 'reader-p9-node', page: 9, page_start: 9 },
     ])
 
     expect(sections).toEqual([
       {
-        id: 'toc-1',
+        id: 'toc-appendix',
         text: 'Appendix',
         level: 1,
         html: '',
@@ -63,7 +63,7 @@ describe('processHtmlIntoSections', () => {
         pageEnd: 7,
       },
       {
-        id: 'toc-2',
+        id: 'toc-reader',
         text: 'Reader page',
         level: 3,
         html: '',

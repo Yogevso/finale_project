@@ -15,15 +15,13 @@ from .common import AttachmentServiceCommonMixin, get_storage_backend
 
 logger = logging.getLogger(__name__)
 
-AttachmentService = None  # Assigned by package facade at import time.
-
 
 class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
     """Download/open stream and deletion operations."""
 
-    @staticmethod
+    @classmethod
     def delete_attachment(
-        db: Session, document_id: int, attachment_id: int, current_user: User
+        cls, db: Session, document_id: int, attachment_id: int, current_user: User
     ) -> None:
         """Delete an attachment."""
         attachment = (
@@ -52,9 +50,7 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
         except Exception as exc:
             logger.warning("Failed to delete from storage: %s", exc)
             try:
-                local_path = AttachmentService._resolve_local_attachment_path(
-                    attachment, document_id
-                )
+                local_path = cls._resolve_local_attachment_path(attachment, document_id)
                 if local_path and os.path.exists(local_path):
                     os.remove(local_path)
             except OSError:
@@ -70,13 +66,13 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
         db.delete(attachment)
         db.commit()
 
-    @staticmethod
+    @classmethod
     def get_file_path(
-        db: Session, document_id: int, attachment_id: int, current_user: User
+        cls, db: Session, document_id: int, attachment_id: int, current_user: User
     ) -> tuple[str, str, str]:
         """Get file path for download - returns (path, filename, mime_type)."""
-        attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
-        local_path = AttachmentService._resolve_local_attachment_path(attachment, document_id)
+        attachment = cls.get_attachment(db, document_id, attachment_id, current_user)
+        local_path = cls._resolve_local_attachment_path(attachment, document_id)
         if local_path:
             return local_path, attachment.original_filename, attachment.mime_type
 
@@ -88,19 +84,20 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
         )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
 
-    @staticmethod
+    @classmethod
     def open_original_stream(
+        cls,
         db: Session,
         document_id: int,
         attachment_id: int,
         current_user: Optional[User] = None,
     ) -> tuple[Attachment, Iterator[bytes]]:
         """Open a byte-preserving stream for the original uploaded file."""
-        attachment = AttachmentService.get_attachment(db, document_id, attachment_id, current_user)
+        attachment = cls.get_attachment(db, document_id, attachment_id, current_user)
 
-        local_path = AttachmentService._resolve_local_attachment_path(attachment, document_id)
+        local_path = cls._resolve_local_attachment_path(attachment, document_id)
         if local_path:
-            return attachment, AttachmentService._stream_file(local_path)
+            return attachment, cls._stream_file(local_path)
 
         storage_refs = [attachment.storage_key, attachment.storage_path]
         for storage_ref in storage_refs:
@@ -109,7 +106,7 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
             try:
                 storage = get_storage_backend()
                 content = storage.download(storage_ref)
-                return attachment, AttachmentService._chunk_bytes(content)
+                return attachment, cls._chunk_bytes(content)
             except Exception as exc:
                 logger.warning(
                     "Storage download failed for attachment %s (ref=%s): %s",

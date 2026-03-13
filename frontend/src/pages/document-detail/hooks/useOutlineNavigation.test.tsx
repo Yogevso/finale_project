@@ -1,8 +1,17 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as domEnv from '@/env/dom'
 import type { Attachment } from '@/types'
 import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 import { useOutlineNavigation } from './useOutlineNavigation'
+
+vi.mock('@/env/dom', async () => {
+  const actual = await vi.importActual<typeof import('@/env/dom')>('@/env/dom')
+  return {
+    ...actual,
+    getDocument: vi.fn(() => document),
+  }
+})
 
 function createAttachment(overrides: Partial<Attachment> = {}): Attachment {
   return {
@@ -24,6 +33,7 @@ describe('useOutlineNavigation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(domEnv.getDocument).mockReturnValue(document)
     Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       value: scrollIntoViewMock,
@@ -33,6 +43,7 @@ describe('useOutlineNavigation', () => {
   it('navigates to an existing heading and tracks page state', () => {
     document.body.innerHTML = '<h2 id="heading-1">Section</h2>'
     const section: TocSection = {
+      id: 'section-1',
       index: 1,
       level: 2,
       text: 'Section',

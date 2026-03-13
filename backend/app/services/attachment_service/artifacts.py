@@ -10,17 +10,13 @@ from .common import AttachmentServiceCommonMixin, get_storage_backend
 
 logger = logging.getLogger(__name__)
 
-AttachmentService = None  # Assigned by package facade at import time.
-
 
 class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
     """Storage internals used by reader-artifact flows."""
 
-    @staticmethod
-    def _load_original_bytes_for_attachment(attachment: Attachment) -> bytes:
-        local_path = AttachmentService._resolve_local_attachment_path(
-            attachment, attachment.document_id
-        )
+    @classmethod
+    def _load_original_bytes_for_attachment(cls, attachment: Attachment) -> bytes:
+        local_path = cls._resolve_local_attachment_path(attachment, attachment.document_id)
         if local_path:
             with open(local_path, "rb") as file_obj:
                 return file_obj.read()

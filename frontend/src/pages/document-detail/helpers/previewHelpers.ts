@@ -1,3 +1,4 @@
+import { getDomParser } from '@/env/dom'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import type { AttachmentOutlineItem } from '@/types'
 
@@ -88,13 +89,15 @@ export function applyHighlights(container: HTMLElement, searchTerm: string) {
   if (!term) return
 
   const regex = new RegExp(escapeRegExp(term), 'gi')
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+  const documentRef = container.ownerDocument
+  const nodeFilter = documentRef.defaultView?.NodeFilter ?? NodeFilter
+  const walker = documentRef.createTreeWalker(container, nodeFilter.SHOW_TEXT, {
     acceptNode: (node) => {
-      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT
+      if (!node.nodeValue || !node.nodeValue.trim()) return nodeFilter.FILTER_REJECT
       const parent = (node as Text).parentElement
-      if (!parent) return NodeFilter.FILTER_REJECT
-      if (parent.tagName === 'MARK') return NodeFilter.FILTER_REJECT
-      return NodeFilter.FILTER_ACCEPT
+      if (!parent) return nodeFilter.FILTER_REJECT
+      if (parent.tagName === 'MARK') return nodeFilter.FILTER_REJECT
+      return nodeFilter.FILTER_ACCEPT
     },
   })
 
@@ -111,40 +114,41 @@ export function applyHighlights(container: HTMLElement, searchTerm: string) {
     if (!regex.test(text)) return
     regex.lastIndex = 0
 
-    const fragment = document.createDocumentFragment()
+    const fragment = documentRef.createDocumentFragment()
     let lastIndex = 0
     let match
     while ((match = regex.exec(text)) !== null) {
       const start = match.index
       const end = start + match[0].length
       if (start > lastIndex) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)))
+        fragment.appendChild(documentRef.createTextNode(text.slice(lastIndex, start)))
       }
-      const mark = document.createElement('mark')
+      const mark = documentRef.createElement('mark')
       mark.className = 'doc-highlight'
       mark.textContent = text.slice(start, end)
       fragment.appendChild(mark)
       lastIndex = end
     }
     if (lastIndex < text.length) {
-      fragment.appendChild(document.createTextNode(text.slice(lastIndex)))
+      fragment.appendChild(documentRef.createTextNode(text.slice(lastIndex)))
     }
     node.parentNode?.replaceChild(fragment, node)
   })
 }
 
 export function clearHighlights(container: HTMLElement) {
+  const documentRef = container.ownerDocument
   container.querySelectorAll('mark.doc-highlight').forEach((mark) => {
     const parent = mark.parentNode
     if (!parent) return
-    parent.replaceChild(document.createTextNode(mark.textContent || ''), mark)
+    parent.replaceChild(documentRef.createTextNode(mark.textContent || ''), mark)
     parent.normalize()
   })
 }
 
 export function processHtmlIntoSections(html: string): { html: string; sections: TocSection[] } {
   const sanitizedHtml = sanitizeHtmlForPreview(html)
-  const parser = new DOMParser()
+  const parser = getDomParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
   const sections: TocSection[] = []
   const rootElement = doc.body.firstElementChild

@@ -12,6 +12,8 @@ import {
 } from 'react'
 import { attributesToProps } from 'html-react-parser'
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
+import { writeText } from '@/env/clipboard'
+import { getWindowLocation } from '@/env/dom'
 import type {
   CommentPopupState,
   SelectionPopupState,
@@ -109,11 +111,11 @@ export function PreviewCanvas({
   }, [])
 
   const handleCopyHeadingLink = useCallback(async (anchorId: string) => {
-    const sectionUrl = new URL(sectionLinkBasePath, window.location.origin)
+    const sectionUrl = new URL(sectionLinkBasePath, getWindowLocation().origin)
     sectionUrl.hash = anchorId
 
     try {
-      await navigator.clipboard.writeText(sectionUrl.toString())
+      await writeText(sectionUrl.toString())
       setCopiedHeadingId(anchorId)
       if (copiedHeadingTimeoutRef.current !== null) {
         window.clearTimeout(copiedHeadingTimeoutRef.current)

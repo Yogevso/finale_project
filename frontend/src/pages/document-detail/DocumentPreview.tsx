@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { getDocument, getDomParser } from '@/env/dom'
 import { api } from '@/lib/api'
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import { useAuth } from '@/lib/auth'
@@ -41,7 +42,7 @@ function estimateReadingTimeMinutes(html: string | null): number | null {
     return null
   }
 
-  const textContent = new DOMParser().parseFromString(html, 'text/html').body.textContent ?? ''
+  const textContent = getDomParser().parseFromString(html, 'text/html').body.textContent ?? ''
   const wordCount = textContent.trim().split(/\s+/).filter(Boolean).length
 
   if (wordCount === 0) {
@@ -168,7 +169,7 @@ export function DocumentPreview({
   )
 
   const focusSearchMatch = useCallback((targetIndex: number, behavior: ScrollBehavior = 'smooth') => {
-    const container = document.getElementById('document-content-area')
+    const container = getDocument().getElementById('document-content-area')
     if (!container) {
       setSearchMatchCount(0)
       setActiveSearchMatchIndex(-1)
@@ -249,7 +250,7 @@ export function DocumentPreview({
   })
 
   useEffect(() => {
-    const container = document.getElementById('document-content-area')
+    const container = getDocument().getElementById('document-content-area')
     if (!activeHtmlContent || !container) {
       setSearchMatchCount(0)
       setActiveSearchMatchIndex(-1)

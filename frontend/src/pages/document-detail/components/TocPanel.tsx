@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronRight, Circle, Edit3, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { writeText } from '@/env/clipboard'
+import { getWindowLocation } from '@/env/dom'
 import { resolveSectionPageStart, type TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 
 interface TocPanelProps {
@@ -48,11 +50,11 @@ export function TocPanel({
 
   const handleCopySectionLink = async (section: TocSection) => {
     const anchorId = section.anchorId || `heading-${section.index}`
-    const sectionUrl = new URL(sectionLinkBasePath, window.location.origin)
+    const sectionUrl = new URL(sectionLinkBasePath, getWindowLocation().origin)
     sectionUrl.hash = anchorId
 
     try {
-      await navigator.clipboard.writeText(sectionUrl.toString())
+      await writeText(sectionUrl.toString())
       setCopiedSectionId(section.id)
       toast.success('Section link copied')
       if (copiedTimeoutRef.current !== null) {

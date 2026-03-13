@@ -25,6 +25,10 @@ class DocumentConverterPluginRegistry:
     def names(self) -> tuple[str, ...]:
         return tuple(plugin.name for plugin in self._plugins)
 
+    @property
+    def plugins(self) -> tuple[DocumentConverterStrategy, ...]:
+        return tuple(self._plugins)
+
     def load(self, plugins: Sequence[DocumentConverterStrategy]) -> None:
         for plugin in plugins:
             self.register(plugin)

@@ -119,7 +119,8 @@ def test_schedule_reader_artifact_generation_queues_background_task():
 
     assert len(tasks.tasks) == 1
     task = tasks.tasks[0]
-    assert task.func is AttachmentService.generate_reader_artifact
+    assert task.func.__self__ is AttachmentService
+    assert task.func.__func__ is AttachmentService.generate_reader_artifact.__func__
     assert task.args == (99, True)
 
 
@@ -142,12 +143,13 @@ def test_schedule_reader_artifact_generation_uses_daemon_thread(monkeypatch):
 
     AttachmentService.schedule_reader_artifact_generation(101, force=False)
 
-    assert thread_state == {
-        "target": AttachmentService.generate_reader_artifact,
-        "args": (101, False),
-        "daemon": True,
-        "started": True,
-    }
+    assert thread_state["target"].__self__ is AttachmentService
+    assert (
+        thread_state["target"].__func__ is AttachmentService.generate_reader_artifact.__func__
+    )
+    assert thread_state["args"] == (101, False)
+    assert thread_state["daemon"] is True
+    assert thread_state["started"] is True
 
 
 def test_reader_payload_helpers_normalize_lists_and_invalid_json(caplog):
@@ -585,6 +587,53 @@ def test_generate_reader_artifact_records_converter_failure(
     assert reader_artifact.status == AttachmentService.READER_STATUS_FAILED
     assert reader_artifact.error == "Structured extraction failed"
     assert reader_artifact.content_text is None
+
+
+def test_generate_reader_artifact_does_not_treat_error_like_html_text_as_failure(
+    db, test_document, test_user, monkeypatch
+):
+    attachment = persist_attachment(db, test_document, test_user.id)
+    local_session_factory = sessionmaker(autocommit=False, autoflush=False, bind=db.get_bind())
+
+    class _FakeWrapper:
+        def convert_document_to_reader_artifact(self, *_args, **_kwargs):
+            return {
+                "status": "ready",
+                "html_content": "<article><p>Error converting Word document: example text</p></article>",
+                "toc_items": [],
+                "payload": {"toc_items": []},
+                "error": None,
+            }
+
+    monkeypatch.setattr(
+        "app.services.attachment_service.reader_view.SessionLocal",
+        local_session_factory,
+    )
+    monkeypatch.setattr(
+        AttachmentService,
+        "_load_original_bytes_for_attachment",
+        staticmethod(lambda _attachment: b"docx-bytes"),
+    )
+    monkeypatch.setattr(
+        "app.services.attachment_service.reader_view.get_document_converter_wrapper",
+        lambda: _FakeWrapper(),
+    )
+
+    AttachmentService.generate_reader_artifact(attachment.id)
+
+    db.expire_all()
+    reader_artifact = (
+        db.query(AttachmentArtifact)
+        .filter(
+            AttachmentArtifact.attachment_id == attachment.id,
+            AttachmentArtifact.kind == AttachmentService.ARTIFACT_KIND_READER_HTML,
+        )
+        .one()
+    )
+
+    assert reader_artifact.status == AttachmentService.READER_STATUS_READY
+    assert "Error converting Word document" in reader_artifact.content_text
+    assert reader_artifact.error is None
 
 
 def test_get_reader_view_marks_unsupported_attachments_failed_without_scheduling(

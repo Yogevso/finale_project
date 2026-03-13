@@ -10,6 +10,7 @@ import type { ChildNode } from 'domhandler'
 import { Link } from 'react-router-dom'
 import DocumentCodeBlock from '@/components/DocumentCodeBlock'
 import LightboxImage from '@/components/LightboxImage'
+import { getWindowLocation } from '@/env/dom'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 
 interface DocumentRendererReplaceContext {
@@ -142,9 +143,9 @@ function resolveInternalDocumentPath(href: string): string | null {
   }
 
   try {
-    const parsedUrl = new URL(trimmedHref, window.location.origin)
+    const parsedUrl = new URL(trimmedHref, getWindowLocation().origin)
     if (
-      parsedUrl.origin === window.location.origin &&
+      parsedUrl.origin === getWindowLocation().origin &&
       parsedUrl.pathname.startsWith('/documents/')
     ) {
       return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`
@@ -160,10 +161,10 @@ function resolveInternalDocumentPath(href: string): string | null {
 
 function isExternalHttpLink(href: string): boolean {
   try {
-    const parsedUrl = new URL(href, window.location.origin)
+    const parsedUrl = new URL(href, getWindowLocation().origin)
     return (
       (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') &&
-      parsedUrl.origin !== window.location.origin
+      parsedUrl.origin !== getWindowLocation().origin
     )
   } catch {
     return false

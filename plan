@@ -1,268 +1,41 @@
-Project Plan: Active Tasks (Names Only)
-Last updated: 2026-03-01
+Project Plan
+Last updated: 2026-03-13
 
-Execution Order
-1. Wave Q
-2. Wave R
-3. Wave S
-4. Wave T
-5. Wave U
-6. Wave V
-7. Wave W
-8. Wave X
-9. Wave Y
-10. Wave Z
-11. Wave AA
-12. Wave AB
+Current checkpoint
+- Stable return point: `f82ba36` (`test(coverage): cover storage helpers and preview branches`)
+- Active wave: Wave Y.1
+- Status: core delivery is done; remaining work is cleanup, hardening, and UX polish
 
-Wave Q - Review, Version, and Publish Safety
-141. Publish preflight checklist endpoint
-142. Audience readiness gate on submit
-143. Audience readiness gate on approve
-144. Audience readiness gate on publish
-145. Review snapshot lock for audience state
-146. Version clone audience carry-forward rules
-147. Audience rollback on failed publish
-148. Audience diff in review timeline
-149. Review cancel reconciliation for assignments
-150. Version restore audience integrity
-151. Publish retry idempotency for audience checks
-152. Pre-approve policy explanation payload
-153. Audience dependency graph for blockers
-154. Forced publish override audit path
-155. Scheduled publish audience revalidation
-156. Publish path stale-company detection
-157. Soft-delete restore audience reconciliation
-158. Review branch merge audience resolution
+Completed in Wave Y.1
+- Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
+- Backend refactors: Y1-010, Y1-011, Y1-012, Y1-013, Y1-014, Y1-015, Y1-016, Y1-017
+- Frontend refactors: Y1-020, Y1-021, Y1-022, Y1-023, Y1-024, Y1-025, Y1-026
+- Coverage/test work: Y1-040, Y1-041, Y1-042, and most of Y1-043
+- PDF removal tranche: Y1-050 through Y1-072
 
-Wave R - Users, Invitations, and Company Lifecycle
-159. Customer user company binding enforcement
-160. Invitation company binding enforcement
-161. Invite accept company drift prevention
-162. Invite resend company consistency
-163. Role downgrade access cleanup
-164. Role upgrade assignment migration checks
-165. Company deactivate impact report
-166. Company merge document reassignment plan
-167. Company rename propagation checks
-168. Company deletion hard safety checks
-169. Orphan customer detector job
-170. Orphan invitation detector job
-171. Company ownership transfer validation
-172. Company hierarchy support baseline
-173. Company archive and restore rules
-174. Multi-company user policy definition
-175. Company-scoped onboarding validation
-176. Company scope conflict resolver tooling
+Verification snapshot
+- Backend full suite: 967 passed, 3 skipped
+- Frontend full unit suite: 158 passed
+- Playwright matrix in slices: 300 passed, 1 skipped
+- Focused AttachmentService regression slice: 53 passed
+- Focused conversion/reader/container regression slice: 36 passed
+- Focused backend Ruff check: clean for conversion, legacy wrapper, container, dependencies, and attachment-service modules
+- Focused frontend preview/browser/DTO slice: 40 passed
+- Focused frontend ESLint slice: clean
+- Frontend TypeScript check (`tsc`): clean
 
-Wave S - Portal, Public, and BFF Consistency
-177. Public endpoint audience projection parity
-178. Customer portal visibility parity checks
-179. Management list visibility parity checks
-180. BFF document bundle audience hydration
-181. BFF fallback when assignment fetch fails
-182. Portal cache invalidation on audience change
-183. Public cache purge on publish visibility change
-184. Search index audience synchronization
-185. Sitemap rules for public documents only
-186. RSS or feed audience filtering
-187. Link-sharing policy by audience type
-188. External embed audience restrictions
-189. Download endpoint audience authorization parity
-190. Attachment access parity with document audience
-191. Preview endpoint audience enforcement
-192. Thumbnail generation audience metadata sync
-193. Document duplicate action audience carry-over
-194. Portal quick actions audience safeguards
+Highest-priority remaining items
+1. Upload UX polish
+   - Y1-030: real upload progress bar
+   - Y1-031: replace placeholder dropzone icons
+   - Y1-032: expose manager/admin upload options
+   - Y1-033: dedicated upload-modal UI E2E
+2. Optional extra coverage
+   - Y1-043: warning banner and anchor-copying viewer coverage polish
 
-Wave T - Audit, Analytics, and Contract Safety
-195. Cross-channel audience contract suite
-196. Consumer-driven audience contract fixtures
-197. Provider verification for audience payloads
-198. Assignment endpoint schema versioning
-199. Audience error code catalog lockfile
-200. Assignment diff audit entries
-201. Visibility change signed audit records
-202. Audience timeline event taxonomy
-203. Analytics segmentation by audience type
-204. Analytics by company-scoped visibility
-205. Exposure risk metric for public transitions
-206. Assignment churn metric
-207. Audit export endpoint for compliance
-208. Compliance redaction policy for audit views
-209. Access history report by company
-210. Admin action reason-capture requirement
-211. Alert rules for suspicious audience changes
-212. Monthly audience governance report generator
+Recommended next item
+- Start with Y1-030 through Y1-033. The main hardening work is now in place on both backend and frontend, so the next meaningful tranche is upload UX polish and the dedicated upload-modal E2E.
 
-Wave U - Security, Resilience, and Operational Controls
-213. Cross-tenant assignment attack tests
-214. Tenant isolation fuzz tests for audience APIs
-215. Assignment endpoint rate limiting
-216. Bulk assignment idempotency keys
-217. Optimistic concurrency for visibility updates
-218. Replay-safe command handling for assignments
-219. Background reconciliation worker for assignments
-220. Dead-letter handling for assignment failures
-221. Retry policy tuning for assignment jobs
-222. Chaos tests for audience critical flows
-223. Feature flag rollout controls for new audience rules
-224. Kill-switch for company-audience enforcement
-225. Safe mode fallback for publish audience gates
-226. Incident runbook for exposure events
-227. Staging smoke suite for audience paths
-228. Post-incident evidence bundle automation
-229. Security checklist for audience endpoints
-230. Permission matrix test enforcement in CI
-
-Wave V - Performance and Developer Productivity
-231. Audience query benchmark suite
-232. Company assignment load-test scenarios
-233. Document detail payload size budget
-234. Company lookup caching service
-235. Batched assignment update API
-236. Assignment pagination performance tuning
-237. Search filter index for audience fields
-238. Query plan regression checks
-239. Test data factory for audience edge cases
-240. Scenario builder for review audience flows
-241. One-click local audience smoke command
-242. PR bot for audience contract drift
-243. Architecture lint rules for audience boundaries
-244. Legacy audience path dead-code cleanup
-245. Module ownership map for audience domain
-246. Refactor map for audience components
-247. Storybook states for visibility modes
-248. Frontend render performance pass for docs table
-
-Wave W - Core Website Account Experience
-249. Email verification flow
-250. Password reset flow
-251. Session management page
-252. Multi-factor authentication baseline
-253. Login anomaly detection
-254. Account lockout and recovery flow
-255. Profile settings page
-256. Notification preferences
-257. Timezone and locale preferences
-258. Avatar upload and moderation checks
-259. Security events page
-260. Device and session revoke controls
-261. Terms and privacy acceptance tracking
-262. Cookie consent management
-263. Age and region gate handling
-264. Welcome onboarding checklist
-265. First-company setup wizard
-266. Role-based onboarding variants
-267. Guided empty states and first actions
-268. In-app product tour framework
-
-Wave X - Collaboration and Content UX
-269. Document mention notifications
-270. Comment threading improvements
-271. Rich text diff view
-272. Side-by-side version compare
-273. Draft autosave recovery snapshots
-274. Conflict resolution UX for concurrent edits
-275. Watch and follow document preferences
-276. Bookmark and favorites system
-277. Recent activity feed
-278. Custom tags and labels
-279. Saved filters and views
-280. Bulk metadata editing
-281. Smart duplicate detection
-282. Template library management
-283. Snippet and boilerplate library
-284. Approval SLA reminders
-285. Due date and calendar integration
-286. Knowledge base category navigation
-287. Archive and restore UX polish
-288. Print-friendly document layout
-
-Wave Y - Search, Discovery, and Portal Experience
-289. Global search with quick results
-290. Advanced search query builder
-291. Faceted filters for portal users
-292. Relevance ranking tuning pipeline
-293. Search analytics dashboard
-294. Broken link detection job
-295. Related documents recommendations
-296. Personalized landing dashboard
-297. Recently viewed across devices
-298. Continue-reading queue
-299. Public docs SEO metadata pipeline
-300. XML sitemap automation
-301. Open Graph and social previews
-302. Canonical URL strategy enforcement
-303. 404 and fallback experience
-304. Help center search integration
-305. Changelog and release notes page
-306. In-app announcement banner system
-307. Feedback widget and NPS flow
-308. Support ticket handoff integration
-
-Wave Z - Admin Operations and Tenant Management
-309. Admin tenant impersonation safeguards
-310. Admin action queue with approvals
-311. Admin bulk tenant maintenance tools
-312. Tenant-level configuration registry
-313. Feature access matrix by role
-314. Status page and incident feed integration
-315. SLA and performance reporting by tenant
-316. Customer success health scoring baseline
-317. Organization provisioning workflow
-318. Tenant suspension and reactivation safeguards
-319. Domain verification for tenant ownership
-320. Custom branding and white-label settings
-321. Tenant quota policy framework
-322. Admin configuration change audit trail
-323. Operations runbook integration page
-324. Tenant migration and split/merge toolkit
-325. Cross-tenant admin boundary checks
-326. Admin API rate limiting and throttling
-327. Maintenance window scheduling controls
-328. Tenant configuration drift detector
-
-Wave AA - Compliance, Data, and Scale Maturity
-329. Data export requests workflow
-330. Data deletion requests workflow
-331. Regional data residency controls
-332. Retention policy automation
-333. Legal hold support baseline
-334. Audit log immutability hardening
-335. Key rotation and secret hygiene checks
-336. Backup restore game-day drills
-337. Disaster recovery RTO and RPO validation
-338. Cross-region failover simulation
-339. Dependency vulnerability response pipeline
-340. Third-party risk inventory automation
-341. SOC2 evidence collection automation
-342. GDPR and CCPA policy mapping docs
-343. Accessibility WCAG audit remediation
-344. Performance budget enforcement in CI
-345. Mobile responsiveness baseline suite
-346. API deprecation communication workflow
-347. Public API version sunset tooling
-348. Annual architecture review cadence
-
-Wave AB - Experimentation and Growth Systems
-349. Feature flag targeting and rollout UI
-350. Experiment assignment service
-351. A/B test metrics guardrails
-352. Experiment kill-switch automation
-353. Onboarding funnel analytics
-354. Activation milestone tracking
-355. Retention cohort dashboard
-356. Churn prediction baseline model
-357. Win-back campaign triggers
-358. Referral program infrastructure
-359. Partner integration marketplace page
-360. API developer portal baseline
-361. Webhook registration management UI
-362. Developer API key rotation UX
-363. Integration health monitoring panel
-364. Internal playbook search and runbooks
-365. Quarterly roadmap scoring framework
-366. Technical debt budgeting workflow
-367. End-user trust center page
-368. Security questionnaire self-serve portal
+Guardrails
+- Do not rerun full Playwright or full coverage unless a real code change needs it.
+- Keep generated artifacts out of commits: `frontend/coverage`, Playwright reports, temp test directories.

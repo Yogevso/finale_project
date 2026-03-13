@@ -4,6 +4,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.container import AppContainer, build_container, get_container
+from app.conversion.contracts import DocumentConversionService
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
@@ -74,3 +75,12 @@ def get_collaboration_service(
     if not isinstance(container, AppContainer):
         container = build_container()
     return container.collaboration_service(db)
+
+
+def get_document_conversion_service(
+    container: AppContainer = Depends(get_container),
+) -> DocumentConversionService:
+    """Resolve the shared document conversion pipeline from the app container."""
+    if not isinstance(container, AppContainer):
+        container = build_container()
+    return container.document_conversion_service()

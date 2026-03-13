@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from app.conversion import (
+    DocumentConversionOutput,
     DocumentConversionPipeline,
+    StrategyCapabilityDescriptor,
 )
 from app.conversion.ir import IRNode
 
@@ -152,3 +152,41 @@ def test_document_conversion_pipeline_html_passthrough():
 
     assert output == "<h1>Hello</h1>"
 
+
+def test_document_conversion_pipeline_describes_registered_strategy_capabilities():
+    pipeline = DocumentConversionPipeline()
+
+    assert pipeline.describe_strategy_capabilities() == {
+        "word": ("html", "reader_artifact"),
+        "powerpoint": ("html", "reader_artifact"),
+        "html": ("html",),
+        "text": ("html",),
+    }
+
+
+def test_document_conversion_pipeline_returns_none_when_strategy_has_no_reader_output(caplog):
+    pipeline = DocumentConversionPipeline()
+
+    with caplog.at_level("INFO"):
+        artifact = pipeline.convert_document_to_reader_artifact(
+            b"plain text",
+            "text/plain",
+            "notes.txt",
+        )
+
+    assert artifact is None
+    assert "does not support reader artifacts" in caplog.text
+
+
+def test_strategy_capability_descriptor_sorts_output_names():
+    descriptor = StrategyCapabilityDescriptor(
+        outputs=frozenset(
+            {
+                DocumentConversionOutput.READER_ARTIFACT,
+                DocumentConversionOutput.HTML,
+            }
+        )
+    )
+
+    assert descriptor.as_names() == ("html", "reader_artifact")
+    assert descriptor.supports(DocumentConversionOutput.HTML) is True

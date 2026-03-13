@@ -52,13 +52,19 @@ describe('usePreviewSource', () => {
 
   it('clears stale attachment selection and falls back to download-only when no preview source exists', async () => {
     const attachment = buildAttachment()
+    type PreviewSourceProps = {
+      attachments: Attachment[]
+      inlineContent: string | null
+      readerHtmlContent: string | null
+    }
+    const initialProps: PreviewSourceProps = {
+      attachments: [attachment],
+      inlineContent: null,
+      readerHtmlContent: '<h1>Reader</h1>',
+    }
 
     const { result, rerender } = renderHook(
-      ({ attachments, inlineContent, readerHtmlContent }: {
-        attachments: Attachment[]
-        inlineContent: string | null
-        readerHtmlContent: string | null
-      }) => {
+      ({ attachments, inlineContent, readerHtmlContent }: PreviewSourceProps) => {
         const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(attachment)
         const preview = usePreviewSource({
           attachments,
@@ -75,11 +81,7 @@ describe('usePreviewSource', () => {
         }
       },
       {
-        initialProps: {
-          attachments: [attachment],
-          inlineContent: null,
-          readerHtmlContent: '<h1>Reader</h1>',
-        },
+        initialProps,
       },
     )
 

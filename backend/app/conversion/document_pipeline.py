@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from typing import Any
 
 from app.conversion.document_strategies import (
+    DocumentConversionOutput,
     DocumentConverterStrategy,
     PowerPointConverterStrategy,
     WordConverterStrategy,
@@ -42,17 +44,28 @@ class DocumentConversionPipeline:
                 powerpoint_converter=self._powerpoint_converter,
             )
 
+    @staticmethod
+    def _build_request(content: bytes, mime_type: str, filename: str) -> DocumentConversionRequest:
+        return DocumentConversionRequest(
+            content=content,
+            mime_type=mime_type,
+            filename=filename,
+        )
+
+    def describe_strategy_capabilities(self) -> dict[str, tuple[str, ...]]:
+        """Expose registered strategy outputs for diagnostics and DI consumers."""
+        return {
+            plugin.name: plugin.capabilities.as_names()
+            for plugin in self._converter_registry.plugins
+        }
+
     def convert_document_to_html(
         self,
         content: bytes,
         mime_type: str,
         filename: str = "",
     ) -> str | None:
-        request = DocumentConversionRequest(
-            content=content,
-            mime_type=mime_type,
-            filename=filename,
-        )
+        request = self._build_request(content, mime_type, filename)
         converter_plugin = self._converter_registry.select(request)
         if converter_plugin:
             return converter_plugin.convert_to_html(request)
@@ -72,17 +85,24 @@ class DocumentConversionPipeline:
         content: bytes,
         mime_type: str,
         filename: str = "",
-    ) -> dict | None:
-        request = DocumentConversionRequest(
-            content=content,
-            mime_type=mime_type,
-            filename=filename,
-        )
+    ) -> dict[str, Any] | None:
+        request = self._build_request(content, mime_type, filename)
         converter_plugin = self._converter_registry.select(request)
-        if converter_plugin and hasattr(converter_plugin, "convert_to_reader_artifact"):
+        if converter_plugin and converter_plugin.capabilities.supports(
+            DocumentConversionOutput.READER_ARTIFACT
+        ):
             artifact = converter_plugin.convert_to_reader_artifact(request)
             if artifact is not None:
                 return artifact
+        elif converter_plugin:
+            logger.info(
+                "Strategy %s matched mime_type=%s filename=%s but does not support reader artifacts; outputs=%s",
+                converter_plugin.name,
+                mime_type,
+                filename,
+                converter_plugin.capabilities.as_names(),
+            )
+            return None
 
         logger.info(
             "No reader-artifact conversion strategy matched mime_type=%s filename=%s",

@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as domEnv from '@/env/dom'
 import { api } from '@/lib/api'
 import type { Attachment } from '@/types'
 import { useAttachmentDownload } from './useAttachmentDownload'
@@ -10,7 +11,18 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
+vi.mock('@/env/dom', async () => {
+  const actual = await vi.importActual<typeof import('@/env/dom')>('@/env/dom')
+  return {
+    ...actual,
+    createObjectUrl: vi.fn(() => 'blob:test'),
+    revokeObjectUrl: vi.fn(),
+    getDocument: vi.fn(() => document),
+  }
+})
+
 const mockedApi = vi.mocked(api, true)
+const mockedDomEnv = vi.mocked(domEnv, true)
 
 function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
   return {
@@ -27,8 +39,6 @@ function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
 }
 
 describe('useAttachmentDownload', () => {
-  const createObjectURLMock = vi.fn(() => 'blob:test')
-  const revokeObjectURLMock = vi.fn()
   const anchorClickMock = vi.fn()
   const appendChildMock = vi.fn()
   const removeMock = vi.fn()
@@ -40,11 +50,7 @@ describe('useAttachmentDownload', () => {
     vi.clearAllMocks()
     document.body.innerHTML = ''
     mockedApi.getAttachmentBlob.mockResolvedValue(new Blob(['test']))
-
-    vi.stubGlobal('URL', {
-      createObjectURL: createObjectURLMock,
-      revokeObjectURL: revokeObjectURLMock,
-    })
+    mockedDomEnv.createObjectUrl.mockReturnValue('blob:test')
 
     vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
       const element = originalCreateElement(tagName)
@@ -70,7 +76,6 @@ describe('useAttachmentDownload', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
     document.body.innerHTML = ''
   })
 
@@ -83,13 +88,13 @@ describe('useAttachmentDownload', () => {
     })
 
     expect(mockedApi.getAttachmentBlob).toHaveBeenCalledWith(42, attachment.id)
-    expect(createObjectURLMock).toHaveBeenCalledTimes(1)
+    expect(mockedDomEnv.createObjectUrl).toHaveBeenCalledTimes(1)
     expect(
       appendChildMock.mock.calls.filter(([node]) => node instanceof HTMLAnchorElement),
     ).toHaveLength(1)
     expect(anchorClickMock).toHaveBeenCalledTimes(1)
     expect(removeMock).toHaveBeenCalledTimes(1)
-    expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:test')
+    expect(mockedDomEnv.revokeObjectUrl).toHaveBeenCalledWith('blob:test')
     expect(result.current.downloadingAttachmentId).toBeNull()
   })
 

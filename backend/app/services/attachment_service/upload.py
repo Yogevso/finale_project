@@ -19,14 +19,13 @@ from .common import AttachmentServiceCommonMixin, get_storage_backend
 
 logger = logging.getLogger(__name__)
 
-AttachmentService = None  # Assigned by package facade at import time.
-
 
 class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
     """Upload and create entry points."""
 
-    @staticmethod
+    @classmethod
     def create_attachment_from_bytes(
+        cls,
         db: Session,
         document_id: int,
         content: bytes,
@@ -44,10 +43,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         """
         # Validate file size
         file_size = len(content)
-        if file_size > AttachmentService.MAX_FILE_SIZE:
+        if file_size > cls.MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large. Max size: {AttachmentService.MAX_FILE_SIZE // (1024 * 1024)}MB",
+                detail=f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB",
             )
         checksum_sha256 = hashlib.sha256(content).hexdigest()
 
@@ -67,7 +66,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         except Exception as e:
             logger.error(f"Storage upload failed: {e}")
             # Fallback to local file storage
-            upload_dir = AttachmentService.get_upload_dir()
+            upload_dir = cls.get_upload_dir()
             doc_dir = upload_dir / str(document_id)
             doc_dir.mkdir(parents=True, exist_ok=True)
             file_path = doc_dir / unique_filename
@@ -76,7 +75,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path = str(file_path)
 
         # Create attachment record
-        supports_reader_artifact = AttachmentService._supports_structured_reader_artifact(
+        supports_reader_artifact = cls._supports_structured_reader_artifact(
             content_type,
             original_filename,
         )
@@ -91,7 +90,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_key=storage_path,
             sha256=checksum_sha256,
             reader_html_status=(
-                AttachmentService.READER_STATUS_PENDING if supports_reader_artifact else None
+                cls.READER_STATUS_PENDING if supports_reader_artifact else None
             ),
             uploaded_by=current_user.id,
         )
@@ -99,12 +98,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         db.add(attachment)
         db.commit()
         db.refresh(attachment)
-        AttachmentService._ensure_artifact_rows(db, attachment, persist=True)
+        cls._ensure_artifact_rows(db, attachment, persist=True)
 
         if supports_reader_artifact:
-            AttachmentService.schedule_reader_artifact_generation(
-                attachment.id, background_tasks=background_tasks
-            )
+            cls.schedule_reader_artifact_generation(attachment.id, background_tasks=background_tasks)
 
         if convert_to_html:
             try:
@@ -126,7 +123,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     next_semantic = (
                         "1.0.0"
                         if not existing_version
-                        else AttachmentService._next_patch_semver(
+                        else cls._next_patch_semver(
                             existing_version.semantic_version, existing_version.version_number
                         )
                     )
@@ -155,6 +152,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         return attachment
 
+    @staticmethod
     def enqueue_conversion(
         attachment_id: int,
         *,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { getDocument } from '@/env/dom'
 import type { Attachment } from '@/types'
 import { resolveSectionPageStart, type TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 
@@ -18,7 +19,7 @@ export function useOutlineNavigation({ selectedAttachment }: UseOutlineNavigatio
   const navigateReaderToSection = useCallback(
     (item: TocSection, behavior: ScrollBehavior = 'smooth') => {
       const anchorId = item.anchorId || `heading-${item.index}`
-      const targetElement = document.getElementById(anchorId)
+      const targetElement = getDocument().getElementById(anchorId)
       const pageStart = resolveSectionPageStart(item)
 
       if (targetElement) {
