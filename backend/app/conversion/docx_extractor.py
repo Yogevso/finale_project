@@ -248,13 +248,16 @@ class DocxExtractor:
             logger.exception("DOCX extraction failed for %s", source_name)
             return self._failed_result("DOCX extraction failed", exc)
 
-        heading_positions = self._build_heading_items(parsed_document.paragraphs)
+        paragraphs = self._extract_paragraphs(parsed_document)
+        heading_positions = self._extract_headings(paragraphs)
         heading_lookup = {
-            id(parsed_document.paragraphs[index]): heading
+            id(paragraphs[index]): heading
             for index, heading in heading_positions.items()
         }
         headings = list(heading_positions.values())
-        document_ir = self._build_document_ir(parsed_document.body_blocks, heading_lookup)
+        table_blocks = self._extract_tables(parsed_document.body_blocks)
+        image_blocks = self._extract_images(parsed_document.body_blocks)
+        document_ir = self._build_ir(parsed_document.body_blocks, heading_lookup)
         html_content = ir_to_html(document_ir)
         document_title = str(parsed_document.metadata.get("title") or "") or (
             headings[0].text if headings else None
@@ -274,10 +277,11 @@ class DocxExtractor:
         result.confidence = calculate_confidence(result)
 
         logger.info(
-            "DOCX extraction completed for %s (headings=%s, images=%s, confidence=%.2f)",
+            "DOCX extraction completed for %s (headings=%s, tables=%s, images=%s, confidence=%.2f)",
             source_name,
             len(result.headings),
-            result.html.count("<img"),
+            len(table_blocks),
+            len(image_blocks),
             result.confidence,
         )
         return result
@@ -301,6 +305,36 @@ class DocxExtractor:
             paragraphs=paragraphs,
             table_count=table_count,
         )
+
+    def _extract_paragraphs(self, parsed_document: ParsedDocxDocument) -> list[ParagraphBlock]:
+        return parsed_document.paragraphs
+
+    def _extract_headings(self, paragraphs: list[ParagraphBlock]) -> dict[int, HeadingItem]:
+        return self._build_heading_items(paragraphs)
+
+    def _extract_lists(self, paragraphs: list[ParagraphBlock]) -> list[ListBlock]:
+        return self._build_list_blocks(paragraphs)
+
+    def _extract_tables(self, blocks: list[BodyBlock]) -> list[TableBlock]:
+        tables: list[TableBlock] = []
+        for block in blocks:
+            if block.kind == "table" and block.table is not None:
+                tables.append(block.table)
+                for row in block.table.rows:
+                    for cell in row.cells:
+                        tables.extend(self._extract_tables(cell.blocks))
+        return tables
+
+    def _extract_images(self, blocks: list[BodyBlock]) -> list[ImageBlock]:
+        images: list[ImageBlock] = []
+        for block in blocks:
+            if block.kind == "image" and block.image is not None:
+                images.append(block.image)
+            elif block.kind == "table" and block.table is not None:
+                for row in block.table.rows:
+                    for cell in row.cells:
+                        images.extend(self._extract_images(cell.blocks))
+        return images
 
     def _parse_metadata(self, archive: zipfile.ZipFile) -> dict[str, Any]:
         root = self._read_xml(archive, "docProps/core.xml", required=False)
@@ -594,7 +628,7 @@ class DocxExtractor:
             return base_id
         return f"{base_id}-{duplicate_index}"
 
-    def _build_document_ir(
+    def _build_ir(
         self,
         body_blocks: list[BodyBlock],
         heading_lookup: dict[int, HeadingItem],
@@ -614,7 +648,7 @@ class DocxExtractor:
         self,
         blocks: list[BodyBlock],
         *,
-        heading_lookup: dict[int, HeadingItem],
+            heading_lookup: dict[int, HeadingItem],
     ) -> list[IRNode]:
         children: list[IRNode] = []
         index = 0
@@ -624,7 +658,7 @@ class DocxExtractor:
             if block.kind == "paragraph" and block.paragraph is not None:
                 if self._is_list_paragraph(block.paragraph):
                     list_run, index = self._collect_list_run(blocks, index)
-                    children.extend(self._build_list_ir(list_run))
+                    children.extend(self._build_list_ir(self._extract_lists(list_run)))
                     continue
 
                 paragraph_node = self._build_paragraph_ir(
@@ -656,7 +690,7 @@ class DocxExtractor:
         if not text:
             return None
 
-        content = self._render_inline_runs(paragraph.runs)
+        content = self._format_inline_runs(paragraph.runs)
         if heading is not None:
             return IRNode(
                 type="heading",
@@ -676,10 +710,10 @@ class DocxExtractor:
             styles={"classes": ["extracted-paragraph"]},
         )
 
-    def _build_list_ir(self, paragraphs: list[ParagraphBlock]) -> list[IRNode]:
+    def _build_list_ir(self, list_blocks: list[ListBlock]) -> list[IRNode]:
         return [
             self._build_list_block_ir(block, root=True)
-            for block in self._build_list_blocks(paragraphs)
+            for block in list_blocks
         ]
 
     def _build_list_block_ir(self, block: ListBlock, *, root: bool = False) -> IRNode:
@@ -694,7 +728,7 @@ class DocxExtractor:
     def _build_list_item_ir(self, item: ListItemBlock) -> IRNode:
         return IRNode(
             type="list-item",
-            content=self._render_inline_runs(item.paragraph.runs),
+            content=self._format_inline_runs(item.paragraph.runs),
             children=[self._build_list_block_ir(child) for child in item.children],
         )
 
@@ -758,73 +792,10 @@ class DocxExtractor:
             },
         )
 
-    def _render_html(
-        self,
-        body_blocks: list[BodyBlock],
-        heading_lookup: dict[int, HeadingItem],
-    ) -> str:
-        article_body = self._render_body_blocks(body_blocks, heading_lookup=heading_lookup)
-        return (
-            '<article class="docx-document" role="article" aria-label="Uploaded document">'
-            f"{article_body}"
-            "</article>"
-        )
+    def _format_inline_runs(self, runs: list[ParagraphRun]) -> str:
+        return "".join(self._format_run(run) for run in runs)
 
-    def _render_body_blocks(
-        self,
-        blocks: list[BodyBlock],
-        *,
-        heading_lookup: dict[int, HeadingItem],
-    ) -> str:
-        body_parts: list[str] = []
-        index = 0
-
-        while index < len(blocks):
-            block = blocks[index]
-            if block.kind == "paragraph" and block.paragraph is not None:
-                if self._is_list_paragraph(block.paragraph):
-                    list_run, index = self._collect_list_run(blocks, index)
-                    body_parts.append(self._render_list_run(list_run))
-                    continue
-
-                heading = heading_lookup.get(id(block.paragraph))
-                body_parts.append(self._render_paragraph(block.paragraph, heading))
-                index += 1
-                continue
-
-            if block.kind == "table" and block.table is not None:
-                body_parts.append(self._render_table(block.table))
-                index += 1
-                continue
-
-            if block.kind == "image" and block.image is not None:
-                body_parts.append(self._render_image(block.image))
-            index += 1
-
-        return "".join(body_parts)
-
-    def _render_paragraph(
-        self,
-        paragraph: ParagraphBlock,
-        heading: HeadingItem | None = None,
-    ) -> str:
-        text = paragraph.text.strip()
-        if not text:
-            return ""
-
-        escaped = self._render_inline_runs(paragraph.runs)
-        if heading is not None:
-            return (
-                f'<h{heading.level} class="extracted-heading '
-                f'extracted-heading-level-{heading.level}" id="{heading.id}">{escaped}'
-                f"</h{heading.level}>"
-            )
-        return f'<p class="extracted-paragraph">{escaped}</p>'
-
-    def _render_inline_runs(self, runs: list[ParagraphRun]) -> str:
-        return "".join(self._render_run(run) for run in runs)
-
-    def _render_run(self, run: ParagraphRun) -> str:
+    def _format_run(self, run: ParagraphRun) -> str:
         rendered = html.escape(run.text, quote=True).replace("\n", "<br/>")
         wrappers = (
             (run.code, "code"),
@@ -840,75 +811,6 @@ class DocxExtractor:
                 else:
                     rendered = f"<{tag}>{rendered}</{tag}>"
         return rendered
-
-    def _render_list_run(self, paragraphs: list[ParagraphBlock]) -> str:
-        list_blocks = self._build_list_blocks(paragraphs)
-        return "".join(self._render_list_block(block, root=True) for block in list_blocks)
-
-    def _render_list_block(self, block: ListBlock, *, root: bool = False) -> str:
-        tag = "ol" if block.ordered else "ul"
-        class_attr = ' class="extracted-list"' if root else ""
-        items = "".join(self._render_list_item(item) for item in block.items)
-        return f"<{tag}{class_attr}>{items}</{tag}>"
-
-    def _render_list_item(self, item: ListItemBlock) -> str:
-        content = self._render_inline_runs(item.paragraph.runs)
-        nested = "".join(self._render_list_block(child) for child in item.children)
-        return f"<li>{content}{nested}</li>"
-
-    def _render_table(self, table: TableBlock) -> str:
-        header_rows = table.rows[:1] if table.has_header_row and table.rows else []
-        body_rows = table.rows[1:] if header_rows else table.rows
-
-        thead = "".join(self._render_table_row(row, header=True) for row in header_rows)
-        tbody = "".join(self._render_table_row(row, header=False) for row in body_rows)
-        return (
-            '<div class="table-wrapper">'
-            f'<table class="extracted-table"><thead>{thead}</thead><tbody>{tbody}</tbody></table>'
-            "</div>"
-        )
-
-    def _render_image(self, image: ImageBlock) -> str:
-        caption = (
-            f'<figcaption class="extracted-image-caption">'
-            f"{html.escape(image.alt, quote=True)}</figcaption>"
-        )
-        if image.missing or image.src is None:
-            return (
-                '<figure class="extracted-image">'
-                '<div class="extracted-image-placeholder">'
-                f"[Image unavailable: {html.escape(image.alt, quote=True)}]"
-                "</div>"
-                f"{caption}"
-                "</figure>"
-            )
-        return (
-            '<figure class="extracted-image">'
-            f'<img src="{html.escape(image.src, quote=True)}" '
-            f'alt="{html.escape(image.alt, quote=True)}" loading="lazy" />'
-            f"{caption}"
-            "</figure>"
-        )
-
-    def _render_table_row(self, row: TableRowBlock, *, header: bool) -> str:
-        tag = "th" if header else "td"
-        cells: list[str] = []
-        for cell in row.cells:
-            if cell.skip_render:
-                continue
-
-            attributes: list[str] = []
-            if cell.colspan > 1:
-                attributes.append(f' colspan="{cell.colspan}"')
-            if cell.rowspan > 1:
-                attributes.append(f' rowspan="{cell.rowspan}"')
-
-            cell_html = self._render_body_blocks(cell.blocks, heading_lookup={})
-            cells.append(f"<{tag}{''.join(attributes)}>{cell_html}</{tag}>")
-
-        if not cells:
-            return ""
-        return f"<tr>{''.join(cells)}</tr>"
 
     def _build_list_blocks(self, paragraphs: list[ParagraphBlock]) -> list[ListBlock]:
         blocks: list[ListBlock] = []

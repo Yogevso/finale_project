@@ -213,8 +213,11 @@ class PptxExtractor:
             logger.exception("PPTX extraction failed for %s", source_name)
             return self._failed_result("PPTX extraction failed", exc)
 
-        headings = self._build_heading_items(parsed_presentation.slides)
-        presentation_ir = self._build_presentation_ir(parsed_presentation.slides)
+        paragraphs = self._extract_paragraphs(parsed_presentation.slides)
+        headings = self._extract_headings(parsed_presentation.slides)
+        table_blocks = self._extract_tables(parsed_presentation.slides)
+        image_blocks = self._extract_images(parsed_presentation.slides)
+        presentation_ir = self._build_ir(parsed_presentation.slides)
         html_content = ir_to_html(presentation_ir)
         result = ExtractionResult(
             status="ready",
@@ -232,9 +235,12 @@ class PptxExtractor:
         result.confidence = calculate_confidence(result)
 
         logger.info(
-            "PPTX extraction completed for %s (slides=%s, confidence=%.2f)",
+            "PPTX extraction completed for %s (slides=%s, paragraphs=%s, tables=%s, images=%s, confidence=%.2f)",
             source_name,
             len(result.slides),
+            len(paragraphs),
+            len(table_blocks),
+            len(image_blocks),
             result.confidence,
         )
         return result
@@ -244,6 +250,33 @@ class PptxExtractor:
         slides = self._load_slides(archive)
         metadata["slideCount"] = len(slides)
         return ParsedPptxPresentation(metadata=metadata, slides=slides)
+
+    def _extract_paragraphs(self, slides: list[ParsedSlide]) -> list[SlideParagraph]:
+        paragraphs: list[SlideParagraph] = []
+        for slide in slides:
+            for block in slide.body_blocks:
+                if block.kind == "text":
+                    paragraphs.extend(block.paragraphs)
+            paragraphs.extend(slide.notes_paragraphs)
+        return paragraphs
+
+    def _extract_headings(self, slides: list[ParsedSlide]) -> list[HeadingItem]:
+        return self._build_heading_items(slides)
+
+    def _extract_lists(self, paragraphs: list[SlideParagraph]) -> list[SlideListBlock]:
+        return self._build_list_blocks(paragraphs)
+
+    def _extract_tables(self, slides: list[ParsedSlide]) -> list[IRNode]:
+        # Table shapes are not yet parsed into structured slide blocks in the Wave Y pipeline.
+        return []
+
+    def _extract_images(self, slides: list[ParsedSlide]) -> list[SlideImage]:
+        images: list[SlideImage] = []
+        for slide in slides:
+            for block in slide.body_blocks:
+                if block.kind == "image" and block.image is not None:
+                    images.append(block.image)
+        return images
 
     def _parse_metadata(self, archive: zipfile.ZipFile) -> dict[str, Any]:
         root = self._read_xml(archive, "docProps/core.xml", required=False)
@@ -533,7 +566,7 @@ class PptxExtractor:
             return self._display_title(slides[0])
         return None
 
-    def _build_presentation_ir(self, slides: list[ParsedSlide]) -> IRNode:
+    def _build_ir(self, slides: list[ParsedSlide]) -> IRNode:
         total_slides = len(slides)
         return IRNode(
             type="document",
@@ -548,7 +581,7 @@ class PptxExtractor:
     def _build_slide_ir(self, slide: ParsedSlide, *, total_slides: int) -> IRNode:
         display_title = self._display_title(slide)
         title_content = (
-            self._render_inline_runs(slide.title_runs)
+            self._format_inline_runs(slide.title_runs)
             if slide.title_runs
             else html.escape(display_title, quote=True)
         )
@@ -617,7 +650,7 @@ class PptxExtractor:
             list_run, index = self._collect_list_run(paragraphs, index)
             children.extend(
                 self._build_list_block_ir(block, root=True)
-                for block in self._build_list_blocks(list_run)
+                for block in self._extract_lists(list_run)
             )
         return children
 
@@ -642,7 +675,7 @@ class PptxExtractor:
         text = paragraph.text.strip()
         if not text:
             return None
-        return IRNode(type="paragraph", content=self._render_inline_runs(paragraph.runs))
+        return IRNode(type="paragraph", content=self._format_inline_runs(paragraph.runs))
 
     def _build_image_group_ir(self, images: list[SlideImage]) -> IRNode | None:
         if not images:
@@ -677,120 +710,20 @@ class PptxExtractor:
     def _build_list_item_ir(self, item: SlideListItem) -> IRNode:
         return IRNode(
             type="list-item",
-            content=self._render_inline_runs(item.paragraph.runs),
+            content=self._format_inline_runs(item.paragraph.runs),
             children=[self._build_list_block_ir(child) for child in item.children],
         )
 
-    def _render_html(self, slides: list[ParsedSlide]) -> str:
-        sections = "".join(self._render_slide(slide, total_slides=len(slides)) for slide in slides)
-        return f'<div class="pptx-presentation" data-slide-count="{len(slides)}">{sections}</div>'
+    def _format_inline_runs(self, runs: list[TextRun]) -> str:
+        return "".join(self._format_run(run) for run in runs)
 
-    def _render_slide(self, slide: ParsedSlide, *, total_slides: int) -> str:
-        display_title = self._display_title(slide)
-        title_html = self._render_inline_runs(slide.title_runs) if slide.title_runs else html.escape(
-            display_title,
-            quote=True,
-        )
-        aria_label = (
-            f"Slide {slide.summary.number}: {display_title}"
-            if slide.summary.title
-            else f"Slide {slide.summary.number}"
-        )
-        body_html = self._render_slide_blocks(slide.body_blocks)
-        notes_html = self._render_notes(slide.notes_paragraphs)
-
-        return (
-            f'<section class="pptx-slide" id="{slide.summary.section_id}" '
-            f'data-slide-number="{slide.summary.number}" '
-            f'aria-label="{html.escape(aria_label, quote=True)}">'
-            f'<span class="slide-badge" aria-label="Slide {slide.summary.number} of {total_slides}">'
-            f"Slide {slide.summary.number}</span>"
-            f'<h2 id="{slide.summary.title_id}">{title_html}</h2>'
-            f"{body_html}{notes_html}"
-            "</section>"
-        )
-
-    def _render_slide_blocks(self, blocks: list[SlideBlock]) -> str:
-        parts: list[str] = []
-        index = 0
-        while index < len(blocks):
-            block = blocks[index]
-            if block.kind == "text":
-                parts.append(self._render_text_box(block.paragraphs))
-                index += 1
-                continue
-
-            images, index = self._collect_image_run(blocks, index)
-            parts.append(self._render_image_run(images))
-        return "".join(part for part in parts if part)
-
-    def _render_text_box(self, paragraphs: list[SlideParagraph]) -> str:
-        parts: list[str] = []
-        index = 0
-        while index < len(paragraphs):
-            paragraph = paragraphs[index]
-            if paragraph.list_type is None:
-                rendered = self._render_paragraph(paragraph)
-                if rendered:
-                    parts.append(rendered)
-                index += 1
-                continue
-
-            list_run, index = self._collect_list_run(paragraphs, index)
-            list_blocks = self._build_list_blocks(list_run)
-            parts.extend(self._render_list_block(block, root=True) for block in list_blocks)
-        return "".join(parts)
-
-    def _render_notes(self, paragraphs: list[SlideParagraph]) -> str:
-        if not paragraphs:
-            return ""
-
-        return (
-            '<details class="speaker-notes">'
-            '<summary aria-expanded="false">Speaker Notes (click to expand)</summary>'
-            f'<div class="notes-content">{self._render_text_box(paragraphs)}</div>'
-            "</details>"
-        )
-
-    def _render_paragraph(self, paragraph: SlideParagraph) -> str:
-        text = paragraph.text.strip()
-        if not text:
-            return ""
-        return f"<p>{self._render_inline_runs(paragraph.runs)}</p>"
-
-    def _render_inline_runs(self, runs: list[TextRun]) -> str:
-        return "".join(self._render_run(run) for run in runs)
-
-    def _render_run(self, run: TextRun) -> str:
+    def _format_run(self, run: TextRun) -> str:
         rendered = html.escape(run.text, quote=True).replace("\n", "<br/>")
         if run.italic:
             rendered = f"<em>{rendered}</em>"
         if run.bold:
             rendered = f"<strong>{rendered}</strong>"
         return rendered
-
-    def _render_image_run(self, images: list[SlideImage]) -> str:
-        if not images:
-            return ""
-        rendered_images = "".join(self._render_image(image) for image in images)
-        return f'<div class="slide-images">{rendered_images}</div>'
-
-    def _render_image(self, image: SlideImage) -> str:
-        alt_text = html.escape(image.alt, quote=True)
-        if image.missing or image.src is None:
-            return (
-                "<figure>"
-                '<div class="extracted-image-placeholder">'
-                f"[Image unavailable: {alt_text}]"
-                "</div>"
-                "</figure>"
-            )
-        return (
-            "<figure>"
-            f'<img src="{html.escape(image.src, quote=True)}" '
-            f'alt="{alt_text}" loading="lazy" />'
-            "</figure>"
-        )
 
     def _collect_image_run(
         self,
@@ -871,17 +804,6 @@ class PptxExtractor:
             index += 1
 
         return block, index
-
-    def _render_list_block(self, block: SlideListBlock, *, root: bool = False) -> str:
-        tag = "ol" if block.ordered else "ul"
-        class_attr = ' class="slide-bullets"' if root else ""
-        items = "".join(self._render_list_item(item) for item in block.items)
-        return f"<{tag}{class_attr}>{items}</{tag}>"
-
-    def _render_list_item(self, item: SlideListItem) -> str:
-        content = self._render_inline_runs(item.paragraph.runs)
-        nested = "".join(self._render_list_block(child) for child in item.children)
-        return f"<li>{content}{nested}</li>"
 
     def _verify(self, result: ExtractionResult) -> list[ExtractionWarning]:
         warnings: list[ExtractionWarning] = []

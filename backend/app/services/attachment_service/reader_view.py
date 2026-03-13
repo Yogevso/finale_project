@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 AttachmentService = None  # Assigned by package facade at import time.
 
 _UNSUPPORTED_READER_VIEW_ERROR = "Reader View is only available for DOCX and PPTX attachments"
+_DOCX_READER_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_PPTX_READER_MIME_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
 class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
@@ -163,6 +166,98 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         )
 
     @staticmethod
+    def _resolve_structured_reader_kind(attachment: Attachment) -> str | None:
+        normalized_mime = (attachment.mime_type or "").lower()
+        suffix = Path(attachment.original_filename or attachment.filename or "").suffix.lower()
+
+        if normalized_mime == _DOCX_READER_MIME_TYPE or suffix == ".docx":
+            return "docx"
+        if normalized_mime == _PPTX_READER_MIME_TYPE or suffix == ".pptx":
+            return "pptx"
+        return None
+
+    @staticmethod
+    def generate_docx_reader_artifact(
+        original_bytes: bytes,
+        attachment: Attachment,
+    ) -> dict[str, Any] | None:
+        wrapper = get_document_converter_wrapper()
+        return wrapper.convert_document_to_reader_artifact(
+            original_bytes,
+            _DOCX_READER_MIME_TYPE,
+            attachment.original_filename or attachment.filename or "document.docx",
+        )
+
+    @staticmethod
+    def generate_pptx_reader_artifact(
+        original_bytes: bytes,
+        attachment: Attachment,
+    ) -> dict[str, Any] | None:
+        wrapper = get_document_converter_wrapper()
+        return wrapper.convert_document_to_reader_artifact(
+            original_bytes,
+            _PPTX_READER_MIME_TYPE,
+            attachment.original_filename or attachment.filename or "presentation.pptx",
+        )
+
+    @staticmethod
+    def _generate_structured_reader_artifact(
+        original_bytes: bytes,
+        attachment: Attachment,
+    ) -> dict[str, Any] | None:
+        reader_kind = AttachmentService._resolve_structured_reader_kind(attachment)
+        if reader_kind == "docx":
+            return AttachmentService.generate_docx_reader_artifact(original_bytes, attachment)
+        if reader_kind == "pptx":
+            return AttachmentService.generate_pptx_reader_artifact(original_bytes, attachment)
+        return None
+
+    @staticmethod
+    def map_status_to_response(
+        attachment: Attachment,
+        reader_artifact: AttachmentArtifact,
+        *,
+        toc_items: Optional[list[dict[str, Any]]] = None,
+        reader_payload: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        resolved_toc_items = (
+            toc_items
+            if toc_items is not None
+            else AttachmentService._get_stored_reader_toc_items(
+                attachment,
+                reader_artifact=reader_artifact,
+            )
+        )
+        resolved_payload = (
+            reader_payload
+            if reader_payload is not None
+            else AttachmentService._get_stored_reader_payload(
+                attachment,
+                reader_artifact=reader_artifact,
+            )
+        )
+        reader_warnings = AttachmentService._normalize_reader_warnings(
+            resolved_payload.get("warnings") or []
+        )
+        confidence_value = resolved_payload.get("confidence")
+        try:
+            confidence = float(confidence_value) if confidence_value is not None else None
+        except (TypeError, ValueError):
+            confidence = None
+
+        return {
+            "attachment_id": attachment.id,
+            "status": reader_artifact.status,
+            "html_content": reader_artifact.content_text,
+            "toc_items": resolved_toc_items,
+            "toc_source": reader_artifact.source,
+            "warnings": reader_warnings,
+            "confidence": confidence,
+            "error": reader_artifact.error,
+            "generated_at": reader_artifact.generated_at,
+        }
+
+    @staticmethod
     def generate_reader_artifact(attachment_id: int, force: bool = False) -> None:
         """Generate HTML reader artifact for supported DOCX and PPTX attachments."""
         db = SessionLocal()
@@ -200,12 +295,10 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             AttachmentService._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
 
-            wrapper = get_document_converter_wrapper()
             original_bytes = AttachmentService._load_original_bytes_for_attachment(attachment)
-            artifact = wrapper.convert_document_to_reader_artifact(
+            artifact = AttachmentService._generate_structured_reader_artifact(
                 original_bytes,
-                attachment.mime_type or "application/octet-stream",
-                attachment.original_filename or attachment.filename or "document",
+                attachment,
             )
             if not artifact:
                 raise ValueError("Structured reader extraction is not available")
@@ -285,17 +378,12 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
                 db.refresh(reader_artifact)
                 db.refresh(attachment)
 
-            return {
-                "attachment_id": attachment.id,
-                "status": reader_artifact.status,
-                "html_content": reader_artifact.content_text,
-                "toc_items": [],
-                "toc_source": reader_artifact.source,
-                "warnings": [],
-                "confidence": None,
-                "error": reader_artifact.error,
-                "generated_at": reader_artifact.generated_at,
-            }
+            return AttachmentService.map_status_to_response(
+                attachment,
+                reader_artifact,
+                toc_items=[],
+                reader_payload={},
+            )
 
         if force_retry:
             reader_artifact.status = AttachmentService.READER_STATUS_PENDING
@@ -331,31 +419,19 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             )
 
         toc_items = AttachmentService._get_stored_reader_toc_items(
-            attachment, reader_artifact=reader_artifact
+            attachment,
+            reader_artifact=reader_artifact,
         )
         reader_payload = AttachmentService._get_stored_reader_payload(
             attachment,
             reader_artifact=reader_artifact,
         )
-        reader_warnings = AttachmentService._normalize_reader_warnings(
-            reader_payload.get("warnings") or []
+        return AttachmentService.map_status_to_response(
+            attachment,
+            reader_artifact,
+            toc_items=toc_items,
+            reader_payload=reader_payload,
         )
-        confidence_value = reader_payload.get("confidence")
-        try:
-            confidence = float(confidence_value) if confidence_value is not None else None
-        except (TypeError, ValueError):
-            confidence = None
-        return {
-            "attachment_id": attachment.id,
-            "status": reader_artifact.status,
-            "html_content": reader_artifact.content_text,
-            "toc_items": toc_items,
-            "toc_source": reader_artifact.source,
-            "warnings": reader_warnings,
-            "confidence": confidence,
-            "error": reader_artifact.error,
-            "generated_at": reader_artifact.generated_at,
-        }
 
     @staticmethod
     def retry_reader_view_generation(
