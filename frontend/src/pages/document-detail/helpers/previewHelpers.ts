@@ -39,6 +39,105 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
     .filter((item) => item.text.trim().length > 0)
 }
 
+function normalizeSectionLabel(value: string | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function removeSectionFromTextMap(
+  map: Map<string, TocSection[]>,
+  section: TocSection,
+) {
+  const textKey = normalizeSectionLabel(section.text)
+  if (!textKey) {
+    return
+  }
+
+  const existing = map.get(textKey)
+  if (!existing) {
+    return
+  }
+
+  const remaining = existing.filter((candidate) => candidate !== section)
+  if (remaining.length === 0) {
+    map.delete(textKey)
+  } else {
+    map.set(textKey, remaining)
+  }
+}
+
+export function mergeTocSections(
+  outlineSections: TocSection[],
+  htmlSections: TocSection[],
+): TocSection[] {
+  if (outlineSections.length === 0) {
+    return htmlSections
+  }
+
+  if (htmlSections.length === 0) {
+    return outlineSections
+  }
+
+  const remainingHtmlById = new Map<string, TocSection>()
+  const remainingHtmlByText = new Map<string, TocSection[]>()
+
+  htmlSections.forEach((section) => {
+    if (section.anchorId) {
+      remainingHtmlById.set(section.anchorId, section)
+    }
+    const textKey = normalizeSectionLabel(section.text)
+    if (!textKey) {
+      return
+    }
+    const existing = remainingHtmlByText.get(textKey) || []
+    existing.push(section)
+    remainingHtmlByText.set(textKey, existing)
+  })
+
+  const usedHtmlSections = new Set<TocSection>()
+
+  const mergedOutlineSections = outlineSections.map((section) => {
+    let htmlMatch: TocSection | undefined
+    if (section.anchorId) {
+      htmlMatch = remainingHtmlById.get(section.anchorId)
+    }
+
+    if (!htmlMatch) {
+      const textKey = normalizeSectionLabel(section.text)
+      const textMatches = remainingHtmlByText.get(textKey)
+      htmlMatch = textMatches?.shift()
+      if (textMatches && textMatches.length === 0) {
+        remainingHtmlByText.delete(textKey)
+      }
+    }
+
+    if (!htmlMatch) {
+      return section
+    }
+
+    usedHtmlSections.add(htmlMatch)
+
+    if (htmlMatch.anchorId) {
+      remainingHtmlById.delete(htmlMatch.anchorId)
+    }
+    removeSectionFromTextMap(remainingHtmlByText, htmlMatch)
+
+    return {
+      ...htmlMatch,
+      id: section.id,
+      text: section.text,
+      level: section.level,
+      index: section.index,
+      anchorId: htmlMatch.anchorId || section.anchorId,
+      pageStart: section.pageStart ?? htmlMatch.pageStart,
+      pageEnd: section.pageEnd ?? htmlMatch.pageEnd,
+    }
+  })
+
+  const unmatchedHtmlSections = htmlSections.filter((section) => !usedHtmlSections.has(section))
+
+  return [...mergedOutlineSections, ...unmatchedHtmlSections]
+}
+
 export function parsePageFromAnchorId(anchorId?: string | null): number | null {
   if (!anchorId) return null
   const normalizedAnchorParts = anchorId
@@ -182,12 +281,7 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
     }
   }
 
-  const allHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-  const hasPrimaryHeadings = elements.some((element) => {
-    const tagName = element.tagName.toLowerCase()
-    return tagName === 'h1' || tagName === 'h2' || tagName === 'h3'
-  })
-  const tocHeadingTags = hasPrimaryHeadings ? new Set(['h1', 'h2', 'h3']) : allHeadingTags
+  const tocHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
 
   let currentSection: { heading: Element | null; content: Element[] } = { heading: null, content: [] }
 

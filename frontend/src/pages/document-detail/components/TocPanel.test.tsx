@@ -103,4 +103,29 @@ describe('TocPanel', () => {
 
     expect(screen.getByText('Release Details')).toBeInTheDocument()
   })
+
+  it('exposes long section labels without relying on truncation-only rendering', () => {
+    renderTocPanel({
+      sections: [
+        {
+          id: 'long-label',
+          text: 'A very long subsection title that should stay readable inside the toc panel',
+          level: 2,
+          html: '<h2>Long section</h2>',
+          index: 0,
+          anchorId: 'long-section',
+          pageStart: 2,
+        },
+      ],
+    })
+
+    expect(
+      screen.getByRole('button', {
+        name: /a very long subsection title that should stay readable inside the toc panel/i,
+      }),
+    ).toHaveAttribute(
+      'title',
+      'A very long subsection title that should stay readable inside the toc panel',
+    )
+  })
 })

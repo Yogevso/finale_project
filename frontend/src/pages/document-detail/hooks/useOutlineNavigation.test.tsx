@@ -91,4 +91,38 @@ describe('useOutlineNavigation', () => {
     expect(result.current.activeHeading).toBeNull()
     expect(result.current.readerCurrentPage).toBeNull()
   })
+
+  it('falls back to matching visible section text when the anchor id is missing from the dom', () => {
+    document.body.innerHTML =
+      '<div id="document-content-area"><ol><li><strong>Release Kit Summary</strong></li><li><strong>Release Kit Summary</strong></li></ol></div>'
+    const section: TocSection = {
+      id: 'section-release-kit',
+      index: 1,
+      level: 1,
+      text: 'Release Kit Summary',
+      html: '',
+      anchorId: 'heading-release-kit-summary',
+      pageStart: 4,
+      pageEnd: null,
+    }
+
+    const { result } = renderHook(() =>
+      useOutlineNavigation({
+        selectedAttachment: createAttachment(),
+      }),
+    )
+
+    act(() => {
+      result.current.navigateReaderToSection(section)
+    })
+
+    const matches = Array.from(document.querySelectorAll('li'))
+    const resolvedTarget = document.getElementById('heading-release-kit-summary')
+    expect(resolvedTarget).not.toBeNull()
+    expect(matches[0]?.id).toBe('')
+    expect(matches[1]?.id).toBe('heading-release-kit-summary')
+    expect(scrollIntoViewMock).toHaveBeenCalled()
+    expect(result.current.activeHeading).toBe('heading-release-kit-summary')
+    expect(result.current.readerCurrentPage).toBe(4)
+  })
 })

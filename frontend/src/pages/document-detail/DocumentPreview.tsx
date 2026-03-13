@@ -119,9 +119,7 @@ export function DocumentPreview({
   }, [])
 
   const processHtmlWithSections = useCallback((html: string) => {
-    const processed = processHtmlIntoSections(html)
-    setSections(processed.sections)
-    return processed.html
+    return processHtmlIntoSections(html).html
   }, [])
 
   const {
@@ -208,9 +206,11 @@ export function DocumentPreview({
 
   const applyProcessedHtml = useCallback(
     (html: string) => {
-      setHtmlContent(processHtmlWithSections(html))
+      const processed = processHtmlIntoSections(html)
+      setHtmlContent(processed.html)
+      setSections(processed.sections)
     },
-    [processHtmlWithSections],
+    [],
   )
 
   const {
@@ -325,7 +325,11 @@ export function DocumentPreview({
 
         const versionContent = getUsableVersionContent(versionToShow?.content)
         if (versionContent) {
-          setHtmlContent(processHtmlWithSections(versionContent))
+          const processed = processHtmlIntoSections(versionContent)
+          setHtmlContent(processed.html)
+          if (!selectedAttachment) {
+            setSections(processed.sections)
+          }
         } else {
           setHtmlContent(null)
           if (!selectedAttachment) {
@@ -336,7 +340,9 @@ export function DocumentPreview({
         console.error('Preview load error:', loadError)
         setError('Failed to load preview')
         setHtmlContent(null)
-        setSections([])
+        if (!selectedAttachment) {
+          setSections([])
+        }
       } finally {
         setIsLoading(false)
       }

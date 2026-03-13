@@ -130,4 +130,72 @@ describe('useReaderArtifact', () => {
     expect(mockedApi.retryAttachmentReaderView).toHaveBeenCalledWith(42, selectedAttachment.id)
     expect(result.current.readerHtmlContent).toContain('Recovered')
   })
+
+  it('preserves the fuller backend TOC order when html only exposes a subset of headings', async () => {
+    const selectedAttachment = createAttachment()
+
+    mockedApi.getAttachmentReaderView.mockResolvedValue({
+      attachment_id: selectedAttachment.id,
+      status: 'ready',
+      html_content:
+        '<article class="docx-document"><h1 id="heading-intro">Intro</h1><p>Body</p><h1 id="heading-appendix-a">Appendix A</h1></article>',
+      toc_items: [
+        {
+          id: 'toc-0',
+          level: 1,
+          title: 'Intro',
+          page: 1,
+          page_start: 1,
+          page_end: null,
+          anchor_id: 'page-1',
+        },
+        {
+          id: 'toc-1',
+          level: 1,
+          title: 'Release Kit Summary',
+          page: 2,
+          page_start: 2,
+          page_end: null,
+          anchor_id: 'page-2',
+        },
+        {
+          id: 'toc-2',
+          level: 1,
+          title: 'Appendix A',
+          page: 3,
+          page_start: 3,
+          page_end: null,
+          anchor_id: 'page-3',
+        },
+      ],
+      toc_source: 'headings',
+      error: null,
+      generated_at: '2026-01-01T00:00:00Z',
+      warnings: [],
+      confidence: 0.98,
+    } as never)
+
+    const { result } = renderHook(() => {
+      const [sections, setSections] = useState<TocSection[]>([])
+      const hook = useReaderArtifact({
+        documentId: 42,
+        selectedAttachment,
+        setSections,
+        processHtmlWithSections: (html) => html,
+      })
+      return { ...hook, sections }
+    })
+
+    await waitFor(() => {
+      expect(result.current.sections.map((section) => section.text)).toEqual([
+        'Intro',
+        'Release Kit Summary',
+        'Appendix A',
+      ])
+    })
+
+    expect(result.current.sections[0]?.anchorId).toBe('heading-intro')
+    expect(result.current.sections[1]?.anchorId).toBe('page-2')
+    expect(result.current.sections[2]?.anchorId).toBe('heading-appendix-a')
+  })
 })

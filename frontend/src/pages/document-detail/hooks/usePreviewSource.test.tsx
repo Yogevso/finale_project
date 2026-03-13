@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Attachment } from '@/types'
 import { usePreviewSource } from './usePreviewSource'
 
@@ -107,5 +107,42 @@ describe('usePreviewSource', () => {
 
     expect(result.current.previewSource).toBe('none')
     expect(result.current.previewState).toBe('DOWNLOAD_ONLY')
+  })
+
+  it('does not churn selection state when attachments are recreated with the same values', async () => {
+    const setSelectedAttachmentSpy = vi.fn()
+    const initialAttachment = buildAttachment({ id: 17, reader_html_status: 'ready' })
+
+    const { result, rerender } = renderHook(
+      ({ attachments }: { attachments: Attachment[] }) =>
+        usePreviewSource({
+          attachments,
+          selectedAttachment: initialAttachment,
+          setSelectedAttachment: setSelectedAttachmentSpy,
+          inlineContent: null,
+          readerHtmlContent: '<h1>Reader</h1>',
+          readerStatus: 'ready',
+        }),
+      {
+        initialProps: {
+          attachments: [initialAttachment],
+        },
+      },
+    )
+
+    rerender({
+      attachments: [
+        buildAttachment({
+          id: 17,
+          reader_html_status: 'ready',
+        }),
+      ],
+    })
+
+    await waitFor(() => {
+      expect(result.current.previewSource).toBe('reader')
+    })
+
+    expect(setSelectedAttachmentSpy).not.toHaveBeenCalled()
   })
 })

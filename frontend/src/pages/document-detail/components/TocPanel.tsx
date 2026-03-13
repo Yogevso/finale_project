@@ -69,7 +69,7 @@ export function TocPanel({
   return (
     <div
       className={`document-detail-toc-panel bg-slate-50 border-r border-slate-200 transition-all duration-300 ${
-        tocCollapsed ? 'w-10' : 'w-56'
+        tocCollapsed ? 'w-10' : 'w-72'
       } h-full flex flex-col flex-shrink-0 overflow-hidden`}
       data-tour="document-toc-panel"
     >
@@ -138,6 +138,7 @@ export function TocPanel({
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => onSectionClick(item)}
+                          title={item.text}
                           className={`flex-1 text-left px-2 py-1.5 text-sm rounded-l transition-colors hover:bg-sky-50 hover:text-sky-700 ${
                             isActiveItem
                               ? 'bg-sky-100 text-sky-700 font-medium'
@@ -145,13 +146,15 @@ export function TocPanel({
                           }`}
                           style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
                         >
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-start gap-2">
                             {item.level === 1 && <ChevronRight className="h-3.5 w-3.5 text-sky-500" />}
                             {item.level === 2 && (
                               <Circle className="h-2.5 w-2.5 fill-current text-slate-400" />
                             )}
                             {item.level >= 3 && <span className="text-slate-300">-</span>}
-                            <span className="truncate">{item.text}</span>
+                            <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">
+                              {item.text}
+                            </span>
                           </span>
                         </button>
 

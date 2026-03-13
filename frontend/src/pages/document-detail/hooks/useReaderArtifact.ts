@@ -6,7 +6,12 @@ import type {
   AttachmentExtractionWarning,
   AttachmentReaderViewResponse,
 } from '@/types'
-import { mapOutlineItemsToSections, type TocSection } from '@/pages/document-detail/helpers/previewHelpers'
+import {
+  mapOutlineItemsToSections,
+  mergeTocSections,
+  processHtmlIntoSections,
+  type TocSection,
+} from '@/pages/document-detail/helpers/previewHelpers'
 
 interface UseReaderArtifactParams {
   documentId: number
@@ -21,6 +26,8 @@ export function useReaderArtifact({
   setSections,
   processHtmlWithSections,
 }: UseReaderArtifactParams) {
+  const selectedAttachmentId = selectedAttachment?.id ?? null
+  const selectedAttachmentStatus = selectedAttachment?.reader_html_status ?? null
   const [readerHtmlContent, setReaderHtmlContent] = useState<string | null>(null)
   const [readerStatus, setReaderStatus] = useState<AttachmentReaderViewResponse['status'] | null>(
     null,
@@ -37,7 +44,7 @@ export function useReaderArtifact({
   }, [processHtmlWithSections])
 
   useEffect(() => {
-    setReaderStatus(selectedAttachment?.reader_html_status ?? null)
+    setReaderStatus(selectedAttachmentStatus)
     setReaderWarnings([])
     setReaderConfidence(null)
     setReaderHtmlContent(null)
@@ -45,17 +52,17 @@ export function useReaderArtifact({
     setIsReaderLoading(false)
     setReaderReloadToken(0)
 
-    if (!selectedAttachment) {
+    if (!selectedAttachmentId) {
       setSections([])
     }
-  }, [selectedAttachment?.id, selectedAttachment?.reader_html_status, setSections, selectedAttachment])
+  }, [selectedAttachmentId, selectedAttachmentStatus, setSections])
 
   useEffect(() => {
-    if (!selectedAttachment) {
+    if (!selectedAttachmentId) {
       return
     }
 
-    const attachmentId = selectedAttachment.id
+    const attachmentId = selectedAttachmentId
     let cancelled = false
     let pollTimer: number | null = null
 
@@ -79,10 +86,12 @@ export function useReaderArtifact({
           readerView.status === 'ready' && !!readerView.html_content?.trim()
 
         if (isReadyWithContent) {
-          const processedHtml = processHtmlWithSectionsRef.current(readerView.html_content || '')
+          const sourceHtml = readerView.html_content || ''
+          const processedHtml = processHtmlWithSectionsRef.current(sourceHtml)
+          const htmlSections = processHtmlIntoSections(sourceHtml).sections
           const mappedTocSections = mapOutlineItemsToSections(readerView.toc_items || [])
           setReaderHtmlContent(processedHtml)
-          setSections(mappedTocSections)
+          setSections(mergeTocSections(mappedTocSections, htmlSections))
           setReaderError(null)
           setReaderReloadToken(0)
           setIsReaderLoading(false)
@@ -127,7 +136,7 @@ export function useReaderArtifact({
         window.clearTimeout(pollTimer)
       }
     }
-  }, [documentId, readerReloadToken, selectedAttachment, setSections])
+  }, [documentId, readerReloadToken, selectedAttachmentId, setSections])
 
   const handleRetryReaderView = useCallback(async () => {
     if (!selectedAttachment) {
@@ -147,10 +156,12 @@ export function useReaderArtifact({
       setReaderWarnings(payload.warnings || [])
       setReaderConfidence(payload.confidence ?? null)
       if (payload.status === 'ready' && payload.html_content?.trim()) {
-        const processedHtml = processHtmlWithSectionsRef.current(payload.html_content)
+        const sourceHtml = payload.html_content
+        const processedHtml = processHtmlWithSectionsRef.current(sourceHtml)
+        const htmlSections = processHtmlIntoSections(sourceHtml).sections
         const mappedTocSections = mapOutlineItemsToSections(payload.toc_items || [])
         setReaderHtmlContent(processedHtml)
-        setSections(mappedTocSections)
+        setSections(mergeTocSections(mappedTocSections, htmlSections))
         setIsReaderLoading(false)
         return
       }

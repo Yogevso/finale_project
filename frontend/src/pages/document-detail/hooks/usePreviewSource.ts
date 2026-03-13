@@ -22,6 +22,22 @@ interface UsePreviewSourceParams {
   readerStatus: Attachment['reader_html_status'] | string | null
 }
 
+function getAttachmentSelectionKey(attachment: Attachment | null): string {
+  if (!attachment) {
+    return 'none'
+  }
+
+  return [
+    attachment.id,
+    attachment.reader_html_status || '',
+    attachment.reader_toc_source || '',
+    attachment.filename,
+    attachment.mime_type,
+    attachment.file_size,
+    attachment.uploaded_at,
+  ].join(':')
+}
+
 export function usePreviewSource({
   attachments,
   selectedAttachment,
@@ -41,7 +57,7 @@ export function usePreviewSource({
       selectedAttachment,
       getPreferredPreviewAttachment,
     )
-    if (nextSelection !== selectedAttachment) {
+    if (getAttachmentSelectionKey(nextSelection) !== getAttachmentSelectionKey(selectedAttachment)) {
       setSelectedAttachment(nextSelection)
     }
   }, [previewableAttachments, selectedAttachment, setSelectedAttachment])
