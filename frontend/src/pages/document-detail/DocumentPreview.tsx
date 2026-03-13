@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { api } from '@/lib/api'
+import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import { useAuth } from '@/lib/auth'
 import type { CSSProperties } from 'react'
 import type { ReadingWidth } from '@/lib/readingWidth'
-import {
-  getPreferredPreviewAttachment,
-  resolveSelectedAttachment,
-} from '@/lib/attachmentSelection'
 import type { Attachment } from '@/types'
 import {
   applyHighlights,
@@ -22,6 +19,9 @@ import { SectionEditPopup } from '@/pages/document-detail/components/SectionEdit
 import { TocPanel } from '@/pages/document-detail/components/TocPanel'
 import { useContentEditingFlow } from '@/pages/document-detail/hooks/useContentEditingFlow'
 import { useInlineComments } from '@/pages/document-detail/hooks/useInlineComments'
+import { usePreviewProgress } from '@/pages/document-detail/hooks/usePreviewProgress'
+import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewShortcuts'
+import { usePreviewSource } from '@/pages/document-detail/hooks/usePreviewSource'
 import { useReaderView } from '@/pages/document-detail/hooks/useReaderView'
 import {
   DOCUMENT_FONT_SIZE_VALUES,
@@ -35,10 +35,6 @@ import {
 } from '@/lib/documentReadingPreferences'
 
 const WORDS_PER_MINUTE = 200
-const PREVIEWABLE_ATTACHMENT_MIME_TYPES = new Set([
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-])
 
 function estimateReadingTimeMinutes(html: string | null): number | null {
   if (!html) {
@@ -53,19 +49,6 @@ function estimateReadingTimeMinutes(html: string | null): number | null {
   }
 
   return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE))
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-
-  const tagName = target.tagName.toLowerCase()
-  return tagName === 'input' || tagName === 'textarea' || tagName === 'select'
 }
 
 export function DocumentPreview({
@@ -105,13 +88,11 @@ export function DocumentPreview({
   const [searchTerm, setSearchTerm] = useState('')
   const [searchMatchCount, setSearchMatchCount] = useState(0)
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
-  const [hasInlineContent, setHasInlineContent] = useState(false)
-  const [previewScrollProgress, setPreviewScrollProgress] = useState(0)
   const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
   const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme())
+  const { downloadAttachment } = useAttachmentDownload(documentId)
   const previewPaneRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const restoredProgressKeyRef = useRef<string | null>(null)
   const {
     selectionPopup,
     commentPopup,
@@ -125,14 +106,6 @@ export function DocumentPreview({
     handleSubmitComment,
     handleCloseCommentPopup,
   } = useInlineComments(documentId)
-
-  const previewableAttachments = useMemo(
-    () =>
-      attachments.filter((attachment) =>
-        PREVIEWABLE_ATTACHMENT_MIME_TYPES.has((attachment.mime_type || '').toLowerCase()),
-      ),
-    [attachments],
-  )
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
     setFontSizeState(value)
@@ -171,9 +144,21 @@ export function DocumentPreview({
     processHtmlWithSections,
   })
 
-  const showingReaderView = selectedAttachment !== null && !!readerHtmlContent
-  const activeHtmlContent = readerHtmlContent || htmlContent
-  const shouldRenderHtmlPreview = !!activeHtmlContent
+  const {
+    previewableAttachments,
+    activeHtmlContent,
+    showingReaderView,
+    shouldRenderHtmlPreview,
+    previewState,
+  } = usePreviewSource({
+    attachments,
+    selectedAttachment,
+    setSelectedAttachment,
+    inlineContent: htmlContent,
+    readerHtmlContent,
+    readerStatus,
+  })
+
   const contentStyle = useMemo(
     () =>
       ({
@@ -249,39 +234,19 @@ export function DocumentPreview({
     onRequireInlineContent: () => setSelectedAttachment(null),
   })
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const container = e.currentTarget
-    const scrollTop = container.scrollTop
-    const scrollHeight = container.scrollHeight - container.clientHeight
-    const containerRect = container.getBoundingClientRect()
-
-    if (scrollHeight > 0) {
-      const progress = Math.min(100, Math.round((scrollTop / scrollHeight) * 100))
-      setPreviewScrollProgress(progress)
-      onScrollProgress?.(progress)
-    } else {
-      setPreviewScrollProgress(0)
-    }
-
-    const headings = container.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]')
-    let currentActive: string | null = null
-
-    headings.forEach((heading) => {
-      const rect = heading.getBoundingClientRect()
-      if (rect.top <= containerRect.top + 100) {
-        currentActive = heading.id
-      }
-    })
-
-    if (currentActive && currentActive !== activeHeading) {
-      setActiveHeading(currentActive)
-      const currentSection = sections.find((section) => section.anchorId === currentActive)
-      const pageStart = currentSection ? resolveSectionPageStart(currentSection) : null
-      if (pageStart && pageStart !== readerCurrentPage) {
-        setReaderCurrentPage(pageStart)
-      }
-    }
-  }
+  const { previewScrollProgress, handleScroll } = usePreviewProgress({
+    documentId,
+    activeHtmlContent,
+    selectedAttachmentId: selectedAttachment?.id ?? null,
+    previewPaneRef,
+    activeHeading,
+    setActiveHeading,
+    sections,
+    readerCurrentPage,
+    setReaderCurrentPage,
+    onScrollProgress,
+    hasUser: !!user,
+  })
 
   useEffect(() => {
     const container = document.getElementById('document-content-area')
@@ -305,81 +270,6 @@ export function DocumentPreview({
   useEffect(() => {
     onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent))
   }, [activeHtmlContent, onReadingTimeChange])
-
-  useEffect(() => {
-    if (!activeHtmlContent) {
-      setPreviewScrollProgress(0)
-      return
-    }
-
-    setPreviewScrollProgress(0)
-  }, [activeHtmlContent])
-
-  useEffect(() => {
-    if (!user || !activeHtmlContent || !previewPaneRef.current) {
-      return
-    }
-
-    const restoreKey = `${documentId}:${selectedAttachment?.id ?? 'inline'}`
-    if (restoredProgressKeyRef.current === restoreKey) {
-      return
-    }
-    restoredProgressKeyRef.current = restoreKey
-
-    let cancelled = false
-    let rafOne: number | null = null
-    let rafTwo: number | null = null
-
-    api
-      .getDocumentProgress(documentId)
-      .then((progress) => {
-        if (cancelled || !progress.has_progress || !previewPaneRef.current) {
-          return
-        }
-
-        rafOne = window.requestAnimationFrame(() => {
-          rafTwo = window.requestAnimationFrame(() => {
-            const pane = previewPaneRef.current
-            if (!pane) {
-              return
-            }
-
-            const scrollRange = pane.scrollHeight - pane.clientHeight
-            if (scrollRange <= 0) {
-              return
-            }
-
-            pane.scrollTop = Math.round(scrollRange * (progress.progress_percent / 100))
-            setPreviewScrollProgress(progress.progress_percent)
-            onScrollProgress?.(progress.progress_percent)
-          })
-        })
-      })
-      .catch(() => {
-        // Ignore unavailable progress records or role-gated responses.
-      })
-
-    return () => {
-      cancelled = true
-      if (rafOne !== null) {
-        window.cancelAnimationFrame(rafOne)
-      }
-      if (rafTwo !== null) {
-        window.cancelAnimationFrame(rafTwo)
-      }
-    }
-  }, [activeHtmlContent, documentId, onScrollProgress, selectedAttachment?.id, user])
-
-  useEffect(() => {
-    const nextSelection = resolveSelectedAttachment(
-      previewableAttachments,
-      selectedAttachment,
-      getPreferredPreviewAttachment,
-    )
-    if (nextSelection !== selectedAttachment) {
-      setSelectedAttachment(nextSelection)
-    }
-  }, [previewableAttachments, selectedAttachment])
 
   useEffect(() => {
     const loadInlineContent = async () => {
@@ -435,9 +325,7 @@ export function DocumentPreview({
         const versionContent = getUsableVersionContent(versionToShow?.content)
         if (versionContent) {
           setHtmlContent(processHtmlWithSections(versionContent))
-          setHasInlineContent(true)
         } else {
-          setHasInlineContent(false)
           setHtmlContent(null)
           if (!selectedAttachment) {
             setSections([])
@@ -511,74 +399,18 @@ export function DocumentPreview({
     [activeSectionIndex, handleReaderTocClick, tocSectionsForHtml],
   )
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return
-      }
-
-      if (event.key === 'Escape') {
-        handleCloseCommentPopup()
-        if (editingSection) {
-          handleCloseSectionEdit()
-        }
-        if (showContentEditChooser) {
-          handleCloseContentEditChooser()
-        }
-        return
-      }
-
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return
-      }
-
-      if (isTypingTarget(event.target)) {
-        return
-      }
-
-      const normalizedKey = event.key.toLowerCase()
-      if (normalizedKey === '/') {
-        if (searchInputRef.current) {
-          event.preventDefault()
-          searchInputRef.current.focus()
-          searchInputRef.current.select()
-        }
-        return
-      }
-
-      if (normalizedKey === 'j') {
-        event.preventDefault()
-        navigateBetweenSections(1)
-        return
-      }
-
-      if (normalizedKey === 'k') {
-        event.preventDefault()
-        navigateBetweenSections(-1)
-        return
-      }
-
-      if (normalizedKey === 'f' && onToggleFullscreen) {
-        event.preventDefault()
-        onToggleFullscreen()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
+  usePreviewShortcuts({
+    searchInputRef,
     editingSection,
+    showContentEditChooser,
     handleCloseCommentPopup,
     handleCloseContentEditChooser,
     handleCloseSectionEdit,
     navigateBetweenSections,
     onToggleFullscreen,
-    showContentEditChooser,
-  ])
+  })
 
-  const hasAttachments = attachments.length > 0
-
-  if (!hasAttachments && !hasInlineContent && !activeHtmlContent) {
+  if (previewState === 'NO_CONTENT') {
     return (
       <div className="surface-card rounded-2xl p-12 text-center">
         <div className="text-6xl mb-4">??</div>
@@ -588,7 +420,7 @@ export function DocumentPreview({
     )
   }
 
-  if (hasAttachments && !hasInlineContent && !activeHtmlContent && previewableAttachments.length === 0) {
+  if (previewState === 'DOWNLOAD_ONLY') {
     const firstAttachment = attachments[0] ?? null
 
     return (
@@ -604,21 +436,9 @@ export function DocumentPreview({
           <a
             href={api.getAttachmentDownloadUrl(documentId, firstAttachment.id)}
             download={firstAttachment.filename}
-            onClick={async (event) => {
+            onClick={(event) => {
               event.preventDefault()
-              try {
-                const blob = await api.getAttachmentBlob(documentId, firstAttachment.id)
-                const url = URL.createObjectURL(blob)
-                const anchor = document.createElement('a')
-                anchor.href = url
-                anchor.download = firstAttachment.filename
-                document.body.appendChild(anchor)
-                anchor.click()
-                document.body.removeChild(anchor)
-                URL.revokeObjectURL(url)
-              } catch (downloadError) {
-                console.error('Download failed:', downloadError)
-              }
+              void downloadAttachment(firstAttachment)
             }}
             className="btn-primary inline-flex items-center gap-2"
           >
@@ -681,7 +501,7 @@ export function DocumentPreview({
               <p className="text-rose-600">{error}</p>
             </div>
           </div>
-        ) : isLoading || (selectedAttachment && isReaderLoading && !activeHtmlContent) ? (
+        ) : previewState === 'LOADING' || isLoading || (selectedAttachment && isReaderLoading && !activeHtmlContent) ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto"></div>
@@ -690,7 +510,7 @@ export function DocumentPreview({
               )}
             </div>
           </div>
-        ) : shouldRenderHtmlPreview ? (
+        ) : previewState === 'READY' && shouldRenderHtmlPreview ? (
           <div className="document-preview-html-layout flex h-[70vh]">
             <TocPanel
               sections={tocSectionsForHtml}
@@ -744,7 +564,7 @@ export function DocumentPreview({
               onSubmitComment={handleSubmitComment}
             />
           </div>
-        ) : selectedAttachment && readerError ? (
+        ) : previewState === 'ERROR' && selectedAttachment && readerError ? (
           <div className="absolute inset-0 flex items-center justify-center px-6">
             <div className="text-center max-w-lg">
               <div className="text-4xl mb-2">??</div>
@@ -763,21 +583,9 @@ export function DocumentPreview({
           <a
             href={api.getAttachmentDownloadUrl(documentId, selectedAttachment.id)}
             download
-            onClick={async (event) => {
+            onClick={(event) => {
               event.preventDefault()
-              try {
-                const blob = await api.getAttachmentBlob(documentId, selectedAttachment.id)
-                const url = URL.createObjectURL(blob)
-                const anchor = document.createElement('a')
-                anchor.href = url
-                anchor.download = selectedAttachment.original_filename || selectedAttachment.filename
-                document.body.appendChild(anchor)
-                anchor.click()
-                document.body.removeChild(anchor)
-                URL.revokeObjectURL(url)
-              } catch (downloadError) {
-                console.error('Download failed:', downloadError)
-              }
+              void downloadAttachment(selectedAttachment)
             }}
             className="btn-primary text-sm"
           >

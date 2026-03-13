@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
+import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -15,6 +16,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const { downloadAttachment, downloadingAttachmentId } = useAttachmentDownload(documentId)
 
   const { data: attachments = [], isLoading } = useDocumentAttachmentsQuery(documentId)
 
@@ -49,11 +51,6 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
     if (file) {
       uploadMutation.mutate(file)
     }
-  }
-
-  const handleDownload = (attachment: Attachment) => {
-    const url = api.getAttachmentDownloadUrl(documentId, attachment.id)
-    window.open(url, '_blank')
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -131,9 +128,12 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
 
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => handleDownload(attachment)}
+                  onClick={() => {
+                    void downloadAttachment(attachment)
+                  }}
                   className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg"
                   title="Download"
+                  disabled={downloadingAttachmentId === attachment.id}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
