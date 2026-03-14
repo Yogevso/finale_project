@@ -4,7 +4,7 @@
  */
 
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import ChatMessage from '@/features/chat/ChatMessage'
 import type { ChatMessage as ChatMessageType } from '@/types/chat'

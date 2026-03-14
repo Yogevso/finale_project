@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Calendar, Tag } from 'lucide-react'
 import { SEO } from '@/components/SEO'
-import { api } from '@/lib/api'
 
 const CATEGORY_COLORS: Record<string, string> = {
   feature: 'bg-emerald-100 text-emerald-700',
@@ -13,10 +12,9 @@ export default function PublicChangelogPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['changelog', 'public'],
     queryFn: async () => {
-      const response = await api.client.get('/changelog', {
-        params: { published_only: true, per_page: 50 },
-      })
-      return response.data
+      const response = await fetch('/api/v1/changelog?published_only=true&per_page=50')
+      if (!response.ok) throw new Error('Failed to fetch changelog')
+      return response.json()
     },
   })
 

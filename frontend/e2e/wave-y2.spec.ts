@@ -40,7 +40,6 @@ test.describe('Y2-024: Global search', () => {
     await createDocumentViaApi(page, ADMIN, {
       title: 'SearchNav Target Doc',
       status: 'draft',
-      platform: 'Core Platform',
     })
 
     const searchInput = page.getByRole('combobox', { name: /search documents/i })
