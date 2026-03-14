@@ -29,8 +29,9 @@ from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
 from tests.tenant_isolation.harness import TenantIsolationScenario
 
-# Disable rate limiting for tests
+# Disable rate limiting and CSRF protection for tests
 settings.RATE_LIMIT_ENABLED = False
+settings.CSRF_PROTECTION_ENABLED = False
 
 # Test database URL - use file-based SQLite to avoid Python 3.14 memory issues
 # with in-memory databases. The file is auto-cleaned via SAVEPOINT rollback.
@@ -201,7 +202,11 @@ def sample_document(client, admin_token):
     response = client.post(
         "/api/v1/documents",
         headers=headers,
-        json={"title": "Test Document", "description": "Test description"},
+        json={
+            "title": "Test Document",
+            "description": "Test description",
+            "platform": "default",  # Required field
+        },
     )
     return response.json()
 

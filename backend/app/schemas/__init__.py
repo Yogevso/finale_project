@@ -85,8 +85,8 @@ class UserWithCompanyResponse(UserResponse):
 class LoginRequest(BaseModel):
     """Login request schema"""
 
-    username: str
-    password: str
+    username: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1, max_length=255)
 
 
 class TokenResponse(BaseModel):
@@ -115,14 +115,14 @@ class DocumentBase(BaseModel):
     """Base document schema"""
 
     title: str = Field(..., min_length=1, max_length=500)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=10000)
     version_label: Optional[str] = Field(None, max_length=50)
     category: Optional[str] = Field(None, max_length=100)
     topic: Optional[str] = Field(None, max_length=150)
     platform: Optional[str] = Field(None, max_length=100)
     platform_id: Optional[int] = None
     release_branch: Optional[str] = Field(None, max_length=100)
-    tags: Optional[str] = None
+    tags: Optional[str] = Field(None, max_length=2000)
     due_date: Optional[date] = None
     thumbnail_url: Optional[str] = Field(None, max_length=500)
 
@@ -141,7 +141,7 @@ class DocumentUpdate(BaseModel):
     """Document update schema"""
 
     title: Optional[str] = Field(None, min_length=1, max_length=500)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=10000)
     version_label: Optional[str] = Field(None, max_length=50)
     status: Optional[DocumentStatus] = None
     visibility: Optional[DocumentVisibility] = None
@@ -237,8 +237,8 @@ class BulkDocumentMetadataUpdateResponse(BaseModel):
 class VersionBase(BaseModel):
     """Base version schema"""
 
-    content: Optional[str] = None
-    changes_summary: Optional[str] = None
+    content: Optional[str] = Field(None, max_length=500000)  # 500KB max for rich HTML content
+    changes_summary: Optional[str] = Field(None, max_length=2000)
 
 
 class VersionCreate(VersionBase):
@@ -250,8 +250,8 @@ class VersionCreate(VersionBase):
 class VersionUpdate(BaseModel):
     """Version update schema (only unpublished versions)"""
 
-    content: Optional[str] = None
-    changes_summary: Optional[str] = None
+    content: Optional[str] = Field(None, max_length=500000)
+    changes_summary: Optional[str] = Field(None, max_length=2000)
 
 
 class VersionResponse(VersionBase):

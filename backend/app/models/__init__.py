@@ -715,6 +715,7 @@ class PasswordReset(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     token_hash = Column(String(255), nullable=False, unique=True)  # Hashed token
+    token_prefix = Column(String(16), nullable=True, index=True)  # First 8 chars for indexed lookup
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)  # Null if not used
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
