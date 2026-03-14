@@ -33,6 +33,15 @@ import {
 } from './dto'
 import type { ApiHttpClient, Constructor } from './httpClient'
 
+export interface SearchAnalyticsDto {
+  period_days: number
+  total_searches: number
+  total_clicks: number
+  click_through_rate: number
+  top_queries: Array<{ query: string; count: number; avg_results: number }>
+  zero_result_queries: Array<{ query: string; count: number }>
+}
+
 export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
   class extends Base {
     constructor(...args: any[]) {
@@ -83,6 +92,17 @@ export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient
     async deleteSavedSearch(searchId: number): Promise<MessageResponse> {
       const { data } = await this.client.delete<MessageResponseDto>(`/search/saved/${searchId}`)
       return mapMessageResponseDto(data)
+    }
+
+    async recordSearchClick(query: string, documentId: number): Promise<void> {
+      await this.client.post('/search/click', { query, document_id: documentId })
+    }
+
+    async getSearchAnalytics(days: number = 30): Promise<SearchAnalyticsDto> {
+      const { data } = await this.client.get<SearchAnalyticsDto>('/search/analytics', {
+        params: { days },
+      })
+      return data
     }
 
     async getBookmarks(): Promise<BookmarkDto[]> {

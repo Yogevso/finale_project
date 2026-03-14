@@ -18,31 +18,34 @@ FTS_CREATE_STATEMENT = text(
     CREATE VIRTUAL TABLE IF NOT EXISTS {FTS_TABLE_NAME} USING fts5(
         title,
         description,
-        category
+        category,
+        tags
     )
     """
 )
 FTS_CLEAR_STATEMENT = text(f"DELETE FROM {FTS_TABLE_NAME}")
 FTS_POPULATE_STATEMENT = text(
     f"""
-    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category)
+    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category, tags)
     SELECT
         id,
         COALESCE(title, ''),
         COALESCE(description, ''),
-        COALESCE(category, '')
+        COALESCE(category, ''),
+        COALESCE(tags, '')
     FROM documents
     """
 )
 FTS_DELETE_ROW_STATEMENT = text(f"DELETE FROM {FTS_TABLE_NAME} WHERE rowid = :doc_id")
 FTS_INSERT_ROW_STATEMENT = text(
     f"""
-    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category)
+    INSERT INTO {FTS_TABLE_NAME}(rowid, title, description, category, tags)
     SELECT
         id,
         COALESCE(title, ''),
         COALESCE(description, ''),
-        COALESCE(category, '')
+        COALESCE(category, ''),
+        COALESCE(tags, '')
     FROM documents
     WHERE id = :doc_id
     """

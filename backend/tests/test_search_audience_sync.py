@@ -18,7 +18,7 @@ def _ensure_fts_table(db):
     db.execute(
         text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5("
-            "title, description, category)"
+            "title, description, category, tags)"
         )
     )
     db.commit()

@@ -1,11 +1,13 @@
 """Search API with FTS5 and saved searches"""
 
+import logging
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.application.queries.dependencies import get_search_query_handler
@@ -17,8 +19,10 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.db import get_db
-from app.models import SavedSearch, User
+from app.models import SavedSearch, SearchAnalytics, User
 from app.security import get_current_active_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -77,6 +81,7 @@ def search_documents(
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
+    db: Session = Depends(get_db),
 ):
     """Full-text search using SQLite FTS5"""
     result = search_query_handler.execute_search_documents(
@@ -90,6 +95,19 @@ def search_documents(
             current_user=current_user,
         )
     )
+
+    # Log search analytics (fire-and-forget)
+    try:
+        db.add(SearchAnalytics(
+            query=q[:500],
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            results_count=result.total,
+        ))
+        db.commit()
+    except Exception:
+        logger.debug("Failed to log search analytics", exc_info=True)
+
     return SearchResponse(
         items=[SearchResult(**asdict(item)) for item in result.items],
         total=result.total,
@@ -173,3 +191,102 @@ def delete_saved_search(
     db.delete(saved)
     db.commit()
     return {"message": "Saved search deleted"}
+
+
+# ---- Search Analytics (Y2-005) ----
+
+
+class SearchClickBody(BaseModel):
+    query: str
+    document_id: int
+
+
+@router.post("/click")
+def record_search_click(
+    body: SearchClickBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Record that a user clicked a search result."""
+    db.add(SearchAnalytics(
+        query=body.query[:500],
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        results_count=0,
+        clicked_document_id=body.document_id,
+    ))
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/analytics")
+def get_search_analytics(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get search analytics — top queries, zero-result queries, click-through."""
+    since = datetime.utcnow() - timedelta(days=days)
+
+    # Only count search events (results_count > 0 or results_count == 0 means a search event)
+    # Click events have clicked_document_id set
+    search_events = (
+        db.query(SearchAnalytics)
+        .filter(
+            SearchAnalytics.created_at >= since,
+            SearchAnalytics.clicked_document_id.is_(None),
+        )
+    )
+
+    # Top queries
+    top_queries = (
+        search_events.with_entities(
+            SearchAnalytics.query,
+            func.count().label("count"),
+            func.avg(SearchAnalytics.results_count).label("avg_results"),
+        )
+        .group_by(SearchAnalytics.query)
+        .order_by(func.count().desc())
+        .limit(20)
+        .all()
+    )
+
+    # Zero-result queries
+    zero_results = (
+        search_events.filter(SearchAnalytics.results_count == 0)
+        .with_entities(
+            SearchAnalytics.query,
+            func.count().label("count"),
+        )
+        .group_by(SearchAnalytics.query)
+        .order_by(func.count().desc())
+        .limit(20)
+        .all()
+    )
+
+    # Click-through rate
+    total_searches = search_events.count()
+    total_clicks = (
+        db.query(SearchAnalytics)
+        .filter(
+            SearchAnalytics.created_at >= since,
+            SearchAnalytics.clicked_document_id.isnot(None),
+        )
+        .count()
+    )
+    ctr = (total_clicks / total_searches * 100) if total_searches > 0 else 0
+
+    return {
+        "period_days": days,
+        "total_searches": total_searches,
+        "total_clicks": total_clicks,
+        "click_through_rate": round(ctr, 1),
+        "top_queries": [
+            {"query": q, "count": c, "avg_results": round(float(a or 0), 1)}
+            for q, c, a in top_queries
+        ],
+        "zero_result_queries": [
+            {"query": q, "count": c}
+            for q, c in zero_results
+        ],
+    }
