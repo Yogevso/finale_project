@@ -12,7 +12,7 @@ import {
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type { DocumentUpdate } from '@/types'
 
-export type DocumentDetailTab = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
+export type DocumentDetailTab = 'preview' | 'details' | 'versions' | 'attachments'
 
 export interface PendingAnchor {
   text: string

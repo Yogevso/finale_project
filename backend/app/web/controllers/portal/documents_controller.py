@@ -11,8 +11,10 @@ from app.application.queries.portal_queries import (
     GetPortalDocumentQuery,
     ListPortalCategoriesQuery,
     ListPortalDocumentsQuery,
+    ListPortalFacetsQuery,
     PortalDashboardStatsQuery,
     PortalDocumentsQueryHandler,
+    RelatedDocumentsQuery,
     SearchPortalDocumentsQuery,
 )
 from app.domain.specifications import RoleAccessSpec
@@ -43,6 +45,10 @@ class PortalDocumentsController:
         per_page: int,
         category: Optional[str],
         search: Optional[str],
+        topic: Optional[str] = None,
+        platform: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         current_user: User,
         portal_documents_query_handler: PortalDocumentsQueryHandler,
     ):
@@ -53,6 +59,10 @@ class PortalDocumentsController:
                 category=category,
                 search=search,
                 current_user=current_user,
+                topic=topic,
+                platform=platform,
+                date_from=date_from,
+                date_to=date_to,
             )
         )
 
@@ -123,5 +133,31 @@ class PortalDocumentsController:
                 page=page,
                 per_page=per_page,
                 current_user=current_user,
+            )
+        )
+
+    def get_customer_facets(
+        self,
+        *,
+        current_user: User,
+        portal_documents_query_handler: PortalDocumentsQueryHandler,
+    ):
+        return portal_documents_query_handler.execute_facets(
+            ListPortalFacetsQuery(current_user=current_user)
+        )
+
+    def get_related_documents(
+        self,
+        *,
+        document_id: int,
+        limit: int,
+        current_user: User,
+        portal_documents_query_handler: PortalDocumentsQueryHandler,
+    ):
+        return portal_documents_query_handler.execute_related_documents(
+            RelatedDocumentsQuery(
+                document_id=document_id,
+                current_user=current_user,
+                limit=limit,
             )
         )

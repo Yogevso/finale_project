@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 from app.application.queries.dependencies import get_portal_documents_query_handler
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
-from app.models import Document, User
+from app.db import get_db
+from app.models import Document, ReadingProgress, User
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
     PortalDocumentListResponse,
+    PortalFacetsResponse,
 )
 from app.security import get_current_active_user
 from app.services.attachment_service import AttachmentService
@@ -36,6 +38,10 @@ async def list_customer_documents(
     per_page: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
     search: Optional[str] = None,
+    topic: Optional[str] = None,
+    platform: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     current_user: User = Depends(require_customer),
     portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
         get_portal_documents_query_handler
@@ -46,6 +52,10 @@ async def list_customer_documents(
         per_page=per_page,
         category=category,
         search=search,
+        topic=topic,
+        platform=platform,
+        date_from=date_from,
+        date_to=date_to,
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -61,6 +71,23 @@ async def get_customer_document(
 ):
     return portal_documents_controller.get_customer_document(
         document_id=document_id,
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
+    )
+
+
+@router.get("/documents/{document_id}/related")
+async def get_related_documents(
+    document_id: int,
+    limit: int = Query(5, ge=1, le=20),
+    current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
+):
+    return portal_documents_controller.get_related_documents(
+        document_id=document_id,
+        limit=limit,
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -133,6 +160,19 @@ async def get_customer_categories(
     )
 
 
+@router.get("/facets", response_model=PortalFacetsResponse)
+async def get_customer_facets(
+    current_user: User = Depends(require_customer),
+    portal_documents_query_handler: PortalDocumentsQueryHandler = Depends(
+        get_portal_documents_query_handler
+    ),
+):
+    return portal_documents_controller.get_customer_facets(
+        current_user=current_user,
+        portal_documents_query_handler=portal_documents_query_handler,
+    )
+
+
 @router.get("/dashboard/stats", response_model=PortalDashboardStats)
 async def get_customer_dashboard_stats(
     current_user: User = Depends(require_customer),
@@ -165,3 +205,63 @@ async def search_customer_documents(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
+
+
+@router.get("/reading-progress/recent")
+async def get_recently_viewed(
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return recently viewed documents for the current user."""
+    rows = (
+        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url)
+        .join(Document, ReadingProgress.document_id == Document.id)
+        .filter(ReadingProgress.user_id == current_user.id)
+        .order_by(ReadingProgress.last_read_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "document_id": rp.document_id,
+            "title": title,
+            "category": category,
+            "thumbnail_url": thumb,
+            "progress_percent": rp.progress_percent,
+            "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
+        }
+        for rp, title, category, thumb in rows
+    ]
+
+
+@router.get("/reading-progress/continue")
+async def get_continue_reading(
+    limit: int = Query(5, ge=1, le=20),
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return documents the user started but hasn't finished (progress < 100%)."""
+    rows = (
+        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url)
+        .join(Document, ReadingProgress.document_id == Document.id)
+        .filter(
+            ReadingProgress.user_id == current_user.id,
+            ReadingProgress.progress_percent > 0,
+            ReadingProgress.completed_at.is_(None),
+        )
+        .order_by(ReadingProgress.last_read_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "document_id": rp.document_id,
+            "title": title,
+            "category": category,
+            "thumbnail_url": thumb,
+            "progress_percent": rp.progress_percent,
+            "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
+        }
+        for rp, title, category, thumb in rows
+    ]

@@ -46,7 +46,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as exc:
-            # Log exception
+            # Log exception with user/tenant context (Y15-027)
             duration_ms = (time.time() - start_time) * 1000
             logger.error(
                 f"Request failed: {request.method} {request.url.path}",
@@ -57,6 +57,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     "client_ip": client_ip,
                     "duration_ms": round(duration_ms, 2),
                     "error": str(exc),
+                    "user_id": getattr(request.state, "user_id", None),
+                    "tenant_id": getattr(request.state, "tenant_id", None),
                 },
             )
             raise
@@ -67,7 +69,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id
 
-        # Log request (skip quiet paths for info level)
+        # Log request with user/tenant context (Y15-027)
         log_data = {
             "request_id": request_id,
             "method": request.method,
@@ -76,6 +78,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             "client_ip": client_ip,
             "duration_ms": round(duration_ms, 2),
             "user_agent": user_agent,
+            "user_id": getattr(request.state, "user_id", None),
+            "tenant_id": getattr(request.state, "tenant_id", None),
         }
 
         if request.url.path in self.QUIET_PATHS:

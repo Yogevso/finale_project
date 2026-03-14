@@ -174,6 +174,13 @@ export interface PublicPlatformDocumentsResponse {
   items: PublicPlatformDocumentRow[]
 }
 
+export interface PublicAnnouncement {
+  id: number
+  message: string
+  type: string
+  created_at: string
+}
+
 // API Functions
 export const publicApi = {
   /**
@@ -340,6 +347,17 @@ export const publicApi = {
     const response = await fetch(`${API_BASE}/documents/${documentId}/attachments/${attachmentId}`)
     if (!response.ok) {
       throw new Error('Failed to fetch attachment info')
+    }
+    return response.json()
+  },
+
+  /**
+   * Get active announcements
+   */
+  async getAnnouncements(): Promise<PublicAnnouncement[]> {
+    const response = await fetch(`${API_BASE}/announcements`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch announcements')
     }
     return response.json()
   },

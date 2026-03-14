@@ -72,7 +72,8 @@ def main():
             CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
                 title,
                 description,
-                category
+                category,
+                tags
             )
         """))
         db.commit()

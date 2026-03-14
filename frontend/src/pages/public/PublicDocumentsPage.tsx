@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { publicApi } from '@/lib/publicApi'
+import { SEO } from '@/components/SEO'
 
 type LatestPlatformRelease = {
   title: string
@@ -327,6 +328,10 @@ export default function PublicDocumentsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <SEO
+        title="Documentation Library"
+        description="Explore approved documentation, release notes, and technical guides."
+      />
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
         <div className="max-w-7xl mx-auto px-6 py-14">
           <div className="max-w-3xl">

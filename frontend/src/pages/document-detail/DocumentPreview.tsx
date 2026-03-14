@@ -8,6 +8,7 @@ import type { ReadingWidth } from '@/lib/readingWidth'
 import type { Attachment } from '@/types'
 import {
   applyHighlights,
+  clearHighlights,
   filterOutlineSectionsByHtml,
   getUsableVersionContent,
   mergeTocSections,
@@ -67,6 +68,7 @@ export function DocumentPreview({
   widthMode = 'reading',
   contentEditRequestToken = 0,
   onToggleFullscreen,
+  highlightAnchor,
 }: {
   documentId: number
   attachments: Attachment[]
@@ -80,6 +82,7 @@ export function DocumentPreview({
   widthMode?: ReadingWidth
   contentEditRequestToken?: number
   onToggleFullscreen?: () => void
+  highlightAnchor?: string
 }) {
   const { user } = useAuth()
   const [htmlContent, setHtmlContent] = useState<string | null>(null)
@@ -311,6 +314,37 @@ export function DocumentPreview({
 
     focusSearchMatch(0, 'auto')
   }, [activeHtmlContent, focusSearchMatch, searchTerm])
+
+  // Highlight anchor text from URL (e.g. ?highlight=some+text from chat "View in document")
+  useEffect(() => {
+    if (!highlightAnchor || !activeHtmlContent || searchTerm) return
+    const container = getDocument().getElementById('document-content-area')
+    if (!container) return
+
+    // Small delay to let the DOM render
+    const timer = setTimeout(() => {
+      applyHighlights(container, highlightAnchor)
+      const firstMark = container.querySelector('mark.doc-highlight')
+      if (firstMark) {
+        firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // Add a pulsing animation then clear after a few seconds
+        container.querySelectorAll('mark.doc-highlight').forEach((m) => {
+          ;(m as HTMLElement).style.background = '#fbbf24'
+          ;(m as HTMLElement).style.transition = 'background 2s ease'
+        })
+        setTimeout(() => {
+          container.querySelectorAll('mark.doc-highlight').forEach((m) => {
+            ;(m as HTMLElement).style.background = '#fef08a'
+          })
+        }, 2000)
+        // Clear the highlight marks after 6 seconds
+        setTimeout(() => {
+          clearHighlights(container)
+        }, 6000)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [highlightAnchor, activeHtmlContent, searchTerm])
 
   useEffect(() => {
     onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent))

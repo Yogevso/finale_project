@@ -85,6 +85,19 @@ class PortalDocumentListResponse(BaseModel):
     pages: int
 
 
+class FacetItem(BaseModel):
+    name: str
+    count: int
+
+
+class PortalFacetsResponse(BaseModel):
+    """Facet counts for portal sidebar filters"""
+
+    categories: List[FacetItem] = []
+    topics: List[FacetItem] = []
+    platforms: List[FacetItem] = []
+
+
 # ============ Feedback Schemas ============
 
 

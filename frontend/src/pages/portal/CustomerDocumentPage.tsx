@@ -18,6 +18,8 @@ import {
   Folder,
   Clock,
   CheckCircle,
+  BookOpen,
+  LifeBuoy,
 } from 'lucide-react'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import NotFoundState from '@/components/NotFoundState'
@@ -57,6 +59,13 @@ export default function CustomerDocumentPage() {
     enabled: !!id,
   })
   const renderedContent = useMemo(() => parseDocumentHtml(document?.content ?? ''), [document?.content])
+
+  // Fetch related documents
+  const { data: relatedDocs } = useQuery({
+    queryKey: ['portal', 'document', id, 'related'],
+    queryFn: () => portalApi.getRelatedDocuments(Number(id)),
+    enabled: !!id,
+  })
 
   // Feedback mutation
   const feedbackMutation = useMutation({
@@ -301,6 +310,42 @@ export default function CustomerDocumentPage() {
         </div>
       )}
 
+      {/* Related Documents */}
+      {relatedDocs && relatedDocs.length > 0 && (
+        <div className="surface-card rounded-2xl">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
+              <BookOpen className="h-5 w-5 mr-2" />
+              Related Documents
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {relatedDocs.map((related) => (
+                <Link
+                  key={related.id}
+                  to={`/portal/documents/${related.id}`}
+                  className="block p-4 rounded-xl border border-slate-200 hover:border-sky-300 hover:shadow-sm transition-all"
+                >
+                  <h3 className="font-medium text-slate-900 line-clamp-2">{related.title}</h3>
+                  {related.description && (
+                    <p className="mt-1 text-sm text-slate-500 line-clamp-2">{related.description}</p>
+                  )}
+                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                    {related.category && (
+                      <span className="px-2 py-0.5 bg-slate-100 rounded-full">{related.category}</span>
+                    )}
+                    {related.updated_at && (
+                      <span>{formatDate(related.updated_at)}</span>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Feedback section */}
       <div className="surface-card rounded-2xl">
         <div className="px-6 py-4 border-b border-slate-200">
@@ -327,6 +372,9 @@ export default function CustomerDocumentPage() {
                 <Link to="/portal/feedback" className="text-sky-600 hover:text-sky-500">
                   View my feedback
                 </Link>
+                <Link to="/portal/support" className="text-sky-600 hover:text-sky-500">
+                  View support tickets
+                </Link>
               </div>
             </div>
           ) : (
@@ -337,6 +385,23 @@ export default function CustomerDocumentPage() {
             />
           )}
         </div>
+      </div>
+
+      {/* Contact Support handoff (Y2-020) */}
+      <div className="surface-card rounded-2xl px-6 py-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-display font-semibold text-slate-900">Need more help?</h2>
+          <p className="text-sm text-slate-500">
+            Open a support ticket with this document's context pre-filled.
+          </p>
+        </div>
+        <Link
+          to={`/portal/support?new=1&subject=${encodeURIComponent(`Help with: ${document?.title ?? 'Document #' + id}`)}&content=${encodeURIComponent(`Document: ${document?.title ?? ''} (ID: ${id})\nURL: ${window.location.href}\nBrowser: ${navigator.userAgent}\n\nDescribe your issue:\n`)}`}
+          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 whitespace-nowrap"
+        >
+          <LifeBuoy className="h-4 w-4" />
+          Contact Support
+        </Link>
       </div>
       </div>
     </div>

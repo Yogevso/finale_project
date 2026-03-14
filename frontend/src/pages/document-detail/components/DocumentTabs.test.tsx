@@ -12,16 +12,15 @@ describe('DocumentTabs', () => {
       <DocumentTabs
         activeTab="preview"
         onTabChange={onTabChange}
-        counts={{ comments: 6, attachments: 3, versions: 4 }}
+        counts={{ attachments: 3, versions: 4 }}
       />,
     )
 
     expect(screen.getByRole('button', { name: 'Versions (4)' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Attachments (3)' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Comments (6)' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Comments (6)' }))
+    await user.click(screen.getByRole('button', { name: 'Attachments (3)' }))
 
-    expect(onTabChange).toHaveBeenCalledWith('comments')
+    expect(onTabChange).toHaveBeenCalledWith('attachments')
   })
 })

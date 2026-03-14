@@ -1,4 +1,4 @@
-type TabType = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
+type TabType = 'preview' | 'details' | 'versions' | 'attachments'
 
 interface DocumentTabsProps {
   activeTab: TabType
@@ -6,7 +6,6 @@ interface DocumentTabsProps {
   counts: {
     versions: number
     attachments: number
-    comments: number
   }
 }
 
@@ -16,13 +15,12 @@ export function DocumentTabs({ activeTab, onTabChange, counts }: DocumentTabsPro
     details: 'Details',
     versions: `Versions (${counts.versions})`,
     attachments: `Attachments (${counts.attachments})`,
-    comments: `Comments (${counts.comments})`,
   }
 
   return (
     <div className="document-detail-tabs border-b border-slate-200">
       <nav className="flex gap-6">
-        {(['preview', 'details', 'versions', 'attachments', 'comments'] as TabType[]).map((tab) => (
+        {(['preview', 'details', 'versions', 'attachments'] as TabType[]).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}

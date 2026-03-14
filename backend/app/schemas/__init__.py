@@ -422,6 +422,7 @@ class CommentResponse(CommentBase):
     user: Optional[CommentAuthor] = None
     replies: list["CommentResponse"] = []
     reply_count: int = 0
+    chat_id: Optional[int] = None  # Direct chat created/found for this comment
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,9 +1,9 @@
-import { BarChart3, Building2, FileText, MessageSquare, TrendingUp, Users } from 'lucide-react'
+import { BarChart3, Building2, FileText, MessageSquare, SearchIcon, TrendingUp, Users } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 import type { TimeGranularity } from '@/types'
 
-export type AnalyticsTabType = 'overview' | 'engagement' | 'users' | 'content' | 'feedback' | 'tenant'
+export type AnalyticsTabType = 'overview' | 'engagement' | 'users' | 'content' | 'feedback' | 'search' | 'tenant'
 
 export type AnalyticsTabConfig = {
   id: AnalyticsTabType
@@ -18,6 +18,7 @@ export const analyticsTabs: AnalyticsTabConfig[] = [
   { id: 'users', label: 'Users', icon: Users, minRole: 'ADMIN' },
   { id: 'content', label: 'Content', icon: FileText, minRole: 'MANAGER' },
   { id: 'feedback', label: 'Feedback', icon: MessageSquare, minRole: 'MANAGER' },
+  { id: 'search', label: 'Search', icon: SearchIcon, minRole: 'MANAGER' },
   { id: 'tenant', label: 'Tenant', icon: Building2, minRole: 'SYSTEM_ADMIN' },
 ]
 

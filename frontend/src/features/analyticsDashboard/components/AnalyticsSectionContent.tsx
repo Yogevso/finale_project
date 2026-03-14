@@ -3,6 +3,7 @@ import {
   EngagementSection,
   FeedbackSection,
   OverviewSection,
+  SearchSection,
   TenantSection,
   UserSection,
 } from '@/components/analytics'
@@ -27,6 +28,8 @@ export function AnalyticsSectionContent({ activeTab, queryParams }: AnalyticsSec
       return <ContentSection params={queryParams} />
     case 'feedback':
       return <FeedbackSection params={queryParams} />
+    case 'search':
+      return <SearchSection />
     case 'tenant':
       return <TenantSection params={queryParams} />
     default:

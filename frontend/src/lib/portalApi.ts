@@ -115,6 +115,17 @@ export interface CategoryCount {
   count: number
 }
 
+export interface FacetItem {
+  name: string
+  count: number
+}
+
+export interface PortalFacetsResponse {
+  categories: FacetItem[]
+  topics: FacetItem[]
+  platforms: FacetItem[]
+}
+
 // ============ API Functions ============
 
 export const portalApi = {
@@ -124,12 +135,20 @@ export const portalApi = {
     per_page?: number
     category?: string
     search?: string
+    topic?: string
+    platform?: string
+    date_from?: string
+    date_to?: string
   } = {}): Promise<PortalDocumentListResponse> {
     const searchParams = new URLSearchParams()
     if (params.page) searchParams.set('page', String(params.page))
     if (params.per_page) searchParams.set('per_page', String(params.per_page))
     if (params.category) searchParams.set('category', params.category)
     if (params.search) searchParams.set('search', params.search)
+    if (params.topic) searchParams.set('topic', params.topic)
+    if (params.platform) searchParams.set('platform', params.platform)
+    if (params.date_from) searchParams.set('date_from', params.date_from)
+    if (params.date_to) searchParams.set('date_to', params.date_to)
     
     const response = await portalClient.get(`/portal/documents?${searchParams.toString()}`)
     return response.data
@@ -145,9 +164,65 @@ export const portalApi = {
     return response.data
   },
 
+  async getFacets(): Promise<PortalFacetsResponse> {
+    const response = await portalClient.get('/portal/facets')
+    return response.data
+  },
+
+  async getRelatedDocuments(documentId: number, limit = 5): Promise<Array<{
+    id: number
+    title: string
+    description: string | null
+    category: string | null
+    thumbnail_url: string | null
+    updated_at: string | null
+  }>> {
+    const response = await portalClient.get(`/portal/documents/${documentId}/related`, {
+      params: { limit },
+    })
+    return response.data
+  },
+
   async getDashboardStats(): Promise<DashboardStats> {
     const response = await portalClient.get('/portal/dashboard/stats')
     return response.data
+  },
+
+  async getRecentlyViewed(limit = 10): Promise<Array<{
+    document_id: number
+    title: string
+    category: string | null
+    thumbnail_url: string | null
+    progress_percent: number
+    last_read_at: string | null
+  }>> {
+    const response = await portalClient.get('/portal/reading-progress/recent', {
+      params: { limit },
+    })
+    return response.data
+  },
+
+  async getContinueReading(limit = 5): Promise<Array<{
+    document_id: number
+    title: string
+    category: string | null
+    thumbnail_url: string | null
+    progress_percent: number
+    last_read_at: string | null
+  }>> {
+    const response = await portalClient.get('/portal/reading-progress/continue', {
+      params: { limit },
+    })
+    return response.data
+  },
+
+  async getNpsStatus(): Promise<{ should_show: boolean }> {
+    const response = await portalClient.get('/portal/nps/status')
+    return response.data
+  },
+
+  async submitNps(score: number, comment?: string): Promise<void> {
+    await portalClient.post('/portal/nps', { score, comment })
   },
 
   async search(params: {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -11,9 +12,12 @@ from sqlalchemy.orm import Session
 
 from app.domain.specifications import DateRangeSpec, TenantScopeSpec, VisibilitySpec
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
-from app.models import Document, SavedSearch, User, UserRole
+from app.models import Document, SavedSearch, SystemSetting, User, UserRole
 from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
+
+# Default BM25 weights for FTS5 columns: title, description, category, tags
+DEFAULT_RELEVANCE_WEIGHTS = {"title": 3.0, "description": 1.0, "category": 1.0, "tags": 2.0}
 
 def escape_sql_wildcards(value: str) -> str:
     """Escape SQL LIKE wildcards to prevent injection."""
@@ -114,6 +118,31 @@ class SearchQueryHandler:
             return VisibilitySpec.customer_portal(user.tenant_id)
         return VisibilitySpec.management()
 
+    def _get_relevance_weights(self) -> dict[str, float]:
+        """Load configurable search relevance weights from system_settings."""
+        try:
+            setting = (
+                self.db.query(SystemSetting)
+                .filter(SystemSetting.key == "search_relevance_weights")
+                .first()
+            )
+            if setting and setting.value:
+                weights = json.loads(setting.value)
+                return {
+                    "title": float(weights.get("title", DEFAULT_RELEVANCE_WEIGHTS["title"])),
+                    "description": float(weights.get("description", DEFAULT_RELEVANCE_WEIGHTS["description"])),
+                    "category": float(weights.get("category", DEFAULT_RELEVANCE_WEIGHTS["category"])),
+                    "tags": float(weights.get("tags", DEFAULT_RELEVANCE_WEIGHTS["tags"])),
+                }
+        except Exception:
+            pass
+        return DEFAULT_RELEVANCE_WEIGHTS.copy()
+
+    def _bm25_expression(self) -> str:
+        """Build bm25() call with weighted columns: title, description, category, tags."""
+        w = self._get_relevance_weights()
+        return f"bm25(documents_fts, {w['title']}, {w['description']}, {w['category']}, {w['tags']})"
+
     def _execute_cached(
         self,
         *,
@@ -210,9 +239,10 @@ class SearchQueryHandler:
                     params.update(vis_params)
 
                 where_clause = " AND ".join(filters)
+                bm25_expr = self._bm25_expression()
                 fts_query = text(
                     f"""
-                    SELECT d.*, bm25(documents_fts) as score
+                    SELECT d.*, {bm25_expr} as score
                     FROM documents d
                     JOIN documents_fts ON d.id = documents_fts.rowid
                     WHERE {where_clause}

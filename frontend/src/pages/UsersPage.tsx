@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -15,6 +16,7 @@ import {
   RefreshCw,
   XCircle,
   Clock,
+  MessageCircle,
 } from 'lucide-react'
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
@@ -43,6 +45,7 @@ type UserFormSubmission = UserCreateFormData | UserUpdateFormData
 export default function UsersPage() {
   const { isAdmin, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebouncedValue(searchInput, 300)
@@ -116,6 +119,14 @@ export default function UsersPage() {
     mutationFn: (id: number) => api.resendInvitation(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
+    },
+  })
+
+  // X1-039: Start direct chat with user
+  const messageMutation = useMutation({
+    mutationFn: (userId: number) => api.createDirectChat({ user_id: userId }),
+    onSuccess: (chat) => {
+      navigate(`/chat?id=${chat.id}`)
     },
   })
 
@@ -313,6 +324,16 @@ export default function UsersPage() {
                     </td>
                     <td className="admin-table-cell text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {user.id !== currentUser?.id && user.role !== 'viewer' && (
+                          <button
+                            onClick={() => messageMutation.mutate(user.id)}
+                            disabled={messageMutation.isPending}
+                            className="admin-icon-action"
+                            title="Send message"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => setEditingUser(user)}
                           className="admin-icon-action"

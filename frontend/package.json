@@ -17,6 +17,8 @@
     "refresh:api-contracts": "node ../scripts/api_contracts/refresh_openapi_snapshot.mjs && npm run generate:api-contracts"
   },
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
     "@hocuspocus/provider": "^3.4.3",
     "@tanstack/react-query": "^5.17.19",
     "@tiptap/extension-collaboration": "^3.16.0",
@@ -35,11 +37,13 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "axios": "^1.6.5",
     "date-fns": "^3.2.0",
+    "emoji-mart": "^5.6.0",
     "html-react-parser": "^5.2.17",
     "lucide-react": "^0.562.0",
     "mammoth": "^1.11.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-helmet-async": "^3.0.0",
     "react-joyride": "^2.9.3",
     "react-router-dom": "^6.21.3",
     "react-syntax-highlighter": "^16.1.1",
@@ -51,6 +55,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.41.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",

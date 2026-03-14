@@ -2,6 +2,7 @@ import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-do
 import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
+import AnnouncementBanner from '@/components/AnnouncementBanner'
 
 export default function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -194,6 +195,9 @@ export default function PublicLayout() {
         )}
       </header>
       )}
+
+      {/* Announcement Banner */}
+      {!isFullscreen && <AnnouncementBanner />}
 
       {/* Main Content */}
       <main className="flex-1">
