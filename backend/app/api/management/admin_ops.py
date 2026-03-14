@@ -552,27 +552,80 @@ def get_system_status(
     tenant_ctx: TenantContext = Depends(require_system_admin),
     db: Session = Depends(get_db),
 ):
-    """Return health of backend services."""
+    """Return health of backend services with latency and diagnostic details."""
+    import os
+    import time
+
     services: list[ServiceStatus] = []
 
-    # Backend DB check
+    # Database check with latency
     try:
-        db.execute(func.literal(1).select())
-        services.append(ServiceStatus(name="database", status="healthy"))
-    except Exception:
-        services.append(ServiceStatus(name="database", status="down", details="Connection failed"))
+        from sqlalchemy import text as sa_text
+        t0 = time.perf_counter()
+        db.execute(sa_text("SELECT 1"))
+        db_ms = round((time.perf_counter() - t0) * 1000, 1)
+        db_status = "healthy" if db_ms < 500 else "degraded"
+        user_count = db.execute(sa_text("SELECT COUNT(*) FROM users")).scalar() or 0
+        tenant_count = db.execute(sa_text("SELECT COUNT(*) FROM tenants")).scalar() or 0
+        doc_count = db.execute(sa_text("SELECT COUNT(*) FROM documents")).scalar() or 0
+        services.append(ServiceStatus(
+            name="database",
+            status=db_status,
+            latency_ms=db_ms,
+            details=f"{user_count} users, {tenant_count} tenants, {doc_count} documents",
+        ))
+    except Exception as exc:
+        services.append(ServiceStatus(
+            name="database", status="down", details=f"Connection failed: {exc}",
+        ))
 
-    # Storage check (simple path existence)
-    import os
-
+    # Storage check
     upload_dir = os.environ.get("UPLOAD_DIR", "data/uploads")
     if os.path.isdir(upload_dir):
-        services.append(ServiceStatus(name="storage", status="healthy"))
+        try:
+            files = os.listdir(upload_dir)
+            total_files = len(files)
+            services.append(ServiceStatus(
+                name="storage", status="healthy",
+                details=f"Upload dir OK — {total_files} files",
+            ))
+        except OSError as exc:
+            services.append(ServiceStatus(
+                name="storage", status="degraded",
+                details=f"Upload dir exists but unreadable: {exc}",
+            ))
     else:
-        services.append(ServiceStatus(name="storage", status="degraded", details="Upload directory missing"))
+        services.append(ServiceStatus(
+            name="storage", status="degraded",
+            details=f"Upload directory missing: {upload_dir}",
+        ))
 
-    # Backend is responding (implicit)
-    services.append(ServiceStatus(name="backend", status="healthy"))
+    # Collab-server check
+    try:
+        import urllib.request
+        collab_url = os.environ.get("COLLAB_SERVER_URL", "http://collab-server:8002")
+        t0 = time.perf_counter()
+        req = urllib.request.Request(f"{collab_url}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            collab_ms = round((time.perf_counter() - t0) * 1000, 1)
+            services.append(ServiceStatus(
+                name="collab-server", status="healthy",
+                latency_ms=collab_ms,
+                details=f"WebSocket server responding ({collab_ms}ms)",
+            ))
+    except Exception:
+        services.append(ServiceStatus(
+            name="collab-server", status="degraded",
+            details="Collab server unreachable — real-time editing may be unavailable",
+        ))
+
+    # Backend self (always healthy if we got here)
+    from app.config import settings as app_settings
+    uptime_info = f"v{app_settings.APP_VERSION}, env={app_settings.APP_ENV}"
+    services.append(ServiceStatus(
+        name="backend", status="healthy",
+        details=uptime_info,
+    ))
 
     overall = "healthy"
     if any(s.status == "down" for s in services):

@@ -5,7 +5,7 @@
  * to published documents with PUBLIC visibility.
  */
 
-const API_BASE = '/api/v1/public'
+const API_BASE = '/api/v1'
 const PLATFORM_API_BASE = '/api/platforms'
 
 // Types matching backend schemas

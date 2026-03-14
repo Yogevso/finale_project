@@ -104,15 +104,22 @@ export default function AdminOpsPage() {
 function SystemStatusPanel() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    api.getSystemStatus().then(setStatus).finally(() => setLoading(false))
-  }, [])
+  const load = () => {
+    setRefreshing(true)
+    api.getSystemStatus().then(setStatus).finally(() => { setLoading(false); setRefreshing(false) })
+  }
+
+  useEffect(() => { load() }, [])
 
   if (loading) return <LoadingSpinner />
 
   const statusColor = (s: string) =>
     s === 'healthy' ? 'text-green-600' : s === 'degraded' ? 'text-yellow-600' : 'text-red-600'
+  const statusBg = (s: string) =>
+    s === 'healthy' ? 'bg-green-50 border-green-200' : s === 'degraded' ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
   const StatusIcon = ({ s }: { s: string }) =>
     s === 'healthy' ? <CheckCircle className="text-green-500" size={20} /> :
     s === 'degraded' ? <AlertTriangle className="text-yellow-500" size={20} /> :
@@ -128,14 +135,76 @@ function SystemStatusPanel() {
             {status?.overall || 'Unknown'}
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        {status?.checked_at && (
+          <p className="text-xs text-slate-400 mb-4">
+            Last checked: {new Date(status.checked_at).toLocaleString()}
+            <button
+              onClick={load}
+              disabled={refreshing}
+              className="ml-2 text-indigo-500 hover:text-indigo-700 underline disabled:opacity-50"
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {status?.services.map(svc => (
-            <div key={svc.name} className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
-              <StatusIcon s={svc.status} />
-              <div>
-                <p className="font-medium capitalize">{svc.name}</p>
-                <p className="text-xs text-slate-500">{svc.details || svc.status}</p>
-              </div>
+            <div key={svc.name}>
+              <button
+                onClick={() => setExpanded(expanded === svc.name ? null : svc.name)}
+                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                  expanded === svc.name ? statusBg(svc.status) : 'bg-slate-50 border-slate-100 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <StatusIcon s={svc.status} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium capitalize">{svc.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{svc.status}</p>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-slate-400 transition-transform ${expanded === svc.name ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </button>
+
+              {expanded === svc.name && (
+                <div className={`mt-1 p-4 rounded-lg border text-sm space-y-2 ${statusBg(svc.status)}`}>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Status</span>
+                    <span className={`font-semibold uppercase ${statusColor(svc.status)}`}>{svc.status}</span>
+                  </div>
+                  {svc.latency_ms !== null && svc.latency_ms !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Latency</span>
+                      <span className={`font-medium ${svc.latency_ms < 100 ? 'text-green-600' : svc.latency_ms < 500 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {svc.latency_ms}ms
+                      </span>
+                    </div>
+                  )}
+                  {svc.details && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <p className="text-slate-600 font-medium text-xs mb-1">Details</p>
+                      <p className="text-slate-700">{svc.details}</p>
+                    </div>
+                  )}
+                  {svc.status !== 'healthy' && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <p className="text-xs font-medium text-red-600 mb-1">Action Required</p>
+                      <p className="text-slate-700 text-xs">
+                        {svc.status === 'down'
+                          ? `The ${svc.name} service is down. Check server logs and connectivity.`
+                          : `The ${svc.name} service is degraded. Performance may be affected.`}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
