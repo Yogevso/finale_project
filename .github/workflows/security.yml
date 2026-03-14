@@ -167,6 +167,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.image.name }}.sarif'
           severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Y15-004: Fail on HIGH/CRITICAL vulnerabilities
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
@@ -175,12 +176,13 @@ jobs:
         with:
           sarif_file: 'trivy-${{ matrix.image.name }}.sarif'
 
-      - name: Run Trivy (table output)
+      - name: Run Trivy (table output for PR visibility)
+        if: failure()  # Only show table if scan failed
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: scan-${{ matrix.image.name }}:latest
           format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH'
 
   # ============================================
   # Secret Scanning
