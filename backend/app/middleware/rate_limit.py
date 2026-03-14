@@ -52,6 +52,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies/\d+$"),
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/companies/batch$"),
     )
+    ADMIN_PATH_PREFIX = f"{settings.API_PREFIX}/admin/"
 
     def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
         super().__init__(app)
@@ -80,6 +81,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _resolve_limit_profile(self, *, request_path: str, method: str) -> tuple[int, int, str]:
         """Resolve path-specific rate-limit profile."""
+        # Z-017: Admin endpoints get a higher limit (500 req/min)
+        if request_path.startswith(self.ADMIN_PATH_PREFIX):
+            return 500, 60, "admin"
         if method in {"POST", "PUT", "PATCH", "DELETE"} and any(
             pattern.match(request_path) for pattern in self.ASSIGNMENT_PATH_PATTERNS
         ):

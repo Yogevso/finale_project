@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import User, UserRole
+from app.models import Tenant, User, UserRole
 from app.security import get_current_active_user
 
 
@@ -37,6 +37,15 @@ async def get_tenant_context(
     - Regular users are scoped to their tenant_id
     """
     is_system_admin = current_user.role == UserRole.SYSTEM_ADMIN
+
+    # Z-009: If the user belongs to a suspended tenant, deny access (403).
+    if current_user.tenant_id and not is_system_admin:
+        tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+        if tenant and not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account suspended",
+            )
 
     return TenantContext(
         tenant_id=current_user.tenant_id,

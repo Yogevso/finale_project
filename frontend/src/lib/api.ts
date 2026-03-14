@@ -1,3 +1,4 @@
+import { AdminOpsApiMixin } from './api/adminOpsApi'
 import { AnalyticsApiMixin } from './api/analyticsApi'
 import { AttachmentsApiMixin } from './api/attachmentsApi'
 import { AuthApiMixin } from './api/authApi'
@@ -31,6 +32,7 @@ const apiMixins = [
   CollaborationApiMixin,
   ChatApiMixin,
   SupportApiMixin,
+  AdminOpsApiMixin,
 ] as const
 
 type AppApiClient = ComposedApiClient<typeof apiMixins>
