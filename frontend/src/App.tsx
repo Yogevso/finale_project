@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, useState } from 'react'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
@@ -22,6 +22,10 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const SupportPage = lazy(() => import('./pages/SupportPage'))
+const CannedResponsesPage = lazy(() => import('./pages/CannedResponsesPage'))
+const CustomerSupportPage = lazy(() => import('./pages/portal/CustomerSupportPage'))
 const ViewerDocumentPage = lazy(() => import('./pages/viewer/ViewerDocumentPage'))
 // Public portal pages
 import PublicLayout from './layouts/PublicLayout'
@@ -32,6 +36,7 @@ const PublicDocumentPage = lazy(() => import('./pages/public/PublicDocumentPage'
 const PublicSearchPage = lazy(() => import('./pages/public/PublicSearchPage'))
 const PublicToolsPage = lazy(() => import('./pages/public/PublicToolsPage'))
 const PublicHelpPage = lazy(() => import('./pages/public/PublicHelpPage'))
+const PublicChangelogPage = lazy(() => import('./pages/public/PublicChangelogPage'))
 // Customer portal pages
 import CustomerLayout from './layouts/CustomerLayout'
 import CustomerRoute from './components/guards/CustomerRoute'
@@ -68,15 +73,47 @@ function RoleBasedRedirect() {
 function NotFoundPage() {
   const { user } = useAuth()
   const homePath = user ? getHomeRouteForRole(user.role) : '/'
-  
+  const [search, setSearch] = useState('')
+  const navigate = useNavigate()
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (search.trim()) {
+      navigate(`/search?q=${encodeURIComponent(search.trim())}`)
+    }
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="text-center max-w-lg">
         <h1 className="text-6xl font-bold text-slate-300">404</h1>
         <p className="text-xl text-slate-600 mt-4">Page not found</p>
-        <a href={homePath} className="mt-6 inline-block px-6 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700">
-          Go Home
-        </a>
+        <p className="text-slate-500 mt-2">
+          The page you're looking for doesn't exist or has been moved.
+        </p>
+        <form onSubmit={handleSearch} className="mt-6 flex gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search documentation..."
+            className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
+          />
+          <button
+            type="submit"
+            className="px-5 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700 font-medium"
+          >
+            Search
+          </button>
+        </form>
+        <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <a href={homePath} className="px-6 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700">
+            Go Home
+          </a>
+          <a href="/docs" className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-100">
+            Browse Documents
+          </a>
+        </div>
       </div>
     </div>
   )
@@ -114,6 +151,7 @@ function App() {
           <Route path="/topics/:slug" element={<Navigate to="/docs" replace />} />
           <Route path="/tools" element={<PublicToolsPage />} />
           <Route path="/help" element={<PublicHelpPage />} />
+          <Route path="/changelog" element={<PublicChangelogPage />} />
           <Route path="/doc/:id" element={<PublicDocumentPage />} />
           <Route path="/search" element={<PublicSearchPage />} />
         </Route>
@@ -249,6 +287,35 @@ function App() {
           <Route path="security-events" element={<SecurityEventsPage />} />
         </Route>
 
+        {/* Chat - all internal users */}
+        <Route
+          path="/chat"
+          element={
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<ChatPage />} />
+        </Route>
+
+        {/* Support - managers and above */}
+        <Route
+          path="/support"
+          element={
+            <ErrorBoundary>
+              <ManagerGuard>
+                <Layout />
+              </ManagerGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<SupportPage />} />
+          <Route path="canned-responses" element={<CannedResponsesPage />} />
+        </Route>
+
         {/* ==================== MANAGEMENT ROUTES ==================== */}
         {/* Users - managers and above */}
         <Route
@@ -338,6 +405,7 @@ function App() {
           <Route path="documents" element={<CustomerDocumentsPage />} />
           <Route path="documents/:id" element={<CustomerDocumentPage />} />
           <Route path="feedback" element={<MyFeedbackPage />} />
+          <Route path="support" element={<CustomerSupportPage />} />
         </Route>
 
         {/* ==================== CATCH ALL ==================== */}

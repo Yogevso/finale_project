@@ -371,6 +371,7 @@ export interface Comment {
   }
   replies: Comment[]
   reply_count: number
+  chat_id?: number | null  // Direct chat linked to this comment
 }
 
 export interface CommentCreate {

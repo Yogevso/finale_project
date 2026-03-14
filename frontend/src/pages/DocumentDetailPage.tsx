@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Joyride from 'react-joyride'
 import { DocumentPreview } from '@/pages/document-detail/DocumentPreview'
 import { EditForm } from '@/pages/document-detail/EditForm'
@@ -15,12 +16,14 @@ import NotFoundState from '@/components/NotFoundState'
 
 const VersionsSection = lazy(() => import('@/components/VersionsSection'))
 const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
-const CommentsSection = lazy(() => import('@/components/CommentsSection'))
+// Comments tab removed — comments are accessible via inline popups and chat bridge
 
 export default function DocumentDetailPage() {
   const tour = useTour('document-detail', documentDetailTour)
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null)
   const [pendingPrint, setPendingPrint] = useState(false)
+  const [searchParams] = useSearchParams()
+  const highlightText = searchParams.get('highlight') || undefined
   const {
     documentId,
     document,
@@ -35,8 +38,6 @@ export default function DocumentDetailPage() {
     setActiveTab,
     scrollProgress,
     handleScrollProgress,
-    pendingAnchor,
-    clearPendingAnchor,
     contentEditRequestToken,
     showCompanySelector,
     toggleCompanySelector,
@@ -97,7 +98,6 @@ export default function DocumentDetailPage() {
   const tabCounts = {
     versions: document?.versions_count ?? 0,
     attachments: document?.attachments_count ?? attachments.length,
-    comments: document?.comments_count ?? 0,
   }
 
   const handlePrint = () => {
@@ -198,6 +198,7 @@ export default function DocumentDetailPage() {
             widthMode={contentWidth}
             contentEditRequestToken={contentEditRequestToken}
             onToggleFullscreen={isFullscreen ? navigateToDetail : navigateToFullscreen}
+            highlightAnchor={highlightText}
           />
         )}
 
@@ -250,15 +251,7 @@ export default function DocumentDetailPage() {
           </Suspense>
         )}
 
-        {activeTab === 'comments' && (
-          <Suspense fallback={<div className="surface-card rounded-2xl p-6">Loading comments...</div>}>
-            <CommentsSection
-              documentId={documentId}
-              pendingAnchor={pendingAnchor}
-              onClearAnchor={clearPendingAnchor}
-            />
-          </Suspense>
-        )}
+
 
         <ReviewSubmitModal
           isOpen={showSubmitReview}

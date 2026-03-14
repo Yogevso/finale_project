@@ -4,8 +4,11 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
+import { useChatUnreadCount } from '@/features/chat/useChatUnreadCount'
 
+import GlobalSearchBar from './GlobalSearchBar'
 import NotificationBell from './NotificationBell'
+import AnnouncementBanner from './AnnouncementBanner'
 
 export default function Layout() {
   const { user, logout, isSystemAdmin } = useAuth()
@@ -14,6 +17,7 @@ export default function Layout() {
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
+  const chatUnreadCount = useChatUnreadCount()
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -62,12 +66,13 @@ export default function Layout() {
           <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
             {navItems.map((item) => {
               const Icon = item.icon
+              const badge = item.path === '/chat' && chatUnreadCount > 0 ? chatUnreadCount : 0
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) =>
-                    `px-4 py-2 rounded-full transition-colors ${
+                    `relative px-4 py-2 rounded-full transition-colors ${
                       isActive
                         ? 'bg-white text-sky-800 font-semibold border border-sky-200'
                         : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
@@ -78,10 +83,20 @@ export default function Layout() {
                     <Icon className="h-4 w-4" />
                   </span>
                   {item.label}
+                  {badge > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
                 </NavLink>
               )
             })}
           </nav>
+
+          {/* Global Search (Y2-001) */}
+          <div className="hidden md:flex">
+            <GlobalSearchBar />
+          </div>
 
           {/* Desktop User Info & Actions */}
           <div className="hidden md:flex items-center gap-3 text-sm">
@@ -110,6 +125,7 @@ export default function Layout() {
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
+                const badge = item.path === '/chat' && chatUnreadCount > 0 ? chatUnreadCount : 0
                 return (
                   <NavLink
                     key={item.path}
@@ -127,6 +143,11 @@ export default function Layout() {
                       <Icon className="h-4 w-4" />
                     </span>
                     {item.label}
+                    {badge > 0 && (
+                      <span className="ml-auto flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
                   </NavLink>
                 )
               })}
@@ -154,6 +175,9 @@ export default function Layout() {
         )}
       </header>
       )}
+
+      {/* Announcement Banner */}
+      {!isFullscreen && <AnnouncementBanner />}
 
       {/* Main Content */}
       <main className="app-shell-main flex-1">

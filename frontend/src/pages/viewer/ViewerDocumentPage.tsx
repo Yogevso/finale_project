@@ -6,7 +6,6 @@ import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import type {
   Attachment,
-  Comment,
   Document,
   Version,
 } from '@/types'
@@ -67,18 +66,6 @@ export default function ViewerDocumentPage() {
       },
       enabled: !!id && !!selectedVersionId,
     })
-
-  const { data: comments = [] } = useQuery<Comment[]>({
-    queryKey: ['viewer-document-comments', id],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/viewer/documents/${id}/comments`)
-      if (!response.ok) {
-        return []
-      }
-      return response.json() as Promise<Comment[]>
-    },
-    enabled: !!id,
-  })
 
   const isSyntheticUploadPlaceholder = (value?: string | null) => {
     if (!value) {
@@ -482,31 +469,7 @@ export default function ViewerDocumentPage() {
           </div>
         )}
 
-        {comments.length > 0 && (
-          <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
-              Comments ({comments.length})
-            </h2>
-            <div className="space-y-4">
-              {comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="p-4 bg-slate-50 rounded-xl border-l-4 border-sky-200"
-                >
-                  <p className="text-slate-700 mb-2">{comment.content}</p>
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span>
-                      By {comment.author_name || `User #${comment.author_id}`}
-                    </span>
-                    <span>
-                      {new Date(comment.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         <div className="text-center pt-4">
           <Link to="/viewer" className="btn-ghost inline-block">
