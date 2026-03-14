@@ -1,10 +1,10 @@
 Project Plan
-Last updated: 2026-03-13
+Last updated: 2026-03-14
 
 Current checkpoint
 - Stable return point: `fa45412` (`test(coverage): cover viewer warning and toc copy flows`)
-- Active wave: Wave Y.1
-- Status: Wave Y.1 delivery is complete on this branch; the last optional viewer coverage polish is implemented and verified
+- Active wave: Wave Y.1.5
+- Status: Security hardening in progress; container security, secrets management, and defense-in-depth middleware complete
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
@@ -14,25 +14,28 @@ Completed in Wave Y.1
 - Coverage/test work: Y1-040, Y1-041, Y1-042, Y1-043
 - PDF removal tranche: Y1-050 through Y1-072
 
+Completed in Wave Y.1.5
+- Container Security: Y15-001, Y15-002, Y15-003 (non-root Dockerfiles)
+- Secrets Management: Y15-005, Y15-006, Y15-007 (hardcoded secret removal, startup validation)
+- Session Security: Y15-009, Y15-010, Y15-011, Y15-012 (revoked token check, indexed lookup, password change invalidation, sessions endpoint)
+- Tenant Isolation: Y15-013 (attachment deletion tenant check)
+- Race Conditions: Y15-017 (atomic document number increment)
+- Error Handling: Y15-025, Y15-026 (exception blocks already logged properly)
+- Defense in Depth: Y15-041, Y15-042, Y15-043, Y15-044 (security headers, CSRF, input validation, audit logging)
+
+In Progress (Wave Y.1.5)
+- Multi-tenancy isolation: Y15-013 through Y15-016
+- Race condition fixes: Y15-017 through Y15-020
+- Orphaned resource cleanup: Y15-021 through Y15-024
+- Backend infrastructure: Y15-025 through Y15-030
+- Security tests: Y15-031 through Y15-040
+
 Verification snapshot
 - Backend full suite: 967 passed, 3 skipped
 - Frontend full unit suite: 175 passed
 - Playwright matrix in slices: 300 passed, 1 skipped
-- Focused AttachmentService regression slice: 53 passed
-- Focused conversion/reader/container regression slice: 36 passed
-- Focused backend Ruff check: clean for conversion, legacy wrapper, container, dependencies, and attachment-service modules
-- Focused frontend preview/browser/DTO slice: 40 passed
-- Focused frontend upload UX slice: 23 passed
-- Focused frontend viewer coverage slice: 9 passed
-- Focused frontend ESLint slice: clean
-- Frontend TypeScript check (`tsc`): clean
-- Dedicated upload-modal UI E2E: 3 passed
-
-Highest-priority remaining items
-- None inside Wave Y.1
-
-Recommended next item
-- Treat this as the finished Wave Y.1 checkpoint, then move to the next wave or separate warning-cleanup work.
+- Focused auth tests: 31 passed
+- Focused document tests: 35 passed
 
 Guardrails
 - Do not rerun full Playwright or full coverage unless a real code change needs it.
