@@ -110,6 +110,10 @@ async def get_current_user(
         request.state.current_session_hash = None
         request.state.current_session_id = None
 
+    # Store user/tenant context for structured logging (Y15-027)
+    request.state.user_id = user.id
+    request.state.tenant_id = getattr(user, "tenant_id", None)
+
     return user
 
 

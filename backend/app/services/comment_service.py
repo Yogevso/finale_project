@@ -15,6 +15,7 @@ from app.repositories import (
 )
 from app.schemas import CommentAuthor, CommentCreate, CommentResponse, CommentUpdate
 from app.services.base_service import SessionService
+from app.services.chat_service import ChatService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
@@ -349,7 +350,73 @@ class CommentService(SessionService):
         self.db.refresh(comment, ["user"])
 
         comment.reply_count = 0
+
+        # Bridge to chat: create/find direct chat with document author
+        chat_id = self._bridge_comment_to_chat(document, comment, current_user)
+        comment.chat_id = chat_id
+
         return comment
+
+    def _bridge_comment_to_chat(
+        self,
+        document: Document,
+        comment: Comment,
+        current_user: User,
+    ) -> Optional[int]:
+        """Find-or-create a direct chat between the commenter and the document
+        author, then send an automatic message with context about the comment.
+
+        Returns the chat ID or None if bridging is not applicable (e.g. the
+        commenter IS the document author, or the author is in another tenant).
+        """
+        try:
+            # Skip if commenter is the document author
+            if current_user.id == document.created_by:
+                return None
+
+            # Load the document author
+            doc_author = self.db.query(User).filter(User.id == document.created_by).first()
+            if not doc_author:
+                return None
+
+            # Skip cross-tenant (chat service enforces this too)
+            if current_user.tenant_id != doc_author.tenant_id:
+                return None
+
+            chat_svc = ChatService(self.db)
+
+            # create_direct_chat deduplicates — returns existing if found
+            chat = chat_svc.create_direct_chat(current_user, doc_author.id)
+
+            # Build a contextual auto-message
+            commenter_name = current_user.full_name or current_user.username
+            anchor_snippet = ""
+            if comment.anchor_text:
+                snippet = comment.anchor_text[:120]
+                if len(comment.anchor_text) > 120:
+                    snippet += "…"
+                anchor_snippet = f'\n📌 On: "{snippet}"'
+
+            # Build the link — when anchor text exists, encode it so the
+            # document preview can scroll to and highlight the passage.
+            from urllib.parse import quote
+            if comment.anchor_text:
+                encoded_anchor = quote(comment.anchor_text[:120], safe='')
+                view_link = f"/documents/{document.id}?highlight={encoded_anchor}"
+            else:
+                view_link = f"/documents/{document.id}"
+
+            content = (
+                f"💬 Comment on **{document.title}**{anchor_snippet}\n\n"
+                f"{comment.content}\n\n"
+                f"[View in document]({view_link})"
+            )
+
+            chat_svc.send_message(chat.id, current_user, content)
+            return chat.id
+        except Exception:
+            # Chat bridging is best-effort — never block comment creation
+            return None
 
     def _publish_comment_created_event(
         self,

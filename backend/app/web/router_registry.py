@@ -10,9 +10,14 @@ from app.api import health
 from app.api.bff import documents as bff_documents
 from app.api.management import (
     analytics,
+    announcements,
     attachments,
     audience_governance,
     auth,
+    broken_links,
+    canned_responses,
+    changelog,
+    chat,
     collaboration,
     comments,
     companies,
@@ -25,6 +30,7 @@ from app.api.management import (
     rbac,
     reviews,
     search,
+    support,
     system_settings,
     tenants,
     users,
@@ -35,6 +41,7 @@ from app.api.public import router as public_router
 from app.api.public.platforms import router as public_platforms_router
 from app.api.viewer import documents as viewer_documents
 from app.config import settings
+from app.ws import chat_ws, support_ws
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,12 +82,21 @@ class FastAPIRouterRegistry:
             RouterRegistration(feedback.router, prefix=self._api_prefix, tags=("Feedback",)),
             RouterRegistration(invitations.router, prefix=self._api_prefix, tags=("Invitations",)),
             RouterRegistration(analytics.router, prefix=self._api_prefix, tags=("Analytics",)),
+            RouterRegistration(broken_links.router, prefix=self._api_prefix, tags=("Broken Links",)),
+            RouterRegistration(changelog.router, prefix=self._api_prefix, tags=("Changelog",)),
+            RouterRegistration(announcements.router, prefix=self._api_prefix, tags=("Announcements",)),
             RouterRegistration(
                 audience_governance.router,
                 prefix=self._api_prefix,
                 tags=("Audience Governance",),
             ),
             RouterRegistration(collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)),
+            RouterRegistration(chat.router, prefix=self._api_prefix, tags=("Chat",)),
+            RouterRegistration(support.router, prefix=self._api_prefix, tags=("Support",)),
+            RouterRegistration(canned_responses.router, prefix=self._api_prefix, tags=("Canned Responses",)),
+            # WebSocket endpoints (no prefix — paths already include /ws/)
+            RouterRegistration(chat_ws.router, tags=("WebSocket",)),
+            RouterRegistration(support_ws.router, tags=("WebSocket",)),
             RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
             RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),

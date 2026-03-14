@@ -130,6 +130,9 @@ class NotificationType(str, enum.Enum):
     FEEDBACK_RECEIVED = "feedback_received"
     FEEDBACK_RESPONDED = "feedback_responded"
     INVITATION_SENT = "invitation_sent"
+    TICKET_HANDOFF = "ticket_handoff"
+    TICKET_NEW_CUSTOMER_MSG = "ticket_new_customer_msg"
+    TICKET_MENTION = "ticket_mention"
     SYSTEM = "system"
 
 
@@ -951,6 +954,296 @@ class CollaborationSnapshot(Base):
     created_by_user = relationship("User")
 
 
+# ========== Chat & Support Models (Wave X.1) ==========
+
+
+class ChatType(str, enum.Enum):
+    """Chat types"""
+
+    DIRECT = "direct"
+    GROUP = "group"
+
+
+class ChatParticipantRole(str, enum.Enum):
+    """Participant roles in a chat"""
+
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+
+class ChatMessageType(str, enum.Enum):
+    """Chat message types"""
+
+    TEXT = "text"
+    SYSTEM = "system"
+    FILE = "file"
+
+
+class SupportTicketStatus(str, enum.Enum):
+    """Support ticket statuses"""
+
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class SupportTicketPriority(str, enum.Enum):
+    """Support ticket priorities"""
+
+    LOW = "low"
+    NORMAL = "normal"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
+class Chat(Base):
+    """Internal chat — direct messages or group conversations"""
+
+    __tablename__ = "chats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(SQLEnum(ChatType), nullable=False)
+    name = Column(String(255), nullable=True)  # Nullable for direct chats
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    last_message_at = Column(DateTime, nullable=True, index=True)  # For sorting by activity
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    creator = relationship("User", foreign_keys=[created_by])
+    tenant = relationship("Tenant")
+    participants = relationship("ChatParticipant", back_populates="chat", cascade="all, delete-orphan")
+    messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
+
+
+class ChatParticipant(Base):
+    """Participant in a chat"""
+
+    __tablename__ = "chat_participants"
+    __table_args__ = (
+        UniqueConstraint("chat_id", "user_id", name="uq_chat_participant"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(SQLEnum(ChatParticipantRole), default=ChatParticipantRole.MEMBER, nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_read_at = Column(DateTime, nullable=True)
+    is_muted = Column(Boolean, default=False, nullable=False)
+
+    # Relationships
+    chat = relationship("Chat", back_populates="participants")
+    user = relationship("User")
+
+
+class ChatMessage(Base):
+    """Message in a chat"""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    message_type = Column(SQLEnum(ChatMessageType), default=ChatMessageType.TEXT, nullable=False)
+    file_url = Column(String(500), nullable=True)
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    file_mime_type = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at = Column(DateTime, nullable=True)  # Soft delete
+
+    # Composite index for efficient message ordering
+    __table_args__ = (
+        Index("ix_chat_messages_chat_created", "chat_id", "created_at"),
+    )
+
+    # Relationships
+    chat = relationship("Chat", back_populates="messages")
+    sender = relationship("User")
+
+
+class SupportTicket(Base):
+    """Customer support ticket — created from feedback or directly"""
+
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    subject = Column(String(500), nullable=False)
+    status = Column(
+        SQLEnum(SupportTicketStatus), default=SupportTicketStatus.OPEN, nullable=False, index=True
+    )
+    priority = Column(
+        SQLEnum(SupportTicketPriority), default=SupportTicketPriority.NORMAL, nullable=False, index=True
+    )
+    category = Column(String(100), nullable=True, index=True)
+    feedback_id = Column(Integer, ForeignKey("feedbacks.id"), nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    customer = relationship("User", foreign_keys=[customer_id])
+    tenant = relationship("Tenant")
+    feedback = relationship("Feedback")
+    messages = relationship("SupportTicketMessage", back_populates="ticket", cascade="all, delete-orphan")
+    assignments = relationship("SupportTicketAssignment", back_populates="ticket", cascade="all, delete-orphan")
+
+
+class SupportTicketMessage(Base):
+    """Message in a support ticket conversation"""
+
+    __tablename__ = "support_ticket_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    sender_type = Column(String(20), nullable=False)  # "customer" or "agent"
+    content = Column(Text, nullable=False)
+    is_internal_note = Column(Boolean, default=False, nullable=False)  # Only visible to agents
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    # Composite index for efficient message ordering
+    __table_args__ = (
+        Index("ix_support_messages_ticket_created", "ticket_id", "created_at"),
+    )
+
+    # Relationships
+    ticket = relationship("SupportTicket", back_populates="messages")
+    sender = relationship("User")
+
+
+class SupportTicketAssignment(Base):
+    """Agent assignment to a support ticket"""
+
+    __tablename__ = "support_ticket_assignments"
+    __table_args__ = (
+        UniqueConstraint("ticket_id", "agent_id", name="uq_ticket_assignment"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    is_primary = Column(Boolean, default=False, nullable=False)  # Primary handler
+
+    # Relationships
+    ticket = relationship("SupportTicket", back_populates="assignments")
+    agent = relationship("User")
+
+
+class CannedResponse(Base):
+    """Reusable canned response template for support agents (X1-103)"""
+
+    __tablename__ = "canned_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    category = Column(String(100), nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    creator = relationship("User")
+    tenant = relationship("Tenant")
+
+
+class SearchAnalytics(Base):
+    """Search analytics — tracks queries, results, and clicks (Y2-005)"""
+
+    __tablename__ = "search_analytics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query = Column(String(500), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    results_count = Column(Integer, nullable=False, default=0)
+    clicked_document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User")
+    tenant = relationship("Tenant")
+    clicked_document = relationship("Document")
+
+
+class BrokenLinkReport(Base):
+    """Stores broken internal link scan results."""
+
+    __tablename__ = "broken_link_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    version_id = Column(Integer, ForeignKey("versions.id"), nullable=False)
+    broken_url = Column(String(1000), nullable=False)
+    link_text = Column(String(500), nullable=True)
+    reason = Column(String(200), nullable=False)  # e.g. "target_not_found", "target_archived"
+    scanned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document = relationship("Document")
+    version = relationship("Version")
+
+
+class ChangelogEntry(Base):
+    """Release notes / changelog entries created by admins."""
+
+    __tablename__ = "changelog_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(300), nullable=False)
+    content = Column(Text, nullable=False)
+    version_tag = Column(String(50), nullable=True)
+    category = Column(String(50), nullable=True)  # e.g. "feature", "bugfix", "improvement"
+    published = Column(Boolean, default=False, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    author = relationship("User")
+
+
+class Announcement(Base):
+    """In-app announcement banners set by admins."""
+
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message = Column(String(500), nullable=False)
+    type = Column(String(20), nullable=False, default="info")  # info, warning, success
+    active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+
+    author = relationship("User")
+
+
+class NpsSurvey(Base):
+    """Net Promoter Score survey responses."""
+
+    __tablename__ = "nps_surveys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
+    score = Column(Integer, nullable=False)  # 0-10
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    tenant = relationship("Tenant")
+
+
 @event.listens_for(Document, "before_update", propagate=True)
 def _bump_document_row_version(_mapper, _connection, target: Document) -> None:
     target.row_version = int(target.row_version or 0) + 1
@@ -992,6 +1285,19 @@ __all__ = [
     "CollaborationSession",
     "CollaborationActivity",
     "CollaborationSnapshot",
+    # Chat & Support (Wave X.1)
+    "Chat",
+    "ChatParticipant",
+    "ChatMessage",
+    "SupportTicket",
+    "SupportTicketMessage",
+    "SupportTicketAssignment",
+    "CannedResponse",
+    "SearchAnalytics",
+    "BrokenLinkReport",
+    "ChangelogEntry",
+    "Announcement",
+    "NpsSurvey",
     # Enums
     "UserRole",
     "DocumentStatus",
@@ -1006,6 +1312,11 @@ __all__ = [
     "InvitationStatus",
     "CollaborationActivityType",
     "SnapshotType",
+    "ChatType",
+    "ChatParticipantRole",
+    "ChatMessageType",
+    "SupportTicketStatus",
+    "SupportTicketPriority",
     # Junction tables
     "document_company_assignments",
 ]
