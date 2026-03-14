@@ -4,7 +4,8 @@ import { CollaborationTokenContractAdapter } from '../adapters/collaborationToke
 import type { UserContext } from '../types.js';
 import type { CollaborationPermission } from './contracts.js';
 
-const DEFAULT_JWT_SECRET = 'your-secret-key-change-in-production';
+// For development only - production must set JWT_SECRET env var
+const INSECURE_DEV_SECRET = 'your-secret-key-change-in-production';
 
 export interface AuthResult {
   success: boolean;
@@ -13,12 +14,42 @@ export interface AuthResult {
   error?: string;
 }
 
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
+
+  if (!secret) {
+    if (isProduction) {
+      console.error('FATAL: JWT_SECRET environment variable is required in production');
+      process.exit(1);
+    }
+    console.warn('WARNING: JWT_SECRET not set, using insecure default. Set JWT_SECRET for production.');
+    return INSECURE_DEV_SECRET;
+  }
+
+  if (secret === INSECURE_DEV_SECRET && isProduction) {
+    console.error('FATAL: JWT_SECRET is set to insecure default value in production');
+    process.exit(1);
+  }
+
+  if (secret.length < 32) {
+    if (isProduction) {
+      console.error('FATAL: JWT_SECRET is too short. Use at least 32 characters.');
+      process.exit(1);
+    }
+    console.warn('WARNING: JWT_SECRET is shorter than recommended (32+ chars)');
+  }
+
+  return secret;
+}
+
 export class CollaborationAuthService {
   private readonly jwtSecret: string;
   private readonly contractAdapter: CollaborationTokenContractAdapter;
 
   constructor(
-    jwtSecret: string = process.env.JWT_SECRET || DEFAULT_JWT_SECRET,
+    jwtSecret: string = getJwtSecret(),
     contractAdapter: CollaborationTokenContractAdapter = new CollaborationTokenContractAdapter(),
   ) {
     this.jwtSecret = jwtSecret;
