@@ -3,18 +3,50 @@
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import Pool
 
 from app.config import settings
 from app.infrastructure.db import run_lightweight_migrations, run_managed_migrations
 
 logger = logging.getLogger(__name__)
 
+
+# Connection pool health check event handlers (Y15-030)
+@event.listens_for(Pool, "checkout")
+def _ping_connection_on_checkout(dbapi_conn, connection_record, connection_proxy):
+    """Validate connection is alive before handing to application.
+    
+    This prevents stale connections from causing errors. If the connection
+    is broken, SQLAlchemy will invalidate it and get a fresh one.
+    """
+    cursor = dbapi_conn.cursor()
+    try:
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+    except Exception:
+        # Connection is stale - raise so SQLAlchemy invalidates it
+        logger.warning("Database connection health check failed, recycling connection")
+        raise
+    finally:
+        cursor.close()
+
+
+@event.listens_for(Pool, "connect")
+def _set_sqlite_pragma(dbapi_conn, connection_record):
+    """Enable SQLite foreign key enforcement on new connections."""
+    if settings.DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 engine = create_engine(
     settings.DATABASE_URL,
     connect_args={"check_same_thread": False},
     echo=settings.SQL_ECHO,
+    pool_pre_ping=True,  # Additional pool-level health check (Y15-030)
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

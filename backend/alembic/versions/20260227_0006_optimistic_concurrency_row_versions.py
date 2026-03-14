@@ -14,7 +14,10 @@ depends_on = None
 
 
 def _column_exists(inspector: sa.Inspector, table_name: str, column_name: str) -> bool:
-    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+    try:
+        return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+    except sa.exc.NoSuchTableError:
+        return False
 
 
 def upgrade() -> None:
