@@ -12,6 +12,8 @@ import {
   Clock,
   CheckCircle,
   Folder,
+  BookOpen,
+  PlayCircle,
 } from 'lucide-react'
 
 export default function CustomerDashboard() {
@@ -33,6 +35,18 @@ export default function CustomerDashboard() {
   const { data: categories } = useQuery({
     queryKey: ['portal', 'categories'],
     queryFn: () => portalApi.getCategories(),
+  })
+
+  // Fetch continue reading
+  const { data: continueReading } = useQuery({
+    queryKey: ['portal', 'continue-reading'],
+    queryFn: () => portalApi.getContinueReading(4),
+  })
+
+  // Fetch recently viewed
+  const { data: recentlyViewed } = useQuery({
+    queryKey: ['portal', 'recently-viewed'],
+    queryFn: () => portalApi.getRecentlyViewed(6),
   })
 
   return (
@@ -101,6 +115,85 @@ export default function CustomerDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Continue Reading */}
+      {continueReading && continueReading.length > 0 && (
+        <div className="surface-card rounded-2xl">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
+              <PlayCircle className="h-5 w-5 mr-2 text-sky-600" />
+              Continue Reading
+            </h2>
+            <p className="text-sm text-slate-500">Pick up where you left off</p>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {continueReading.map((item) => (
+                <Link
+                  key={item.document_id}
+                  to={`/portal/documents/${item.document_id}?fullscreen=1`}
+                  className="flex items-center p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-sm transition-all"
+                >
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center">
+                    <BookOpen className="h-6 w-6 text-sky-600" />
+                  </div>
+                  <div className="ml-3 min-w-0 flex-1">
+                    <h3 className="font-medium text-slate-900 truncate">{item.title}</h3>
+                    {item.category && (
+                      <span className="text-xs text-slate-500">{item.category}</span>
+                    )}
+                    <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1.5">
+                      <div
+                        className="bg-sky-500 h-1.5 rounded-full transition-all"
+                        style={{ width: `${item.progress_percent}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400">{item.progress_percent}% complete</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recently Viewed */}
+      {recentlyViewed && recentlyViewed.length > 0 && (
+        <div className="surface-card rounded-2xl">
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
+              <Clock className="h-5 w-5 mr-2 text-slate-500" />
+              Recently Viewed
+            </h2>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recentlyViewed.map((item) => (
+                <Link
+                  key={item.document_id}
+                  to={`/portal/documents/${item.document_id}?fullscreen=1`}
+                  className="block p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-sm transition-all"
+                >
+                  <div className="flex items-start">
+                    <FileText className="h-6 w-6 text-slate-400 flex-shrink-0" />
+                    <div className="ml-3 min-w-0">
+                      <h3 className="font-medium text-slate-900 truncate text-sm">{item.title}</h3>
+                      {item.category && (
+                        <span className="text-xs text-slate-400">{item.category}</span>
+                      )}
+                      {item.last_read_at && (
+                        <p className="text-xs text-slate-400 mt-1">
+                          {new Date(item.last_read_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent documents */}
       <div className="surface-card rounded-2xl">

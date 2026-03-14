@@ -17,6 +17,7 @@ import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import NotFoundState from '@/components/NotFoundState'
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
+import { SEO } from '@/components/SEO'
 
 export default function PublicDocumentPage() {
   const { id } = useParams<{ id: string }>()
@@ -97,6 +98,12 @@ export default function PublicDocumentPage() {
 
   return (
     <div className={`${isFullscreen ? 'min-h-screen bg-white' : 'min-h-screen bg-slate-50'}`}>
+      <SEO
+        title={doc.title}
+        description={doc.description || `Read ${doc.title} on our documentation platform.`}
+        image={doc.thumbnail_url}
+        type="article"
+      />
       <FullscreenTopBar
         isFullscreen={isFullscreen}
         documentTitle={doc.title}

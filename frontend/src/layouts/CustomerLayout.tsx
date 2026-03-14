@@ -4,10 +4,11 @@
  */
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Search, X } from 'lucide-react'
+import { Menu, Search, X, HelpCircle } from 'lucide-react'
 
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
+import NpsWidget from '@/components/NpsWidget'
 
 export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -180,6 +181,20 @@ export default function CustomerLayout() {
           <p className="text-xs mt-1">(c) {new Date().getFullYear()} Developer Portal</p>
         </div>
       </footer>
+
+      {/* NPS Feedback Widget (Y2-019) */}
+      <NpsWidget />
+
+      {/* Floating Help Button (X1-092) */}
+      {!isFullscreen && (
+        <Link
+          to="/portal/support"
+          className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
+          title="Need help? Contact support"
+        >
+          <HelpCircle className="h-6 w-6" />
+        </Link>
+      )}
     </div>
   )
 }

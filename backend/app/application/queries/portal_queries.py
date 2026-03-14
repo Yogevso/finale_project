@@ -24,11 +24,13 @@ from app.models import (
 from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
 from app.schemas.portal import (
+    FacetItem,
     PortalAttachment,
     PortalDashboardStats,
     PortalDocumentDetail,
     PortalDocumentListResponse,
     PortalDocumentSummary,
+    PortalFacetsResponse,
 )
 
 
@@ -41,6 +43,10 @@ class ListPortalDocumentsQuery:
     category: Optional[str]
     search: Optional[str]
     current_user: User
+    topic: Optional[str] = None
+    platform: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +89,22 @@ class SearchPortalDocumentsQuery:
     page: int
     per_page: int
     current_user: User
+
+
+@dataclass(frozen=True, slots=True)
+class ListPortalFacetsQuery:
+    """Get facet counts for portal sidebar."""
+
+    current_user: User
+
+
+@dataclass(frozen=True, slots=True)
+class RelatedDocumentsQuery:
+    """Get documents related to a given document."""
+
+    document_id: int
+    current_user: User
+    limit: int = 5
 
 
 class PortalDocumentsQueryHandler:
@@ -150,6 +172,14 @@ class PortalDocumentsQueryHandler:
             docs_query = self._customer_documents_query(query.current_user)
             if query.category:
                 docs_query = docs_query.filter(Document.category == query.category)
+            if query.topic:
+                docs_query = docs_query.filter(Document.topic == query.topic)
+            if query.platform:
+                docs_query = docs_query.filter(Document.platform == query.platform)
+            if query.date_from:
+                docs_query = docs_query.filter(Document.updated_at >= query.date_from)
+            if query.date_to:
+                docs_query = docs_query.filter(Document.updated_at <= query.date_to)
             if query.search:
                 search_term = f"%{query.search}%"
                 docs_query = docs_query.filter(
@@ -216,6 +246,10 @@ class PortalDocumentsQueryHandler:
                 query.per_page,
                 query.category,
                 query.search,
+                query.topic,
+                query.platform,
+                query.date_from,
+                query.date_to,
             ),
             loader=load_projection,
             validator=lambda payload: isinstance(payload, PortalDocumentListResponse),
@@ -321,6 +355,46 @@ class PortalDocumentsQueryHandler:
             .all()
         )
         return [{"category": category, "count": count} for category, count in results if category]
+
+    def execute_facets(self, query: ListPortalFacetsQuery) -> PortalFacetsResponse:
+        return self._execute_cached(
+            projection_name="facets",
+            key_parts=(self._tenant_scope(query.current_user),),
+            loader=lambda: self._load_facets(query),
+            ttl_seconds=60,
+            validator=lambda payload: isinstance(payload, PortalFacetsResponse),
+        )
+
+    def _load_facets(self, query: ListPortalFacetsQuery) -> PortalFacetsResponse:
+        base = self._customer_documents_query(query.current_user)
+
+        categories = (
+            base.with_entities(Document.category, func.count(Document.id))
+            .filter(Document.category.isnot(None), Document.category != "")
+            .group_by(Document.category)
+            .order_by(func.count(Document.id).desc())
+            .all()
+        )
+        topics = (
+            base.with_entities(Document.topic, func.count(Document.id))
+            .filter(Document.topic.isnot(None), Document.topic != "")
+            .group_by(Document.topic)
+            .order_by(func.count(Document.id).desc())
+            .all()
+        )
+        platforms = (
+            base.with_entities(Document.platform, func.count(Document.id))
+            .filter(Document.platform.isnot(None), Document.platform != "")
+            .group_by(Document.platform)
+            .order_by(func.count(Document.id).desc())
+            .all()
+        )
+
+        return PortalFacetsResponse(
+            categories=[FacetItem(name=n, count=c) for n, c in categories if n],
+            topics=[FacetItem(name=n, count=c) for n, c in topics if n],
+            platforms=[FacetItem(name=n, count=c) for n, c in platforms if n],
+        )
 
     def execute_dashboard_stats(self, query: PortalDashboardStatsQuery) -> PortalDashboardStats:
         return self._execute_cached(
@@ -448,3 +522,55 @@ class PortalDocumentsQueryHandler:
             "per_page": query.per_page,
             "pages": pages,
         }
+
+    def execute_related_documents(self, query: RelatedDocumentsQuery) -> list[dict]:
+        """Find documents related to the given document by shared attributes."""
+        source = self.db.query(Document).filter(Document.id == query.document_id).first()
+        if not source:
+            return []
+
+        base_query = self._customer_documents_query(query.current_user)
+        base_query = base_query.filter(Document.id != query.document_id)
+
+        source_tags = {
+            t.strip().lower()
+            for t in (source.tags or "").split(",")
+            if t.strip()
+        }
+
+        # Score candidates by shared attributes
+        candidates = base_query.all()
+        scored: list[tuple[float, Document]] = []
+        for doc in candidates:
+            score = 0.0
+            if source.category and doc.category == source.category:
+                score += 3.0
+            if source.topic and doc.topic == source.topic:
+                score += 2.0
+            if source.platform and doc.platform == source.platform:
+                score += 1.5
+            if source_tags:
+                doc_tags = {
+                    t.strip().lower()
+                    for t in (doc.tags or "").split(",")
+                    if t.strip()
+                }
+                overlap = len(source_tags & doc_tags)
+                score += overlap * 1.0
+            if score > 0:
+                scored.append((score, doc))
+
+        scored.sort(key=lambda x: (-x[0], x[1].updated_at or x[1].created_at), reverse=False)
+        top = scored[: query.limit]
+
+        return [
+            {
+                "id": doc.id,
+                "title": doc.title,
+                "description": doc.description,
+                "category": doc.category,
+                "thumbnail_url": doc.thumbnail_url,
+                "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+            }
+            for _score, doc in top
+        ]
