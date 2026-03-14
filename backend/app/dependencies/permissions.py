@@ -362,6 +362,7 @@ def get_optional_current_user():
                 return user
             return None
         except Exception:
+            logger.warning("Token validation failed for optional auth", exc_info=True)
             return None
 
     return dependency

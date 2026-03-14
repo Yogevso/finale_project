@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from app.auth_context.refresh_token_service import RefreshTokenService
 from app.db import get_db
 from app.models import (
     Document,
@@ -17,9 +18,11 @@ from app.models import (
     DocumentVisibility,
     Invitation,
     InvitationStatus,
+    PasswordReset,
     Tenant,
     User,
     UserRole,
+    UserSession,
     document_company_assignments,
 )
 from app.schemas.company import (
@@ -456,12 +459,40 @@ async def delete_company(
     if company_id == current_user.tenant_id:
         raise HTTPException(status_code=400, detail="Cannot delete your own company")
 
+    # Y15-016: Only SYSTEM_ADMIN can delete other companies
+    # Regular ADMINs should only manage their own company
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(status_code=403, detail="Only system administrators can delete companies")
+
     # Company deactivation cascade events:
     # 1. Cancel all pending invitations for this company
     cancelled_invitations = db.query(Invitation).filter(
         Invitation.tenant_id == company_id,
         Invitation.status == InvitationStatus.PENDING,
     ).update({"status": InvitationStatus.CANCELLED})
+
+    # 2. Revoke all active sessions for users in this company
+    company_user_ids = db.query(User.id).filter(User.tenant_id == company_id).subquery()
+    revoked_sessions = db.query(UserSession).filter(
+        UserSession.user_id.in_(company_user_ids),
+        UserSession.revoked_at.is_(None),
+    ).update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+
+    # 3. Invalidate all refresh tokens for users in this company
+    now = datetime.utcnow()
+    invalidated_tokens = db.query(PasswordReset).filter(
+        PasswordReset.user_id.in_(company_user_ids),
+        PasswordReset.used_at.is_(None),
+    ).update({"used_at": now}, synchronize_session=False)
+
+    # Y15-024: Clean up orphaned company assignments from documents
+    # Remove this company from document assignee lists to prevent ghost assignments
+    from app.models import document_company_assignments
+    removed_assignments = db.execute(
+        document_company_assignments.delete().where(
+            document_company_assignments.c.tenant_id == company_id
+        )
+    ).rowcount
 
     # Soft delete
     company.is_active = False
@@ -471,6 +502,9 @@ async def delete_company(
         "message": "Company deactivated successfully",
         "cascade_actions": {
             "invitations_cancelled": cancelled_invitations,
+            "sessions_revoked": revoked_sessions,
+            "tokens_invalidated": invalidated_tokens,
+            "document_assignments_removed": removed_assignments,
         },
     }
 
@@ -550,6 +584,10 @@ async def remove_user_from_company(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    # Y15-016: Only SYSTEM_ADMIN can manage users in other companies
+    if current_user.role != UserRole.SYSTEM_ADMIN and current_user.tenant_id != company_id:
+        raise HTTPException(status_code=403, detail="Cannot manage users in other companies")
 
     user = db.query(User).filter(User.id == user_id, User.tenant_id == company_id).first()
 

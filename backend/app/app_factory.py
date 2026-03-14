@@ -20,7 +20,14 @@ from app.feature_flags import (
     get_backend_feature_flags,
     is_backend_feature_enabled,
 )
-from app.middleware import IdempotencyMiddleware, LoggingMiddleware, RateLimitMiddleware
+from app.middleware import (
+    CSRFMiddleware,
+    IdempotencyMiddleware,
+    LoggingMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    TenantContextMiddleware,
+)
 from app.projections import get_projection_cache, register_projection_invalidation_listeners
 from app.web.router_registry import FastAPIRouterRegistry, build_default_router_registry
 
@@ -68,12 +75,18 @@ class FastAPIAppFactory:
     @staticmethod
     def _configure_middleware(app: FastAPI) -> None:
         # Add middleware (order matters - first added is outermost).
+        # SecurityHeadersMiddleware runs last (innermost), closest to response
+        app.add_middleware(SecurityHeadersMiddleware)
         app.add_middleware(
             RateLimitMiddleware,
             max_requests=settings.RATE_LIMIT_REQUESTS,
             window_seconds=settings.RATE_LIMIT_WINDOW,
         )
         app.add_middleware(LoggingMiddleware)
+        # TenantContextMiddleware propagates tenant_id from auth layer to request context
+        app.add_middleware(TenantContextMiddleware)
+        if settings.CSRF_PROTECTION_ENABLED:
+            app.add_middleware(CSRFMiddleware, allowed_origins=settings.CORS_ORIGINS)
         if is_backend_feature_enabled(BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE):
             app.add_middleware(IdempotencyMiddleware)
         app.add_middleware(

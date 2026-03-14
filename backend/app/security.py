@@ -151,6 +151,10 @@ async def get_current_active_user(current_user=Depends(get_current_user), db: Se
         if tenant and not tenant.is_active:
             raise HTTPException(status_code=403, detail="Company is inactive")
 
+    # Inject tenant context for request-scoped tenant isolation
+    from app.middleware.tenant_context import inject_tenant_context
+    inject_tenant_context(current_user)
+    
     return current_user
 
 

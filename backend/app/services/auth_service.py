@@ -362,9 +362,27 @@ class AuthService(SessionService):
             )
         self._ensure_tenant_is_active(user)
 
+        # Check if the session associated with this refresh token has been revoked
+        session_identifier = self.refresh_token_service.parse_session_identifier(refresh_token)
+        if session_identifier:
+            session_hash = hash_session_identifier(session_identifier)
+            user_session = (
+                self.db.query(UserSession)
+                .filter(
+                    UserSession.user_id == user.id,
+                    UserSession.session_token_hash == session_hash,
+                )
+                .first()
+            )
+            if user_session is None or user_session.revoked_at is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session has been revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        session_identifier = self.refresh_token_service.parse_session_identifier(refresh_token)
         access_token = self.token_service.create_access_token_for_user(
             user,
             expires_delta=access_token_expires,
@@ -413,7 +431,7 @@ class AuthService(SessionService):
         return user
 
     def change_password(self, user: User, old_password: str, new_password: str) -> None:
-        """Change user password"""
+        """Change user password and invalidate all existing sessions."""
         # Verify old password
         if not verify_password(old_password, user.hashed_password):
             raise HTTPException(
@@ -423,4 +441,14 @@ class AuthService(SessionService):
         # Update password
         user.hashed_password = get_password_hash(new_password)
         self.db.add(SecurityEvent(user_id=user.id, event_type="password_changed"))
+
+        # Invalidate all refresh tokens and sessions for security
+        # User must re-authenticate on all devices after password change
+        self.refresh_token_service.invalidate_user_tokens(user.id)
+        now = datetime.utcnow()
+        self.db.query(UserSession).filter(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        ).update({"revoked_at": now})
+
         self.db.commit()

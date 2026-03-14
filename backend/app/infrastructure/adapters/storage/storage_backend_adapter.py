@@ -27,7 +27,11 @@ class StorageBackendAdapter(StoragePort):
         try:
             return self._backend.delete(storage_key)
         except Exception as exc:
-            logger.error("Storage adapter delete failed for key %s: %s", storage_key, exc)
+            logger.critical(
+                "STORAGE DELETE FAILED - possible orphaned file: %s",
+                storage_key,
+                exc_info=True,
+            )
             return False
 
     def get_url(self, storage_key: str, expires_in: int = 3600) -> str:

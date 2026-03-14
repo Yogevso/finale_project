@@ -169,21 +169,23 @@ class DocumentService(TenantAwareService[Document]):
             pass
 
     def _reserve_document_sequence(self, date_key: str) -> int:
-        update_result = self.db.execute(
+        # Use RETURNING clause to make increment and retrieval atomic,
+        # preventing race conditions where concurrent transactions get same number.
+        # Works on PostgreSQL and SQLite 3.35+.
+        update_stmt = (
             update(DocumentNumberSequence)
             .where(DocumentNumberSequence.date_key == date_key)
             .values(
                 next_value=DocumentNumberSequence.next_value + 1,
                 updated_at=datetime.utcnow(),
             )
+            .returning(DocumentNumberSequence.next_value)
         )
-        if update_result.rowcount != 1:
+        result = self.db.execute(update_stmt)
+        row = result.fetchone()
+        if row is None:
             raise RuntimeError("Failed to reserve a document number sequence value")
-
-        next_value = self.db.execute(
-            select(DocumentNumberSequence.next_value).where(DocumentNumberSequence.date_key == date_key)
-        ).scalar_one()
-        return int(next_value)
+        return int(row[0])
 
     def generate_document_number(self) -> str:
         """Generate unique document number (DOC-YYYYMMDD-XXXX)"""

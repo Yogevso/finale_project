@@ -11,6 +11,7 @@ from app.auth_context.passwords import get_password_hash, verify_password
 from app.models import PasswordReset
 
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+TOKEN_PREFIX_LENGTH = 8  # Length of searchable prefix for indexed lookup
 
 
 class RefreshTokenService:
@@ -44,6 +45,11 @@ class RefreshTokenService:
         session_identifier, _ = refresh_token.split(".", 1)
         return session_identifier or None
 
+    @staticmethod
+    def extract_token_prefix(refresh_token: str) -> str:
+        """Extract searchable prefix from raw token for indexed lookup."""
+        return refresh_token[:TOKEN_PREFIX_LENGTH]
+
     def issue_refresh_token(
         self,
         user_id: int,
@@ -55,9 +61,11 @@ class RefreshTokenService:
             session_identifier=session_identifier,
         )
         token_hash = get_password_hash(refresh_token)
+        token_prefix = self.extract_token_prefix(refresh_token)
         refresh_record = PasswordReset(
             user_id=user_id,
             token_hash=token_hash,
+            token_prefix=token_prefix,
             expires_at=expires_at,
         )
         self.db.add(refresh_record)
@@ -70,14 +78,38 @@ class RefreshTokenService:
             return None
 
         now = datetime.utcnow()
+        token_prefix = self.extract_token_prefix(refresh_token)
+        
+        # Use indexed token_prefix for fast lookup instead of scanning all records.
+        # Only records matching the prefix are candidates; then verify the full hash.
         refresh_records = (
             self.db.query(PasswordReset)
-            .filter(PasswordReset.expires_at > now, PasswordReset.used_at.is_(None))
+            .filter(
+                PasswordReset.expires_at > now,
+                PasswordReset.used_at.is_(None),
+                PasswordReset.token_prefix == token_prefix,
+            )
             .all()
         )
         for record in refresh_records:
             if verify_password(refresh_token, record.token_hash):
                 return record
+        
+        # Fallback for legacy tokens without token_prefix (backwards compatibility)
+        if not refresh_records:
+            legacy_records = (
+                self.db.query(PasswordReset)
+                .filter(
+                    PasswordReset.expires_at > now,
+                    PasswordReset.used_at.is_(None),
+                    PasswordReset.token_prefix.is_(None),
+                )
+                .all()
+            )
+            for record in legacy_records:
+                if verify_password(refresh_token, record.token_hash):
+                    return record
+        
         return None
 
     def invalidate_user_tokens(self, user_id: int) -> None:

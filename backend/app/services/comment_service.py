@@ -207,6 +207,11 @@ class CommentService(SessionService):
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
+        # Y15-016: Tenant isolation - non-system-admins can only see comments on their tenant's documents
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            if document.tenant_id != current_user.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
         # Get all contributors to this document for visibility checks
         contributors = CommentService.get_document_contributors(self.db, document_id)
 
@@ -232,6 +237,16 @@ class CommentService(SessionService):
         self, document_id: int, comment_id: int, current_user: User
     ) -> CommentResponse:
         """Get a specific comment with its replies"""
+        # Y15-016: Verify document exists and user has tenant access
+        document = self.document_repository.get_by_id(document_id)
+        if not document:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
+        # Tenant isolation: non-system-admins can only access comments on their tenant's documents
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            if document.tenant_id != current_user.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
             document_id,
@@ -260,18 +275,18 @@ class CommentService(SessionService):
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
+        # Y15-016: Tenant isolation - non-system-admins can only create comments on their tenant's documents
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            if document.tenant_id != current_user.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
         parent_id = comment_data.parent_id
 
         # If parent_id is provided, verify parent exists
+        # Y15-018: Use row-level locking to prevent race conditions when adding concurrent replies
         parent_comment = None
         if parent_id:
-            parent_comment = (
-                self.comment_repository.get_by_id_for_document(
-                    parent_id,
-                    document_id,
-                    include_replies=True,
-                )
-            )
+            parent_comment = self.comment_repository.get_by_id_for_update(parent_id, document_id)
             if not parent_comment:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Parent comment not found"
@@ -367,6 +382,16 @@ class CommentService(SessionService):
         current_user: User,
     ) -> Comment:
         """Update a comment"""
+        # Y15-016: Verify document exists and user has tenant access
+        document = self.document_repository.get_by_id(document_id)
+        if not document:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
+        # Tenant isolation: non-system-admins can only update comments on their tenant's documents
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            if document.tenant_id != current_user.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
             document_id,
@@ -420,6 +445,16 @@ class CommentService(SessionService):
 
     def delete_comment(self, document_id: int, comment_id: int, current_user: User) -> None:
         """Delete a comment and its replies"""
+        # Y15-016: Verify document exists and user has tenant access
+        document = self.document_repository.get_by_id(document_id)
+        if not document:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
+        # Tenant isolation: non-system-admins can only delete comments on their tenant's documents
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            if document.tenant_id != current_user.tenant_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        
         comment = self.comment_repository.get_by_id_for_document(comment_id, document_id)
 
         if not comment:

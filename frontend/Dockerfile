@@ -15,8 +15,8 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Production stage - use unprivileged nginx
+FROM nginxinc/nginx-unprivileged:alpine
 
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -24,12 +24,12 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Expose port
+# Expose port (unprivileged nginx uses 8080 by default, but we configure 80)
 EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost/ || exit 1
+    CMD wget -q --spider http://localhost:8080/ || exit 1
 
-# Start nginx
+# nginx-unprivileged runs as non-root by default
 CMD ["nginx", "-g", "daemon off;"]

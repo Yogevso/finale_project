@@ -2,9 +2,14 @@
 
 import logging
 import logging.config
+import sys
 from typing import Optional
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+# Insecure default that must not be used in production
+_INSECURE_SECRET_KEY = "your-secret-key-change-in-production"
 
 
 class Settings(BaseSettings):
@@ -19,7 +24,7 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://localhost:3000"
 
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str = _INSECURE_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
@@ -32,6 +37,7 @@ class Settings(BaseSettings):
     SESSION_INACTIVITY_DAYS: int = 30
     REVIEW_SLA_REMINDER_HOURS: int = 48
     REVIEW_SLA_ESCALATION_HOURS: int = 96
+    CSRF_PROTECTION_ENABLED: bool = True  # Enable CSRF Origin/Referer validation
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -62,6 +68,7 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: Optional[str] = None
     S3_SECRET_KEY: Optional[str] = None
     S3_REGION: str = "us-east-1"
+    ALLOW_LOCAL_STORAGE_FALLBACK: bool = True  # Allow fallback to local storage on S3 failure
 
     # Email (SMTP)
     EMAIL_ENABLED: bool = False
@@ -89,6 +96,38 @@ class Settings(BaseSettings):
     FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE: int = 0
     FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT: bool = True
     AUDIENCE_VALIDATION_SAFE_MODE_ENABLED: bool = False
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> "Settings":
+        """Validate security-critical settings on startup."""
+        is_production = self.APP_ENV not in ("development", "test", "testing")
+        
+        # SECRET_KEY validation
+        if self.SECRET_KEY == _INSECURE_SECRET_KEY:
+            if is_production:
+                print(
+                    "FATAL: SECRET_KEY is set to the insecure default value. "
+                    "Set SECRET_KEY environment variable to a secure random value.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                # Log warning for development
+                logging.warning(
+                    "SECRET_KEY is using insecure default. "
+                    "This is acceptable for development but must be changed in production."
+                )
+        elif len(self.SECRET_KEY) < 32:
+            if is_production:
+                print(
+                    "FATAL: SECRET_KEY is too short. Use at least 32 characters.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                logging.warning("SECRET_KEY is shorter than recommended (32+ chars).")
+        
+        return self
 
     class Config:
         env_file = ".env"
