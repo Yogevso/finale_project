@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.auth_context.refresh_token_service import RefreshTokenService
 from app.dependencies.tenant import TenantContext
-from app.models import Invitation, InvitationStatus, Tenant, User, UserRole
+from app.models import Invitation, InvitationStatus, SecurityEvent, Tenant, User, UserRole, UserSession
 from app.schemas import UserCreate, UserUpdate
 from app.security import get_password_hash
 
@@ -115,6 +117,14 @@ class UsersController:
             is_email_verified=True,
         )
         db.add(user)
+        db.flush()  # Get user ID before creating security event
+        
+        # Log user creation security event
+        db.add(SecurityEvent(
+            user_id=current_user.id,
+            event_type="user_created",
+        ))
+        
         db.commit()
         db.refresh(user)
         return self._serialize_user(user, db)
@@ -162,6 +172,10 @@ class UsersController:
             or user_data.is_active is not None
             or tenant_id_provided
         )
+
+        # Track changes for security event logging
+        old_role = user.role
+        old_is_active = user.is_active
 
         if not is_self and not is_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
@@ -282,6 +296,15 @@ class UsersController:
                     Invitation.status == InvitationStatus.PENDING,
                 ).update({"status": InvitationStatus.CANCELLED})
 
+                # Cascade: revoke all active sessions for this user
+                db.query(UserSession).filter(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                ).update({"revoked_at": datetime.utcnow()})
+
+                # Cascade: invalidate all refresh tokens for this user
+                RefreshTokenService(db).invalidate_user_tokens(user.id)
+
             # User reactivation checks
             is_reactivating = user_data.is_active and not was_active
             if is_reactivating:
@@ -357,6 +380,19 @@ class UsersController:
                     headers={"X-Error-Code": "role_change_company_inactive"},
                 )
 
+        # Log security events for sensitive changes
+        if user.role != old_role:
+            db.add(SecurityEvent(
+                user_id=current_user.id,
+                event_type="user_role_changed",
+            ))
+        if user.is_active != old_is_active:
+            event_type = "user_deactivated" if not user.is_active else "user_reactivated"
+            db.add(SecurityEvent(
+                user_id=current_user.id,
+                event_type=event_type,
+            ))
+
         db.commit()
         db.refresh(user)
         return self._serialize_user(user, db)
@@ -390,6 +426,13 @@ class UsersController:
             )
 
         user.is_active = False
+        
+        # Log user deletion security event
+        db.add(SecurityEvent(
+            user_id=current_user.id,
+            event_type="user_deleted",
+        ))
+        
         db.commit()
 
     def check_company_binding(

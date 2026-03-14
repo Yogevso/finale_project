@@ -52,6 +52,23 @@ class CommentRepository(BaseRepository):
             )
         return query.first()
 
+    def get_by_id_for_update(self, comment_id: int, document_id: int) -> Comment | None:
+        """
+        Get a comment with a row-level lock for update (Y15-018).
+        
+        This prevents race conditions when adding replies to the same parent comment.
+        Uses SELECT ... FOR UPDATE on PostgreSQL, no-op on SQLite (uses serializable isolation).
+        """
+        dialect = self.db.bind.dialect.name if self.db.bind else "sqlite"
+        query = self.db.query(Comment).filter(
+            Comment.id == comment_id,
+            Comment.document_id == document_id,
+        )
+        # PostgreSQL supports row-level locking; SQLite uses serializable transactions
+        if dialect != "sqlite":
+            query = query.with_for_update()
+        return query.first()
+
     def list_distinct_user_ids_for_document(self, document_id: int) -> list[int]:
         rows = (
             self.db.query(Comment.user_id)

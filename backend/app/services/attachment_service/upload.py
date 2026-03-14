@@ -12,12 +12,17 @@ from typing import Optional
 from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment, User, Version, VersionBumpType
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
 
 logger = logging.getLogger(__name__)
+
+
+class StorageError(Exception):
+    """Raised when storage operations fail and fallback is disabled."""
 
 
 class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
@@ -65,6 +70,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             logger.info(f"Uploaded attachment to storage: {storage_key}")
         except Exception as e:
             logger.error(f"Storage upload failed: {e}")
+            if not settings.ALLOW_LOCAL_STORAGE_FALLBACK:
+                raise StorageError(f"Storage unavailable and fallback disabled: {e}") from e
+            logger.warning("Falling back to local file storage")
             # Fallback to local file storage
             upload_dir = cls.get_upload_dir()
             doc_dir = upload_dir / str(document_id)
@@ -95,9 +103,22 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             uploaded_by=current_user.id,
         )
 
-        db.add(attachment)
-        db.commit()
-        db.refresh(attachment)
+        # Y15-021: Wrap DB commit in try/finally to clean up storage on failure
+        try:
+            db.add(attachment)
+            db.commit()
+            db.refresh(attachment)
+        except Exception as db_error:
+            # Clean up orphaned storage file if DB commit fails
+            logger.error(f"DB commit failed for attachment, cleaning up storage: {db_error}")
+            try:
+                storage = get_storage_backend()
+                storage.delete(storage_path)
+                logger.info(f"Cleaned up orphaned storage file: {storage_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up storage file {storage_path}: {cleanup_error}")
+            raise
+        
         cls._ensure_artifact_rows(db, attachment, persist=True)
 
         if supports_reader_artifact:

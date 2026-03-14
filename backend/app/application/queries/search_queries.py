@@ -15,6 +15,9 @@ from app.models import Document, SavedSearch, User, UserRole
 from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
 
+def escape_sql_wildcards(value: str) -> str:
+    """Escape SQL LIKE wildcards to prevent injection."""
+    return value.replace("%", r"\%").replace("_", r"\_")
 
 @dataclass(frozen=True, slots=True)
 class SearchDocumentReadModel:
@@ -229,8 +232,10 @@ class SearchQueryHandler:
                 count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
                 total = self.db.execute(count_query, count_params).scalar() or 0
             except Exception:
+                escaped_q = escape_sql_wildcards(query.q)
                 fallback_query = document_repository.query().filter(
-                    (Document.title.ilike(f"%{query.q}%")) | (Document.description.ilike(f"%{query.q}%"))
+                    (Document.title.ilike(f"%{escaped_q}%", escape="\\"))
+                    | (Document.description.ilike(f"%{escaped_q}%", escape="\\"))
                 )
                 fallback_query = tenant_scope_spec.apply(fallback_query, Document)
                 if visibility_spec is not None:

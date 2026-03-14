@@ -24,6 +24,9 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
         cls, db: Session, document_id: int, attachment_id: int, current_user: User
     ) -> None:
         """Delete an attachment."""
+        # Enforce tenant isolation and document access before allowing deletion
+        cls._get_document_for_attachment_access(db, document_id, current_user)
+        
         attachment = (
             db.query(Attachment)
             .filter(Attachment.id == attachment_id, Attachment.document_id == document_id)
