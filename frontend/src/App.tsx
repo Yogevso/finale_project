@@ -24,6 +24,7 @@ const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
 const AdminOpsPage = lazy(() => import('./pages/admin/AdminOpsPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
+const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 const SupportPage = lazy(() => import('./pages/SupportPage'))
 const CannedResponsesPage = lazy(() => import('./pages/CannedResponsesPage'))
 const CustomerSupportPage = lazy(() => import('./pages/portal/CustomerSupportPage'))
@@ -302,6 +303,20 @@ function App() {
           <Route index element={<ChatPage />} />
         </Route>
 
+        {/* AI Assistant - all internal users */}
+        <Route
+          path="/assistant"
+          element={
+            <ErrorBoundary>
+              <InternalGuard>
+                <Layout />
+              </InternalGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<AssistantPage />} />
+        </Route>
+
         {/* Support - managers and above */}
         <Route
           path="/support"
@@ -421,6 +436,7 @@ function App() {
           <Route path="documents/:id" element={<CustomerDocumentPage />} />
           <Route path="feedback" element={<MyFeedbackPage />} />
           <Route path="support" element={<CustomerSupportPage />} />
+          <Route path="assistant" element={<AssistantPage />} />
         </Route>
 
         {/* ==================== CATCH ALL ==================== */}

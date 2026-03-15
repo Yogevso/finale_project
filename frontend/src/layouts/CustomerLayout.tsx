@@ -9,6 +9,7 @@ import { Menu, Search, X, HelpCircle } from 'lucide-react'
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
 import NpsWidget from '@/components/NpsWidget'
+import AssistantChatBubble from '@/components/AssistantChatBubble'
 
 export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -185,11 +186,14 @@ export default function CustomerLayout() {
       {/* NPS Feedback Widget (Y2-019) */}
       <NpsWidget />
 
-      {/* Floating Help Button (X1-092) */}
+      {/* AI Assistant Chat Bubble */}
+      <AssistantChatBubble />
+
+      {/* Floating Help Button (X1-092) — shifted left to not overlap chat bubble */}
       {!isFullscreen && (
         <Link
           to="/portal/support"
-          className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
+          className="fixed bottom-6 right-20 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
           title="Need help? Contact support"
         >
           <HelpCircle className="h-6 w-6" />

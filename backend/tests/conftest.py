@@ -23,7 +23,6 @@ from app.config import settings
 settings.APP_ENV = "testing"
 
 from app.db import Base, get_db
-from app.main import app
 from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole
 from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
@@ -33,17 +32,10 @@ from tests.tenant_isolation.harness import TenantIsolationScenario
 settings.RATE_LIMIT_ENABLED = False
 settings.CSRF_PROTECTION_ENABLED = False
 
-# Test database URL - use file-based SQLite to avoid Python 3.14 memory issues
-# with in-memory databases. The file is auto-cleaned via SAVEPOINT rollback.
-_test_db_file = os.path.join(tempfile.gettempdir(), "test_portal.db")
-# Remove stale test DB from previous crashed run
-if os.path.exists(_test_db_file):
-    try:
-        os.remove(_test_db_file)
-    except OSError:
-        pass
-
-TEST_DATABASE_URL = f"sqlite:///{_test_db_file}"
+# Test database URL - use in-memory SQLite with StaticPool (single shared
+# connection).  The previous file-based approach caused "disk I/O error" in
+# Docker containers.
+TEST_DATABASE_URL = "sqlite://"
 _test_tmp_root = Path(__file__).resolve().parent / "_tmp_runtime"
 _test_tmp_root.mkdir(parents=True, exist_ok=True)
 
@@ -62,7 +54,14 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 # repeated create_all / drop_all cycles on the same in-memory DB.
 # Per-test isolation is achieved via SAVEPOINT rollback below.
 # ---------------------------------------------------------------------------
+# IMPORTANT: create_all MUST run BEFORE importing app.main because that import
+# initialises the application's own database engine.  With StaticPool the two
+# engines share the underlying SQLite connection, and if the app engine is
+# created first the test create_all hits a "disk I/O error".
 Base.metadata.create_all(bind=engine)
+
+# Now it is safe to import the FastAPI application.
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

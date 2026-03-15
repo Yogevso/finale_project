@@ -12,6 +12,7 @@ from app.api.management import (
     admin_ops,
     analytics,
     announcements,
+    assistant,
     attachments,
     audience_governance,
     auth,
@@ -101,6 +102,7 @@ class FastAPIRouterRegistry:
             RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
             RouterRegistration(admin_ops.router, prefix=self._api_prefix, tags=("Admin Operations",)),
+            RouterRegistration(assistant.router, prefix=self._api_prefix, tags=("Assistant",)),
             RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),
             # Viewer Portal (public, no auth required)
             RouterRegistration(viewer_documents.router, prefix=self._api_prefix, tags=("Viewer",)),

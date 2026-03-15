@@ -9,6 +9,7 @@ import { useChatUnreadCount } from '@/features/chat/useChatUnreadCount'
 import GlobalSearchBar from './GlobalSearchBar'
 import NotificationBell from './NotificationBell'
 import AnnouncementBanner from './AnnouncementBanner'
+import AssistantChatBubble from './AssistantChatBubble'
 
 export default function Layout() {
   const { user, logout, isSystemAdmin } = useAuth()
@@ -195,6 +196,9 @@ export default function Layout() {
         </div>
       </footer>
       )}
+
+      {/* AI Assistant Chat Bubble */}
+      <AssistantChatBubble />
     </div>
   )
 }
