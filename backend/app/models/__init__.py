@@ -1406,6 +1406,65 @@ class MaintenanceWindow(Base):
     creator = relationship("User")
 
 
+# ---------------------------------------------------------------------------
+# AI Assistant (conversations & messages)
+# ---------------------------------------------------------------------------
+
+class AssistantConversation(Base):
+    """A conversation between a user and the AI assistant."""
+
+    __tablename__ = "assistant_conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)  # null for SYSTEM_ADMIN
+    title = Column(String(255), default="New Chat", nullable=False)
+    is_archived = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User")
+    tenant = relationship("Tenant")
+    messages = relationship(
+        "AssistantMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="AssistantMessage.created_at",
+    )
+
+    __table_args__ = (
+        Index("ix_assistant_conv_user_created", "user_id", "created_at"),
+    )
+
+
+class AssistantMessage(Base):
+    """A single message within an assistant conversation."""
+
+    __tablename__ = "assistant_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("assistant_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role = Column(String(20), nullable=False)  # user, assistant, tool, system
+    content = Column(Text, nullable=True)
+    tool_calls = Column(Text, nullable=True)   # JSON-serialised list of tool-call dicts
+    tool_call_id = Column(String(100), nullable=True)
+    tool_name = Column(String(100), nullable=True)
+    token_count = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    conversation = relationship("AssistantConversation", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_assistant_msg_conv_created", "conversation_id", "created_at"),
+    )
+
+
 @event.listens_for(Document, "before_update", propagate=True)
 def _bump_document_row_version(_mapper, _connection, target: Document) -> None:
     target.row_version = int(target.row_version or 0) + 1
@@ -1489,6 +1548,9 @@ __all__ = [
     "AdminActionStatus",
     "AdminActionType",
     "DomainVerificationStatus",
+    # AI Assistant
+    "AssistantConversation",
+    "AssistantMessage",
     # Junction tables
     "document_company_assignments",
 ]

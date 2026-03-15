@@ -97,6 +97,16 @@ class Settings(BaseSettings):
     FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT: bool = True
     AUDIENCE_VALIDATION_SAFE_MODE_ENABLED: bool = False
 
+    # AI Assistant
+    OLLAMA_BASE_URL: str = "http://ollama:11434"
+    ASSISTANT_MODEL: str = "llama3.1:8b"
+    ASSISTANT_MAX_TOKENS: int = 2048
+    ASSISTANT_TEMPERATURE: float = 0.7
+    ASSISTANT_MAX_TOOL_ITERATIONS: int = 5
+    ASSISTANT_REQUEST_TIMEOUT: int = 120  # seconds
+    ASSISTANT_RATE_LIMIT_PER_MINUTE: int = 20
+    ASSISTANT_ENABLED: bool = True  # feature flag to disable AI assistant
+
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":
         """Validate security-critical settings on startup."""
