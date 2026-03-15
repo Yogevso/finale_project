@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -25,7 +26,7 @@ from app.assistant.schemas import (
 from app.assistant.tools import registry
 from app.config import settings
 from app.db import get_db
-from app.models import User
+from app.models import User, UserRole
 from app.security import get_current_active_user
 
 logger = logging.getLogger(__name__)
@@ -78,23 +79,69 @@ async def chat(
     _check_rate_limit(user.id)
 
     engine = _build_engine(db, user)
-    tenant_id = user.tenant_id
+    tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
 
     async def event_stream():
-        async for event in engine.chat(
-            user=user,
-            tenant_id=tenant_id,
-            message=body.message,
-            conversation_id=body.conversation_id,
-            db=db,
-        ):
-            evt = event.get("event", "message")
-            data = event.get("data", "")
-            if isinstance(data, dict):
-                data = json.dumps(data)
-            yield f"event: {evt}\ndata: {data}\n\n"
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+        done = asyncio.Event()
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+        async def _producer():
+            try:
+                async for event in engine.chat(
+                    user=user,
+                    tenant_id=tenant_id,
+                    message=body.message,
+                    conversation_id=body.conversation_id,
+                    db=db,
+                    file_ids=body.file_ids,
+                    document_ids=body.document_ids,
+                ):
+                    await queue.put(event)
+            finally:
+                done.set()
+                await queue.put(None)
+
+        async def _heartbeat():
+            """Send SSE keepalive comments every 3s to prevent proxy/browser timeouts."""
+            while not done.is_set():
+                await asyncio.sleep(3)
+                if not done.is_set():
+                    await queue.put({"event": "_keepalive"})
+
+        prod_task = asyncio.create_task(_producer())
+        hb_task = asyncio.create_task(_heartbeat())
+
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=180)
+                except asyncio.TimeoutError:
+                    yield 'event: error\ndata: {"message":"Request timed out"}\n\n'
+                    break
+                if event is None:
+                    break
+                if event.get("event") == "_keepalive":
+                    yield ": keepalive\n\n"
+                    continue
+                evt = event.get("event", "message")
+                data = event.get("data", "")
+                if isinstance(data, dict):
+                    data = json.dumps(data)
+                yield f"event: {evt}\ndata: {data}\n\n"
+        finally:
+            hb_task.cancel()
+            if not prod_task.done():
+                prod_task.cancel()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ------------------------------------------------------------------
@@ -157,6 +204,15 @@ def get_conversation(
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
     messages = mgr.get_messages(conversation_id)
+
+    def _parse_tool_calls(raw: str | None) -> list[dict] | None:
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
     return ConversationDetail(
         id=conv.id,
         title=conv.title,
@@ -165,11 +221,30 @@ def get_conversation(
             ConversationTurn(
                 role=m.role,
                 content=m.content,
+                tool_calls=_parse_tool_calls(m.tool_calls),
                 tool_call_id=m.tool_call_id,
+                tool_name=m.tool_name,
             )
             for m in messages
         ],
     )
+
+
+@router.patch("/conversations/{conversation_id}")
+def rename_conversation(
+    conversation_id: int,
+    title: str,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Rename a conversation."""
+    _require_enabled()
+    mgr = ConversationManager(db)
+    conv = mgr.get_conversation(conversation_id, user.id)
+    if conv is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    mgr.update_title(conversation_id, title)
+    return {"id": conv.id, "title": title}
 
 
 @router.delete("/conversations/{conversation_id}", status_code=204)
@@ -222,4 +297,59 @@ async def assistant_health(user: User = Depends(get_current_active_user)):
         "status": "ready" if healthy else "unavailable",
         "model": settings.ASSISTANT_MODEL,
         "ollama_healthy": healthy,
+    }
+
+
+# ------------------------------------------------------------------
+# File Uploads
+# ------------------------------------------------------------------
+
+
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a file for assistant analysis."""
+    _require_enabled()
+    from app.assistant.file_handler import AssistantFileHandler
+
+    handler = AssistantFileHandler()
+    try:
+        record = await handler.save_upload(file, user.id, db)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "file_id": record.id,
+        "filename": record.original_filename,
+        "mime_type": record.mime_type,
+        "file_size": record.file_size,
+        "has_text": bool(record.extracted_text),
+    }
+
+
+@router.get("/files/{file_id}")
+def get_uploaded_file(
+    file_id: int,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Get metadata and text preview for an uploaded file."""
+    _require_enabled()
+    from app.assistant.file_handler import AssistantFileHandler
+
+    handler = AssistantFileHandler()
+    record = handler.get_file(file_id, user.id, db)
+    if record is None:
+        raise HTTPException(status_code=404, detail="File not found.")
+    preview = (record.extracted_text or "")[:500]
+    return {
+        "file_id": record.id,
+        "filename": record.original_filename,
+        "mime_type": record.mime_type,
+        "file_size": record.file_size,
+        "has_text": bool(record.extracted_text),
+        "text_preview": preview,
+        "created_at": record.created_at.isoformat(),
     }

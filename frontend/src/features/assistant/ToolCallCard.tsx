@@ -40,6 +40,52 @@ const TOOL_LABELS: Record<string, string> = {
   get_ticket_details: 'Loading ticket…',
   submit_feedback: 'Submitting feedback…',
   get_my_feedback: 'Loading feedback…',
+  // Phase 10-14 tools
+  semantic_search: 'Searching with AI…',
+  summarize_document: 'Summarizing document…',
+  ask_about_document: 'Analyzing document…',
+  analyze_uploaded_file: 'Analyzing file…',
+  compare_files: 'Comparing files…',
+  compare_versions: 'Comparing versions…',
+  get_document_history: 'Loading version history…',
+  publish_document: 'Publishing document…',
+  get_document_workflow: 'Loading workflow status…',
+  list_attachments: 'Loading attachments…',
+  get_attachment_info: 'Loading attachment info…',
+  get_documents_by_status: 'Filtering documents…',
+  get_recent_documents: 'Loading recent documents…',
+  get_platform_analytics: 'Loading platform analytics…',
+  get_engagement_analytics: 'Analyzing engagement…',
+  get_content_analytics: 'Analyzing content…',
+  search_audit_logs: 'Searching audit logs…',
+  get_user_activity: 'Loading user activity…',
+  get_my_notifications: 'Loading notifications…',
+  mark_notifications_read: 'Marking notifications read…',
+  list_document_comments: 'Loading comments…',
+  add_comment: 'Adding comment…',
+  resolve_comment: 'Resolving comment…',
+  submit_review: 'Submitting review…',
+  list_pending_reviews: 'Loading pending reviews…',
+  create_invitation: 'Creating invitation…',
+  list_invitations: 'Loading invitations…',
+  get_active_collaborators: 'Checking collaborators…',
+  get_collaboration_history: 'Loading collaboration history…',
+}
+
+/** Tool category colors for visual grouping. */
+const TOOL_CATEGORY_COLORS: Record<string, string> = {
+  analytics: 'border-purple-200 bg-purple-50',
+  audit: 'border-amber-200 bg-amber-50',
+  collaboration: 'border-teal-200 bg-teal-50',
+  rag: 'border-indigo-200 bg-indigo-50',
+}
+
+function getToolCategory(name: string): string | null {
+  if (name.includes('analytics')) return 'analytics'
+  if (name.includes('audit') || name.includes('activity')) return 'audit'
+  if (name.includes('collaborat')) return 'collaboration'
+  if (['semantic_search', 'summarize_document', 'ask_about_document'].includes(name)) return 'rag'
+  return null
 }
 
 interface Props {
@@ -49,11 +95,23 @@ interface Props {
 
 export default function ToolCallCard({ toolCall, result }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
   const isRunning = !result
   const label = TOOL_LABELS[toolCall.name] ?? `Running ${toolCall.name}…`
+  const category = getToolCategory(toolCall.name)
+  const categoryClass = category ? TOOL_CATEGORY_COLORS[category] : 'border-slate-200 bg-slate-50'
+
+  const handleCopy = () => {
+    if (result?.result) {
+      navigator.clipboard.writeText(result.result).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+    }
+  }
 
   return (
-    <div className="my-2 rounded-lg border border-slate-200 bg-slate-50 text-sm">
+    <div className={`my-2 rounded-lg border text-sm ${categoryClass}`}>
       {/* Header */}
       <button
         type="button"
@@ -88,10 +146,20 @@ export default function ToolCallCard({ toolCall, result }: Props) {
           {result.error && (
             <p className="mb-1 text-red-600"><strong>Error:</strong> {result.error}</p>
           )}
-          <pre className="whitespace-pre-wrap break-words rounded bg-white p-2 font-mono">
-            {result.result.slice(0, 2000)}
-            {result.result.length > 2000 && '…'}
-          </pre>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="absolute right-1 top-1 rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Copy result"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+            <pre className="whitespace-pre-wrap break-words rounded bg-white p-2 font-mono">
+              {result.result.slice(0, 2000)}
+              {result.result.length > 2000 && '…'}
+            </pre>
+          </div>
         </div>
       )}
     </div>

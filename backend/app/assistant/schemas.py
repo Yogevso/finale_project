@@ -57,6 +57,7 @@ class ConversationTurn(BaseModel):
     content: str | None = None
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
+    tool_name: str | None = None
 
 
 # --- API request / response ---
@@ -65,6 +66,8 @@ class ConversationTurn(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: int | None = None  # None = new conversation
     message: str = Field(..., min_length=1, max_length=4000)
+    file_ids: list[int] | None = None   # IDs of uploaded files to include as context
+    document_ids: list[int] | None = None  # IDs of platform documents to inject as context
 
 
 class ChatResponse(BaseModel):

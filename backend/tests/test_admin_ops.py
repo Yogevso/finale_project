@@ -23,7 +23,7 @@ class TestTenantImpersonation:
         resp = client.post(
             "/api/v1/admin/impersonate",
             headers=system_admin_headers,
-            json={"tenant_id": test_tenant.id},
+            json={"target_tenant_id": test_tenant.id},
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -72,7 +72,7 @@ class TestTenantImpersonation:
         resp = client.post(
             "/api/v1/admin/impersonate",
             headers=admin_headers,
-            json={"tenant_id": test_tenant.id},
+            json={"target_tenant_id": test_tenant.id},
         )
         assert resp.status_code == 403
 
@@ -80,7 +80,7 @@ class TestTenantImpersonation:
         resp = client.post(
             "/api/v1/admin/impersonate",
             headers=system_admin_headers,
-            json={"tenant_id": 99999},
+            json={"target_tenant_id": 99999},
         )
         assert resp.status_code == 404
 

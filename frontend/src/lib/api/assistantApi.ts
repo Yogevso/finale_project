@@ -47,6 +47,8 @@ async function parseSSEStream(
 
     for (const part of parts) {
       if (!part.trim()) continue
+      // Skip SSE comments (keepalive heartbeats)
+      if (part.trim().startsWith(':')) continue
 
       let eventName = 'message'
       let eventData = ''
@@ -92,11 +94,14 @@ const assistantApi = {
     message: string,
     onEvent: (event: SSEEvent) => void,
     signal?: AbortSignal,
+    documentIds?: number[],
   ): Promise<void> {
+    const body: Record<string, unknown> = { conversation_id: conversationId, message }
+    if (documentIds && documentIds.length > 0) body.document_ids = documentIds
     const res = await fetch(`${API_BASE_URL}/assistant/chat`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ conversation_id: conversationId, message }),
+      body: JSON.stringify(body),
       signal,
     })
 
@@ -156,6 +161,17 @@ const assistantApi = {
       headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Failed to delete conversation')
+  },
+
+  /**
+   * Rename a conversation.
+   */
+  async renameConversation(id: number, title: string): Promise<void> {
+    const res = await fetch(
+      `${API_BASE_URL}/assistant/conversations/${id}?title=${encodeURIComponent(title)}`,
+      { method: 'PATCH', headers: authHeaders() },
+    )
+    if (!res.ok) throw new Error('Failed to rename conversation')
   },
 
   /**

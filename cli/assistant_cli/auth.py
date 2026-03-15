@@ -15,8 +15,7 @@ def login(config: CLIConfig, username: str, password: str) -> bool:
     try:
         r = httpx.post(
             f"{config.base_url}/auth/login",
-            data={"username": username, "password": password},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            json={"username": username, "password": password},
             timeout=15,
         )
         if r.status_code == 200:

@@ -28,6 +28,9 @@ class CreateSupportTicketTool(BaseTool):
     }
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+        if tenant_id is None:
+            return {"success": False, "result": "", "error": "Support tickets require a tenant context. Please switch to a tenant-scoped account."}
+
         ticket = SupportTicket(
             subject=params["subject"],
             status="open",
@@ -42,8 +45,9 @@ class CreateSupportTicketTool(BaseTool):
         msg = SupportTicketMessage(
             ticket_id=ticket.id,
             sender_id=user.id,
+            sender_type="customer",
             content=params["description"],
-            is_internal=False,
+            is_internal_note=False,
         )
         db.add(msg)
         db.commit()
@@ -102,7 +106,7 @@ class GetTicketDetailsTool(BaseTool):
             db.query(SupportTicketMessage)
             .filter(
                 SupportTicketMessage.ticket_id == ticket.id,
-                SupportTicketMessage.is_internal.is_(False),
+                SupportTicketMessage.is_internal_note.is_(False),
             )
             .order_by(SupportTicketMessage.created_at.asc())
             .all()

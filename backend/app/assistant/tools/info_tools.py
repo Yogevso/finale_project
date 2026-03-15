@@ -145,9 +145,16 @@ class GetDocumentContentTool(BaseTool):
             .order_by(Version.created_at.desc())
             .first()
         )
-        content = version.content if version and version.content else "(no content)"
 
-        info = f"Title: {doc.title}\n\n{content}"
+        if version and version.content:
+            from app.assistant.rag.chunker import DocumentChunker
+            text = DocumentChunker.strip_html(version.content).strip()
+            if not text:
+                text = "(document contains only images or non-text content)"
+        else:
+            text = "(no content)"
+
+        info = f"Title: {doc.title}\n\n{text}"
         # Truncate very long content
         if len(info) > 4000:
             info = info[:4000] + "\n\n... (truncated)"

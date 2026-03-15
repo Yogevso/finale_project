@@ -79,8 +79,11 @@ class ToolRegistry:
                 error="You do not have permission to use this tool.",
             )
 
+        # Sanitize parameters: LLMs sometimes send literal "null" strings
+        clean_params = self._sanitize_params(params)
+
         try:
-            result = await tool.execute(user, tenant_id, params, db)
+            result = await tool.execute(user, tenant_id, clean_params, db)
             return ToolResult(
                 tool_call_id="",
                 name=name,
@@ -97,6 +100,33 @@ class ToolRegistry:
                 result="",
                 error=f"Tool execution error: {exc}",
             )
+
+    # Parameter names that should be integers (LLMs often send as strings)
+    _NUMERIC_PARAMS = {
+        "limit", "offset", "page", "rating", "user_id", "document_id",
+        "tenant_id", "ticket_id", "topic_id", "announcement_id", "feedback_id",
+        "version_id", "review_id", "comment_id", "attachment_id",
+        "notification_id", "session_id", "n_results",
+    }
+
+    @staticmethod
+    def _sanitize_params(params: dict[str, Any]) -> dict[str, Any]:
+        """Normalize LLM quirks — type coercion, null strings, etc."""
+        cleaned: dict[str, Any] = {}
+        for key, value in params.items():
+            if isinstance(value, str) and value.lower() in ("null", "none", "undefined", ""):
+                cleaned[key] = None
+            elif isinstance(value, str) and key in ToolRegistry._NUMERIC_PARAMS:
+                # Coerce numeric params that LLMs send as strings
+                try:
+                    cleaned[key] = int(value)
+                except ValueError:
+                    cleaned[key] = value
+            elif isinstance(value, str) and value.lower() in ("true", "false"):
+                cleaned[key] = value.lower() == "true"
+            else:
+                cleaned[key] = value
+        return cleaned
 
 
 # Module-level singleton

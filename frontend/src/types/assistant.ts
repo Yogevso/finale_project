@@ -48,7 +48,11 @@ export interface AssistantHealthStatus {
 export type SSEEvent =
   | { event: 'conversation_id'; data: number }
   | { event: 'token'; data: string }
+  | { event: 'thinking'; data: { status: string } }
   | { event: 'tool_call'; data: ToolCall }
   | { event: 'tool_result'; data: ToolResult }
   | { event: 'done'; data: { token_count?: number } }
   | { event: 'error'; data: { message: string } }
+  | { event: 'suggestions'; data: { questions: string[] } }
+  | { event: 'confirm_required'; data: { id: string; name: string; arguments: Record<string, unknown> } }
+  | { event: 'title_updated'; data: { title: string } }

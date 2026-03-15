@@ -36,14 +36,16 @@ class ListUsersTool(BaseTool):
 
         if tenant_id is not None:
             query = query.filter(User.tenant_id == tenant_id)
-        if params.get("role"):
-            query = query.filter(User.role == params["role"])
-        if params.get("is_active") is not None:
-            query = query.filter(User.is_active == params["is_active"])
-        if params.get("search"):
-            s = params["search"]
+        role = params.get("role")
+        if role and role != "null":
+            query = query.filter(User.role == role)
+        is_active = params.get("is_active")
+        if is_active is not None and is_active != "null":
+            query = query.filter(User.is_active == is_active)
+        search = params.get("search")
+        if search and search != "null":
             query = query.filter(
-                (User.username.ilike(f"%{s}%")) | (User.email.ilike(f"%{s}%"))
+                (User.username.ilike(f"%{search}%")) | (User.email.ilike(f"%{search}%"))
             )
 
         users = query.order_by(User.id).limit(limit).all()
@@ -83,8 +85,7 @@ class GetUserTool(BaseTool):
             f"Role: {target.role}\n"
             f"Active: {target.is_active}\n"
             f"Tenant ID: {target.tenant_id}\n"
-            f"Created: {target.created_at}\n"
-            f"Last Login: {target.last_login_at}"
+            f"Created: {target.created_at}"
         )
         return {"success": True, "result": info}
 
@@ -115,7 +116,9 @@ class CreateUserTool(BaseTool):
         # Prevent creating users with higher privilege
         target_role = UserRole(params["role"])
         caller_role = UserRole(user.role)
-        if caller_role != UserRole.SYSTEM_ADMIN and target_role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN):
+        caller_idx = self._ROLE_HIERARCHY.index(caller_role)
+        target_idx = self._ROLE_HIERARCHY.index(target_role)
+        if target_idx > caller_idx:
             return {"success": False, "result": "", "error": "You cannot create users with a higher role than your own."}
 
         # Check uniqueness
@@ -192,7 +195,9 @@ class ChangeUserRoleTool(BaseTool):
 
         new_role = UserRole(params["new_role"])
         caller_role = UserRole(user.role)
-        if caller_role != UserRole.SYSTEM_ADMIN and new_role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN):
+        caller_idx = self._ROLE_HIERARCHY.index(caller_role)
+        new_role_idx = self._ROLE_HIERARCHY.index(new_role)
+        if new_role_idx > caller_idx:
             return {"success": False, "result": "", "error": "You cannot assign a role higher than your own."}
 
         old_role = target.role

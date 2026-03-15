@@ -27,12 +27,17 @@ class SubmitFeedbackTool(BaseTool):
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
         rating = max(1, min(5, params["rating"]))
+        comment = params.get("comment", "")
+        # Store the numeric rating in the comment field since the model
+        # only has `is_helpful` (boolean).  Format: "[Rating: N/5] comment"
+        stored_comment = f"[Rating: {rating}/5] {comment}".strip()
         fb = Feedback(
             user_id=user.id,
             document_id=params["document_id"],
             feedback_type="suggestion",
             status="pending",
-            content=params.get("comment", ""),
+            content=stored_comment,
+            comment=stored_comment,
             is_helpful=rating >= 4,
         )
         db.add(fb)

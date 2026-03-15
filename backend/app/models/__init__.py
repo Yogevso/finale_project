@@ -1419,6 +1419,8 @@ class AssistantConversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)  # null for SYSTEM_ADMIN
     title = Column(String(255), default="New Chat", nullable=False)
+    summary = Column(Text, nullable=True)  # Auto-generated summary for long conversations
+    context_document_ids = Column(Text, nullable=True)  # JSON list of document IDs for context injection
     is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -1462,6 +1464,35 @@ class AssistantMessage(Base):
 
     __table_args__ = (
         Index("ix_assistant_msg_conv_created", "conversation_id", "created_at"),
+    )
+
+
+class AssistantUploadedFile(Base):
+    """A file uploaded by a user in the assistant chat."""
+
+    __tablename__ = "assistant_uploaded_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    conversation_id = Column(
+        Integer,
+        ForeignKey("assistant_conversations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    filename = Column(String(255), nullable=False)       # UUID-based storage name
+    original_filename = Column(String(255), nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    file_size = Column(Integer, nullable=False)           # bytes
+    storage_path = Column(String(500), nullable=False)    # relative path
+    extracted_text = Column(Text, nullable=True)           # extracted content
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = relationship("User")
+    conversation = relationship("AssistantConversation")
+
+    __table_args__ = (
+        Index("ix_assistant_file_user", "user_id"),
     )
 
 
@@ -1551,6 +1582,7 @@ __all__ = [
     # AI Assistant
     "AssistantConversation",
     "AssistantMessage",
+    "AssistantUploadedFile",
     # Junction tables
     "document_company_assignments",
 ]

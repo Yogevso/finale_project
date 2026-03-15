@@ -41,7 +41,12 @@ class BaseTool(ABC):
                 return False
         if self.required_role is not None:
             try:
-                required_idx = self._ROLE_HIERARCHY.index(self.required_role)
+                # Normalise required_role: accept both UserRole enum and plain
+                # strings (e.g. "VIEWER", "viewer", "SYSTEM_ADMIN").
+                role = self.required_role
+                if not isinstance(role, UserRole):
+                    role = UserRole(str(role).lower())
+                required_idx = self._ROLE_HIERARCHY.index(role)
                 user_idx = self._ROLE_HIERARCHY.index(UserRole(user.role))
             except ValueError:
                 return False

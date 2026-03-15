@@ -128,10 +128,46 @@ class ConversationManager:
             .all()
         )
 
-    def build_message_history(self, conversation_id: int) -> list[dict[str, Any]]:
-        """Convert stored messages into the Ollama chat message format."""
+    def build_message_history(
+        self,
+        conversation_id: int,
+        max_tokens: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Convert stored messages into the Ollama chat message format.
+
+        If the conversation has >10 messages and a summary exists, use
+        summary + last 6 messages instead of full history.
+        If *max_tokens* is set, only the most recent messages that fit
+        within the budget are returned (oldest messages are dropped).
+        Rough estimation: 1 token ≈ 4 characters.
+        """
         messages = self.get_messages(conversation_id)
-        history: list[dict[str, Any]] = []
+
+        # If conversation is long and has a summary, use compact representation
+        conv = (
+            self._db.query(AssistantConversation)
+            .filter(AssistantConversation.id == conversation_id)
+            .first()
+        )
+        if conv and conv.summary and len(messages) > 10:
+            # Prepend summary as system context, then last 6 messages
+            history: list[dict[str, Any]] = [
+                {"role": "system", "content": f"[Conversation summary so far]: {conv.summary}"},
+            ]
+            recent = messages[-6:]
+            for msg in recent:
+                entry: dict[str, Any] = {"role": msg.role, "content": msg.content or ""}
+                if msg.tool_calls:
+                    try:
+                        entry["tool_calls"] = json.loads(msg.tool_calls)
+                    except json.JSONDecodeError:
+                        pass
+                if msg.tool_call_id:
+                    entry["tool_call_id"] = msg.tool_call_id
+                history.append(entry)
+            return history
+
+        history = []
         for msg in messages:
             entry: dict[str, Any] = {"role": msg.role, "content": msg.content or ""}
             if msg.tool_calls:
@@ -142,6 +178,21 @@ class ConversationManager:
             if msg.tool_call_id:
                 entry["tool_call_id"] = msg.tool_call_id
             history.append(entry)
+
+        if max_tokens and history:
+            # Truncate from the front (drop oldest) to stay within budget
+            chars_per_token = 4
+            budget = max_tokens * chars_per_token
+            total_chars = 0
+            keep_from = len(history)
+            for i in range(len(history) - 1, -1, -1):
+                msg_chars = len(history[i].get("content", "") or "")
+                if total_chars + msg_chars > budget:
+                    break
+                total_chars += msg_chars
+                keep_from = i
+            history = history[keep_from:]
+
         return history
 
     def get_message_count(self, conversation_id: int) -> int:
@@ -163,3 +214,57 @@ class ConversationManager:
         if len(title) > _TITLE_MAX_LEN:
             title = title[: _TITLE_MAX_LEN - 1] + "…"
         return title
+
+    async def auto_summarize_if_needed(
+        self,
+        conversation_id: int,
+        ollama_client: Any | None = None,
+    ) -> None:
+        """Summarize conversation every 10 messages to compress context."""
+        msg_count = self.get_message_count(conversation_id)
+        # Only summarize at multiples of 10 (10, 20, 30, ...)
+        if msg_count < 10 or msg_count % 10 != 0:
+            return
+
+        conv = (
+            self._db.query(AssistantConversation)
+            .filter(AssistantConversation.id == conversation_id)
+            .first()
+        )
+        if not conv:
+            return
+
+        messages = self.get_messages(conversation_id, limit=200)
+        # Build text from messages for summarization
+        text_parts: list[str] = []
+        for msg in messages:
+            if msg.role in ("user", "assistant") and msg.content:
+                text_parts.append(f"{msg.role}: {msg.content[:300]}")
+
+        if not text_parts:
+            return
+
+        full_text = "\n".join(text_parts)[:4000]
+
+        if ollama_client is None:
+            from app.assistant.ollama_client import OllamaClient
+            ollama_client = OllamaClient()
+
+        try:
+            from app.config import settings
+            response = await ollama_client.chat(
+                messages=[
+                    {"role": "system", "content": "Summarize this conversation concisely in 2-3 sentences. Focus on what was discussed and what actions were taken."},
+                    {"role": "user", "content": full_text},
+                ],
+                tools=None,
+                temperature=0.3,
+                max_tokens=200,
+            )
+            summary = response.get("message", {}).get("content", "")
+            if summary:
+                conv.summary = summary[:1000]
+                self._db.commit()
+                logger.info("Auto-summarized conversation %d (%d messages)", conversation_id, msg_count)
+        except Exception:
+            logger.warning("Failed to auto-summarize conversation %d", conversation_id, exc_info=True)

@@ -102,10 +102,19 @@ class Settings(BaseSettings):
     ASSISTANT_MODEL: str = "llama3.1:8b"
     ASSISTANT_MAX_TOKENS: int = 2048
     ASSISTANT_TEMPERATURE: float = 0.7
+    ASSISTANT_TOOL_TEMPERATURE: float = 0.2  # lower temp for reliable tool-calling
     ASSISTANT_MAX_TOOL_ITERATIONS: int = 5
     ASSISTANT_REQUEST_TIMEOUT: int = 120  # seconds
     ASSISTANT_RATE_LIMIT_PER_MINUTE: int = 20
     ASSISTANT_ENABLED: bool = True  # feature flag to disable AI assistant
+
+    # RAG (Retrieval-Augmented Generation)
+    ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"
+    ASSISTANT_CHROMA_PERSIST_DIR: str = "./data/chromadb"
+    ASSISTANT_CHUNK_SIZE: int = 500  # tokens per chunk
+    ASSISTANT_CHUNK_OVERLAP: int = 50  # overlap tokens between chunks
+    ASSISTANT_RAG_TOP_K: int = 5  # number of results per semantic search
+    ASSISTANT_RAG_MIN_SCORE: float = 0.3  # minimum similarity threshold
 
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":
