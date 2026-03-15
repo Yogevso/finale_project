@@ -14,6 +14,7 @@ import {
   Search,
   Settings,
   Shield,
+  Sparkles,
   UserCog,
   Users,
 } from 'lucide-react'
@@ -59,6 +60,13 @@ export const internalNavItems: RouteConfig[] = [
     path: '/chat',
     label: 'Chat',
     icon: MessageCircle,
+    section: 'main',
+    internalOnly: true,
+  },
+  {
+    path: '/assistant',
+    label: 'AI Assistant',
+    icon: Sparkles,
     section: 'main',
     internalOnly: true,
   },
@@ -158,6 +166,12 @@ export const customerNavItems: RouteConfig[] = [
     path: '/portal/support',
     label: 'Support',
     icon: Headphones,
+    customerOnly: true,
+  },
+  {
+    path: '/portal/assistant',
+    label: 'AI Assistant',
+    icon: Sparkles,
     customerOnly: true,
   },
 ]
