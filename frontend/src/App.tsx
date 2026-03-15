@@ -21,6 +21,7 @@ const SecurityEventsPage = lazy(() => import('./pages/SecurityEventsPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const FeedbackPage = lazy(() => import('./pages/admin/FeedbackPage'))
 const SystemSetupPage = lazy(() => import('./pages/admin/SystemSetupPage'))
+const AdminOpsPage = lazy(() => import('./pages/admin/AdminOpsPage'))
 const AnalyticsDashboardPage = lazy(() => import('./pages/AnalyticsDashboardPage'))
 const ChatPage = lazy(() => import('./pages/ChatPage'))
 const SupportPage = lazy(() => import('./pages/SupportPage'))
@@ -386,6 +387,20 @@ function App() {
           }
         >
           <Route index element={<SystemSetupPage />} />
+        </Route>
+
+        {/* Admin Operations (Wave Z) - system_admin only */}
+        <Route
+          path="/admin/operations"
+          element={
+            <ErrorBoundary>
+              <RoleGuard allowedRoles={['system_admin']}>
+                <Layout />
+              </RoleGuard>
+            </ErrorBoundary>
+          }
+        >
+          <Route index element={<AdminOpsPage />} />
         </Route>
 
         {/* ==================== CUSTOMER PORTAL ==================== */}

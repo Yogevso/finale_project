@@ -13,6 +13,7 @@ import {
   MessageSquareText,
   Search,
   Settings,
+  Shield,
   UserCog,
   Users,
 } from 'lucide-react'
@@ -121,6 +122,13 @@ export const internalNavItems: RouteConfig[] = [
     path: '/admin/system-setup',
     label: 'System Setup',
     icon: Settings,
+    section: 'admin',
+    allowedRoles: ['system_admin'],
+  },
+  {
+    path: '/admin/operations',
+    label: 'Admin Ops',
+    icon: Shield,
     section: 'admin',
     allowedRoles: ['system_admin'],
   },

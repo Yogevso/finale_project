@@ -1244,6 +1244,168 @@ class NpsSurvey(Base):
     tenant = relationship("Tenant")
 
 
+# ========== Admin Operations Models (Wave Z) ==========
+
+
+class AdminActionStatus(str, enum.Enum):
+    """Status for queued admin actions requiring approval"""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTED = "executed"
+    CANCELLED = "cancelled"
+
+
+class AdminActionType(str, enum.Enum):
+    """Types of critical admin actions that require approval"""
+
+    TENANT_DELETION = "tenant_deletion"
+    MASS_USER_DEACTIVATION = "mass_user_deactivation"
+    TENANT_SUSPENSION = "tenant_suspension"
+    DATA_EXPORT = "data_export"
+    QUOTA_OVERRIDE = "quota_override"
+    SYSTEM_SETTING_CHANGE = "system_setting_change"
+
+
+class DomainVerificationStatus(str, enum.Enum):
+    """Status for domain ownership verification"""
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class ImpersonationSession(Base):
+    """Tracks when a system admin is impersonating a tenant (Z-001)"""
+
+    __tablename__ = "impersonation_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    target_tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    session_token = Column(String(128), unique=True, nullable=False, index=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+
+    # Relationships
+    admin_user = relationship("User", foreign_keys=[admin_user_id])
+    target_tenant = relationship("Tenant")
+
+
+class AdminAction(Base):
+    """Queued admin actions requiring second sysadmin approval (Z-002)"""
+
+    __tablename__ = "admin_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    action_type = Column(SQLEnum(AdminActionType), nullable=False, index=True)
+    status = Column(SQLEnum(AdminActionStatus), default=AdminActionStatus.PENDING, nullable=False, index=True)
+    payload = Column(Text, nullable=False)  # JSON with action details
+    reason = Column(Text, nullable=True)  # Why this action is being requested
+    requested_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_comment = Column(Text, nullable=True)
+    target_tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    reviewed_at = Column(DateTime, nullable=True)
+    executed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    requester = relationship("User", foreign_keys=[requested_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    target_tenant = relationship("Tenant")
+
+
+class TenantQuota(Base):
+    """Configurable quotas per tenant (Z-012)"""
+
+    __tablename__ = "tenant_quotas"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", name="uq_tenant_quota"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    max_users = Column(Integer, nullable=True)  # null = unlimited
+    max_documents = Column(Integer, nullable=True)
+    max_storage_mb = Column(Integer, nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    tenant = relationship("Tenant", backref="quota")
+    updater = relationship("User")
+
+
+class FeatureFlag(Base):
+    """Per-tenant feature flags (Z-005)"""
+
+    __tablename__ = "feature_flags"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "feature_key", name="uq_tenant_feature"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    feature_key = Column(String(100), nullable=False, index=True)
+    enabled = Column(Boolean, default=False, nullable=False)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    tenant = relationship("Tenant")
+    updater = relationship("User")
+
+
+class DomainVerification(Base):
+    """DNS domain verification for tenant ownership (Z-010)"""
+
+    __tablename__ = "domain_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    domain = Column(String(255), nullable=False, index=True)
+    verification_token = Column(String(128), nullable=False)  # TXT record value
+    status = Column(
+        SQLEnum(DomainVerificationStatus),
+        default=DomainVerificationStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    verified_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)  # Token validity window
+
+    # Relationships
+    tenant = relationship("Tenant")
+
+
+class MaintenanceWindow(Base):
+    """Scheduled maintenance windows with notification (Z-018)"""
+
+    __tablename__ = "maintenance_windows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    scheduled_start = Column(DateTime, nullable=False, index=True)
+    scheduled_end = Column(DateTime, nullable=False)
+    is_read_only = Column(Boolean, default=True, nullable=False)  # Read-only mode during window
+    is_active = Column(Boolean, default=False, nullable=False, index=True)
+    notification_sent = Column(Boolean, default=False, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    creator = relationship("User")
+
+
 @event.listens_for(Document, "before_update", propagate=True)
 def _bump_document_row_version(_mapper, _connection, target: Document) -> None:
     target.row_version = int(target.row_version or 0) + 1
@@ -1298,6 +1460,13 @@ __all__ = [
     "ChangelogEntry",
     "Announcement",
     "NpsSurvey",
+    # Admin Operations (Wave Z)
+    "ImpersonationSession",
+    "AdminAction",
+    "TenantQuota",
+    "FeatureFlag",
+    "DomainVerification",
+    "MaintenanceWindow",
     # Enums
     "UserRole",
     "DocumentStatus",
@@ -1317,6 +1486,9 @@ __all__ = [
     "ChatMessageType",
     "SupportTicketStatus",
     "SupportTicketPriority",
+    "AdminActionStatus",
+    "AdminActionType",
+    "DomainVerificationStatus",
     # Junction tables
     "document_company_assignments",
 ]

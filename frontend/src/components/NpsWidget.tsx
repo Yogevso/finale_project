@@ -9,7 +9,7 @@ const SCORE_LABELS: Record<number, string> = {
   10: 'Extremely likely',
 }
 
-export function NpsWidget() {
+export default function NpsWidget() {
   const queryClient = useQueryClient()
   const [dismissed, setDismissed] = useState(false)
   const [selectedScore, setSelectedScore] = useState<number | null>(null)
