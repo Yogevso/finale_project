@@ -609,6 +609,7 @@ class TestPermissionDependenciesViaAPI:
             json={
                 "title": "Test Document",
                 "description": "Test description",
+                "platform": "Core Platform",
             },
         )
         assert response.status_code == 201

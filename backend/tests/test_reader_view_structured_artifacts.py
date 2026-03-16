@@ -190,8 +190,16 @@ def test_reader_payload_helpers_normalize_lists_and_invalid_json(caplog):
     ]
 
     attachment.reader_toc_json = "{not-json"
-    with caplog.at_level(logging.WARNING):
+    from app.services.attachment_service import reader_view as _rv_mod
+    _rv_logger = _rv_mod.logger
+    _rv_logger.disabled = False
+    _rv_logger.addHandler(caplog.handler)
+    _rv_logger.setLevel(logging.WARNING)
+
+    try:
         assert AttachmentService._get_stored_reader_payload(attachment) == {}
+    finally:
+        _rv_logger.removeHandler(caplog.handler)
 
     assert "Invalid reader_toc_json for attachment 8" in caplog.text
 

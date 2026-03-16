@@ -24,10 +24,9 @@ python_files = ["test_*.py", "audience_smoke.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-v",
+    "-n", "8",
     "--strict-markers",
     "--tb=short",
-    "--disable-warnings",
     "-p", "no:asyncio",
 ]
 markers = [
@@ -35,6 +34,15 @@ markers = [
     "integration: Integration tests",
     "slow: Slow tests",
     "smoke: Critical-path smoke tests",
+]
+filterwarnings = [
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore:datetime.datetime.utcnow:DeprecationWarning",
+    "ignore:on_event is deprecated:DeprecationWarning",
+    "ignore:'asyncio.iscoroutinefunction':DeprecationWarning:chromadb",
+    "ignore:No path_separator found:DeprecationWarning:alembic",
+    "ignore:Coercing Subquery object:sqlalchemy.exc.SAWarning",
+    "ignore::ResourceWarning",
 ]
 
 [tool.coverage.run]

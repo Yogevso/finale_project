@@ -79,8 +79,16 @@ def test_load_original_bytes_falls_back_between_storage_refs(caplog, monkeypatch
         lambda: _FakeStorage(),
     )
 
-    with caplog.at_level(logging.WARNING):
+    from app.services.attachment_service import artifacts as _art_mod
+    _actual_logger = _art_mod.logger
+    _actual_logger.disabled = False
+    _actual_logger.addHandler(caplog.handler)
+    _actual_logger.setLevel(logging.WARNING)
+    
+    try:
         content = AttachmentService._load_original_bytes_for_attachment(attachment)
+    finally:
+        _actual_logger.removeHandler(caplog.handler)
 
     assert content == b"secondary-docx"
     assert download_calls == ["doc_1/primary.docx", "doc_1/secondary.docx"]
@@ -302,8 +310,16 @@ def test_open_original_stream_falls_back_to_storage_download(caplog, monkeypatch
         lambda: _FakeStorage(),
     )
 
-    with caplog.at_level(logging.WARNING):
+    from app.services.attachment_service import streams as _streams_mod
+    _stream_logger = _streams_mod.logger
+    _stream_logger.disabled = False
+    _stream_logger.addHandler(caplog.handler)
+    _stream_logger.setLevel(logging.WARNING)
+
+    try:
         returned_attachment, stream = AttachmentService.open_original_stream(None, 1, 12, None)
+    finally:
+        _stream_logger.removeHandler(caplog.handler)
 
     assert returned_attachment is attachment
     assert b"".join(stream) == b"storage-bytes"

@@ -70,9 +70,9 @@ def upgrade() -> None:
             sa.Column("updated_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.UniqueConstraint("tenant_id", name="uq_tenant_quota"),
         )
         op.create_index("ix_tenant_quotas_tenant_id", "tenant_quotas", ["tenant_id"])
-        op.create_unique_constraint("uq_tenant_quota", "tenant_quotas", ["tenant_id"])
 
     # Z-005: Feature flags
     if not _table_exists(inspector, "feature_flags"):
@@ -85,10 +85,10 @@ def upgrade() -> None:
             sa.Column("updated_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.UniqueConstraint("tenant_id", "feature_key", name="uq_tenant_feature"),
         )
         op.create_index("ix_feature_flags_tenant_id", "feature_flags", ["tenant_id"])
         op.create_index("ix_feature_flags_feature_key", "feature_flags", ["feature_key"])
-        op.create_unique_constraint("uq_tenant_feature", "feature_flags", ["tenant_id", "feature_key"])
 
     # Z-010: Domain verification
     if not _table_exists(inspector, "domain_verifications"):

@@ -24,6 +24,7 @@ def test_assignment_endpoints_emit_schema_version_header(
             "visibility": "company",
             "status": "draft",
             "company_ids": [test_tenant.id],
+            "platform": "Core Platform",
         },
     )
     assert create_response.status_code == 201

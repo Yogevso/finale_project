@@ -174,7 +174,7 @@ class SnapshotType(str, enum.Enum):
 document_company_assignments = Table(
     "document_company_assignments",
     Base.metadata,
-    Column("document_id", Integer, ForeignKey("documents.id"), primary_key=True),
+    Column("document_id", Integer, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
     Column("tenant_id", Integer, ForeignKey("tenants.id"), primary_key=True),
     Column("assigned_at", DateTime, default=datetime.utcnow),
     Column("assigned_by", Integer, ForeignKey("users.id")),
@@ -370,7 +370,7 @@ class Document(Base):
     thumbnail_url = Column(String(500), nullable=True)  # Cover image / thumbnail URL
     yjs_state = Column(LargeBinary, nullable=True)  # Yjs document state for real-time collaboration
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
+    parent_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
     row_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -412,7 +412,7 @@ class Version(Base):
     __tablename__ = "versions"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False)
     semantic_version = Column(String(32), nullable=True, index=True)
     bump_type = Column(SQLEnum(VersionBumpType), default=VersionBumpType.PATCH, nullable=False)
@@ -450,7 +450,7 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
@@ -597,7 +597,7 @@ class Comment(Base):
     __tablename__ = "comments"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(
         Integer, ForeignKey("comments.id"), nullable=True, index=True
@@ -625,7 +625,7 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
     action = Column(SQLEnum(ActionType), nullable=False, index=True)
     audience_event_type = Column(SQLEnum(AudienceEventType), nullable=True, index=True)
     details = Column(Text, nullable=True)
@@ -752,7 +752,7 @@ class Bookmark(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -770,7 +770,7 @@ class DocumentWatcher(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="watched_documents")
@@ -784,7 +784,7 @@ class Feedback(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     feedback_type = Column(SQLEnum(FeedbackType), default=FeedbackType.OTHER, nullable=False)
     status = Column(
         SQLEnum(FeedbackStatus), default=FeedbackStatus.PENDING, nullable=False, index=True
@@ -811,7 +811,7 @@ class ReadingProgress(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     progress_percent = Column(Integer, default=0, nullable=False)  # 0-100
     last_read_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)  # When progress reached 100%
@@ -828,7 +828,7 @@ class ReviewRequest(Base):
     __tablename__ = "review_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     version_id = Column(
         Integer, ForeignKey("versions.id"), nullable=True
     )  # Specific version if applicable
@@ -888,7 +888,7 @@ class CollaborationSession(Base):
     __tablename__ = "collaboration_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     session_id = Column(String(100), nullable=False, index=True)  # Unique session identifier
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -908,7 +908,7 @@ class CollaborationActivity(Base):
     __tablename__ = "collaboration_activities"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     session_id = Column(String(100), nullable=True, index=True)
     activity_type = Column(SQLEnum(CollaborationActivityType), nullable=False, index=True)
@@ -926,7 +926,7 @@ class CollaborationSnapshot(Base):
     __tablename__ = "collaboration_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Snapshot metadata
     snapshot_type = Column(SQLEnum(SnapshotType), nullable=False, index=True)
@@ -1168,7 +1168,7 @@ class SearchAnalytics(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     results_count = Column(Integer, nullable=False, default=0)
-    clicked_document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    clicked_document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -1183,8 +1183,8 @@ class BrokenLinkReport(Base):
     __tablename__ = "broken_link_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
-    version_id = Column(Integer, ForeignKey("versions.id"), nullable=False)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_id = Column(Integer, ForeignKey("versions.id", ondelete="CASCADE"), nullable=False)
     broken_url = Column(String(1000), nullable=False)
     link_text = Column(String(500), nullable=True)
     reason = Column(String(200), nullable=False)  # e.g. "target_not_found", "target_archived"

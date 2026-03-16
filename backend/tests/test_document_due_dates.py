@@ -13,6 +13,7 @@ def test_document_due_date_round_trip_and_clear(client, auth_headers, db):
             "title": "Due date document",
             "description": "Tracks a due date",
             "due_date": "2026-03-18",
+            "platform": "Core Platform",
         },
     )
     assert create_response.status_code == 201
@@ -50,6 +51,7 @@ def test_document_due_date_calendar_export_returns_ical(client, auth_headers):
             "title": "Release readiness checklist",
             "description": "Calendar export coverage",
             "due_date": "2026-04-01",
+            "platform": "Core Platform",
         },
     )
     assert create_response.status_code == 201

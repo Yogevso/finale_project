@@ -16,11 +16,21 @@ branch_labels = None
 depends_on = None
 
 
+def _column_exists(table: str, column: str) -> bool:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return any(c["name"] == column for c in inspector.get_columns(table))
+
+
 def upgrade() -> None:
-    op.add_column('chat_messages', sa.Column('file_url', sa.String(length=500), nullable=True))
-    op.add_column('chat_messages', sa.Column('file_name', sa.String(length=255), nullable=True))
-    op.add_column('chat_messages', sa.Column('file_size', sa.Integer(), nullable=True))
-    op.add_column('chat_messages', sa.Column('file_mime_type', sa.String(length=100), nullable=True))
+    if not _column_exists("chat_messages", "file_url"):
+        op.add_column('chat_messages', sa.Column('file_url', sa.String(length=500), nullable=True))
+    if not _column_exists("chat_messages", "file_name"):
+        op.add_column('chat_messages', sa.Column('file_name', sa.String(length=255), nullable=True))
+    if not _column_exists("chat_messages", "file_size"):
+        op.add_column('chat_messages', sa.Column('file_size', sa.Integer(), nullable=True))
+    if not _column_exists("chat_messages", "file_mime_type"):
+        op.add_column('chat_messages', sa.Column('file_mime_type', sa.String(length=100), nullable=True))
 
 
 def downgrade() -> None:

@@ -380,7 +380,7 @@ class CommentService(SessionService):
                 return None
 
             # Skip cross-tenant (chat service enforces this too)
-            if current_user.tenant_id != doc_author.tenant_id:
+            if not current_user.tenant_id or current_user.tenant_id != doc_author.tenant_id:
                 return None
 
             chat_svc = ChatService(self.db)

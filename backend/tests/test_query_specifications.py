@@ -137,13 +137,30 @@ def test_visibility_spec_customer_portal_query_and_runtime(
 def test_document_repository_spec_composition(
     db, test_customer, test_user, public_document, company_document, internal_document
 ):
+    tenant_a = Tenant(
+        name=f"Repo Tenant A {uuid4().hex[:6]}",
+        slug=f"repo-tenant-a-{uuid4().hex[:6]}",
+        is_active=True,
+        company_type="customer",
+    )
+    tenant_b = Tenant(
+        name=f"Repo Tenant B {uuid4().hex[:6]}",
+        slug=f"repo-tenant-b-{uuid4().hex[:6]}",
+        is_active=True,
+        company_type="customer",
+    )
+    db.add_all([tenant_a, tenant_b])
+    db.commit()
+    db.refresh(tenant_a)
+    db.refresh(tenant_b)
+
     scoped_doc = Document(
         title="Repository Scoped Doc",
         document_number=f"DOC-RSD-{uuid4().hex[:6].upper()}",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.INTERNAL,
         created_by=test_user.id,
-        tenant_id=77,
+        tenant_id=tenant_a.id,
     )
     other_doc = Document(
         title="Repository Other Tenant Doc",
@@ -151,13 +168,13 @@ def test_document_repository_spec_composition(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.INTERNAL,
         created_by=test_user.id,
-        tenant_id=88,
+        tenant_id=tenant_b.id,
     )
     db.add_all([scoped_doc, other_doc])
     db.commit()
 
     test_user.role = UserRole.EDITOR
-    test_user.tenant_id = 77
+    test_user.tenant_id = tenant_a.id
     db.commit()
 
     repository = DocumentRepository(db)
