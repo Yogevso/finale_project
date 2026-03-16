@@ -40,6 +40,8 @@ def _index_exists(table_name: str, index_name: str) -> bool:
 
 
 def upgrade() -> None:
+    if not _table_exists("password_resets"):
+        return
     # Add token_prefix column for indexed lookup (first 8 chars of raw token)
     if not _column_exists("password_resets", "token_prefix"):
         op.add_column(
