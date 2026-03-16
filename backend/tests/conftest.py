@@ -23,7 +23,7 @@ from app.config import settings
 settings.APP_ENV = "testing"
 
 from app.db import Base, get_db
-from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole
+from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole, Version
 from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
 from tests.tenant_isolation.harness import TenantIsolationScenario
@@ -377,8 +377,10 @@ def customer_2_headers(client, test_customer_2):
 
 @pytest.fixture
 def public_document(db, test_admin):
-    """Create a public active document"""
-    return create_document(
+    """Create a public active document with a published version"""
+    from datetime import datetime
+
+    doc = create_document(
         db,
         title="Public Document",
         document_number="DOC-PUB-001",
@@ -387,6 +389,19 @@ def public_document(db, test_admin):
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
     )
+    version = Version(
+        document_id=doc.id,
+        version_number=1,
+        content="Published test content",
+        is_published=True,
+        published_at=datetime.utcnow(),
+        created_by=test_admin.id,
+        published_by=test_admin.id,
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(doc)
+    return doc
 
 
 @pytest.fixture

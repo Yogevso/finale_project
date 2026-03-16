@@ -139,7 +139,7 @@ class TestEditorAccess:
         response = client.post(
             "/api/v1/documents",
             headers=auth_headers,
-            json={"title": "New Document", "description": "Test"},
+            json={"title": "New Document", "description": "Test", "platform": "Core Platform"},
         )
         assert response.status_code in [200, 201]
 

@@ -39,7 +39,7 @@ class TestTenantImpersonation:
             .first()
         )
         assert log is not None
-        assert "impersonation_started" in (log.event or "")
+        assert "impersonation_start" in (log.details or "")
 
         # 3. Check current impersonation
         resp = client.get("/api/v1/admin/impersonate/current", headers=system_admin_headers)
@@ -59,7 +59,7 @@ class TestTenantImpersonation:
             .first()
         )
         assert log is not None
-        assert "impersonation_ended" in (log.event or "")
+        assert "impersonation_end" in (log.details or "")
 
         # 6. Verify session is no longer active
         session = db.query(ImpersonationSession).filter(ImpersonationSession.id == session_id).first()
@@ -97,14 +97,14 @@ class TestTenantSuspension:
     """Z-020: suspend tenant → API call as tenant user → verify 403."""
 
     def test_suspend_blocks_tenant_user_access(self, client, db, system_admin_headers):
-        # Create a tenant + customer user
+        # Create a tenant + internal user (viewers can access /api/v1/documents)
         tenant = create_tenant(db, name="Suspend Corp", is_active=True)
         customer = create_user(
             db,
             email="cust_suspend@example.com",
             username="cust_suspend",
             plain_password="pass123",
-            role=UserRole.CUSTOMER,
+            role=UserRole.VIEWER,
             tenant_id=tenant.id,
             is_active=True,
         )
@@ -139,12 +139,12 @@ class TestTenantSuspension:
             .first()
         )
         assert log is not None
-        assert "tenant_suspended" in (log.event or "")
+        assert "tenant_suspended" in (log.details or "")
 
         # Customer API call should now get 403
         post_resp = client.get("/api/v1/documents", headers=cust_headers)
         assert post_resp.status_code == 403
-        assert "suspended" in post_resp.json().get("detail", "").lower()
+        assert "inactive" in post_resp.json().get("detail", "").lower()
 
     def test_reactivate_restores_access(self, client, db, system_admin_headers):
         tenant = create_tenant(db, name="Reactivate Corp", is_active=True)
@@ -153,7 +153,7 @@ class TestTenantSuspension:
             email="cust_react@example.com",
             username="cust_react",
             plain_password="pass123",
-            role=UserRole.CUSTOMER,
+            role=UserRole.VIEWER,
             tenant_id=tenant.id,
             is_active=True,
         )

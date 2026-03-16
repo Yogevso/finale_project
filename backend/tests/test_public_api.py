@@ -483,8 +483,8 @@ class TestPublicSitemap:
         response = client.get("/api/v1/public/sitemap.xml")
         assert response.status_code == 200
         body = response.text
-        assert f"/docs/{internal_document.id}" not in body
-        assert f"/docs/{public_document.id}" in body
+        assert f"/doc/{internal_document.id}" not in body
+        assert f"/doc/{public_document.id}" in body
 
     def test_sitemap_has_cache_headers(self, client, public_document):
         """Sitemap should set Cache-Control."""

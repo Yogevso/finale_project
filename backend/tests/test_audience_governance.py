@@ -19,7 +19,7 @@ def _create_document_with_visibility(
     visibility: str,
     company_ids: list[int] | None = None,
 ) -> dict:
-    payload = {"title": title, "status": "draft", "visibility": visibility}
+    payload = {"title": title, "status": "draft", "visibility": visibility, "platform": "Core Platform"}
     if company_ids is not None:
         payload["company_ids"] = company_ids
     response = client.post("/api/v1/documents", headers=headers, json=payload)
