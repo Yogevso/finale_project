@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 from app.conversion import (
@@ -167,12 +168,20 @@ def test_document_conversion_pipeline_describes_registered_strategy_capabilities
 def test_document_conversion_pipeline_returns_none_when_strategy_has_no_reader_output(caplog):
     pipeline = DocumentConversionPipeline()
 
-    with caplog.at_level("INFO"):
+    from app.conversion import document_pipeline as _dp_mod
+    _dp_logger = _dp_mod.logger
+    _dp_logger.disabled = False
+    _dp_logger.addHandler(caplog.handler)
+    _dp_logger.setLevel(logging.INFO)
+
+    try:
         artifact = pipeline.convert_document_to_reader_artifact(
             b"plain text",
             "text/plain",
             "notes.txt",
         )
+    finally:
+        _dp_logger.removeHandler(caplog.handler)
 
     assert artifact is None
     assert "does not support reader artifacts" in caplog.text
