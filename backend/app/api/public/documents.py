@@ -590,7 +590,7 @@ def get_public_sitemap(
     for doc_id, updated_at in docs:
         lastmod = updated_at.strftime("%Y-%m-%d") if updated_at else ""
         lines.append("  <url>\n")
-        lines.append(f"    <loc>{origin}/docs/{doc_id}</loc>\n")
+        lines.append(f"    <loc>{origin}/doc/{doc_id}</loc>\n")
         if lastmod:
             lines.append(f"    <lastmod>{lastmod}</lastmod>\n")
         lines.append("    <changefreq>weekly</changefreq>\n")
