@@ -2,6 +2,52 @@
 
 # ruff: noqa: E402
 
+# ---------------------------------------------------------------------------
+# Stub out chromadb early to prevent numpy C-extension load failures.
+# On systems where numpy's .pyd is blocked (e.g. Windows Smart App Control),
+# importing chromadb crashes the process. Since no tests actually need a real
+# vector store, we inject lightweight fakes into sys.modules before anything
+# else is imported.
+# ---------------------------------------------------------------------------
+import sys
+import types
+
+def _make_stub(name: str) -> types.ModuleType:
+    mod = types.ModuleType(name)
+    mod.__path__ = []  # make it a "package"
+    return mod
+
+if "chromadb" not in sys.modules:
+    _chromadb = _make_stub("chromadb")
+
+    # Minimal attributes that application code references at import time
+    class _FakeSettings:
+        def __init__(self, **kw):
+            pass
+    _config = _make_stub("chromadb.config")
+    _config.Settings = _FakeSettings  # type: ignore[attr-defined]
+
+    class _FakeClientAPI:
+        """Duck-typed stand-in for chromadb.ClientAPI."""
+        pass
+
+    _chromadb.ClientAPI = _FakeClientAPI  # type: ignore[attr-defined]
+
+    def _PersistentClient(**kw):  # noqa: N802
+        return _FakeClientAPI()
+
+    _chromadb.PersistentClient = _PersistentClient  # type: ignore[attr-defined]
+
+    # Register stubs so that `import chromadb` / `from chromadb.config import ...`
+    # resolve without hitting the real package (and numpy).
+    for _name, _mod in [
+        ("chromadb", _chromadb),
+        ("chromadb.config", _config),
+        ("chromadb.api", _make_stub("chromadb.api")),
+        ("chromadb.api.types", _make_stub("chromadb.api.types")),
+    ]:
+        sys.modules.setdefault(_name, _mod)
+
 import asyncio
 import os
 import shutil
@@ -62,6 +108,17 @@ Base.metadata.create_all(bind=engine)
 
 # Now it is safe to import the FastAPI application.
 from app.main import app  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# ONE shared TestClient for the entire session.  Creating a TestClient spins
+# up an anyio blocking-portal thread + asyncio event-loop thread.  When a
+# *new* TestClient is created per-test (×1 000+ tests), the thread-pool
+# accumulates and eventually triggers a CPython 3.14 access-violation crash
+# inside socket.getaddrinfo running on a concurrent-futures worker thread.
+# Reusing a single client avoids this.
+# ---------------------------------------------------------------------------
+_shared_test_client = TestClient(app)
+_shared_test_client.__enter__()
 
 
 @pytest.fixture(autouse=True)
@@ -127,7 +184,7 @@ def tmp_path():
 
 @pytest.fixture(scope="function")
 def client(db):
-    """Create a test client"""
+    """Reuse the shared TestClient, just swap the DB override per test."""
 
     def override_get_db():
         try:
@@ -136,9 +193,10 @@ def client(db):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+    try:
+        yield _shared_test_client
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture

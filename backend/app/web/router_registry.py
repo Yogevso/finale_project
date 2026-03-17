@@ -15,6 +15,7 @@ from app.api.management import (
     assistant,
     attachments,
     audience_governance,
+    gdpr,
     auth,
     broken_links,
     canned_responses,
@@ -102,6 +103,7 @@ class FastAPIRouterRegistry:
             RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
             RouterRegistration(admin_ops.router, prefix=self._api_prefix, tags=("Admin Operations",)),
+            RouterRegistration(gdpr.router, prefix=self._api_prefix, tags=("GDPR & Compliance",)),
             RouterRegistration(assistant.router, prefix=self._api_prefix, tags=("Assistant",)),
             RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),
             # Viewer Portal (public, no auth required)

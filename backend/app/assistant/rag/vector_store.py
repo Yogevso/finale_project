@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+if TYPE_CHECKING:
+    import chromadb
 
 from app.config import settings
 
@@ -36,6 +36,9 @@ class VectorStore:
 
     def _get_client(self) -> chromadb.ClientAPI:
         if self._client is None:
+            import chromadb
+            from chromadb.config import Settings as ChromaSettings
+
             self._client = chromadb.PersistentClient(
                 path=self._persist_dir,
                 settings=ChromaSettings(anonymized_telemetry=False),

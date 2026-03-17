@@ -29,6 +29,7 @@ from app.middleware import (
     TenantContextMiddleware,
 )
 from app.projections import get_projection_cache, register_projection_invalidation_listeners
+from app.sunset_middleware import SunsetMiddleware
 from app.web.router_registry import FastAPIRouterRegistry, build_default_router_registry
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ class FastAPIAppFactory:
         # Add middleware (order matters - first added is outermost).
         # SecurityHeadersMiddleware runs last (innermost), closest to response
         app.add_middleware(SecurityHeadersMiddleware)
+        app.add_middleware(SunsetMiddleware)  # AA-015: Sunset headers for deprecated endpoints
         app.add_middleware(
             RateLimitMiddleware,
             max_requests=settings.RATE_LIMIT_REQUESTS,

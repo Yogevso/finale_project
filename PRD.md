@@ -1182,35 +1182,35 @@ Users need a way to communicate privately about documents without those conversa
 ## Wave AA — Compliance, Data, and Scale Maturity
 
 ### Data Governance
-- [ ] AA-001: Add data export requests workflow — user/admin can request full export of their documents and metadata, generate ZIP, email download link (GDPR Article 20).
-- [ ] AA-002: Add data deletion requests workflow — user requests account deletion, admin approves, system anonymizes user data while preserving audit trail integrity.
-- [ ] AA-004: Add audit log immutability hardening — append-only audit table with DB trigger preventing `UPDATE`/`DELETE`, add integrity check command.
+- [x] AA-001: Add data export requests workflow — user/admin can request full export of their documents and metadata, generate ZIP, email download link (GDPR Article 20).
+- [x] AA-002: Add data deletion requests workflow — user requests account deletion, admin approves, system anonymizes user data while preserving audit trail integrity.
+- [x] AA-004: Add audit log immutability hardening — append-only audit table with DB trigger preventing `UPDATE`/`DELETE`, add integrity check command.
 
 ### Security Ops
-- [ ] AA-005: Add key rotation script (`backend/scripts/rotate_secrets.py`) — rotate JWT secret key with grace period (accept old key for 24 hours), rotate HMAC audit signing key.
-- [ ] AA-006: Add backup/restore game-day drill script — automate: take backup, corrupt DB, restore, verify data integrity — document as runbook.
-- [ ] AA-007: Add disaster recovery validation — document RTO (4 hours) and RPO (1 hour) targets, create test that verifies backup recency.
-- [ ] AA-008: Add cross-region failover simulation — if S3-compatible storage configured, test failover to secondary bucket.
-- [ ] AA-009: Add dependency vulnerability response pipeline — `pip-audit` + `npm audit` in CI, auto-create GitHub issue for critical CVEs.
+- [x] AA-005: Add key rotation script (`backend/scripts/rotate_secrets.py`) — rotate JWT secret key with grace period (accept old key for 24 hours), rotate HMAC audit signing key.
+- [x] AA-006: Add backup/restore game-day drill script — automate: take backup, corrupt DB, restore, verify data integrity — document as runbook.
+- [x] AA-007: Add disaster recovery validation — document RTO (4 hours) and RPO (1 hour) targets, create test that verifies backup recency.
+- [x] AA-008: Add cross-region failover simulation — if S3-compatible storage configured, test failover to secondary bucket.
+- [x] AA-009: Add dependency vulnerability response pipeline — `pip-audit` + `npm audit` in CI, auto-create GitHub issue for critical CVEs.
 
 ### Compliance & Accessibility
-- [ ] AA-010: Add SOC2 evidence collection script — gather: user access logs, config change logs, uptime metrics, test results — output as compliance bundle.
-- [ ] AA-011: Create GDPR/CCPA policy mapping document (`docs/compliance/data-policy-mapping.md`) — map each data field to legal basis, retention period, and deletion procedure.
-- [ ] AA-012: Run WCAG 2.1 AA accessibility audit on all frontend pages — fix critical issues (missing alt text, keyboard traps, color contrast).
-- [ ] AA-013: Add performance budget enforcement in CI — Lighthouse score ≥80 for public pages, bundle size <500KB, first contentful paint <2s.
-- [ ] AA-014: Add mobile responsiveness baseline — all public and portal pages must pass viewport test at 375px, 768px, 1024px widths.
-- [ ] AA-015: Add API deprecation communication workflow — when an endpoint is deprecated, set `Sunset` header, add to `docs/deprecations.md`, send notification to API consumers.
-- [ ] AA-016: Add public API version sunset tooling — scheduled job that removes deprecated endpoints after sunset date, with 30-day advance warnings.
+- [x] AA-010: Add SOC2 evidence collection script — gather: user access logs, config change logs, uptime metrics, test results — output as compliance bundle.
+- [x] AA-011: Create GDPR/CCPA policy mapping document (`docs/compliance/data-policy-mapping.md`) — map each data field to legal basis, retention period, and deletion procedure.
+- [x] AA-012: Run WCAG 2.1 AA accessibility audit on all frontend pages — fix critical issues (missing alt text, keyboard traps, color contrast).
+- [x] AA-013: Add performance budget enforcement in CI — Lighthouse score ≥80 for public pages, bundle size <500KB, first contentful paint <2s.
+- [x] AA-014: Add mobile responsiveness baseline — all public and portal pages must pass viewport test at 375px, 768px, 1024px widths.
+- [x] AA-015: Add API deprecation communication workflow — when an endpoint is deprecated, set `Sunset` header, add to `docs/deprecations.md`, send notification to API consumers.
+- [x] AA-016: Add public API version sunset tooling — scheduled job that removes deprecated endpoints after sunset date, with 30-day advance warnings.
 
 ### Wave AA — Tests
-- [ ] AA-017: Backend integration test for data export — request export, verify ZIP contains all user documents, metadata, and attachments.
-- [ ] AA-018: Backend integration test for data deletion — request deletion, verify user anonymized, documents attributed to "Deleted User", audit log intact.
-- [ ] AA-019: Backend integration test for retention policy — create document, set retention to 0 days, run retention job, verify archived.
-- [ ] AA-020: Backend test for audit immutability — attempt to UPDATE audit_logs row via raw SQL in test, verify it fails/is prevented.
-- [ ] AA-021: CI test for dependency vulnerabilities — run `pip-audit` and `npm audit`, assert no critical/high severity issues.
-- [ ] AA-022: Playwright accessibility test for all public pages — run `@axe-core/playwright` on 5 key public pages, assert zero critical/serious violations.
-- [ ] AA-023: Playwright mobile responsiveness test — render `PublicHomePage` at 375px width, verify no horizontal scroll, verify mobile nav works.
-- [ ] AA-024: Performance budget test — build frontend, assert bundle size <500KB, run Lighthouse CI on public home page.
+- [x] AA-017: Backend integration test for data export — request export, verify ZIP contains all user documents, metadata, and attachments.
+- [x] AA-018: Backend integration test for data deletion — request deletion, verify user anonymized, documents attributed to "Deleted User", audit log intact.
+- [x] AA-019: Backend integration test for retention policy — create document, set retention to 0 days, run retention job, verify archived.
+- [x] AA-020: Backend test for audit immutability — attempt to UPDATE audit_logs row via raw SQL in test, verify it fails/is prevented.
+- [x] AA-021: CI test for dependency vulnerabilities — run `pip-audit` and `npm audit`, assert no critical/high severity issues.
+- [x] AA-022: Playwright accessibility test for all public pages — run `@axe-core/playwright` on 5 key public pages, assert zero critical/serious violations.
+- [x] AA-023: Playwright mobile responsiveness test — render `PublicHomePage` at 375px width, verify no horizontal scroll, verify mobile nav works.
+- [x] AA-024: Performance budget test — build frontend, assert bundle size <500KB, run Lighthouse CI on public home page.
 
 ---
 
