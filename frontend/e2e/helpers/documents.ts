@@ -39,6 +39,7 @@ export async function createDocumentViaApi(
       category: input.category ?? 'Operations',
       status: input.status ?? 'draft',
       visibility: input.visibility ?? 'internal',
+      platform: 'Core Platform',
     },
   })
 

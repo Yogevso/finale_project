@@ -25,7 +25,7 @@ test.describe('Z-022 Admin Tenant Provisioning', () => {
   test('should navigate to admin operations page', async ({ page }) => {
     await page.goto('/admin/operations')
     await expect(page.locator('h1')).toContainText('Admin Operations')
-    await expect(page.locator('text=System Admin')).toBeVisible()
+    await expect(page.locator('text=System Admin').first()).toBeVisible()
   })
 
   test('should provision a new tenant via the wizard', async ({ page }) => {

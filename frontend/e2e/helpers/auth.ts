@@ -146,3 +146,11 @@ export async function getApiAuthHeaders(
     Authorization: `Bearer ${payload.access_token}`,
   };
 }
+
+export async function adminLogin(page: Page) {
+  await loginByApi(page, { username: 'admin', password: 'admin123' }, /\/(dashboard|documents)/, '/dashboard');
+}
+
+export async function editorLogin(page: Page) {
+  await loginByApi(page, { username: 'editor', password: 'editor123' }, /\/(dashboard|documents)/, '/dashboard');
+}

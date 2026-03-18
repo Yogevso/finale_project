@@ -10,7 +10,7 @@ test.describe('Profile settings', () => {
     await page.goto('/profile')
     await expect(page).toHaveURL(/\/profile/)
 
-    const fullNameInput = page.locator('input[type="text"]').first()
+    const fullNameInput = page.locator('#main-content input[type="text"]').first()
     const saveButton = page.getByRole('button', { name: /save profile/i })
 
     const originalName = await fullNameInput.inputValue()
@@ -21,9 +21,9 @@ test.describe('Profile settings', () => {
     await expect(page.getByText(/profile updated/i)).toBeVisible()
 
     await page.reload()
-    await expect(page.locator('input[type="text"]').first()).toHaveValue(updatedName)
+    await expect(page.locator('#main-content input[type="text"]').first()).toHaveValue(updatedName)
 
-    await page.locator('input[type="text"]').first().fill(originalName)
+    await page.locator('#main-content input[type="text"]').first().fill(originalName)
     await saveButton.click()
     await expect(page.getByText(/profile updated/i)).toBeVisible()
   })
