@@ -48,7 +48,7 @@ export default function AnalyticsDashboardPage() {
         onTabChange={controller.setActiveTab}
       />
 
-      <AnalyticsSectionContent activeTab={controller.activeTab} queryParams={controller.queryParams} />
+      <AnalyticsSectionContent key={controller.activeTab} activeTab={controller.activeTab} queryParams={controller.queryParams} />
     </div>
   )
 }

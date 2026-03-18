@@ -118,9 +118,10 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
               onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
               className="input-field"
               placeholder="acme-corp (auto-generated if empty)"
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
             />
             <p className="mt-1 text-xs text-slate-500">
-              URL-friendly identifier. Leave empty to auto-generate from name.
+              URL-friendly identifier — lowercase letters, numbers, and hyphens only. Leave empty to auto-generate from name.
             </p>
           </div>
 
@@ -166,6 +167,17 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
               className="input-field"
               placeholder="https://example.com/logo.png"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Full URL to an image (PNG, SVG, or JPG recommended).
+            </p>
+            {formData.company_logo && /^https?:\/\/.+/i.test(formData.company_logo) && (
+              <img
+                src={formData.company_logo}
+                alt="Logo preview"
+                className="mt-2 h-10 w-10 rounded object-contain border border-slate-200"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-2">

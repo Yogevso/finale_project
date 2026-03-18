@@ -106,27 +106,27 @@ export default function ProfileSettingsPage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Username</label>
+            <label className="text-sm font-medium text-slate-700">Username <span className="text-xs text-slate-400 font-normal">(read-only)</span></label>
             <input
               type="text"
               value={user.username}
               readOnly
-              className="input-field bg-slate-100 text-slate-500"
+              className="input-field bg-slate-100 text-slate-500 cursor-default"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Email</label>
-            <input type="email" value={user.email} readOnly className="input-field bg-slate-100 text-slate-500" />
+            <label className="text-sm font-medium text-slate-700">Email <span className="text-xs text-slate-400 font-normal">(read-only)</span></label>
+            <input type="email" value={user.email} readOnly className="input-field bg-slate-100 text-slate-500 cursor-default" />
           </div>
 
           <div className="space-y-1">
-            <label className="text-sm font-medium text-slate-700">Role</label>
+            <label className="text-sm font-medium text-slate-700">Role <span className="text-xs text-slate-400 font-normal">(read-only)</span></label>
             <input
               type="text"
               value={user.role.replace('_', ' ')}
               readOnly
-              className="input-field bg-slate-100 text-slate-500 capitalize"
+              className="input-field bg-slate-100 text-slate-500 capitalize cursor-default"
             />
           </div>
 
@@ -145,7 +145,7 @@ export default function ProfileSettingsPage() {
             <label className="text-sm font-medium text-slate-700">Timezone</label>
             <select
               value={timezone}
-              onChange={(event) => setTimezone(event.target.value)}
+              onChange={(event) => { setTimezone(event.target.value); setTimezoneSearch('') }}
               className="select-field"
             >
               {timezoneOptions.map((zone) => (
@@ -174,7 +174,7 @@ export default function ProfileSettingsPage() {
 
         <button
           type="button"
-          className="btn-primary"
+          className="btn-primary disabled:cursor-not-allowed"
           disabled={
             updateProfileMutation.isPending ||
             fullName.trim().length === 0 ||

@@ -40,7 +40,7 @@ export default function SecurityEventsPage() {
 
   const data = securityEventsQuery.data
   const events = data?.items ?? []
-  const totalPages = data?.pages ?? 0
+  const totalPages = data?.total_pages ?? 0
 
   return (
     <div className="space-y-6">
@@ -74,7 +74,6 @@ export default function SecurityEventsPage() {
                 <tr>
                   <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Event</th>
                   <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">IP Address</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Location</th>
                   <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Date/Time</th>
                   <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">User Agent</th>
                 </tr>
@@ -84,9 +83,6 @@ export default function SecurityEventsPage() {
                   <tr key={event.id} className="border-b border-slate-100">
                     <td className="px-4 py-4 text-sm text-slate-900 capitalize">
                       {getEventLabel(event.event_type)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {event.ip_address || 'Unknown'}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-700">
                       {event.ip_address || 'Unknown'}

@@ -6,6 +6,7 @@ import { Building2, Search, Plus, Users, FileText, MoreVertical, Eye, Trash2, Ed
 import { Link } from 'react-router-dom'
 import type { Company, CompanyType } from '@/types'
 import CompanyForm from '@/components/CompanyForm'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 import PageHeader from '@/components/PageHeader'
 
 export default function CompaniesPage() {
@@ -18,6 +19,7 @@ export default function CompaniesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingCompany, setEditingCompany] = useState<Company | null>(null)
   const [openDropdown, setOpenDropdown] = useState<number | null>(null)
+  const [companyToDeactivate, setCompanyToDeactivate] = useState<Company | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['companies', page, search, typeFilter, activeFilter],
@@ -38,10 +40,8 @@ export default function CompaniesPage() {
     },
   })
 
-  const handleDeleteCompany = async (company: Company) => {
-    if (confirm(`Are you sure you want to deactivate "${company.name}"? This will not delete any data.`)) {
-      await deleteCompanyMutation.mutateAsync(company.id)
-    }
+  const handleDeleteCompany = (company: Company) => {
+    setCompanyToDeactivate(company)
     setOpenDropdown(null)
   }
 
@@ -103,6 +103,7 @@ export default function CompaniesPage() {
                   setPage(1)
                 }}
                 className="input-field pl-10"
+                aria-label="Search companies by name"
               />
             </div>
             <select
@@ -112,6 +113,7 @@ export default function CompaniesPage() {
                 setPage(1)
               }}
               className="select-field min-w-[150px]"
+              aria-label="Filter by company type"
             >
               <option value="">All Types</option>
               <option value="customer">Customer</option>
@@ -125,6 +127,7 @@ export default function CompaniesPage() {
                 setPage(1)
               }}
               className="select-field min-w-[150px]"
+              aria-label="Filter by status"
             >
               <option value="">All Status</option>
               <option value="true">Active</option>
@@ -187,16 +190,16 @@ export default function CompaniesPage() {
                       </span>
                     </td>
                     <td className="admin-table-cell">
-                      <div className="flex items-center gap-2 text-slate-600">
+                      <Link to={`/admin/companies/${company.id}`} className="flex items-center gap-2 text-slate-600 hover:text-sky-700">
                         <Users className="w-4 h-4" />
                         {company.user_count}
-                      </div>
+                      </Link>
                     </td>
                     <td className="admin-table-cell">
-                      <div className="flex items-center gap-2 text-slate-600">
+                      <Link to={`/admin/companies/${company.id}`} className="flex items-center gap-2 text-slate-600 hover:text-sky-700">
                         <FileText className="w-4 h-4" />
                         {company.assigned_document_count}
-                      </div>
+                      </Link>
                     </td>
                     <td className="admin-table-cell">
                       <span className={`pill ${
@@ -214,7 +217,7 @@ export default function CompaniesPage() {
                           <MoreVertical className="w-4 h-4 text-slate-500" />
                         </button>
                         {openDropdown === company.id && (
-                          <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-10">
+                          <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
                             <Link
                               to={`/admin/companies/${company.id}`}
                               className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-50 rounded-t-xl"
@@ -252,7 +255,7 @@ export default function CompaniesPage() {
       </div>
 
       {/* Pagination */}
-      {data && data.pages > 1 && (
+      {data && data.total_pages > 1 && (
         <div className="flex justify-center gap-2">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -262,11 +265,11 @@ export default function CompaniesPage() {
             Previous
           </button>
           <span className="px-4 py-2 text-slate-600">
-            Page {page} of {data.pages}
+            Page {page} of {data.total_pages}
           </span>
           <button
-            onClick={() => setPage(p => Math.min(data.pages, p + 1))}
-            disabled={page === data.pages}
+            onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
+            disabled={page === data.total_pages}
             className="btn-ghost disabled:opacity-50"
           >
             Next
@@ -294,6 +297,21 @@ export default function CompaniesPage() {
           onClick={() => setOpenDropdown(null)}
         />
       )}
+
+      {/* Deactivate confirmation */}
+      <ConfirmationDialog
+        open={!!companyToDeactivate}
+        title="Deactivate company"
+        description={`Are you sure you want to deactivate "${companyToDeactivate?.name}"? This will not delete any data.`}
+        confirmLabel="Deactivate"
+        isLoading={deleteCompanyMutation.isPending}
+        onConfirm={() => {
+          if (companyToDeactivate) {
+            deleteCompanyMutation.mutate(companyToDeactivate.id, { onSettled: () => setCompanyToDeactivate(null) })
+          }
+        }}
+        onCancel={() => setCompanyToDeactivate(null)}
+      />
     </div>
   )
 }

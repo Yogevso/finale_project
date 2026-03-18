@@ -111,7 +111,7 @@ export default function CompanySelector({
 
   const pageCompanies = companiesQuery.data?.items ?? EMPTY_PAGE_COMPANIES
   const currentPage = companiesQuery.data?.page ?? page
-  const totalPages = companiesQuery.data?.pages ?? 1
+  const totalPages = companiesQuery.data?.total_pages ?? 1
   const hasPreviousPage = currentPage > 1
   const hasNextPage = currentPage < totalPages
 

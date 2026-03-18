@@ -20,8 +20,10 @@ import {
 } from 'lucide-react'
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 type UserCreateFormData = {
   email: string
@@ -46,6 +48,7 @@ export default function UsersPage() {
   const { isAdmin, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const toast = useToast()
   
   const [searchInput, setSearchInput] = useState('')
   const debouncedSearch = useDebouncedValue(searchInput, 300)
@@ -55,6 +58,7 @@ export default function UsersPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null)
 
   const { data: users, isLoading, error } = useQuery({
     queryKey: ['users', roleFilter, companyFilter, statusFilter, debouncedSearch],
@@ -76,7 +80,7 @@ export default function UsersPage() {
   const companies = companiesData?.items || []
 
   // Fetch pending invitations
-  const { data: invitationsData } = useQuery({
+  const { data: invitationsData, isLoading: isInvitationsLoading } = useQuery({
     queryKey: ['invitations', 'pending'],
     queryFn: () => api.getInvitations({ status: 'pending' as InvitationStatus, per_page: 50 }),
     enabled: isAdmin,
@@ -89,6 +93,10 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setShowCreateDialog(false)
+      toast.success('User created')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to create user', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -98,6 +106,10 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       setEditingUser(null)
+      toast.success('User updated')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to update user', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -105,6 +117,10 @@ export default function UsersPage() {
     mutationFn: (id: number) => api.deleteUser(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User deactivated')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to deactivate user', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -112,6 +128,10 @@ export default function UsersPage() {
     mutationFn: (id: number) => api.cancelInvitation(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
+      toast.success('Invitation cancelled')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to cancel invitation', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -119,6 +139,10 @@ export default function UsersPage() {
     mutationFn: (id: number) => api.resendInvitation(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
+      toast.success('Invitation resent')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to resend invitation', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -127,6 +151,9 @@ export default function UsersPage() {
     mutationFn: (userId: number) => api.createDirectChat({ user_id: userId }),
     onSuccess: (chat) => {
       navigate(`/chat?id=${chat.id}`)
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to start chat', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -206,6 +233,7 @@ export default function UsersPage() {
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search users..."
                 className="input-field pl-10"
+                aria-label="Search users by name or email"
               />
             </div>
             <select
@@ -312,7 +340,7 @@ export default function UsersPage() {
                           {user.company_name}
                         </div>
                       ) : (
-                        <span className="text-slate-400 text-sm">-</span>
+                        <span className="text-slate-400 text-sm italic">No company</span>
                       )}
                     </td>
                     <td className="admin-table-cell">
@@ -344,9 +372,11 @@ export default function UsersPage() {
                         {user.id !== currentUser?.id && (
                           <button
                             onClick={() => {
-                              if (confirm(`Deactivate user ${user.full_name}?`)) {
-                                deleteMutation.mutate(user.id)
-                              }
+                              setPendingConfirm({
+                                title: 'Deactivate user',
+                                description: `Are you sure you want to deactivate ${user.full_name}?`,
+                                onConfirm: () => { deleteMutation.mutate(user.id); setPendingConfirm(null) },
+                              })
                             }}
                             className="admin-icon-action-danger"
                             title="Deactivate"
@@ -365,17 +395,26 @@ export default function UsersPage() {
       </div>
 
       {/* Pending Invitations */}
-      {pendingInvitations.length > 0 && (
+      {(pendingInvitations.length > 0 || isInvitationsLoading) && (
         <div className="admin-table-shell">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-600" />
               <h3 className="font-display font-semibold text-slate-900">Pending Invitations</h3>
+              {!isInvitationsLoading && (
               <span className="pill bg-amber-100 text-amber-700">
                 {pendingInvitations.length}
               </span>
+              )}
             </div>
           </div>
+          {isInvitationsLoading ? (
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-4 w-44 mx-auto" />
+              <Skeleton className="h-4 w-36 mx-auto" />
+              <Skeleton className="h-4 w-40 mx-auto" />
+            </div>
+          ) : (
           <div className="admin-table-scroll">
             <table className="admin-table">
               <thead className="admin-table-head">
@@ -432,9 +471,11 @@ export default function UsersPage() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Cancel invitation for ${invitation.email}?`)) {
-                              cancelInvitationMutation.mutate(invitation.id)
-                            }
+                            setPendingConfirm({
+                              title: 'Cancel invitation',
+                              description: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
+                              onConfirm: () => { cancelInvitationMutation.mutate(invitation.id); setPendingConfirm(null) },
+                            })
                           }}
                           disabled={cancelInvitationMutation.isPending}
                           className="admin-icon-action-danger"
@@ -449,8 +490,19 @@ export default function UsersPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ''}
+        description={pendingConfirm?.description}
+        confirmLabel="Confirm"
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onCancel={() => setPendingConfirm(null)}
+      />
 
       {/* Create User Dialog */}
       {showCreateDialog && (

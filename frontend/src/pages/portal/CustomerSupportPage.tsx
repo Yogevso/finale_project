@@ -2,15 +2,18 @@
  * CustomerSupportPage — customer portal support tickets (X1-088 to X1-092)
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { formatDistanceToNow } from 'date-fns'
 import { Plus, ArrowLeft, Send, X } from 'lucide-react'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import type {
   SupportTicket,
   SupportTicketDetail,
+  SupportTicketMessage,
   SupportTicketPriority,
 } from '@/types/chat'
 
@@ -147,13 +150,48 @@ function CustomerTicketView({
   onBack: () => void
 }) {
   const queryClient = useQueryClient()
+  const { user: currentUser } = useAuth()
   const [message, setMessage] = useState('')
+  const toast = useToast()
+  const optimisticIdCounter = useRef(0)
 
   const sendMutation = useMutation({
     mutationFn: (content: string) => api.sendMyTicketMessage(ticket.id, { content }),
-    onSuccess: () => {
+    onMutate: async (content: string) => {
+      // Cancel outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['myTicket', ticket.id] })
+      const previous = queryClient.getQueryData<SupportTicketDetail>(['myTicket', ticket.id])
+
+      if (currentUser && previous) {
+        optimisticIdCounter.current -= 1
+        const optimistic: SupportTicketMessage = {
+          id: optimisticIdCounter.current,
+          ticket_id: ticket.id,
+          sender_id: currentUser.id,
+          sender_type: 'customer',
+          content,
+          is_internal_note: false,
+          created_at: new Date().toISOString(),
+          sender_full_name: currentUser.full_name,
+        }
+        queryClient.setQueryData<SupportTicketDetail>(['myTicket', ticket.id], {
+          ...previous,
+          messages: [...previous.messages, optimistic],
+        })
+      }
+
       setMessage('')
+      return { previous }
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myTicket', ticket.id] })
+    },
+    onError: (error: unknown, _content, context) => {
+      // Roll back to the previous state
+      if (context?.previous) {
+        queryClient.setQueryData(['myTicket', ticket.id], context.previous)
+      }
+      toast.error('Failed to send reply', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -162,6 +200,10 @@ function CustomerTicketView({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myTicket', ticket.id] })
       queryClient.invalidateQueries({ queryKey: ['myTickets'] })
+      toast.success('Ticket closed')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to close ticket', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -197,7 +239,14 @@ function CustomerTicketView({
       {/* Messages */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
-          {ticket.messages
+          {ticket.messages.filter((m) => !m.is_internal_note).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <Send className="mb-2 h-8 w-8" />
+              <p className="text-sm font-medium text-gray-500">No messages yet</p>
+              <p className="mt-0.5 text-xs">Send a message to start the conversation</p>
+            </div>
+          ) : (
+          ticket.messages
             .filter((m) => !m.is_internal_note)
             .map((msg) => (
               <div
@@ -224,7 +273,8 @@ function CustomerTicketView({
                   </p>
                 </div>
               </div>
-            ))}
+            ))
+          )}
         </div>
 
         {/* Reply input */}

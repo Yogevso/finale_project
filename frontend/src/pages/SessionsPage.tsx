@@ -105,7 +105,7 @@ export default function SessionsPage() {
         actions={
           <button
             type="button"
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => revokeAllSessionsMutation.mutate()}
             disabled={revokeAllSessionsMutation.isPending}
           >
@@ -183,7 +183,7 @@ export default function SessionsPage() {
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           onClick={() => revokeSessionMutation.mutate(session.id)}
                           disabled={revokeSessionMutation.isPending || session.is_current}
                           title={session.is_current ? 'Use "Sign out everywhere" to end this session' : 'Revoke session'}

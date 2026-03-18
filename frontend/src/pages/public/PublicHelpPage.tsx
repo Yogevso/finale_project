@@ -75,11 +75,11 @@ export default function PublicHelpPage() {
             </div>
 
             {/* Browse by Category */}
-            {categories && categories.length > 0 && (
+            {categories && categories.items && categories.items.length > 0 && (
               <div className="surface-card rounded-3xl p-8">
                 <h2 className="text-lg font-semibold text-slate-900 mb-4">Browse by category</h2>
                 <div className="flex flex-wrap gap-2">
-                  {categories.map((cat: { category: string; count: number }) => (
+                  {categories.items.map((cat: { category: string; count: number }) => (
                     <Link
                       key={cat.category}
                       to={`/docs?category=${encodeURIComponent(cat.category)}`}

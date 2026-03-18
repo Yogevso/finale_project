@@ -113,8 +113,9 @@ export default function DocumentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+        <p className="text-sm text-slate-500">Loading document…</p>
       </div>
     )
   }

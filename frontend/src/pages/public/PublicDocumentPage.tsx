@@ -16,6 +16,7 @@ import { publicApi } from '@/lib/publicApi'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import NotFoundState from '@/components/NotFoundState'
+import Skeleton from '@/components/Skeleton'
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
 import { SEO } from '@/components/SEO'
 
@@ -62,25 +63,24 @@ export default function PublicDocumentPage() {
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-slate-200 rounded-xl w-1/2 mb-4" />
-          <div className="h-4 bg-slate-200 rounded-xl w-1/4 mb-8" />
-          <div className="space-y-3">
-            <div className="h-4 bg-slate-200 rounded-xl" />
-            <div className="h-4 bg-slate-200 rounded-xl" />
-            <div className="h-4 bg-slate-200 rounded-xl w-3/4" />
-          </div>
+        <Skeleton className="h-8 w-1/2 mb-4" />
+        <Skeleton className="h-4 w-1/4 mb-8" />
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
         </div>
       </div>
     )
   }
 
   if (error || !doc) {
+    const is404 = error instanceof Error && error.message.includes('not found');
     return (
       <div className="max-w-4xl mx-auto px-4 py-16">
         <NotFoundState
-          title="Document Not Found"
-          description="This document doesn't exist or is not publicly accessible."
+          title={is404 ? "Document Not Found" : "Failed to Load Document"}
+          description={is404 ? "This document doesn't exist or is not publicly accessible." : "A network error occurred. Please check your connection and try again."}
           icon={<FileText className="h-12 w-12 text-slate-300" />}
           action={
             <Link

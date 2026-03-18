@@ -276,10 +276,11 @@ export default function AcceptInvitationPage() {
                 placeholder="Create a password"
                 required
                 minLength={8}
+                aria-describedby="password-hint"
                 className="input-field pl-10"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Must be at least 8 characters</p>
+            <p id="password-hint" className="text-xs text-slate-500 mt-1">Must be at least 8 characters</p>
           </div>
 
           <div>

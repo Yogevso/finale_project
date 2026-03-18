@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useChatSocket } from '@/hooks/useChatSocket'
+import { useToast } from '@/lib/toast'
 import type {
   ChatListItem,
   ChatMessage,
@@ -19,6 +20,7 @@ export function useChatController() {
   const [searchFilter, setSearchFilter] = useState('')
   const [typingUsers, setTypingUsers] = useState<Record<number, { username: string; timeout: ReturnType<typeof setTimeout> }>>({})
   const optimisticIdCounter = useRef(0)
+  const toast = useToast()
 
   // Fetch chat list
   const chatsQuery = useQuery({
@@ -179,9 +181,15 @@ export function useChatController() {
       }
 
       // Send via WebSocket — the server persists the message and broadcasts it back
-      socket.sendMessage(activeChatId, content)
+      try {
+        socket.sendMessage(activeChatId, content)
+      } catch {
+        // Remove optimistic message on send failure
+        queryClient.invalidateQueries({ queryKey: ['chatMessages', activeChatId] })
+        toast.error('Failed to send message', 'Please check your connection and try again.')
+      }
     },
-    [activeChatId, socket, currentUser, queryClient],
+    [activeChatId, socket, currentUser, queryClient, toast],
   )
 
   const handleTyping = useCallback(() => {

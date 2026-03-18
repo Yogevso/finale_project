@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { X } from 'lucide-react'
 import TemplateLibrary from '@/components/TemplateLibrary'
 import CompanySelector from '@/components/CompanySelector'
 import RichTextEditor from '@/components/RichTextEditor'
@@ -47,6 +49,8 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   const visibilityHelperText = getAudienceVisibilityHelperText(formData.visibility || 'internal')
   const duplicateMatches = duplicateCheckQuery.data?.matches ?? []
   const isTemplateMode = saveAsTemplate
+  const hasDuplicates = !isTemplateMode && duplicateMatches.length > 0
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false)
 
   const handleTemplateSelect = (template: DocumentTemplate) => {
     setSelectedTemplateId(template.id)
@@ -85,7 +89,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h2 className="text-xl font-display font-bold text-slate-900">Create Document</h2>
           <button onClick={confirmClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500" aria-label="Close create document dialog">
-            x
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -259,6 +263,15 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                         </a>
                       ))}
                     </div>
+                    <label className="mt-2 flex items-center gap-2 text-xs text-amber-800">
+                      <input
+                        type="checkbox"
+                        checked={duplicateAcknowledged}
+                        onChange={(e) => setDuplicateAcknowledged(e.target.checked)}
+                        className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                      />
+                      I've reviewed these — create anyway
+                    </label>
                   </div>
                 ) : null}
               </div>
@@ -456,7 +469,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               type="submit"
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || (hasDuplicates && !duplicateAcknowledged)}
               className="btn-primary flex items-center gap-2"
             >
               {createMutation.isPending ? (

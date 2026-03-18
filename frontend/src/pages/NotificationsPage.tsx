@@ -16,8 +16,10 @@ import {
 import { useNavigate } from 'react-router-dom'
 
 import PageHeader from '@/components/PageHeader'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
+import { useToast } from '@/lib/toast'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
 
 const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
@@ -69,6 +71,8 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1)
   const hasMounted = useRef(false)
   const currentLimit = page * NOTIFICATIONS_PAGE_SIZE
+  const toast = useToast()
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null)
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
@@ -163,6 +167,7 @@ export default function NotificationsPage() {
           })),
         }
       })
+      toast.success('All notifications marked as read')
     },
   })
 
@@ -229,9 +234,11 @@ export default function NotificationsPage() {
             {hasReadNotifications && (
               <button
                 onClick={() => {
-                  if (confirm('Delete all read notifications?')) {
-                    deleteReadMutation.mutate()
-                  }
+                  setConfirmAction({
+                    title: 'Delete read notifications',
+                    description: 'Are you sure you want to delete all read notifications? This cannot be undone.',
+                    onConfirm: () => { deleteReadMutation.mutate(); setConfirmAction(null) },
+                  })
                 }}
                 className="btn-ghost inline-flex items-center gap-2 text-rose-600 hover:text-rose-700"
                 disabled={anyActionPending}
@@ -342,9 +349,11 @@ export default function NotificationsPage() {
                         )}
                         <button
                           onClick={() => {
-                            if (confirm('Delete this notification?')) {
-                              deleteMutation.mutate(notification.id)
-                            }
+                            setConfirmAction({
+                              title: 'Delete notification',
+                              description: 'Are you sure you want to delete this notification?',
+                              onConfirm: () => { deleteMutation.mutate(notification.id); setConfirmAction(null) },
+                            })
                           }}
                           className="p-2 rounded-lg border border-slate-200 text-rose-700 hover:bg-rose-50"
                           title="Delete notification"
@@ -374,6 +383,15 @@ export default function NotificationsPage() {
           </>
         )}
       </div>
+
+      <ConfirmationDialog
+        open={!!confirmAction}
+        title={confirmAction?.title ?? ''}
+        description={confirmAction?.description}
+        confirmLabel="Delete"
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   )
 }

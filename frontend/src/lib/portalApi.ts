@@ -77,7 +77,7 @@ export interface PortalDocumentListResponse {
   total: number
   page: number
   per_page: number
-  pages: number
+  total_pages: number
 }
 
 export interface FeedbackItem {

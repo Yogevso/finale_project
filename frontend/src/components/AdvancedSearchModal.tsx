@@ -181,9 +181,10 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
                 id="adv-search-company"
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+                disabled={companiesQuery.isLoading}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none disabled:opacity-60"
               >
-                <option value="">Any company</option>
+                <option value="">{companiesQuery.isLoading ? 'Loading companies…' : 'Any company'}</option>
                 {companies.map((c) => (
                   <option key={c.id} value={String(c.id)}>
                     {c.name}
@@ -199,6 +200,7 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
                 id="adv-search-date-from"
                 type="date"
                 value={dateFrom}
+                max={dateTo || undefined}
                 onChange={(e) => setDateFrom(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
               />
@@ -211,6 +213,7 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
                 id="adv-search-date-to"
                 type="date"
                 value={dateTo}
+                min={dateFrom || undefined}
                 onChange={(e) => setDateTo(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
               />

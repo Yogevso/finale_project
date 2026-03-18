@@ -135,7 +135,10 @@ export default function ReviewDialog({
                 <div className="flex-1">
                   <span className="text-xs font-medium text-amber-700">Changes Made:</span>
                   {loadingVersion ? (
-                    <p className="mt-1 text-sm text-slate-500">Loading changes...</p>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-300 border-t-amber-600"></div>
+                      Loading changes…
+                    </div>
                   ) : version?.changes_summary ? (
                     <>
                       <div className="mt-2 text-xs text-slate-600">
@@ -190,6 +193,8 @@ export default function ReviewDialog({
               rows={4}
               className="input-field"
               disabled={isLoading}
+              required={action === 'reject'}
+              aria-required={action === 'reject'}
             />
           </div>
 
@@ -249,7 +254,7 @@ export default function ReviewDialog({
                 <button
                   onClick={() => handleAction('reject')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full hover:bg-rose-200 disabled:opacity-50 font-medium transition"
+                  className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full hover:bg-rose-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
                 >
                   <XCircle className="w-4 h-4" />
                   Reject
@@ -257,7 +262,7 @@ export default function ReviewDialog({
                 <button
                   onClick={() => handleAction('approve')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-50 font-medium transition"
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
                 >
                   <CheckCircle className="w-4 h-4" />
                   Approve
@@ -275,7 +280,7 @@ export default function ReviewDialog({
                 <button
                   onClick={handleConfirm}
                   disabled={isLoading || (action === 'reject' && !comments.trim())}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 font-medium transition ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed font-medium transition ${
                     action === 'approve'
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                       : 'bg-rose-600 text-white hover:bg-rose-700'

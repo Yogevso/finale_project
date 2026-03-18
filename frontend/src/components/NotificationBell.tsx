@@ -233,6 +233,17 @@ export default function NotificationBell() {
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-600"></div>
               </div>
+            ) : !data && !isLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 text-slate-500">
+                <AlertCircle className="w-8 h-8 mb-2 text-rose-300" />
+                <p className="text-sm">Failed to load notifications</p>
+                <button
+                  onClick={() => void refetch()}
+                  className="mt-2 text-xs text-sky-600 hover:text-sky-800"
+                >
+                  Try again
+                </button>
+              </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-slate-500">
                 <Bell className="w-8 h-8 mb-2 text-slate-300" />
@@ -261,7 +272,7 @@ export default function NotificationBell() {
                         {notification.message}
                       </p>
                     )}
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-xs text-slate-400 mt-1" title={new Date(notification.created_at).toLocaleString()}>
                       {formatTime(notification.created_at)}
                     </p>
                   </div>

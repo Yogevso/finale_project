@@ -117,8 +117,8 @@ export default function ChatPage() {
       />
 
       <div className="flex flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white mx-4 mb-4">
-        {/* Sidebar — 320px fixed */}
-        <div className="w-80 flex-shrink-0">
+        {/* Sidebar — hidden on mobile when a chat is active */}
+        <div className={`w-full md:w-80 flex-shrink-0 ${activeChatId ? 'hidden md:block' : ''}`}>
           <ChatSidebar
             chats={filteredChats}
             activeChatId={activeChatId}
@@ -135,8 +135,8 @@ export default function ChatPage() {
           />
         </div>
 
-        {/* Chat area */}
-        <div className="flex-1">
+        {/* Chat area — hidden on mobile when no chat selected */}
+        <div className={`flex-1 ${!activeChatId ? 'hidden md:block' : ''}`}>
           <ChatView
             chat={activeChat}
             messages={messagesQuery.data?.items ?? []}

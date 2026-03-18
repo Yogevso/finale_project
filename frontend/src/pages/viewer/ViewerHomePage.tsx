@@ -67,7 +67,7 @@ export default function ViewerHomePage() {
   }
 
   const documents: Document[] = data?.items || []
-  const totalPages = data?.pages || 1
+  const totalPages = data?.total_pages || 1
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50">

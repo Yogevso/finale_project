@@ -109,7 +109,7 @@ export function OfflineIndicator({
     return {
       icon: CloudOff,
       label: 'Disconnected',
-      description: 'Not connected to collaboration server',
+      description: 'Waiting for collaboration server…',
       color: 'text-slate-600',
       bgColor: 'bg-slate-100',
       borderColor: 'border-slate-300',

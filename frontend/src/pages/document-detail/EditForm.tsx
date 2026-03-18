@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmDialog'
 import {
   getAudienceDirtyHelperText,
@@ -53,6 +53,28 @@ export function EditForm({
   })
   const [pendingVisibilityConfirmation, setPendingVisibilityConfirmation] =
     useState<PendingVisibilityConfirmation | null>(null)
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const isDirty =
+      formData.title !== document.title ||
+      (formData.description || '') !== (document.description || '') ||
+      formData.status !== document.status ||
+      formData.visibility !== document.visibility ||
+      (formData.category || '') !== (document.category || '') ||
+      (formData.release_branch || '') !== (document.release_branch || '') ||
+      (formData.tags || '') !== (document.tags || '') ||
+      (formData.due_date || '') !== (document.due_date || '')
+
+    if (!isDirty) return
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [formData, document])
+
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: document.visibility,
@@ -199,6 +221,7 @@ export function EditForm({
           <input
             type="date"
             value={formData.due_date || ''}
+            min={new Date().toISOString().split('T')[0]}
             onChange={(e) => setFormData({ ...formData, due_date: e.target.value || null })}
             className="input-field"
           />

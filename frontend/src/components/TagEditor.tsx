@@ -9,6 +9,7 @@ type TagEditorProps = {
   canEdit: boolean
   isSaving?: boolean
   onSave: (tags: string[]) => void
+  maxTags?: number
 }
 
 function normalizeTagValue(value: string) {
@@ -32,6 +33,7 @@ export default function TagEditor({
   canEdit,
   isSaving = false,
   onSave,
+  maxTags = 20,
 }: TagEditorProps) {
   const [draftTag, setDraftTag] = useState('')
   const tagSuggestionsQuery = useQuery({
@@ -41,6 +43,7 @@ export default function TagEditor({
   })
 
   const addTag = (nextTag: string) => {
+    if (tags.length >= maxTags) return
     const nextTags = mergeTags(tags, nextTag)
     if (nextTags !== tags) {
       onSave(nextTags)
@@ -99,22 +102,23 @@ export default function TagEditor({
                 event.preventDefault()
                 addTag(draftTag)
               }}
-              placeholder="Add a tag and press Enter"
+              placeholder={tags.length >= maxTags ? `Maximum ${maxTags} tags reached` : 'Add a tag and press Enter'}
               className="input-field flex-1"
-              disabled={isSaving}
+              disabled={isSaving || tags.length >= maxTags}
             />
             <button
               type="button"
               onClick={() => addTag(draftTag)}
-              disabled={isSaving || normalizeTagValue(draftTag).length === 0}
+              disabled={isSaving || normalizeTagValue(draftTag).length === 0 || tags.length >= maxTags}
               className="btn-primary whitespace-nowrap disabled:opacity-60"
             >
               Add tag
             </button>
           </div>
+          <p className="text-xs text-slate-400">{tags.length}/{maxTags} tags used</p>
 
           {availableSuggestions.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="relative z-10 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-500">
                 <Sparkles className="h-3.5 w-3.5" />
                 Suggestions

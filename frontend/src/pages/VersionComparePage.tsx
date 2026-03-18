@@ -43,6 +43,7 @@ export default function VersionComparePage() {
   const {
     data: versionsData,
     isLoading: areVersionsLoading,
+    isFetching: areVersionsFetching,
   } = useDocumentVersionsQuery(id)
 
   const versions = useMemo(
@@ -125,7 +126,7 @@ export default function VersionComparePage() {
                 setLeftVersionId(rightVersionId)
                 setRightVersionId(leftVersionId)
               }}
-              disabled={leftVersionId === null || rightVersionId === null}
+              disabled={leftVersionId === null || rightVersionId === null || areVersionsFetching}
               className="btn-secondary inline-flex items-center gap-2"
             >
               <ArrowLeftRight className="h-4 w-4" />

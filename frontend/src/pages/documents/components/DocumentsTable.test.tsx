@@ -37,7 +37,7 @@ const tableData: DocumentListResponse = {
   total: 1,
   page: 1,
   page_size: 10,
-  pages: 1,
+  total_pages: 1,
 }
 
 describe('DocumentsTable', () => {

@@ -21,6 +21,14 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     console.error('Unhandled React error:', error, errorInfo)
   }
 
+  handleGoHome = () => {
+    window.location.href = '/'
+  }
+
+  handleGoBack = () => {
+    window.history.back()
+  }
+
   handleReload = () => {
     window.location.reload()
   }
@@ -31,10 +39,18 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
         <div className="min-h-[50vh] flex items-center justify-center p-6">
           <div className="surface-card rounded-2xl p-8 text-center max-w-md w-full">
             <h2 className="text-xl font-display font-semibold text-slate-900">Something went wrong</h2>
-            <p className="text-sm text-slate-500 mt-2">An unexpected error occurred in this section.</p>
-            <button className="btn-primary mt-5" onClick={this.handleReload}>
-              Reload
-            </button>
+            <p className="text-sm text-slate-500 mt-2">An unexpected error occurred in this section. You can try one of the actions below.</p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-5">
+              <button className="btn-primary" onClick={this.handleReload}>
+                Reload Page
+              </button>
+              <button className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={this.handleGoBack}>
+                Go Back
+              </button>
+              <button className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={this.handleGoHome}>
+                Go to Dashboard
+              </button>
+            </div>
           </div>
         </div>
       )

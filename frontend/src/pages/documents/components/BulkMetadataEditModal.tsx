@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import CompanySelector from '@/components/CompanySelector'
 import type { BulkDocumentMetadataUpdate, DocumentVisibility } from '@/types'
 import { useFocusTrap } from '@/hooks/useAccessibility'
@@ -33,7 +34,7 @@ export function BulkMetadataEditModal({
             <p className="text-sm text-slate-500">Apply one metadata update to {selectedCount} documents.</p>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" aria-label="Close bulk edit dialog">
-            x
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -84,6 +85,7 @@ export function BulkMetadataEditModal({
                 rows={3}
                 placeholder="Explain why this visibility update is needed"
               />
+              <p className="mt-1 text-xs text-slate-500">Minimum 3 characters required.</p>
             </div>
           ) : null}
         </div>
@@ -113,6 +115,17 @@ export function BulkMetadataEditModal({
           >
             {isSubmitting ? 'Updating...' : 'Apply changes'}
           </button>
+          {!isSubmitting && (
+            <p className="text-xs text-slate-500 text-right mt-1">
+              {category.trim() === '' && visibility === '' && companyIds.length === 0
+                ? 'Select at least one field to update.'
+                : visibility !== '' && reason.trim().length < 3
+                  ? 'Reason must be at least 3 characters.'
+                  : visibility === 'company' && companyIds.length === 0
+                    ? 'Select at least one target company.'
+                    : ''}
+            </p>
+          )}
         </div>
       </div>
     </div>

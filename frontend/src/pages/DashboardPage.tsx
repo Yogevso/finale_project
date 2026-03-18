@@ -127,8 +127,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="surface-card rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-200">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-lg font-display font-semibold text-slate-900">Recent Documents</h2>
+          <Link to={documentsPath} className="text-sm font-medium text-sky-600 hover:text-sky-700">
+            View all →
+          </Link>
         </div>
         <div className="divide-y divide-slate-100">
           {isDocumentsLoading ? (

@@ -109,6 +109,16 @@
 
   .admin-table-scroll {
     @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+    background:
+      linear-gradient(to right, white 30%, transparent),
+      linear-gradient(to left, white 30%, transparent),
+      linear-gradient(to right, rgba(0,0,0,.08), transparent 15px),
+      linear-gradient(to left, rgba(0,0,0,.08), transparent 15px);
+    background-position: left center, right center, left center, right center;
+    background-repeat: no-repeat;
+    background-size: 20px 100%, 20px 100%, 15px 100%, 15px 100%;
+    background-attachment: local, local, scroll, scroll;
   }
 
   .admin-table {
@@ -263,6 +273,15 @@ h1, h2, h3, h4, h5, h6 {
 .ProseMirror {
   outline: none;
   min-height: 400px;
+}
+
+/* Placeholder for empty editor (TipTap Placeholder extension) */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 
 .ProseMirror p {

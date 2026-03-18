@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Menu, X } from 'lucide-react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronRight, Menu, X } from 'lucide-react'
+import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
 
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
@@ -18,12 +18,45 @@ export default function Layout() {
   const navItems = getNavigationForRole(user?.role || null)
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
   const chatUnreadCount = useChatUnreadCount()
 
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname, location.search])
+
+  // #65 — Focus trap for mobile menu
+  useEffect(() => {
+    if (!mobileMenuOpen || !mobileMenuRef.current) return
+    const menu = mobileMenuRef.current
+    const focusable = menu.querySelectorAll<HTMLElement>('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first.focus()
+    const trap = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setMobileMenuOpen(false); return }
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus() } }
+      else { if (document.activeElement === last) { e.preventDefault(); first.focus() } }
+    }
+    menu.addEventListener('keydown', trap)
+    return () => menu.removeEventListener('keydown', trap)
+  }, [mobileMenuOpen])
+
+  // #64 — Breadcrumb segments
+  const breadcrumbs = location.pathname
+    .split('/')
+    .filter(Boolean)
+    .reduce<{ label: string; path: string }[]>((acc, segment, i, arr) => {
+      const path = '/' + arr.slice(0, i + 1).join('/')
+      const label = segment
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+      acc.push({ label, path })
+      return acc
+    }, [])
 
   const handleLogout = () => {
     logout()
@@ -57,11 +90,10 @@ export default function Layout() {
                 aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
                 aria-expanded={mobileMenuOpen}
               >
-                {mobileMenuOpen ? (
-                  <X className="h-5 w-5 text-slate-600" />
-                ) : (
-                  <Menu className="h-5 w-5 text-slate-600" />
-                )}
+                <span className="relative block h-5 w-5">
+                  <X className={`absolute inset-0 h-5 w-5 text-slate-600 transition-all duration-200 ${mobileMenuOpen ? 'opacity-100 rotate-0' : 'opacity-0 rotate-90'}`} />
+                  <Menu className={`absolute inset-0 h-5 w-5 text-slate-600 transition-all duration-200 ${mobileMenuOpen ? 'opacity-0 -rotate-90' : 'opacity-100 rotate-0'}`} />
+                </span>
               </button>
             </div>
           </div>
@@ -88,8 +120,8 @@ export default function Layout() {
                   </span>
                   {item.label}
                   {badge > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {badge > 99 ? '99+' : badge}
+                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${badge} unread messages`}>
+                      <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
                     </span>
                   )}
                 </NavLink>
@@ -125,7 +157,7 @@ export default function Layout() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-sky-200 bg-sky-50/90">
+          <div ref={mobileMenuRef} className="md:hidden border-t border-sky-200 bg-sky-50/90">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
@@ -183,6 +215,25 @@ export default function Layout() {
       {/* Announcement Banner */}
       {!isFullscreen && <AnnouncementBanner />}
 
+      {/* Breadcrumb (#64) */}
+      {!isFullscreen && breadcrumbs.length > 1 && (
+        <nav aria-label="Breadcrumb" className="max-w-7xl mx-auto px-4 pt-4">
+          <ol className="flex items-center gap-1 text-sm text-slate-500">
+            <li><Link to="/dashboard" className="hover:text-sky-700 transition-colors">Home</Link></li>
+            {breadcrumbs.map((crumb, i) => (
+              <li key={crumb.path} className="flex items-center gap-1">
+                <ChevronRight className="h-3.5 w-3.5" />
+                {i === breadcrumbs.length - 1 ? (
+                  <span className="font-medium text-slate-700">{crumb.label}</span>
+                ) : (
+                  <Link to={crumb.path} className="hover:text-sky-700 transition-colors">{crumb.label}</Link>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
+
       {/* Main Content */}
       <main id="main-content" className="app-shell-main flex-1">
         <div className={`${isFullscreen ? 'px-0 py-0' : 'max-w-7xl mx-auto px-4 py-8'}`}>
@@ -193,9 +244,16 @@ export default function Layout() {
       {/* Footer */}
       {!isFullscreen && (
       <footer className="app-shell-footer border-t border-slate-200 bg-white/85 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
-          <p>Developer Portal</p>
-          <p className="text-xs mt-1">Internal documentation workspace</p>
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+            <p>Developer Portal &mdash; Internal documentation workspace</p>
+            <nav className="flex items-center gap-4" aria-label="Footer">
+              <Link to="/help" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Help</Link>
+              <Link to="/docs" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Documentation</Link>
+              <span className="text-slate-300">|</span>
+              <span className="text-xs">&copy; {new Date().getFullYear()} DocPortal</span>
+            </nav>
+          </div>
         </div>
       </footer>
       )}

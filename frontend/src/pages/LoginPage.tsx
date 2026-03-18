@@ -121,7 +121,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="w-full max-w-md">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-slate-900 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-500">Skip to main content</a>
+      <div id="main-content" className="w-full max-w-md">
         <div className="surface-card rounded-2xl p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-4">
@@ -135,7 +136,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {cooldownSeconds > 0 && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+              <div role="alert" aria-live="polite" className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
                 Too many sign-in attempts. Try again in {cooldownSeconds} seconds.
               </div>
             )}

@@ -80,7 +80,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
         <h2 className="text-xl font-display font-bold text-slate-900 mb-4">Upload Document</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-sm">{error}</div>}
+          {error && <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl text-sm">{error}</div>}
 
           <div
             className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-colors ${
@@ -389,7 +389,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               <div className="flex items-center justify-between text-sm font-medium text-sky-900">
                 <span className="inline-flex items-center gap-2">
                   <FilePlus2 className="h-4 w-4" aria-hidden="true" />
-                  Upload progress
+                  Uploading {selectedFile?.name ?? 'file'}
                 </span>
                 <span>{progressValue}%</span>
               </div>

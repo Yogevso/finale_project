@@ -1,5 +1,5 @@
 import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
@@ -53,8 +53,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -65,8 +65,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -77,8 +77,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -89,8 +89,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -175,6 +175,25 @@ export default function PublicLayout() {
                 Help
               </NavLink>
               <hr className="my-3 border-slate-200" />
+              {/* Mobile search (#70) */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="search"
+                  placeholder="Search documentation..."
+                  className="input-field pl-9 w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const query = (e.target as HTMLInputElement).value
+                      if (query) {
+                        setMobileMenuOpen(false)
+                        navigate(`/search?q=${encodeURIComponent(query)}`)
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <hr className="my-3 border-slate-200" />
               {user ? (
                 <button
                   onClick={() => {
@@ -228,17 +247,17 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/docs" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/docs" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Docs Library
                   </Link>
                 </li>
                 <li>
-                  <Link to="/platforms" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/platforms" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Platform History
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/search" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Search
                   </Link>
                 </li>
@@ -248,7 +267,7 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Access</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/login" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/login" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Login for more content
                   </Link>
                 </li>

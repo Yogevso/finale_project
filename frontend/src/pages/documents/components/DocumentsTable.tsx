@@ -1,3 +1,4 @@
+import { FileQuestion } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 import VisibilityBadge from '@/components/VisibilityBadge'
@@ -84,7 +85,10 @@ export function DocumentsTable({
             ) : data?.items.length === 0 ? (
               <tr className="admin-table-row">
                 <td colSpan={isManager ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
-                  No documents found
+                  <div className="flex flex-col items-center gap-2">
+                    <FileQuestion className="w-8 h-8 text-slate-300" />
+                    <span>No documents found</span>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -102,8 +106,8 @@ export function DocumentsTable({
                   ) : null}
                   <td className="admin-table-cell w-[36%]">
                     <div className="flex items-start justify-between gap-3">
-                      <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700">
-                        <div className="font-medium text-slate-900">{doc.title}</div>
+                      <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700 min-w-0">
+                        <div className="font-medium text-slate-900 truncate max-w-[300px]" title={doc.title}>{doc.title}</div>
                         <div className="text-sm text-slate-500">{doc.document_number}</div>
                         {doc.due_date ? (
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -147,6 +151,7 @@ export function DocumentsTable({
                         <div className="space-y-1.5">
                           <select
                             value={effectiveVisibility}
+                            aria-label={`Visibility for ${doc.title}`}
                             onChange={(event) =>
                               onVisibilityChange({
                                 id: doc.id,
@@ -211,10 +216,10 @@ export function DocumentsTable({
         </table>
       </div>
 
-      {data && data.pages > 1 ? (
+      {data && data.total_pages > 1 ? (
         <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
-          <div className="text-sm text-slate-500">
-            Page {data.page} of {data.pages} ({data.total} total)
+          <div className="text-base text-slate-600 font-medium">
+            Page {data.page} of {data.total_pages} <span className="text-sm font-normal text-slate-400">({data.total} total)</span>
           </div>
           <div className="flex gap-2">
             <button
@@ -225,8 +230,8 @@ export function DocumentsTable({
               Previous
             </button>
             <button
-              onClick={() => onPageChange(Math.min(data.pages, page + 1))}
-              disabled={page === data.pages}
+              onClick={() => onPageChange(Math.min(data.total_pages, page + 1))}
+              disabled={page === data.total_pages}
               className="btn-ghost disabled:opacity-50"
             >
               Next

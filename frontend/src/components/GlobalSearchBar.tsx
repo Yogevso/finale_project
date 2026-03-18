@@ -74,7 +74,7 @@ export default function GlobalSearchBar() {
     setQuery(value)
     setActiveIndex(-1)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => doSearch(value), 300)
+    debounceRef.current = setTimeout(() => doSearch(value), 150)
   }
 
   const navigateToResult = (id: number) => {
@@ -125,7 +125,7 @@ export default function GlobalSearchBar() {
           onFocus={() => query.length >= 2 && hasResults && setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search documents..."
-          className="w-56 rounded-full border border-sky-200 bg-white/80 py-1.5 pl-9 pr-8 text-sm text-slate-700 placeholder-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300 transition-all focus:w-72"
+          className="w-44 rounded-full border border-sky-200 bg-white/80 py-1.5 pl-9 pr-8 text-sm text-slate-700 placeholder-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300 transition-all focus:w-64 max-w-[calc(100vw-8rem)]"
           aria-label="Search documents"
           role="combobox"
           aria-expanded={isOpen}
@@ -195,7 +195,7 @@ export default function GlobalSearchBar() {
                   aria-selected={activeIndex === idx}
                   onClick={() => navigateToResult(result.id)}
                   className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors ${
-                    activeIndex === idx ? 'bg-sky-50' : 'hover:bg-slate-50'
+                    activeIndex === idx ? 'bg-sky-50 ring-2 ring-inset ring-sky-300' : 'hover:bg-slate-50'
                   }`}
                 >
                   <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
@@ -218,8 +218,8 @@ export default function GlobalSearchBar() {
                 role="option"
                 aria-selected={activeIndex === results.length}
                 onClick={navigateToFullSearch}
-                className={`w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-medium text-sky-600 transition-colors ${
-                  activeIndex === results.length ? 'bg-sky-50' : 'hover:bg-slate-50'
+                className={`w-full border-t border-slate-100 px-4 py-3 text-center text-sm font-semibold text-sky-600 transition-colors ${
+                  activeIndex === results.length ? 'bg-sky-50 ring-2 ring-inset ring-sky-300' : 'hover:bg-sky-50'
                 }`}
               >
                 View all results for "{query}" →

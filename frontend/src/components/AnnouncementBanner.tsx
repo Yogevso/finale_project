@@ -30,7 +30,11 @@ export default function AnnouncementBanner() {
   const [dismissed, setDismissedState] = useState<Set<number>>(getDismissed)
 
   useEffect(() => {
-    publicApi.getAnnouncements().then(setAnnouncements).catch(() => {})
+    publicApi.getAnnouncements().then(setAnnouncements).catch(() => {
+      // Announcements are non-critical; log for debugging
+      // eslint-disable-next-line no-console
+      console.warn('Failed to load announcements')
+    })
   }, [])
 
   const visible = announcements.filter((a) => !dismissed.has(a.id))

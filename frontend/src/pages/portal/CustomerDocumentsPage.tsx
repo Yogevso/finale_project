@@ -328,7 +328,7 @@ export default function CustomerDocumentsPage() {
           )}
 
           {/* Pagination */}
-          {documents && documents.pages > 1 && (
+          {documents && documents.total_pages > 1 && (
             <div className="flex items-center justify-between surface-card rounded-2xl px-4 py-3">
               <p className="text-sm text-slate-500">
                 Showing {(page - 1) * 12 + 1} to {Math.min(page * 12, documents.total)} of{' '}
@@ -343,11 +343,11 @@ export default function CustomerDocumentsPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <span className="px-4 py-2 text-sm">
-                  Page {page} of {documents.pages}
+                  Page {page} of {documents.total_pages}
                 </span>
                 <button
                   onClick={() => handlePageChange(page + 1)}
-                  disabled={page === documents.pages}
+                  disabled={page === documents.total_pages}
                   className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="h-5 w-5" />

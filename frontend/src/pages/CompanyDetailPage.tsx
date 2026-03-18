@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import { 
   Building2, 
   ArrowLeft, 
@@ -17,17 +18,20 @@ import {
 } from 'lucide-react'
 import type { CompanyUser } from '@/types'
 import CompanyForm from '@/components/CompanyForm'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
   const companyId = parseInt(id || '0')
   const { isAdmin } = useAuth()
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [showEditForm, setShowEditForm] = useState(false)
   const [showAddUser, setShowAddUser] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [activeTab, setActiveTab] = useState<'users' | 'documents'>('users')
   const [docPage, setDocPage] = useState(1)
+  const [userToRemove, setUserToRemove] = useState<CompanyUser | null>(null)
 
   const { data: company, isLoading, error } = useQuery({
     queryKey: ['company', companyId],
@@ -48,6 +52,10 @@ export default function CompanyDetailPage() {
       setShowAddUser(false)
       setUserEmail('')
       queryClient.invalidateQueries({ queryKey: ['company', companyId] })
+      toast.success('User added to company')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to add user', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -55,6 +63,10 @@ export default function CompanyDetailPage() {
     mutationFn: (userId: number) => api.removeUserFromCompany(companyId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company', companyId] })
+      toast.success('User removed from company')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to remove user', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -66,9 +78,7 @@ export default function CompanyDetailPage() {
   }
 
   const handleRemoveUser = (user: CompanyUser) => {
-    if (confirm(`Are you sure you want to remove ${user.full_name || user.email} from this company?`)) {
-      removeUserMutation.mutate(user.id)
-    }
+    setUserToRemove(user)
   }
 
   const getRoleBadgeColor = (role: string) => {
@@ -291,6 +301,8 @@ export default function CompanyDetailPage() {
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
                   placeholder="Enter user email"
+                  required
+                  aria-invalid={!!addUserMutation.error || undefined}
                   className="input-field flex-1"
                 />
                 <button
@@ -308,11 +320,11 @@ export default function CompanyDetailPage() {
                   Cancel
                 </button>
               </form>
-              {addUserMutation.error && (
+              {addUserMutation.error ? (
                 <p className="mt-2 text-sm text-rose-600">
-                  {(addUserMutation.error as Error & { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to add user'}
+                  {extractApiErrorMessage(addUserMutation.error, 'Failed to add user')}
                 </p>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -423,7 +435,7 @@ export default function CompanyDetailPage() {
             </tbody>
           </table>
 
-          {documents && documents.pages > 1 && (
+          {documents && documents.total_pages > 1 && (
             <div className="flex justify-center gap-2 p-4 border-t border-slate-200">
               <button
                 onClick={() => setDocPage(p => Math.max(1, p - 1))}
@@ -433,11 +445,11 @@ export default function CompanyDetailPage() {
                 Previous
               </button>
               <span className="px-4 py-2 text-slate-600">
-                Page {docPage} of {documents.pages}
+                Page {docPage} of {documents.total_pages}
               </span>
               <button
-                onClick={() => setDocPage(p => Math.min(documents.pages, p + 1))}
-                disabled={docPage === documents.pages}
+                onClick={() => setDocPage(p => Math.min(documents.total_pages, p + 1))}
+                disabled={docPage === documents.total_pages}
                 className="btn-ghost disabled:opacity-50"
               >
                 Next
@@ -458,6 +470,21 @@ export default function CompanyDetailPage() {
           }}
         />
       )}
+
+      {/* Remove user confirmation */}
+      <ConfirmationDialog
+        open={!!userToRemove}
+        title="Remove user"
+        description={`Are you sure you want to remove ${userToRemove?.full_name || userToRemove?.email} from this company?`}
+        confirmLabel="Remove"
+        isLoading={removeUserMutation.isPending}
+        onConfirm={() => {
+          if (userToRemove) {
+            removeUserMutation.mutate(userToRemove.id, { onSettled: () => setUserToRemove(null) })
+          }
+        }}
+        onCancel={() => setUserToRemove(null)}
+      />
     </div>
   )
 }

@@ -76,6 +76,12 @@ export default function ChatSidebar({
             <MessageCircle className="mb-2 h-8 w-8" />
             <p className="text-sm font-medium">No conversations yet</p>
             <p className="mt-0.5 text-xs">Start a new chat to get going</p>
+            <button
+              onClick={onNewChat}
+              className="mt-3 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              + New Chat
+            </button>
           </div>
         ) : (
           <>

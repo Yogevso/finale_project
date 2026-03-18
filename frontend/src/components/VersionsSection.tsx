@@ -6,6 +6,8 @@ import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentVersionsQuery } from '@/hooks/useDocumentQueries'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
 import type { Version, VersionBumpType, VersionCreate } from '@/types'
 
 interface VersionsSectionProps {
@@ -36,6 +38,7 @@ const roleLabel = (role?: string | null) =>
 
 export default function VersionsSection({ documentId, isEditor }: VersionsSectionProps) {
   const queryClient = useQueryClient()
+  const toast = useToast()
   const [isCreating, setIsCreating] = useState(false)
   const [newVersion, setNewVersion] = useState<VersionCreate>({
     content: '',
@@ -44,6 +47,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
   })
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [publishError, setPublishError] = useState<string | null>(null)
+  const [versionToDelete, setVersionToDelete] = useState<number | null>(null)
 
   const { data: versionsData, isLoading } = useDocumentVersionsQuery(documentId)
 
@@ -53,6 +57,10 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
       setIsCreating(false)
       setNewVersion({ content: '', changes_summary: '', bump_type: 'patch' })
+      toast.success('Version created')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to create version', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -61,12 +69,14 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
     onSuccess: () => {
       setPublishError(null)
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
+      toast.success('Version published')
     },
     onError: (error: unknown) => {
       const message =
         (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to publish version'
       setPublishError(message)
+      setTimeout(() => setPublishError(null), 8000)
     },
   })
 
@@ -74,6 +84,10 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
     mutationFn: (versionId: number) => api.deleteVersion(documentId, versionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
+      toast.success('Version deleted')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to delete version', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 
@@ -150,7 +164,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               <button
                 onClick={() => createMutation.mutate(newVersion)}
                 disabled={createMutation.isPending}
-                className="btn-primary text-sm"
+                className="btn-primary text-sm disabled:cursor-not-allowed"
               >
                 {createMutation.isPending ? 'Creating...' : 'Create Version'}
               </button>
@@ -179,17 +193,27 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               isExpanded={expandedVersion === version.id}
               onToggle={() => setExpandedVersion(expandedVersion === version.id ? null : version.id)}
               onPublish={() => publishMutation.mutate(version.id)}
-              onDelete={() => {
-                if (confirm('Delete this version?')) {
-                  deleteMutation.mutate(version.id)
-                }
-              }}
+              onDelete={() => setVersionToDelete(version.id)}
               isEditor={isEditor}
               isPublishing={publishMutation.isPending}
             />
           ))}
         </div>
       )}
+
+      <ConfirmationDialog
+        open={versionToDelete !== null}
+        title="Delete version"
+        description="Are you sure you want to delete this version? This cannot be undone."
+        confirmLabel="Delete"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (versionToDelete !== null) {
+            deleteMutation.mutate(versionToDelete, { onSettled: () => setVersionToDelete(null) })
+          }
+        }}
+        onCancel={() => setVersionToDelete(null)}
+      />
     </div>
   )
 }
