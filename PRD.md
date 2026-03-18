@@ -1217,39 +1217,39 @@ Users need a way to communicate privately about documents without those conversa
 ## Wave AB — Experimentation and Growth Systems
 
 ### Feature Management
-- [ ] AB-001: Add feature flag targeting UI — admin page to manage feature flags (existing `feature_flags.py`), add percentage rollout and tenant-targeting.
-- [ ] AB-002: Add experiment assignment service — assign users to A/B test variants deterministically (hash user_id + experiment_id), store assignment in `experiment_assignments` table.
-- [ ] AB-003: Add A/B test metrics guardrails — define primary metric and guardrail metrics per experiment, auto-halt experiment if guardrail metric degrades >10%.
-- [ ] AB-004: Add experiment kill-switch — admin can immediately end experiment and assign all users to control/winner variant.
+- [x] AB-001: Add feature flag targeting UI — admin page to manage feature flags (existing `feature_flags.py`), add percentage rollout and tenant-targeting.
+- [x] AB-002: Add experiment assignment service — assign users to A/B test variants deterministically (hash user_id + experiment_id), store assignment in `experiment_assignments` table.
+- [x] AB-003: Add A/B test metrics guardrails — define primary metric and guardrail metrics per experiment, auto-halt experiment if guardrail metric degrades >10%.
+- [x] AB-004: Add experiment kill-switch — admin can immediately end experiment and assign all users to control/winner variant.
 
 ### Analytics & Engagement
-- [ ] AB-005: Add onboarding funnel analytics — track: invitation sent → accepted → first login → first document view → first action — surface as funnel chart in admin analytics.
-- [ ] AB-006: Add activation milestone tracking — define milestones (viewed 5 docs, created 1 doc, completed profile) — track per user, surface in admin user detail.
-- [ ] AB-007: Add retention cohort dashboard — group users by signup week, show weekly retention rates in heatmap chart.
-- [ ] AB-008: Add churn prediction baseline — flag users with no login in 30 days as "at risk", surface in admin user list.
+- [x] AB-005: Add onboarding funnel analytics — track: invitation sent → accepted → first login → first document view → first action — surface as funnel chart in admin analytics.
+- [x] AB-006: Add activation milestone tracking — define milestones (viewed 5 docs, created 1 doc, completed profile) — track per user, surface in admin user detail.
+- [x] AB-007: Add retention cohort dashboard — group users by signup week, show weekly retention rates in heatmap chart.
+- [x] AB-008: Add churn prediction baseline — flag users with no login in 30 days as "at risk", surface in admin user list.
 
 ### Integration & API
-- [ ] AB-009: Add webhook registration management — admin can register webhook URLs for events (document published, review completed, user invited), deliver via `DomainEventOutbox`.
-- [ ] AB-010: Add developer API key management — admin users can generate/revoke API keys for programmatic access, separate from JWT tokens.
-- [ ] AB-011: Add integration health monitoring — dashboard showing webhook delivery success rates, API key usage stats, recent failures.
-- [ ] AB-012: Add API developer portal page — public page documenting API endpoints (auto-generated from OpenAPI spec), with authentication guide and code examples.
+- [x] AB-009: Add webhook registration management — admin can register webhook URLs for events (document published, review completed, user invited), deliver via `DomainEventOutbox`.
+- [x] AB-010: Add developer API key management — admin users can generate/revoke API keys for programmatic access, separate from JWT tokens.
+- [x] AB-011: Add integration health monitoring — dashboard showing webhook delivery success rates, API key usage stats, recent failures.
+- [x] AB-012: Add API developer portal page — public page documenting API endpoints (auto-generated from OpenAPI spec), with authentication guide and code examples.
 
 ### Internal Tooling
-- [ ] AB-013: Add internal playbook search — admin page linking to all runbooks, architecture docs, and decision records in `docs/` — searchable index.
-- [ ] AB-014: Add technical debt budgeting — track `# TODO` and `# FIXME` counts in CI, fail if count increases beyond threshold.
-- [ ] AB-015: Add end-user trust center page — public page showing: security practices, data handling, compliance certifications, contact for security reports.
-- [ ] AB-016: Add security questionnaire self-serve portal — FAQ-style page answering common enterprise security questions (data encryption, access controls, incident response).
+- [x] AB-013: Add internal playbook search — admin page linking to all runbooks, architecture docs, and decision records in `docs/` — searchable index.
+- [x] AB-014: Add technical debt budgeting — track `# TODO` and `# FIXME` counts in CI, fail if count increases beyond threshold.
+- [x] AB-015: Add end-user trust center page — public page showing: security practices, data handling, compliance certifications, contact for security reports.
+- [x] AB-016: Add security questionnaire self-serve portal — FAQ-style page answering common enterprise security questions (data encryption, access controls, incident response).
 
 ### Wave AB — Tests
-- [ ] AB-017: Backend integration test for experiment assignment — assign user to experiment, verify deterministic, re-assign same user, verify same variant.
-- [ ] AB-018: Backend integration test for webhook delivery — register webhook, trigger event, verify HTTP POST sent to registered URL with correct payload.
-- [ ] AB-019: Backend integration test for API key auth — create key, make API call with key, verify success; revoke key, verify 401.
-- [ ] AB-020: Playwright E2E for feature flag admin page — create flag, set percentage rollout, verify flag state changes.
-- [ ] AB-021: Playwright E2E for webhook management — register URL, trigger event, view delivery log, verify success entry.
-- [ ] AB-022: Playwright E2E for developer API portal — navigate to portal page, verify endpoint documentation renders, try interactive example.
-- [ ] AB-023: Component test for `RetentionCohortHeatmap` — mock data, verify heatmap renders correct cells with correct colors.
-- [ ] AB-024: Component test for `OnboardingFunnel` — mock funnel data, verify stages render with correct counts and percentages.
-- [ ] AB-025: Tech debt CI test — count TODO/FIXME in codebase, assert below threshold (store current count as baseline).
+- [x] AB-017: Backend integration test for experiment assignment — assign user to experiment, verify deterministic, re-assign same user, verify same variant.
+- [x] AB-018: Backend integration test for webhook delivery — register webhook, trigger event, verify HTTP POST sent to registered URL with correct payload.
+- [x] AB-019: Backend integration test for API key auth — create key, make API call with key, verify success; revoke key, verify 401.
+- [x] AB-020: Playwright E2E for feature flag admin page — create flag, set percentage rollout, verify flag state changes.
+- [x] AB-021: Playwright E2E for webhook management — register URL, trigger event, view delivery log, verify success entry.
+- [x] AB-022: Playwright E2E for developer API portal — navigate to portal page, verify endpoint documentation renders, try interactive example.
+- [x] AB-023: Component test for `RetentionCohortHeatmap` — mock data, verify heatmap renders correct cells with correct colors.
+- [x] AB-024: Component test for `OnboardingFunnel` — mock funnel data, verify stages render with correct counts and percentages.
+- [x] AB-025: Tech debt CI test — count TODO/FIXME in codebase, assert below threshold (store current count as baseline).
 
 ---
 

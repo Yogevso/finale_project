@@ -1342,7 +1342,7 @@ class TenantQuota(Base):
 
 
 class FeatureFlag(Base):
-    """Per-tenant feature flags (Z-005)"""
+    """Per-tenant feature flags (Z-005) with targeting (AB-001)"""
 
     __tablename__ = "feature_flags"
     __table_args__ = (
@@ -1353,6 +1353,8 @@ class FeatureFlag(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     feature_key = Column(String(100), nullable=False, index=True)
     enabled = Column(Boolean, default=False, nullable=False)
+    rollout_percentage = Column(Integer, nullable=True, default=100)  # AB-001
+    target_tenant_ids = Column(Text, nullable=True)  # AB-001: JSON list of targeted tenant IDs
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -1547,6 +1549,176 @@ class AssistantUploadedFile(Base):
     )
 
 
+# ---------------------------------------------------------------------------
+# Wave AB — Experimentation and Growth Systems
+# ---------------------------------------------------------------------------
+
+
+class ExperimentStatus(str, enum.Enum):
+    """Status of an A/B experiment."""
+
+    DRAFT = "draft"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+
+
+class Experiment(Base):
+    """A/B experiment definition (AB-002)."""
+
+    __tablename__ = "experiments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    feature_flag_key = Column(String(100), nullable=True, index=True)
+    status = Column(SQLEnum(ExperimentStatus), default=ExperimentStatus.DRAFT, nullable=False, index=True)
+    variants = Column(Text, nullable=False, default='["control","treatment"]')  # JSON list
+    traffic_percentage = Column(Integer, default=100, nullable=False)  # % of users enrolled
+    primary_metric = Column(String(100), nullable=True)
+    guardrail_metrics = Column(Text, nullable=True)  # JSON list of metric names
+    guardrail_threshold = Column(Integer, default=10, nullable=False)  # max % degradation before halt
+    winner_variant = Column(String(100), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    tenant = relationship("Tenant")
+    creator = relationship("User")
+    assignments = relationship("ExperimentAssignment", back_populates="experiment", cascade="all, delete-orphan")
+
+
+class ExperimentAssignment(Base):
+    """Deterministic user→variant assignment for an experiment (AB-002)."""
+
+    __tablename__ = "experiment_assignments"
+    __table_args__ = (
+        UniqueConstraint("experiment_id", "user_id", name="uq_experiment_user"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    variant = Column(String(100), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    experiment = relationship("Experiment", back_populates="assignments")
+    user = relationship("User")
+
+
+class ExperimentMetricSnapshot(Base):
+    """Point-in-time metric readings per variant (AB-003)."""
+
+    __tablename__ = "experiment_metric_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True)
+    variant = Column(String(100), nullable=False)
+    metric_name = Column(String(100), nullable=False)
+    metric_value = Column(String(50), nullable=False)  # stored as string for flexibility
+    sample_size = Column(Integer, default=0, nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class OnboardingEvent(Base):
+    """Funnel event for onboarding analytics (AB-005)."""
+
+    __tablename__ = "onboarding_events"
+    __table_args__ = (
+        Index("ix_onboarding_user_step", "user_id", "step"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    step = Column(String(50), nullable=False)  # invitation_sent, accepted, first_login, first_view, first_action
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    tenant = relationship("Tenant")
+
+
+class ActivationMilestone(Base):
+    """Per-user milestone tracking (AB-006)."""
+
+    __tablename__ = "activation_milestones"
+    __table_args__ = (
+        UniqueConstraint("user_id", "milestone", name="uq_user_milestone"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    milestone = Column(String(50), nullable=False)  # viewed_5_docs, created_1_doc, completed_profile, etc.
+    achieved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    tenant = relationship("Tenant")
+
+
+class WebhookRegistration(Base):
+    """Registered webhook URLs for domain events (AB-009)."""
+
+    __tablename__ = "webhook_registrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    url = Column(String(2048), nullable=False)
+    secret = Column(String(255), nullable=False)  # HMAC signing secret
+    event_types = Column(Text, nullable=False)  # JSON list of subscribed event types
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    creator = relationship("User")
+    deliveries = relationship("WebhookDelivery", back_populates="webhook", cascade="all, delete-orphan")
+
+
+class WebhookDelivery(Base):
+    """Delivery log for a webhook invocation (AB-011)."""
+
+    __tablename__ = "webhook_deliveries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_id = Column(Integer, ForeignKey("webhook_registrations.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(120), nullable=False)
+    payload_json = Column(Text, nullable=False)
+    response_status = Column(Integer, nullable=True)
+    response_body = Column(Text, nullable=True)
+    success = Column(Boolean, default=False, nullable=False)
+    attempts = Column(Integer, default=1, nullable=False)
+    delivered_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    webhook = relationship("WebhookRegistration", back_populates="deliveries")
+
+
+class ApiKey(Base):
+    """Developer API keys for programmatic access (AB-010)."""
+
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    key_prefix = Column(String(8), nullable=False)  # first 8 chars for identification
+    key_hash = Column(String(255), nullable=False, unique=True)  # SHA-256 hash of full key
+    scopes = Column(Text, nullable=True)  # JSON list of allowed scopes
+    is_active = Column(Boolean, default=True, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    tenant = relationship("Tenant")
+    user = relationship("User")
+
+
 @event.listens_for(Document, "before_update", propagate=True)
 def _bump_document_row_version(_mapper, _connection, target: Document) -> None:
     target.row_version = int(target.row_version or 0) + 1
@@ -1612,6 +1784,16 @@ __all__ = [
     "DataRequest",
     "DataRequestType",
     "DataRequestStatus",
+    # Experimentation & Growth (Wave AB)
+    "Experiment",
+    "ExperimentAssignment",
+    "ExperimentMetricSnapshot",
+    "ExperimentStatus",
+    "OnboardingEvent",
+    "ActivationMilestone",
+    "WebhookRegistration",
+    "WebhookDelivery",
+    "ApiKey",
     # Enums
     "UserRole",
     "DocumentStatus",

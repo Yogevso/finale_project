@@ -52,7 +52,7 @@ def upgrade() -> None:
         )
 
     # AA-004: Audit log immutability triggers
-    if not _trigger_exists("prevent_audit_log_delete"):
+    if _table_exists("audit_logs") and not _trigger_exists("prevent_audit_log_delete"):
         op.execute(
             """
             CREATE TRIGGER prevent_audit_log_delete
@@ -63,7 +63,7 @@ def upgrade() -> None:
             """
         )
 
-    if not _trigger_exists("prevent_audit_log_update"):
+    if _table_exists("audit_logs") and not _trigger_exists("prevent_audit_log_update"):
         op.execute(
             """
             CREATE TRIGGER prevent_audit_log_update
