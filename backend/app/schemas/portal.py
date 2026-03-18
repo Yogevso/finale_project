@@ -82,7 +82,7 @@ class PortalDocumentListResponse(BaseModel):
     total: int
     page: int
     per_page: int
-    pages: int
+    total_pages: int
 
 
 class FacetItem(BaseModel):
@@ -135,7 +135,7 @@ class FeedbackListResponse(BaseModel):
     total: int
     page: int
     per_page: int
-    pages: int
+    total_pages: int
 
 
 # ============ Dashboard Schemas ============

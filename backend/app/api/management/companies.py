@@ -228,7 +228,7 @@ async def list_companies(
         total=total,
         page=page,
         per_page=per_page,
-        pages=pages,
+        total_pages=pages,
     )
 
 

@@ -283,7 +283,7 @@ def test_list_documents_with_pagination(client, auth_headers, db, test_user):
     data = response.json()
     assert data["total"] == 25
     assert len(data["items"]) == 10
-    assert data["pages"] == 3
+    assert data["total_pages"] == 3
     assert data["page"] == 1
 
 

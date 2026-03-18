@@ -141,6 +141,8 @@ def test_list_documents_query_handler_delegates_to_service():
             "company_id": None,
             "date_from": None,
             "date_to": None,
+            "sort_by": None,
+            "sort_order": "desc",
         }
     ]
 

@@ -47,7 +47,7 @@ class FrontendDocumentListResponseDto(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 class FrontendPortalDocumentDto(BaseModel):
@@ -82,7 +82,7 @@ class FrontendPortalDocumentListResponseDto(BaseModel):
     total: int
     page: int
     per_page: int
-    pages: int
+    total_pages: int
 
 
 class FrontendPublicDocumentSummaryDto(BaseModel):

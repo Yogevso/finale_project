@@ -570,6 +570,8 @@ class DocumentService(TenantAwareService[Document]):
         company_id: Optional[int] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = "desc",
     ) -> tuple[List[Document], int]:
         """Get list of documents with filters, pagination, and tenant filtering"""
         query = self._base_query()
@@ -609,8 +611,18 @@ class DocumentService(TenantAwareService[Document]):
         # Get total count
         total = query.count()
 
+        # Apply sorting
+        allowed_sort_fields = {"title", "created_at", "updated_at", "status", "category"}
+        sort_column = Document.created_at  # default
+        if sort_by and sort_by in allowed_sort_fields:
+            sort_column = getattr(Document, sort_by)
+        if sort_order == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
+
         # Apply pagination
-        documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+        documents = query.offset(skip).limit(limit).all()
 
         return documents, total
 

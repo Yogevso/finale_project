@@ -188,7 +188,7 @@ class DocumentListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 class DocumentTagSuggestionsResponse(BaseModel):

@@ -235,7 +235,7 @@ class PortalDocumentsQueryHandler:
                 total=total,
                 page=query.page,
                 per_page=query.per_page,
-                pages=pages,
+                total_pages=pages,
             )
 
         return self._execute_cached(

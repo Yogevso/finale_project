@@ -261,6 +261,8 @@ def list_documents(
     company_id: Optional[int] = Query(None, description="Filter by assigned company"),
     date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
     date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
+    sort_by: Optional[str] = Query(None, description="Sort field: title, created_at, updated_at, status, category"),
+    sort_order: Optional[str] = Query("desc", description="Sort direction: asc or desc"),
     current_user: User = Depends(require_internal_user),
     list_documents_query_handler: ListDocumentsQueryHandler = Depends(
         get_list_documents_query_handler
@@ -277,6 +279,7 @@ def list_documents(
     - Visibility filter
     - Category filter
     - Full-text search
+    - Sorting (sort_by, sort_order)
     """
     skip = (page - 1) * page_size
     query_result = list_documents_query_handler.execute(
@@ -290,6 +293,8 @@ def list_documents(
             company_id=company_id,
             date_from=date_from,
             date_to=date_to,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     )
 
@@ -298,7 +303,7 @@ def list_documents(
         total=query_result.total,
         page=page,
         page_size=page_size,
-        pages=ceil(query_result.total / page_size) if query_result.total > 0 else 0,
+        total_pages=ceil(query_result.total / page_size) if query_result.total > 0 else 0,
     )
 
 

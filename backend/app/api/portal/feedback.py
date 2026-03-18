@@ -155,7 +155,7 @@ async def list_my_feedback(
         total=total,
         page=page,
         per_page=per_page,
-        pages=pages,
+        total_pages=pages,
     )
 
 

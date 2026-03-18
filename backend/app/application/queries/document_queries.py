@@ -45,6 +45,8 @@ class ListDocumentsQuery:
     company_id: int | None = None
     date_from: date | None = None
     date_to: date | None = None
+    sort_by: str | None = None
+    sort_order: str | None = "desc"
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,5 +92,7 @@ class ListDocumentsQueryHandler:
             company_id=query.company_id,
             date_from=query.date_from,
             date_to=query.date_to,
+            sort_by=query.sort_by,
+            sort_order=query.sort_order,
         )
         return ListDocumentsQueryResult(items=documents, total=total)
