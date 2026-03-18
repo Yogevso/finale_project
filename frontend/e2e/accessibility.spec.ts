@@ -1,18 +1,45 @@
 /**
- * Y2-029: Accessibility test for public pages
- * Run axe-core on PublicHomePage, PublicDocumentsPage, PublicDocumentPage — zero critical violations.
+ * Y2-029 + AA-012/AA-022: WCAG 2.1 AA Accessibility Audit
+ *
+ * Run axe-core on key public and portal pages.
+ * Asserts zero critical AND serious violations (WCAG 2.1 AA standard).
  */
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 
 const PUBLIC_PAGES = [
-  { name: 'PublicHomePage', path: '/public' },
+  { name: 'PublicHomePage', path: '/' },
+  { name: 'PublicBrowse', path: '/browse' },
+  { name: 'LoginPage', path: '/login' },
   { name: 'PublicDocumentsPage', path: '/public/documents' },
+  { name: 'PublicHomeLegacy', path: '/public' },
 ]
 
-test.describe('Y2-029: Accessibility — public pages', () => {
+function assertNoCriticalOrSerious(
+  violations: { impact?: string | null; id: string; description: string; nodes: unknown[] }[],
+) {
+  const blocking = violations.filter(
+    (v) => v.impact === 'critical' || v.impact === 'serious',
+  )
+  if (blocking.length > 0) {
+    const summary = blocking
+      .map(
+        (v) =>
+          `[${v.impact}] ${v.id}: ${v.description} (${v.nodes.length} instance(s))`,
+      )
+      .join('\n')
+    expect(
+      blocking.length,
+      `Critical/serious a11y violations:\n${summary}`,
+    ).toBe(0)
+  }
+}
+
+test.describe('AA-012/AA-022: Accessibility — WCAG 2.1 AA audit (public pages)', () => {
   for (const { name, path } of PUBLIC_PAGES) {
-    test(`${name} has no critical accessibility violations`, async ({ page }) => {
+    test(`${name} (${path}) has no critical/serious a11y violations`, async ({
+      page,
+    }) => {
       await page.goto(path)
       await page.waitForLoadState('networkidle')
 
@@ -20,25 +47,13 @@ test.describe('Y2-029: Accessibility — public pages', () => {
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze()
 
-      const critical = results.violations.filter(
-        (v) => v.impact === 'critical',
-      )
-
-      if (critical.length > 0) {
-        const summary = critical.map(
-          (v) => `[${v.id}] ${v.description} (${v.nodes.length} instance(s))`,
-        )
-        console.error('Critical violations found:', summary)
-      }
-
-      expect(critical).toHaveLength(0)
+      assertNoCriticalOrSerious(results.violations)
     })
   }
 
-  test('PublicDocumentPage has no critical accessibility violations', async ({
+  test('PublicDocumentPage has no critical/serious a11y violations', async ({
     page,
   }) => {
-    // Navigate to documents list first, then click the first document link
     await page.goto('/public/documents')
     await page.waitForLoadState('networkidle')
 
@@ -53,10 +68,7 @@ test.describe('Y2-029: Accessibility — public pages', () => {
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze()
 
-      const critical = results.violations.filter(
-        (v) => v.impact === 'critical',
-      )
-      expect(critical).toHaveLength(0)
+      assertNoCriticalOrSerious(results.violations)
     } else {
       // No public documents exist — skip gracefully
       test.skip()

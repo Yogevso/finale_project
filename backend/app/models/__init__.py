@@ -1407,6 +1407,57 @@ class MaintenanceWindow(Base):
 
 
 # ---------------------------------------------------------------------------
+# Wave AA — GDPR Data Requests
+# ---------------------------------------------------------------------------
+
+
+class DataRequestType(str, enum.Enum):
+    """Types of GDPR data requests."""
+
+    EXPORT = "export"
+    DELETION = "deletion"
+
+
+class DataRequestStatus(str, enum.Enum):
+    """Processing status for GDPR data requests."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+
+
+class DataRequest(Base):
+    """GDPR data export/deletion request (AA-001, AA-002)."""
+
+    __tablename__ = "data_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    request_type = Column(SQLEnum(DataRequestType), nullable=False, index=True)
+    status = Column(
+        SQLEnum(DataRequestStatus),
+        default=DataRequestStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    reason = Column(Text, nullable=False)
+    admin_comment = Column(Text, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    download_token = Column(String(128), nullable=True, unique=True)
+    download_expires_at = Column(DateTime, nullable=True)
+    requested_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    approved_at = Column(DateTime, nullable=True)
+    executed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+# ---------------------------------------------------------------------------
 # AI Assistant (conversations & messages)
 # ---------------------------------------------------------------------------
 
@@ -1557,6 +1608,10 @@ __all__ = [
     "FeatureFlag",
     "DomainVerification",
     "MaintenanceWindow",
+    # GDPR Data Requests (Wave AA)
+    "DataRequest",
+    "DataRequestType",
+    "DataRequestStatus",
     # Enums
     "UserRole",
     "DocumentStatus",
