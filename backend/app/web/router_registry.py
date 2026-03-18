@@ -27,6 +27,7 @@ from app.api.management import (
     company_maintenance,
     documents,
     engagement,
+    experimentation,
     feedback,
     invitations,
     notifications,
@@ -104,6 +105,7 @@ class FastAPIRouterRegistry:
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
             RouterRegistration(admin_ops.router, prefix=self._api_prefix, tags=("Admin Operations",)),
             RouterRegistration(gdpr.router, prefix=self._api_prefix, tags=("GDPR & Compliance",)),
+            RouterRegistration(experimentation.router, prefix=self._api_prefix, tags=("Experimentation",)),
             RouterRegistration(assistant.router, prefix=self._api_prefix, tags=("Assistant",)),
             RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),
             # Viewer Portal (public, no auth required)

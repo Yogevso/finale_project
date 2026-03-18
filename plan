@@ -1,10 +1,20 @@
 Project Plan
-Last updated: 2026-03-17
+Last updated: 2026-03-18
 
 Current checkpoint
-- Active wave: Wave AA (completed)
-- Status: All 24 Wave AA items implemented and tested
-- Branch: wave-aa
+- Active wave: Wave AB (completed)
+- Status: All 25 Wave AB items implemented and tested
+- Branch: wave-ab
+- Test suite: 1245 passed, 1 failed (pre-existing), 2 skipped
+
+Completed in Wave AB
+- Feature Management: AB-001 through AB-004 (flag targeting, experiments, guardrails, kill-switch)
+- Analytics & Engagement: AB-005 through AB-008 (onboarding funnel, activation milestones, retention cohorts, churn prediction)
+- Integration & API: AB-009 through AB-012 (webhooks, API keys, integration health, developer portal)
+- Internal Tooling: AB-013 through AB-016 (playbook search, tech debt budget CI, trust center, security questionnaire)
+- Tests: AB-017 through AB-025 (18 service-layer tests covering all features)
+
+Completed in Wave AA
 
 Completed in Wave Y.1
 - Must-fix bugs: Y1-001, Y1-002, Y1-003, Y1-004, Y1-005
