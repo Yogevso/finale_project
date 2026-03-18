@@ -10,6 +10,7 @@ import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
 import NpsWidget from '@/components/NpsWidget'
 import AssistantChatBubble from '@/components/AssistantChatBubble'
+import { SkipNavLink } from '@/components/a11y/SkipNavLink'
 
 export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -26,6 +27,7 @@ export default function CustomerLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+      <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
       <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
@@ -46,6 +48,8 @@ export default function CustomerLayout() {
             <button
               className="md:hidden p-2 rounded-lg hover:bg-slate-100"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6 text-slate-600" />
@@ -169,7 +173,7 @@ export default function CustomerLayout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <Outlet />
         </div>

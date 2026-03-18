@@ -19,6 +19,7 @@ import {
   Eye,
 } from 'lucide-react'
 import PageHeader from '@/components/PageHeader'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 import type {
   SupportTicket,
   SupportTicketDetail,
@@ -475,12 +476,14 @@ function AssignAgentModal({
     },
   })
 
+  const { containerRef: assignRef, handleKeyDown: assignKeyDown } = useFocusTrap(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div ref={assignRef} role="dialog" aria-modal="true" aria-label="Assign Agent" className="w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={assignKeyDown}>
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h3 className="text-sm font-semibold text-gray-900">Assign Agent</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close assign agent dialog">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -545,12 +548,14 @@ function HandoffModal({
     },
   })
 
+  const { containerRef: handoffRef, handleKeyDown: handoffKeyDown } = useFocusTrap(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div ref={handoffRef} role="dialog" aria-modal="true" aria-label="Handoff Ticket" className="w-full max-w-sm rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={handoffKeyDown}>
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h3 className="text-sm font-semibold text-gray-900">Handoff Ticket</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close handoff dialog">
             <X className="h-4 w-4" />
           </button>
         </div>

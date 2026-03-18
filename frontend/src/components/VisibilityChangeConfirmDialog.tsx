@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { getVisibilityLabel } from '@/features/documents'
 import type { DocumentVisibility } from '@/types'
 import CompanySelector from './CompanySelector'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 type VisibilityChangeConfirmDialogProps = {
   isOpen: boolean
@@ -27,6 +28,8 @@ export default function VisibilityChangeConfirmDialog({
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>(initialCompanyIds)
   const [reason, setReason] = useState('')
   const wasOpenRef = useRef(false)
+
+  const { containerRef, handleKeyDown } = useFocusTrap(onCancel)
 
   // Only reset selection when dialog opens (transitions from closed to open)
   useEffect(() => {
@@ -56,11 +59,16 @@ export default function VisibilityChangeConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCancel}>
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm Visibility Change"
         className="w-full max-w-lg rounded-2xl bg-white shadow-xl p-6 space-y-4 overflow-visible"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
       >
         <div>
           <h3 className="text-lg font-display font-semibold text-slate-900">
@@ -101,10 +109,11 @@ export default function VisibilityChangeConfirmDialog({
         )}
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-slate-700">
+          <label htmlFor="visibility-reason" className="block text-sm font-medium text-slate-700">
             Reason for change <span className="text-rose-500">*</span>
           </label>
           <textarea
+            id="visibility-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="input-field min-h-[92px]"

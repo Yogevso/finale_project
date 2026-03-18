@@ -1,5 +1,5 @@
-import { lazy, Suspense, useState } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { lazy, Suspense, useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
@@ -27,6 +27,7 @@ const ChatPage = lazy(() => import('./pages/ChatPage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 const SupportPage = lazy(() => import('./pages/SupportPage'))
 const CannedResponsesPage = lazy(() => import('./pages/CannedResponsesPage'))
+const AccessibilityStatementPage = lazy(() => import('./pages/AccessibilityStatementPage'))
 const CustomerSupportPage = lazy(() => import('./pages/portal/CustomerSupportPage'))
 const ViewerDocumentPage = lazy(() => import('./pages/viewer/ViewerDocumentPage'))
 // Public portal pages
@@ -49,6 +50,7 @@ const MyFeedbackPage = lazy(() => import('./pages/portal/MyFeedbackPage'))
 import AcceptInvitationPage from './pages/AcceptInvitationPage'
 // Route guards
 import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard } from './components/guards/RoleGuard'
+import { RouteAnnouncer } from './components/a11y/SkipNavLink'
 
 // Smart redirect based on user role
 function RoleBasedRedirect() {
@@ -123,16 +125,32 @@ function NotFoundPage() {
 
 function RouteLoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
     </div>
   )
+}
+
+/** AC-010: Announce route changes to screen readers */
+function RouteChangeAnnouncer() {
+  const location = useLocation()
+  const [announcement, setAnnouncement] = useState('')
+
+  useEffect(() => {
+    // Derive a human-readable page name from the path
+    const path = location.pathname
+    const name = path === '/' ? 'Home' : path.split('/').filter(Boolean).map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ')).join(' - ')
+    setAnnouncement(`Navigated to ${name}`)
+  }, [location.pathname])
+
+  return <RouteAnnouncer message={announcement} />
 }
 
 function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" richColors />
+      <RouteChangeAnnouncer />
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
         {/* ==================== PUBLIC PORTAL ==================== */}
@@ -154,6 +172,7 @@ function App() {
           <Route path="/tools" element={<PublicToolsPage />} />
           <Route path="/help" element={<PublicHelpPage />} />
           <Route path="/changelog" element={<PublicChangelogPage />} />
+          <Route path="/accessibility" element={<AccessibilityStatementPage />} />
           <Route path="/doc/:id" element={<PublicDocumentPage />} />
           <Route path="/search" element={<PublicSearchPage />} />
         </Route>

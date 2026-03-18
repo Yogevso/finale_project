@@ -9,6 +9,7 @@ import {
 } from '@/features/documents'
 import type { DocumentTemplate } from '@/lib/documentTemplates'
 import { useCreateDocumentFlow } from '@/pages/documents/hooks/useCreateDocumentFlow'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   const {
@@ -40,6 +41,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     handleSubmit,
     confirmClose,
   } = useCreateDocumentFlow({ onClose })
+  const { containerRef, handleKeyDown: trapKeyDown } = useFocusTrap(onClose)
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
   const visibilityHelperText = getAudienceVisibilityHelperText(formData.visibility || 'internal')
@@ -78,11 +80,11 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={confirmClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Create Document" className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()} onKeyDown={trapKeyDown}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h2 className="text-xl font-display font-bold text-slate-900">Create Document</h2>
-          <button onClick={confirmClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500">
+          <button onClick={confirmClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500" aria-label="Close create document dialog">
             x
           </button>
         </div>

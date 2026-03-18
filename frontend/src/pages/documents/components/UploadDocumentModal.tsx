@@ -11,6 +11,7 @@ import {
   MANAGER_UPLOAD_STATUS_OPTIONS,
   useUploadDocumentFlow,
 } from '@/pages/documents/hooks/useUploadDocumentFlow'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const {
@@ -53,6 +54,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     handleSubmit,
     confirmClose,
   } = useUploadDocumentFlow({ onClose })
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
   const audiencePresets = listAudiencePresets()
   const audienceDirtyHelper = getAudienceDirtyHelperText(audienceDirtyState)
   const visibilityHelperText = getAudienceVisibilityHelperText(visibility)
@@ -73,8 +75,8 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Upload Document" className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <h2 className="text-xl font-display font-bold text-slate-900 mb-4">Upload Document</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">

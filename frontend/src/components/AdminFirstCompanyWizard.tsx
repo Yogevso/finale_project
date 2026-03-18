@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Building2, CheckCircle2, Mail, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useToast } from '@/lib/toast'
 import type { UserRole } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 type AdminFirstCompanyWizardProps = {
   isOpen: boolean
@@ -41,10 +42,12 @@ export default function AdminFirstCompanyWizard({
 
   const dismissStorageKey = useMemo(() => `admin-wizard-dismissed-${userId}`, [userId])
 
-  const dismissWizard = () => {
+  const dismissWizard = useCallback(() => {
     window.localStorage.setItem(dismissStorageKey, '1')
     onDismiss()
-  }
+  }, [dismissStorageKey, onDismiss])
+
+  const { containerRef, handleKeyDown } = useFocusTrap(dismissWizard)
 
   const createCompanyMutation = useMutation({
     mutationFn: () =>
@@ -100,8 +103,8 @@ export default function AdminFirstCompanyWizard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4" onClick={dismissWizard}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="First Company Wizard" className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <p className="eyebrow text-slate-500">Admin Setup</p>

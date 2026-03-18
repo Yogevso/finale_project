@@ -198,7 +198,7 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-bold text-white bg-sky-600 rounded-full">
+          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-bold text-white bg-sky-600 rounded-full" aria-live="polite" role="status">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}

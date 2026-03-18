@@ -10,6 +10,7 @@ import GlobalSearchBar from './GlobalSearchBar'
 import NotificationBell from './NotificationBell'
 import AnnouncementBanner from './AnnouncementBanner'
 import AssistantChatBubble from './AssistantChatBubble'
+import { SkipNavLink } from './a11y/SkipNavLink'
 
 export default function Layout() {
   const { user, logout, isSystemAdmin } = useAuth()
@@ -31,6 +32,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+      <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
       <header className="app-shell-header sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
@@ -53,6 +55,7 @@ export default function Layout() {
                 className="p-2 rounded-lg hover:bg-slate-100"
                 onClick={() => setMobileMenuOpen((previous) => !previous)}
                 aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? (
                   <X className="h-5 w-5 text-slate-600" />
@@ -181,7 +184,7 @@ export default function Layout() {
       {!isFullscreen && <AnnouncementBanner />}
 
       {/* Main Content */}
-      <main className="app-shell-main flex-1">
+      <main id="main-content" className="app-shell-main flex-1">
         <div className={`${isFullscreen ? 'px-0 py-0' : 'max-w-7xl mx-auto px-4 py-8'}`}>
           <Outlet />
         </div>

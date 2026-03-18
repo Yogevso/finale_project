@@ -16,6 +16,7 @@ import {
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/dateUtils'
 import type { FeedbackDetailResponse, FeedbackStatus, FeedbackType } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface FeedbackResponseDialogProps {
   feedback: FeedbackDetailResponse
@@ -58,6 +59,8 @@ export default function FeedbackResponseDialog({
   const [response, setResponse] = useState(feedback.response || '')
   const type = typeConfig[feedback.feedback_type]
 
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!response.trim()) return
@@ -65,8 +68,8 @@ export default function FeedbackResponseDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Feedback Response" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
@@ -85,6 +88,7 @@ export default function FeedbackResponseDialog({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600"
+            aria-label="Close feedback dialog"
           >
             <X className="w-5 h-5" />
           </button>
@@ -150,10 +154,11 @@ export default function FeedbackResponseDialog({
           {/* Response Form */}
           {feedback.status === 'pending' && (
             <form onSubmit={handleSubmit}>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="feedback-response" className="block text-sm font-medium text-slate-700 mb-2">
                 Your Response
               </label>
               <textarea
+                id="feedback-response"
                 value={response}
                 onChange={(e) => setResponse(e.target.value)}
                 rows={5}

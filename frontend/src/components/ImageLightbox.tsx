@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface ImageLightboxProps {
   src: string
@@ -10,6 +11,8 @@ interface ImageLightboxProps {
 }
 
 export default function ImageLightbox({ src, alt, title, onClose }: ImageLightboxProps) {
+  const { containerRef, handleKeyDown: trapKeyDown } = useFocusTrap(onClose)
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -27,11 +30,13 @@ export default function ImageLightbox({ src, alt, title, onClose }: ImageLightbo
 
   return createPortal(
     <div
+      ref={containerRef}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={alt || title || 'Image preview'}
       onClick={onClose}
+      onKeyDown={trapKeyDown}
     >
       <button
         type="button"

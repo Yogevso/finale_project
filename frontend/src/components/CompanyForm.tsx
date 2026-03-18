@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { X } from 'lucide-react'
 import type { Company, CompanyCreate, CompanyUpdate, CompanyType } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface CompanyFormProps {
   company?: Company | null
@@ -22,6 +23,7 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
     is_active: company?.is_active ?? true,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
 
   const createMutation = useMutation({
     mutationFn: (data: CompanyCreate) => api.createCompany(data),
@@ -70,28 +72,29 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label={isEditing ? 'Edit Company' : 'Create New Company'} className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4" onKeyDown={handleKeyDown}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900 font-display">
             {isEditing ? 'Edit Company' : 'Create New Company'}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full" aria-label="Close company form">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {errors.submit && (
-            <div className="p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200 text-sm">
+            <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200 text-sm">
               {errors.submit}
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="company-name" className="block text-sm font-medium text-slate-700 mb-1">
               Company Name *
             </label>
             <input
+              id="company-name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -99,8 +102,10 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
                 errors.name ? 'border-rose-500 focus:ring-rose-500' : ''
               }`}
               placeholder="Acme Corporation"
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? 'company-name-error' : undefined}
             />
-            {errors.name && <p className="mt-1 text-sm text-rose-500">{errors.name}</p>}
+            {errors.name && <p id="company-name-error" className="mt-1 text-sm text-rose-500">{errors.name}</p>}
           </div>
 
           <div>

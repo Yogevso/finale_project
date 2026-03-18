@@ -1,3 +1,5 @@
+import { useFocusTrap } from '@/hooks/useAccessibility'
+
 type QuickStartModalProps = {
   onClose: () => void
   onCreate: () => void
@@ -5,12 +7,14 @@ type QuickStartModalProps = {
 }
 
 export function QuickStartModal({ onClose, onCreate, onUpload }: QuickStartModalProps) {
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Start a new document" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-display font-bold text-slate-900">Start a new document</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500">
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl text-slate-500" aria-label="Close">
             x
           </button>
         </div>

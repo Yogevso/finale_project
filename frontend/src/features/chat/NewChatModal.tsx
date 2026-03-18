@@ -8,6 +8,7 @@ import { X, Search, Users, User as UserIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { User } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface NewChatModalProps {
   onClose: () => void
@@ -17,6 +18,7 @@ interface NewChatModalProps {
 export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
   const [tab, setTab] = useState<'direct' | 'group'>('direct')
   const [search, setSearch] = useState('')
   const [groupName, setGroupName] = useState('')
@@ -55,12 +57,12 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
   const isPending = createDirect.isPending || createGroup.isPending
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="New Conversation" className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 className="text-lg font-semibold text-gray-900">New Conversation</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600" aria-label="Close new conversation dialog">
             <X className="h-5 w-5" />
           </button>
         </div>

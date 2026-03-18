@@ -131,7 +131,7 @@ export function OfflineIndicator({
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} role="status" aria-live="polite">
       {/* Main indicator button */}
       <button
         onClick={() => setShowDetails(!showDetails)}

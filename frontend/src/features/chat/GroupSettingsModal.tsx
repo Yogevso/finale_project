@@ -8,6 +8,7 @@ import { X, Crown, Shield, UserMinus, Check } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { ChatDetail, ChatParticipant, ChatParticipantRole } from '@/types/chat'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface GroupSettingsModalProps {
   chat: ChatDetail
@@ -17,6 +18,7 @@ interface GroupSettingsModalProps {
 export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModalProps) {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
   const [name, setName] = useState(chat.name || '')
   const [nameChanged, setNameChanged] = useState(false)
 
@@ -67,12 +69,12 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Group Settings" className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <h2 className="text-lg font-semibold text-gray-900">Group Settings</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600" aria-label="Close group settings">
             <X className="h-5 w-5" />
           </button>
         </div>

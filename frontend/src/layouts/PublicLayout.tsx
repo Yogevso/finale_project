@@ -3,6 +3,7 @@ import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
+import { SkipNavLink } from '@/components/a11y/SkipNavLink'
 
 export default function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -13,6 +14,7 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SkipNavLink />
       {/* Zip B Style Header */}
       {!isFullscreen && (
       <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
@@ -33,6 +35,8 @@ export default function PublicLayout() {
             <button
               className="md:hidden p-2 rounded-lg hover:bg-slate-100"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6 text-slate-600" />
@@ -200,7 +204,7 @@ export default function PublicLayout() {
       {!isFullscreen && <AnnouncementBanner />}
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <Outlet />
       </main>
 

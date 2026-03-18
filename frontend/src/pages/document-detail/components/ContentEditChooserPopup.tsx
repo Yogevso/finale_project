@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface ContentEditChooserPopupProps {
   sections: TocSection[]
@@ -16,9 +17,11 @@ export function ContentEditChooserPopup({
   onEditSection,
   onAddSection,
 }: ContentEditChooserPopupProps) {
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Edit Content Options" className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700">
           <div>
             <h2 className="text-lg font-display font-semibold text-white">Edit Content Options</h2>
@@ -29,6 +32,7 @@ export function ContentEditChooserPopup({
           <button
             onClick={onClose}
             className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white"
+            aria-label="Close edit options"
           >
             <X className="w-5 h-5" />
           </button>

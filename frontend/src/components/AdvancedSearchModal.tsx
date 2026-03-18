@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { X, Search, SlidersHorizontal } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface AdvancedSearchModalProps {
   isOpen: boolean
@@ -50,6 +51,8 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
   const statuses = facetsQuery.data?.statuses ?? []
   const companies = (companiesQuery.data as { items?: { id: number; name: string }[] })?.items ?? []
 
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+
   const handleSearch = () => {
     const params = new URLSearchParams()
     if (query.trim()) params.set('search', query.trim())
@@ -77,15 +80,23 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
   const activeFilterCount = [query, category, status, visibility, companyId, dateFrom, dateTo].filter(Boolean).length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Advanced Search"
+        className="w-full max-w-lg rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="h-5 w-5 text-sky-600" />
             <h2 className="text-lg font-semibold text-gray-900">Advanced Search</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close advanced search">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -94,10 +105,11 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
         <div className="space-y-4 p-6">
           {/* Text query */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Search text</label>
+            <label htmlFor="adv-search-query" className="mb-1 block text-sm font-medium text-gray-700">Search text</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
+                id="adv-search-query"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -112,8 +124,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
           <div className="grid grid-cols-2 gap-4">
             {/* Category */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
+              <label htmlFor="adv-search-category" className="mb-1 block text-sm font-medium text-gray-700">Category</label>
               <select
+                id="adv-search-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
@@ -129,8 +142,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
 
             {/* Status */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+              <label htmlFor="adv-search-status" className="mb-1 block text-sm font-medium text-gray-700">Status</label>
               <select
+                id="adv-search-status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
@@ -146,8 +160,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
 
             {/* Visibility */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Visibility</label>
+              <label htmlFor="adv-search-visibility" className="mb-1 block text-sm font-medium text-gray-700">Visibility</label>
               <select
+                id="adv-search-visibility"
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
@@ -161,8 +176,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
 
             {/* Company */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Company</label>
+              <label htmlFor="adv-search-company" className="mb-1 block text-sm font-medium text-gray-700">Company</label>
               <select
+                id="adv-search-company"
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
@@ -178,8 +194,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
 
             {/* Date from */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Created after</label>
+              <label htmlFor="adv-search-date-from" className="mb-1 block text-sm font-medium text-gray-700">Created after</label>
               <input
+                id="adv-search-date-from"
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -189,8 +206,9 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
 
             {/* Date to */}
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Created before</label>
+              <label htmlFor="adv-search-date-to" className="mb-1 block text-sm font-medium text-gray-700">Created before</label>
               <input
+                id="adv-search-date-to"
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}

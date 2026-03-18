@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import type { UserRole, Company } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface InviteUserDialogProps {
   onClose: () => void
@@ -38,6 +39,8 @@ export default function InviteUserDialog({
     message: '',
   })
   const [error, setError] = useState('')
+
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
 
   const { data: companiesData } = useQuery({
     queryKey: ['companies'],
@@ -108,8 +111,8 @@ export default function InviteUserDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Invite User" className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-sky-100 rounded-xl">
@@ -117,43 +120,47 @@ export default function InviteUserDialog({
             </div>
             <h2 className="text-lg font-semibold text-slate-900 font-display">Invite User</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100" aria-label="Close invite dialog">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200">
+            <div id="invite-error" role="alert" className="flex items-center gap-2 p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200">
               <AlertCircle className="w-4 h-4" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="invite-email" className="block text-sm font-medium text-slate-700 mb-1">
               Email Address <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
+                id="invite-email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 placeholder="user@example.com"
                 required
                 className="input-field pl-10"
+                aria-invalid={!!error}
+                aria-describedby={error ? 'invite-error' : undefined}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="invite-role" className="block text-sm font-medium text-slate-700 mb-1">
               Role <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <select
+                id="invite-role"
                 value={formData.role}
                 onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                 className="select-field pl-10 appearance-none"
@@ -170,12 +177,13 @@ export default function InviteUserDialog({
           {/* Show company selector for customer role */}
           {(formData.role === 'customer' || preselectedCompanyId) && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="invite-company" className="block text-sm font-medium text-slate-700 mb-1">
                 Company <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <select
+                  id="invite-company"
                   value={formData.tenant_id}
                   onChange={(e) =>
                     setFormData({
@@ -209,10 +217,11 @@ export default function InviteUserDialog({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="invite-message" className="block text-sm font-medium text-slate-700 mb-1">
               Message (optional)
             </label>
             <textarea
+              id="invite-message"
               value={formData.message}
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               placeholder="Add a personal message to include in the invitation email..."

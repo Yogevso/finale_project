@@ -10,6 +10,7 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
 import DraftRecoveryNotice from '@/components/DraftRecoveryNotice'
 import VersionDiffView from '@/components/VersionDiffView'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 import {
   clearDraftRecovery,
   isDraftRecoveryDifferent,
@@ -113,6 +114,7 @@ export function SectionEditPopup({
   onBack,
 }: SectionEditPopupProps) {
   const initialEditingFrame = useMemo(() => createEditingFrame(section.html), [section.html])
+  const { containerRef: dialogRef, handleKeyDown: trapKeyDown } = useFocusTrap(onClose)
   const [editingFrame, setEditingFrame] = useState(initialEditingFrame)
   const [isSaving, setIsSaving] = useState(false)
   const [submitForReview, setSubmitForReview] = useState(true)
@@ -319,8 +321,8 @@ export function SectionEditPopup({
   const showTableControls = true
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={popupTitle} className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} onKeyDown={trapKeyDown}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700">
           <div className="flex items-center gap-3">
             <Edit3 className="w-5 h-5 text-white" />
@@ -329,6 +331,7 @@ export function SectionEditPopup({
           <button
             onClick={onClose}
             className="p-2 hover:bg-white/20 rounded-lg transition-colors text-white"
+            aria-label="Close editor"
           >
             <X className="w-5 h-5" />
           </button>

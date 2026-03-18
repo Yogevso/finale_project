@@ -14,6 +14,7 @@ import {
 import type { ReviewRequest, Version } from '@/types'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface ReviewDialogProps {
   review: ReviewRequest
@@ -35,6 +36,8 @@ export default function ReviewDialog({
   const [showConfirm, setShowConfirm] = useState(false)
   const [version, setVersion] = useState<Version | null>(null)
   const [loadingVersion, setLoadingVersion] = useState(false)
+
+  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
 
   // Fetch version details if version_id is present
   useEffect(() => {
@@ -65,8 +68,8 @@ export default function ReviewDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Review Document" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900 font-display">Review Document</h2>
@@ -74,6 +77,7 @@ export default function ReviewDialog({
             onClick={onClose}
             disabled={isLoading}
             className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
+            aria-label="Close review dialog"
           >
             <X className="w-5 h-5" />
           </button>
@@ -171,10 +175,11 @@ export default function ReviewDialog({
 
           {/* Comments */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor="review-comments" className="block text-sm font-medium text-slate-700 mb-2">
               Review Comments {action === 'reject' && <span className="text-rose-500">*</span>}
             </label>
             <textarea
+              id="review-comments"
               value={comments}
               onChange={(e) => setComments(e.target.value)}
               placeholder={
