@@ -1,8 +1,17 @@
+import pytest
+
 from app.services.permissions import Permission, clear_dynamic_role_permissions, has_permission
 
 
-def test_rbac_policy_update_publishes_dynamic_permissions(client, test_user, system_admin_headers):
+@pytest.fixture(autouse=True)
+def _clean_dynamic_permissions():
+    """Ensure dynamic RBAC overrides never leak to subsequent tests."""
     clear_dynamic_role_permissions()
+    yield
+    clear_dynamic_role_permissions()
+
+
+def test_rbac_policy_update_publishes_dynamic_permissions(client, test_user, system_admin_headers):
 
     payload = {
         "policies": [
@@ -24,8 +33,6 @@ def test_rbac_policy_update_publishes_dynamic_permissions(client, test_user, sys
 def test_auth_me_uses_effective_dynamic_permissions(
     client, test_user, auth_headers, system_admin_headers
 ):
-    clear_dynamic_role_permissions()
-
     payload = {
         "policies": [
             {
