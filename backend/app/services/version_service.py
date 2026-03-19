@@ -546,6 +546,18 @@ class VersionService(SessionService):
                 version.audience_visibility_snapshot = audience_visibility_snapshot
                 version.audience_company_ids_snapshot = audience_company_ids_snapshot
 
+                # AF-003: Snapshot attachment IDs at publish time
+                from app.models import Attachment as AttachmentModel
+                publish_cutoff = version.published_at
+                attachment_ids = [
+                    a.id for a in self.db.query(AttachmentModel.id)
+                    .filter(
+                        AttachmentModel.document_id == document.id,
+                        AttachmentModel.uploaded_at <= publish_cutoff,
+                    ).all()
+                ]
+                version.published_attachment_ids_snapshot = json.dumps(attachment_ids) if attachment_ids else None
+
                 DocumentAggregate(document).transition_to_active()
                 self.event_dispatcher.dispatch(
                     DocumentPublished(

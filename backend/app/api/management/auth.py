@@ -21,6 +21,7 @@ from app.schemas import (
     LoginRequest,
     MessageResponse,
     PasswordChange,
+    PublicRegistrationRequest,
     RefreshTokenRequest,
     TokenResponse,
     UserCreate,
@@ -329,7 +330,7 @@ def logout(
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(
-    user_data: UserCreate,
+    user_data: PublicRegistrationRequest,
     background_tasks: BackgroundTasks,
     auth_service: AuthService = Depends(get_auth_service),
 ):

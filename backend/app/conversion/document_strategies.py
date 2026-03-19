@@ -187,7 +187,11 @@ class TextConverterStrategy:
 
 
 class HtmlPassthroughStrategy:
-    """HTML passthrough strategy that decodes bytes as HTML text."""
+    """HTML passthrough strategy that decodes bytes as HTML text.
+
+    AF-012: Content is sanitized via ``strip_dangerous_html_patterns``
+    before being returned, so backend never serves raw unsanitized HTML.
+    """
 
     name = "html"
     capabilities = _HTML_ONLY_CAPABILITIES
@@ -201,10 +205,13 @@ class HtmlPassthroughStrategy:
         )
 
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
+        from app.utils.sanitization import strip_dangerous_html_patterns
+
         try:
-            return request.content.decode("utf-8")
+            raw = request.content.decode("utf-8")
         except UnicodeDecodeError:
-            return request.content.decode("utf-8", errors="replace")
+            raw = request.content.decode("utf-8", errors="replace")
+        return strip_dangerous_html_patterns(raw)
 
     def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
         return None

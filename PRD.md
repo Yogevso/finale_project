@@ -1375,31 +1375,31 @@ Users need a way to communicate privately about documents without those conversa
 > Fixes publication draft fallback, data leakage, API boundary confusion, and dead code. (Audit §2.4, §3.1, §3.3, §3.6, §3.9, §4.1–4.5, §4.7)
 
 ### Publication Integrity (High)
-- [ ] AF-001: Remove draft fallback for public reads — public document endpoints must only serve from published versions, never fall back to latest draft. (Audit 2.4)
-- [ ] AF-002: Fix attachment leakage — public, portal, and viewer responses must only include attachments associated with the published version/snapshot, not all current document attachments. (Audit 2.4)
-- [ ] AF-003: Treat publication as a release artifact — create an immutable published revision record that snapshots content, metadata, audience, and attachments at publish time. (Audit 4.2)
-- [ ] AF-004: Fix portal reading-progress metadata leak — `/portal/reading-progress/recent` and `/continue` must re-run customer document access checks, not just filter by `user_id`. (Audit 3.1)
+- [x] AF-001: Remove draft fallback for public reads — public document endpoints must only serve from published versions, never fall back to latest draft. (Audit 2.4)
+- [x] AF-002: Fix attachment leakage — public, portal, and viewer responses must only include attachments associated with the published version/snapshot, not all current document attachments. (Audit 2.4)
+- [x] AF-003: Treat publication as a release artifact — create an immutable published revision record that snapshots content, metadata, audience, and attachments at publish time. (Audit 4.2)
+- [x] AF-004: Fix portal reading-progress metadata leak — `/portal/reading-progress/recent` and `/continue` must re-run customer document access checks, not just filter by `user_id`. (Audit 3.1)
 
 ### Access Policy Centralization
-- [ ] AF-005: Create one central document access service — resolve read/write/download/comment access per user, per document, per version. Replace the scattered re-implementations in portal, public, comments, attachments, and collaboration paths. (Audit 4.1)
+- [x] AF-005: Create one central document access service — resolve read/write/download/comment access per user, per document, per version. Replace the scattered re-implementations in portal, public, comments, attachments, and collaboration paths. (Audit 4.1)
 
 ### API Surface Cleanup
-- [ ] AF-006: Separate API surfaces physically — move public changelog out of management router, stop portal/public behavior depending on management routes. Route boundaries must map to policy boundaries. (Audit 3.3)
-- [ ] AF-007: Make API surfaces honest — if an endpoint is public, put it in the public router. If it is management-only, enforce auth at the router level. Remove accidental sharing. (Audit 4.5)
-- [ ] AF-008: Fix `DocumentStatus.PUBLISHED = "active"` naming — pick one canonical lifecycle vocabulary (`PUBLISHED`). If aliases needed for compatibility, isolate at API translation boundary. (Audit 3.9)
-- [ ] AF-009: Remove `role` and `tenant_id` from external write payloads — public API payloads must not carry server-owned authority fields. Move role assignment to admin-only commands and invitation acceptance. (Audit 4.8)
+- [x] AF-006: Separate API surfaces physically — move public changelog out of management router, stop portal/public behavior depending on management routes. Route boundaries must map to policy boundaries. (Audit 3.3)
+- [x] AF-007: Make API surfaces honest — if an endpoint is public, put it in the public router. If it is management-only, enforce auth at the router level. Remove accidental sharing. (Audit 4.5)
+- [x] AF-008: Fix `DocumentStatus.PUBLISHED = "active"` naming — pick one canonical lifecycle vocabulary (`PUBLISHED`). If aliases needed for compatibility, isolate at API translation boundary. (Audit 3.9)
+- [x] AF-009: Remove `role` and `tenant_id` from external write payloads — public API payloads must not carry server-owned authority fields. Move role assignment to admin-only commands and invitation acceptance. (Audit 4.8)
 
 ### Dead Code & Feature Branches
-- [ ] AF-010: Delete dead `CommentsSection.tsx` — confirmed dead code, never imported. (Audit 3.6)
-- [ ] AF-011: Remove or update stale "chat bridge" comment on `DocumentDetailPage.tsx:19`. (Audit 3.6)
-- [ ] AF-012: Eliminate ad hoc HTML rendering — route every HTML-like rendering path through the existing safe sanitizer utility, or move to structured rich text. (Audit 4.3)
-- [ ] AF-013: Remove or complete dead feature branches — finish transitions or delete stale contracts. (Audit 4.7)
+- [x] AF-010: Delete dead `CommentsSection.tsx` — confirmed dead code, never imported. (Audit 3.6)
+- [x] AF-011: Remove or update stale "chat bridge" comment on `DocumentDetailPage.tsx:19`. (Audit 3.6)
+- [x] AF-012: Eliminate ad hoc HTML rendering — route every HTML-like rendering path through the existing safe sanitizer utility, or move to structured rich text. (Audit 4.3)
+- [x] AF-013: Remove or complete dead feature branches — finish transitions or delete stale contracts. (Audit 4.7)
 
 ### Wave AF — Tests
-- [ ] AF-014: Test — public document endpoint returns 404 when no published version exists (no draft fallback).
-- [ ] AF-015: Test — public/portal document response includes only attachments from the published snapshot.
-- [ ] AF-016: Test — portal reading-progress endpoint excludes documents user no longer has access to.
-- [ ] AF-017: Test — public changelog route is not in management router namespace.
+- [x] AF-014: Test — public document endpoint returns 404 when no published version exists (no draft fallback).
+- [x] AF-015: Test — public/portal document response includes only attachments from the published snapshot.
+- [x] AF-016: Test — portal reading-progress endpoint excludes documents user no longer has access to.
+- [x] AF-017: Test — public changelog route is not in management router namespace.
 
 ---
 

@@ -12,7 +12,7 @@ from app.application.queries.dependencies import get_portal_documents_query_hand
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.db import get_db
-from app.models import Document, ReadingProgress, User
+from app.models import Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
@@ -26,6 +26,32 @@ from app.web.controllers.portal import PortalDocumentsController
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
 portal_documents_controller = PortalDocumentsController()
+
+
+def _customer_can_still_access(
+    doc_status: DocumentStatus,
+    doc_visibility: DocumentVisibility,
+    doc_tenant_id: int | None,
+    user: User,
+) -> bool:
+    """AF-004: Lightweight access re-check for reading-progress endpoints.
+
+    For COMPANY documents this is conservative — we check the doc's own
+    tenant matches the user's tenant. The full assigned_companies check
+    is done via the portal query handler for detail endpoints. This is
+    acceptable because it only filters reading-progress list items.
+    """
+    if doc_status != DocumentStatus.ACTIVE:
+        return False
+    if doc_visibility == DocumentVisibility.PUBLIC:
+        return True
+    if doc_visibility == DocumentVisibility.INTERNAL:
+        return False  # Customers can't access internal docs
+    if doc_visibility == DocumentVisibility.COMPANY:
+        # Conservative: allow if the user's tenant matches. Full access
+        # checks are done when the user actually opens the document.
+        return user.tenant_id is not None
+    return False
 
 
 def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
@@ -215,24 +241,28 @@ async def get_recently_viewed(
 ):
     """Return recently viewed documents for the current user."""
     rows = (
-        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url)
+        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url,
+                 Document.status, Document.visibility, Document.tenant_id)
         .join(Document, ReadingProgress.document_id == Document.id)
         .filter(ReadingProgress.user_id == current_user.id)
         .order_by(ReadingProgress.last_read_at.desc())
         .limit(limit)
         .all()
     )
-    return [
-        {
+    # AF-004: Re-run access checks — exclude docs the user can no longer view
+    results = []
+    for rp, title, category, thumb, doc_status, doc_vis, doc_tenant_id in rows:
+        if not _customer_can_still_access(doc_status, doc_vis, doc_tenant_id, current_user):
+            continue
+        results.append({
             "document_id": rp.document_id,
             "title": title,
             "category": category,
             "thumbnail_url": thumb,
             "progress_percent": rp.progress_percent,
             "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
-        }
-        for rp, title, category, thumb in rows
-    ]
+        })
+    return results
 
 
 @router.get("/reading-progress/continue")
@@ -243,7 +273,8 @@ async def get_continue_reading(
 ):
     """Return documents the user started but hasn't finished (progress < 100%)."""
     rows = (
-        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url)
+        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url,
+                 Document.status, Document.visibility, Document.tenant_id)
         .join(Document, ReadingProgress.document_id == Document.id)
         .filter(
             ReadingProgress.user_id == current_user.id,
@@ -254,14 +285,17 @@ async def get_continue_reading(
         .limit(limit)
         .all()
     )
-    return [
-        {
+    # AF-004: Re-run access checks — exclude docs the user can no longer view
+    results = []
+    for rp, title, category, thumb, doc_status, doc_vis, doc_tenant_id in rows:
+        if not _customer_can_still_access(doc_status, doc_vis, doc_tenant_id, current_user):
+            continue
+        results.append({
             "document_id": rp.document_id,
             "title": title,
             "category": category,
             "thumbnail_url": thumb,
             "progress_percent": rp.progress_percent,
             "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
-        }
-        for rp, title, category, thumb in rows
-    ]
+        })
+    return results

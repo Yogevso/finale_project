@@ -39,13 +39,19 @@ class UserRole(str, enum.Enum):
 
 
 class DocumentStatus(str, enum.Enum):
-    """Document statuses"""
+    """Document lifecycle statuses.
+
+    AF-008: The canonical published state is ``PUBLISHED``.
+    The database stores ``"active"`` as the value for backward compatibility.
+    ``ACTIVE`` is retained as an alias so existing queries continue to work.
+    New code should use ``DocumentStatus.PUBLISHED``.
+    """
 
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"  # Waiting for approval
     APPROVED = "approved"  # Approved for publish, not public yet
-    ACTIVE = "active"
-    PUBLISHED = "active"  # Alias for ACTIVE
+    ACTIVE = "active"  # Legacy alias — prefer PUBLISHED
+    PUBLISHED = "active"  # Canonical published state (DB value is "active")
     ARCHIVED = "archived"
 
 
@@ -432,6 +438,9 @@ class Version(Base):
     # Audience state snapshot at publish time (carry-forward for auditing)
     audience_visibility_snapshot = Column(String(50), nullable=True)
     audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
+
+    # AF-003: Attachment snapshot at publish time — JSON array of attachment IDs
+    published_attachment_ids_snapshot = Column(Text, nullable=True)
 
     # Relationships
     document = relationship("Document", back_populates="versions")

@@ -11,7 +11,7 @@ from app.auth_context.session_tokens import hash_session_identifier
 from app.config import settings
 from app.models import PasswordReset, SecurityEvent, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
-from app.schemas import TokenResponse, UserCreate
+from app.schemas import PublicRegistrationRequest, TokenResponse, UserCreate
 from app.security import get_password_hash, verify_password
 from app.services.base_service import SessionService
 
@@ -425,10 +425,11 @@ class AuthService(SessionService):
             session.revoked_at = now
         self.db.commit()
 
-    def register(self, user_data: UserCreate) -> User:
+    def register(self, user_data: UserCreate | PublicRegistrationRequest) -> User:
         """Register a new user via public self-registration.
 
-        Security: role and tenant_id from the payload are ignored.
+        AF-009: Accepts ``PublicRegistrationRequest`` (no role/tenant_id) or
+        legacy ``UserCreate`` — either way, role and tenant_id are ignored.
         All self-registered users land as ``customer`` with no tenant.
         Staff creation goes through admin/invitation flows only.
         """

@@ -124,10 +124,11 @@ class PortalDocumentsQueryHandler:
         return VisibilitySpec.customer_portal(customer_tenant_id=user.tenant_id)
 
     def _ensure_customer_document_access(self, document: Document, user: User) -> None:
-        if document.status != DocumentStatus.ACTIVE:
+        """AF-005: Delegate to the central DocumentAccessPolicy."""
+        from app.application.policies.access_policies import DocumentAccessPolicy
+        policy = DocumentAccessPolicy()
+        if not policy.can_view_document(user, document):
             raise HTTPException(status_code=404, detail="Document not found")
-        if not self._customer_visibility_spec(user).is_satisfied_by(document):
-            raise HTTPException(status_code=403, detail="You don't have access to this document")
 
     def _customer_documents_query(self, user: User):
         repository = DocumentRepository(self.db)
@@ -160,12 +161,14 @@ class PortalDocumentsQueryHandler:
 
     @staticmethod
     def _portal_visible_version(document: Document) -> Version | None:
+        """Return latest published version only — never fall back to draft (AF-001)."""
         if not document.versions:
             return None
 
         published_versions = [version for version in document.versions if version.is_published]
-        candidate_versions = published_versions or document.versions
-        return max(candidate_versions, key=lambda version: version.version_number)
+        if not published_versions:
+            return None
+        return max(published_versions, key=lambda version: version.version_number)
 
     def execute_list_documents(self, query: ListPortalDocumentsQuery) -> PortalDocumentListResponse:
         def load_projection() -> PortalDocumentListResponse:

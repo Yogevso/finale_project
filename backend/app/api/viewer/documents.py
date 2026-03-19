@@ -192,12 +192,30 @@ def get_document_attachments(
     document_id: int,
     db: Session = Depends(get_db),
 ):
-    """Get attachments for a published document."""
+    """Get attachments for a published document (scoped to latest publish time)."""
     _get_active_document_or_404(db, document_id)
 
+    # AF-002: Scope attachments to the latest published version's publish time
+    # so uploads after publish don't leak to public viewers.
+    latest_published = (
+        db.query(Version)
+        .filter(
+            Version.document_id == document_id,
+            Version.is_published.is_(True),
+        )
+        .order_by(Version.version_number.desc())
+        .first()
+    )
+    if not latest_published:
+        return []
+
+    cutoff = latest_published.published_at or latest_published.created_at
     attachments = (
         db.query(Attachment)
-        .filter(Attachment.document_id == document_id)
+        .filter(
+            Attachment.document_id == document_id,
+            Attachment.uploaded_at <= cutoff,
+        )
         .order_by(Attachment.uploaded_at.desc())
         .all()
     )

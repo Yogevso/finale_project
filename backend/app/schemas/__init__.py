@@ -37,7 +37,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    """User creation schema"""
+    """User creation schema (admin use — includes role and tenant_id)."""
 
     password: str = Field(..., min_length=8, max_length=100)
     role: UserRole = UserRole.VIEWER
@@ -47,6 +47,31 @@ class UserCreate(UserBase):
     @classmethod
     def password_complexity(cls, v: str) -> str:
         """AD-011: enforce password complexity — upper, lower, digit, special."""
+        import re
+
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[^A-Za-z0-9]", v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
+class PublicRegistrationRequest(UserBase):
+    """AF-009: Public self-registration schema — no role or tenant_id fields.
+
+    External API payloads must not carry server-owned authority fields.
+    """
+
+    password: str = Field(..., min_length=8, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        """AD-011: enforce password complexity."""
         import re
 
         if not re.search(r"[A-Z]", v):
@@ -738,6 +763,7 @@ __all__ = [
     # User
     "UserBase",
     "UserCreate",
+    "PublicRegistrationRequest",
     "UserUpdate",
     "UserResponse",
     # Auth

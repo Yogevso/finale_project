@@ -16,7 +16,7 @@ import NotFoundState from '@/components/NotFoundState'
 
 const VersionsSection = lazy(() => import('@/components/VersionsSection'))
 const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
-// Comments tab removed — comments are accessible via inline popups and chat bridge
+// Comments tab removed — comments are accessible via inline popups
 
 export default function DocumentDetailPage() {
   const tour = useTour('document-detail', documentDetailTour)

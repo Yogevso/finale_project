@@ -1,4 +1,8 @@
-"""Changelog API — admin creates/manages release notes, public reads them."""
+"""Changelog API — management CRUD for release notes (auth required).
+
+AF-006/007: Public read access moved to ``app.api.public.changelog``.
+This router is management-only; all endpoints require manager auth.
+"""
 
 from __future__ import annotations
 
@@ -32,14 +36,14 @@ class ChangelogUpdate(BaseModel):
     published: Optional[bool] = None
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(require_manager)])
 async def list_changelog(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    published_only: bool = True,
+    published_only: bool = False,
     db: Session = Depends(get_db),
 ):
-    """List changelog entries. Defaults to published-only for public safety."""
+    """List changelog entries (management — includes unpublished drafts)."""
     query = db.query(ChangelogEntry)
     if published_only:
         query = query.filter(ChangelogEntry.published.is_(True))
