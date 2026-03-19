@@ -1258,39 +1258,39 @@ Users need a way to communicate privately about documents without those conversa
 > Dedicated accessibility wave scheduled at end of roadmap per user decision. Consolidates WCAG 2.1 AA compliance work.
 
 ### WCAG 2.1 AA Audit
-- [ ] AC-001: Conduct full WCAG 2.1 AA audit on all pages using axe-core, WAVE, and manual testing — document all violations in `docs/accessibility-audit.md`.
-- [ ] AC-002: Fix all Level A violations — missing alt text, empty links, missing form labels, invalid ARIA, keyboard traps.
-- [ ] AC-003: Fix all Level AA violations — color contrast, resize/reflow, focus visible, status messages, error identification.
-- [ ] AC-004: Add skip navigation links — "Skip to main content" link at top of every page, visible on focus.
+- [x] AC-001: Conduct full WCAG 2.1 AA audit on all pages using axe-core, WAVE, and manual testing — document all violations in `docs/accessibility-audit.md`.
+- [x] AC-002: Fix all Level A violations — missing alt text, empty links, missing form labels, invalid ARIA, keyboard traps.
+- [x] AC-003: Fix all Level AA violations — color contrast, resize/reflow, focus visible, status messages, error identification.
+- [x] AC-004: Add skip navigation links — "Skip to main content" link at top of every page, visible on focus.
 
 ### Screen Reader & Keyboard
-- [ ] AC-005: Verify all interactive components work with screen readers (NVDA, VoiceOver) — document list, document viewer, modals, forms, comments.
-- [ ] AC-006: Implement full keyboard navigation — all actions reachable without mouse, logical tab order, visible focus indicators.
-- [ ] AC-007: Add ARIA live regions for dynamic content — document status changes, notification counts, real-time collaboration updates.
-- [ ] AC-008: Ensure all images have meaningful alt text or are marked decorative (`alt=""`).
+- [x] AC-005: Verify all interactive components work with screen readers (NVDA, VoiceOver) — document list, document viewer, modals, forms, comments.
+- [x] AC-006: Implement full keyboard navigation — all actions reachable without mouse, logical tab order, visible focus indicators.
+- [x] AC-007: Add ARIA live regions for dynamic content — document status changes, notification counts, real-time collaboration updates.
+- [x] AC-008: Ensure all images have meaningful alt text or are marked decorative (`alt=""`).
 
 ### Focus & State Management
-- [ ] AC-009: Implement focus trapping in modals — focus stays within modal when open, returns to trigger on close.
-- [ ] AC-010: Add focus management for SPA navigation — focus moves to main content area after route change.
-- [ ] AC-011: Ensure all form errors are announced and linked to inputs — use `aria-describedby` and `aria-invalid`.
-- [ ] AC-012: Add high contrast mode support — ensure all UI is usable with Windows High Contrast Mode.
+- [x] AC-009: Implement focus trapping in modals — focus stays within modal when open, returns to trigger on close.
+- [x] AC-010: Add focus management for SPA navigation — focus moves to main content area after route change.
+- [x] AC-011: Ensure all form errors are announced and linked to inputs — use `aria-describedby` and `aria-invalid`.
+- [x] AC-012: Add high contrast mode support — ensure all UI is usable with Windows High Contrast Mode.
 
 ### Testing & CI
-- [ ] AC-013: Add axe-core accessibility checks to all Playwright E2E tests — fail on any critical or serious violations.
-- [ ] AC-014: Add accessibility linting to CI — eslint-plugin-jsx-a11y for React components, fail build on errors.
-- [ ] AC-015: Create accessibility testing checklist for PR reviews — document in `docs/accessibility-checklist.md`.
-- [ ] AC-016: Add automated color contrast checking — integrate contrast checker into design system, fail if new colors don't meet AA.
+- [x] AC-013: Add axe-core accessibility checks to all Playwright E2E tests — fail on any critical or serious violations.
+- [x] AC-014: Add accessibility linting to CI — eslint-plugin-jsx-a11y for React components, fail build on errors.
+- [x] AC-015: Create accessibility testing checklist for PR reviews — document in `docs/accessibility-checklist.md`.
+- [x] AC-016: Add automated color contrast checking — integrate contrast checker into design system, fail if new colors don't meet AA.
 
 ### Documentation & Training
-- [ ] AC-017: Document accessibility patterns in component library — each component includes accessibility notes and keyboard shortcuts.
-- [ ] AC-018: Create accessibility statement page — public page describing conformance level, known issues, and contact for accessibility feedback.
+- [x] AC-017: Document accessibility patterns in component library — each component includes accessibility notes and keyboard shortcuts.
+- [x] AC-018: Create accessibility statement page — public page describing conformance level, known issues, and contact for accessibility feedback.
 
 ### Wave AC — Tests
-- [ ] AC-019: Playwright test for skip navigation — tab from page load, verify skip link appears and works.
-- [ ] AC-020: Playwright test for keyboard-only document browsing — complete full flow without mouse.
-- [ ] AC-021: Playwright test for screen reader announcements — verify ARIA live regions announce status changes.
-- [ ] AC-022: Component test for focus management — open modal, verify focus trapped, close, verify focus returns.
-- [ ] AC-023: CI accessibility regression test — run axe-core on all routes, store baseline violations, fail if count increases.
+- [x] AC-019: Playwright test for skip navigation — tab from page load, verify skip link appears and works.
+- [x] AC-020: Playwright test for keyboard-only document browsing — complete full flow without mouse.
+- [x] AC-021: Playwright test for screen reader announcements — verify ARIA live regions announce status changes.
+- [x] AC-022: Component test for focus management — open modal, verify focus trapped, close, verify focus returns.
+- [x] AC-023: CI accessibility regression test — run axe-core on all routes, store baseline violations, fail if count increases.
 
 ---
 
