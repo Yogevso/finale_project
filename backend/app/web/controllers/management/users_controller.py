@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth_context.refresh_token_service import RefreshTokenService
 from app.dependencies.tenant import TenantContext
@@ -41,7 +41,7 @@ class UsersController:
         if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
-        query = db.query(User)
+        query = db.query(User).options(joinedload(User.tenant))
         if not tenant_ctx.is_system_admin:
             query = query.filter(User.tenant_id == tenant_ctx.tenant_id)
 
@@ -527,7 +527,8 @@ class UsersController:
             "company_slug": None,
         }
         if user.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            # Use pre-loaded relationship if available (joinedload), else fallback query
+            tenant = getattr(user, 'tenant', None) or db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
             if tenant:
                 payload["company_name"] = tenant.name
                 payload["company_slug"] = tenant.slug

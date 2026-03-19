@@ -586,7 +586,7 @@ class VersionService(SessionService):
                             ),
                         )
                     )
-        except Exception as e:
+        except Exception as e:  # policy: FAIL_FAST — publish must succeed or abort
             # Log failed publish attempt with audience state for audit trail
             logging.getLogger(__name__).error(
                 "Publish failed for document=%d version=%d user=%d. "
@@ -968,7 +968,7 @@ class VersionService(SessionService):
         # Check audience readiness
         try:
             DocumentAggregate(document).ensure_audience_ready_for_submit()
-        except Exception as e:
+        except Exception as e:  # policy: LOSSY — audience check is advisory during force-publish
             warnings_overridden.append(f"Audience validation failed: {str(e)}")
 
         # Capture audience snapshot
@@ -1257,7 +1257,7 @@ class VersionService(SessionService):
                 # Re-validate audience readiness
                 try:
                     DocumentAggregate(document).ensure_audience_ready_for_submit()
-                except Exception as e:
+                except Exception as e:  # policy: FAIL_FAST — skip this item, continue batch
                     report["failed_validation"] += 1
                     report["errors"].append({
                         "version_id": version.id,
@@ -1335,7 +1335,7 @@ class VersionService(SessionService):
                     version.id,
                 )
 
-            except Exception as e:
+            except Exception as e:  # policy: COMPENSATING — record error, skip item, continue batch
                 report["errors"].append({
                     "version_id": version.id,
                     "document_id": document.id if document else None,

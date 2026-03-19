@@ -136,7 +136,7 @@ def get_document_detail_page_bundle(
     # --- Attachments (soft failure) ---
     try:
         attachments = AttachmentService.get_attachments(db, document_id, current_user)
-    except Exception:
+    except Exception:  # policy: LOSSY — optional section, page still usable
         logger.exception("BFF: failed to load attachments for document %s", document_id)
         attachments = []
         partial_errors.append("attachments")
@@ -147,7 +147,7 @@ def get_document_detail_page_bundle(
             TenantSummary(id=company.id, name=company.name, slug=company.slug)
             for company in document.assigned_companies
         ]
-    except Exception:
+    except Exception:  # policy: LOSSY — optional section, page still usable
         logger.exception("BFF: failed to load assigned companies for document %s", document_id)
         assigned_companies = []
         partial_errors.append("assigned_companies")
@@ -180,7 +180,7 @@ def get_document_detail_page_bundle(
             published_visibility_snapshot=published_visibility_snapshot,
             published_company_ids_snapshot=published_company_ids_snapshot,
         )
-    except Exception:
+    except Exception:  # policy: LOSSY — optional section, page still usable
         logger.exception("BFF: failed to build audience preview for document %s", document_id)
         audience_access_preview = AudienceAccessPreviewResponse(
             visibility=document.visibility,
@@ -194,7 +194,7 @@ def get_document_detail_page_bundle(
     # --- Review history (soft failure) ---
     try:
         review_history = _load_document_review_history(db=db, document_id=document_id)
-    except Exception:
+    except Exception:  # policy: LOSSY — optional section, page still usable
         logger.exception("BFF: failed to load review history for document %s", document_id)
         review_history = ReviewListResponse(
             items=[], total=0, page=1, per_page=20, has_more=False,

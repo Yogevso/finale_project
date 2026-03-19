@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+import shutil
 import sys
+import time
 from logging.config import fileConfig
 from pathlib import Path
 
@@ -19,6 +22,8 @@ import app.models  # noqa: E402,F401
 from app.config import settings  # noqa: E402
 from app.db import Base  # noqa: E402
 
+_env_logger = logging.getLogger("alembic.env")
+
 config = context.config
 
 if config.config_file_name is not None:
@@ -28,6 +33,23 @@ if config.config_file_name is not None:
 config.set_main_option("sqlalchemy.url", config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL)
 
 target_metadata = Base.metadata
+
+
+def _backup_sqlite_before_migration() -> None:
+    """Create a timestamped backup of the SQLite DB before running migrations."""
+    db_url = config.get_main_option("sqlalchemy.url") or ""
+    if not db_url.startswith("sqlite"):
+        return
+    # Extract path from sqlite:///./data/portal.db or similar
+    db_path_str = db_url.split("///", 1)[-1] if "///" in db_url else None
+    if not db_path_str:
+        return
+    db_path = Path(db_path_str)
+    if not db_path.exists():
+        return
+    backup_path = db_path.with_suffix(f".db.bak.{int(time.time())}")
+    shutil.copy2(str(db_path), str(backup_path))
+    _env_logger.info("Pre-migration backup: %s -> %s", db_path, backup_path)
 
 
 def run_migrations_offline() -> None:
@@ -43,6 +65,7 @@ def run_migrations_offline() -> None:
     )
 
     with context.begin_transaction():
+        _backup_sqlite_before_migration()
         context.run_migrations()
 
 
@@ -63,6 +86,7 @@ def run_migrations_online() -> None:
         )
 
         with context.begin_transaction():
+            _backup_sqlite_before_migration()
             context.run_migrations()
 
 

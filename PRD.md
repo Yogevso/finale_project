@@ -1408,39 +1408,39 @@ Users need a way to communicate privately about documents without those conversa
 > Addresses infrastructure gaps, reliability issues, dependency hygiene, and observability improvements. (Audit §3.4, §3.7, §3.14, §3.19–3.26, §4.6, §4.10–4.14)
 
 ### Dependency & Configuration Hygiene
-- [ ] AG-001: Remove dual JWT libraries — audit imports, consolidate on `PyJWT`, remove `python-jose` from requirements. (Audit 3.19)
-- [ ] AG-002: Fix collaboration config drift — pick one source of truth for collab server URL (backend API response OR frontend env var), delete the unused variants from backend, frontend, and docker-compose. (Audit 3.4)
-- [ ] AG-003: Align configuration sources — define one env var contract for collab URL, remove `VITE_COLLAB_WS_URL` / `VITE_COLLAB_SERVER_URL` duplication. (Audit 4.10)
+- [x] AG-001: Remove dual JWT libraries — audit imports, consolidate on `PyJWT`, remove `python-jose` from requirements. (Audit 3.19)
+- [x] AG-002: Fix collaboration config drift — pick one source of truth for collab server URL (backend API response OR frontend env var), delete the unused variants from backend, frontend, and docker-compose. (Audit 3.4)
+- [x] AG-003: Align configuration sources — define one env var contract for collab URL, remove `VITE_COLLAB_WS_URL` / `VITE_COLLAB_SERVER_URL` duplication. (Audit 4.10)
 
 ### Reliability & Observability
-- [ ] AG-004: Replace blanket exception suppression with explicit degradation policies — classify each broad `except` as fail-fast, retryable, compensating, or intentionally lossy with metrics. Wire into real alerting. (Audit 3.14, 4.13)
-- [ ] AG-005: Add email retry mechanism — implement exponential backoff (3 attempts: 1m, 5m, 15m) for transient SMTP failures. Persist failed sends for monitoring. (Audit 3.24)
-- [ ] AG-006: Add WebSocket chat reconnection backoff — implement exponential backoff (3s → 6s → 12s → 30s → cap 60s) instead of fixed 3s retry. Show connection status indicator after N failures. (Audit 3.26)
+- [x] AG-004: Replace blanket exception suppression with explicit degradation policies — classify each broad `except` as fail-fast, retryable, compensating, or intentionally lossy with metrics. Wire into real alerting. (Audit 3.14, 4.13)
+- [x] AG-005: Add email retry mechanism — implement exponential backoff (3 attempts: 1m, 5m, 15m) for transient SMTP failures. Persist failed sends for monitoring. (Audit 3.24)
+- [x] AG-006: Add WebSocket chat reconnection backoff — implement exponential backoff (3s → 6s → 12s → 30s → cap 60s) instead of fixed 3s retry. Show connection status indicator after N failures. (Audit 3.26)
 
 ### Data Hygiene & Background Jobs
-- [ ] AG-007: Add cleanup worker for expired sessions/tokens — periodic job (hourly) purging expired `UserSession`, used password reset tokens, stale `IdempotencyRecord` entries. (Audit 3.25)
-- [ ] AG-008: Add scheduled-publish executor worker — poll for versions where `scheduled_publish_at <= now()` and trigger the publish flow. (Audit 3.25)
-- [ ] AG-009: Add backup automation for SQLite — backup script that copies DB file to separate volume/path. Add pre-migration hook: `cp portal.db portal.db.bak.$(date +%s)` before `alembic upgrade`. Document restore procedure. (Audit 3.21)
+- [x] AG-007: Add cleanup worker for expired sessions/tokens — periodic job (hourly) purging expired `UserSession`, used password reset tokens, stale `IdempotencyRecord` entries. (Audit 3.25)
+- [x] AG-008: Add scheduled-publish executor worker — poll for versions where `scheduled_publish_at <= now()` and trigger the publish flow. (Audit 3.25)
+- [x] AG-009: Add backup automation for SQLite — backup script that copies DB file to separate volume/path. Add pre-migration hook: `cp portal.db portal.db.bak.$(date +%s)` before `alembic upgrade`. Document restore procedure. (Audit 3.21)
 
 ### Performance
-- [ ] AG-010: Fix N+1 query patterns — add `joinedload`/`selectinload` to admin, GDPR, and company endpoints that iterate over lazy-loaded relationships. Add query count assertion to critical endpoint tests. (Audit 3.20)
+- [x] AG-010: Fix N+1 query patterns — add `joinedload`/`selectinload` to admin, GDPR, and company endpoints that iterate over lazy-loaded relationships. Add query count assertion to critical endpoint tests. (Audit 3.20)
 
 ### Test & QA Improvements
-- [ ] AG-011: Add invariant tests for critical business rules — self-registration, comment privacy, revoked-session parity, published snapshot immutability, portal revocation. Fix local test runner assumptions. (Audit 3.7)
-- [ ] AG-012: Reduce test warning noise — fix deprecations, tighten warning filters, fail CI on new warning classes (baseline from current 3833 warnings). (Audit 4.6)
-- [ ] AG-013: Add security contract tests — route-by-route parity tests for HTTP auth, download auth, portal access, and WebSocket auth. (Audit 4.9)
-- [ ] AG-014: Add content-based upload validation to attachment pipeline — magic-byte verification for restricted types, separate "allowed for storage" from "trusted for conversion." (Audit 4.14)
+- [x] AG-011: Add invariant tests for critical business rules — self-registration, comment privacy, revoked-session parity, published snapshot immutability, portal revocation. Fix local test runner assumptions. (Audit 3.7)
+- [x] AG-012: Reduce test warning noise — fix deprecations, tighten warning filters, fail CI on new warning classes (baseline from current 3833 warnings). (Audit 4.6)
+- [x] AG-013: Add security contract tests — route-by-route parity tests for HTTP auth, download auth, portal access, and WebSocket auth. (Audit 4.9)
+- [x] AG-014: Add content-based upload validation to attachment pipeline — magic-byte verification for restricted types, separate "allowed for storage" from "trusted for conversion." (Audit 4.14)
 
 ### GDPR & Compliance (Deferred — complete when ready)
-- [ ] AG-015: Expand GDPR export — add `SecurityEvent`, `UserSession`, chat messages, and support messages to export ZIP. Build registry-driven export/delete map for future user-linked entities. (Audit 2.8, 4.12)
+- [x] AG-015: Expand GDPR export — add `SecurityEvent`, `UserSession`, chat messages, and support messages to export ZIP. Build registry-driven export/delete map for future user-linked entities. (Audit 2.8, 4.12)
 
 ### Wave AG — Tests
-- [ ] AG-016: Test — verify only `PyJWT` is imported (no `python-jose` imports remain).
-- [ ] AG-017: Test — collaboration URL is resolved from a single source in frontend, backend, and docker-compose.
-- [ ] AG-018: Test — email send retries on transient SMTP failure (mock SMTP timeout, verify 3 attempts).
-- [ ] AG-019: Test — cleanup worker purges expired sessions and tokens.
-- [ ] AG-020: Test — scheduled-publish worker fires publication at appointed time.
-- [ ] AG-021: Test — admin list users endpoint uses eager loading (query count assertion).
+- [x] AG-016: Test — verify only `PyJWT` is imported (no `python-jose` imports remain).
+- [x] AG-017: Test — collaboration URL is resolved from a single source in frontend, backend, and docker-compose.
+- [x] AG-018: Test — email send retries on transient SMTP failure (mock SMTP timeout, verify 3 attempts).
+- [x] AG-019: Test — cleanup worker purges expired sessions and tokens.
+- [x] AG-020: Test — scheduled-publish worker fires publication at appointed time.
+- [x] AG-021: Test — admin list users endpoint uses eager loading (query count assertion).
 
 ---
 

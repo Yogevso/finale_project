@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     ASSISTANT_RATE_LIMIT_PER_MINUTE: int = 20
     ASSISTANT_ENABLED: bool = True  # feature flag to disable AI assistant
 
+    # Collaboration server
+    COLLAB_SERVER_URL: str = "http://collab-server:8002"
+
     # RAG (Retrieval-Augmented Generation)
     ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"
     ASSISTANT_CHROMA_PERSIST_DIR: str = "./data/chromadb"

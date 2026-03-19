@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
 
 from app.auth_context.contracts import (
     COLLABORATION_TOKEN_TYPE,
@@ -62,5 +63,5 @@ class CollaborationAuthService:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return payload
-        except JWTError:
+        except PyJWTError:
             return None

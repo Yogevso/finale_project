@@ -25,6 +25,7 @@ from app.models import (
     AuditLog,
     Attachment,
     Bookmark,
+    ChatMessage,
     Comment,
     DataRequest,
     DataRequestStatus,
@@ -34,6 +35,7 @@ from app.models import (
     Notification,
     ReadingProgress,
     SecurityEvent,
+    SupportTicketMessage,
     User,
     UserSession,
 )
@@ -197,6 +199,66 @@ def execute_data_export(db: Session, request_id: int) -> bytes:
                 for att in attachments
             ]
             zf.writestr("attachments.json", json.dumps(att_list, indent=2))
+
+        # 10. Security events (AG-015)
+        sec_events = db.query(SecurityEvent).filter(SecurityEvent.user_id == user.id).all()
+        sec_list = [
+            {
+                "id": e.id,
+                "event_type": e.event_type.value if hasattr(e.event_type, "value") else str(e.event_type),
+                "ip_address": e.ip_address,
+                "user_agent": e.user_agent,
+                "details": e.details,
+                "created_at": str(e.created_at),
+            }
+            for e in sec_events
+        ]
+        zf.writestr("security_events.json", json.dumps(sec_list, indent=2))
+
+        # 11. User sessions (AG-015)
+        sessions = db.query(UserSession).filter(UserSession.user_id == user.id).all()
+        session_list = [
+            {
+                "id": s.id,
+                "ip_address": s.ip_address,
+                "user_agent": s.user_agent,
+                "last_active_at": str(s.last_active_at) if s.last_active_at else None,
+                "revoked_at": str(s.revoked_at) if s.revoked_at else None,
+                "created_at": str(s.created_at),
+            }
+            for s in sessions
+        ]
+        zf.writestr("user_sessions.json", json.dumps(session_list, indent=2))
+
+        # 12. Chat messages (AG-015)
+        chat_msgs = db.query(ChatMessage).filter(ChatMessage.sender_id == user.id).all()
+        chat_list = [
+            {
+                "id": m.id,
+                "chat_id": m.chat_id,
+                "content": m.content,
+                "message_type": m.message_type.value if hasattr(m.message_type, "value") else str(m.message_type),
+                "created_at": str(m.created_at),
+            }
+            for m in chat_msgs
+        ]
+        zf.writestr("chat_messages.json", json.dumps(chat_list, indent=2))
+
+        # 13. Support ticket messages (AG-015)
+        support_msgs = db.query(SupportTicketMessage).filter(
+            SupportTicketMessage.sender_id == user.id
+        ).all()
+        support_list = [
+            {
+                "id": m.id,
+                "ticket_id": m.ticket_id,
+                "content": m.content,
+                "is_internal_note": m.is_internal_note,
+                "created_at": str(m.created_at),
+            }
+            for m in support_msgs
+        ]
+        zf.writestr("support_messages.json", json.dumps(support_list, indent=2))
 
     # Finalize
     token = secrets.token_urlsafe(64)

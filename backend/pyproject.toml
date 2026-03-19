@@ -40,9 +40,15 @@ filterwarnings = [
     "ignore:datetime.datetime.utcnow:DeprecationWarning",
     "ignore:on_event is deprecated:DeprecationWarning",
     "ignore:'asyncio.iscoroutinefunction':DeprecationWarning:chromadb",
+    "ignore:'asyncio.iscoroutinefunction':DeprecationWarning:pytest_asyncio",
+    "ignore:'asyncio.get_event_loop_policy':DeprecationWarning:pytest_asyncio",
     "ignore:No path_separator found:DeprecationWarning:alembic",
     "ignore:Coercing Subquery object:sqlalchemy.exc.SAWarning",
     "ignore::ResourceWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore:The configuration option.*asyncio_default_fixture_loop_scope:pytest.PytestDeprecationWarning",
+    "ignore:.*AbstractEventLoopPolicy.*:DeprecationWarning",
+    "ignore:.*get_event_loop.*:DeprecationWarning",
 ]
 
 [tool.coverage.run]

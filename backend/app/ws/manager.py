@@ -116,7 +116,7 @@ class ConnectionManager:
         try:
             if ws.client_state == WebSocketState.CONNECTED:
                 await ws.send_text(payload)
-        except Exception:
+        except Exception:  # policy: LOSSY — connection already closed; cleanup via disconnect
             pass  # Connection already closed; cleanup happens on disconnect
 
     # ------------------------------------------------------------------
