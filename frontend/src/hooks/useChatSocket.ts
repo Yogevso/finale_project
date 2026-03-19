@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatWsEvent } from '@/types/chat'
+import { api } from '@/lib/api'
 
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
 
@@ -34,7 +35,8 @@ export function useChatSocket(options: UseChatSocketOptions = {}): UseChatSocket
   callbacksRef.current = { onNewMessage, onUserTyping, onMessageRead }
 
   const connect = useCallback(() => {
-    const token = localStorage.getItem('token')
+    // AD-004: get token from in-memory API client, not localStorage
+    const token = api.getToken()
     if (!token || !enabled) return
 
     const ws = new WebSocket(`${WS_BASE_URL}/ws/chat?token=${encodeURIComponent(token)}`)

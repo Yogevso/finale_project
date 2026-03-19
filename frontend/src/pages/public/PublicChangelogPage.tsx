@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import DOMPurify from 'dompurify'
 import { Calendar, Tag } from 'lucide-react'
 import { SEO } from '@/components/SEO'
 
@@ -76,7 +77,7 @@ export default function PublicChangelogPage() {
                       )}
                     </div>
                     <h2 className="text-lg font-display font-semibold text-slate-900">{entry.title}</h2>
-                    <div className="mt-2 text-sm text-slate-600 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: entry.content }} />
+                    <div className="mt-2 text-sm text-slate-600 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.content) }} />
                   </div>
                 </div>
               ))}

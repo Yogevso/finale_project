@@ -86,6 +86,37 @@ class AttachmentServiceCommonMixin:
         "application/json",
     }
     HTML_MIME_TYPES = {"text/html"}
+
+    # AD-017: magic byte signatures for content-based validation
+    _MAGIC_SIGNATURES: dict[str, list[bytes]] = {
+        ".png": [b"\x89PNG\r\n\x1a\n"],
+        ".jpg": [b"\xff\xd8\xff"],
+        ".jpeg": [b"\xff\xd8\xff"],
+        ".gif": [b"GIF87a", b"GIF89a"],
+        ".webp": [b"RIFF"],  # RIFF....WEBP (first 4 bytes)
+        # Office Open XML / ZIP-based formats share the ZIP header
+        ".docx": [b"PK\x03\x04"],
+        ".xlsx": [b"PK\x03\x04"],
+        ".pptx": [b"PK\x03\x04"],
+        # Legacy Office formats use OLE2 compound document header
+        ".doc": [b"\xd0\xcf\x11\xe0"],
+        ".xls": [b"\xd0\xcf\x11\xe0"],
+        ".ppt": [b"\xd0\xcf\x11\xe0"],
+    }
+
+    @classmethod
+    def _validate_magic_bytes(cls, content: bytes, file_ext: str, filename: str) -> None:
+        """Reject uploads whose magic bytes contradict the file extension."""
+        sigs = cls._MAGIC_SIGNATURES.get(file_ext)
+        if sigs is None:
+            # No signature check for text-ish formats (.txt, .md, .csv, .json, .html)
+            return
+        if not any(content[:len(sig)] == sig for sig in sigs):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File content does not match extension {file_ext}: {filename}",
+            )
+
     @classmethod
     def get_upload_dir(cls) -> Path:
         """Get upload directory path"""
@@ -398,6 +429,10 @@ class AttachmentServiceCommonMixin:
 
         # Read file content
         content = await file.read()
+
+        # AD-017: validate uploaded file magic bytes match the declared type
+        cls._validate_magic_bytes(content, file_ext, original_filename)
+
         attachment = cls.create_attachment_from_bytes(
             db=db,
             document_id=document_id,

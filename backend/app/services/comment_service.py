@@ -97,8 +97,12 @@ class CommentService(SessionService):
         Check if a user can view a specific comment.
         Rules:
         - Comment author can always see their own comments
-        - Internal staff who have contributed to the document can see all comments
         - System admins can see all comments
+        - Private comments (is_private=True) are only visible to author,
+          system admins, and internal staff with an elevated role
+          (admin / manager / editor)
+        - Non-private comments are visible to internal staff who have
+          contributed to the document
         """
         # Comment author can always see their own comment
         if comment.user_id == current_user.id:
@@ -108,7 +112,15 @@ class CommentService(SessionService):
         if current_user.role == UserRole.SYSTEM_ADMIN:
             return True
 
-        # Internal staff who have contributed to this document can see comments
+        # AD-005: enforce private-comment visibility
+        if comment.is_private:
+            return current_user.role in [
+                UserRole.ADMIN,
+                UserRole.MANAGER,
+                UserRole.EDITOR,
+            ]
+
+        # Internal staff who have contributed to this document can see non-private comments
         if CommentService.is_internal_staff(current_user):
             if contributors is None:
                 contributors = CommentService.get_document_contributors(db, comment.document_id)
@@ -299,12 +311,17 @@ class CommentService(SessionService):
                 )
 
         # Create comment with new fields
+        # AD-005: customers cannot create private comments
+        is_private = comment_data.is_private
+        if current_user.role == UserRole.CUSTOMER:
+            is_private = False
+
         comment = Comment(
             document_id=document_id,
             user_id=current_user.id,
             content=comment_data.content,
             parent_id=parent_id,
-            is_private=comment_data.is_private,
+            is_private=is_private,
             anchor_text=comment_data.anchor_text,
             anchor_id=comment_data.anchor_id,
         )

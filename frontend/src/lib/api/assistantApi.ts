@@ -13,11 +13,13 @@ import type {
   SSEEvent,
 } from '@/types/assistant'
 import { API_BASE_URL } from './httpClient'
+import { api } from '@/lib/api'
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('token')
+  // AD-004: get token from in-memory API client, not localStorage
+  const token = api.getToken()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['Authorization'] = `Bearer ${token}`
   return headers

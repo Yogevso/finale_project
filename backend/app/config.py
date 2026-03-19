@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Documentation Platform"
     APP_VERSION: str = "2.0.0"
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     API_PREFIX: str = "/api/v1"
     BASE_URL: str = "http://localhost:3000"
 
@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
     SESSION_INACTIVITY_DAYS: int = 30
+    MAX_CONCURRENT_SESSIONS: int = 5
     REVIEW_SLA_REMINDER_HOURS: int = 48
     REVIEW_SLA_ESCALATION_HOURS: int = 96
     CSRF_PROTECTION_ENABLED: bool = True  # Enable CSRF Origin/Referer validation

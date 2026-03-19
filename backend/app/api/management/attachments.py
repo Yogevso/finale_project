@@ -1,5 +1,8 @@
 """Attachments API Routes"""
 
+import hashlib
+import hmac
+import time
 from typing import List, Optional
 
 from fastapi import (
@@ -14,8 +17,10 @@ from fastapi import (
     status,
 )
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_db
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import Document, User
@@ -31,63 +36,165 @@ from app.utils.http_headers import build_content_disposition
 
 router = APIRouter()
 
+# AD-002: Signed download tickets replace raw JWT tokens in URLs.
+_DOWNLOAD_TICKET_TTL_SECONDS = 300  # 5 minutes
+
+
+def _sign_download_ticket(user_id: int, document_id: int, attachment_id: int, ts: int) -> str:
+    """Create an HMAC-SHA256 signature for a download ticket."""
+    msg = f"{user_id}:{document_id}:{attachment_id}:{ts}".encode()
+    return hmac.new(settings.SECRET_KEY.encode(), msg, hashlib.sha256).hexdigest()
+
+
+def _verify_download_ticket(
+    ticket: str, document_id: int, attachment_id: int, db: Session
+) -> User:
+    """Validate a signed download ticket and return the authenticated user."""
+    try:
+        parts = ticket.split(":")
+        if len(parts) != 4:
+            raise ValueError("malformed ticket")
+        user_id_str, doc_id_str, att_id_str, ts_str = parts
+        user_id = int(user_id_str)
+        ticket_doc_id = int(doc_id_str)
+        ticket_att_id = int(att_id_str)
+        ts = int(ts_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid download ticket",
+        ) from None
+
+    if ticket_doc_id != document_id or ticket_att_id != attachment_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid download ticket",
+        )
+
+    if int(time.time()) - ts > _DOWNLOAD_TICKET_TTL_SECONDS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Download ticket expired",
+        )
+
+    expected_sig = _sign_download_ticket(user_id, document_id, attachment_id, ts)
+    provided_sig = _sign_download_ticket(user_id, ticket_doc_id, ticket_att_id, ts)
+    if not hmac.compare_digest(expected_sig, provided_sig):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid download ticket",
+        )
+
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid download ticket",
+        )
+    return user
+
+
+class DownloadTicketRequest(BaseModel):
+    document_id: int
+    attachment_id: int
+
+
+class DownloadTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int
+
+
+@router.post("/attachments/download-ticket", response_model=DownloadTicketResponse)
+def issue_download_ticket(
+    body: DownloadTicketRequest,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Issue a short-lived signed download ticket (AD-002).
+
+    The ticket replaces passing raw JWT tokens as URL query parameters.
+    """
+    ts = int(time.time())
+    sig = _sign_download_ticket(current_user.id, body.document_id, body.attachment_id, ts)
+    ticket = f"{current_user.id}:{body.document_id}:{body.attachment_id}:{ts}"
+    # Append HMAC so ticket is self-contained
+    signed_ticket = f"{ticket}:{sig}"
+    return DownloadTicketResponse(ticket=signed_ticket, expires_in=_DOWNLOAD_TICKET_TTL_SECONDS)
+
 
 def _get_current_active_user_or_token(
     request: Request,
     token: Optional[str] = Query(
-        None, description="JWT token for authentication (alternative to Authorization header)"
+        None, description="Signed download ticket (preferred) or legacy JWT token"
     ),
     db: Session = Depends(get_db),
 ) -> User:
+    """Authenticate via Authorization header, signed download ticket, or legacy JWT query param."""
+    # 1. Prefer standard Authorization header
     auth_header = request.headers.get("authorization")
     bearer_token: Optional[str] = None
     if auth_header and auth_header.lower().startswith("bearer "):
         bearer_token = auth_header.split(" ", 1)[1].strip()
 
-    resolved_token = bearer_token or token
-    if not resolved_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    if bearer_token:
+        payload = verify_token(bearer_token)
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
 
-    payload = verify_token(resolved_token)
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # 2. Signed download ticket (AD-002 — preferred for URL-based access)
+    if token and ":" in token:
+        # Extract document_id and attachment_id from the URL path
+        path = request.url.path
+        path_parts = path.strip("/").split("/")
+        # Expected path: .../documents/{doc_id}/attachments/{att_id}/...
+        doc_id = att_id = None
+        for i, part in enumerate(path_parts):
+            if part == "documents" and i + 1 < len(path_parts):
+                try:
+                    doc_id = int(path_parts[i + 1])
+                except (ValueError, IndexError):
+                    pass
+            if part == "attachments" and i + 1 < len(path_parts):
+                try:
+                    att_id = int(path_parts[i + 1])
+                except (ValueError, IndexError):
+                    pass
+        if doc_id is not None and att_id is not None:
+            return _verify_download_ticket(token, doc_id, att_id, db)
 
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # 3. Legacy JWT in query param (kept for backward compat, but discouraged)
+    if token:
+        payload = verify_token(token)
+        if payload is not None:
+            user_id = payload.get("sub")
+            if user_id is not None:
+                user = db.query(User).filter(User.id == int(user_id)).first()
+                if user and user.is_active:
+                    return user
 
-    try:
-        user_id_int = int(user_id)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
-
-    user = db.query(User).filter(User.id == user_id_int).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
-
-    return user
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def _audience_headers_for_document(db: Session, document_id: int) -> dict[str, str]:

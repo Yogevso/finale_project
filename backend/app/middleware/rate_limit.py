@@ -139,8 +139,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _is_e2e_bypass_request(request: Request) -> bool:
-        """Allow bypassing limits for explicit E2E traffic in non-production envs."""
-        if settings.APP_ENV.lower() == "production":
+        """Allow bypassing limits for explicit E2E traffic only in test environments."""
+        # AD-014: restrict to explicit test/development envs — not just "not production"
+        if settings.APP_ENV.lower() not in ("test", "testing", "development"):
             return False
         return request.headers.get("x-e2e-test", "").strip() == "1"
 

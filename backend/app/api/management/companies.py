@@ -171,6 +171,10 @@ async def list_companies(
     """
     query = db.query(Tenant)
 
+    # AD-006: scope non-system-admins to their own tenant only
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        query = query.filter(Tenant.id == current_user.tenant_id)
+
     # Apply filters
     if search:
         search_term = f"%{search}%"

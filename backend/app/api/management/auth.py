@@ -4,9 +4,9 @@ import asyncio
 from datetime import datetime
 from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -50,6 +50,21 @@ class InvitationValidateResponse(BaseModel):
     expires_at: datetime | None = None
 
 
+def _validate_password_complexity(v: str) -> str:
+    """AD-011: reusable password complexity check."""
+    import re
+
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", v):
+        raise ValueError("Password must contain at least one digit")
+    if not re.search(r"[^A-Za-z0-9]", v):
+        raise ValueError("Password must contain at least one special character")
+    return v
+
+
 class AcceptInvitationRequest(BaseModel):
     """Request to accept an invitation"""
 
@@ -57,6 +72,11 @@ class AcceptInvitationRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     full_name: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=8, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -70,6 +90,11 @@ class ResetPasswordRequest(BaseModel):
 
     token: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=8, max_length=100)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 def _run_async_email(coro):
@@ -121,10 +146,36 @@ def _rate_limited_response(detail: str, retry_after: int) -> JSONResponse:
 
 
 def _is_e2e_bypass_request(request: Request) -> bool:
-    """Allow bypassing auth-rate limits for explicit E2E traffic outside production."""
-    if settings.APP_ENV.lower() == "production":
+    """Allow bypassing auth-rate limits for explicit E2E traffic only in test environments."""
+    # AD-014: restrict to explicit test/development envs
+    if settings.APP_ENV.lower() not in ("test", "testing", "development"):
         return False
     return request.headers.get("x-e2e-test", "").strip() == "1"
+
+
+def _set_refresh_cookie(response: JSONResponse, refresh_token: str | None) -> None:
+    """AD-004: Set httpOnly refresh-token cookie for cookie-based session persistence."""
+    if refresh_token:
+        is_prod = settings.APP_ENV.lower() == "production"
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=is_prod,
+            samesite="lax",
+            path="/api/v1/auth/refresh",
+            max_age=7 * 24 * 60 * 60,  # 7 days
+        )
+    else:
+        response.delete_cookie(key="refresh_token", path="/api/v1/auth/refresh")
+
+
+def _token_json_response(token_response: TokenResponse) -> JSONResponse:
+    """Return token JSON with httpOnly refresh cookie set."""
+    body = token_response.model_dump()
+    resp = JSONResponse(content=body)
+    _set_refresh_cookie(resp, token_response.refresh_token)
+    return resp
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -173,7 +224,8 @@ def login(
     if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
         AuthRateLimitService.record_login_success(client_ip, username)
 
-    return token_response
+    # AD-004: set httpOnly refresh cookie alongside JSON response
+    return _token_json_response(token_response)
 
 
 @router.post("/auth/forgot-password", response_model=MessageResponse)
@@ -241,13 +293,23 @@ def reset_password(
 def refresh_token(
     token_data: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service),
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token"),
 ):
     """
     Refresh access token using refresh token.
 
-    Returns new JWT access token.
+    The refresh token can be provided in the request body or via an httpOnly cookie.
+    Returns new JWT access token (with httpOnly cookie updated).
     """
-    return auth_service.refresh_access_token(token_data.refresh_token)
+    # AD-004: prefer body, fallback to httpOnly cookie
+    rt = token_data.refresh_token or refresh_token_cookie
+    if not rt:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token required",
+        )
+    result = auth_service.refresh_access_token(rt)
+    return _token_json_response(result)
 
 
 @router.post("/auth/logout", response_model=MessageResponse)
@@ -259,7 +321,10 @@ def logout(
     Logout user and invalidate all refresh tokens.
     """
     auth_service.logout(current_user.id)
-    return MessageResponse(message="Logged out successfully")
+    resp = JSONResponse(content={"message": "Logged out successfully"})
+    # AD-004: clear httpOnly refresh cookie
+    resp.delete_cookie(key="refresh_token", path="/api/v1/auth/refresh")
+    return resp
 
 
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -269,9 +334,11 @@ def register(
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """
-    Register a new user.
+    Register a new user (public self-registration).
 
-    Only admins can set role other than viewer (enforced in frontend).
+    All self-registered users are assigned the ``customer`` role
+    regardless of the payload.  Staff accounts are created through
+    invitation acceptance or admin user-management flows only.
     """
     user = auth_service.register(user_data)
     verification_token = auth_service.issue_email_verification_token(user)

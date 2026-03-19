@@ -192,12 +192,20 @@ class ChatService:
     # Messages
     # ------------------------------------------------------------------
 
+    # AD-018: maximum allowed chat message length (characters)
+    MAX_MESSAGE_LENGTH = 5000
+
     def send_message(self, chat_id: int, sender: User, content: str) -> ChatMessage:
         """Send a message in a chat (X1-006)."""
         self._get_chat_with_permission(chat_id, sender)
         content = content.strip()
         if not content:
             raise HTTPException(status_code=400, detail="Message content cannot be empty")
+        if len(content) > self.MAX_MESSAGE_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message exceeds maximum length of {self.MAX_MESSAGE_LENGTH} characters",
+            )
 
         msg = ChatMessage(
             chat_id=chat_id,

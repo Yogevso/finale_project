@@ -36,10 +36,10 @@ class ChangelogUpdate(BaseModel):
 async def list_changelog(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    published_only: bool = False,
+    published_only: bool = True,
     db: Session = Depends(get_db),
 ):
-    """List changelog entries (public: published only, admin: all)."""
+    """List changelog entries. Defaults to published-only for public safety."""
     query = db.query(ChangelogEntry)
     if published_only:
         query = query.filter(ChangelogEntry.published.is_(True))

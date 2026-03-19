@@ -1,11 +1,34 @@
 import { useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, FileText, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { publicApi } from '@/lib/publicApi'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * AD-008: Safe text highlighting using React nodes instead of dangerouslySetInnerHTML.
+ * Splits `text` on matches of `query` and wraps matches in <mark>.
+ */
+function HighlightText({ text, query: q }: { text: string; query: string }): ReactNode {
+  if (!q || !text) return <>{text}</>
+  const escaped = escapeRegExp(q)
+  if (!escaped) return <>{text}</>
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-amber-200">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 export default function PublicSearchPage() {
@@ -61,13 +84,7 @@ export default function PublicSearchPage() {
     setSearchParams(params)
   }
 
-  const highlightQuery = (text: string) => {
-    if (!query || !text) return text
-    const escapedQuery = escapeRegExp(query)
-    if (!escapedQuery) return text
-    const regex = new RegExp(`(${escapedQuery})`, 'gi')
-    return text.replace(regex, '<mark class="bg-amber-200">$1</mark>')
-  }
+  // AD-008: highlight logic moved to HighlightText component (safe)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -179,14 +196,16 @@ export default function PublicSearchPage() {
                     <div className="flex-1 min-w-0">
                       <h3 
                         className="font-display font-semibold text-slate-900 group-hover:text-sky-600 mb-1"
-                        dangerouslySetInnerHTML={{ __html: highlightQuery(item.title) }}
-                      />
+                      >
+                        <HighlightText text={item.title} query={query} />
+                      </h3>
                       <p className="text-xs text-slate-400 mb-2">{item.document_number}</p>
                       {item.snippet && (
                         <p 
                           className="text-sm text-slate-600 line-clamp-2"
-                          dangerouslySetInnerHTML={{ __html: highlightQuery(item.snippet) }}
-                        />
+                        >
+                          <HighlightText text={item.snippet} query={query} />
+                        </p>
                       )}
                       {item.category && (
                         <span className="inline-block mt-2 pill bg-slate-100 text-slate-600 border-slate-200">
