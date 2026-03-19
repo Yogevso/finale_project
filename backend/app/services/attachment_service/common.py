@@ -41,6 +41,7 @@ class AttachmentServiceCommonMixin:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/pdf",
         "application/json",
         "text/markdown",
         "text/html",
@@ -75,10 +76,11 @@ class AttachmentServiceCommonMixin:
     STRUCTURED_READER_MIME_TYPES = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/pdf",
     }
     OFFICE_EXTENSIONS = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
     WORD_EXTENSIONS = {".doc", ".docx"}
-    STRUCTURED_READER_EXTENSIONS = {".docx", ".pptx"}
+    STRUCTURED_READER_EXTENSIONS = {".docx", ".pptx", ".pdf"}
     TEXT_MIME_TYPES = {
         "text/plain",
         "text/markdown",
@@ -102,6 +104,8 @@ class AttachmentServiceCommonMixin:
         ".doc": [b"\xd0\xcf\x11\xe0"],
         ".xls": [b"\xd0\xcf\x11\xe0"],
         ".ppt": [b"\xd0\xcf\x11\xe0"],
+        # PDF
+        ".pdf": [b"%PDF"],
     }
 
     @classmethod

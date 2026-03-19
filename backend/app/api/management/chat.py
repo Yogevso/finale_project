@@ -36,6 +36,7 @@ from app.schemas.chat import (
     ChatParticipantResponse,
     ChatResponse,
     CreateDirectChatRequest,
+    CreateDocumentChatRequest,
     CreateGroupChatRequest,
     SendMessageRequest,
     UpdateChatRequest,
@@ -126,6 +127,22 @@ def create_group_chat(
     return ChatResponse.model_validate(chat)
 
 
+@router.post("/chats/document", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
+def create_document_chat(
+    body: CreateDocumentChatRequest,
+    current_user: User = Depends(require_internal_user),
+    svc: ChatService = Depends(_get_chat_service),
+):
+    """AH-008: Create or return existing chat scoped to a document.
+
+    Automatically adds the document's author(s) as participants.
+    """
+    chat = svc.create_document_chat(
+        current_user, body.document_id, body.participant_ids
+    )
+    return ChatResponse.model_validate(chat)
+
+
 @router.get("/chats/{chat_id}", response_model=ChatDetailResponse)
 def get_chat(
     chat_id: int,
@@ -184,7 +201,7 @@ def send_message(
     svc: ChatService = Depends(_get_chat_service),
 ):
     """Send a message in a chat."""
-    msg = svc.send_message(chat_id, current_user, body.content)
+    msg = svc.send_message(chat_id, current_user, body.content, context_json=body.context_json)
     return _msg_to_response(msg)
 
 

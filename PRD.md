@@ -1449,34 +1449,34 @@ Users need a way to communicate privately about documents without those conversa
 > New feature requests identified during audit, plus planned architecture items. (Audit §5)
 
 ### PDF Upload → Editable Document
-- [ ] AH-001: Add `.pdf` to frontend file picker accept list in `documentsUseCases.ts`. (Audit §5 — PDF Upload)
-- [ ] AH-002: Create `PdfConverterStrategy` in `backend/app/conversion/` — use `PyMuPDF` (fitz) to extract text blocks, images, and structure → build IR nodes → generate HTML via existing `html_generator.py`. Follow existing DOCX/PPTX extractor pattern.
-- [ ] AH-003: Register `.pdf` in `STRUCTURED_READER_EXTENSIONS` and wire strategy into `document_strategies.py`.
-- [ ] AH-004: Add OCR fallback for scanned PDFs — integrate `pytesseract` for image-only PDF pages (optional, behind feature flag).
+- [x] AH-001: Add `.pdf` to frontend file picker accept list in `documentsUseCases.ts`. (Audit §5 — PDF Upload)
+- [x] AH-002: Create `PdfConverterStrategy` in `backend/app/conversion/` — use `PyMuPDF` (fitz) to extract text blocks, images, and structure → build IR nodes → generate HTML via existing `html_generator.py`. Follow existing DOCX/PPTX extractor pattern.
+- [x] AH-003: Register `.pdf` in `STRUCTURED_READER_EXTENSIONS` and wire strategy into `document_strategies.py`.
+- [x] AH-004: Add OCR fallback for scanned PDFs — integrate `pytesseract` for image-only PDF pages (optional, behind feature flag).
 
 ### PDF-Only Downloads for External Users
-- [ ] AH-005: Add PDF render service — take existing reader artifact HTML → render to PDF using `weasyprint` (or `reportlab`). Cache as `AttachmentArtifact` (type `pdf_export`).
-- [ ] AH-006: Regenerate PDF artifact whenever a new version is published.
-- [ ] AH-007: Modify portal and viewer download endpoints to serve PDF artifact instead of original file. Keep management download unchanged (internal users get original).
+- [x] AH-005: Add PDF render service — take existing reader artifact HTML → render to PDF using `weasyprint` (or `reportlab`). Cache as `AttachmentArtifact` (type `pdf_export`).
+- [x] AH-006: Regenerate PDF artifact whenever a new version is published.
+- [x] AH-007: Modify portal and viewer download endpoints to serve PDF artifact instead of original file. Keep management download unchanged (internal users get original).
 
 ### Chat Unification Architecture
-- [ ] AH-008: Add `document_id` (nullable FK) to Chat model for document-scoped chats. When a user creates inline comment on a document, open/create chat with document author(s). Multi-author documents create group chat.
-- [ ] AH-009: Implement context cards in chat messages — metadata (document title, section, anchor text, comment type) so participants understand the topic without leaving chat.
-- [ ] AH-010: Migrate feedback system to chat-like UX — back-and-forth between customer and internal staff, keeping existing feedback business logic. Customers see "Chat" tab alongside Feedback in portal.
-- [ ] AH-011: Add customer chat routing — customers can chat with internal users related to the document they are discussing, or continue existing threads.
+- [x] AH-008: Add `document_id` (nullable FK) to Chat model for document-scoped chats. When a user creates inline comment on a document, open/create chat with document author(s). Multi-author documents create group chat.
+- [x] AH-009: Implement context cards in chat messages — metadata (document title, section, anchor text, comment type) so participants understand the topic without leaving chat.
+- [x] AH-010: Migrate feedback system to chat-like UX — back-and-forth between customer and internal staff, keeping existing feedback business logic. Customers see "Chat" tab alongside Feedback in portal.
+- [x] AH-011: Add customer chat routing — customers can chat with internal users related to the document they are discussing, or continue existing threads.
 
 ### Operational Tooling
-- [ ] AH-012: Add permission debugger admin screen — explain why a user can/cannot access a document, showing the access policy evaluation chain.
-- [ ] AH-013: Add published snapshot diff tool — editors can see exactly what will change for public/customer viewers before publishing.
-- [ ] AH-014: Add deploy-time configuration validator — checks env var names across backend, frontend, and collab-server. Fail deploy on missing required vars.
-- [ ] AH-015: Add `pip audit` and `npm audit` as CI gates to catch dependency vulnerabilities automatically.
-- [ ] AH-016: Generate machine-readable route ownership matrix — map each endpoint to its audience surface (public/portal/viewer/management) and enforced auth level.
+- [x] AH-012: Add permission debugger admin screen — explain why a user can/cannot access a document, showing the access policy evaluation chain.
+- [x] AH-013: Add published snapshot diff tool — editors can see exactly what will change for public/customer viewers before publishing.
+- [x] AH-014: Add deploy-time configuration validator — checks env var names across backend, frontend, and collab-server. Fail deploy on missing required vars.
+- [x] AH-015: Add `pip audit` and `npm audit` as CI gates to catch dependency vulnerabilities automatically.
+- [x] AH-016: Generate machine-readable route ownership matrix — map each endpoint to its audience surface (public/portal/viewer/management) and enforced auth level.
 
 ### Wave AH — Tests
-- [ ] AH-017: Test — upload PDF file, verify HTML conversion produces editable TipTap content.
-- [ ] AH-018: Test — portal download endpoint serves PDF, management download serves original file.
-- [ ] AH-019: Test — document-scoped chat is created when inline comment targets a document with an author.
-- [ ] AH-020: Test — permission debugger returns correct access explanation for customer vs editor on same document.
+- [x] AH-017: Test — upload PDF file, verify HTML conversion produces editable TipTap content.
+- [x] AH-018: Test — portal download endpoint serves PDF, management download serves original file.
+- [x] AH-019: Test — document-scoped chat is created when inline comment targets a document with an author.
+- [x] AH-020: Test — permission debugger returns correct access explanation for customer vs editor on same document.
 
 ---
 

@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     FEATURE_FLAG_NEW_AUDIENCE_RULES: bool = False
     FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE: int = 0
     FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT: bool = True
+    FEATURE_FLAG_PDF_OCR: bool = False  # AH-004: OCR for scanned PDFs (requires tesseract binary)
     AUDIENCE_VALIDATION_SAFE_MODE_ENABLED: bool = False
 
     # AI Assistant

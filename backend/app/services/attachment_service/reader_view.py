@@ -176,6 +176,8 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             return "docx"
         if normalized_mime == _PPTX_READER_MIME_TYPE or suffix == ".pptx":
             return "pptx"
+        if normalized_mime == "application/pdf" or suffix == ".pdf":
+            return "pdf"
         return None
 
     @staticmethod
@@ -202,6 +204,24 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             attachment.original_filename or attachment.filename or "presentation.pptx",
         )
 
+    @staticmethod
+    def generate_pdf_reader_artifact(
+        original_bytes: bytes,
+        attachment: Attachment,
+    ) -> dict[str, Any] | None:
+        """Convert PDF → DOCX bytes, then delegate to the DOCX reader artifact pipeline."""
+        from app.conversion.pdf_to_docx import convert_pdf_to_docx
+
+        result = convert_pdf_to_docx(original_bytes)
+        if result.error:
+            return {"status": "error", "error": result.error}
+        wrapper = get_document_converter_wrapper()
+        return wrapper.convert_document_to_reader_artifact(
+            result.docx_bytes,
+            _DOCX_READER_MIME_TYPE,
+            (attachment.original_filename or attachment.filename or "document").rsplit(".", 1)[0] + ".docx",
+        )
+
     @classmethod
     def _generate_structured_reader_artifact(
         cls,
@@ -213,6 +233,8 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             return cls.generate_docx_reader_artifact(original_bytes, attachment)
         if reader_kind == "pptx":
             return cls.generate_pptx_reader_artifact(original_bytes, attachment)
+        if reader_kind == "pdf":
+            return cls.generate_pdf_reader_artifact(original_bytes, attachment)
         return None
 
     @classmethod

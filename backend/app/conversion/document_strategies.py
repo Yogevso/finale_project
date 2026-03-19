@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
@@ -9,6 +10,7 @@ from typing import Any, Protocol
 from app.conversion.docx_extractor import DocxExtractor
 from app.conversion.docx_extractor import ExtractionResult as DocxExtractionResult
 from app.conversion.models import DocumentConversionRequest
+from app.conversion.pdf_to_docx import convert_pdf_to_docx
 from app.conversion.pptx_extractor import (
     ExtractionResult as PptxExtractionResult,
 )
@@ -215,3 +217,61 @@ class HtmlPassthroughStrategy:
 
     def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
         return None
+
+
+_pdf_logger = logging.getLogger(__name__ + ".pdf")
+
+
+class PdfConverterStrategy:
+    """PDF conversion strategy — converts PDF → DOCX, then delegates to Word pipeline.
+
+    The uploaded PDF is transparently converted to DOCX bytes using PyMuPDF +
+    python-docx, then the existing ``WordConverterStrategy`` handles HTML and
+    reader-artifact generation.  From the user's perspective the document
+    behaves exactly like a DOCX that was uploaded directly.
+    """
+
+    name = "pdf"
+    capabilities = _HTML_AND_READER_CAPABILITIES
+    _pdf_mime_types = {"application/pdf"}
+    _pdf_extensions = {".pdf"}
+
+    def __init__(
+        self,
+        *,
+        word_strategy: WordConverterStrategy | None = None,
+    ) -> None:
+        self._word = word_strategy or WordConverterStrategy()
+
+    def supports(self, request: DocumentConversionRequest) -> bool:
+        return (
+            request.normalized_mime_type in self._pdf_mime_types
+            or request.extension in self._pdf_extensions
+        )
+
+    def _to_docx_request(self, request: DocumentConversionRequest) -> DocumentConversionRequest | None:
+        """Convert PDF bytes to DOCX bytes, return a new request."""
+        result = convert_pdf_to_docx(request.content)
+        if result.error:
+            _pdf_logger.error("PDF→DOCX conversion failed: %s", result.error)
+            return None
+        for w in result.warnings:
+            _pdf_logger.warning("PDF→DOCX: %s", w)
+        stem = request.filename.rsplit(".", 1)[0] if "." in request.filename else request.filename
+        return DocumentConversionRequest(
+            content=result.docx_bytes,
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=f"{stem}.docx",
+        )
+
+    def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
+        docx_req = self._to_docx_request(request)
+        if docx_req is None:
+            return None
+        return self._word.convert_to_html(docx_req)
+
+    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+        docx_req = self._to_docx_request(request)
+        if docx_req is None:
+            return None
+        return self._word.convert_to_reader_artifact(docx_req)

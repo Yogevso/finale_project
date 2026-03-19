@@ -215,6 +215,86 @@ class VersionService(SessionService):
             link=f"/documents/{document.id}?tab=versions&version={version.id}",
         )
 
+    @staticmethod
+    def _schedule_pdf_export_generation(attachment_ids: list[int]) -> None:
+        """AH-006: Generate PDF export artifacts for portal/viewer downloads."""
+        import threading
+
+        from app.services.pdf_export_service import render_html_to_pdf
+
+        def _generate():
+            from app.db import SessionLocal
+            from app.models import Attachment, AttachmentArtifact
+
+            db = SessionLocal()
+            try:
+                for aid in attachment_ids:
+                    att = db.query(Attachment).filter(Attachment.id == aid).first()
+                    if not att:
+                        continue
+                    # Find existing reader_html artifact
+                    reader = (
+                        db.query(AttachmentArtifact)
+                        .filter(
+                            AttachmentArtifact.attachment_id == aid,
+                            AttachmentArtifact.kind == "reader_html",
+                            AttachmentArtifact.status == "completed",
+                        )
+                        .first()
+                    )
+                    html = reader.content_text if reader else None
+                    if not html:
+                        continue
+                    pdf_bytes = render_html_to_pdf(
+                        html, title=att.original_filename or "document"
+                    )
+                    if not pdf_bytes:
+                        continue
+                    existing = (
+                        db.query(AttachmentArtifact)
+                        .filter(
+                            AttachmentArtifact.attachment_id == aid,
+                            AttachmentArtifact.kind == "pdf_export",
+                        )
+                        .first()
+                    )
+                    if existing:
+                        existing.content_text = None
+                        existing.content_json = None
+                        existing.size_bytes = len(pdf_bytes)
+                        existing.status = "completed"
+                        existing.mime_type = "application/pdf"
+                        existing.storage_key = f"pdf_export/{aid}.pdf"
+                    else:
+                        existing = AttachmentArtifact(
+                            attachment_id=aid,
+                            kind="pdf_export",
+                            status="completed",
+                            mime_type="application/pdf",
+                            size_bytes=len(pdf_bytes),
+                            storage_key=f"pdf_export/{aid}.pdf",
+                        )
+                        db.add(existing)
+                    # Store PDF bytes via storage backend
+                    import io
+                    from app.services.attachment_service.common import get_storage_backend
+                    try:
+                        storage = get_storage_backend()
+                        storage.upload(
+                            io.BytesIO(pdf_bytes),
+                            f"pdf_export/{aid}.pdf",
+                            "application/pdf",
+                        )
+                    except Exception:
+                        pass  # PDF still generated, storage optional
+                    db.commit()
+            except Exception:
+                logging.getLogger(__name__).exception("PDF export generation failed")
+            finally:
+                db.close()
+
+        threading.Thread(target=_generate, daemon=True).start()
+
     def _notify_version_watchers(
         self,
         *,
@@ -603,6 +683,11 @@ class VersionService(SessionService):
             raise
 
         self.db.refresh(version)
+
+        # AH-006: regenerate PDF export artifact for portal/viewer downloads
+        if attachment_ids:
+            self._schedule_pdf_export_generation(attachment_ids)
+
         self._notify_version_watchers(
             document=document,
             current_user=current_user,

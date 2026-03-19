@@ -152,6 +152,36 @@ async def download_customer_attachment(
         raise HTTPException(status_code=404, detail="Document not found")
     portal_documents_query_handler._ensure_customer_document_access(doc, current_user)
 
+    # AH-007: Serve PDF export artifact for portal users when available
+    from app.models import AttachmentArtifact
+
+    pdf_artifact = (
+        db.query(AttachmentArtifact)
+        .filter(
+            AttachmentArtifact.attachment_id == attachment_id,
+            AttachmentArtifact.kind == "pdf_export",
+            AttachmentArtifact.status == "completed",
+        )
+        .first()
+    )
+    if pdf_artifact and pdf_artifact.storage_key:
+        try:
+            from app.services.attachment_service.common import get_storage_backend
+
+            storage = get_storage_backend()
+            pdf_stream = storage.download(pdf_artifact.storage_key)
+            attachment = db.query(Attachment).filter_by(id=attachment_id).first()
+            base_name = (attachment.original_filename or "document").rsplit(".", 1)[0]
+            return StreamingResponse(
+                content=pdf_stream,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=False),
+                },
+            )
+        except Exception:
+            pass  # Fall through to original download
+
     attachment, content_stream = AttachmentService.open_original_stream(
         db, document_id, attachment_id, current_user=current_user,
     )
