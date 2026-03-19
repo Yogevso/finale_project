@@ -9,7 +9,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Document, ReviewRequest, ReviewStatus, User
+from app.container import AppContainer
+from app.models import AuditLog, ActionType, Document, ReviewRequest, ReviewStatus, User
+from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ class SubmitReviewTool(BaseTool):
         "required": ["review_id", "decision"],
     }
     required_role = "EDITOR"
+    required_permission = Permission.APPROVE_REVIEW
     confirm_before_execute = True
 
     async def execute(
@@ -65,17 +68,60 @@ class SubmitReviewTool(BaseTool):
                 return {"success": False, "result": "", "error": "Document not found in your tenant."}
 
         decision = params["decision"]
-        review.status = ReviewStatus.APPROVED if decision == "approve" else ReviewStatus.REJECTED
-        review.reviewed_by = user.id
-        review.reviewed_at = datetime.utcnow()
-        if params.get("comments"):
-            review.review_comments = params["comments"][:2000]
-        db.commit()
 
-        return {
-            "success": True,
-            "result": f"Review {review.id} has been **{decision}d** for document ID {review.document_id}.",
-        }
+        if decision == "approve":
+            # AE-002: Route approval through ApproveReviewCommandHandler (same
+            # pipeline the API uses) — enforces ReviewPolicy.can_approve_review(),
+            # blocks self-approval, creates audit log + notification.
+            from app.application.commands.review_commands import (
+                ApproveReviewCommand,
+            )
+
+            container = AppContainer()
+            handler = container.approve_review_command_handler(db)
+            command = ApproveReviewCommand(
+                review_id=review.id,
+                comments=params.get("comments"),
+                current_user=user,
+            )
+            result = handler.execute(command)
+            if result.is_err:
+                err = result.error
+                return {"success": False, "result": "", "error": err.message}
+
+            return {
+                "success": True,
+                "result": f"Review {review.id} has been **approved** for document ID {review.document_id}.",
+            }
+        else:
+            # Reject path: enforce self-rejection block and create audit trail
+            # AE-002: Block self-rejection (submitter == reviewer)
+            if review.submitted_by == user.id:
+                return {
+                    "success": False,
+                    "result": "",
+                    "error": "You cannot reject your own submission.",
+                }
+
+            review.status = ReviewStatus.REJECTED
+            review.reviewed_by = user.id
+            review.reviewed_at = datetime.utcnow()
+            if params.get("comments"):
+                review.review_comments = params["comments"][:2000]
+
+            # AE-005: Audit log for reject decision
+            db.add(AuditLog(
+                user_id=user.id,
+                document_id=review.document_id,
+                action=ActionType.UPDATE,
+                details=f"Rejected review #{review.id} via AI assistant",
+            ))
+            db.commit()
+
+            return {
+                "success": True,
+                "result": f"Review {review.id} has been **rejected** for document ID {review.document_id}.",
+            }
 
 
 class ListPendingReviewsTool(BaseTool):

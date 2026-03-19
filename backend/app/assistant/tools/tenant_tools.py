@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Tenant, User, UserRole
+from app.models import ActionType, AuditLog, Tenant, User, UserRole
 
 
 class ListTenantsTool(BaseTool):
@@ -98,5 +98,11 @@ class UpdateTenantTool(BaseTool):
             changes.append(f"is_active → {params['is_active']}")
         if not changes:
             return {"success": True, "result": "No changes specified."}
+        # AE-005: Audit trail for AI-initiated tenant updates
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Updated tenant '{t.name}' (ID: {t.id}): {', '.join(changes)} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Tenant '{t.name}' updated: {', '.join(changes)}."}

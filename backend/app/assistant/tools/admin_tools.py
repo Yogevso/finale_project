@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import (
+    ActionType,
     AdminAction,
     AdminActionStatus,
     AdminActionType,
     Attachment,
+    AuditLog,
     Document,
     FeatureFlag,
     ImpersonationSession,
@@ -85,6 +87,12 @@ class ToggleFeatureFlagTool(BaseTool):
             flag.enabled = enabled
             flag.updated_by = user.id
             action = "Enabled" if enabled else "Disabled"
+        # AE-005: Audit trail for AI-initiated feature flag changes
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"{action} feature flag '{key}' for tenant {tid} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"{action} feature flag '{key}' for tenant {tid}."}
 
@@ -156,6 +164,12 @@ class CreateMaintenanceWindowTool(BaseTool):
             created_by=user.id,
         )
         db.add(mw)
+        # AE-005: Audit trail for AI-initiated maintenance window creation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.CREATE,
+            details=f"Created maintenance window '{params['title']}' ({start} - {end}) via AI assistant",
+        ))
         db.commit()
         db.refresh(mw)
         return {"success": True, "result": f"Maintenance window '{mw.title}' scheduled (ID: {mw.id})."}
@@ -239,6 +253,12 @@ class UpdateTenantQuotaTool(BaseTool):
         if "max_storage_mb" in params:
             quota.max_storage_mb = params["max_storage_mb"]
         quota.updated_by = user.id
+        # AE-005: Audit trail for AI-initiated quota changes
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Updated quotas for tenant {tid} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Quotas updated for tenant {tid}."}
 
@@ -350,6 +370,12 @@ class ReviewAdminActionTool(BaseTool):
         action.reviewed_by = user.id
         action.review_comment = params.get("comment", "")
         action.reviewed_at = dt.utcnow()
+        # AE-005: Audit trail for AI-initiated admin action review
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Admin action #{action.id} {decision}d via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Admin action #{action.id} {decision}d."}
 

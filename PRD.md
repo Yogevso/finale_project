@@ -1342,31 +1342,31 @@ Users need a way to communicate privately about documents without those conversa
 > Fixes critical privilege escalation, service-layer bypass, and cross-tenant exposure in the 97-tool AI assistant layer. (Audit §3.27–3.30)
 
 ### Privilege Escalation Fixes (Critical)
-- [ ] AE-001: Fix PublishDocumentTool — route through `PublishApprovedVersionCommandHandler` (same handler the API uses). Must enforce `PUBLISH_DOCUMENT` permission, review approval status, and state machine checks. Remove direct `version.is_published = True` assignment. (Audit 3.27a)
-- [ ] AE-002: Fix SubmitReviewTool — route through `ApproveReviewCommandHandler` and enforce `ReviewPolicy.can_approve_review()`. Must block self-approval (submitter == reviewer). (Audit 3.27b)
-- [ ] AE-003: Fix EditDocumentTool — remove `status` from the tool's allowed parameter schema entirely. Status transitions must only happen through the document state machine. (Audit 3.27c)
+- [x] AE-001: Fix PublishDocumentTool — route through `PublishApprovedVersionCommandHandler` (same handler the API uses). Must enforce `PUBLISH_DOCUMENT` permission, review approval status, and state machine checks. Remove direct `version.is_published = True` assignment. (Audit 3.27a)
+- [x] AE-002: Fix SubmitReviewTool — route through `ApproveReviewCommandHandler` and enforce `ReviewPolicy.can_approve_review()`. Must block self-approval (submitter == reviewer). (Audit 3.27b)
+- [x] AE-003: Fix EditDocumentTool — remove `status` from the tool's allowed parameter schema entirely. Status transitions must only happen through the document state machine. (Audit 3.27c)
 
 ### Service Layer Integration (High)
-- [ ] AE-004: Route all 33 AI write tools through the service layer / command handlers — restore audit trail, notifications, state machine validation, and ETag/optimistic locking for all AI-initiated writes. (Audit 3.29)
-- [ ] AE-005: As stopgap (if full service-layer integration is phased): add explicit `AuditLog` creation in each write tool's `execute()` method, attributed to the requesting user. (Audit 3.29)
+- [x] AE-004: Route all 33 AI write tools through the service layer / command handlers — restore audit trail, notifications, state machine validation, and ETag/optimistic locking for all AI-initiated writes. (Audit 3.29)
+- [x] AE-005: As stopgap (if full service-layer integration is phased): add explicit `AuditLog` creation in each write tool's `execute()` method, attributed to the requesting user. (Audit 3.29)
 
 ### Tenant Isolation (High)
-- [ ] AE-006: Add `tenant_id` filtering to `GetVersionDetailsTool` and `GetDocumentVersionStatsTool` — these are gated by `VIEW_INTERNAL_DOCS` which editors have; must not allow cross-tenant reads. (Audit 3.30)
-- [ ] AE-007: Add `tenant_id` filtering to `CancelScheduledPublishTool` — gated by `PUBLISH_DOCUMENT` (managers have this); must not allow cross-tenant cancellation. (Audit 3.30)
-- [ ] AE-008: Add `tenant_id` filtering to `CancelInvitationTool` — gated by `MANAGE_USERS` (admins have this); must not allow cross-tenant invitation cancellation. (Audit 3.30)
-- [ ] AE-009: Add `doc.tenant_id == tenant_id` check to engagement tools (`BookmarkDocumentTool`, `WatchDocumentTool`, `UpdateReadingProgressTool`). (Audit 3.30)
-- [ ] AE-010: Document that cross-tenant analytics/audit reads by system_admin are intentional. Add code comment and guard: `if not user.is_system_admin: raise`. (Audit 3.30)
+- [x] AE-006: Add `tenant_id` filtering to `GetVersionDetailsTool` and `GetDocumentVersionStatsTool` — these are gated by `VIEW_INTERNAL_DOCS` which editors have; must not allow cross-tenant reads. (Audit 3.30)
+- [x] AE-007: Add `tenant_id` filtering to `CancelScheduledPublishTool` — gated by `PUBLISH_DOCUMENT` (managers have this); must not allow cross-tenant cancellation. (Audit 3.30)
+- [x] AE-008: Add `tenant_id` filtering to `CancelInvitationTool` — gated by `MANAGE_USERS` (admins have this); must not allow cross-tenant invitation cancellation. (Audit 3.30)
+- [x] AE-009: Add `doc.tenant_id == tenant_id` check to engagement tools (`BookmarkDocumentTool`, `WatchDocumentTool`, `UpdateReadingProgressTool`). (Audit 3.30)
+- [x] AE-010: Document that cross-tenant analytics/audit reads by system_admin are intentional. Add code comment and guard: `if not user.is_system_admin: raise`. (Audit 3.30)
 
 ### Phase 17 Prerequisite (Future)
-- [ ] AE-011: When AI content editing (Phase 17) is built — AI proposes changes as suggestions (diff), user accepts/rejects, accepted changes go through normal review workflow, edits tagged in version history as "edited via AI assistant by [user]". (Audit 3.28)
+- [x] AE-011: When AI content editing (Phase 17) is built — AI proposes changes as suggestions (diff), user accepts/rejects, accepted changes go through normal review workflow, edits tagged in version history as "edited via AI assistant by [user]". (Audit 3.28)
 
 ### Wave AE — Tests
-- [ ] AE-012: Test — editor asks AI to publish → denied (requires manager+).
-- [ ] AE-013: Test — editor asks AI to approve own submission → denied (self-approval blocked).
-- [ ] AE-014: Test — editor asks AI to set document status to `active` → denied (status field removed from tool).
-- [ ] AE-015: Test — AI write operation creates audit log entry attributed to requesting user.
-- [ ] AE-016: Test — editor's AI tool cannot read/modify versions from another tenant.
-- [ ] AE-017: Test — manager's AI tool cannot cancel scheduled publish from another tenant.
+- [x] AE-012: Test — editor asks AI to publish → denied (requires manager+).
+- [x] AE-013: Test — editor asks AI to approve own submission → denied (self-approval blocked).
+- [x] AE-014: Test — editor asks AI to set document status to `active` → denied (status field removed from tool).
+- [x] AE-015: Test — AI write operation creates audit log entry attributed to requesting user.
+- [x] AE-016: Test — editor's AI tool cannot read/modify versions from another tenant.
+- [x] AE-017: Test — manager's AI tool cannot cancel scheduled publish from another tenant.
 
 ---
 

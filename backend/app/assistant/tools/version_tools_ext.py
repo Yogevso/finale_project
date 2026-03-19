@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Document, User, UserRole, Version
+from app.models import ActionType, AuditLog, Document, User, UserRole, Version
 from app.services.permissions import Permission
 
 
@@ -62,8 +62,13 @@ class GetVersionDetailsTool(BaseTool):
         v = db.query(Version).filter(Version.id == params["version_id"]).first()
         if not v:
             return {"success": False, "result": "Version not found."}
+        # AE-006: Tenant isolation — prevent cross-tenant version reads
         doc = db.query(Document).filter(Document.id == v.document_id).first()
-        title = doc.title if doc else f"Doc#{v.document_id}"
+        if not doc:
+            return {"success": False, "result": "Version not found."}
+        if tenant_id is not None and doc.tenant_id != tenant_id:
+            return {"success": False, "result": "Version not found."}
+        title = doc.title
         creator = db.query(User).filter(User.id == v.created_by).first()
         creator_name = creator.full_name if creator else "Unknown"
         published_by = ""
@@ -101,6 +106,9 @@ class GetDocumentVersionStatsTool(BaseTool):
         doc_id = params["document_id"]
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if not doc:
+            return {"success": False, "result": f"Document {doc_id} not found."}
+        # AE-006: Tenant isolation — prevent cross-tenant version stat reads
+        if tenant_id is not None and doc.tenant_id != tenant_id:
             return {"success": False, "result": f"Document {doc_id} not found."}
         total = db.query(func.count(Version.id)).filter(Version.document_id == doc_id).scalar() or 0
         published = db.query(func.count(Version.id)).filter(
@@ -147,11 +155,24 @@ class CancelScheduledPublishTool(BaseTool):
         v = db.query(Version).filter(Version.id == params["version_id"]).first()
         if not v:
             return {"success": False, "result": "Version not found."}
+        # AE-007: Tenant isolation — prevent cross-tenant scheduled publish cancellation
+        doc = db.query(Document).filter(Document.id == v.document_id).first()
+        if not doc:
+            return {"success": False, "result": "Version not found."}
+        if tenant_id is not None and doc.tenant_id != tenant_id:
+            return {"success": False, "result": "Version not found."}
         if not v.scheduled_publish_at:
             return {"success": True, "result": "This version has no scheduled publish date."}
         if v.is_published:
             return {"success": False, "result": "This version is already published."}
         v.scheduled_publish_at = None
+        # AE-005: Audit trail for AI-initiated scheduled publish cancellation
+        db.add(AuditLog(
+            user_id=user.id,
+            document_id=v.document_id,
+            action=ActionType.UPDATE,
+            details=f"Cancelled scheduled publish for version #{v.id} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Scheduled publish cancelled for version #{v.id}."}
 

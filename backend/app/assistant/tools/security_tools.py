@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import (
+    ActionType,
+    AuditLog,
     Invitation,
     InvitationStatus,
     SecurityEvent,
@@ -73,6 +75,12 @@ class RevokeSessionTool(BaseTool):
         if s.revoked_at:
             return {"success": True, "result": "Session is already revoked."}
         s.revoked_at = dt.utcnow()
+        # AE-005: Audit trail for AI-initiated session revocation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Revoked session #{s.id} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Session #{s.id} revoked. That device will need to log in again."}
 
@@ -201,8 +209,17 @@ class CancelInvitationTool(BaseTool):
         inv = db.query(Invitation).filter(Invitation.id == params["invitation_id"]).first()
         if not inv:
             return {"success": False, "result": "Invitation not found."}
+        # AE-008: Tenant isolation — prevent cross-tenant invitation cancellation
+        if tenant_id is not None and inv.tenant_id != tenant_id:
+            return {"success": False, "result": "Invitation not found."}
         if inv.status != InvitationStatus.PENDING:
             return {"success": False, "result": f"Cannot cancel — invitation is already '{inv.status.value}'."}
         inv.status = InvitationStatus.CANCELLED
+        # AE-005: Audit trail for AI-initiated invitation cancellation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Cancelled invitation to {inv.email} via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Invitation to {inv.email} cancelled."}
