@@ -1,4 +1,4 @@
-/**
+ /**
  * PHASE 14 - Docker Smoke Test
  * Runs against the live Docker Compose stack at http://localhost:3000
  * Verifies items #139-#148 from VERIFICATION_UX_PLAN.md
