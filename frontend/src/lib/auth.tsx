@@ -58,6 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check for existing session on mount
   useEffect(() => {
     const checkAuth = async () => {
+      if (!api.hasToken()) {
+        // Skip session restore on public-only routes where no auth is expected.
+        // This avoids a noisy 401 in the browser console for guest visitors.
+        const publicPrefixes = ['/docs', '/platforms', '/browse', '/topics', '/tools', '/help', '/changelog', '/accessibility', '/doc/', '/search']
+        const isPublicRoute = publicPrefixes.some((p) => window.location.pathname.startsWith(p))
+        if (!isPublicRoute) {
+          await api.tryRestoreSession()
+        }
+      }
       await refreshUser()
       setIsLoading(false)
     }
@@ -136,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
