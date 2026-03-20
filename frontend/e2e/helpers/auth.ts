@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
 
 export type Credentials = {
   username: string;
@@ -145,4 +145,16 @@ export async function getApiAuthHeaders(
     ...E2E_BYPASS_HEADERS,
     Authorization: `Bearer ${payload.access_token}`,
   };
+}
+
+export async function adminLogin(
+  page: Page,
+  landingPath: string = '/dashboard',
+  expectedUrl: RegExp = /\/(dashboard|documents)/,
+) {
+  await loginByApi(page, { username: 'admin', password: 'admin123' }, expectedUrl, landingPath);
+}
+
+export async function editorLogin(page: Page) {
+  await loginByApi(page, { username: 'editor', password: 'editor123' }, /\/(dashboard|documents)/, '/dashboard');
 }

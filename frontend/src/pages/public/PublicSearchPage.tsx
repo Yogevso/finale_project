@@ -1,11 +1,38 @@
 import { useSearchParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, FileText, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { CardSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * AD-008: Safe text highlighting using React nodes instead of dangerouslySetInnerHTML.
+ * Splits `text` on matches of `query` and wraps matches in <mark>.
+ */
+function HighlightText({ text, query: q }: { text: string; query: string }): ReactNode {
+  if (!q || !text) return <>{text}</>
+  const escaped = escapeRegExp(q)
+  if (!escaped) return <>{text}</>
+  const regex = new RegExp(`(${escaped})`, 'gi')
+  const matchRegex = new RegExp(`^${escaped}$`, 'i')
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        matchRegex.test(part) ? (
+          <mark key={i} className="rounded-sm bg-amber-200 px-0.5">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 export default function PublicSearchPage() {
@@ -23,7 +50,13 @@ export default function PublicSearchPage() {
   })
 
   // Fetch search results
-  const { data: results, isLoading, isFetching } = useQuery({
+  const {
+    data: results,
+    isLoading,
+    isFetching,
+    isError: resultsError,
+    refetch: refetchResults,
+  } = useQuery({
     queryKey: ['public-search', { q: query, page, category }],
     queryFn: () => publicApi.search({ q: query, page, page_size: 20, category }),
     enabled: query.length >= 2,
@@ -61,18 +94,12 @@ export default function PublicSearchPage() {
     setSearchParams(params)
   }
 
-  const highlightQuery = (text: string) => {
-    if (!query || !text) return text
-    const escapedQuery = escapeRegExp(query)
-    if (!escapedQuery) return text
-    const regex = new RegExp(`(${escapedQuery})`, 'gi')
-    return text.replace(regex, '<mark class="bg-amber-200">$1</mark>')
-  }
+  // AD-008: highlight logic moved to HighlightText component (safe)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-6xl mx-auto px-6 py-12">
+        <div className="content-shell py-12">
           <Link
             to="/docs"
             className="inline-flex items-center gap-2 text-sky-100/80 hover:text-white mb-4"
@@ -92,34 +119,35 @@ export default function PublicSearchPage() {
                 placeholder="Search public documents..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full px-6 py-4 pl-14 rounded-2xl text-lg text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40"
+                className="w-full rounded-2xl px-6 py-4 pl-14 text-lg text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40 dark:bg-slate-950 dark:text-slate-100"
               />
-              <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <button
                 type="submit"
                 disabled={searchInput.length < 2}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 bg-sky-600 text-white px-6 py-2 rounded-xl hover:bg-sky-700 disabled:bg-slate-300 disabled:cursor-not-allowed font-medium"
+                className="btn-primary table-action-btn absolute right-3 top-1/2 -translate-y-1/2 disabled:bg-slate-300 disabled:hover:scale-100"
               >
                 Search
               </button>
             </div>
             {searchInput.length > 0 && searchInput.length < 2 && (
-              <p className="text-sm text-sky-200/80 mt-2">Enter at least 2 characters to search</p>
+              <p className="helper-copy mt-2 text-sky-200/80">Enter at least 2 characters to search</p>
             )}
           </form>
         </div>
       </section>
 
-      <section className="max-w-4xl mx-auto px-4 py-8">
+      <section className="content-shell max-w-4xl py-8">
         {/* Category Filter */}
         {categories?.items && categories.items.length > 0 && query && (
           <div className="mb-6 flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={() => handleCategoryChange(null)}
               className={`px-3 py-1 rounded-full text-sm font-medium ${
                 !category
                   ? 'bg-sky-500 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               All
@@ -127,11 +155,12 @@ export default function PublicSearchPage() {
             {categories.items.map((cat) => (
               <button
                 key={cat.category}
+                type="button"
                 onClick={() => handleCategoryChange(cat.category)}
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
                   category === cat.category
                     ? 'bg-sky-500 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 {cat.category}
@@ -142,19 +171,24 @@ export default function PublicSearchPage() {
 
         {/* Results */}
         {!query ? (
-          <div className="text-center py-16 text-slate-500">
-            <Search className="h-16 w-16 mx-auto mb-4 text-slate-300" />
-            <p className="text-lg">Enter a search term to find documents</p>
-          </div>
+          <EmptyState
+            icon={<Search className="h-8 w-8" aria-hidden="true" />}
+            title="Search the library"
+            description="Enter at least two characters to find documents, release notes, and guides."
+          />
         ) : isLoading || isFetching ? (
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />
-            ))}
-          </div>
+          <CardSkeleton count={5} className="grid-cols-1" />
+        ) : resultsError ? (
+          <ErrorState
+            title="Unable to load search results"
+            message="The public search index could not be queried right now."
+            onRetry={() => {
+              void refetchResults()
+            }}
+          />
         ) : results?.items && results.items.length > 0 ? (
           <>
-            <div className="text-sm text-slate-500 mb-4">
+            <div className="body-copy mb-4">
               Found {results.total} results for "<strong>{query}</strong>"
             </div>
 
@@ -168,19 +202,17 @@ export default function PublicSearchPage() {
                   <div className="flex items-start gap-4">
                     <FileText className="h-6 w-6 text-sky-500 flex-shrink-0 mt-1" />
                     <div className="flex-1 min-w-0">
-                      <h3 
-                        className="font-display font-semibold text-slate-900 group-hover:text-sky-600 mb-1"
-                        dangerouslySetInnerHTML={{ __html: highlightQuery(item.title) }}
-                      />
-                      <p className="text-xs text-slate-400 mb-2">{item.document_number}</p>
+                      <h3 className="card-title mb-1 group-hover:text-sky-600">
+                        <HighlightText text={item.title} query={query} />
+                      </h3>
+                      <p className="helper-copy mb-2">{item.document_number}</p>
                       {item.snippet && (
-                        <p 
-                          className="text-sm text-slate-600 line-clamp-2"
-                          dangerouslySetInnerHTML={{ __html: highlightQuery(item.snippet) }}
-                        />
+                        <p className="body-copy line-clamp-2">
+                          <HighlightText text={item.snippet} query={query} />
+                        </p>
                       )}
                       {item.category && (
-                        <span className="inline-block mt-2 pill bg-slate-100 text-slate-600 border-slate-200">
+                        <span className="mt-2 inline-block pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                           {item.category}
                         </span>
                       )}
@@ -194,16 +226,18 @@ export default function PublicSearchPage() {
             {results.total > results.page_size && (
               <div className="mt-8 flex justify-center items-center gap-4">
                 <button
+                  type="button"
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page <= 1}
                   className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="text-sm text-slate-600">
+                <span className="body-copy">
                   Page {page} of {Math.ceil(results.total / results.page_size)}
                 </span>
                 <button
+                  type="button"
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page >= Math.ceil(results.total / results.page_size)}
                   className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
@@ -214,13 +248,11 @@ export default function PublicSearchPage() {
             )}
           </>
         ) : (
-          <div className="text-center py-16">
-            <Search className="h-16 w-16 mx-auto mb-4 text-slate-300" />
-            <h3 className="text-lg font-display font-medium text-slate-900 mb-2">No results found</h3>
-            <p className="text-slate-500">
-              No documents match "{query}". Try a different search term.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Search className="h-8 w-8" aria-hidden="true" />}
+            title="No results found"
+            description={`No documents match "${query}". Try a different search term or category.`}
+          />
         )}
       </section>
     </div>

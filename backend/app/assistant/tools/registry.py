@@ -103,7 +103,7 @@ class ToolRegistry:
 
     # Parameter names that should be integers (LLMs often send as strings)
     _NUMERIC_PARAMS = {
-        "limit", "offset", "page", "rating", "user_id", "document_id",
+        "limit", "offset", "page", "rating", "days", "user_id", "document_id",
         "tenant_id", "ticket_id", "topic_id", "announcement_id", "feedback_id",
         "version_id", "review_id", "comment_id", "attachment_id",
         "notification_id", "session_id", "n_results",

@@ -1,0 +1,39 @@
+{
+  "ci": {
+    "collect": {
+      "numberOfRuns": 1,
+      "url": [
+        "http://127.0.0.1:3100/login",
+        "http://127.0.0.1:3100/docs"
+      ],
+      "startServerCommand": "npm run dev -- --host 127.0.0.1 --port 3100",
+      "startServerReadyPattern": "Local:|ready in|127.0.0.1:3100",
+      "settings": {
+        "preset": "desktop",
+        "chromeFlags": "--headless=new"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:accessibility": [
+          "warn",
+          {
+            "minScore": 0.95
+          }
+        ],
+        "interactive": [
+          "warn",
+          {
+            "maxNumericValue": 3000
+          }
+        ]
+      }
+    }
+  }
+}

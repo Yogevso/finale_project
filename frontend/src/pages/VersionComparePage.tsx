@@ -43,6 +43,7 @@ export default function VersionComparePage() {
   const {
     data: versionsData,
     isLoading: areVersionsLoading,
+    isFetching: areVersionsFetching,
   } = useDocumentVersionsQuery(id)
 
   const versions = useMemo(
@@ -83,39 +84,46 @@ export default function VersionComparePage() {
 
   if (!Number.isFinite(documentId)) {
     return (
-      <NotFoundState
-        title="Document Not Found"
-        description="This comparison request is missing a valid document id."
-      />
+      <div className="animate-fade-in content-shell">
+        <NotFoundState
+          title="Document Not Found"
+          description="This comparison request is missing a valid document id."
+        />
+      </div>
     )
   }
 
   if (isDocumentLoading || areVersionsLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-sky-600" />
+      <div className="page-stack">
+        <div className="surface-card flex animate-fade-in flex-col items-center justify-center gap-3 rounded-2xl p-12 text-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-sky-600" />
+          <p className="body-copy">Loading version comparison...</p>
+        </div>
       </div>
     )
   }
 
   if (documentError || !document) {
     return (
-      <NotFoundState
-        title="Document Not Found"
-        description="The document could not be loaded for version comparison."
-      />
+      <div className="animate-fade-in content-shell">
+        <NotFoundState
+          title="Document Not Found"
+          description="The document could not be loaded for version comparison."
+        />
+      </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         eyebrow="Version Compare"
         title={`Compare versions for ${document.title}`}
         subtitle="Review changes side-by-side before approving, publishing, or restoring content."
         actions={
           <>
-            <Link to={`/documents/${documentId}`} className="btn-ghost inline-flex items-center gap-2">
+            <Link to={`/documents/${documentId}`} className="btn-ghost table-action-btn inline-flex items-center gap-2">
               <ArrowLeft className="h-4 w-4" />
               Back to document
             </Link>
@@ -125,8 +133,8 @@ export default function VersionComparePage() {
                 setLeftVersionId(rightVersionId)
                 setRightVersionId(leftVersionId)
               }}
-              disabled={leftVersionId === null || rightVersionId === null}
-              className="btn-secondary inline-flex items-center gap-2"
+              disabled={leftVersionId === null || rightVersionId === null || areVersionsFetching}
+              className="btn-secondary table-action-btn inline-flex items-center gap-2"
             >
               <ArrowLeftRight className="h-4 w-4" />
               Swap sides
@@ -142,15 +150,16 @@ export default function VersionComparePage() {
       />
 
       {versions.length < 2 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center text-slate-500">
+        <div className="surface-card rounded-2xl border border-dashed border-slate-200 p-12 text-center">
           <GitCompareArrows className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-          <p className="text-sm">At least two versions are needed before a side-by-side compare is useful.</p>
+          <h2 className="section-title">Not enough versions to compare</h2>
+          <p className="body-copy">At least two versions are needed before a side-by-side compare is useful.</p>
         </div>
       ) : (
         <>
-          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 lg:grid-cols-2">
-            <label className="space-y-2 text-sm text-slate-600">
-              <span className="font-medium text-slate-900">Left version</span>
+          <div className="surface-card grid gap-4 rounded-2xl p-5 lg:grid-cols-2">
+            <label className="space-y-2">
+              <span className="helper-copy font-medium uppercase tracking-wide">Left version</span>
               <select
                 value={leftVersionId ?? ''}
                 onChange={(event) => setLeftVersionId(Number(event.target.value))}
@@ -163,8 +172,8 @@ export default function VersionComparePage() {
                 ))}
               </select>
             </label>
-            <label className="space-y-2 text-sm text-slate-600">
-              <span className="font-medium text-slate-900">Right version</span>
+            <label className="space-y-2">
+              <span className="helper-copy font-medium uppercase tracking-wide">Right version</span>
               <select
                 value={rightVersionId ?? ''}
                 onChange={(event) => setRightVersionId(Number(event.target.value))}
@@ -180,8 +189,8 @@ export default function VersionComparePage() {
           </div>
 
           {(isLeftLoading || isRightLoading) ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500">
-              Loading selected versions...
+            <div className="surface-card rounded-2xl p-12 text-center">
+              <p className="body-copy">Loading selected versions...</p>
             </div>
           ) : (
             <VersionDiffView

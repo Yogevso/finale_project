@@ -11,6 +11,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
 import { buildSavedViewPayload, parseSavedDocumentsView } from '@/pages/documents/lib/savedViews'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import type { BulkDocumentMetadataUpdate, DocumentStatus, DocumentVisibility } from '@/types'
 
 type VisibilityChangeRequest = {
@@ -52,6 +53,7 @@ export function useDocumentsPageController() {
   const { isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
+  const toast = useToast()
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -203,10 +205,10 @@ export function useDocumentsPageController() {
       setShowBulkEditModal(false)
       setSelectedDocumentIds([])
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Metadata updated')
     },
     onError: (error: unknown) => {
-      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
-      alert(apiError.response?.data?.detail || apiError.message || 'Failed to update document metadata.')
+      toast.error('Failed to update metadata', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
 

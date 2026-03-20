@@ -35,7 +35,7 @@ export function CollaborationStatus({
       <div className="flex items-center gap-2">
         {isConnecting && (
           <div className="flex items-center gap-1.5 text-amber-600">
-            <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <div className="sync-status-pulse h-2 w-2 rounded-full bg-amber-500" />
             <span className="text-xs">Connecting...</span>
           </div>
         )}
@@ -57,7 +57,7 @@ export function CollaborationStatus({
 
         {isConnected && !isSynced && (
           <div className="flex items-center gap-1.5 text-sky-600">
-            <div className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+            <div className="sync-status-pulse h-2 w-2 rounded-full bg-sky-500" />
             <span className="text-xs">Syncing...</span>
           </div>
         )}
@@ -122,7 +122,7 @@ export function CollaborationStatusCompact({
   if (isConnecting) {
     return (
       <div className="flex items-center gap-1 text-amber-600">
-        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+        <div className="sync-status-pulse h-2 w-2 rounded-full bg-amber-500" />
       </div>
     )
   }

@@ -109,7 +109,7 @@ def list_published_documents(
         total=total,
         page=page,
         page_size=page_size,
-        pages=(total + page_size - 1) // page_size,
+        total_pages=(total + page_size - 1) // page_size,
     )
 
 
@@ -192,12 +192,30 @@ def get_document_attachments(
     document_id: int,
     db: Session = Depends(get_db),
 ):
-    """Get attachments for a published document."""
+    """Get attachments for a published document (scoped to latest publish time)."""
     _get_active_document_or_404(db, document_id)
 
+    # AF-002: Scope attachments to the latest published version's publish time
+    # so uploads after publish don't leak to public viewers.
+    latest_published = (
+        db.query(Version)
+        .filter(
+            Version.document_id == document_id,
+            Version.is_published.is_(True),
+        )
+        .order_by(Version.version_number.desc())
+        .first()
+    )
+    if not latest_published:
+        return []
+
+    cutoff = latest_published.published_at or latest_published.created_at
     attachments = (
         db.query(Attachment)
-        .filter(Attachment.document_id == document_id)
+        .filter(
+            Attachment.document_id == document_id,
+            Attachment.uploaded_at <= cutoff,
+        )
         .order_by(Attachment.uploaded_at.desc())
         .all()
     )
@@ -212,6 +230,37 @@ def _stream_public_attachment(
     *,
     inline: bool,
 ) -> StreamingResponse:
+    # AH-007: Serve PDF export artifact for viewer/public users when available
+    from app.models import AttachmentArtifact
+
+    pdf_artifact = (
+        db.query(AttachmentArtifact)
+        .filter(
+            AttachmentArtifact.attachment_id == attachment_id,
+            AttachmentArtifact.kind == "pdf_export",
+            AttachmentArtifact.status == "completed",
+        )
+        .first()
+    )
+    if pdf_artifact and pdf_artifact.storage_key:
+        try:
+            from app.services.attachment_service.common import get_storage_backend
+
+            storage = get_storage_backend()
+            pdf_stream = storage.download(pdf_artifact.storage_key)
+            att = db.query(Attachment).filter_by(id=attachment_id).first()
+            base_name = (att.original_filename or "document").rsplit(".", 1)[0] if att else "document"
+            return StreamingResponse(
+                content=pdf_stream,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=inline),
+                    **_audience_policy_headers(DocumentVisibility.PUBLIC),
+                },
+            )
+        except Exception:
+            pass  # Fall through to original download
+
     attachment, content_stream = AttachmentService.open_original_stream(
         db,
         document_id,

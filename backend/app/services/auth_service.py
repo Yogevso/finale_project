@@ -11,7 +11,7 @@ from app.auth_context.session_tokens import hash_session_identifier
 from app.config import settings
 from app.models import PasswordReset, SecurityEvent, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
-from app.schemas import TokenResponse, UserCreate
+from app.schemas import PublicRegistrationRequest, TokenResponse, UserCreate
 from app.security import get_password_hash, verify_password
 from app.services.base_service import SessionService
 
@@ -314,6 +314,23 @@ class AuthService(SessionService):
         self._record_login_context(user=user, client_ip=client_ip, user_agent=user_agent)
         session_identifier = secrets.token_urlsafe(32)
         now = datetime.utcnow()
+
+        # AD-013: enforce concurrent session limit — revoke oldest sessions
+        max_sessions = settings.MAX_CONCURRENT_SESSIONS
+        active_sessions = (
+            self.db.query(UserSession)
+            .filter(
+                UserSession.user_id == user.id,
+                UserSession.revoked_at.is_(None),
+            )
+            .order_by(UserSession.last_active_at.desc())
+            .all()
+        )
+        if len(active_sessions) >= max_sessions:
+            # revoke oldest sessions to stay within the limit
+            for old_session in active_sessions[max_sessions - 1:]:
+                old_session.revoked_at = now
+
         self.db.add(
             UserSession(
                 user_id=user.id,
@@ -392,11 +409,30 @@ class AuthService(SessionService):
         return TokenResponse(access_token=access_token, token_type="bearer")
 
     def logout(self, user_id: int) -> None:
-        """Invalidate all refresh tokens for user"""
+        """Invalidate all refresh tokens and revoke all active sessions for user."""
         self.refresh_token_service.invalidate_user_tokens(user_id)
+        # AD-020: also revoke all UserSession records so JWTs are rejected
+        now = datetime.utcnow()
+        active_sessions = (
+            self.db.query(UserSession)
+            .filter(
+                UserSession.user_id == user_id,
+                UserSession.revoked_at.is_(None),
+            )
+            .all()
+        )
+        for session in active_sessions:
+            session.revoked_at = now
+        self.db.commit()
 
-    def register(self, user_data: UserCreate) -> User:
-        """Register a new user"""
+    def register(self, user_data: UserCreate | PublicRegistrationRequest) -> User:
+        """Register a new user via public self-registration.
+
+        AF-009: Accepts ``PublicRegistrationRequest`` (no role/tenant_id) or
+        legacy ``UserCreate`` — either way, role and tenant_id are ignored.
+        All self-registered users land as ``customer`` with no tenant.
+        Staff creation goes through admin/invitation flows only.
+        """
         # Check if username already exists
         existing_user = self.user_repository.get_by_username(user_data.username)
         if existing_user:
@@ -411,14 +447,15 @@ class AuthService(SessionService):
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
             )
 
-        # Create new user
+        # AD-001: Force customer role — ignore caller-supplied role/tenant_id
+        # Staff users are created via invitation acceptance or admin flows.
         user = User(
             email=user_data.email,
             username=user_data.username,
             full_name=user_data.full_name,
             hashed_password=get_password_hash(user_data.password),
-            role=user_data.role,
-            tenant_id=user_data.tenant_id,
+            role=UserRole.CUSTOMER,
+            tenant_id=None,
             is_active=True,
             is_email_verified=False,
             failed_login_attempts=0,

@@ -70,4 +70,28 @@ describe('global toast system', () => {
       expect(screen.getByText('Server exploded')).toBeInTheDocument()
     })
   })
+
+  it('does not move focus away from the triggering control when a toast appears', async () => {
+    const user = userEvent.setup()
+    const queryClient = createQueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MutationToastHarness />
+      </QueryClientProvider>,
+    )
+
+    const trigger = screen.getByRole('button', { name: /trigger success/i })
+    trigger.focus()
+
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+
+    await waitFor(() => {
+      expect(screen.getByText('Mutation succeeded')).toBeInTheDocument()
+    })
+
+    expect(trigger).toHaveFocus()
+  })
 })

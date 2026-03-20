@@ -148,7 +148,7 @@ describe('AdminOpsPage – Tenant Quota Editor (Z-025)', () => {
 
     // Wait for quota editor to render
     await waitFor(() => {
-      expect(screen.getByText(/Quota/)).toBeDefined()
+      expect(screen.getByText('Save Quota')).toBeDefined()
     })
 
     // Verify current quota values are displayed

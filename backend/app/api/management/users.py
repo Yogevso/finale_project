@@ -81,7 +81,7 @@ class SecurityEventListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-    pages: int
+    total_pages: int
 
 
 @router.get("/users", response_model=list[UserWithCompanyResponse])
@@ -355,7 +355,7 @@ def list_my_security_events(
         total=total,
         page=page,
         page_size=page_size,
-        pages=pages,
+        total_pages=pages,
     )
 
 

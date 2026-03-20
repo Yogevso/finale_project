@@ -2,6 +2,7 @@ import {
   DateRangePicker,
   ExportButton,
 } from '@/components/analytics'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import PageHeader from '@/components/PageHeader'
 import {
   AnalyticsAccessDenied,
@@ -14,11 +15,15 @@ export default function AnalyticsDashboardPage() {
   const controller = useAnalyticsDashboardController()
 
   if (!controller.hasAnyAccess) {
-    return <AnalyticsAccessDenied />
+    return (
+      <div className="animate-fade-in">
+        <AnalyticsAccessDenied />
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="Analytics Dashboard"
         subtitle="Insights into your content and user engagement"
@@ -48,7 +53,9 @@ export default function AnalyticsDashboardPage() {
         onTabChange={controller.setActiveTab}
       />
 
-      <AnalyticsSectionContent activeTab={controller.activeTab} queryParams={controller.queryParams} />
+      <ErrorBoundary>
+        <AnalyticsSectionContent key={controller.activeTab} activeTab={controller.activeTab} queryParams={controller.queryParams} />
+      </ErrorBoundary>
     </div>
   )
 }

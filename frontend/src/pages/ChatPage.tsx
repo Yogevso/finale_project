@@ -15,6 +15,7 @@ import NewChatModal from '@/features/chat/NewChatModal'
 import AddPeopleModal from '@/features/chat/AddPeopleModal'
 import GroupSettingsModal from '@/features/chat/GroupSettingsModal'
 import PageHeader from '@/components/PageHeader'
+import { ErrorState } from '@/components/ErrorState'
 
 export default function ChatPage() {
   const [searchParams] = useSearchParams()
@@ -110,15 +111,15 @@ export default function ChatPage() {
   const isGroup = activeChat?.type === 'group'
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    <div className="page-stack flex h-[calc(100vh-4rem)] flex-col">
       <PageHeader
         title="Messages"
         subtitle="Private and group messaging"
       />
 
-      <div className="flex flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white mx-4 mb-4">
-        {/* Sidebar — 320px fixed */}
-        <div className="w-80 flex-shrink-0">
+      <div className="surface-card mx-4 mb-4 flex flex-1 overflow-hidden rounded-2xl">
+        {/* Sidebar — hidden on mobile when a chat is active */}
+        <div className={`w-full md:w-80 flex-shrink-0 ${activeChatId ? 'hidden md:block' : ''}`}>
           <ChatSidebar
             chats={filteredChats}
             activeChatId={activeChatId}
@@ -132,31 +133,46 @@ export default function ChatPage() {
             globalSearchResults={debouncedGlobalSearch.length >= 2 ? globalSearchQuery.data?.items : undefined}
             globalSearchLoading={debouncedGlobalSearch.length >= 2 && globalSearchQuery.isLoading}
             onSelectMessage={handleSelectMessage}
+            isLoading={chatsQuery.isLoading}
+            isError={chatsQuery.isError}
+            onRetry={() => void chatsQuery.refetch()}
           />
         </div>
 
-        {/* Chat area */}
-        <div className="flex-1">
-          <ChatView
-            chat={activeChat}
-            messages={messagesQuery.data?.items ?? []}
-            displayName={displayName}
-            typingText={typingText}
-            isConnected={isConnected}
-            isLoading={messagesQuery.isLoading}
-            onSend={handleSend}
-            onFileUpload={handleFileUpload}
-            onTyping={handleTyping}
-            onClose={() => setActiveChatId(null)}
-            onDeleteChat={handleDeleteChat}
-            onAddPeople={isGroup ? () => setShowAddPeople(true) : undefined}
-            onMuteToggle={activeChatId ? () => muteMutation.mutate(activeChatId) : undefined}
-            isMuted={isMuted}
-            onLeaveChat={isGroup ? () => { if (activeChatId) leaveMutation.mutate(activeChatId) } : undefined}
-            onOpenSettings={isGroup ? () => setShowGroupSettings(true) : undefined}
-            scrollToMessageId={scrollToMessageId}
-            onScrollToMessageHandled={() => setScrollToMessageId(null)}
-          />
+        {/* Chat area — hidden on mobile when no chat selected */}
+        <div className={`flex-1 ${!activeChatId ? 'hidden md:block' : ''}`}>
+          {activeChatId && activeChatQuery.isError ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <ErrorState
+                title="Conversation could not be loaded"
+                message="We could not load this chat right now."
+                onRetry={() => void activeChatQuery.refetch()}
+              />
+            </div>
+          ) : (
+            <ChatView
+              chat={activeChat}
+              messages={messagesQuery.data?.items ?? []}
+              displayName={displayName}
+              typingText={typingText}
+              isConnected={isConnected}
+              isLoading={messagesQuery.isLoading}
+              isError={messagesQuery.isError}
+              onRetry={() => void messagesQuery.refetch()}
+              onSend={handleSend}
+              onFileUpload={handleFileUpload}
+              onTyping={handleTyping}
+              onClose={() => setActiveChatId(null)}
+              onDeleteChat={handleDeleteChat}
+              onAddPeople={isGroup ? () => setShowAddPeople(true) : undefined}
+              onMuteToggle={activeChatId ? () => muteMutation.mutate(activeChatId) : undefined}
+              isMuted={isMuted}
+              onLeaveChat={isGroup ? () => { if (activeChatId) leaveMutation.mutate(activeChatId) } : undefined}
+              onOpenSettings={isGroup ? () => setShowGroupSettings(true) : undefined}
+              scrollToMessageId={scrollToMessageId}
+              onScrollToMessageHandled={() => setScrollToMessageId(null)}
+            />
+          )}
         </div>
       </div>
 

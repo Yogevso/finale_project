@@ -9,10 +9,14 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import AuditLog, User
+from app.models import AuditLog, User, UserRole
 from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
+
+# AE-010: Audit tools intentionally perform cross-tenant reads for
+# compliance/security investigation purposes.  Access is restricted
+# to SYSTEM_ADMIN role only.
 
 
 class SearchAuditLogsTool(BaseTool):
@@ -33,6 +37,8 @@ class SearchAuditLogsTool(BaseTool):
         "required": [],
     }
     required_permission = Permission.SYSTEM_SETTINGS
+    # AE-010: Restrict to system_admin — cross-tenant audit log reads
+    required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
@@ -85,6 +91,8 @@ class GetUserActivityTool(BaseTool):
         "required": ["user_id"],
     }
     required_permission = Permission.SYSTEM_SETTINGS
+    # AE-010: Restrict to system_admin — cross-tenant user activity reads
+    required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,

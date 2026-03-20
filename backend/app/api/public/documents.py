@@ -218,7 +218,7 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
             detail="Document not found or not publicly accessible",
         )
 
-    # Get latest published version
+    # Get latest published version — never fall back to draft (AF-001)
     latest_version = (
         db.query(Version)
         .filter(
@@ -229,17 +229,24 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
         .first()
     )
 
-    # Fallback: if no published version exists, use latest draft version
     if not latest_version:
-        latest_version = (
-            db.query(Version)
-            .filter(Version.document_id == document_id)
-            .order_by(Version.version_number.desc())
-            .first()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document has no published version",
         )
 
-    # Get attachments
-    attachments = db.query(Attachment).filter(Attachment.document_id == document_id).all()
+    # AF-002: Only include attachments uploaded before the published version's
+    # publish timestamp so new uploads don't leak to public readers.
+    cutoff = latest_version.published_at or latest_version.created_at
+    attachments = (
+        db.query(Attachment)
+        .filter(
+            Attachment.document_id == document_id,
+            Attachment.uploaded_at <= cutoff,
+        )
+        .order_by(Attachment.uploaded_at.desc())
+        .all()
+    )
 
     # Build response
     sharing_policy = LinkSharingPolicySpec.for_document(document).to_dict()

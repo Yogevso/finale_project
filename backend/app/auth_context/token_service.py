@@ -6,7 +6,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
 
 from app.auth_context.contracts import ACCESS_TOKEN_TYPE, AccessTokenContract
 from app.config import settings
@@ -57,6 +58,6 @@ class TokenService:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             return payload
-        except JWTError as err:
+        except PyJWTError as err:
             logger.info("JWT verification failed: %s", type(err).__name__)
             return None

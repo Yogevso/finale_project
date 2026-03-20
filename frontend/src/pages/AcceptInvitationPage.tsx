@@ -105,18 +105,19 @@ export default function AcceptInvitationPage() {
   // No token provided
   if (!token) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
         <div className="surface-card rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-rose-600" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Invalid Link</h1>
-          <p className="text-slate-600 mb-6">
+          <h1 className="section-title mb-2 text-xl">Invalid Link</h1>
+          <p className="body-copy mb-6">
             This invitation link is invalid. Please check your email for the correct link.
           </p>
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="btn-primary"
+            className="btn-primary table-action-btn"
           >
             Go to Login
           </button>
@@ -128,10 +129,10 @@ export default function AcceptInvitationPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-sky-600 animate-spin mx-auto mb-4" />
-          <p className="text-slate-600">Validating invitation...</p>
+          <p className="body-copy">Validating invitation...</p>
         </div>
       </div>
     )
@@ -140,19 +141,20 @@ export default function AcceptInvitationPage() {
   // Invalid or expired invitation
   if (validationError || !invitation?.valid) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
         <div className="surface-card rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-rose-600" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Invitation Invalid</h1>
-          <p className="text-slate-600 mb-6">
+          <h1 className="section-title mb-2 text-xl">Invitation Invalid</h1>
+          <p className="body-copy mb-6">
             This invitation link is invalid or has expired. Please contact the person who
             invited you to request a new invitation.
           </p>
           <button
+            type="button"
             onClick={() => navigate('/login')}
-            className="btn-primary"
+            className="btn-primary table-action-btn"
           >
             Go to Login
           </button>
@@ -162,34 +164,34 @@ export default function AcceptInvitationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-100 flex items-center justify-center p-4">
+    <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-100 flex items-center justify-center p-4">
       <div className="surface-card rounded-2xl shadow-lg w-full max-w-lg">
         {/* Header */}
         <div className="p-6 border-b border-slate-200 text-center">
           <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FileText className="w-8 h-8 text-sky-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Accept Invitation</h1>
-          <p className="text-slate-600 mt-2">
+          <h1 className="page-title">Accept Invitation</h1>
+          <p className="body-copy mt-2">
             You've been invited to join the document management platform
           </p>
         </div>
 
         {/* Invitation Details */}
         <div className="px-6 pt-6">
-          <div className="bg-sky-50 rounded-xl p-4 space-y-3">
+          <div className="surface-muted rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <Mail className="w-5 h-5 text-sky-600" />
               <div>
-                <p className="text-xs text-sky-600 font-medium">Email</p>
-                <p className="text-slate-900">{invitation.email}</p>
+                <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Email</p>
+                <p className="body-copy text-slate-900">{invitation.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <User className="w-5 h-5 text-sky-600" />
               <div>
-                <p className="text-xs text-sky-600 font-medium">Role</p>
-                <p className="text-slate-900 capitalize">
+                <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Role</p>
+                <p className="body-copy text-slate-900 capitalize">
                   {invitation.role?.replace('_', ' ')}
                 </p>
               </div>
@@ -198,8 +200,8 @@ export default function AcceptInvitationPage() {
               <div className="flex items-center gap-3">
                 <Building2 className="w-5 h-5 text-sky-600" />
                 <div>
-                  <p className="text-xs text-sky-600 font-medium">Company</p>
-                  <p className="text-slate-900">{invitation.company_name}</p>
+                  <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Company</p>
+                  <p className="body-copy text-slate-900">{invitation.company_name}</p>
                 </div>
               </div>
             )}
@@ -207,14 +209,14 @@ export default function AcceptInvitationPage() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-sky-600" />
                 <div>
-                  <p className="text-xs text-sky-600 font-medium">Invited by</p>
-                  <p className="text-slate-900">{invitation.inviter_name}</p>
+                  <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Invited by</p>
+                  <p className="body-copy text-slate-900">{invitation.inviter_name}</p>
                 </div>
               </div>
             )}
             {invitation.message && (
               <div className="pt-2 border-t border-sky-200">
-                <p className="text-sm text-slate-700 italic">"{invitation.message}"</p>
+                <p className="body-copy italic">"{invitation.message}"</p>
               </div>
             )}
           </div>
@@ -223,19 +225,20 @@ export default function AcceptInvitationPage() {
         {/* Registration Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-rose-50 text-rose-700 rounded-lg">
+            <div className="alert-danger flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm">{error}</span>
+              <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="accept-invite-username" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
               Username <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
+                id="accept-invite-username"
                 type="text"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -247,12 +250,13 @@ export default function AcceptInvitationPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="accept-invite-full-name" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
               Full Name <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
+                id="accept-invite-full-name"
                 type="text"
                 value={formData.full_name}
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
@@ -264,31 +268,34 @@ export default function AcceptInvitationPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="accept-invite-password" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
               Password <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
+                id="accept-invite-password"
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="Create a password"
                 required
                 minLength={8}
+                aria-describedby="password-hint"
                 className="input-field pl-10"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Must be at least 8 characters</p>
+            <p id="password-hint" className="helper-copy mt-1">Must be at least 8 characters</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="accept-invite-confirm-password" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
               Confirm Password <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
+                id="accept-invite-confirm-password"
                 type="password"
                 value={formData.confirmPassword}
                 onChange={(e) =>
@@ -304,7 +311,7 @@ export default function AcceptInvitationPage() {
           <button
             type="submit"
             disabled={acceptMutation.isPending}
-            className="btn-primary w-full flex items-center justify-center gap-2 py-3"
+            className="btn-primary table-action-btn flex w-full items-center justify-center gap-2 py-3"
           >
             {acceptMutation.isPending ? (
               <>
@@ -322,15 +329,16 @@ export default function AcceptInvitationPage() {
 
         {/* Footer */}
         <div className="px-6 pb-6 text-center">
-          <p className="text-sm text-slate-500">
-            Already have an account?{' '}
+          <p className="body-copy">Already have an account?</p>
+          <div className="mt-3 flex justify-center">
             <button
+              type="button"
               onClick={() => navigate('/login')}
-              className="text-sky-600 hover:text-sky-700 font-medium"
+              className="btn-ghost table-action-btn"
             >
               Sign in
             </button>
-          </p>
+          </div>
         </div>
       </div>
     </div>

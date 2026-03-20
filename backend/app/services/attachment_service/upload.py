@@ -53,6 +53,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB",
             )
+
+        # AG-014: Magic-byte validation for restricted types
+        cls._validate_magic_bytes(content, original_filename, content_type)
+
         checksum_sha256 = hashlib.sha256(content).hexdigest()
 
         # Generate unique filename
@@ -172,6 +176,47 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                 logger.error(f"Failed to convert document to HTML: {e}")
 
         return attachment
+
+    # AG-014: Magic-byte verification for upload validation
+    # Separates "allowed for storage" from "trusted for conversion"
+    MAGIC_BYTES: dict[bytes, set[str]] = {
+        b"PK\x03\x04": {".docx", ".pptx", ".xlsx", ".zip"},  # ZIP-based (OOXML)
+        b"%PDF": {".pdf"},
+    }
+    # Extensions that MUST match magic bytes (restricted types)
+    RESTRICTED_EXTENSIONS: set[str] = {".docx", ".pptx", ".xlsx", ".pdf"}
+
+    @classmethod
+    def _validate_magic_bytes(
+        cls,
+        content: bytes,
+        original_filename: str,
+        content_type: str,
+    ) -> None:
+        """Validate file magic bytes for restricted types.
+
+        Files with restricted extensions must have matching magic bytes.
+        Unknown extensions are allowed through (stored but not trusted for conversion).
+        """
+        ext = Path(original_filename).suffix.lower()
+        if ext not in cls.RESTRICTED_EXTENSIONS:
+            return  # unrestricted extension — accept as-is
+
+        if len(content) < 4:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File too small to be a valid {ext} file",
+            )
+
+        header = content[:4]
+        for magic, allowed_exts in cls.MAGIC_BYTES.items():
+            if header[:len(magic)] == magic and ext in allowed_exts:
+                return  # valid match
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File content does not match expected format for {ext}",
+        )
 
     @staticmethod
     def enqueue_conversion(

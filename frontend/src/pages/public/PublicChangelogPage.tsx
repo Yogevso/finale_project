@@ -1,15 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
+import DOMPurify from 'dompurify'
 import { Calendar, Tag } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import { SEO } from '@/components/SEO'
+import { ListSkeleton } from '@/components/skeletons'
 
 const CATEGORY_COLORS: Record<string, string> = {
-  feature: 'bg-emerald-100 text-emerald-700',
-  bugfix: 'bg-red-100 text-red-700',
-  improvement: 'bg-sky-100 text-sky-700',
+  feature: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200',
+  bugfix: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200',
+  improvement: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200',
 }
 
 export default function PublicChangelogPage() {
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError: changelogError,
+    refetch: refetchChangelog,
+  } = useQuery({
     queryKey: ['changelog', 'public'],
     queryFn: async () => {
       const response = await fetch('/api/v1/changelog?published_only=true&per_page=50')
@@ -19,31 +28,41 @@ export default function PublicChangelogPage() {
   })
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <SEO title="Changelog" description="See the latest updates, features, and fixes to the documentation platform." />
+    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
+      <SEO
+        title="Changelog"
+        description="See the latest updates, features, and fixes to the documentation platform."
+      />
 
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-4xl mx-auto px-6 py-12">
-          <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Platform Updates</div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold">Changelog</h1>
-          <p className="text-sky-100 mt-3">
+        <div className="content-shell max-w-4xl py-12">
+          <div className="mb-3 text-xs uppercase tracking-widest text-sky-200">Platform Updates</div>
+          <h1 className="text-3xl font-display font-bold md:text-4xl">Changelog</h1>
+          <p className="mt-3 text-sky-100">
             Stay up to date with the latest features, improvements, and fixes.
           </p>
         </div>
       </section>
 
-      <section className="max-w-4xl mx-auto px-6 py-12">
+      <section className="content-shell max-w-4xl py-12">
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600" />
-          </div>
+          <ListSkeleton rows={5} />
+        ) : changelogError ? (
+          <ErrorState
+            title="Unable to load the changelog"
+            message="Public release notes could not be loaded right now."
+            onRetry={() => {
+              void refetchChangelog()
+            }}
+          />
         ) : !data?.items?.length ? (
-          <div className="text-center py-12 text-slate-500">
-            <p>No changelog entries yet.</p>
-          </div>
+          <EmptyState
+            title="No changelog entries yet"
+            description="Published release notes will appear here when updates are announced."
+          />
         ) : (
           <div className="relative">
-            <div className="absolute left-4 top-0 bottom-0 w-px bg-slate-200" />
+            <div className="absolute bottom-0 left-4 top-0 w-px bg-slate-200 dark:bg-slate-800" />
             <div className="space-y-8">
               {data.items.map((entry: {
                 id: number
@@ -54,29 +73,38 @@ export default function PublicChangelogPage() {
                 created_at: string
               }) => (
                 <div key={entry.id} className="relative pl-10">
-                  <div className="absolute left-2.5 top-2 w-3 h-3 rounded-full bg-sky-500 border-2 border-white" />
+                  <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full border-2 border-white bg-sky-500 dark:border-slate-900" />
                   <div className="surface-card rounded-2xl p-6">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="helper-copy flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {new Date(entry.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric', month: 'long', day: 'numeric',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
                         })}
                       </span>
-                      {entry.version_tag && (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-mono">
+                      {entry.version_tag ? (
+                        <span className="pill border-slate-200 bg-slate-100 font-mono text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                           {entry.version_tag}
                         </span>
-                      )}
-                      {entry.category && (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CATEGORY_COLORS[entry.category] || 'bg-slate-100 text-slate-600'}`}>
-                          <Tag className="h-3 w-3 inline mr-0.5" />
+                      ) : null}
+                      {entry.category ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            CATEGORY_COLORS[entry.category] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200'
+                          }`}
+                        >
+                          <Tag className="mr-0.5 inline h-3 w-3" />
                           {entry.category}
                         </span>
-                      )}
+                      ) : null}
                     </div>
-                    <h2 className="text-lg font-display font-semibold text-slate-900">{entry.title}</h2>
-                    <div className="mt-2 text-sm text-slate-600 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: entry.content }} />
+                    <h2 className="section-title">{entry.title}</h2>
+                    <div
+                      className="prose prose-sm body-copy mt-2 max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(entry.content) }}
+                    />
                   </div>
                 </div>
               ))}

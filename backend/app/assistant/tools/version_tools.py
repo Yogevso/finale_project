@@ -11,9 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.assistant.rag.chunker import DocumentChunker
 from app.assistant.tools.base import BaseTool
+from app.container import AppContainer
 from app.models import (
-    Document, ReviewRequest, User, Version,
+    AuditLog, ActionType, Document, ReviewRequest, User, UserRole, Version,
 )
+from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +147,8 @@ class PublishDocumentTool(BaseTool):
     name = "publish_document"
     description = (
         "Publish a specific version of a document to make it visible. "
-        "If no version_id is given, publishes the latest draft."
+        "If no version_id is given, publishes the latest draft. "
+        "Requires MANAGER role or above."
     )
     parameters = {
         "type": "object",
@@ -155,7 +158,9 @@ class PublishDocumentTool(BaseTool):
         },
         "required": ["document_id"],
     }
-    required_role = "EDITOR"
+    # AE-001: Publishing requires MANAGER+ (was EDITOR — privilege escalation fix)
+    required_role = "MANAGER"
+    required_permission = Permission.PUBLISH_DOCUMENT
     confirm_before_execute = True
 
     async def execute(
@@ -184,10 +189,26 @@ class PublishDocumentTool(BaseTool):
         if version.is_published:
             return {"success": True, "result": f"Version {version.version_number} is already published."}
 
-        version.is_published = True
-        version.published_at = datetime.utcnow()
-        version.published_by = user.id
-        db.commit()
+        # AE-001: Route through PublishApprovedVersionCommandHandler (same pipeline
+        # the API uses) — enforces review approval status, state machine checks,
+        # and PUBLISH_DOCUMENT permission.  Replaces direct is_published = True.
+        from app.application.commands.version_commands import (
+            PublishApprovedVersionCommand,
+            PublishApprovedVersionCommandErrorCode,
+        )
+
+        container = AppContainer()
+        handler = container.publish_approved_version_command_handler(db)
+        command = PublishApprovedVersionCommand(
+            document_id=doc_id,
+            version_id=version_id,
+            current_user=user,
+        )
+        result = handler.execute(command)
+        if result.is_err:
+            err = result.error
+            return {"success": False, "result": "", "error": err.message}
+
         return {"success": True, "result": f"Version {version.version_number} of '{doc.title}' has been published."}
 
 

@@ -10,6 +10,7 @@ import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
 import NpsWidget from '@/components/NpsWidget'
 import AssistantChatBubble from '@/components/AssistantChatBubble'
+import { SkipNavLink } from '@/components/a11y/SkipNavLink'
 
 export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -26,6 +27,7 @@ export default function CustomerLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+      <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
       <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
@@ -46,6 +48,8 @@ export default function CustomerLayout() {
             <button
               className="md:hidden p-2 rounded-lg hover:bg-slate-100"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6 text-slate-600" />
@@ -88,7 +92,7 @@ export default function CustomerLayout() {
               <input
                 type="search"
                 placeholder="Search documents..."
-                className="input-field pl-9 w-64 bg-white"
+                className="input-field pl-9 w-48 lg:w-64 bg-white"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const query = (e.target as HTMLInputElement).value
@@ -169,7 +173,7 @@ export default function CustomerLayout() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <Outlet />
         </div>
@@ -177,14 +181,23 @@ export default function CustomerLayout() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white/85 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
-          <p>Customer Portal</p>
-          <p className="text-xs mt-1">(c) {new Date().getFullYear()} Developer Portal</p>
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+            <p>Customer Portal</p>
+            <nav className="flex items-center gap-4" aria-label="Footer">
+              <Link to="/portal/support" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Support</Link>
+              <Link to="/portal/documents" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Documents</Link>
+              <span className="text-slate-300">|</span>
+              <span className="text-xs">&copy; {new Date().getFullYear()} Developer Portal</span>
+            </nav>
+          </div>
         </div>
       </footer>
 
       {/* NPS Feedback Widget (Y2-019) */}
-      <NpsWidget />
+      <div className="z-30">
+        <NpsWidget />
+      </div>
 
       {/* AI Assistant Chat Bubble */}
       <AssistantChatBubble />
@@ -193,7 +206,7 @@ export default function CustomerLayout() {
       {!isFullscreen && (
         <Link
           to="/portal/support"
-          className="fixed bottom-6 right-20 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
+          className="fixed bottom-6 right-20 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
           title="Need help? Contact support"
         >
           <HelpCircle className="h-6 w-6" />

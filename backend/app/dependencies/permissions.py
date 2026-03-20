@@ -338,10 +338,14 @@ def get_optional_current_user():
         ):
             ...
     """
-    from app.security import oauth2_scheme
+    from fastapi.security import OAuth2PasswordBearer as _OAuth2PB
+
+    # AD-012: use a separate scheme with auto_error=False so that missing
+    # tokens yield None instead of raising 401.
+    _optional_oauth2 = _OAuth2PB(tokenUrl="token", auto_error=False)
 
     async def dependency(
-        token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)
+        token: Optional[str] = Depends(_optional_oauth2), db: Session = Depends(get_db)
     ) -> Optional[User]:
         if not token:
             return None
@@ -362,7 +366,7 @@ def get_optional_current_user():
                 return user
             return None
         except Exception:
-            logger.warning("Token validation failed for optional auth", exc_info=True)
+            LOGGER.warning("Token validation failed for optional auth", exc_info=True)
             return None
 
     return dependency

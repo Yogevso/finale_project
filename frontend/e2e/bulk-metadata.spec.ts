@@ -17,7 +17,7 @@ test('bulk metadata edit updates category for three selected documents', async (
   await loginByApi(page, MANAGER, /\/(dashboard|documents)/, '/dashboard')
   await page.goto('/documents')
 
-  await page.getByPlaceholder('Search documents...').fill(seedPrefix)
+  await page.locator('input[data-tour="documents-search-bar"]').fill(seedPrefix)
 
   for (const documentRecord of seededDocuments) {
     await page.getByRole('checkbox', { name: `Select ${documentRecord.title}` }).check()

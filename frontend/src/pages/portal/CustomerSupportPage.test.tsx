@@ -13,6 +13,13 @@ import type {
   SupportTicketListResponse,
 } from '@/types/chat'
 
+// Mock auth (needed by optimistic update in CustomerTicketView)
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({
+    user: { id: 5, full_name: 'Jane Doe', role: 'customer' },
+  }),
+}))
+
 // Mock API
 const mockGetMyTickets = vi.fn()
 const mockGetMyTicket = vi.fn()

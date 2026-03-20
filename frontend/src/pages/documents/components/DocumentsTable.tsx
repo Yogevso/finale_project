@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+import { FileQuestion } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 import VisibilityBadge from '@/components/VisibilityBadge'
@@ -49,7 +51,10 @@ export function DocumentsTable({
   return (
     <div className="admin-table-shell">
       <div className="admin-table-scroll">
-        <table className="admin-table">
+        <table className="admin-table" aria-label="Documents list">
+          <caption className="sr-only">
+            Documents list showing title, status, visibility, category, and document actions.
+          </caption>
           <thead className="admin-table-head">
             <tr>
               {isManager ? (
@@ -84,12 +89,19 @@ export function DocumentsTable({
             ) : data?.items.length === 0 ? (
               <tr className="admin-table-row">
                 <td colSpan={isManager ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
-                  No documents found
+                  <div className="flex flex-col items-center gap-2">
+                    <FileQuestion className="w-8 h-8 text-slate-300" />
+                    <span>No documents found</span>
+                  </div>
                 </td>
               </tr>
             ) : (
-              data?.items.map((doc) => (
-                <tr key={doc.id} className="admin-table-row">
+              data?.items.map((doc, index) => (
+                <tr
+                  key={doc.id}
+                  className="admin-table-row motion-enter-fade"
+                  style={{ '--enter-delay': `${Math.min(index, 6) * 25}ms` } as CSSProperties}
+                >
                   {isManager ? (
                     <td className="admin-table-cell w-12">
                       <input
@@ -100,10 +112,10 @@ export function DocumentsTable({
                       />
                     </td>
                   ) : null}
-                  <td className="admin-table-cell w-[36%]">
+                  <th scope="row" className="admin-table-cell w-[36%]">
                     <div className="flex items-start justify-between gap-3">
-                      <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700">
-                        <div className="font-medium text-slate-900">{doc.title}</div>
+                      <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700 min-w-0">
+                        <div className="font-medium text-slate-900 truncate max-w-[300px]" title={doc.title}>{doc.title}</div>
                         <div className="text-sm text-slate-500">{doc.document_number}</div>
                         {doc.due_date ? (
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -116,9 +128,9 @@ export function DocumentsTable({
                           </div>
                         ) : null}
                       </Link>
-                      <BookmarkToggleButton documentId={doc.id} showLabel={false} />
+                      <BookmarkToggleButton documentId={doc.id} documentTitle={doc.title} showLabel={false} />
                     </div>
-                  </td>
+                  </th>
                   <td className="admin-table-cell w-[14%]">
                     <span
                       className={`pill whitespace-nowrap ${
@@ -147,6 +159,7 @@ export function DocumentsTable({
                         <div className="space-y-1.5">
                           <select
                             value={effectiveVisibility}
+                            aria-label={`Visibility for ${doc.title}`}
                             onChange={(event) =>
                               onVisibilityChange({
                                 id: doc.id,
@@ -184,7 +197,9 @@ export function DocumentsTable({
                     {isManager ? (
                       <div className="flex items-center justify-end gap-3">
                         <button
+                          type="button"
                           onClick={() => onArchiveOrRestore(doc.id, doc.title, doc.status)}
+                          aria-label={`${doc.status === 'archived' ? 'Restore' : 'Archive'} ${doc.title}`}
                           className={`text-xs font-semibold uppercase tracking-wide ${
                             doc.status === 'archived'
                               ? 'text-emerald-600 hover:text-emerald-700'
@@ -194,7 +209,9 @@ export function DocumentsTable({
                           {doc.status === 'archived' ? 'Restore' : 'Archive'}
                         </button>
                         <button
+                          type="button"
                           onClick={() => onDelete(doc.id, doc.title)}
+                          aria-label={`Delete ${doc.title}`}
                           className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
                         >
                           Delete
@@ -211,10 +228,10 @@ export function DocumentsTable({
         </table>
       </div>
 
-      {data && data.pages > 1 ? (
+      {data && data.total_pages > 1 ? (
         <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
-          <div className="text-sm text-slate-500">
-            Page {data.page} of {data.pages} ({data.total} total)
+          <div className="text-base text-slate-600 font-medium">
+            Page {data.page} of {data.total_pages} <span className="text-sm font-normal text-slate-400">({data.total} total)</span>
           </div>
           <div className="flex gap-2">
             <button
@@ -225,8 +242,8 @@ export function DocumentsTable({
               Previous
             </button>
             <button
-              onClick={() => onPageChange(Math.min(data.pages, page + 1))}
-              disabled={page === data.pages}
+              onClick={() => onPageChange(Math.min(data.total_pages, page + 1))}
+              disabled={page === data.total_pages}
               className="btn-ghost disabled:opacity-50"
             >
               Next

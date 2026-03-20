@@ -6,7 +6,7 @@
  * Persists open/closed state in localStorage.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Clock,
@@ -19,11 +19,12 @@ import {
 } from 'lucide-react'
 import assistantApi from '@/lib/api/assistantApi'
 import { useAssistantChat } from '@/features/assistant/useAssistantChat'
-import AssistantMessageList from '@/features/assistant/AssistantMessageList'
+import AssistantMessageListFallback from '@/features/assistant/AssistantMessageListFallback'
 import AssistantInput from '@/features/assistant/AssistantInput'
 import type { AssistantConversation } from '@/types/assistant'
 
 const LS_KEY = 'assistant-bubble-state'
+const AssistantMessageList = lazy(() => import('@/features/assistant/AssistantMessageList'))
 
 type BubbleState = 'collapsed' | 'expanded' | 'minimized'
 
@@ -65,7 +66,7 @@ export default function AssistantChatBubble() {
     (text: string, documentIds?: number[]) => {
       chat.sendMessage(text, documentIds)
     },
-    [chat.sendMessage],
+    [chat],
   )
 
   // ── Collapsed: floating button ────────────────────────────────
@@ -188,17 +189,19 @@ export default function AssistantChatBubble() {
       </div>
 
       {/* Messages */}
-      <AssistantMessageList
-        messages={chat.messages}
-        streamingText={chat.currentStreamText}
-        isLoading={chat.isLoading}
-        isStreaming={chat.isStreaming}
-        thinkingStatus={chat.thinkingStatus}
-        activeToolCalls={chat.activeToolCalls}
-        toolResults={chat.toolResults}
-        onRegenerate={chat.regenerateLastResponse}
-        onEditMessage={(idx, content) => chat.editAndResend(idx, content)}
-      />
+      <Suspense fallback={<AssistantMessageListFallback className="min-h-0" />}>
+        <AssistantMessageList
+          messages={chat.messages}
+          streamingText={chat.currentStreamText}
+          isLoading={chat.isLoading}
+          isStreaming={chat.isStreaming}
+          thinkingStatus={chat.thinkingStatus}
+          activeToolCalls={chat.activeToolCalls}
+          toolResults={chat.toolResults}
+          onRegenerate={chat.regenerateLastResponse}
+          onEditMessage={(idx, content) => chat.editAndResend(idx, content)}
+        />
+      </Suspense>
 
       {/* Error */}
       {chat.error && (

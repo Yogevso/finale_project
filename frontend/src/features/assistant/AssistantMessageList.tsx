@@ -5,7 +5,7 @@
  * text, and inline tool-call cards — both live and historical.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -68,7 +68,14 @@ export default function AssistantMessageList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+    <div
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-busy={isLoading || isStreaming}
+      aria-label="Assistant conversation"
+      className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+    >
       {messages.map((msg, i) => {
         // Skip tool messages — they're shown inline with their parent
         if (msg.role === 'tool') return null
@@ -76,8 +83,12 @@ export default function AssistantMessageList({
         // For assistant messages with tool_calls, render the tool call indicators
         if (msg.role === 'assistant' && msg.tool_calls?.length) {
           return (
-            <div key={i} className="space-y-2">
-              {msg.content && <MessageBubble message={msg} index={i} onEditMessage={onEditMessage} />}
+            <div
+              key={i}
+              className="motion-enter-fade space-y-2"
+              style={{ '--enter-delay': `${Math.min(i, 6) * 30}ms` } as CSSProperties}
+            >
+              {msg.content && <MessageBubble message={msg} index={i} onEditMessage={onEditMessage} animationDelayMs={Math.min(i, 6) * 30} />}
               {msg.tool_calls.map(tc => {
                 const toolMsg = toolMessageMap.get(tc.id)
                 const histResult: ToolResult | undefined = toolMsg
@@ -101,7 +112,7 @@ export default function AssistantMessageList({
           )
         }
 
-        return <MessageBubble key={i} message={msg} index={i} onEditMessage={onEditMessage} />
+        return <MessageBubble key={i} message={msg} index={i} onEditMessage={onEditMessage} animationDelayMs={Math.min(i, 6) * 30} />
       })}
 
       {/* Active tool calls (executing right now) */}
@@ -112,7 +123,7 @@ export default function AssistantMessageList({
       {/* Streaming assistant reply — shown whenever there's text to display,
           cursor only pulses while actively receiving tokens */}
       {streamingText && (
-        <div className="flex items-start gap-3">
+        <div className="motion-enter-fade flex items-start gap-3">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
             <Bot className="h-4 w-4" />
           </div>
@@ -125,16 +136,28 @@ export default function AssistantMessageList({
 
       {/* Thinking indicator — shown during LLM processing and between tool iterations */}
       {isLoading && !isStreaming && (thinkingStatus || activeToolCalls.length === 0) && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm pl-10">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{thinkingStatus || 'Thinking…'}</span>
+        <div className="motion-enter-fade flex items-start gap-3">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+            <Bot className="h-4 w-4" />
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300">
+              <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+              <span>{thinkingStatus || 'Preparing a response…'}</span>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-300 [animation-delay:-200ms]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:-100ms]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+            </div>
+          </div>
         </div>
       )}
 
       {/* Regenerate button on last assistant message (only when idle) */}
       {!isLoading && !isStreaming && !streamingText && messages.length > 0 &&
         messages.filter(m => m.role !== 'tool').pop()?.role === 'assistant' && onRegenerate && (
-        <div className="flex pl-10">
+        <div className="motion-enter-fade flex pl-10">
           <button
             onClick={onRegenerate}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors px-2 py-1 rounded hover:bg-slate-100"
@@ -152,8 +175,19 @@ export default function AssistantMessageList({
 
 // ── Individual message bubble ────────────────────────────────────
 
-function MessageBubble({ message, index, onEditMessage }: { message: AssistantMessage; index: number; onEditMessage?: (index: number, content: string) => void }) {
+function MessageBubble({
+  message,
+  index,
+  onEditMessage,
+  animationDelayMs = 0,
+}: {
+  message: AssistantMessage
+  index: number
+  onEditMessage?: (index: number, content: string) => void
+  animationDelayMs?: number
+}) {
   const [copied, setCopied] = useState(false)
+  const motionStyle = { '--enter-delay': `${animationDelayMs}ms` } as CSSProperties
 
   const handleCopyMessage = () => {
     if (!message.content) return
@@ -164,7 +198,7 @@ function MessageBubble({ message, index, onEditMessage }: { message: AssistantMe
 
   if (message.role === 'user') {
     return (
-      <div className="group flex items-start gap-3 justify-end">
+      <div className="motion-enter-fade group flex items-start justify-end gap-3" style={motionStyle}>
         <div className="flex flex-col items-end">
           <div className="rounded-xl bg-sky-600 text-white px-4 py-2.5 max-w-[80%] shadow-sm">
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -176,6 +210,7 @@ function MessageBubble({ message, index, onEditMessage }: { message: AssistantMe
                 onClick={() => onEditMessage(index, message.content || '')}
                 className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-600"
                 title="Edit & resend"
+                aria-label="Edit and resend message"
               >
                 <Pencil className="h-3 w-3" />
               </button>
@@ -194,7 +229,7 @@ function MessageBubble({ message, index, onEditMessage }: { message: AssistantMe
 
   if (message.role === 'assistant' && message.content) {
     return (
-      <div className="group flex items-start gap-3">
+      <div className="motion-enter-fade group flex items-start gap-3" style={motionStyle}>
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
           <Bot className="h-4 w-4" />
         </div>
@@ -203,8 +238,9 @@ function MessageBubble({ message, index, onEditMessage }: { message: AssistantMe
             <button
               type="button"
               onClick={handleCopyMessage}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 flex items-center gap-1 z-10"
+              className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-600 opacity-0 transition-opacity hover:bg-slate-100 group-hover:opacity-100 ${copied ? 'motion-enter-scale' : ''}`}
               title="Copy message"
+              aria-label={copied ? 'Message copied' : 'Copy message'}
             >
               {copied ? <><Check className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
             </button>
@@ -251,8 +287,10 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   return (
     <div className="relative group">
       <button
+        type="button"
         onClick={handleCopy}
-        className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 flex items-center gap-1"
+        className={`absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-600 opacity-0 transition-opacity hover:bg-slate-100 group-hover:opacity-100 ${copied ? 'motion-enter-scale' : ''}`}
+        aria-label={copied ? 'Code copied' : 'Copy code block'}
       >
         {copied ? <><Check className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
       </button>

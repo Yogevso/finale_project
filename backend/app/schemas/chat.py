@@ -36,6 +36,7 @@ class ChatMessageResponse(BaseModel):
     sender_id: int
     content: str
     message_type: ChatMessageType
+    context_json: Optional[str] = None  # AH-009: context card metadata
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     file_size: Optional[int] = None
@@ -51,6 +52,7 @@ class ChatResponse(BaseModel):
     id: int
     type: ChatType
     name: Optional[str] = None
+    document_id: Optional[int] = None  # AH-008: document-scoped chat
     created_by: int
     tenant_id: int
     last_message_at: Optional[datetime] = None
@@ -88,6 +90,13 @@ class CreateGroupChatRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=10000)
+    context_json: Optional[str] = Field(None, max_length=5000, description="AH-009: context card metadata (document title, section, anchor, comment type)")
+
+
+class CreateDocumentChatRequest(BaseModel):
+    """AH-008: Create or return existing chat scoped to a document."""
+    document_id: int = Field(..., description="Document to scope the chat to")
+    participant_ids: List[int] = Field(default_factory=list, description="Extra user IDs to include (authors auto-added)")
 
 
 class AddParticipantRequest(BaseModel):

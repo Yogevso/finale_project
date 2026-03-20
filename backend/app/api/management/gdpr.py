@@ -15,7 +15,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context, require_system_admin
@@ -204,10 +204,16 @@ def list_data_requests(
     db: Session = Depends(get_db),
 ):
     """List all GDPR data requests (admin view)."""
-    requests = db.query(DataRequest).order_by(DataRequest.requested_at.desc()).limit(100).all()
+    requests = (
+        db.query(DataRequest)
+        .options(joinedload(DataRequest.user))
+        .order_by(DataRequest.requested_at.desc())
+        .limit(100)
+        .all()
+    )
     result = []
     for r in requests:
-        user = db.query(User).filter(User.id == r.user_id).first()
+        user = r.user
         result.append(
             DataRequestListItem(
                 id=r.id,

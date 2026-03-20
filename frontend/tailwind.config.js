@@ -12,6 +12,27 @@ export default {
         body: ['var(--font-body)'],
       },
       colors: {
+        primary: {
+          DEFAULT: '#0369a1',
+          hover: '#075985',
+          light: '#e0f2fe',
+        },
+        success: {
+          DEFAULT: '#059669',
+          light: '#d1fae5',
+        },
+        warning: {
+          DEFAULT: '#d97706',
+          light: '#fef3c7',
+        },
+        danger: {
+          DEFAULT: '#dc2626',
+          light: '#fee2e2',
+        },
+        info: {
+          DEFAULT: '#0284c7',
+          light: '#e0f2fe',
+        },
         slate: {
           50: '#f8fafc',
           100: '#f1f5f9',
@@ -61,10 +82,44 @@ export default {
         '2xl': '1rem',
         '3xl': '1.5rem',
       },
+      spacing: {
+        '4.5': '1.125rem',
+        '18': '4.5rem',
+      },
       boxShadow: {
         'surface': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
         'surface-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-      }
+      },
+      keyframes: {
+        slideIn: {
+          '0%': { opacity: 0, transform: 'translateY(-8px)' },
+          '100%': { opacity: 1, transform: 'translateY(0)' },
+        },
+        slideOut: {
+          '0%': { opacity: 1, transform: 'translateY(0)' },
+          '100%': { opacity: 0, transform: 'translateY(-8px)' },
+        },
+        fadeIn: {
+          '0%': { opacity: 0 },
+          '100%': { opacity: 1 },
+        },
+        scaleIn: {
+          '0%': { opacity: 0, transform: 'scale(0.95)' },
+          '100%': { opacity: 1, transform: 'scale(1)' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '25%': { transform: 'translateX(-4px)' },
+          '75%': { transform: 'translateX(4px)' },
+        },
+      },
+      animation: {
+        'slide-in': 'slideIn 150ms ease-out',
+        'slide-out': 'slideOut 100ms ease-in',
+        'fade-in': 'fadeIn 150ms ease-out',
+        'scale-in': 'scaleIn 150ms ease-out',
+        shake: 'shake 300ms ease-in-out',
+      },
     },
   },
   plugins: [],

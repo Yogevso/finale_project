@@ -62,19 +62,25 @@ export function DocumentHeaderCard({
   onArchive,
   onRestore,
 }: DocumentHeaderCardProps) {
+  const headerActionClassName =
+    'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20'
+  const headerStatusClassName =
+    'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 text-white/90'
+
   return (
-    <div className="document-detail-header-card rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg overflow-hidden">
-      <div className="px-6 py-5 md:px-8 md:py-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div className="document-detail-header-card overflow-hidden rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg">
+      <div className="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-start md:justify-between md:px-8 md:py-6">
         <div>
           <button
+            type="button"
             onClick={onBackToDocuments}
-            className="inline-flex items-center gap-2 text-sm text-sky-100/80 hover:text-white mb-2"
+            className="helper-copy mb-2 inline-flex items-center gap-2 text-sky-100/80 hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Documents
           </button>
-          <h1 className="text-2xl md:text-3xl font-display font-bold">{documentTitle}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-sky-100/80">
+          <h1 className="page-title md:text-3xl !text-white">{documentTitle}</h1>
+          <p className="helper-copy mt-1 flex flex-wrap items-center gap-2 text-sky-100/80">
             <span>{documentNumber}</span>
             {readingTimeMinutes ? (
               <>
@@ -108,8 +114,9 @@ export function DocumentHeaderCard({
 
         <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             onClick={onPrint}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+            className={headerActionClassName}
             title="Print document"
           >
             <Printer className="w-4 h-4" />
@@ -118,8 +125,9 @@ export function DocumentHeaderCard({
 
           {dueDate && onExportCalendar ? (
             <button
+              type="button"
               onClick={onExportCalendar}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+              className={headerActionClassName}
               title="Export due date as iCal"
             >
               <CalendarDays className="w-4 h-4" />
@@ -129,8 +137,9 @@ export function DocumentHeaderCard({
 
           {!isFullscreen ? (
             <button
+              type="button"
               onClick={onEnterFullscreen}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+              className={headerActionClassName}
               title="Toggle fullscreen (F)"
             >
               <Maximize2 className="w-4 h-4" />
@@ -138,8 +147,9 @@ export function DocumentHeaderCard({
             </button>
           ) : (
             <button
+              type="button"
               onClick={onExitFullscreen}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+              className={headerActionClassName}
               title="Toggle fullscreen (F)"
             >
               <Minimize2 className="w-4 h-4" />
@@ -147,33 +157,31 @@ export function DocumentHeaderCard({
             </button>
           )}
 
-          {isEditor && (
+          {isEditor ? (
             <>
-              {documentStatus === 'draft' && (
+              {documentStatus === 'draft' ? (
                 <button
+                  type="button"
                   onClick={onOpenSubmitReview}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-sky-900 hover:bg-slate-100 transition-colors"
+                  className="btn-secondary table-action-btn border-white/60 bg-white text-sky-900 hover:border-white hover:bg-slate-100"
                 >
                   <Send className="w-4 h-4" />
                   Submit for Review
                 </button>
-              )}
-              {documentStatus === 'pending_review' && (
-                <span className="flex items-center gap-2 px-4 py-2 bg-amber-200/30 text-amber-100 rounded-lg">
+              ) : null}
+              {documentStatus === 'pending_review' ? (
+                <span className={headerStatusClassName}>
                   <Clock className="w-4 h-4" />
                   Pending Review
                 </span>
-              )}
-              {documentStatus === 'approved' && (
-                <span className="flex items-center gap-2 px-4 py-2 bg-sky-200/30 text-sky-100 rounded-lg">
+              ) : null}
+              {documentStatus === 'approved' ? (
+                <span className={headerStatusClassName}>
                   <CheckCircle className="w-4 h-4" />
                   Approved (Ready to Publish)
                 </span>
-              )}
-              <button
-                onClick={onEditAction}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
-              >
+              ) : null}
+              <button type="button" onClick={onEditAction} className={headerActionClassName}>
                 {activeTab === 'details'
                   ? isEditing
                     ? 'Cancel Details'
@@ -181,8 +189,9 @@ export function DocumentHeaderCard({
                   : 'Edit Content'}
               </button>
               <button
+                type="button"
                 onClick={documentStatus === 'archived' ? onRestore : onArchive}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 transition-colors text-white"
+                className={headerActionClassName}
               >
                 {documentStatus === 'archived' ? (
                   <>
@@ -197,7 +206,7 @@ export function DocumentHeaderCard({
                 )}
               </button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

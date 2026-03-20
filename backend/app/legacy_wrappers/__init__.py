@@ -1,4 +1,15 @@
-"""Legacy strangler wrappers public API."""
+"""Legacy strangler wrappers public API.
+
+AF-013: These wrappers are *active* migration boundaries. They track
+usage of legacy utility modules while new implementations are built
+inside ``app.conversion`` / ``app.services``. Each wrapper records
+call counts so we know when usage reaches zero and the legacy module
+can be deleted.
+
+Current migration status:
+  - document_converter: 0% (target: app.conversion pipeline)
+  - analytics: tracked via wrapper
+"""
 
 from app.legacy_wrappers.analytics import AnalyticsServiceStranglerWrapper
 from app.legacy_wrappers.document_converter import (

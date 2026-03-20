@@ -93,7 +93,8 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const token = localStorage.getItem('token')
+      // AD-004: get token from in-memory API client
+      const token = api.getToken()
       const res = await fetch(`${API_BASE_URL}/assistant/upload`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},

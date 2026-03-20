@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatWsEvent } from '@/types/chat'
+import { api } from '@/lib/api'
 
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
 
@@ -18,29 +19,43 @@ export interface UseChatSocketOptions {
 
 export interface UseChatSocketReturn {
   isConnected: boolean
+  connectionFailures: number
   sendMessage: (chatId: number, content: string) => void
   sendTyping: (chatId: number) => void
   markRead: (chatId: number) => void
   joinChat: (chatId: number) => void
 }
 
+// Exponential backoff: 3s → 6s → 12s → 30s → cap 60s
+const RECONNECT_BASE_MS = 3000
+const RECONNECT_CAP_MS = 60000
+
+function nextBackoff(attempt: number): number {
+  return Math.min(RECONNECT_BASE_MS * Math.pow(2, attempt), RECONNECT_CAP_MS)
+}
+
 export function useChatSocket(options: UseChatSocketOptions = {}): UseChatSocketReturn {
   const { enabled = true, onNewMessage, onUserTyping, onMessageRead } = options
   const [isConnected, setIsConnected] = useState(false)
+  const [connectionFailures, setConnectionFailures] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const attemptRef = useRef(0)
 
   const callbacksRef = useRef({ onNewMessage, onUserTyping, onMessageRead })
   callbacksRef.current = { onNewMessage, onUserTyping, onMessageRead }
 
   const connect = useCallback(() => {
-    const token = localStorage.getItem('token')
+    // AD-004: get token from in-memory API client, not localStorage
+    const token = api.getToken()
     if (!token || !enabled) return
 
     const ws = new WebSocket(`${WS_BASE_URL}/ws/chat?token=${encodeURIComponent(token)}`)
 
     ws.onopen = () => {
       setIsConnected(true)
+      attemptRef.current = 0
+      setConnectionFailures(0)
     }
 
     ws.onmessage = (event) => {
@@ -69,8 +84,11 @@ export function useChatSocket(options: UseChatSocketOptions = {}): UseChatSocket
     ws.onclose = () => {
       setIsConnected(false)
       wsRef.current = null
-      // Auto-reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 3000)
+      // Exponential backoff reconnection
+      const delay = nextBackoff(attemptRef.current)
+      attemptRef.current += 1
+      setConnectionFailures(attemptRef.current)
+      reconnectTimeoutRef.current = setTimeout(connect, delay)
     }
 
     ws.onerror = () => {
@@ -96,6 +114,7 @@ export function useChatSocket(options: UseChatSocketOptions = {}): UseChatSocket
 
   return {
     isConnected,
+    connectionFailures,
     sendMessage: useCallback((chatId: number, content: string) => send('send_message', { chat_id: chatId, content }), [send]),
     sendTyping: useCallback((chatId: number) => send('typing', { chat_id: chatId }), [send]),
     markRead: useCallback((chatId: number) => send('mark_read', { chat_id: chatId }), [send]),

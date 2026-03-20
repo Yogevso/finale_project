@@ -1,3 +1,5 @@
+import OptimizedImage from '@/components/OptimizedImage'
+
 interface LeaderboardItem {
   rank: number
   name: string
@@ -87,10 +89,13 @@ export function LeaderboardTable({
                 <td className="py-3">
                   <div className="flex items-center gap-3">
                     {item.imageUrl && (
-                      <img
+                      <OptimizedImage
                         src={item.imageUrl}
                         alt=""
                         className="w-8 h-8 rounded-full object-cover"
+                        height={32}
+                        sizes="32px"
+                        width={32}
                       />
                     )}
                     <div>

@@ -2,12 +2,13 @@
  * NewChatModal — create direct or group chat (X1-036 to X1-038)
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Search, Users, User as UserIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { User } from '@/types'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface NewChatModalProps {
   onClose: () => void
@@ -17,6 +18,8 @@ interface NewChatModalProps {
 export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const { containerRef } = useFocusTrap(onClose)
+  const titleId = useId()
   const [tab, setTab] = useState<'direct' | 'group'>('direct')
   const [search, setSearch] = useState('')
   const [groupName, setGroupName] = useState('')
@@ -55,12 +58,26 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
   const isPending = createDirect.isPending || createGroup.isPending
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+    <div className="modal-overlay flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close new conversation dialog"
+        tabIndex={-1}
+      />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="modal-content motion-enter-scale relative w-full max-w-md dark:bg-slate-900"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">New Conversation</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-slate-800">
+          <h2 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-slate-100">New Conversation</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-200" aria-label="Close new conversation dialog">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -68,9 +85,10 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
           <button
+            type="button"
             className={`flex-1 py-2.5 text-sm font-medium ${
               tab === 'direct'
-                ? 'border-b-2 border-blue-600 text-blue-600'
+                ? 'border-b-2 border-sky-600 text-sky-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => { setTab('direct'); setSelectedIds([]) }}
@@ -79,9 +97,10 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
             Direct
           </button>
           <button
+            type="button"
             className={`flex-1 py-2.5 text-sm font-medium ${
               tab === 'group'
-                ? 'border-b-2 border-blue-600 text-blue-600'
+                ? 'border-b-2 border-sky-600 text-sky-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => { setTab('group'); setSelectedIds([]) }}
@@ -99,7 +118,8 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
               placeholder="Group name"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+              aria-label="Group name"
             />
           </div>
         )}
@@ -113,7 +133,8 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
               placeholder="Search users..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
+              aria-label="Search users"
             />
           </div>
         </div>
@@ -128,6 +149,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
             filteredUsers.map((u: User) => (
               <button
                 key={u.id}
+                type="button"
                 onClick={() => {
                   if (tab === 'direct') {
                     createDirect.mutate(u.id)
@@ -137,7 +159,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
                 }}
                 disabled={tab === 'direct' && isPending}
                 className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${
-                  selectedIds.includes(u.id) ? 'bg-blue-50' : ''
+                  selectedIds.includes(u.id) ? 'bg-sky-50' : ''
                 }`}
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600">
@@ -148,7 +170,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
                   <p className="truncate text-xs text-gray-500">{u.email}</p>
                 </div>
                 {tab === 'group' && selectedIds.includes(u.id) && (
-                  <div className="h-5 w-5 rounded-full bg-blue-600 text-center text-xs leading-5 text-white">✓</div>
+                  <div className="h-5 w-5 rounded-full bg-sky-600 text-center text-xs leading-5 text-white">✓</div>
                 )}
               </button>
             ))
@@ -159,9 +181,10 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
         {tab === 'group' && (
           <div className="border-t border-gray-200 px-6 py-4">
             <button
+              type="button"
               onClick={() => createGroup.mutate()}
               disabled={isPending || selectedIds.length < 1 || !groupName.trim()}
-              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="btn-primary w-full disabled:opacity-50"
             >
               {isPending ? 'Creating...' : `Create Group (${selectedIds.length} selected)`}
             </button>

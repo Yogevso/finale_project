@@ -19,7 +19,10 @@ import {
   X,
 } from 'lucide-react'
 
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
+import { CardSkeleton } from '@/components/skeletons'
 
 import { portalApi } from '../../lib/portalApi'
 import type { FacetItem } from '../../lib/portalApi'
@@ -43,7 +46,12 @@ export default function CustomerDocumentsPage() {
   }
 
   // Fetch documents with all filters
-  const { data: documents, isLoading } = useQuery({
+  const {
+    data: documents,
+    isLoading,
+    isError: isDocumentsError,
+    refetch: refetchDocuments,
+  } = useQuery({
     queryKey: ['portal', 'documents', { page, category, topic, platform, dateFrom, dateTo, search }],
     queryFn: () =>
       portalApi.getDocuments({
@@ -100,7 +108,7 @@ export default function CustomerDocumentsPage() {
   const hasActiveFilters = !!(category || topic || platform || dateFrom || dateTo || search)
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         eyebrow="Customer Portal"
         title="Documents"
@@ -113,7 +121,7 @@ export default function CustomerDocumentsPage() {
           {/* Search */}
           <div className="surface-card rounded-2xl p-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="search"
                 name="search"
@@ -127,8 +135,9 @@ export default function CustomerDocumentsPage() {
 
           {hasActiveFilters && (
             <button
+              type="button"
               onClick={clearAllFilters}
-              className="w-full text-sm text-sky-600 hover:text-sky-700 font-medium flex items-center justify-center gap-1"
+            className="body-copy flex w-full items-center justify-center gap-1 font-medium text-sky-600 hover:text-sky-700"
             >
               <X className="h-3.5 w-3.5" />
               Clear all filters
@@ -164,20 +173,22 @@ export default function CustomerDocumentsPage() {
 
           {/* Date Range */}
           <div className="surface-card rounded-2xl p-4">
-            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
+            <h3 className="card-title mb-3 flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Date Range
             </h3>
             <div className="space-y-2">
-              <label className="block text-xs text-slate-500">From</label>
+              <label htmlFor="customer-docs-date-from" className="helper-copy block">From</label>
               <input
+                id="customer-docs-date-from"
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setFilter('date_from', e.target.value || null)}
                 className="input-field text-sm"
               />
-              <label className="block text-xs text-slate-500">To</label>
+              <label htmlFor="customer-docs-date-to" className="helper-copy block">To</label>
               <input
+                id="customer-docs-date-to"
                 type="date"
                 value={dateTo}
                 onChange={(e) => setFilter('date_to', e.target.value || null)}
@@ -193,7 +204,7 @@ export default function CustomerDocumentsPage() {
           <div className="lg:hidden surface-card rounded-2xl p-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="search"
                   name="search"
@@ -240,16 +251,28 @@ export default function CustomerDocumentsPage() {
                 <FilterPill label={`"${search}"`} onRemove={() => handleSearchChange('')} />
               )}
             </div>
-            <div className="flex border border-slate-200 rounded-xl overflow-hidden">
+            <div className="flex overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
               <button
+                type="button"
                 onClick={() => setViewMode('grid')}
-                className={`p-2 ${viewMode === 'grid' ? 'bg-sky-100 text-sky-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`p-2 ${
+                  viewMode === 'grid'
+                    ? 'bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-200'
+                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                }`}
+                aria-label="Grid view"
               >
                 <LayoutGrid className="h-5 w-5" />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode('list')}
-                className={`p-2 ${viewMode === 'list' ? 'bg-sky-100 text-sky-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                className={`p-2 ${
+                  viewMode === 'list'
+                    ? 'bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-200'
+                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                }`}
+                aria-label="List view"
               >
                 <List className="h-5 w-5" />
               </button>
@@ -258,19 +281,24 @@ export default function CustomerDocumentsPage() {
 
           {/* Documents */}
           {isLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
-            </div>
+            <CardSkeleton count={viewMode === 'grid' ? 6 : 4} className="xl:grid-cols-3" />
+          ) : isDocumentsError ? (
+            <ErrorState
+              title="Documents could not be loaded"
+              message="We could not fetch customer portal documents."
+              onRetry={() => void refetchDocuments()}
+            />
           ) : documents?.items.length === 0 ? (
-            <div className="text-center py-12 surface-card rounded-2xl">
-              <FileText className="h-16 w-16 mx-auto text-slate-300" />
-              <h3 className="mt-4 text-lg font-display font-medium text-slate-900">No documents found</h3>
-              <p className="mt-2 text-slate-500">
-                {hasActiveFilters
-                  ? 'Try adjusting your search or filters'
-                  : 'No documents are available at this time'}
-              </p>
-            </div>
+            <EmptyState
+              icon={<FileText className="h-8 w-8" aria-hidden="true" />}
+              title="No documents found"
+              description={
+                hasActiveFilters
+                  ? 'Try adjusting your search or filters.'
+                  : 'No documents are available at this time.'
+              }
+              action={hasActiveFilters ? { label: 'Clear Filters', onClick: clearAllFilters } : undefined}
+            />
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {documents?.items.map((doc) => (
@@ -282,16 +310,16 @@ export default function CustomerDocumentsPage() {
                   <div className="flex items-start">
                     <FileText className="h-10 w-10 text-sky-500 flex-shrink-0" />
                     <div className="ml-4 flex-1 min-w-0">
-                      <h3 className="font-display font-semibold text-slate-900 truncate">{doc.title}</h3>
+                      <h3 className="card-title truncate">{doc.title}</h3>
                       {doc.description && (
-                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">{doc.description}</p>
+                        <p className="helper-copy mt-1 line-clamp-2">{doc.description}</p>
                       )}
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-4 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
                     <div className="flex items-center gap-2">
                       {doc.category && (
-                        <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.category}</span>
+                        <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{doc.category}</span>
                       )}
                       {doc.has_attachments && <Paperclip className="h-4 w-4" />}
                     </div>
@@ -301,22 +329,22 @@ export default function CustomerDocumentsPage() {
               ))}
             </div>
           ) : (
-            <div className="surface-card rounded-2xl divide-y divide-slate-100">
+            <div className="surface-card divide-y divide-slate-100 rounded-2xl dark:divide-slate-800">
               {documents?.items.map((doc) => (
                 <Link
                   key={doc.id}
                   to={`/portal/documents/${doc.id}?fullscreen=1`}
-                  className="block p-4 hover:bg-slate-50"
+                  className="block p-4 hover:bg-slate-50 dark:hover:bg-slate-800/70"
                 >
                   <div className="flex items-center">
                     <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
                     <div className="ml-4 flex-1 min-w-0">
-                      <h3 className="font-medium text-slate-900">{doc.title}</h3>
-                      {doc.description && <p className="text-sm text-slate-500 truncate">{doc.description}</p>}
+                      <h3 className="card-title">{doc.title}</h3>
+                      {doc.description && <p className="helper-copy truncate">{doc.description}</p>}
                     </div>
-                    <div className="ml-4 flex items-center gap-3 text-sm text-slate-400">
+                    <div className="helper-copy ml-4 flex items-center gap-3">
                       {doc.category && (
-                        <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.category}</span>
+                        <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{doc.category}</span>
                       )}
                       {doc.has_attachments && <Paperclip className="h-4 w-4" />}
                       <span>v{doc.version}</span>
@@ -328,27 +356,31 @@ export default function CustomerDocumentsPage() {
           )}
 
           {/* Pagination */}
-          {documents && documents.pages > 1 && (
+          {documents && documents.total_pages > 1 && (
             <div className="flex items-center justify-between surface-card rounded-2xl px-4 py-3">
-              <p className="text-sm text-slate-500">
+              <p className="body-copy">
                 Showing {(page - 1) * 12 + 1} to {Math.min(page * 12, documents.total)} of{' '}
                 {documents.total} results
               </p>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 1}
                   className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="px-4 py-2 text-sm">
-                  Page {page} of {documents.pages}
+                <span className="body-copy px-4 py-2">
+                  Page {page} of {documents.total_pages}
                 </span>
                 <button
+                  type="button"
                   onClick={() => handlePageChange(page + 1)}
-                  disabled={page === documents.pages}
+                  disabled={page === documents.total_pages}
                   className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Next page"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -378,7 +410,7 @@ function FacetSection({
 
   return (
     <div className="surface-card rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
+      <h3 className="card-title mb-3 flex items-center gap-2">
         {icon}
         {title}
       </h3>
@@ -386,15 +418,16 @@ function FacetSection({
         {items.map((item) => (
           <li key={item.name}>
             <button
+              type="button"
               onClick={() => onSelect(selected === item.name ? null : item.name)}
               className={`w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-colors ${
                 selected === item.name
-                  ? 'bg-sky-100 text-sky-700 font-medium'
-                  : 'text-slate-600 hover:bg-slate-50'
+                  ? 'bg-sky-100 text-sky-700 font-medium dark:bg-sky-950/50 dark:text-sky-200'
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
             >
               <span className="truncate">{item.name}</span>
-              <span className={`text-xs ml-2 flex-shrink-0 ${selected === item.name ? 'text-sky-500' : 'text-slate-400'}`}>
+              <span className={`ml-2 flex-shrink-0 text-xs ${selected === item.name ? 'text-sky-500 dark:text-sky-300' : 'text-slate-400 dark:text-slate-500'}`}>
                 {item.count}
               </span>
             </button>
@@ -407,9 +440,14 @@ function FacetSection({
 
 function FilterPill({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-sm">
+    <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm text-sky-700 dark:bg-sky-950/50 dark:text-sky-200">
       {label}
-      <button onClick={onRemove} className="ml-2 hover:text-sky-900">
+      <button
+        type="button"
+        onClick={onRemove}
+        className="ml-2 hover:text-sky-900 dark:hover:text-sky-100"
+        aria-label={`Remove filter ${label}`}
+      >
         &times;
       </button>
     </span>

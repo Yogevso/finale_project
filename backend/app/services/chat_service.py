@@ -16,6 +16,7 @@ from app.models import (
     ChatParticipant,
     ChatParticipantRole,
     ChatType,
+    Document,
     User,
     UserRole,
 )
@@ -131,6 +132,67 @@ class ChatService:
         self.db.refresh(chat)
         return chat
 
+    def create_document_chat(self, creator: User, document_id: int, extra_participant_ids: list[int] | None = None) -> Chat:
+        """AH-008: Create or return existing chat scoped to a document.
+
+        Automatically adds the document's author as a participant.
+        If a document-scoped chat already exists, returns it.
+        """
+        doc = self.db.query(Document).filter(Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Check for existing document-scoped chat
+        existing = (
+            self.db.query(Chat)
+            .filter(Chat.document_id == document_id, Chat.tenant_id == creator.tenant_id)
+            .first()
+        )
+        if existing:
+            # Ensure creator is a participant
+            is_participant = (
+                self.db.query(ChatParticipant)
+                .filter(ChatParticipant.chat_id == existing.id, ChatParticipant.user_id == creator.id)
+                .first()
+            )
+            if not is_participant:
+                self.db.add(ChatParticipant(chat_id=existing.id, user_id=creator.id, role=ChatParticipantRole.MEMBER))
+                self.db.commit()
+                self.db.refresh(existing)
+            return existing
+
+        chat = Chat(
+            type=ChatType.GROUP,
+            name=f"Discussion: {doc.title[:100]}",
+            document_id=document_id,
+            created_by=creator.id,
+            tenant_id=creator.tenant_id,
+        )
+        self.db.add(chat)
+        self.db.flush()
+
+        # Collect participants: creator + document author + extras
+        participant_ids = {creator.id}
+        if doc.created_by:
+            participant_ids.add(doc.created_by)
+        if extra_participant_ids:
+            participant_ids.update(extra_participant_ids)
+
+        for uid in participant_ids:
+            role = ChatParticipantRole.OWNER if uid == creator.id else ChatParticipantRole.MEMBER
+            self.db.add(ChatParticipant(chat_id=chat.id, user_id=uid, role=role))
+
+        self.db.add(ChatMessage(
+            chat_id=chat.id,
+            sender_id=creator.id,
+            content=f"Started a discussion about \"{doc.title}\"",
+            message_type=ChatMessageType.SYSTEM,
+        ))
+
+        self.db.commit()
+        self.db.refresh(chat)
+        return chat
+
     # ------------------------------------------------------------------
     # Participants
     # ------------------------------------------------------------------
@@ -192,18 +254,27 @@ class ChatService:
     # Messages
     # ------------------------------------------------------------------
 
-    def send_message(self, chat_id: int, sender: User, content: str) -> ChatMessage:
+    # AD-018: maximum allowed chat message length (characters)
+    MAX_MESSAGE_LENGTH = 5000
+
+    def send_message(self, chat_id: int, sender: User, content: str, *, context_json: str | None = None) -> ChatMessage:
         """Send a message in a chat (X1-006)."""
         self._get_chat_with_permission(chat_id, sender)
         content = content.strip()
         if not content:
             raise HTTPException(status_code=400, detail="Message content cannot be empty")
+        if len(content) > self.MAX_MESSAGE_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Message exceeds maximum length of {self.MAX_MESSAGE_LENGTH} characters",
+            )
 
         msg = ChatMessage(
             chat_id=chat_id,
             sender_id=sender.id,
             content=content,
             message_type=ChatMessageType.TEXT,
+            context_json=context_json,
         )
         self.db.add(msg)
 

@@ -2,16 +2,22 @@
  * ChatSidebar — list of chats with search, unread badges, last message preview (X1-027)
  */
 
-import { MessageCircle, Search, ArrowRight } from 'lucide-react'
+import { useRef } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { MessageCircle, ArrowRight } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import type { ChatListItem, ChatMessage } from '@/types/chat'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { SearchInput } from '@/components/form'
+import { ListSkeleton } from '@/components/skeletons'
 
 /** Strip markdown from a message preview (bold markers, link syntax) */
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[💬📌]/g, '')
+    .replace(/[\u{1F4AC}\u{1F4CC}]/gu, '')
     .replace(/\n/g, ' ')
     .trim()
 }
@@ -26,6 +32,9 @@ interface ChatSidebarProps {
   globalSearchResults?: ChatMessage[]
   globalSearchLoading?: boolean
   onSelectMessage?: (chatId: number, messageId: number) => void
+  isLoading?: boolean
+  isError?: boolean
+  onRetry?: () => void
 }
 
 export default function ChatSidebar({
@@ -38,8 +47,19 @@ export default function ChatSidebar({
   globalSearchResults,
   globalSearchLoading,
   onSelectMessage,
+  isLoading = false,
+  isError = false,
+  onRetry,
 }: ChatSidebarProps) {
   const showGlobalResults = searchFilter.length >= 2 && (globalSearchResults || globalSearchLoading)
+  const chatListRef = useRef<HTMLDivElement | null>(null)
+  const chatVirtualizer = useVirtualizer({
+    count: chats.length,
+    getScrollElement: () => chatListRef.current,
+    estimateSize: () => 84,
+    overscan: 10,
+  })
+  const shouldVirtualizeChats = !showGlobalResults && chats.length > 12
 
   return (
     <div className="flex h-full flex-col border-r border-gray-200 bg-white">
@@ -48,7 +68,7 @@ export default function ChatSidebar({
         <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
         <button
           onClick={onNewChat}
-          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          className="btn-primary px-3 py-1.5"
         >
           + New
         </button>
@@ -56,29 +76,60 @@ export default function ChatSidebar({
 
       {/* Search */}
       <div className="px-4 py-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search chats & messages..."
-            value={searchFilter}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <SearchInput
+          placeholder="Search chats & messages..."
+          value={searchFilter}
+          onChange={(e) => onSearchChange(e.target.value)}
+        />
       </div>
 
       {/* Chat list */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Chat name matches */}
-        {chats.length === 0 && !showGlobalResults ? (
-          <div className="flex flex-col items-center justify-center px-4 py-12 text-gray-400">
-            <MessageCircle className="mb-2 h-8 w-8" />
-            <p className="text-sm font-medium">No conversations yet</p>
-            <p className="mt-0.5 text-xs">Start a new chat to get going</p>
+      <div className="flex-1 overflow-hidden">
+        {isLoading ? (
+          <div className="px-4 py-4">
+            <ListSkeleton rows={6} />
+          </div>
+        ) : isError ? (
+          <div className="px-4 py-8">
+            <ErrorState
+              title="Conversations unavailable"
+              message="We could not load the chat list."
+              onRetry={onRetry}
+            />
+          </div>
+        ) : chats.length === 0 && !showGlobalResults ? (
+          <div className="px-4 py-8">
+            <EmptyState
+              icon={<MessageCircle className="h-8 w-8" aria-hidden="true" />}
+              title="No conversations yet"
+              description="Start a new chat to get going."
+              action={{ label: 'New chat', onClick: onNewChat }}
+            />
+          </div>
+        ) : shouldVirtualizeChats ? (
+          <div ref={chatListRef} className="h-full overflow-y-auto">
+            <div className="relative" style={{ height: `${chatVirtualizer.getTotalSize()}px` }}>
+              {chatVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = chats[virtualRow.index]
+
+                return (
+                  <div
+                    key={item.chat.id}
+                    className="absolute inset-x-0"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <ChatListEntry
+                      item={item}
+                      isActive={item.chat.id === activeChatId}
+                      onClick={() => onSelectChat(item.chat.id)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ) : (
-          <>
+          <div className="h-full overflow-y-auto">
             {chats.map((item) => (
               <ChatListEntry
                 key={item.chat.id}
@@ -98,7 +149,7 @@ export default function ChatSidebar({
                 </div>
                 {globalSearchLoading ? (
                   <div className="flex items-center justify-center py-6">
-                    <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-blue-600" />
+                    <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-sky-600" />
                   </div>
                 ) : globalSearchResults && globalSearchResults.length > 0 ? (
                   globalSearchResults.map((msg) => (
@@ -114,7 +165,7 @@ export default function ChatSidebar({
                 )}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
@@ -152,7 +203,7 @@ function GlobalSearchResult({
   return (
     <button
       onClick={onClick}
-      className="w-full px-4 py-2.5 text-left transition-colors hover:bg-blue-50 border-l-3 border-transparent"
+      className="w-full border-l-3 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-sky-50"
     >
       <div className="flex items-start gap-3">
         <div
@@ -179,7 +230,7 @@ function GlobalSearchResult({
 
 /** Color palette for avatar backgrounds based on first character */
 const AVATAR_COLORS = [
-  'bg-blue-500',
+  'bg-sky-500',
   'bg-emerald-500',
   'bg-purple-500',
   'bg-amber-500',
@@ -217,7 +268,7 @@ function ChatListEntry({
     <button
       onClick={onClick}
       className={`w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
-        isActive ? 'bg-blue-50 border-l-3 border-blue-600' : 'border-l-3 border-transparent'
+        isActive ? 'border-l-3 border-sky-600 bg-sky-50' : 'border-l-3 border-transparent'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -234,7 +285,7 @@ function ChatListEntry({
               {item.display_name}
             </span>
             {timeAgo && (
-              <span className={`ml-2 flex-shrink-0 text-[11px] ${item.unread_count > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+              <span className={`ml-2 flex-shrink-0 text-[11px] ${item.unread_count > 0 ? 'font-medium text-sky-600' : 'text-gray-400'}`}>
                 {timeAgo}
               </span>
             )}
@@ -248,7 +299,7 @@ function ChatListEntry({
               <p className="text-xs text-gray-400 italic">No messages</p>
             )}
             {item.unread_count > 0 && (
-              <span className="ml-2 flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
+              <span className="ml-2 flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-sky-600 px-1.5 text-[10px] font-bold text-white">
                 {item.unread_count > 99 ? '99+' : item.unread_count}
               </span>
             )}

@@ -40,6 +40,9 @@ class BookmarkDocumentTool(BaseTool):
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if not doc:
             return {"success": False, "result": f"Document {doc_id} not found."}
+        # AE-009: Tenant isolation — prevent cross-tenant bookmarking
+        if tenant_id is not None and doc.tenant_id != tenant_id:
+            return {"success": False, "result": f"Document {doc_id} not found."}
         bm = Bookmark(user_id=user.id, document_id=doc_id)
         db.add(bm)
         db.commit()
@@ -121,6 +124,9 @@ class WatchDocumentTool(BaseTool):
             return {"success": True, "result": "You are already watching this document."}
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if not doc:
+            return {"success": False, "result": f"Document {doc_id} not found."}
+        # AE-009: Tenant isolation — prevent cross-tenant watching
+        if tenant_id is not None and doc.tenant_id != tenant_id:
             return {"success": False, "result": f"Document {doc_id} not found."}
         watcher = DocumentWatcher(user_id=user.id, document_id=doc_id)
         db.add(watcher)
@@ -243,6 +249,9 @@ class UpdateReadingProgressTool(BaseTool):
         pct = max(0, min(100, params["progress_percent"]))
         doc = db.query(Document).filter(Document.id == doc_id).first()
         if not doc:
+            return {"success": False, "result": f"Document {doc_id} not found."}
+        # AE-009: Tenant isolation — prevent cross-tenant reading progress updates
+        if tenant_id is not None and doc.tenant_id != tenant_id:
             return {"success": False, "result": f"Document {doc_id} not found."}
         rp = db.query(ReadingProgress).filter(
             ReadingProgress.user_id == user.id, ReadingProgress.document_id == doc_id

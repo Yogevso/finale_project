@@ -17,6 +17,10 @@ from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
 
+# AE-010: Analytics tools intentionally perform cross-tenant reads.
+# Access is restricted to SYSTEM_ADMIN role only.  All three analytics
+# tools below carry required_role = UserRole.SYSTEM_ADMIN.
+
 
 def _period_cutoff(period: str) -> datetime:
     mapping = {"day": 1, "week": 7, "month": 30}
@@ -42,6 +46,8 @@ class GetPlatformAnalyticsTool(BaseTool):
         "required": [],
     }
     required_permission = Permission.SYSTEM_SETTINGS
+    # AE-010: Restrict to system_admin — cross-tenant analytics read
+    required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
@@ -92,6 +98,8 @@ class GetEngagementAnalyticsTool(BaseTool):
         "required": [],
     }
     required_permission = Permission.SYSTEM_SETTINGS
+    # AE-010: Restrict to system_admin — cross-tenant engagement analytics read
+    required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
@@ -148,6 +156,8 @@ class GetContentAnalyticsTool(BaseTool):
         "required": [],
     }
     required_permission = Permission.SYSTEM_SETTINGS
+    # AE-010: Restrict to system_admin — cross-tenant content analytics read
+    required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,

@@ -559,7 +559,7 @@ export function DocumentPreview({
         </p>
         {firstAttachment && (
           <a
-            href={api.getAttachmentDownloadUrl(documentId, firstAttachment.id)}
+            href="#"
             download={firstAttachment.filename}
             onClick={(event) => {
               event.preventDefault()
@@ -706,7 +706,7 @@ export function DocumentPreview({
             {documentTitle || selectedAttachment.filename}
           </span>
           <a
-            href={api.getAttachmentDownloadUrl(documentId, selectedAttachment.id)}
+            href="#"
             download
             onClick={(event) => {
               event.preventDefault()

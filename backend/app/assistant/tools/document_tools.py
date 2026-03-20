@@ -1,4 +1,11 @@
-"""Document-related assistant tools."""
+"""Document-related assistant tools.
+
+AE-011 / Phase 17 prerequisite: When AI content editing is implemented,
+AI-proposed changes must be surfaced as suggestions (diffs) rather than
+applied directly.  Accepted suggestions should go through the normal
+review workflow, and version history must tag edits as
+"edited via AI assistant by [user]".
+"""
 
 from __future__ import annotations
 
@@ -7,7 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Document, DocumentStatus, DocumentVisibility, Topic, User
+from app.models import ActionType, AuditLog, Document, DocumentStatus, DocumentVisibility, Topic, User
 from app.services.permissions import Permission
 
 from datetime import datetime, timedelta
@@ -142,6 +149,12 @@ class CreateDocumentTool(BaseTool):
             document_number=f"DOC-{datetime.utcnow().strftime('%Y%m%d')}-{unique_suffix}",
         )
         db.add(doc)
+        # AE-005: Audit trail for AI-initiated document creation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.CREATE,
+            details=f"Created document '{params['title']}' via AI assistant",
+        ))
         db.commit()
         db.refresh(doc)
         return {"success": True, "result": f"Document created — ID: {doc.id}, title: '{doc.title}'."}
@@ -149,17 +162,14 @@ class CreateDocumentTool(BaseTool):
 
 class EditDocumentTool(BaseTool):
     name = "edit_document"
-    description = "Update a document's title, status, or topic."
+    description = "Update a document's title or topic. Status transitions must go through the document state machine."
     parameters = {
         "type": "object",
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID to edit"},
             "title": {"type": "string", "description": "New title (optional)"},
-            "status": {
-                "type": "string",
-                "description": "New status (optional)",
-                "enum": ["draft", "pending_review", "approved", "active", "archived"],
-            },
+            # AE-003: "status" removed — status transitions must only happen
+            # through the document state machine (review → approve → publish).
             "topic": {"type": "string", "description": "New topic slug (optional)"},
         },
         "required": ["document_id"],
@@ -177,9 +187,13 @@ class EditDocumentTool(BaseTool):
         if "title" in params:
             doc.title = params["title"]
             changes.append(f"title → '{params['title']}'")
+        # AE-003: Reject any attempt to set status directly via this tool
         if "status" in params:
-            doc.status = params["status"]
-            changes.append(f"status → {params['status']}")
+            return {
+                "success": False,
+                "result": "",
+                "error": "Cannot change document status directly. Use the review/approval workflow instead.",
+            }
         if "topic" in params:
             doc.topic = params["topic"]
             changes.append(f"topic → {params['topic']}")
@@ -187,6 +201,13 @@ class EditDocumentTool(BaseTool):
         if not changes:
             return {"success": True, "result": "No changes specified."}
 
+        # AE-005: Audit trail for AI-initiated document edits
+        db.add(AuditLog(
+            user_id=user.id,
+            document_id=doc.id,
+            action=ActionType.UPDATE,
+            details=f"Edited document via AI assistant: {', '.join(changes)}",
+        ))
         db.commit()
         return {"success": True, "result": f"Document {doc.id} updated: {', '.join(changes)}."}
 
@@ -212,6 +233,13 @@ class DeleteDocumentTool(BaseTool):
             return {"success": False, "result": "", "error": "Document not found."}
 
         title = doc.title
+        # AE-005: Audit trail for AI-initiated document deletion
+        db.add(AuditLog(
+            user_id=user.id,
+            document_id=doc.id,
+            action=ActionType.DELETE,
+            details=f"Deleted document '{title}' via AI assistant",
+        ))
         db.delete(doc)
         db.commit()
         return {"success": True, "result": f"Document '{title}' (ID: {params['document_id']}) deleted."}

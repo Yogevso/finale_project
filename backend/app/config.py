@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Documentation Platform"
     APP_VERSION: str = "2.0.0"
     APP_ENV: str = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     API_PREFIX: str = "/api/v1"
     BASE_URL: str = "http://localhost:3000"
 
@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
     SESSION_INACTIVITY_DAYS: int = 30
+    MAX_CONCURRENT_SESSIONS: int = 5
     REVIEW_SLA_REMINDER_HOURS: int = 48
     REVIEW_SLA_ESCALATION_HOURS: int = 96
     CSRF_PROTECTION_ENABLED: bool = True  # Enable CSRF Origin/Referer validation
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
     FEATURE_FLAG_NEW_AUDIENCE_RULES: bool = False
     FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE: int = 0
     FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT: bool = True
+    FEATURE_FLAG_PDF_OCR: bool = False  # AH-004: OCR for scanned PDFs (requires tesseract binary)
     AUDIENCE_VALIDATION_SAFE_MODE_ENABLED: bool = False
 
     # AI Assistant
@@ -107,6 +109,9 @@ class Settings(BaseSettings):
     ASSISTANT_REQUEST_TIMEOUT: int = 120  # seconds
     ASSISTANT_RATE_LIMIT_PER_MINUTE: int = 20
     ASSISTANT_ENABLED: bool = True  # feature flag to disable AI assistant
+
+    # Collaboration server
+    COLLAB_SERVER_URL: str = "http://collab-server:8002"
 
     # RAG (Retrieval-Augmented Generation)
     ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"

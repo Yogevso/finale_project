@@ -16,7 +16,7 @@ import NotFoundState from '@/components/NotFoundState'
 
 const VersionsSection = lazy(() => import('@/components/VersionsSection'))
 const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
-// Comments tab removed — comments are accessible via inline popups and chat bridge
+// Comments tab removed — comments are accessible via inline popups
 
 export default function DocumentDetailPage() {
   const tour = useTour('document-detail', documentDetailTour)
@@ -113,23 +113,28 @@ export default function DocumentDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+      <div className="content-shell flex h-64 animate-fade-in flex-col items-center justify-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600" />
+        <p className="body-copy">Loading document...</p>
       </div>
     )
   }
 
   if (error || !document) {
     return (
-      <NotFoundState
-        title="Document Not Found"
-        description="This document may not exist or you may not have access."
-      />
+      <div className="animate-fade-in">
+        <NotFoundState
+          title="Document Not Found"
+          description="This document may not exist or you may not have access."
+        />
+      </div>
     )
   }
 
   return (
-    <div className={`document-detail-page ${isFullscreen ? 'min-h-screen bg-slate-50 px-6 md:px-10 lg:px-14 py-6' : ''}`}>
+    <div
+      className={`document-detail-page animate-fade-in ${isFullscreen ? 'min-h-screen bg-slate-50 px-6 py-6 md:px-10 lg:px-14' : 'page-stack'}`}
+    >
       <Joyride
         steps={documentDetailTour}
         run={tour.run}
@@ -138,6 +143,7 @@ export default function DocumentDetailPage() {
         showProgress
         showSkipButton
         disableScrolling
+        disableOverlay
       />
 
       <FullscreenTopBar
@@ -238,14 +244,24 @@ export default function DocumentDetailPage() {
         )}
 
         {activeTab === 'versions' && (
-          <Suspense fallback={<div className="surface-card rounded-2xl p-6">Loading versions...</div>}>
+          <Suspense
+            fallback={
+              <div className="surface-card rounded-2xl p-6">
+                <p className="body-copy">Loading versions...</p>
+              </div>
+            }
+          >
             <VersionsSection documentId={documentId} isEditor={isEditor} />
           </Suspense>
         )}
 
         {activeTab === 'attachments' && (
           <Suspense
-            fallback={<div className="surface-card rounded-2xl p-6">Loading attachments...</div>}
+            fallback={
+              <div className="surface-card rounded-2xl p-6">
+                <p className="body-copy">Loading attachments...</p>
+              </div>
+            }
           >
             <AttachmentsSection documentId={documentId} isEditor={isEditor} />
           </Suspense>

@@ -1,4 +1,11 @@
-"""Strangler wrapper around legacy document converter utility module."""
+"""Strangler wrapper around legacy document converter utility module.
+
+AF-013: This wrapper is an *active* migration boundary, *not* dead code.
+Migration status: 0%. The conversion pipeline (``app.conversion``) is the
+target replacement. Until migration completes, calls pass through to the
+legacy ``app.utils.document_converter`` and usage is tracked for progress
+monitoring.  Delete this wrapper once the legacy module has zero usage.
+"""
 
 from __future__ import annotations
 

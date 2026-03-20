@@ -5,7 +5,7 @@
  * to published documents with PUBLIC visibility.
  */
 
-const API_BASE = '/api/v1'
+const API_BASE = '/api/v1/public'
 const PLATFORM_API_BASE = '/api/platforms'
 
 // Types matching backend schemas
@@ -355,7 +355,7 @@ export const publicApi = {
    * Get active announcements
    */
   async getAnnouncements(): Promise<PublicAnnouncement[]> {
-    const response = await fetch(`${API_BASE}/announcements`)
+    const response = await fetch('/api/v1/announcements')
     if (!response.ok) {
       throw new Error('Failed to fetch announcements')
     }

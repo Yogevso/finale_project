@@ -678,7 +678,7 @@ class AssistantEngine:
             suggestions = await self._generate_suggestions(message, conv.id)
             if suggestions:
                 yield {"event": "suggestions", "data": {"questions": suggestions}}
-        except Exception:
+        except Exception:  # policy: LOSSY — suggestions are optional UX enhancement
             logger.debug("Follow-up suggestion generation skipped", exc_info=True)
 
         yield {"event": "done", "data": {"total_tokens": total_tokens}}
@@ -690,13 +690,13 @@ class AssistantEngine:
                 if llm_title:
                     self._conv.update_title(conv.id, llm_title)
                     yield {"event": "title_updated", "data": {"title": llm_title}}
-            except Exception:
+            except Exception:  # policy: LOSSY — title is cosmetic
                 logger.debug("LLM title generation skipped", exc_info=True)
 
         # Auto-summarize long conversations (fire-and-forget)
         try:
             await self._conv.auto_summarize_if_needed(conv.id, self._ollama)
-        except Exception:
+        except Exception:  # policy: LOSSY — summarization is background optimization
             logger.debug("Auto-summarization skipped", exc_info=True)
     # ------------------------------------------------------------------
     # Internals
@@ -731,7 +731,7 @@ class AssistantEngine:
                 if line.strip() and len(line.strip()) > 5
             ]
             return lines[:3]
-        except Exception:
+        except Exception:  # policy: LOSSY — suggestions are optional
             logger.debug("Suggestion generation failed", exc_info=True)
             return []
 

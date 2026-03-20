@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Announcement, SystemSetting, Topic, User
+from app.models import ActionType, Announcement, AuditLog, SystemSetting, Topic, User
 from app.services.permissions import Permission
 
 
@@ -48,6 +48,12 @@ class UpdateSiteSettingTool(BaseTool):
         else:
             row = SystemSetting(key=params["key"], value=params["value"], updated_by=user.id)
             db.add(row)
+        # AE-005: Audit trail for AI-initiated setting changes
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.UPDATE,
+            details=f"Updated site setting '{params['key']}' via AI assistant",
+        ))
         db.commit()
         return {"success": True, "result": f"Setting '{params['key']}' set to '{params['value']}'."}
 
@@ -77,6 +83,12 @@ class CreateAnnouncementTool(BaseTool):
             created_by=user.id,
         )
         db.add(ann)
+        # AE-005: Audit trail for AI-initiated announcement creation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.CREATE,
+            details=f"Created announcement via AI assistant: {params['message'][:100]}",
+        ))
         db.commit()
         db.refresh(ann)
         return {"success": True, "result": f"Announcement created (ID: {ann.id})."}
@@ -135,6 +147,12 @@ class CreateTopicTool(BaseTool):
 
         topic = Topic(name=params["name"], slug=slug, description=params.get("description"))
         db.add(topic)
+        # AE-005: Audit trail for AI-initiated topic creation
+        db.add(AuditLog(
+            user_id=user.id,
+            action=ActionType.CREATE,
+            details=f"Created topic '{params['name']}' (slug: {slug}) via AI assistant",
+        ))
         db.commit()
         db.refresh(topic)
         return {"success": True, "result": f"Topic '{topic.name}' created (slug: {topic.slug})."}

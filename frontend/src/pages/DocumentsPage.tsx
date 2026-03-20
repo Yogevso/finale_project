@@ -1,9 +1,12 @@
 import { useMemo } from 'react'
 import Joyride from 'react-joyride'
+import { Upload } from 'lucide-react'
+
+import { ErrorState } from '@/components/ErrorState'
+import PageHeader from '@/components/PageHeader'
 import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmDialog'
 import { useTour } from '@/hooks/useTour'
 import { documentsPageTour } from '@/lib/tour'
-import PageHeader from '@/components/PageHeader'
 import {
   BulkMetadataEditModal,
   CreateDocumentModal,
@@ -40,9 +43,10 @@ export default function DocumentsPage() {
   const showGuidedEmptyState =
     !controller.documentsQuery.isLoading &&
     (controller.documentsQuery.data?.items.length ?? 0) === 0
+  const hasDocumentsError = controller.documentsQuery.isError ?? false
 
   return (
-    <div className="space-y-8">
+    <div className="page-stack-lg">
       <Joyride
         steps={tourSteps}
         run={tour.run}
@@ -51,6 +55,7 @@ export default function DocumentsPage() {
         showProgress
         showSkipButton
         disableScrolling
+        disableOverlay
       />
 
       <PageHeader
@@ -60,14 +65,17 @@ export default function DocumentsPage() {
           controller.isEditor ? (
             <>
               <button
+                type="button"
                 onClick={() => controller.setShowUploadModal(true)}
-                className="btn-secondary flex items-center gap-2"
+                className="btn-secondary table-action-btn"
               >
-                <span>📤</span> Upload File
+                <Upload className="h-4 w-4" />
+                Upload File
               </button>
               <button
+                type="button"
                 onClick={() => controller.setShowCreateModal(true)}
-                className="btn-primary"
+                className="btn-primary table-action-btn"
                 data-tour="documents-create-button"
               >
                 + New Document
@@ -114,16 +122,18 @@ export default function DocumentsPage() {
       {!controller.isQuickCreateMode && controller.isManager && controller.selectedDocumentIds.length > 0 ? (
         <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-medium text-slate-900">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {controller.selectedDocumentIds.length} document(s) selected
             </p>
-            <p className="text-sm text-slate-500">Bulk-update category, visibility, and company assignments.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Bulk-update category, visibility, and company assignments.
+            </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={controller.clearSelection} className="btn-ghost">
+            <button type="button" onClick={controller.clearSelection} className="btn-ghost">
               Clear selection
             </button>
-            <button onClick={() => controller.setShowBulkEditModal(true)} className="btn-primary">
+            <button type="button" onClick={() => controller.setShowBulkEditModal(true)} className="btn-primary">
               Bulk edit metadata
             </button>
           </div>
@@ -137,8 +147,14 @@ export default function DocumentsPage() {
         />
       )}
 
-      {!controller.isQuickCreateMode && (
-        showGuidedEmptyState ? (
+      {!controller.isQuickCreateMode &&
+        (hasDocumentsError ? (
+          <ErrorState
+            title="Documents could not be loaded"
+            message="We could not fetch the document list for this workspace."
+            onRetry={() => void controller.documentsQuery.refetch?.()}
+          />
+        ) : showGuidedEmptyState ? (
           <DocumentsEmptyState
             hasActiveFilters={hasActiveFilters}
             canCreate={controller.isEditor}
@@ -161,8 +177,7 @@ export default function DocumentsPage() {
             onVisibilityChange={controller.handleVisibilityChange}
             onPageChange={controller.setPage}
           />
-        )
-      )}
+        ))}
 
       <VisibilityChangeConfirmDialog
         isOpen={controller.pendingVisibilityChange !== null}

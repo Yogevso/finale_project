@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmDialog'
 import {
   getAudienceDirtyHelperText,
@@ -53,6 +53,28 @@ export function EditForm({
   })
   const [pendingVisibilityConfirmation, setPendingVisibilityConfirmation] =
     useState<PendingVisibilityConfirmation | null>(null)
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const isDirty =
+      formData.title !== document.title ||
+      (formData.description || '') !== (document.description || '') ||
+      formData.status !== document.status ||
+      formData.visibility !== document.visibility ||
+      (formData.category || '') !== (document.category || '') ||
+      (formData.release_branch || '') !== (document.release_branch || '') ||
+      (formData.tags || '') !== (document.tags || '') ||
+      (formData.due_date || '') !== (document.due_date || '')
+
+    if (!isDirty) return
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [formData, document])
+
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: document.visibility,
@@ -105,8 +127,11 @@ export function EditForm({
     <>
       <form onSubmit={handleSubmit} className="surface-card rounded-2xl p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+          <label htmlFor="document-edit-title" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+            Title
+          </label>
           <input
+            id="document-edit-title"
             type="text"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -116,8 +141,11 @@ export function EditForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <label htmlFor="document-edit-description" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+            Description
+          </label>
           <textarea
+            id="document-edit-description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="input-field"
@@ -127,8 +155,11 @@ export function EditForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+            <label htmlFor="document-edit-status" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+              Status
+            </label>
             <select
+              id="document-edit-status"
               name="status"
               value={formData.status}
               onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
@@ -142,8 +173,11 @@ export function EditForm({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Visibility</label>
+            <label htmlFor="document-edit-visibility" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+              Visibility
+            </label>
             <select
+              id="document-edit-visibility"
               name="visibility"
               value={formData.visibility}
               onChange={(e) =>
@@ -156,16 +190,16 @@ export function EditForm({
               <option value="public">Public (Everyone)</option>
               <option value="company">Company (Assigned companies)</option>
             </select>
-            <p className="text-xs text-slate-500 mt-1">{visibilityHelperText}</p>
+            <p className="helper-copy mt-1">{visibilityHelperText}</p>
             <p
-              className={`text-xs mt-1 ${
+              className={`helper-copy mt-1 ${
                 audienceDirtyHelper.isChanged ? 'text-amber-700' : 'text-slate-500'
               }`}
             >
               {audienceDirtyHelper.text}
             </p>
             {!canEditVisibility && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="helper-copy mt-1">
                 Only managers can change document visibility.
               </p>
             )}
@@ -174,8 +208,11 @@ export function EditForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+            <label htmlFor="document-edit-category" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+              Category
+            </label>
             <input
+              id="document-edit-category"
               type="text"
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -183,8 +220,11 @@ export function EditForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Release Branch</label>
+            <label htmlFor="document-edit-release-branch" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+              Release Branch
+            </label>
             <input
+              id="document-edit-release-branch"
               type="text"
               value={formData.release_branch || ''}
               onChange={(e) => setFormData({ ...formData, release_branch: e.target.value })}
@@ -195,18 +235,25 @@ export function EditForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+          <label htmlFor="document-edit-due-date" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+            Due Date
+          </label>
           <input
+            id="document-edit-due-date"
             type="date"
             value={formData.due_date || ''}
+            min={new Date().toISOString().split('T')[0]}
             onChange={(e) => setFormData({ ...formData, due_date: e.target.value || null })}
             className="input-field"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Tags</label>
+          <label htmlFor="document-edit-tags" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+            Tags
+          </label>
           <input
+            id="document-edit-tags"
             type="text"
             value={formData.tags}
             onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
@@ -216,10 +263,14 @@ export function EditForm({
         </div>
 
         <div className="flex justify-end gap-3 pt-4">
-          <button type="button" onClick={onCancel} className="btn-ghost">
+          <button type="button" onClick={onCancel} className="btn-ghost table-action-btn">
             Cancel
           </button>
-          <button type="submit" disabled={isLoading} className="btn-primary disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="btn-primary table-action-btn disabled:opacity-50"
+          >
             {isLoading ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

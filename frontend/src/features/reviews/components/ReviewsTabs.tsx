@@ -10,11 +10,12 @@ type ReviewsTabsProps = {
 
 export function ReviewsTabs({ activeTab, pendingCount, onTabChange }: ReviewsTabsProps) {
   return (
-    <div className="border-b border-slate-200">
-      <nav className="flex gap-6">
+    <div className="surface-card rounded-2xl px-4">
+      <nav className="flex gap-4 border-b border-slate-200">
         <button
+          type="button"
           onClick={() => onTabChange('pending')}
-          className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+          className={`inline-flex items-center gap-2 border-b-2 px-2 py-3 text-sm font-medium transition-colors ${
             activeTab === 'pending'
               ? 'border-sky-600 text-sky-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -25,8 +26,9 @@ export function ReviewsTabs({ activeTab, pendingCount, onTabChange }: ReviewsTab
           {pendingCount > 0 ? <span className="pill bg-amber-100 text-amber-700">{pendingCount}</span> : null}
         </button>
         <button
+          type="button"
           onClick={() => onTabChange('my-submissions')}
-          className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+          className={`inline-flex items-center gap-2 border-b-2 px-2 py-3 text-sm font-medium transition-colors ${
             activeTab === 'my-submissions'
               ? 'border-sky-600 text-sky-600'
               : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -39,4 +41,3 @@ export function ReviewsTabs({ activeTab, pendingCount, onTabChange }: ReviewsTab
     </div>
   )
 }
-

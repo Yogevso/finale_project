@@ -15,12 +15,24 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
+import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { TableSkeleton } from '@/components/skeletons'
+import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
+import {
+  deleteReadNotifications,
+  markAllNotificationsRead,
+  NOTIFICATIONS_QUERY_KEY,
+  removeNotification,
+  setNotificationReadState,
+} from '@/lib/notificationsCache'
+import { useToast } from '@/lib/toast'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
 
-const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
 const NOTIFICATIONS_PAGE_SIZE = 20
 
 const getNotificationIcon = (type: NotificationType) => {
@@ -69,6 +81,8 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1)
   const hasMounted = useRef(false)
   const currentLimit = page * NOTIFICATIONS_PAGE_SIZE
+  const toast = useToast()
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null)
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
@@ -87,98 +101,111 @@ export default function NotificationsPage() {
   const unreadCount = data?.unread_count || 0
   const hasMore = (data?.total || 0) > notifications.length
 
-  const setReadStatusInCache = (notificationId: number, isRead: boolean) => {
-    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-      if (!previous) return previous
-
-      let unreadDelta = 0
-      const items = previous.items.map((item) => {
-        if (item.id !== notificationId) return item
-        if (item.is_read === isRead) return item
-        unreadDelta = isRead ? -1 : 1
-        return {
-          ...item,
-          is_read: isRead,
-          read_at: isRead ? new Date().toISOString() : null,
-        }
-      })
-
-      return {
-        ...previous,
-        items,
-        unread_count: Math.max(0, previous.unread_count + unreadDelta),
-      }
-    })
-  }
-
-  const removeNotificationFromCache = (notificationId: number) => {
-    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-      if (!previous) return previous
-      const removed = previous.items.find((item) => item.id === notificationId)
-      if (!removed) return previous
-
-      return {
-        ...previous,
-        items: previous.items.filter((item) => item.id !== notificationId),
-        total: Math.max(0, previous.total - 1),
-        unread_count: removed.is_read ? previous.unread_count : Math.max(0, previous.unread_count - 1),
-      }
-    })
-  }
-
   const markReadMutation = useMutation({
     mutationFn: (notificationId: number) => api.markNotificationRead(notificationId),
-    onSuccess: (_, notificationId) => {
-      setReadStatusInCache(notificationId, true)
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        setNotificationReadState(current, notificationId, true),
+      )
+      return { previous }
+    },
+    onError: (_error, _notificationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+      toast.error('Could not mark notification as read')
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const markUnreadMutation = useMutation({
     mutationFn: (notificationId: number) => api.markNotificationUnread(notificationId),
-    onSuccess: (_, notificationId) => {
-      setReadStatusInCache(notificationId, false)
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        setNotificationReadState(current, notificationId, false),
+      )
+      return { previous }
+    },
+    onError: (_error, _notificationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+      toast.error('Could not mark notification as unread')
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (notificationId: number) => api.deleteNotification(notificationId),
-    onSuccess: (_, notificationId) => {
-      removeNotificationFromCache(notificationId)
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        removeNotification(current, notificationId),
+      )
+      return { previous }
+    },
+    onError: (_error, _notificationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+      toast.error('Could not delete notification')
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.markAllNotificationsRead(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        markAllNotificationsRead(current),
+      )
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+      toast.error('Could not mark all notifications as read')
+    },
     onSuccess: () => {
-      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-        if (!previous) return previous
-        const nowIso = new Date().toISOString()
-        return {
-          ...previous,
-          unread_count: 0,
-          items: previous.items.map((item) => ({
-            ...item,
-            is_read: true,
-            read_at: item.read_at || nowIso,
-          })),
-        }
-      })
+      toast.success('All notifications marked as read')
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const deleteReadMutation = useMutation({
     mutationFn: () => api.deleteAllNotifications(true),
-    onSuccess: () => {
-      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-        if (!previous) return previous
-        const unreadItems = previous.items.filter((item) => !item.is_read)
-        return {
-          ...previous,
-          items: unreadItems,
-          total: unreadItems.length,
-          unread_count: unreadItems.length,
-        }
-      })
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        deleteReadNotifications(current),
+      )
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+      toast.error('Could not delete read notifications')
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
@@ -199,27 +226,39 @@ export default function NotificationsPage() {
     deleteMutation.isPending ||
     markAllReadMutation.isPending ||
     deleteReadMutation.isPending
+  const notificationColumns = [
+    { header: 'Status' },
+    { header: 'Notification' },
+    { header: 'Received' },
+    { header: 'Actions', headerClassName: 'text-right' },
+  ]
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="Notifications"
         subtitle="Review updates and manage read status."
         meta={
-          <span className="pill bg-sky-100 text-sky-800 border-sky-200">
+          <span className="pill border-sky-200 bg-sky-100 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
             {unreadCount} unread
           </span>
         }
         actions={
           <>
-            <button onClick={() => refetch()} className="btn-ghost inline-flex items-center gap-2" disabled={isFetching}>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="btn-ghost table-action-btn"
+              disabled={isFetching}
+            >
               <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             {unreadCount > 0 && (
               <button
+                type="button"
                 onClick={() => markAllReadMutation.mutate()}
-                className="btn-secondary inline-flex items-center gap-2"
+                className="btn-secondary table-action-btn"
                 disabled={anyActionPending}
               >
                 <CheckCheck className="w-4 h-4" />
@@ -228,12 +267,15 @@ export default function NotificationsPage() {
             )}
             {hasReadNotifications && (
               <button
+                type="button"
                 onClick={() => {
-                  if (confirm('Delete all read notifications?')) {
-                    deleteReadMutation.mutate()
-                  }
+                  setConfirmAction({
+                    title: 'Delete read notifications',
+                    description: 'Are you sure you want to delete all read notifications? This cannot be undone.',
+                    onConfirm: () => { deleteReadMutation.mutate(); setConfirmAction(null) },
+                  })
                 }}
-                className="btn-ghost inline-flex items-center gap-2 text-rose-600 hover:text-rose-700"
+                className="btn-danger table-action-btn"
                 disabled={anyActionPending}
               >
                 <Trash2 className="w-4 h-4" />
@@ -246,121 +288,132 @@ export default function NotificationsPage() {
 
       <div className="surface-card rounded-2xl overflow-hidden">
         {isLoading ? (
-          <div className="p-10 text-center text-slate-500">Loading notifications...</div>
+          <TableSkeleton rows={8} columns={4} />
         ) : isError ? (
-          <div className="p-10 text-center">
-            <p className="text-rose-600 mb-3">Failed to load notifications.</p>
-            <button onClick={() => refetch()} className="btn-primary">
-              Try again
-            </button>
-          </div>
+          <ErrorState
+            title="Notifications could not be loaded"
+            message="We could not fetch your latest updates right now."
+            onRetry={() => void refetch()}
+            className="p-10"
+          />
         ) : notifications.length === 0 ? (
-          <div className="p-12 text-center text-slate-500">
-            <Bell className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-            <p className="text-sm">No notifications yet</p>
-          </div>
+          <EmptyState
+            icon={<Bell className="h-10 w-10" aria-hidden="true" />}
+            title="No notifications yet"
+            description="New activity, review updates, and document events will appear here."
+            className="p-12"
+          />
         ) : (
           <>
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Status</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Notification</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Received</th>
-                  <th className="text-right text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notifications.map((notification) => (
-                  <tr
-                    key={notification.id}
-                    className={`border-b border-slate-100 hover:bg-slate-50 ${
-                      notification.is_read ? 'bg-white' : 'bg-sky-50/60'
-                    }`}
-                  >
-                    <td className="px-4 py-4 align-top">
-                      <span
-                        className={`pill ${
-                          notification.is_read
-                            ? 'bg-slate-100 text-slate-700 border-slate-200'
-                            : 'bg-sky-100 text-sky-700 border-sky-200'
-                        }`}
-                      >
-                        {notification.is_read ? 'Read' : 'Unread'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-start gap-3">
-                        <div className="pt-0.5 text-base">{getNotificationIcon(notification.type)}</div>
-                        <div className="min-w-0">
-                          <p
-                            className={`text-sm ${
-                              notification.is_read ? 'text-slate-800' : 'text-slate-900 font-semibold'
-                            }`}
-                          >
-                            {notification.title}
-                          </p>
-                          {notification.message && (
-                            <p className="text-xs text-slate-500 mt-1 line-clamp-2">{notification.message}</p>
-                          )}
-                        </div>
+            <VirtualizedTable
+              items={notifications}
+              ariaLabel="Notifications"
+              columns={notificationColumns}
+              gridTemplateColumns="minmax(8rem, 0.8fr) minmax(20rem, 2.2fr) minmax(10rem, 0.9fr) minmax(11rem, 0.9fr)"
+              estimateRowHeight={94}
+              maxHeightClassName="max-h-[44rem]"
+              overscan={10}
+              rowKey={(notification) => notification.id}
+              renderRow={(notification) => (
+                <>
+                  <div className="admin-table-cell">
+                    <span
+                      className={`pill ${
+                        notification.is_read
+                          ? 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          : 'border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200'
+                      }`}
+                    >
+                      {notification.is_read ? 'Read' : 'Unread'}
+                    </span>
+                  </div>
+                  <div className="admin-table-cell">
+                    <div className="flex items-start gap-3">
+                      <div className="pt-0.5 text-base">{getNotificationIcon(notification.type)}</div>
+                      <div className="min-w-0">
+                        <p
+                          className={`text-sm ${
+                            notification.is_read
+                              ? 'text-slate-800 dark:text-slate-200'
+                              : 'font-semibold text-slate-900 dark:text-slate-100'
+                          }`}
+                        >
+                          {notification.title}
+                        </p>
+                        {notification.message ? (
+                          <p className="helper-copy mt-1 line-clamp-2">{notification.message}</p>
+                        ) : null}
                       </div>
-                    </td>
-                    <td className="px-4 py-4 align-top text-sm text-slate-600 whitespace-nowrap">
-                      {formatTime(notification.created_at)}
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <div className="flex items-center justify-end gap-2">
-                        {notification.link && (
-                          <button
-                            onClick={() => openNotificationLink(notification)}
-                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-                            title="Open link"
-                            disabled={anyActionPending}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </button>
-                        )}
-                        {notification.is_read ? (
-                          <button
-                            onClick={() => markUnreadMutation.mutate(notification.id)}
-                            className="p-2 rounded-lg border border-slate-200 text-amber-700 hover:bg-amber-50"
-                            title="Mark as unread"
-                            disabled={anyActionPending}
-                          >
-                            <Mail className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => markReadMutation.mutate(notification.id)}
-                            className="p-2 rounded-lg border border-slate-200 text-emerald-700 hover:bg-emerald-50"
-                            title="Mark as read"
-                            disabled={anyActionPending}
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
+                    </div>
+                  </div>
+                  <div className="admin-table-cell body-copy whitespace-nowrap">
+                    {formatTime(notification.created_at)}
+                  </div>
+                  <div className="admin-table-cell">
+                    <div className="flex items-center justify-end gap-2">
+                      {notification.link ? (
                         <button
-                          onClick={() => {
-                            if (confirm('Delete this notification?')) {
-                              deleteMutation.mutate(notification.id)
-                            }
-                          }}
-                          className="p-2 rounded-lg border border-slate-200 text-rose-700 hover:bg-rose-50"
-                          title="Delete notification"
+                          type="button"
+                          onClick={() => openNotificationLink(notification)}
+                          className="admin-icon-action border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:text-slate-300"
+                          title="Open link"
+                          aria-label={`Open notification link for ${notification.title}`}
                           disabled={anyActionPending}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <ExternalLink className="w-4 h-4" />
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="px-4 py-4 border-t border-slate-200 bg-slate-50 flex justify-center">
+                      ) : null}
+                      {notification.is_read ? (
+                        <button
+                          type="button"
+                          onClick={() => markUnreadMutation.mutate(notification.id)}
+                          className="admin-icon-action border border-slate-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-slate-700 dark:text-amber-300 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
+                          title="Mark as unread"
+                          aria-label={`Mark ${notification.title} as unread`}
+                          disabled={anyActionPending}
+                        >
+                          <Mail className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => markReadMutation.mutate(notification.id)}
+                          className="admin-icon-action border border-slate-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-slate-700 dark:text-emerald-300 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-200"
+                          title="Mark as read"
+                          aria-label={`Mark ${notification.title} as read`}
+                          disabled={anyActionPending}
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmAction({
+                            title: 'Delete notification',
+                            description: 'Are you sure you want to delete this notification?',
+                            onConfirm: () => {
+                              deleteMutation.mutate(notification.id)
+                              setConfirmAction(null)
+                            },
+                          })
+                        }}
+                        className="admin-icon-action-danger border border-slate-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-slate-700 dark:text-rose-300 dark:hover:bg-rose-950/30 dark:hover:text-rose-200"
+                        title="Delete notification"
+                        aria-label={`Delete notification ${notification.title}`}
+                        disabled={anyActionPending}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            />
+            <div className="flex justify-center border-t border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/70">
               {hasMore ? (
                 <button
+                  type="button"
                   onClick={() => setPage((previous) => previous + 1)}
                   className="btn-secondary"
                   disabled={isFetching || anyActionPending}
@@ -368,12 +421,21 @@ export default function NotificationsPage() {
                   {isFetching ? 'Loading...' : 'Load more'}
                 </button>
               ) : (
-                <p className="text-sm text-slate-500">Showing all notifications</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Showing all notifications</p>
               )}
             </div>
           </>
         )}
       </div>
+
+      <ConfirmationDialog
+        open={!!confirmAction}
+        title={confirmAction?.title ?? ''}
+        description={confirmAction?.description}
+        confirmLabel="Delete"
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   )
 }

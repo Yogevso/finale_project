@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 
 import AdminFirstCompanyWizard from '@/components/AdminFirstCompanyWizard'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
+import { ErrorState } from '@/components/ErrorState'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
@@ -47,7 +48,12 @@ export default function DashboardPage() {
     queryFn: () => api.getDocuments({ page: 1, page_size: 5 }),
   })
 
-  const { data: documentStats, isLoading: isStatsLoading } = useQuery({
+  const {
+    data: documentStats,
+    isLoading: isStatsLoading,
+    isError: isStatsError,
+    refetch: refetchDocumentStats,
+  } = useQuery({
     queryKey: ['documents', 'stats'],
     queryFn: () => api.getDocumentStats(),
   })
@@ -79,7 +85,7 @@ export default function DashboardPage() {
   const documentsPath = isCustomer ? '/portal/documents' : '/documents'
 
   return (
-    <div className="space-y-8">
+    <div className="page-stack-lg">
       <PageHeader
         title="Dashboard"
         subtitle={`Welcome back, ${user?.full_name || 'team member'}`}
@@ -105,61 +111,89 @@ export default function DashboardPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div key={stat.label} className="surface-card rounded-2xl p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="eyebrow">{stat.label}</p>
-                  {isStatsLoading ? (
-                    <Skeleton className="mt-1 h-9 w-16" />
-                  ) : (
-                    <p className="text-3xl font-display font-bold text-slate-900 mt-1">{stat.value}</p>
-                  )}
+      {isStatsError ? (
+        <ErrorState
+          title="Dashboard stats unavailable"
+          message="We could not load the dashboard summary cards."
+          onRetry={() => void refetchDocumentStats()}
+        />
+      ) : (
+        <section aria-label="Dashboard summary metrics" aria-busy={isStatsLoading}>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4" role="list">
+            {stats.map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div
+                  key={stat.label}
+                  role="listitem"
+                  aria-label={`${stat.label}: ${isStatsLoading ? 'Loading' : stat.value}`}
+                  className="surface-card rounded-2xl p-6"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="eyebrow">{stat.label}</p>
+                      {isStatsLoading ? (
+                        <Skeleton className="mt-1 h-9 w-16" />
+                      ) : (
+                        <p className="mt-1 text-3xl font-display font-bold text-slate-900 dark:text-slate-100">
+                          {stat.value}
+                        </p>
+                      )}
+                    </div>
+                    <Icon className="h-7 w-7 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+                  </div>
                 </div>
-                <Icon className="h-7 w-7 text-slate-500" />
-              </div>
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
-      <div className="surface-card rounded-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-200">
-          <h2 className="text-lg font-display font-semibold text-slate-900">Recent Documents</h2>
+      <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-recent-documents-heading">
+        <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-800">
+          <h2 id="dashboard-recent-documents-heading" className="section-title">
+            Recent Documents
+          </h2>
+          <Link
+            to={documentsPath}
+            className="text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200"
+          >
+            View all -&gt;
+          </Link>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800" role="list" aria-label="Recent documents">
           {isDocumentsLoading ? (
-            <div className="p-6 space-y-3">
+            <div className="space-y-3 p-6">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-4 w-36" />
               <Skeleton className="h-4 w-44" />
             </div>
           ) : documents?.items.length === 0 ? (
-            <div className="p-6 text-center text-slate-500">No documents yet</div>
+            <div className="helper-copy p-6 text-center" role="status">No documents yet</div>
           ) : (
             documents?.items.map((doc) => (
-              <div key={doc.id} className="p-4 hover:bg-slate-50 transition-colors">
+              <div key={doc.id} role="listitem" className="p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700">
-                      <h3 className="font-medium text-slate-900">{doc.title}</h3>
-                      <p className="text-sm text-slate-500">{doc.document_number}</p>
+                    <Link
+                      to={`/documents/${doc.id}/fullscreen`}
+                      className="block hover:text-sky-700 dark:hover:text-sky-300"
+                    >
+                      <h3 className="font-medium text-slate-900 dark:text-slate-100">{doc.title}</h3>
+                      <p className="helper-copy">{doc.document_number}</p>
                     </Link>
                   </div>
                   <div className="flex items-center gap-3">
-                    <BookmarkToggleButton documentId={doc.id} showLabel={false} />
+                    <BookmarkToggleButton documentId={doc.id} documentTitle={doc.title} showLabel={false} />
                     <span
                       className={`pill ${
                         doc.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200'
                           : doc.status === 'approved'
-                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                            ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200'
                             : doc.status === 'draft'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200'
+                              : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                       }`}
                     >
                       {doc.status === 'active'
@@ -174,17 +208,23 @@ export default function DashboardPage() {
             ))
           )}
         </div>
-      </div>
+      </section>
 
       {!isCustomer && <RecentActivityWidget />}
 
       <div className="surface-card rounded-2xl p-6">
-        <h2 className="text-lg font-display font-semibold text-slate-900 mb-4">Quick Actions</h2>
+        <h2 className="section-title mb-4">Quick Actions</h2>
         <div className="flex flex-wrap gap-3">
           <a href="/documents" className="btn-primary">
             View All Documents
           </a>
-          <button className="btn-secondary" onClick={() => window.location.href = '/documents?action=create'}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              window.location.href = '/documents?action=create'
+            }}
+          >
             Create New Document
           </button>
         </div>
@@ -207,41 +247,44 @@ function BookmarksWidget() {
   })
 
   return (
-    <div className="surface-card rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-        <h2 className="font-display font-semibold text-slate-900 flex items-center gap-2">
-          <BookMarked className="h-4 w-4 text-amber-500" />
+    <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-bookmarks-heading">
+      <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
+        <h2 id="dashboard-bookmarks-heading" className="section-title flex items-center gap-2">
+          <BookMarked className="h-4 w-4 text-amber-500" aria-hidden="true" />
           My Bookmarks
         </h2>
-        <span className="pill bg-slate-100 text-slate-600 border-slate-200">{bookmarks.length} saved</span>
+        <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          {bookmarks.length} saved
+        </span>
       </div>
-      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+      <div className="max-h-64 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800" role="list" aria-label="Bookmarked documents">
         {isLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="space-y-2 p-4">
             <Skeleton className="h-3 w-40" />
             <Skeleton className="h-3 w-28" />
             <Skeleton className="h-3 w-36" />
           </div>
         ) : bookmarks.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
-            <BookMarked className="h-6 w-6 mx-auto mb-2 text-slate-300" />
+          <div className="p-6 text-center" role="status">
+            <BookMarked className="mx-auto mb-2 h-6 w-6 text-slate-300 dark:text-slate-600" aria-hidden="true" />
             <p>No bookmarks yet</p>
-            <p className="text-xs mt-1">Bookmark documents for quick access</p>
+            <p className="helper-copy mt-1">Bookmark documents for quick access</p>
           </div>
         ) : (
           bookmarks.slice(0, 5).map((bookmark) => (
             <Link
               key={bookmark.id}
               to={`/documents/${bookmark.document_id}/fullscreen`}
-              className="block p-3 hover:bg-slate-50 transition-colors"
+              role="listitem"
+              className="block p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
             >
-              <p className="font-medium text-slate-900 text-sm truncate">{bookmark.document_title}</p>
-              <p className="text-xs text-slate-500">{bookmark.document_number}</p>
+              <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{bookmark.document_title}</p>
+              <p className="helper-copy">{bookmark.document_number}</p>
             </Link>
           ))
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -254,15 +297,17 @@ function RecentActivityWidget() {
   })
 
   return (
-    <div className="surface-card rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-200 p-4">
-        <h2 className="flex items-center gap-2 font-display font-semibold text-slate-900">
-          <Activity className="h-4 w-4 text-sky-600" />
+    <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-activity-heading">
+      <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
+        <h2 id="dashboard-activity-heading" className="section-title flex items-center gap-2">
+          <Activity className="h-4 w-4 text-sky-600" aria-hidden="true" />
           Recent Activity
         </h2>
-        <span className="pill border-slate-200 bg-slate-100 text-slate-600">{activities.length} items</span>
+        <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          {activities.length} items
+        </span>
       </div>
-      <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+      <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800" role="list" aria-label="Recent activity feed">
         {isLoading ? (
           <div className="space-y-2 p-4">
             <Skeleton className="h-3 w-52" />
@@ -270,26 +315,28 @@ function RecentActivityWidget() {
             <Skeleton className="h-3 w-48" />
           </div>
         ) : activities.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">No recent activity yet</div>
+          <div className="helper-copy p-6 text-center" role="status">No recent activity yet</div>
         ) : (
           activities.map((activity) => (
-            <div key={activity.id} className="p-4">
+            <div key={activity.id} role="listitem" className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm text-slate-900">
+                  <p className="text-sm text-slate-900 dark:text-slate-100">
                     <span className="font-medium">{activity.user_name}</span>{' '}
-                    <span className="text-slate-600">{formatActivityAction(activity.action, activity.details)}</span>
+                    <span className="body-copy">
+                      {formatActivityAction(activity.action, activity.details)}
+                    </span>
                   </p>
                   {activity.document_id && activity.document_title ? (
                     <Link
                       to={`/documents/${activity.document_id}`}
-                      className="mt-1 inline-block text-sm text-sky-700 hover:text-sky-800"
+                      className="mt-1 inline-block text-sm text-sky-700 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
                     >
                       {activity.document_title}
                     </Link>
                   ) : null}
                 </div>
-                <span className="whitespace-nowrap text-xs text-slate-500">
+                <span className="whitespace-nowrap text-xs text-slate-500 dark:text-slate-400">
                   {new Date(activity.created_at).toLocaleString()}
                 </span>
               </div>
@@ -297,7 +344,7 @@ function RecentActivityWidget() {
           ))
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -335,26 +382,28 @@ function ReadingProgressWidget() {
   const completed = progress.filter((item) => item.progress_percent >= 100)
 
   return (
-    <div className="surface-card rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-        <h2 className="font-display font-semibold text-slate-900 flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-sky-500" />
+    <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-reading-progress-heading">
+      <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
+        <h2 id="dashboard-reading-progress-heading" className="section-title flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-sky-500" aria-hidden="true" />
           Reading Progress
         </h2>
-        <span className="pill bg-emerald-50 text-emerald-700 border-emerald-200">{completed.length} completed</span>
+        <span className="pill border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+          {completed.length} completed
+        </span>
       </div>
-      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+      <div className="max-h-64 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800" role="list" aria-label="Reading progress">
         {isLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="space-y-2 p-4">
             <Skeleton className="h-3 w-44" />
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-3 w-40" />
           </div>
         ) : inProgress.length === 0 && completed.length === 0 ? (
-          <div className="p-6 text-center text-slate-500">
-            <BookOpen className="h-6 w-6 mx-auto mb-2 text-slate-300" />
+          <div className="p-6 text-center" role="status">
+            <BookOpen className="mx-auto mb-2 h-6 w-6 text-slate-300 dark:text-slate-600" aria-hidden="true" />
             <p>No reading activity</p>
-            <p className="text-xs mt-1">Start reading documents to track progress</p>
+            <p className="helper-copy mt-1">Start reading documents to track progress</p>
           </div>
         ) : (
           <>
@@ -362,14 +411,17 @@ function ReadingProgressWidget() {
               <Link
                 key={item.id}
                 to={`/documents/${item.document_id}/fullscreen`}
-                className="block p-3 hover:bg-slate-50 transition-colors"
+                role="listitem"
+                className="block p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
               >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-medium text-slate-900 text-sm truncate flex-1">{item.document_title}</p>
-                  <span className="text-xs text-sky-600 ml-2">{item.progress_percent}%</span>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="flex-1 truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {item.document_title}
+                  </p>
+                  <span className="ml-2 text-xs text-sky-600 dark:text-sky-300">{item.progress_percent}%</span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-sky-500 transition-all" style={{ width: `${item.progress_percent}%` }} />
+                <div className="progress-track h-1.5 w-full">
+                  <div className="progress-fill" style={{ width: `${item.progress_percent}%` }} />
                 </div>
               </Link>
             ))}
@@ -377,17 +429,18 @@ function ReadingProgressWidget() {
               <Link
                 key={item.id}
                 to={`/documents/${item.document_id}/fullscreen`}
-                className="block p-3 hover:bg-slate-50 transition-colors"
+                role="listitem"
+                className="block p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
               >
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <p className="font-medium text-slate-700 text-sm truncate">{item.document_title}</p>
+                  <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{item.document_title}</p>
                 </div>
               </Link>
             ))}
           </>
         )}
       </div>
-    </div>
+    </section>
   )
 }

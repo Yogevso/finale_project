@@ -1,11 +1,14 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Laptop, LogOut, MonitorSmartphone, ShieldAlert, Smartphone, Trash2 } from 'lucide-react'
+import { Laptop, LogOut, MonitorSmartphone, Smartphone, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
 import ProfileSettingsNav from '@/components/ProfileSettingsNav'
-import Skeleton from '@/components/Skeleton'
+import { TableSkeleton } from '@/components/skeletons'
+import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatDate } from '@/lib/dateUtils'
@@ -98,14 +101,14 @@ export default function SessionsPage() {
   }, [sessionsQuery.data?.items])
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="Sessions"
         subtitle="Review active devices and revoke sessions you do not recognize."
         actions={
           <button
             type="button"
-            className="btn-secondary inline-flex items-center gap-2"
+            className="btn-secondary table-action-btn disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => revokeAllSessionsMutation.mutate()}
             disabled={revokeAllSessionsMutation.isPending}
           >
@@ -117,89 +120,88 @@ export default function SessionsPage() {
 
       <ProfileSettingsNav />
 
-      <div className="surface-card rounded-2xl overflow-hidden">
-        {sessionsQuery.isLoading ? (
-          <div className="p-6 space-y-3">
-            <Skeleton className="h-4 w-44" />
-            <Skeleton className="h-4 w-56" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        ) : sessionsQuery.isError ? (
-          <div className="p-8 text-center">
-            <ShieldAlert className="h-8 w-8 mx-auto text-rose-500 mb-2" />
-            <p className="text-rose-600">Failed to load sessions.</p>
-          </div>
-        ) : sortedSessions.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <p>No active sessions found.</p>
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Device</th>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">IP Address</th>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Last Active</th>
-                <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Created</th>
-                <th className="text-right text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedSessions.map((session) => {
-                const Icon = inferDeviceIcon(session.user_agent)
-                return (
-                  <tr key={session.id} className="border-b border-slate-100">
-                    <td className="px-4 py-4">
-                      <div className="flex items-start gap-2">
-                        <Icon className="h-4 w-4 text-slate-500 mt-0.5" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-900">
-                            {inferBrowserLabel(session.user_agent)}
-                            {session.is_current && (
-                              <span className="ml-2 pill bg-emerald-100 text-emerald-700 border-emerald-200">
-                                Current
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs text-slate-500 truncate">
-                            {session.user_agent || 'Unknown user agent'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {session.ip_address || 'Unknown'}
-                    </td>
-                    <td
-                      className="px-4 py-4 text-sm text-slate-700"
-                      title={formatDate(session.last_active_at)}
+      {sessionsQuery.isLoading ? (
+        <TableSkeleton rows={6} columns={5} />
+      ) : sessionsQuery.isError ? (
+        <ErrorState
+          title="Sessions could not be loaded"
+          message="We could not fetch your recent device activity."
+          onRetry={() => void sessionsQuery.refetch()}
+        />
+      ) : sortedSessions.length === 0 ? (
+        <EmptyState
+          icon={<Laptop className="h-8 w-8" aria-hidden="true" />}
+          title="No active sessions found"
+          description="This account does not have any active sessions to review right now."
+        />
+      ) : (
+        <VirtualizedTable
+          items={sortedSessions}
+          ariaLabel="Active sessions"
+          columns={[
+            { header: 'Device' },
+            { header: 'IP Address' },
+            { header: 'Last Active' },
+            { header: 'Created' },
+            { header: 'Actions', headerClassName: 'text-right' },
+          ]}
+          gridTemplateColumns="minmax(18rem, 2.2fr) minmax(8rem, 1fr) minmax(8rem, 0.9fr) minmax(8rem, 0.9fr) minmax(9rem, 0.8fr)"
+          estimateRowHeight={88}
+          rowKey={(session) => session.id}
+          renderRow={(session) => {
+            const Icon = inferDeviceIcon(session.user_agent)
+
+            return (
+              <>
+                <div className="admin-table-cell">
+                  <div className="flex items-start gap-2">
+                    <Icon className="mt-0.5 h-4 w-4 text-slate-500" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {inferBrowserLabel(session.user_agent)}
+                        {session.is_current ? (
+                          <span className="ml-2 pill border-emerald-200 bg-emerald-100 text-emerald-700">
+                            Current
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        {session.user_agent || 'Unknown user agent'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="admin-table-cell text-sm text-slate-700 dark:text-slate-300">
+                  {session.ip_address || 'Unknown'}
+                </div>
+                <div
+                  className="admin-table-cell text-sm text-slate-700 dark:text-slate-300"
+                  title={formatDate(session.last_active_at)}
+                >
+                  {formatRelativeTime(session.last_active_at)}
+                </div>
+                <div className="admin-table-cell text-sm text-slate-700 dark:text-slate-300">
+                  {formatDate(session.created_at)}
+                </div>
+                <div className="admin-table-cell">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="btn-danger px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => revokeSessionMutation.mutate(session.id)}
+                      disabled={revokeSessionMutation.isPending || session.is_current}
+                      title={session.is_current ? 'Use "Sign out everywhere" to end this session' : 'Revoke session'}
                     >
-                      {formatRelativeTime(session.last_active_at)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {formatDate(session.created_at)}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 disabled:opacity-60"
-                          onClick={() => revokeSessionMutation.mutate(session.id)}
-                          disabled={revokeSessionMutation.isPending || session.is_current}
-                          title={session.is_current ? 'Use "Sign out everywhere" to end this session' : 'Revoke session'}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Revoke
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                      <Trash2 className="h-4 w-4" />
+                      Revoke
+                    </button>
+                  </div>
+                </div>
+              </>
+            )
+          }}
+        />
+      )}
     </div>
   )
 }

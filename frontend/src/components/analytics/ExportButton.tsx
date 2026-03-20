@@ -35,9 +35,10 @@ export function ExportButton({ exportType, startDate, endDate }: ExportButtonPro
 
   return (
     <button
+      type="button"
       onClick={() => void handleExport()}
       disabled={exporting}
-      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-50"
+      className="btn-secondary table-action-btn flex items-center gap-2 disabled:opacity-50"
     >
       {exporting ? <Download className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4" />}
       {exporting ? 'Exporting CSV...' : 'Export CSV'}

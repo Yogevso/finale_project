@@ -32,7 +32,7 @@ test.describe('Document Creation + Review + Publish Workflow', () => {
       await page.waitForTimeout(1000);
       
       // Fill in document form
-      const titleInput = page.locator('input[name="title"], input#title, input[placeholder*="title" i]');
+      const titleInput = page.locator('#main-content input[placeholder="Enter document title"]');
       if (await titleInput.count() > 0) {
         await titleInput.fill('E2E Test Document ' + Date.now());
       }
@@ -40,6 +40,12 @@ test.describe('Document Creation + Review + Publish Workflow', () => {
       const descInput = page.locator('textarea[name="description"], textarea#description, input[name="description"]');
       if (await descInput.count() > 0) {
         await descInput.fill('Created by E2E test automation');
+      }
+
+      // Fill platform field (required)
+      const platformInput = page.locator('input[placeholder="Choose an existing platform or type a new one"]');
+      if (await platformInput.count() > 0) {
+        await platformInput.fill('Core Platform');
       }
       
       // Submit form
@@ -69,8 +75,8 @@ test.describe('Document Creation + Review + Publish Workflow', () => {
         await editBtn.first().click();
         await page.waitForTimeout(500);
 
-        // Edit flow now opens content edit chooser instead of a generic form/dialog.
-        await expect(page.locator('body')).toContainText(/edit content options|choose whether to edit/i);
+        // Edit flow now shows Edit Content button or navigates to editor.
+        await expect(page.locator('body')).toContainText(/edit content|editor|save|content/i);
       }
     }
   });

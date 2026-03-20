@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=https://api.portal.example.com
-        - VITE_COLLAB_WS_URL=wss://collab.portal.example.com
+        - VITE_COLLAB_SERVER_URL=wss://collab.portal.example.com
     container_name: portal-frontend
     restart: unless-stopped
     ports:

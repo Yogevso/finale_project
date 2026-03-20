@@ -29,11 +29,21 @@ export class ApiHttpClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      // AD-004: send httpOnly cookies for session persistence
+      withCredentials: true,
     })
 
-    // Load tokens from localStorage
-    this.token = localStorage.getItem('token')
-    this.refreshToken = localStorage.getItem('refreshToken')
+    // AD-004: tokens are stored in memory only — not localStorage.
+    // On page reload they are restored from httpOnly session cookie
+    // by the auth interceptor / refresh flow.
+    this.token = null
+    this.refreshToken = null
+
+    // Migrate: remove any leftover localStorage tokens from pre-AD-004 installs
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
+    }
 
     // Add auth header to requests
     this.client.interceptors.request.use((config) => {
@@ -55,8 +65,8 @@ export class ApiHttpClient {
           requestUrl.includes('/auth/refresh')
 
         if (error.response?.status === 401 && originalRequest && !isAuthFlowRequest) {
-          // Try to refresh the token
-          if (this.refreshToken && !this.isRefreshing) {
+          // Try to refresh the token (in-memory refresh token OR httpOnly cookie)
+          if (!this.isRefreshing) {
             this.isRefreshing = true
             try {
               const newToken = await this.doRefreshToken()
@@ -93,16 +103,15 @@ export class ApiHttpClient {
     )
   }
 
+  /** Expose current in-memory access token (read-only). */
+  getToken(): string | null {
+    return this.token
+  }
+
   protected resolveAttachmentAccessToken(): string | null {
-    const authToken = this.token || localStorage.getItem('token')
-    if (authToken && authToken !== 'null' && authToken !== 'undefined') {
-      return authToken
-    }
-    if (typeof window !== 'undefined') {
-      const urlToken = new URLSearchParams(window.location.search).get('token')
-      if (urlToken && urlToken !== 'null' && urlToken !== 'undefined') {
-        return urlToken
-      }
+    // AD-004: tokens live in memory only — no localStorage fallback
+    if (this.token && this.token !== 'null' && this.token !== 'undefined') {
+      return this.token
     }
     return null
   }
@@ -147,30 +156,52 @@ export class ApiHttpClient {
     const { data } = await axios.post<TokenResponse>(
       `${API_BASE_URL}/auth/refresh`,
       { refresh_token: this.refreshToken },
+      // AD-004: send httpOnly cookie for refresh when in-memory token absent
+      { withCredentials: true },
     )
-    this.setToken(data.access_token)
+    this.setToken(data.access_token, data.refresh_token ?? undefined)
     return data.access_token
+  }
+
+  /**
+   * AD-004: Attempt to restore session from httpOnly refresh cookie.
+   * Call once on app init — if a valid refresh cookie exists the backend
+   * returns a fresh access token.
+   */
+  async tryRestoreSession(): Promise<boolean> {
+    try {
+      const { data } = await axios.post<TokenResponse>(
+        `${API_BASE_URL}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      if (data.access_token) {
+        this.setToken(data.access_token, data.refresh_token ?? undefined)
+        return true
+      }
+    } catch {
+      // no valid cookie — user needs to log in
+    }
+    return false
   }
 
   setToken(token: string, refresh?: string | null) {
     this.token = token
     this.hasRedirectedToLogin = false
-    localStorage.setItem('token', token)
+    // AD-004: tokens stored in memory only — not localStorage
     if (refresh !== undefined) {
-      this.refreshToken = refresh
-      if (refresh) {
-        localStorage.setItem('refreshToken', refresh)
-      } else {
-        localStorage.removeItem('refreshToken')
-      }
+      this.refreshToken = refresh ?? null
     }
   }
 
   clearTokens() {
     this.token = null
     this.refreshToken = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('refreshToken')
+    // AD-004: clean up any stale localStorage keys from pre-migration
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
+    }
   }
 
   hasToken(): boolean {

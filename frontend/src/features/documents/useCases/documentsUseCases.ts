@@ -63,15 +63,16 @@ export type DocumentsUseCasesClient = Pick<
 
 export type UploadDocumentOptions = Parameters<DocumentsUseCasesClient['uploadDocument']>[2]
 
-export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx'
+export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx,.pdf'
 export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024
 
 export const DOCUMENT_UPLOAD_ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/pdf',
 ])
 
-export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.docx', '.pptx'])
+export const DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.docx', '.pptx', '.pdf'])
 
 export function buildDocumentsListQueryParams(filters: DocumentListFilters): DocumentQueryParams {
   return {

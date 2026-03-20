@@ -37,7 +37,7 @@ const tableData: DocumentListResponse = {
   total: 1,
   page: 1,
   page_size: 10,
-  pages: 1,
+  total_pages: 1,
 }
 
 describe('DocumentsTable', () => {
@@ -64,7 +64,9 @@ describe('DocumentsTable', () => {
       </MemoryRouter>,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(screen.getByRole('table', { name: /documents list/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Delete Document 42' }))
 
     expect(onDelete).toHaveBeenCalledWith(42, 'Document 42')
   })

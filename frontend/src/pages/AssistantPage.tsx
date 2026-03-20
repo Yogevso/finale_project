@@ -3,7 +3,7 @@
  * a conversation sidebar and main chat area.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import {
   Clock,
   Download,
@@ -15,12 +15,17 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { ListSkeleton } from '@/components/skeletons'
 import { useAuth } from '@/lib/auth'
 import assistantApi from '@/lib/api/assistantApi'
 import { useAssistantChat } from '@/features/assistant/useAssistantChat'
-import AssistantMessageList from '@/features/assistant/AssistantMessageList'
+import AssistantMessageListFallback from '@/features/assistant/AssistantMessageListFallback'
 import AssistantInput from '@/features/assistant/AssistantInput'
 import type { AssistantConversation } from '@/types/assistant'
+
+const AssistantMessageList = lazy(() => import('@/features/assistant/AssistantMessageList'))
 
 // ── Role-based suggested questions ──────────────────────────────
 
@@ -111,9 +116,12 @@ export default function AssistantPage() {
   const [conversations, setConversations] = useState<AssistantConversation[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchFilter, setSearchFilter] = useState('')
+  const [conversationsLoading, setConversationsLoading] = useState(true)
+  const [conversationsError, setConversationsError] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const renameInputRef = useRef<HTMLInputElement | null>(null)
 
   // Load conversations on mount
   useEffect(() => {
@@ -128,12 +136,29 @@ export default function AssistantPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.titleVersion])
 
+  useEffect(() => {
+    if (editingId === null) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [editingId])
+
   const refreshConversations = async () => {
+    setConversationsLoading(true)
+    setConversationsError(false)
     try {
       const convs = await assistantApi.getConversations()
       setConversations(convs)
     } catch {
-      // silently fail
+      setConversationsError(true)
+    } finally {
+      setConversationsLoading(false)
     }
   }
 
@@ -145,7 +170,7 @@ export default function AssistantPage() {
     async (id: number) => {
       await chat.loadConversation(id)
     },
-    [chat.loadConversation],
+    [chat],
   )
 
   const handleDeleteConversation = useCallback(
@@ -154,7 +179,7 @@ export default function AssistantPage() {
       setConversations(prev => prev.filter(c => c.id !== id))
       setDeleteConfirmId(null)
     },
-    [chat.deleteConversation],
+    [chat],
   )
 
   const handleRenameConversation = useCallback(
@@ -178,7 +203,7 @@ export default function AssistantPage() {
       // Refresh sidebar after first message (new conversation appears)
       setTimeout(refreshConversations, 500)
     },
-    [chat.sendMessage],
+    [chat],
   )
 
   const handleSlashCommand = useCallback(
@@ -198,7 +223,7 @@ export default function AssistantPage() {
           break
       }
     },
-    [handleSend, chat.exportConversation, chat.newConversation],
+    [handleSend, chat],
   )
 
   const handleEditMessage = useCallback(
@@ -209,7 +234,7 @@ export default function AssistantPage() {
         setTimeout(refreshConversations, 500)
       }
     },
-    [chat.editAndResend],
+    [chat],
   )
 
   const suggestions = ROLE_SUGGESTIONS[user?.role || 'viewer'] || ROLE_SUGGESTIONS.viewer
@@ -219,7 +244,7 @@ export default function AssistantPage() {
     : conversations
 
   return (
-    <div className="flex h-[calc(100vh-200px)] min-h-[400px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+    <div className="surface-card flex h-[calc(100vh-200px)] min-h-[400px] overflow-hidden rounded-2xl animate-fade-in">
       {/* ── Sidebar ──────────────────────────────────────────── */}
       {sidebarOpen && (
         <div className="flex w-60 shrink-0 flex-col border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
@@ -228,7 +253,7 @@ export default function AssistantPage() {
             <button
               type="button"
               onClick={handleNewChat}
-              className="flex flex-1 items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 transition-colors"
+              className="btn-primary table-action-btn flex-1"
             >
               <MessageSquarePlus className="h-4 w-4" />
               New Chat
@@ -236,7 +261,7 @@ export default function AssistantPage() {
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              className="btn-icon h-9 w-9 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
               title="Close sidebar"
             >
               <PanelLeftClose className="h-4 w-4" />
@@ -259,78 +284,108 @@ export default function AssistantPage() {
 
           {/* Conversation list (grouped by date) */}
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-            {filteredConversations.length === 0 && (
-              <p className="px-2 py-4 text-center text-xs text-slate-400">
-                {searchFilter ? 'No matching conversations' : 'No conversations yet'}
-              </p>
-            )}
-            {groupConversations(filteredConversations).map(group => (
-              <div key={group.label}>
-                <p className="px-2.5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  {group.label}
-                </p>
-                {group.items.map(conv => (
-                  <div
-                    key={conv.id}
-                    className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm cursor-pointer transition-colors ${
-                      conv.id === chat.conversationId
-                        ? 'bg-sky-100 text-sky-700'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                    onClick={() => editingId !== conv.id && handleLoadConversation(conv.id)}
-                  >
-                    <div className="flex-1 min-w-0">
-                      {editingId === conv.id ? (
-                        <input
-                          autoFocus
-                          value={editTitle}
-                          onChange={e => setEditTitle(e.target.value)}
-                          onBlur={() => handleRenameConversation(conv.id, editTitle)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') handleRenameConversation(conv.id, editTitle)
-                            if (e.key === 'Escape') setEditingId(null)
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          className="w-full bg-white border border-sky-400 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-sky-400"
-                        />
-                      ) : (
-                        <p className="truncate font-medium text-xs">{conv.title}</p>
-                      )}
-                      <p className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                        <Clock className="h-3 w-3" />
-                        {timeAgo(conv.updated_at)}
-                        <span className="ml-1">· {conv.message_count} msg{conv.message_count !== 1 ? 's' : ''}</span>
-                      </p>
-                    </div>
-                    <div className="hidden group-hover:flex items-center gap-0.5">
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation()
-                          setEditingId(conv.id)
-                          setEditTitle(conv.title)
-                        }}
-                        className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:bg-sky-50 hover:text-sky-500"
-                        title="Rename conversation"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation()
-                          setDeleteConfirmId(conv.id)
-                        }}
-                        className="h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-500"
-                        title="Delete conversation"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            {conversationsLoading ? (
+              <ListSkeleton rows={6} className="px-1 py-2" />
+            ) : conversationsError ? (
+              <ErrorState
+                title="Conversations unavailable"
+                message="We could not load your conversation history."
+                onRetry={() => void refreshConversations()}
+                className="p-5"
+              />
+            ) : filteredConversations.length === 0 ? (
+              <div className="px-1 py-2">
+                <EmptyState
+                  title={searchFilter ? 'No matching chats' : 'No conversations yet'}
+                  description={
+                    searchFilter
+                      ? 'Try a different search term.'
+                      : 'Start a new chat to build your assistant history.'
+                  }
+                  action={!searchFilter ? { label: 'New Chat', onClick: handleNewChat } : undefined}
+                  className="p-6"
+                />
               </div>
-            ))}
+            ) : (
+              groupConversations(filteredConversations).map(group => (
+                <div key={group.label}>
+                  <p className="helper-copy px-2.5 pt-3 pb-1 font-semibold uppercase tracking-wider">
+                    {group.label}
+                  </p>
+                  {group.items.map(conv => (
+                    <div
+                      key={conv.id}
+                      className={`group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                        conv.id === chat.conversationId
+                          ? 'bg-sky-100 text-sky-700'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                      onClick={() => editingId !== conv.id && handleLoadConversation(conv.id)}
+                      onKeyDown={(event) => {
+                        if ((event.key === 'Enter' || event.key === ' ') && editingId !== conv.id) {
+                          event.preventDefault()
+                          void handleLoadConversation(conv.id)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={conv.id === chat.conversationId}
+                    >
+                      <div className="flex-1 min-w-0">
+                        {editingId === conv.id ? (
+                          <input
+                            ref={renameInputRef}
+                            value={editTitle}
+                            onChange={e => setEditTitle(e.target.value)}
+                            onBlur={() => handleRenameConversation(conv.id, editTitle)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleRenameConversation(conv.id, editTitle)
+                              if (e.key === 'Escape') setEditingId(null)
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            className="input-field h-8 px-2 text-xs"
+                          />
+                        ) : (
+                          <p className="truncate font-medium text-xs">{conv.title}</p>
+                        )}
+                        <p className="helper-copy mt-0.5 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {timeAgo(conv.updated_at)}
+                          <span className="ml-1">· {conv.message_count} msg{conv.message_count !== 1 ? 's' : ''}</span>
+                        </p>
+                      </div>
+                      <div className="hidden group-hover:flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setEditingId(conv.id)
+                            setEditTitle(conv.title)
+                          }}
+                          className="btn-icon h-8 w-8 text-slate-400 hover:bg-sky-50 hover:text-sky-500"
+                          title="Rename conversation"
+                          aria-label={`Rename ${conv.title}`}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            setDeleteConfirmId(conv.id)
+                          }}
+                          className="btn-icon h-8 w-8 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete conversation"
+                          aria-label={`Delete ${conv.title}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -343,14 +398,14 @@ export default function AssistantPage() {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 mr-1"
+              className="btn-icon mr-1 h-9 w-9 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               title="Open sidebar"
             >
               <PanelLeftOpen className="h-4 w-4" />
             </button>
           )}
           <Sparkles className="h-4 w-4 text-sky-600" />
-          <h1 className="text-sm font-semibold text-slate-800">AI Assistant</h1>
+          <h1 className="card-title text-sm">AI Assistant</h1>
           <span className="text-xs text-slate-400">
             {chat.availableTools.length > 0 && `${chat.availableTools.length} tools available`}
           </span>
@@ -359,10 +414,10 @@ export default function AssistantPage() {
               <button
                 type="button"
                 onClick={() => chat.exportConversation()}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                className="btn-secondary table-action-btn"
                 title="Export as Markdown"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Download className="h-4 w-4" />
                 Export
               </button>
             )}
@@ -378,22 +433,24 @@ export default function AssistantPage() {
             onSuggestionClick={handleSend}
           />
         ) : (
-          <AssistantMessageList
-            messages={chat.messages}
-            streamingText={chat.currentStreamText}
-            isLoading={chat.isLoading}
-            isStreaming={chat.isStreaming}
-            thinkingStatus={chat.thinkingStatus}
-            activeToolCalls={chat.activeToolCalls}
-            toolResults={chat.toolResults}
-            onRegenerate={chat.regenerateLastResponse}
-            onEditMessage={handleEditMessage}
-          />
+          <Suspense fallback={<AssistantMessageListFallback rows={5} />}>
+            <AssistantMessageList
+              messages={chat.messages}
+              streamingText={chat.currentStreamText}
+              isLoading={chat.isLoading}
+              isStreaming={chat.isStreaming}
+              thinkingStatus={chat.thinkingStatus}
+              activeToolCalls={chat.activeToolCalls}
+              toolResults={chat.toolResults}
+              onRegenerate={chat.regenerateLastResponse}
+              onEditMessage={handleEditMessage}
+            />
+          </Suspense>
         )}
 
         {/* Error */}
         {chat.error && (
-          <div className="mx-4 mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+          <div className="alert-danger mx-4 mb-2">
             {chat.error}
           </div>
         )}
@@ -430,7 +487,7 @@ export default function AssistantPage() {
                   chat.dismissConfirm()
                   handleSend(`Yes, please proceed with ${chat.confirmRequired!.name}`)
                 }}
-                className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors"
+                className="btn-warning table-action-btn"
               >
                 Confirm
               </button>
@@ -440,7 +497,7 @@ export default function AssistantPage() {
                   chat.dismissConfirm()
                   handleSend(`Cancel the ${chat.confirmRequired!.name} operation`)
                 }}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                className="btn-secondary table-action-btn"
               >
                 Cancel
               </button>
@@ -459,24 +516,24 @@ export default function AssistantPage() {
 
       {/* Delete conversation confirmation modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-800">Delete conversation?</h3>
-            <p className="mt-1 text-sm text-slate-500">
+        <div className="modal-overlay z-50 flex items-center justify-center">
+          <div className="modal-content mx-4 w-full max-w-sm p-6">
+            <h3 className="section-title">Delete conversation?</h3>
+            <p className="body-copy mt-1">
               This conversation will be permanently deleted. This action cannot be undone.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setDeleteConfirmId(null)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                className="btn-secondary table-action-btn"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteConversation(deleteConfirmId)}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                className="btn-danger table-action-btn"
               >
                 Delete
               </button>
@@ -508,10 +565,10 @@ function WelcomeScreen({
       </div>
 
       <div className="text-center">
-        <h2 className="text-lg font-semibold text-slate-800">
+        <h2 className="section-title">
           Hi {userName}! I'm your Portal Assistant.
         </h2>
-        <p className="mt-1.5 text-sm text-slate-500 max-w-sm">
+        <p className="body-copy mt-1.5 max-w-sm">
           I can help you search documents, manage content, check settings,
           and more. {toolCount > 0 && `I have ${toolCount} tools at your disposal.`}
         </p>
@@ -523,7 +580,7 @@ function WelcomeScreen({
             key={i}
             type="button"
             onClick={() => onSuggestionClick(s)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-sm text-slate-600 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+            className="surface-card justify-start rounded-2xl px-4 py-3 text-left body-copy hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 transition-colors"
           >
             {s}
           </button>

@@ -603,7 +603,8 @@ def get_system_status(
     # Collab-server check
     try:
         import urllib.request
-        collab_url = os.environ.get("COLLAB_SERVER_URL", "http://collab-server:8002")
+        from app.config import settings as _cfg
+        collab_url = _cfg.COLLAB_SERVER_URL
         t0 = time.perf_counter()
         req = urllib.request.Request(f"{collab_url}/health", method="GET")
         with urllib.request.urlopen(req, timeout=3) as resp:
@@ -613,7 +614,7 @@ def get_system_status(
                 latency_ms=collab_ms,
                 details=f"WebSocket server responding ({collab_ms}ms)",
             ))
-    except Exception:
+    except Exception:  # policy: LOSSY — collab is optional; report degraded
         services.append(ServiceStatus(
             name="collab-server", status="degraded",
             details="Collab server unreachable — real-time editing may be unavailable",

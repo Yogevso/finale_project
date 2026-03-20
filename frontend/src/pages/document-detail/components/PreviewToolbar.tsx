@@ -29,7 +29,7 @@ export function PreviewToolbar({
 }: PreviewToolbarProps) {
   return (
     <div
-      className="document-preview-toolbar border-b border-slate-200 p-3 bg-slate-50 flex flex-wrap items-center gap-3 justify-between"
+      className="document-preview-toolbar surface-muted flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-3"
       data-tour="document-preview-toolbar"
     >
       <div className="flex flex-wrap items-center gap-3">
@@ -52,18 +52,18 @@ export function PreviewToolbar({
             ))}
           </select>
         ) : (
-          <span className="text-sm font-medium text-slate-600">
+          <span className="card-title text-sm">
             {selectedAttachment?.filename || 'Document preview'}
           </span>
         )}
 
         {readerError && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-amber-700">{readerError}</span>
+            <span className="helper-copy text-amber-700">{readerError}</span>
             <button
               type="button"
               onClick={onRetryReaderView}
-              className="px-2 py-1 text-xs rounded-md border border-amber-300 text-amber-700 hover:bg-amber-50"
+              className="btn-warning table-action-btn"
             >
               Retry
             </button>

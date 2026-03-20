@@ -53,10 +53,10 @@ vi.mock('@/components/analytics/hooks/useAnalytics', () => ({
 }))
 
 describe('AnalyticsDashboardPage', () => {
-  it('renders audience segmentation metrics from overview data', () => {
+  it('renders audience segmentation metrics from overview data', async () => {
     render(<AnalyticsDashboardPage />)
 
-    expect(screen.getByText('Audience Breakdown')).toBeInTheDocument()
+    expect(await screen.findByText('Audience Breakdown')).toBeInTheDocument()
     expect(screen.getByTestId('audience-type-internal')).toHaveTextContent('4')
     expect(screen.getByTestId('audience-type-company')).toHaveTextContent('6')
     expect(screen.getByTestId('audience-type-public')).toHaveTextContent('2')

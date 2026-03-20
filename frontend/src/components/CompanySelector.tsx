@@ -111,7 +111,7 @@ export default function CompanySelector({
 
   const pageCompanies = companiesQuery.data?.items ?? EMPTY_PAGE_COMPANIES
   const currentPage = companiesQuery.data?.page ?? page
-  const totalPages = companiesQuery.data?.pages ?? 1
+  const totalPages = companiesQuery.data?.total_pages ?? 1
   const hasPreviousPage = currentPage > 1
   const hasNextPage = currentPage < totalPages
 
@@ -323,46 +323,47 @@ export default function CompanySelector({
       className={`relative ${className}`.trim()}
       data-testid="company-selector"
     >
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 ? (
         <div className="mb-2 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-500">
+            <p className="helper-copy">
               {selectedIds.length} {selectedIds.length === 1 ? 'company' : 'companies'} selected
             </p>
-            {!disabled && (
+            {!disabled ? (
               <button
                 type="button"
                 onClick={clearAllCompanies}
-                className="text-xs font-medium text-rose-600 hover:text-rose-700"
+                className="btn-ghost table-action-btn !px-0 text-rose-600 hover:bg-transparent hover:text-rose-700"
                 data-testid="company-selector-clear-all"
               >
                 Clear all
               </button>
-            )}
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             {selectedCompanies.map((company) => (
               <span
                 key={company.id}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-sky-100 text-sky-700 rounded-full text-sm"
+                className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-sm text-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
               >
                 <Building2 className="w-3 h-3" />
                 {company.name}
-                {!disabled && (
+                {!disabled ? (
                   <button
                     type="button"
                     onClick={() => removeCompany(company.id)}
-                    className="ml-1 hover:bg-sky-200 rounded-full p-0.5"
+                    className="btn-icon ml-1 h-6 w-6 border-0 bg-transparent text-sky-700 shadow-none hover:bg-sky-200 hover:text-sky-900 dark:hover:bg-sky-900/50 dark:hover:text-sky-100"
                     data-testid={`company-selector-remove-${company.id}`}
+                    aria-label={`Remove ${company.name}`}
                   >
                     <X className="w-3 h-3" />
                   </button>
-                )}
+                ) : null}
               </span>
             ))}
           </div>
         </div>
-      )}
+      ) : null}
 
       <button
         ref={triggerButtonRef}
@@ -375,7 +376,7 @@ export default function CompanySelector({
           openDropdown()
         }}
         onKeyDown={handleTriggerKeyDown}
-        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-left text-slate-600 hover:border-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:opacity-60 disabled:cursor-not-allowed"
+        className="input-field body-copy text-left hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -385,14 +386,11 @@ export default function CompanySelector({
         {triggerLabel}
       </button>
 
-      {isOpen && (
-        <div
-          className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="p-2 border-b border-slate-200">
+      {isOpen ? (
+        <div className="dropdown-menu absolute z-[60] mt-1 w-full overflow-hidden">
+          <div className="border-b border-slate-200 p-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -400,7 +398,7 @@ export default function CompanySelector({
                 onChange={(event) => setSearchInput(event.target.value)}
                 onKeyDown={handleSearchInputKeyDown}
                 placeholder="Search companies..."
-                className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500"
+                className="input-field pl-9 pr-3"
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls="company-selector-listbox"
@@ -413,15 +411,15 @@ export default function CompanySelector({
 
           <div className="max-h-48 overflow-y-auto" role="listbox" id="company-selector-listbox">
             {companiesQuery.isLoading ? (
-              <div className="px-4 py-3 text-slate-500 text-sm" data-testid="company-selector-loading">
+              <div className="body-copy px-4 py-3" data-testid="company-selector-loading">
                 {loadingText}
               </div>
             ) : companiesQuery.isError ? (
-              <div className="px-4 py-3 text-rose-600 text-sm" data-testid="company-selector-error">
+              <div className="body-copy px-4 py-3 text-rose-600" data-testid="company-selector-error">
                 {errorText}
               </div>
             ) : pageCompanies.length === 0 ? (
-              <div className="px-4 py-3 text-slate-500 text-sm" data-testid="company-selector-no-results">
+              <div className="body-copy px-4 py-3" data-testid="company-selector-no-results">
                 {noResultsText}
               </div>
             ) : (
@@ -443,64 +441,72 @@ export default function CompanySelector({
                   }}
                   onMouseEnter={() => setActiveOptionIndex(index)}
                   onFocus={() => setActiveOptionIndex(index)}
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-left ${
-                    activeOptionIndex === index ? 'bg-sky-50' : 'hover:bg-slate-50'
+                  className={`w-full px-4 py-2 text-left ${
+                    activeOptionIndex === index
+                      ? 'bg-sky-50 dark:bg-sky-950/40'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-900'
                   }`}
                   data-testid={`company-selector-option-${company.id}`}
                 >
-                  <div
-                    className={`w-5 h-5 rounded border flex items-center justify-center ${
-                      selectedIds.includes(company.id)
-                        ? 'bg-sky-600 border-sky-600'
-                        : 'border-slate-300'
-                    }`}
-                  >
-                    {selectedIds.includes(company.id) && <Check className="w-3 h-3 text-white" />}
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded border ${
+                        selectedIds.includes(company.id)
+                          ? 'border-sky-600 bg-sky-600'
+                          : 'border-slate-300'
+                      }`}
+                    >
+                      {selectedIds.includes(company.id) ? (
+                        <Check className="w-3 h-3 text-white" />
+                      ) : null}
+                    </div>
+                    <div className="flex-1">
+                      <div className="card-title text-sm">{company.name}</div>
+                      <div className="helper-copy">{company.slug}</div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${getCompanyTypeBadgeClassName(company.company_type)}`}
+                    >
+                      {company.company_type}
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-slate-900">{company.name}</div>
-                    <div className="text-xs text-slate-500">{company.slug}</div>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${getCompanyTypeBadgeClassName(company.company_type)}`}
-                  >
-                    {company.company_type}
-                  </span>
                 </button>
               ))
             )}
           </div>
 
-          {(totalPages > 1 || companiesQuery.isFetching) && (
-            <div className="px-3 py-2 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 bg-slate-50">
-              <div data-testid="company-selector-page-indicator">
-                Page {currentPage} of {Math.max(totalPages, 1)}
-                {companiesQuery.isFetching ? ' - Updating...' : ''}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40"
-                  onClick={() => setPage((previous) => Math.max(1, previous - 1))}
-                  disabled={!hasPreviousPage || companiesQuery.isFetching}
-                  data-testid="company-selector-prev-page"
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40"
-                  onClick={() => setPage((previous) => previous + 1)}
-                  disabled={!hasNextPage || companiesQuery.isFetching}
-                  data-testid="company-selector-next-page"
-                >
-                  Next
-                </button>
+          {totalPages > 1 || companiesQuery.isFetching ? (
+            <div className="surface-muted rounded-none border-0 border-t border-slate-200 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="helper-copy" data-testid="company-selector-page-indicator">
+                  Page {currentPage} of {Math.max(totalPages, 1)}
+                  {companiesQuery.isFetching ? ' - Updating...' : ''}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-ghost table-action-btn disabled:opacity-40"
+                    onClick={() => setPage((previous) => Math.max(1, previous - 1))}
+                    disabled={!hasPreviousPage || companiesQuery.isFetching}
+                    data-testid="company-selector-prev-page"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost table-action-btn disabled:opacity-40"
+                    onClick={() => setPage((previous) => previous + 1)}
+                    disabled={!hasNextPage || companiesQuery.isFetching}
+                    data-testid="company-selector-next-page"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

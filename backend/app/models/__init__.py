@@ -39,13 +39,19 @@ class UserRole(str, enum.Enum):
 
 
 class DocumentStatus(str, enum.Enum):
-    """Document statuses"""
+    """Document lifecycle statuses.
+
+    AF-008: The canonical published state is ``PUBLISHED``.
+    The database stores ``"active"`` as the value for backward compatibility.
+    ``ACTIVE`` is retained as an alias so existing queries continue to work.
+    New code should use ``DocumentStatus.PUBLISHED``.
+    """
 
     DRAFT = "draft"
     PENDING_REVIEW = "pending_review"  # Waiting for approval
     APPROVED = "approved"  # Approved for publish, not public yet
-    ACTIVE = "active"
-    PUBLISHED = "active"  # Alias for ACTIVE
+    ACTIVE = "active"  # Legacy alias — prefer PUBLISHED
+    PUBLISHED = "active"  # Canonical published state (DB value is "active")
     ARCHIVED = "archived"
 
 
@@ -432,6 +438,9 @@ class Version(Base):
     # Audience state snapshot at publish time (carry-forward for auditing)
     audience_visibility_snapshot = Column(String(50), nullable=True)
     audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
+
+    # AF-003: Attachment snapshot at publish time — JSON array of attachment IDs
+    published_attachment_ids_snapshot = Column(Text, nullable=True)
 
     # Relationships
     document = relationship("Document", back_populates="versions")
@@ -1006,6 +1015,7 @@ class Chat(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(SQLEnum(ChatType), nullable=False)
     name = Column(String(255), nullable=True)  # Nullable for direct chats
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)  # AH-008: document-scoped chats
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     last_message_at = Column(DateTime, nullable=True, index=True)  # For sorting by activity
@@ -1015,6 +1025,7 @@ class Chat(Base):
     # Relationships
     creator = relationship("User", foreign_keys=[created_by])
     tenant = relationship("Tenant")
+    document = relationship("Document", foreign_keys=[document_id])
     participants = relationship("ChatParticipant", back_populates="chat", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
 
@@ -1050,6 +1061,7 @@ class ChatMessage(Base):
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     message_type = Column(SQLEnum(ChatMessageType), default=ChatMessageType.TEXT, nullable=False)
+    context_json = Column(Text, nullable=True)  # AH-009: context card metadata (document title, section, anchor, comment type)
     file_url = Column(String(500), nullable=True)
     file_name = Column(String(255), nullable=True)
     file_size = Column(Integer, nullable=True)

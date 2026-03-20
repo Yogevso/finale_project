@@ -2,13 +2,14 @@
  * AddPeopleModal — add members to an existing group chat (X1-045)
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Search, UserPlus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { User } from '@/types'
 import type { ChatDetail } from '@/types/chat'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface AddPeopleModalProps {
   chat: ChatDetail
@@ -18,6 +19,8 @@ interface AddPeopleModalProps {
 export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const { containerRef } = useFocusTrap(onClose)
+  const titleId = useId()
   const [search, setSearch] = useState('')
 
   const existingUserIds = new Set(chat.participants.map((p) => p.user_id))
@@ -42,12 +45,26 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+    <div className="modal-overlay flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close add people dialog"
+        tabIndex={-1}
+      />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="modal-content motion-enter-scale relative w-full max-w-md dark:bg-slate-900"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">Add People</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-slate-800">
+          <h2 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-slate-100">Add People</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-200" aria-label="Close add people dialog">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -61,7 +78,8 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
               placeholder="Search users..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
+              aria-label="Search users"
             />
           </div>
         </div>
@@ -88,9 +106,10 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
                   <p className="truncate text-xs text-gray-500">{u.email}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => addMutation.mutate(u.id)}
                   disabled={addMutation.isPending}
-                  className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-600 hover:bg-sky-100 disabled:opacity-50"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   Add

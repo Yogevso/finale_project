@@ -2,6 +2,7 @@
  * Portal API - Customer authenticated API calls
  */
 import axios from 'axios'
+import { api } from '@/lib/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -15,7 +16,8 @@ const portalClient = axios.create({
 
 // Add auth header to requests
 portalClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
+  // AD-004: get token from in-memory API client, not localStorage
+  const token = api.getToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -77,7 +79,7 @@ export interface PortalDocumentListResponse {
   total: number
   page: number
   per_page: number
-  pages: number
+  total_pages: number
 }
 
 export interface FeedbackItem {

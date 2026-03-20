@@ -50,16 +50,15 @@ describe('ApiHttpClient refresh interceptor', () => {
   })
 
   it('retries queued 401 requests after a successful refresh', async () => {
-    localStorage.setItem('token', 'expired-token')
-    localStorage.setItem('refreshToken', 'refresh-token')
-
     mockedAxios.post.mockResolvedValue({
       data: {
         access_token: 'new-access-token',
       },
     } as never)
 
-    new ApiHttpClient()
+    const client = new ApiHttpClient()
+    // AD-004: tokens are set in memory via setToken, not localStorage
+    client.setToken('expired-token', 'refresh-token')
 
     expect(onResponseError).toBeTruthy()
 
@@ -68,10 +67,12 @@ describe('ApiHttpClient refresh interceptor', () => {
     await Promise.all([requestOne, requestTwo])
 
     expect(mockedAxios.post).toHaveBeenCalledTimes(1)
-    expect(mockedAxios.post).toHaveBeenCalledWith(`${API_BASE_URL}/auth/refresh`, {
-      refresh_token: 'refresh-token',
-    })
-    expect(localStorage.getItem('token')).toBe('new-access-token')
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${API_BASE_URL}/auth/refresh`,
+      { refresh_token: 'refresh-token' },
+      { withCredentials: true },
+    )
+    expect(client.getToken()).toBe('new-access-token')
     expect(mockAxiosInstance).toHaveBeenCalledTimes(2)
 
     for (const [requestConfig] of mockAxiosInstance.mock.calls) {
@@ -81,12 +82,10 @@ describe('ApiHttpClient refresh interceptor', () => {
   })
 
   it('rejects all queued requests and clears tokens when refresh fails', async () => {
-    localStorage.setItem('token', 'expired-token')
-    localStorage.setItem('refreshToken', 'refresh-token')
-
     mockedAxios.post.mockRejectedValue(new Error('refresh failed'))
 
-    new ApiHttpClient()
+    const client = new ApiHttpClient()
+    client.setToken('expired-token', 'refresh-token')
 
     expect(onResponseError).toBeTruthy()
 
@@ -98,7 +97,6 @@ describe('ApiHttpClient refresh interceptor', () => {
 
     expect(mockedAxios.post).toHaveBeenCalledTimes(1)
     expect(mockAxiosInstance).toHaveBeenCalledTimes(0)
-    expect(localStorage.getItem('token')).toBeNull()
-    expect(localStorage.getItem('refreshToken')).toBeNull()
+    expect(client.getToken()).toBeNull()
   })
 })

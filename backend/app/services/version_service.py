@@ -215,6 +215,86 @@ class VersionService(SessionService):
             link=f"/documents/{document.id}?tab=versions&version={version.id}",
         )
 
+    @staticmethod
+    def _schedule_pdf_export_generation(attachment_ids: list[int]) -> None:
+        """AH-006: Generate PDF export artifacts for portal/viewer downloads."""
+        import threading
+
+        from app.services.pdf_export_service import render_html_to_pdf
+
+        def _generate():
+            from app.db import SessionLocal
+            from app.models import Attachment, AttachmentArtifact
+
+            db = SessionLocal()
+            try:
+                for aid in attachment_ids:
+                    att = db.query(Attachment).filter(Attachment.id == aid).first()
+                    if not att:
+                        continue
+                    # Find existing reader_html artifact
+                    reader = (
+                        db.query(AttachmentArtifact)
+                        .filter(
+                            AttachmentArtifact.attachment_id == aid,
+                            AttachmentArtifact.kind == "reader_html",
+                            AttachmentArtifact.status == "completed",
+                        )
+                        .first()
+                    )
+                    html = reader.content_text if reader else None
+                    if not html:
+                        continue
+                    pdf_bytes = render_html_to_pdf(
+                        html, title=att.original_filename or "document"
+                    )
+                    if not pdf_bytes:
+                        continue
+                    existing = (
+                        db.query(AttachmentArtifact)
+                        .filter(
+                            AttachmentArtifact.attachment_id == aid,
+                            AttachmentArtifact.kind == "pdf_export",
+                        )
+                        .first()
+                    )
+                    if existing:
+                        existing.content_text = None
+                        existing.content_json = None
+                        existing.size_bytes = len(pdf_bytes)
+                        existing.status = "completed"
+                        existing.mime_type = "application/pdf"
+                        existing.storage_key = f"pdf_export/{aid}.pdf"
+                    else:
+                        existing = AttachmentArtifact(
+                            attachment_id=aid,
+                            kind="pdf_export",
+                            status="completed",
+                            mime_type="application/pdf",
+                            size_bytes=len(pdf_bytes),
+                            storage_key=f"pdf_export/{aid}.pdf",
+                        )
+                        db.add(existing)
+                    # Store PDF bytes via storage backend
+                    import io
+                    from app.services.attachment_service.common import get_storage_backend
+                    try:
+                        storage = get_storage_backend()
+                        storage.upload(
+                            io.BytesIO(pdf_bytes),
+                            f"pdf_export/{aid}.pdf",
+                            "application/pdf",
+                        )
+                    except Exception:
+                        pass  # PDF still generated, storage optional
+                    db.commit()
+            except Exception:
+                logging.getLogger(__name__).exception("PDF export generation failed")
+            finally:
+                db.close()
+
+        threading.Thread(target=_generate, daemon=True).start()
+
     def _notify_version_watchers(
         self,
         *,
@@ -546,6 +626,18 @@ class VersionService(SessionService):
                 version.audience_visibility_snapshot = audience_visibility_snapshot
                 version.audience_company_ids_snapshot = audience_company_ids_snapshot
 
+                # AF-003: Snapshot attachment IDs at publish time
+                from app.models import Attachment as AttachmentModel
+                publish_cutoff = version.published_at
+                attachment_ids = [
+                    a.id for a in self.db.query(AttachmentModel.id)
+                    .filter(
+                        AttachmentModel.document_id == document.id,
+                        AttachmentModel.uploaded_at <= publish_cutoff,
+                    ).all()
+                ]
+                version.published_attachment_ids_snapshot = json.dumps(attachment_ids) if attachment_ids else None
+
                 DocumentAggregate(document).transition_to_active()
                 self.event_dispatcher.dispatch(
                     DocumentPublished(
@@ -574,7 +666,7 @@ class VersionService(SessionService):
                             ),
                         )
                     )
-        except Exception as e:
+        except Exception as e:  # policy: FAIL_FAST — publish must succeed or abort
             # Log failed publish attempt with audience state for audit trail
             logging.getLogger(__name__).error(
                 "Publish failed for document=%d version=%d user=%d. "
@@ -591,6 +683,11 @@ class VersionService(SessionService):
             raise
 
         self.db.refresh(version)
+
+        # AH-006: regenerate PDF export artifact for portal/viewer downloads
+        if attachment_ids:
+            self._schedule_pdf_export_generation(attachment_ids)
+
         self._notify_version_watchers(
             document=document,
             current_user=current_user,
@@ -956,7 +1053,7 @@ class VersionService(SessionService):
         # Check audience readiness
         try:
             DocumentAggregate(document).ensure_audience_ready_for_submit()
-        except Exception as e:
+        except Exception as e:  # policy: LOSSY — audience check is advisory during force-publish
             warnings_overridden.append(f"Audience validation failed: {str(e)}")
 
         # Capture audience snapshot
@@ -1245,7 +1342,7 @@ class VersionService(SessionService):
                 # Re-validate audience readiness
                 try:
                     DocumentAggregate(document).ensure_audience_ready_for_submit()
-                except Exception as e:
+                except Exception as e:  # policy: FAIL_FAST — skip this item, continue batch
                     report["failed_validation"] += 1
                     report["errors"].append({
                         "version_id": version.id,
@@ -1323,7 +1420,7 @@ class VersionService(SessionService):
                     version.id,
                 )
 
-            except Exception as e:
+            except Exception as e:  # policy: COMPENSATING — record error, skip item, continue batch
                 report["errors"].append({
                     "version_id": version.id,
                     "document_id": document.id if document else None,

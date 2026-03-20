@@ -9,6 +9,7 @@ import {
   Legend,
 } from 'recharts'
 import type { TimeSeriesPoint } from '@/types'
+import { useChartTheme } from './useChartTheme'
 
 interface LineChartWidgetProps {
   title: string
@@ -33,12 +34,16 @@ export function LineChartWidget({
   secondaryLabel,
   label,
 }: LineChartWidgetProps) {
+  const theme = useChartTheme()
+  const primaryColor = color || theme.series[0]
+  const secondarySeriesColor = secondaryColor || theme.series[1]
+
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow p-6">
-        <div className="h-5 bg-slate-200 rounded w-40 mb-4 animate-pulse"></div>
+      <div className="surface-card rounded-xl p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-4 h-5 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700"></div>
         <div className="animate-pulse" style={{ height }}>
-          <div className="bg-slate-100 rounded h-full"></div>
+          <div className="h-full rounded" style={{ backgroundColor: theme.surfaceMuted }}></div>
         </div>
       </div>
     )
@@ -54,47 +59,54 @@ export function LineChartWidget({
     : data
 
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      <h3 className="text-lg font-medium text-slate-900 mb-4">{title}</h3>
+    <div
+      role="img"
+      aria-label={title}
+      className="surface-card rounded-xl p-6 dark:border-slate-800 dark:bg-slate-900"
+    >
+      <h3 className="mb-4 text-lg font-medium text-slate-900 dark:text-slate-100">{title}</h3>
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} />
           <XAxis 
             dataKey="date" 
-            tick={{ fontSize: 12 }} 
+            tick={{ fontSize: 12, fill: theme.axis }} 
             tickLine={false}
-            axisLine={{ stroke: '#E5E7EB' }}
+            axisLine={{ stroke: theme.grid }}
           />
           <YAxis 
-            tick={{ fontSize: 12 }} 
+            tick={{ fontSize: 12, fill: theme.axis }} 
             tickLine={false}
-            axisLine={{ stroke: '#E5E7EB' }}
+            axisLine={{ stroke: theme.grid }}
           />
           <Tooltip 
             contentStyle={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #E5E7EB',
+              backgroundColor: theme.tooltipBackground, 
+              border: `1px solid ${theme.tooltipBorder}`,
               borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              color: theme.text,
             }}
+            labelStyle={{ color: theme.text }}
+            itemStyle={{ color: theme.text }}
           />
-          {secondaryData && <Legend />}
+          {secondaryData && <Legend wrapperStyle={{ color: theme.textMuted }} />}
           <Line
             type="monotone"
             dataKey={label || 'value'}
-            stroke={color}
+            stroke={primaryColor}
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 4 }}
+            activeDot={{ r: 4, fill: primaryColor }}
           />
           {secondaryData && (
             <Line
               type="monotone"
               dataKey={secondaryLabel || 'secondary'}
-              stroke={secondaryColor}
+              stroke={secondarySeriesColor}
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 4 }}
+              activeDot={{ r: 4, fill: secondarySeriesColor }}
             />
           )}
         </LineChart>

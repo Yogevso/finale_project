@@ -4,6 +4,8 @@ import { Bell, BellRing } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
+import { useToast } from '@/lib/toast'
+import type { DocumentWatchStatus } from '@/types'
 
 interface EngagementBarProps {
   documentId: number
@@ -14,6 +16,7 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
   const queryClient = useQueryClient()
   const lastSavedProgress = useRef<number>(0)
   const { isCustomer, isInternal } = useAuth()
+  const toast = useToast()
 
   // Bookmark status
   const { data: bookmarkStatus } = useQuery({
@@ -48,11 +51,43 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
   })
 
   const toggleWatch = useMutation({
-    mutationFn: () =>
-      watchStatus?.is_watching ? api.unwatchDocument(documentId) : api.watchDocument(documentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.watchStatus(documentId) })
+    mutationFn: (nextWatching: boolean) =>
+      nextWatching ? api.watchDocument(documentId) : api.unwatchDocument(documentId),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.documents.watchStatus(documentId) })
+
+      const previousWatchStatus = queryClient.getQueryData<DocumentWatchStatus>(
+        queryKeys.documents.watchStatus(documentId),
+      )
+      const nextWatching = !(previousWatchStatus?.is_watching ?? false)
+
+      queryClient.setQueryData<DocumentWatchStatus>(
+        queryKeys.documents.watchStatus(documentId),
+        { is_watching: nextWatching },
+      )
+
+      return { previousWatchStatus }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousWatchStatus) {
+        queryClient.setQueryData(
+          queryKeys.documents.watchStatus(documentId),
+          context.previousWatchStatus,
+        )
+      } else {
+        queryClient.removeQueries({ queryKey: queryKeys.documents.watchStatus(documentId) })
+      }
+      toast.error('Watch preference not updated', 'Please try again.')
+    },
+    onSuccess: (response) => {
+      queryClient.setQueryData<DocumentWatchStatus>(
+        queryKeys.documents.watchStatus(documentId),
+        { is_watching: response.is_watching },
+      )
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.watchStatus(documentId) })
     },
   })
 
@@ -109,13 +144,14 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
 
         {isInternal && (
           <button
-            onClick={() => toggleWatch.mutate()}
+            onClick={() => toggleWatch.mutate(!(watchStatus?.is_watching ?? false))}
             disabled={toggleWatch.isPending}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
               watchStatus?.is_watching
                 ? 'bg-sky-50 text-sky-700 border border-sky-200'
                 : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
+            aria-pressed={watchStatus?.is_watching ?? false}
           >
             {watchStatus?.is_watching ? (
               <BellRing className="h-4 w-4" />

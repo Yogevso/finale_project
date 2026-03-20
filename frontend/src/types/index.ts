@@ -91,7 +91,7 @@ export interface SecurityEventListResponse {
   total: number
   page: number
   page_size: number
-  pages: number
+  total_pages: number
 }
 
 // Auth types
@@ -187,7 +187,7 @@ export interface DocumentListResponse {
   total: number
   page: number
   page_size: number
-  pages: number
+  total_pages: number
 }
 
 export interface DocumentWatchStatus {
@@ -583,7 +583,7 @@ export interface CompanyListResponse {
   total: number
   page: number
   per_page: number
-  pages: number
+  total_pages: number
 }
 
 export interface CompanyCreate {
@@ -623,7 +623,7 @@ export interface CompanyDocumentsResponse {
   total: number
   page: number
   per_page: number
-  pages: number
+  total_pages: number
   scope?: 'assigned' | 'owned' | 'customer_visible'
 }
 

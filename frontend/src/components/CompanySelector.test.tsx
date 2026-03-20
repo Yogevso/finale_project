@@ -39,7 +39,7 @@ function buildCompanyListResponse(
     items,
     total: items.length,
     page,
-    pages,
+    total_pages: pages,
     per_page: perPage,
   }
 }

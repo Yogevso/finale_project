@@ -63,7 +63,7 @@ export function buildDocumentListResponseDto(
     total: 1,
     page: 1,
     page_size: 20,
-    pages: 1,
+    total_pages: 1,
     ...overrides,
   }
 }

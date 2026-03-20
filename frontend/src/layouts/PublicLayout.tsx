@@ -1,8 +1,9 @@
 import { Outlet, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
+import { SkipNavLink } from '@/components/a11y/SkipNavLink'
 
 export default function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -13,6 +14,7 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SkipNavLink />
       {/* Zip B Style Header */}
       {!isFullscreen && (
       <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
@@ -24,7 +26,7 @@ export default function PublicLayout() {
                 DP
               </div>
               <div>
-                <div className="text-xs uppercase tracking-widest text-slate-400">Viewer Portal</div>
+                <div className="text-xs uppercase tracking-widest text-slate-600">Viewer Portal</div>
                 <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </Link>
@@ -33,6 +35,8 @@ export default function PublicLayout() {
             <button
               className="md:hidden p-2 rounded-lg hover:bg-slate-100"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6 text-slate-600" />
@@ -49,8 +53,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -61,8 +65,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -73,8 +77,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -85,8 +89,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-sky-100 text-sky-800 font-medium'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
                 }`
               }
             >
@@ -105,7 +109,7 @@ export default function PublicLayout() {
               </button>
             ) : (
               <>
-                <span className="text-xs text-slate-500">External access to approved documentation</span>
+                <span className="text-xs text-slate-700">External access to approved documentation</span>
                 <Link to="/login" className="btn-primary">
                   Sign in
                 </Link>
@@ -171,6 +175,25 @@ export default function PublicLayout() {
                 Help
               </NavLink>
               <hr className="my-3 border-slate-200" />
+              {/* Mobile search (#70) */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Search documentation..."
+                  className="input-field pl-9 w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const query = (e.target as HTMLInputElement).value
+                      if (query) {
+                        setMobileMenuOpen(false)
+                        navigate(`/search?q=${encodeURIComponent(query)}`)
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <hr className="my-3 border-slate-200" />
               {user ? (
                 <button
                   onClick={() => {
@@ -200,7 +223,7 @@ export default function PublicLayout() {
       {!isFullscreen && <AnnouncementBanner />}
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <Outlet />
       </main>
 
@@ -216,7 +239,7 @@ export default function PublicLayout() {
                 </div>
                 <span className="text-lg font-semibold text-slate-900 font-display">Documentation Platform</span>
               </div>
-              <p className="text-slate-500 text-sm">
+              <p className="text-sm text-slate-700">
                 Your central hub for documentation and knowledge sharing.
               </p>
             </div>
@@ -224,17 +247,17 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/docs" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/docs" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Docs Library
                   </Link>
                 </li>
                 <li>
-                  <Link to="/platforms" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/platforms" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Platform History
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/search" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Search
                   </Link>
                 </li>
@@ -244,14 +267,14 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Access</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/login" className="text-slate-500 hover:text-slate-900 transition-colors">
+                  <Link to="/login" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Login for more content
                   </Link>
                 </li>
               </ul>
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-700">
             © {new Date().getFullYear()} DocPortal. All rights reserved.
           </div>
         </div>

@@ -51,12 +51,12 @@ export function DocumentDetailsView({
 
   return (
     <div className="surface-card rounded-2xl p-6 space-y-6">
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div>
-          <label className="text-sm text-slate-500">Status</label>
+          <p className="helper-copy font-medium uppercase tracking-wide">Status</p>
           <p className="mt-1">
             <span
-              className={`px-2 py-1 text-xs rounded-full ${
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                 document.status === 'active'
                   ? 'bg-emerald-100 text-emerald-700'
                   : document.status === 'approved'
@@ -75,26 +75,30 @@ export function DocumentDetailsView({
           </p>
         </div>
         <div>
-          <label className="text-sm text-slate-500">Visibility</label>
+          <p className="helper-copy font-medium uppercase tracking-wide">Visibility</p>
           <div className="mt-1">
             <VisibilityBadge visibility={document.visibility} showLabel />
           </div>
         </div>
         <div>
-          <label className="text-sm text-slate-500">Category</label>
-          <p className="mt-1 text-slate-900">{document.category || '-'}</p>
+          <p className="helper-copy font-medium uppercase tracking-wide">Category</p>
+          <p className="body-copy mt-1 text-slate-900 dark:text-slate-100">{document.category || '-'}</p>
         </div>
         <div>
-          <label className="text-sm text-slate-500">Created</label>
-          <p className="mt-1 text-slate-900">{formatDate(document.created_at)}</p>
+          <p className="helper-copy font-medium uppercase tracking-wide">Created</p>
+          <p className="body-copy mt-1 text-slate-900 dark:text-slate-100">
+            {formatDate(document.created_at)}
+          </p>
         </div>
         <div>
-          <label className="text-sm text-slate-500">Updated</label>
-          <p className="mt-1 text-slate-900">{formatDate(document.updated_at)}</p>
+          <p className="helper-copy font-medium uppercase tracking-wide">Updated</p>
+          <p className="body-copy mt-1 text-slate-900 dark:text-slate-100">
+            {formatDate(document.updated_at)}
+          </p>
         </div>
         <div>
-          <label className="text-sm text-slate-500">Due Date</label>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-900">
+          <p className="helper-copy font-medium uppercase tracking-wide">Due Date</p>
+          <div className="body-copy mt-1 flex flex-wrap items-center gap-2 text-slate-900 dark:text-slate-100">
             <span>{formatDueDate(document.due_date)}</span>
             {isOverdue ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
@@ -107,19 +111,19 @@ export function DocumentDetailsView({
       </div>
 
       <div>
-        <label className="text-sm text-slate-500">Description</label>
-        <p className="mt-1 text-slate-900 whitespace-pre-wrap">
+        <p className="helper-copy font-medium uppercase tracking-wide">Description</p>
+        <p className="body-copy mt-1 whitespace-pre-wrap text-slate-900 dark:text-slate-100">
           {document.description || 'No description'}
         </p>
       </div>
 
-      {audienceAccessPreview && (
+      {audienceAccessPreview ? (
         <div className="border-t border-slate-200 pt-6">
-          <label className="text-sm font-medium text-slate-700">Audience Access Preview</label>
-          <p className="mt-2 text-sm text-slate-600">{audienceAccessPreview.access_summary}</p>
+          <p className="section-title text-base">Audience Access Preview</p>
+          <p className="body-copy mt-2">{audienceAccessPreview.access_summary}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span
-              className={`px-2 py-1 rounded-full ${
+              className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${
                 audienceAccessPreview.is_public
                   ? 'bg-emerald-100 text-emerald-700'
                   : 'bg-slate-100 text-slate-700'
@@ -128,7 +132,7 @@ export function DocumentDetailsView({
               {audienceAccessPreview.is_public ? 'Public users' : 'No public access'}
             </span>
             <span
-              className={`px-2 py-1 rounded-full ${
+              className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${
                 audienceAccessPreview.includes_internal_users
                   ? 'bg-sky-100 text-sky-700'
                   : 'bg-slate-100 text-slate-700'
@@ -138,31 +142,31 @@ export function DocumentDetailsView({
                 ? 'Internal users included'
                 : 'No internal access'}
             </span>
-            {audienceAccessPreview.target_companies.length > 0 && (
-              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+            {audienceAccessPreview.target_companies.length > 0 ? (
+              <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-700">
                 {audienceAccessPreview.target_companies.length} assigned{' '}
                 {audienceAccessPreview.target_companies.length === 1 ? 'company' : 'companies'}
               </span>
-            )}
+            ) : null}
           </div>
-          {audienceAccessPreview.target_companies.length > 0 && (
+          {audienceAccessPreview.target_companies.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {audienceAccessPreview.target_companies.map((company) => (
                 <span
                   key={company.id}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-xs"
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
                 >
                   <Building2 className="w-3 h-3" />
                   {company.name}
                 </span>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       <div>
-        <label className="text-sm text-slate-500">Tags</label>
+        <p className="helper-copy font-medium uppercase tracking-wide">Tags</p>
         <div className="mt-2">
           <TagEditor
             tags={(document.tags || '')
@@ -176,33 +180,32 @@ export function DocumentDetailsView({
         </div>
       </div>
 
-      {showAssignmentSection && (
+      {showAssignmentSection ? (
         <div className="border-t border-slate-200 pt-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-slate-500" />
-              <label className="text-sm font-medium text-slate-700">Company Assignments</label>
+              <p className="section-title text-base">Company Assignments</p>
             </div>
-            {isEditor && (
+            {isEditor ? (
               <button
+                type="button"
                 onClick={onToggleCompanySelector}
-                className="text-sm text-sky-600 hover:text-sky-700"
+                className="btn-secondary table-action-btn"
               >
                 {showCompanySelector ? 'Cancel' : 'Assign Companies'}
               </button>
-            )}
+            ) : null}
           </div>
-          <p className="text-xs text-slate-500 mb-3">
+          <p className="helper-copy mb-3">
             {document.visibility === 'company'
               ? 'Assigned companies currently have audience access.'
               : 'Pre-assign companies here, then switch visibility to Company to grant access.'}
           </p>
 
-          {showCompanySelector && (
-            <div className="mb-4 p-4 bg-slate-50 rounded-xl">
-              <p className="text-sm text-slate-600 mb-3">
-                Select companies to assign this document to:
-              </p>
+          {showCompanySelector ? (
+            <div className="surface-muted mb-4 p-4">
+              <p className="body-copy mb-3">Select companies to assign this document to:</p>
               <CompanySelector
                 selectedIds={assignmentDraftIds}
                 selectedCompanyOptions={assignedCompanies}
@@ -212,7 +215,7 @@ export function DocumentDetailsView({
               />
               <div className="mt-3 flex items-center justify-between gap-3">
                 <p
-                  className={`text-xs ${
+                  className={`helper-copy ${
                     hasUnsavedAssignmentChanges ? 'text-amber-700' : 'text-slate-500'
                   }`}
                 >
@@ -225,7 +228,7 @@ export function DocumentDetailsView({
                     type="button"
                     onClick={onDiscardAssignmentDraft}
                     disabled={!hasUnsavedAssignmentChanges || isAssigningCompanies}
-                    className="btn-ghost disabled:opacity-50"
+                    className="btn-ghost table-action-btn disabled:opacity-50"
                   >
                     Discard
                   </button>
@@ -233,97 +236,97 @@ export function DocumentDetailsView({
                     type="button"
                     onClick={onSaveAssignmentDraft}
                     disabled={!hasUnsavedAssignmentChanges || isAssigningCompanies}
-                    className="btn-primary disabled:opacity-50"
+                    className="btn-primary table-action-btn disabled:opacity-50"
                   >
                     {isAssigningCompanies ? 'Saving...' : 'Save Assignments'}
                   </button>
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {assignedCompanies.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {assignedCompanies.map((company) => (
                 <div
                   key={company.id}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-sm"
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-sm text-amber-700"
                 >
                   <Building2 className="w-4 h-4" />
                   <span>{company.name}</span>
-                  {isEditor && (
+                  {isEditor ? (
                     <button
+                      type="button"
                       onClick={() => onRemoveCompany(company.id)}
-                      className="ml-1 hover:text-amber-900"
+                      className="btn-icon h-7 w-7 border-0 bg-transparent text-amber-700 hover:bg-amber-100 hover:text-amber-900"
                       disabled={isRemovingCompany || isAssigningCompanies || showCompanySelector}
+                      aria-label={`Remove ${company.name}`}
                     >
                       <X className="w-4 h-4" />
                     </button>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-500">
-              No companies assigned yet. {isEditor && 'Click "Assign Companies" to add.'}
+            <p className="body-copy">
+              No companies assigned yet. {isEditor ? 'Click "Assign Companies" to add.' : ''}
             </p>
           )}
         </div>
-      )}
+      ) : null}
 
-      {reviewHistoryItems.length > 0 && (
+      {reviewHistoryItems.length > 0 ? (
         <div className="border-t border-slate-200 pt-6">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="mb-4 flex items-center gap-2">
             <History className="w-5 h-5 text-slate-500" />
-            <label className="text-sm font-medium text-slate-700">Review History</label>
+            <p className="section-title text-base">Review History</p>
           </div>
           <div className="space-y-3">
             {reviewHistoryItems.slice(0, 5).map((review) => (
               <div
                 key={review.id}
-                className={`p-3 rounded-xl border ${
+                className={`rounded-xl border p-3 ${
                   review.status === 'approved'
-                    ? 'bg-emerald-50 border-emerald-200'
+                    ? 'border-emerald-200 bg-emerald-50'
                     : review.status === 'rejected'
-                      ? 'bg-rose-50 border-rose-200'
+                      ? 'border-rose-200 bg-rose-50'
                       : review.status === 'pending'
-                        ? 'bg-amber-50 border-amber-200'
-                        : 'bg-slate-50 border-slate-200'
+                        ? 'border-amber-200 bg-amber-50'
+                        : 'border-slate-200 bg-slate-50'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {review.status === 'approved' && (
+                    {review.status === 'approved' ? (
                       <CheckCircle className="w-4 h-4 text-emerald-600" />
-                    )}
-                    {review.status === 'rejected' && (
+                    ) : null}
+                    {review.status === 'rejected' ? (
                       <XCircle className="w-4 h-4 text-rose-600" />
-                    )}
-                    {review.status === 'pending' && (
+                    ) : null}
+                    {review.status === 'pending' ? (
                       <Clock className="w-4 h-4 text-amber-600" />
-                    )}
-                    <span className="text-sm font-medium capitalize">{review.status}</span>
+                    ) : null}
+                    <span className="card-title text-sm capitalize">{review.status}</span>
                   </div>
-                  <span className="text-xs text-slate-500">
+                  <span className="helper-copy">
                     {new Date(review.submitted_at).toLocaleDateString()}
                   </span>
                 </div>
-                {review.submitter && (
-                  <p className="text-xs text-slate-600 mt-1">
-                    Submitted by {review.submitter.full_name}
-                  </p>
-                )}
-                {review.reviewer && (
-                  <p className="text-xs text-slate-600">Reviewed by {review.reviewer.full_name}</p>
-                )}
-                {review.review_comments && (
-                  <p className="text-sm text-slate-700 mt-2 italic">"{review.review_comments}"</p>
-                )}
+                {review.submitter ? (
+                  <p className="helper-copy mt-1">Submitted by {review.submitter.full_name}</p>
+                ) : null}
+                {review.reviewer ? (
+                  <p className="helper-copy">Reviewed by {review.reviewer.full_name}</p>
+                ) : null}
+                {review.review_comments ? (
+                  <p className="body-copy mt-2 italic">"{review.review_comments}"</p>
+                ) : null}
               </div>
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

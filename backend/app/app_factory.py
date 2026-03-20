@@ -43,13 +43,15 @@ class FastAPIAppFactory:
 
     def create(self) -> FastAPI:
         """Create and configure the FastAPI application instance."""
+        # AD-016: disable OpenAPI docs in production
+        is_prod = settings.APP_ENV.lower() not in ("development", "test", "testing")
         app = FastAPI(
             title=settings.APP_NAME,
             version=settings.APP_VERSION,
             description="Documentation Platform - Greenfield rebuild with SQLite",
-            docs_url=f"{settings.API_PREFIX}/docs",
-            redoc_url=f"{settings.API_PREFIX}/redoc",
-            openapi_url=f"{settings.API_PREFIX}/openapi.json",
+            docs_url=None if is_prod else f"{settings.API_PREFIX}/docs",
+            redoc_url=None if is_prod else f"{settings.API_PREFIX}/redoc",
+            openapi_url=None if is_prod else f"{settings.API_PREFIX}/openapi.json",
         )
         self._configure_state(app)
         self._configure_middleware(app)
@@ -95,8 +97,9 @@ class FastAPIAppFactory:
             CORSMiddleware,
             allow_origins=settings.CORS_ORIGINS,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            # AD-015: explicit method and header allowlists
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-E2E-Test", "X-Idempotency-Key", "X-Request-ID"],
         )
 
     @staticmethod

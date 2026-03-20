@@ -1258,39 +1258,237 @@ Users need a way to communicate privately about documents without those conversa
 > Dedicated accessibility wave scheduled at end of roadmap per user decision. Consolidates WCAG 2.1 AA compliance work.
 
 ### WCAG 2.1 AA Audit
-- [ ] AC-001: Conduct full WCAG 2.1 AA audit on all pages using axe-core, WAVE, and manual testing — document all violations in `docs/accessibility-audit.md`.
-- [ ] AC-002: Fix all Level A violations — missing alt text, empty links, missing form labels, invalid ARIA, keyboard traps.
-- [ ] AC-003: Fix all Level AA violations — color contrast, resize/reflow, focus visible, status messages, error identification.
-- [ ] AC-004: Add skip navigation links — "Skip to main content" link at top of every page, visible on focus.
+- [x] AC-001: Conduct full WCAG 2.1 AA audit on all pages using axe-core, WAVE, and manual testing — document all violations in `docs/accessibility-audit.md`.
+- [x] AC-002: Fix all Level A violations — missing alt text, empty links, missing form labels, invalid ARIA, keyboard traps.
+- [x] AC-003: Fix all Level AA violations — color contrast, resize/reflow, focus visible, status messages, error identification.
+- [x] AC-004: Add skip navigation links — "Skip to main content" link at top of every page, visible on focus.
 
 ### Screen Reader & Keyboard
-- [ ] AC-005: Verify all interactive components work with screen readers (NVDA, VoiceOver) — document list, document viewer, modals, forms, comments.
-- [ ] AC-006: Implement full keyboard navigation — all actions reachable without mouse, logical tab order, visible focus indicators.
-- [ ] AC-007: Add ARIA live regions for dynamic content — document status changes, notification counts, real-time collaboration updates.
-- [ ] AC-008: Ensure all images have meaningful alt text or are marked decorative (`alt=""`).
+- [x] AC-005: Verify all interactive components work with screen readers (NVDA, VoiceOver) — document list, document viewer, modals, forms, comments.
+- [x] AC-006: Implement full keyboard navigation — all actions reachable without mouse, logical tab order, visible focus indicators.
+- [x] AC-007: Add ARIA live regions for dynamic content — document status changes, notification counts, real-time collaboration updates.
+- [x] AC-008: Ensure all images have meaningful alt text or are marked decorative (`alt=""`).
 
 ### Focus & State Management
-- [ ] AC-009: Implement focus trapping in modals — focus stays within modal when open, returns to trigger on close.
-- [ ] AC-010: Add focus management for SPA navigation — focus moves to main content area after route change.
-- [ ] AC-011: Ensure all form errors are announced and linked to inputs — use `aria-describedby` and `aria-invalid`.
-- [ ] AC-012: Add high contrast mode support — ensure all UI is usable with Windows High Contrast Mode.
+- [x] AC-009: Implement focus trapping in modals — focus stays within modal when open, returns to trigger on close.
+- [x] AC-010: Add focus management for SPA navigation — focus moves to main content area after route change.
+- [x] AC-011: Ensure all form errors are announced and linked to inputs — use `aria-describedby` and `aria-invalid`.
+- [x] AC-012: Add high contrast mode support — ensure all UI is usable with Windows High Contrast Mode.
 
 ### Testing & CI
-- [ ] AC-013: Add axe-core accessibility checks to all Playwright E2E tests — fail on any critical or serious violations.
-- [ ] AC-014: Add accessibility linting to CI — eslint-plugin-jsx-a11y for React components, fail build on errors.
-- [ ] AC-015: Create accessibility testing checklist for PR reviews — document in `docs/accessibility-checklist.md`.
-- [ ] AC-016: Add automated color contrast checking — integrate contrast checker into design system, fail if new colors don't meet AA.
+- [x] AC-013: Add axe-core accessibility checks to all Playwright E2E tests — fail on any critical or serious violations.
+- [x] AC-014: Add accessibility linting to CI — eslint-plugin-jsx-a11y for React components, fail build on errors.
+- [x] AC-015: Create accessibility testing checklist for PR reviews — document in `docs/accessibility-checklist.md`.
+- [x] AC-016: Add automated color contrast checking — integrate contrast checker into design system, fail if new colors don't meet AA.
 
 ### Documentation & Training
-- [ ] AC-017: Document accessibility patterns in component library — each component includes accessibility notes and keyboard shortcuts.
-- [ ] AC-018: Create accessibility statement page — public page describing conformance level, known issues, and contact for accessibility feedback.
+- [x] AC-017: Document accessibility patterns in component library — each component includes accessibility notes and keyboard shortcuts.
+- [x] AC-018: Create accessibility statement page — public page describing conformance level, known issues, and contact for accessibility feedback.
 
 ### Wave AC — Tests
-- [ ] AC-019: Playwright test for skip navigation — tab from page load, verify skip link appears and works.
-- [ ] AC-020: Playwright test for keyboard-only document browsing — complete full flow without mouse.
-- [ ] AC-021: Playwright test for screen reader announcements — verify ARIA live regions announce status changes.
-- [ ] AC-022: Component test for focus management — open modal, verify focus trapped, close, verify focus returns.
-- [ ] AC-023: CI accessibility regression test — run axe-core on all routes, store baseline violations, fail if count increases.
+- [x] AC-019: Playwright test for skip navigation — tab from page load, verify skip link appears and works.
+- [x] AC-020: Playwright test for keyboard-only document browsing — complete full flow without mouse.
+- [x] AC-021: Playwright test for screen reader announcements — verify ARIA live regions announce status changes.
+- [x] AC-022: Component test for focus management — open modal, verify focus trapped, close, verify focus returns.
+- [x] AC-023: CI accessibility regression test — run axe-core on all routes, store baseline violations, fail if count increases.
+
+---
+
+## Wave AD — Security Hardening
+
+> Addresses all critical & high security findings from the production-readiness audit (PROJECT_FULL_AUDIT.md §2 & §3). Must be completed before any external exposure.
+
+### Auth & Privilege Escalation (Critical)
+- [x] AD-001: Fix self-registration privilege escalation — backend must ignore `role` and `tenant_id` from public `/auth/register` payload, hard-force `customer` role on server side. Add tests: POST register with `role=admin` → verify stored as `customer`. (Audit 2.1)
+- [x] AD-002: Eliminate bearer tokens in URL query params — replace attachment download `?token=` with short-lived signed download tickets (POST-to-download or server-issued one-time URLs). (Audit 2.2)
+- [x] AD-003: Unify auth for WebSocket/collaboration — chat WS, support WS, and collab-server must validate against the main session model (revocation, inactivity) not raw JWT `verify_token`. (Audit 2.2)
+- [x] AD-004: Move auth tokens out of `localStorage` — migrate to `httpOnly` secure cookies or another design not readable by injected script. (Audit 2.5)
+
+### Comment & Data Privacy (Critical)
+- [x] AD-005: Fix comments permission model — gate management comment endpoints behind document-access policy (not just tenant match). Enforce `is_private` on backend with explicit role check. Add tests: customer POST comment on internal doc → 403. (Audit 2.3)
+- [x] AD-006: Scope company listing to caller's tenant — non-system-admin callers to `GET /companies` must filter `Tenant.id == current_user.tenant_id`. (Audit 2.7)
+- [x] AD-007: Fix changelog public exposure — make `published_only=True` the hard default for public callers. Create separate authenticated admin endpoint for draft entries. (Audit 2.6)
+
+### XSS & Browser Defense (Critical/High)
+- [x] AD-008: Fix XSS sinks in public pages — replace `dangerouslySetInnerHTML` in `PublicChangelogPage` and `PublicSearchPage` with safe rendering (text nodes + `<mark>` for highlights, sanitize changelog HTML). (Audit 2.5)
+- [x] AD-009: Add Content-Security-Policy header to frontend nginx — `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'`. Start with report-only, then enforce. (Audit 3.17)
+- [x] AD-010: Fix X-XSS-Protection header inconsistency — change `frontend/nginx.conf` to `X-XSS-Protection: 0` to match backend. Rely on CSP for protection. (Audit 3.18)
+
+### Auth Hardening (Medium)
+- [x] AD-011: Add password complexity enforcement — require at least one uppercase, one lowercase, one digit, and one special character (or integrate `zxcvbn` scoring). Align frontend validation with backend rules. (Audit 3.16)
+- [x] AD-012: Fix optional auth dependency — use `auto_error=False` in `get_optional_current_user`, fix `logger` → `LOGGER` typo. Add unit tests for no-token, bad-token, valid-token. (Audit 3.2)
+- [x] AD-013: Add concurrent session limit — add `MAX_CONCURRENT_SESSIONS_PER_USER` config (default 10). On new login, revoke oldest session when limit exceeded. (Audit 3.22)
+- [x] AD-014: Restrict rate-limit E2E bypass — limit `X-E2E-Test` header bypass to `APP_ENV=test`/`testing` only, not all non-production environments. (Audit 3.11)
+- [x] AD-015: Harden CORS configuration — replace `allow_methods=["*"]` and `allow_headers=["*"]` with explicit allowlists. Add startup check rejecting `allow_credentials=True` with wildcard origins. (Audit 3.15)
+- [x] AD-016: Harden security defaults — make docs/OpenAPI and `DEBUG` environment-dependent (disabled in production). Remove dev secret from default config. (Audit 3.8)
+
+### Upload & Validation
+- [x] AD-017: Add content-based upload validation — validate actual file signatures (magic bytes) for restricted upload types instead of trusting MIME headers and filename extensions. (Audit 3.12)
+- [x] AD-018: Add chat message size limit — enforce maximum message length at schema/service boundary, align frontend with the limit. (Audit 3.13)
+
+### Wave AD — Tests
+- [x] AD-019: Invariant test — self-registration always lands as `customer` regardless of payload `role`/`tenant_id` values.
+- [x] AD-020: Invariant test — revoked session cannot access attachment downloads, WebSocket, or collab endpoints.
+- [x] AD-021: Invariant test — customer cannot read/write comments on internal documents.
+- [x] AD-022: Invariant test — non-system-admin cannot list companies outside own tenant.
+- [x] AD-023: Invariant test — public changelog endpoint never returns unpublished entries.
+- [x] AD-024: Security contract test — all management endpoints return 401 without auth and 403 for insufficient role.
+- [x] AD-025: XSS regression test — inject script tags into changelog entry and search query, verify no execution on render.
+
+---
+
+## Wave AE — AI Assistant Security & Audit Trail
+
+> Fixes critical privilege escalation, service-layer bypass, and cross-tenant exposure in the 97-tool AI assistant layer. (Audit §3.27–3.30)
+
+### Privilege Escalation Fixes (Critical)
+- [x] AE-001: Fix PublishDocumentTool — route through `PublishApprovedVersionCommandHandler` (same handler the API uses). Must enforce `PUBLISH_DOCUMENT` permission, review approval status, and state machine checks. Remove direct `version.is_published = True` assignment. (Audit 3.27a)
+- [x] AE-002: Fix SubmitReviewTool — route through `ApproveReviewCommandHandler` and enforce `ReviewPolicy.can_approve_review()`. Must block self-approval (submitter == reviewer). (Audit 3.27b)
+- [x] AE-003: Fix EditDocumentTool — remove `status` from the tool's allowed parameter schema entirely. Status transitions must only happen through the document state machine. (Audit 3.27c)
+
+### Service Layer Integration (High)
+- [x] AE-004: Route all 33 AI write tools through the service layer / command handlers — restore audit trail, notifications, state machine validation, and ETag/optimistic locking for all AI-initiated writes. (Audit 3.29)
+- [x] AE-005: As stopgap (if full service-layer integration is phased): add explicit `AuditLog` creation in each write tool's `execute()` method, attributed to the requesting user. (Audit 3.29)
+
+### Tenant Isolation (High)
+- [x] AE-006: Add `tenant_id` filtering to `GetVersionDetailsTool` and `GetDocumentVersionStatsTool` — these are gated by `VIEW_INTERNAL_DOCS` which editors have; must not allow cross-tenant reads. (Audit 3.30)
+- [x] AE-007: Add `tenant_id` filtering to `CancelScheduledPublishTool` — gated by `PUBLISH_DOCUMENT` (managers have this); must not allow cross-tenant cancellation. (Audit 3.30)
+- [x] AE-008: Add `tenant_id` filtering to `CancelInvitationTool` — gated by `MANAGE_USERS` (admins have this); must not allow cross-tenant invitation cancellation. (Audit 3.30)
+- [x] AE-009: Add `doc.tenant_id == tenant_id` check to engagement tools (`BookmarkDocumentTool`, `WatchDocumentTool`, `UpdateReadingProgressTool`). (Audit 3.30)
+- [x] AE-010: Document that cross-tenant analytics/audit reads by system_admin are intentional. Add code comment and guard: `if not user.is_system_admin: raise`. (Audit 3.30)
+
+### Phase 17 Prerequisite (Future)
+- [x] AE-011: When AI content editing (Phase 17) is built — AI proposes changes as suggestions (diff), user accepts/rejects, accepted changes go through normal review workflow, edits tagged in version history as "edited via AI assistant by [user]". (Audit 3.28)
+
+### Wave AE — Tests
+- [x] AE-012: Test — editor asks AI to publish → denied (requires manager+).
+- [x] AE-013: Test — editor asks AI to approve own submission → denied (self-approval blocked).
+- [x] AE-014: Test — editor asks AI to set document status to `active` → denied (status field removed from tool).
+- [x] AE-015: Test — AI write operation creates audit log entry attributed to requesting user.
+- [x] AE-016: Test — editor's AI tool cannot read/modify versions from another tenant.
+- [x] AE-017: Test — manager's AI tool cannot cancel scheduled publish from another tenant.
+
+---
+
+## Wave AF — Publication Integrity & API Cleanup
+
+> Fixes publication draft fallback, data leakage, API boundary confusion, and dead code. (Audit §2.4, §3.1, §3.3, §3.6, §3.9, §4.1–4.5, §4.7)
+
+### Publication Integrity (High)
+- [x] AF-001: Remove draft fallback for public reads — public document endpoints must only serve from published versions, never fall back to latest draft. (Audit 2.4)
+- [x] AF-002: Fix attachment leakage — public, portal, and viewer responses must only include attachments associated with the published version/snapshot, not all current document attachments. (Audit 2.4)
+- [x] AF-003: Treat publication as a release artifact — create an immutable published revision record that snapshots content, metadata, audience, and attachments at publish time. (Audit 4.2)
+- [x] AF-004: Fix portal reading-progress metadata leak — `/portal/reading-progress/recent` and `/continue` must re-run customer document access checks, not just filter by `user_id`. (Audit 3.1)
+
+### Access Policy Centralization
+- [x] AF-005: Create one central document access service — resolve read/write/download/comment access per user, per document, per version. Replace the scattered re-implementations in portal, public, comments, attachments, and collaboration paths. (Audit 4.1)
+
+### API Surface Cleanup
+- [x] AF-006: Separate API surfaces physically — move public changelog out of management router, stop portal/public behavior depending on management routes. Route boundaries must map to policy boundaries. (Audit 3.3)
+- [x] AF-007: Make API surfaces honest — if an endpoint is public, put it in the public router. If it is management-only, enforce auth at the router level. Remove accidental sharing. (Audit 4.5)
+- [x] AF-008: Fix `DocumentStatus.PUBLISHED = "active"` naming — pick one canonical lifecycle vocabulary (`PUBLISHED`). If aliases needed for compatibility, isolate at API translation boundary. (Audit 3.9)
+- [x] AF-009: Remove `role` and `tenant_id` from external write payloads — public API payloads must not carry server-owned authority fields. Move role assignment to admin-only commands and invitation acceptance. (Audit 4.8)
+
+### Dead Code & Feature Branches
+- [x] AF-010: Delete dead `CommentsSection.tsx` — confirmed dead code, never imported. (Audit 3.6)
+- [x] AF-011: Remove or update stale "chat bridge" comment on `DocumentDetailPage.tsx:19`. (Audit 3.6)
+- [x] AF-012: Eliminate ad hoc HTML rendering — route every HTML-like rendering path through the existing safe sanitizer utility, or move to structured rich text. (Audit 4.3)
+- [x] AF-013: Remove or complete dead feature branches — finish transitions or delete stale contracts. (Audit 4.7)
+
+### Wave AF — Tests
+- [x] AF-014: Test — public document endpoint returns 404 when no published version exists (no draft fallback).
+- [x] AF-015: Test — public/portal document response includes only attachments from the published snapshot.
+- [x] AF-016: Test — portal reading-progress endpoint excludes documents user no longer has access to.
+- [x] AF-017: Test — public changelog route is not in management router namespace.
+
+---
+
+## Wave AG — Infrastructure, Reliability & Ops
+
+> Addresses infrastructure gaps, reliability issues, dependency hygiene, and observability improvements. (Audit §3.4, §3.7, §3.14, §3.19–3.26, §4.6, §4.10–4.14)
+
+### Dependency & Configuration Hygiene
+- [x] AG-001: Remove dual JWT libraries — audit imports, consolidate on `PyJWT`, remove `python-jose` from requirements. (Audit 3.19)
+- [x] AG-002: Fix collaboration config drift — pick one source of truth for collab server URL (backend API response OR frontend env var), delete the unused variants from backend, frontend, and docker-compose. (Audit 3.4)
+- [x] AG-003: Align configuration sources — define one env var contract for collab URL, remove `VITE_COLLAB_WS_URL` / `VITE_COLLAB_SERVER_URL` duplication. (Audit 4.10)
+
+### Reliability & Observability
+- [x] AG-004: Replace blanket exception suppression with explicit degradation policies — classify each broad `except` as fail-fast, retryable, compensating, or intentionally lossy with metrics. Wire into real alerting. (Audit 3.14, 4.13)
+- [x] AG-005: Add email retry mechanism — implement exponential backoff (3 attempts: 1m, 5m, 15m) for transient SMTP failures. Persist failed sends for monitoring. (Audit 3.24)
+- [x] AG-006: Add WebSocket chat reconnection backoff — implement exponential backoff (3s → 6s → 12s → 30s → cap 60s) instead of fixed 3s retry. Show connection status indicator after N failures. (Audit 3.26)
+
+### Data Hygiene & Background Jobs
+- [x] AG-007: Add cleanup worker for expired sessions/tokens — periodic job (hourly) purging expired `UserSession`, used password reset tokens, stale `IdempotencyRecord` entries. (Audit 3.25)
+- [x] AG-008: Add scheduled-publish executor worker — poll for versions where `scheduled_publish_at <= now()` and trigger the publish flow. (Audit 3.25)
+- [x] AG-009: Add backup automation for SQLite — backup script that copies DB file to separate volume/path. Add pre-migration hook: `cp portal.db portal.db.bak.$(date +%s)` before `alembic upgrade`. Document restore procedure. (Audit 3.21)
+
+### Performance
+- [x] AG-010: Fix N+1 query patterns — add `joinedload`/`selectinload` to admin, GDPR, and company endpoints that iterate over lazy-loaded relationships. Add query count assertion to critical endpoint tests. (Audit 3.20)
+
+### Test & QA Improvements
+- [x] AG-011: Add invariant tests for critical business rules — self-registration, comment privacy, revoked-session parity, published snapshot immutability, portal revocation. Fix local test runner assumptions. (Audit 3.7)
+- [x] AG-012: Reduce test warning noise — fix deprecations, tighten warning filters, fail CI on new warning classes (baseline from current 3833 warnings). (Audit 4.6)
+- [x] AG-013: Add security contract tests — route-by-route parity tests for HTTP auth, download auth, portal access, and WebSocket auth. (Audit 4.9)
+- [x] AG-014: Add content-based upload validation to attachment pipeline — magic-byte verification for restricted types, separate "allowed for storage" from "trusted for conversion." (Audit 4.14)
+
+### GDPR & Compliance (Deferred — complete when ready)
+- [x] AG-015: Expand GDPR export — add `SecurityEvent`, `UserSession`, chat messages, and support messages to export ZIP. Build registry-driven export/delete map for future user-linked entities. (Audit 2.8, 4.12)
+
+### Wave AG — Tests
+- [x] AG-016: Test — verify only `PyJWT` is imported (no `python-jose` imports remain).
+- [x] AG-017: Test — collaboration URL is resolved from a single source in frontend, backend, and docker-compose.
+- [x] AG-018: Test — email send retries on transient SMTP failure (mock SMTP timeout, verify 3 attempts).
+- [x] AG-019: Test — cleanup worker purges expired sessions and tokens.
+- [x] AG-020: Test — scheduled-publish worker fires publication at appointed time.
+- [x] AG-021: Test — admin list users endpoint uses eager loading (query count assertion).
+
+---
+
+## Wave AH — New Features
+
+> New feature requests identified during audit, plus planned architecture items. (Audit §5)
+
+### PDF Upload → Editable Document
+- [x] AH-001: Add `.pdf` to frontend file picker accept list in `documentsUseCases.ts`. (Audit §5 — PDF Upload)
+- [x] AH-002: Create `PdfConverterStrategy` in `backend/app/conversion/` — use `PyMuPDF` (fitz) to extract text blocks, images, and structure → build IR nodes → generate HTML via existing `html_generator.py`. Follow existing DOCX/PPTX extractor pattern.
+- [x] AH-003: Register `.pdf` in `STRUCTURED_READER_EXTENSIONS` and wire strategy into `document_strategies.py`.
+- [x] AH-004: Add OCR fallback for scanned PDFs — integrate `pytesseract` for image-only PDF pages (optional, behind feature flag).
+
+### PDF-Only Downloads for External Users
+- [x] AH-005: Add PDF render service — take existing reader artifact HTML → render to PDF using `weasyprint` (or `reportlab`). Cache as `AttachmentArtifact` (type `pdf_export`).
+- [x] AH-006: Regenerate PDF artifact whenever a new version is published.
+- [x] AH-007: Modify portal and viewer download endpoints to serve PDF artifact instead of original file. Keep management download unchanged (internal users get original).
+
+### Chat Unification Architecture
+- [x] AH-008: Add `document_id` (nullable FK) to Chat model for document-scoped chats. When a user creates inline comment on a document, open/create chat with document author(s). Multi-author documents create group chat.
+- [x] AH-009: Implement context cards in chat messages — metadata (document title, section, anchor text, comment type) so participants understand the topic without leaving chat.
+- [x] AH-010: Migrate feedback system to chat-like UX — back-and-forth between customer and internal staff, keeping existing feedback business logic. Customers see "Chat" tab alongside Feedback in portal.
+- [x] AH-011: Add customer chat routing — customers can chat with internal users related to the document they are discussing, or continue existing threads.
+
+### Operational Tooling
+- [x] AH-012: Add permission debugger admin screen — explain why a user can/cannot access a document, showing the access policy evaluation chain.
+- [x] AH-013: Add published snapshot diff tool — editors can see exactly what will change for public/customer viewers before publishing.
+- [x] AH-014: Add deploy-time configuration validator — checks env var names across backend, frontend, and collab-server. Fail deploy on missing required vars.
+- [x] AH-015: Add `pip audit` and `npm audit` as CI gates to catch dependency vulnerabilities automatically.
+- [x] AH-016: Generate machine-readable route ownership matrix — map each endpoint to its audience surface (public/portal/viewer/management) and enforced auth level.
+
+### Wave AH — Tests
+- [x] AH-017: Test — upload PDF file, verify HTML conversion produces editable TipTap content.
+- [x] AH-018: Test — portal download endpoint serves PDF, management download serves original file.
+- [x] AH-019: Test — document-scoped chat is created when inline comment targets a document with an author.
+- [x] AH-020: Test — permission debugger returns correct access explanation for customer vs editor on same document.
+
+---
+
+## Deferred / By-Design Items (from Audit — no action required)
+
+> Items explicitly reviewed during the production-readiness audit and classified as accepted behavior or intentionally deferred.
+
+- **2.9 — SQLite in production**: Accepted for current stage. Migration to PostgreSQL when needed. (Enable WAL mode for better concurrent reads.)
+- **2.10 — Audience change after review**: Intentional flexibility. Optionally add audit logging of audience changes during pending review.
+- **3.5 — Viewer no auto-select version**: Intentional UX — user browses version list and chooses. Optionally add "Select a version" message.
+- **3.10 — Manager permission naming**: `MANAGE_EDITORS` should be `MANAGE_SUBORDINATES` — naming issue only, implementation is correct (pyramid model).
+- **3.23 — Deactivated tenant's public docs remain visible**: Accepted. Published public content stays visible after tenant deactivation.
 
 ---
 

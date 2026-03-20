@@ -54,6 +54,7 @@ async function createDocument(page: Page, title: string) {
   await expect(page.getByText('Create Document')).toBeVisible();
   await page.fill('input[placeholder="Enter document title"]', title);
   await page.fill('textarea[placeholder="Brief description"]', 'Created by Playwright E2E');
+  await page.fill('input[placeholder="Choose an existing platform or type a new one"]', 'Core Platform');
   const createBtn = page.getByRole('button', { name: /create & continue editing/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {

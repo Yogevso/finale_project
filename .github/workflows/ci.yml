@@ -472,6 +472,12 @@ jobs:
           - customer-portal.spec.ts
           - public.spec.ts
           - system-admin.spec.ts
+          - accessibility.spec.ts
+          - a11y-skip-nav.spec.ts
+          - a11y-keyboard.spec.ts
+          - a11y-announcements.spec.ts
+          - a11y-focus-management.spec.ts
+          - a11y-ci-regression.spec.ts
 
     steps:
       - name: Checkout code

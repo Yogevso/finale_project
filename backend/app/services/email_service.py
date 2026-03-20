@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -19,6 +20,10 @@ from app.notifications import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Retry config: 3 attempts with exponential backoff (60s, 300s, 900s)
+EMAIL_MAX_ATTEMPTS = 3
+EMAIL_RETRY_DELAYS = (60, 300, 900)  # seconds: 1m, 5m, 15m
 
 
 class EmailService:
@@ -66,7 +71,38 @@ class EmailService:
 
             logger.info("Email sent successfully to %s: %s", to_email, subject)
             return True
-        except Exception as exc:
+        except (aiosmtplib.SMTPConnectError, aiosmtplib.SMTPServerDisconnected,
+                aiosmtplib.SMTPResponseException, OSError) as exc:
+            # Transient SMTP failures — retry with exponential backoff
+            last_error = exc
+            for attempt in range(1, EMAIL_MAX_ATTEMPTS):
+                delay = EMAIL_RETRY_DELAYS[min(attempt, len(EMAIL_RETRY_DELAYS) - 1)]
+                logger.warning(
+                    "Email to %s failed (attempt %d/%d), retrying in %ds: %s",
+                    to_email, attempt, EMAIL_MAX_ATTEMPTS, delay, exc,
+                )
+                await asyncio.sleep(delay)
+                try:
+                    async with aiosmtplib.SMTP(
+                        hostname=self.host,
+                        port=self.port,
+                        use_tls=True,
+                    ) as smtp:
+                        if self.user and self.password:
+                            await smtp.login(self.user, self.password)
+                        await smtp.send_message(message)
+                    logger.info("Email sent successfully to %s on retry %d: %s", to_email, attempt + 1, subject)
+                    return True
+                except (aiosmtplib.SMTPConnectError, aiosmtplib.SMTPServerDisconnected,
+                        aiosmtplib.SMTPResponseException, OSError) as retry_exc:
+                    last_error = retry_exc
+                    continue
+            logger.error(  # policy: RETRYABLE — exhausted all %d attempts
+                "Failed to send email to %s after %d attempts: %s",
+                to_email, EMAIL_MAX_ATTEMPTS, last_error,
+            )
+            return False
+        except Exception as exc:  # policy: FAIL_FAST — unexpected error (auth, config)
             logger.error("Failed to send email to %s: %s", to_email, exc)
             return False
 

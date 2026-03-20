@@ -2,9 +2,13 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Link } from 'react-router-dom'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import PageHeader from '@/components/PageHeader'
+import { SearchInput } from '@/components/form'
+import { StatCardSkeleton, TableSkeleton } from '@/components/skeletons'
 import {
   MessageSquare,
-  Search,
   Filter,
   HelpCircle,
   Lightbulb,
@@ -71,7 +75,7 @@ export default function FeedbackPage() {
   const queryClient = useQueryClient()
 
   // Fetch feedback list
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['feedback-management', page, statusFilter, typeFilter, search],
     queryFn: () =>
       api.getAllFeedback({
@@ -84,7 +88,7 @@ export default function FeedbackPage() {
   })
 
   // Fetch stats
-  const { data: stats } = useQuery({
+  const { data: stats, isLoading: isStatsLoading } = useQuery({
     queryKey: ['feedback-stats'],
     queryFn: () => api.getManagementFeedbackStats(),
   })
@@ -110,29 +114,23 @@ export default function FeedbackPage() {
     },
   })
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setPage(1)
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Customer Feedback</h1>
-          <p className="text-slate-600">Manage and respond to customer feedback</p>
-        </div>
-      </div>
+    <div className="page-stack">
+      <PageHeader
+        title="Customer Feedback"
+        subtitle="Manage and respond to customer feedback"
+      />
 
       {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-4 gap-4">
+      {isStatsLoading ? (
+        <StatCardSkeleton count={4} />
+      ) : stats ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="surface-card rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Total</p>
-                <p className="text-2xl font-bold text-slate-900">{stats.total}</p>
+                <p className="metric-label">Total</p>
+                <p className="metric-value">{stats.total}</p>
               </div>
               <MessageSquare className="w-8 h-8 text-slate-400" />
             </div>
@@ -140,8 +138,8 @@ export default function FeedbackPage() {
           <div className="surface-card rounded-2xl border-amber-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-amber-600">Pending</p>
-                <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
+                <p className="metric-label text-amber-600 dark:text-amber-300">Pending</p>
+                <p className="metric-value text-amber-700 dark:text-amber-200">{stats.pending}</p>
               </div>
               <Clock className="w-8 h-8 text-amber-400" />
             </div>
@@ -149,8 +147,8 @@ export default function FeedbackPage() {
           <div className="surface-card rounded-2xl border-emerald-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-emerald-600">Responded</p>
-                <p className="text-2xl font-bold text-emerald-700">{stats.responded}</p>
+                <p className="metric-label text-emerald-600 dark:text-emerald-300">Responded</p>
+                <p className="metric-value text-emerald-700 dark:text-emerald-200">{stats.responded}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-emerald-400" />
             </div>
@@ -158,31 +156,32 @@ export default function FeedbackPage() {
           <div className="surface-card rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Closed</p>
-                <p className="text-2xl font-bold text-slate-700">{stats.closed}</p>
+                <p className="metric-label">Closed</p>
+                <p className="metric-value text-slate-700 dark:text-slate-200">{stats.closed}</p>
               </div>
               <XCircle className="w-8 h-8 text-slate-400" />
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Filters */}
       <div className="surface-card rounded-2xl p-4">
         <div className="flex items-center gap-4 flex-wrap">
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search feedback..."
-                className="input-field w-full pl-10"
-              />
-            </div>
-          </form>
+          <div className="flex-1 min-w-[200px]">
+            <SearchInput
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+              onClear={() => {
+                setSearch('')
+                setPage(1)
+              }}
+              placeholder="Search feedback..."
+            />
+          </div>
 
           {/* Status Filter */}
           <div className="flex items-center gap-2">
@@ -223,11 +222,22 @@ export default function FeedbackPage() {
       {/* Feedback Table */}
       <div className="surface-card rounded-2xl overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500">Loading feedback...</div>
+          <TableSkeleton rows={6} columns={7} />
+        ) : isError ? (
+          <div className="p-6">
+            <ErrorState
+              title="Feedback could not be loaded"
+              message="We could not fetch the customer feedback queue."
+              onRetry={() => void refetch()}
+            />
+          </div>
         ) : !data?.items?.length ? (
-          <div className="p-8 text-center text-slate-500">
-            <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>No feedback found</p>
+          <div className="p-6">
+            <EmptyState
+              icon={<MessageSquare className="h-8 w-8" aria-hidden="true" />}
+              title="No feedback found"
+              description="Try changing the filters or search terms to widen the results."
+            />
           </div>
         ) : (
           <table className="min-w-full divide-y divide-slate-200">
@@ -269,12 +279,12 @@ export default function FeedbackPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm">
-                      <div className="flex items-center gap-1 text-slate-900">
+                      <div className="card-title flex items-center gap-1">
                         <User className="w-3 h-3" />
                         {feedback.user_name}
                       </div>
                       {feedback.tenant_name && (
-                        <div className="flex items-center gap-1 text-slate-500 text-xs mt-1">
+                        <div className="helper-copy mt-1 flex items-center gap-1">
                           <Building2 className="w-3 h-3" />
                           {feedback.tenant_name}
                         </div>
@@ -284,7 +294,7 @@ export default function FeedbackPage() {
                   <td className="px-6 py-4">
                     <Link
                       to={`/documents/${feedback.document_id}/fullscreen`}
-                      className="flex items-center gap-1 text-sky-600 hover:text-sky-700 text-sm"
+                      className="flex items-center gap-1 text-sm text-sky-600 hover:text-sky-700"
                     >
                       <FileText className="w-3 h-3" />
                       {feedback.document_title.length > 30
@@ -293,7 +303,7 @@ export default function FeedbackPage() {
                     </Link>
                   </td>
                   <td className="px-6 py-4 max-w-xs">
-                    <p className="text-sm text-slate-700 truncate">
+                    <p className="body-copy truncate">
                       {feedback.content.length > 50
                         ? `${feedback.content.slice(0, 50)}...`
                         : feedback.content}
@@ -309,21 +319,23 @@ export default function FeedbackPage() {
                       {statusConfig[feedback.status].label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-600">
+                  <td className="px-6 py-4 body-copy">
                     {new Date(feedback.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
+                        type="button"
                         onClick={() => setSelectedFeedback(feedback)}
-                        className="text-sky-600 hover:text-sky-700 text-sm"
+                        className="btn-secondary table-action-btn"
                       >
                         View
                       </button>
                       {feedback.status === 'pending' && (
                         <button
+                          type="button"
                           onClick={() => setSelectedFeedback(feedback)}
-                          className="btn-primary text-sm px-2 py-1 flex items-center gap-1"
+                          className="btn-primary table-action-btn"
                         >
                           <Send className="w-3 h-3" />
                           Respond
@@ -331,12 +343,13 @@ export default function FeedbackPage() {
                       )}
                       {feedback.status === 'responded' && (
                         <button
+                          type="button"
                           onClick={() => {
                             if (confirm('Mark this feedback as closed?')) {
                               updateStatusMutation.mutate({ id: feedback.id, status: 'closed' })
                             }
                           }}
-                          className="text-slate-600 hover:text-slate-800 text-sm"
+                          className="btn-ghost table-action-btn"
                         >
                           Close
                         </button>
@@ -351,22 +364,24 @@ export default function FeedbackPage() {
 
         {/* Pagination */}
         {data && data.total > 20 && (
-          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-            <p className="text-sm text-slate-600">
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-3">
+            <p className="body-copy">
               Page {data.page} of {Math.ceil(data.total / data.per_page)}
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="btn-ghost text-sm disabled:opacity-50"
+                className="btn-ghost table-action-btn disabled:opacity-50"
               >
                 Previous
               </button>
               <button
+                type="button"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={!data.has_more}
-                className="btn-ghost text-sm disabled:opacity-50"
+                className="btn-ghost table-action-btn disabled:opacity-50"
               >
                 Next
               </button>
