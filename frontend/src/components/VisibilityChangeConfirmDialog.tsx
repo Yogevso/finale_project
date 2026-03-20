@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useId } from 'react'
 import { getVisibilityLabel } from '@/features/documents'
 import type { DocumentVisibility } from '@/types'
 import CompanySelector from './CompanySelector'
@@ -28,8 +28,13 @@ export default function VisibilityChangeConfirmDialog({
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>(initialCompanyIds)
   const [reason, setReason] = useState('')
   const wasOpenRef = useRef(false)
+  const titleId = useId()
+  const descriptionId = useId()
+  const companySelectorLabelId = useId()
+  const reasonHintId = useId()
+  const reasonErrorId = useId()
 
-  const { containerRef, handleKeyDown } = useFocusTrap(onCancel)
+  const { containerRef } = useFocusTrap(onCancel)
 
   // Only reset selection when dialog opens (transitions from closed to open)
   useEffect(() => {
@@ -50,6 +55,7 @@ export default function VisibilityChangeConfirmDialog({
   const isCompanyVisibility = toVisibility === 'company'
   const reasonIsValid = reason.trim().length >= 3
   const canConfirm = reasonIsValid && (!isCompanyVisibility || selectedCompanyIds.length > 0)
+  const showReasonError = reason.length > 0 && !reasonIsValid
 
   const handleConfirm = () => {
     onConfirm({
@@ -59,22 +65,28 @@ export default function VisibilityChangeConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        onClick={onCancel}
+        aria-label="Close visibility change dialog"
+        tabIndex={-1}
+      />
       <div
         ref={containerRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Confirm Visibility Change"
-        className="w-full max-w-lg rounded-2xl bg-white shadow-xl p-6 space-y-4 overflow-visible"
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        tabIndex={-1}
+        className="relative w-full max-w-lg space-y-4 overflow-visible rounded-2xl bg-white p-6 shadow-xl"
       >
         <div>
-          <h3 className="text-lg font-display font-semibold text-slate-900">
+          <h3 id={titleId} className="text-lg font-display font-semibold text-slate-900">
             Confirm Visibility Change
           </h3>
-          <p className="mt-2 text-sm text-slate-600">
+          <p id={descriptionId} className="mt-2 text-sm text-slate-600">
             You are expanding access for {documentLabel} from{' '}
             <span className="font-medium text-slate-900">{fromLabel}</span> to{' '}
             <span className="font-medium text-slate-900">{toLabel}</span>.
@@ -86,15 +98,17 @@ export default function VisibilityChangeConfirmDialog({
 
         {isCompanyVisibility && (
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-700">
+            <p id={companySelectorLabelId} className="block text-sm font-medium text-slate-700">
               Select companies to grant access <span className="text-rose-500">*</span>
-            </label>
-            <CompanySelector
-              selectedIds={selectedCompanyIds}
-              onChange={setSelectedCompanyIds}
-              placeholder="Select companies..."
-              disabled={isSubmitting}
-            />
+            </p>
+            <div aria-labelledby={companySelectorLabelId} role="group">
+              <CompanySelector
+                selectedIds={selectedCompanyIds}
+                onChange={setSelectedCompanyIds}
+                placeholder="Select companies..."
+                disabled={isSubmitting}
+              />
+            </div>
             {selectedCompanyIds.length === 0 && (
               <p className="text-xs text-amber-600">
                 At least one company must be selected for company visibility.
@@ -120,10 +134,17 @@ export default function VisibilityChangeConfirmDialog({
             placeholder="Describe why this visibility change is required..."
             disabled={isSubmitting}
             data-testid="visibility-change-reason"
+            aria-invalid={showReasonError}
+            aria-describedby={showReasonError ? `${reasonHintId} ${reasonErrorId}` : reasonHintId}
           />
-          <p className="text-xs text-slate-500">
+          <p id={reasonHintId} className="text-xs text-slate-500">
             Minimum 3 characters. Reason is stored in the audience audit trail.
           </p>
+          {showReasonError ? (
+            <p id={reasonErrorId} role="alert" className="text-xs text-rose-600">
+              Enter at least 3 characters so the audit trail has a meaningful reason.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-3 pt-1">

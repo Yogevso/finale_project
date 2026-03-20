@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -14,18 +14,34 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { api } from '@/lib/api'
+import {
+  markAllNotificationsRead,
+  NOTIFICATIONS_QUERY_KEY,
+  removeNotification,
+  setNotificationReadState,
+} from '@/lib/notificationsCache'
 import type { Notification, NotificationListResponse, NotificationType } from '@/types'
 
-const NOTIFICATIONS_QUERY_KEY = ['notifications'] as const
 const BELL_NOTIFICATIONS_LIMIT = 20
 
 export default function NotificationBell() {
+  const panelId = useId()
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
   const isNotificationsPage = location.pathname === '/notifications'
+
+  const closeDropdown = useCallback((options?: { restoreFocus?: boolean }) => {
+    setIsOpen(false)
+    if (options?.restoreFocus) {
+      requestAnimationFrame(() => {
+        triggerRef.current?.focus()
+      })
+    }
+  }, [])
 
   const {
     data,
@@ -49,84 +65,92 @@ export default function NotificationBell() {
   }, [isOpen, isNotificationsPage, refetch])
 
   useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+        closeDropdown()
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [closeDropdown, isOpen])
 
-  const setReadStatusInCache = (notificationId: number, isRead: boolean) => {
-    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-      if (!previous) return previous
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
 
-      let unreadDelta = 0
-      const items = previous.items.map((item) => {
-        if (item.id !== notificationId) return item
-        if (item.is_read === isRead) return item
-        unreadDelta = isRead ? -1 : 1
-        return {
-          ...item,
-          is_read: isRead,
-          read_at: isRead ? new Date().toISOString() : null,
-        }
-      })
-
-      return {
-        ...previous,
-        items,
-        unread_count: Math.max(0, previous.unread_count + unreadDelta),
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        closeDropdown({ restoreFocus: true })
       }
-    })
-  }
+    }
 
-  const removeNotificationFromCache = (notificationId: number) => {
-    queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-      if (!previous) return previous
-      const removed = previous.items.find((item) => item.id === notificationId)
-      if (!removed) return previous
-
-      return {
-        ...previous,
-        items: previous.items.filter((item) => item.id !== notificationId),
-        total: Math.max(0, previous.total - 1),
-        unread_count: removed.is_read ? previous.unread_count : Math.max(0, previous.unread_count - 1),
-      }
-    })
-  }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [closeDropdown, isOpen])
 
   const markReadMutation = useMutation({
     mutationFn: (notificationId: number) => api.markNotificationRead(notificationId),
-    onSuccess: (_, notificationId) => {
-      setReadStatusInCache(notificationId, true)
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        setNotificationReadState(current, notificationId, true),
+      )
+      return { previous }
+    },
+    onError: (_error, _notificationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.markAllNotificationsRead(),
-    onSuccess: () => {
-      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (previous) => {
-        if (!previous) return previous
-        const nowIso = new Date().toISOString()
-        return {
-          ...previous,
-          unread_count: 0,
-          items: previous.items.map((item) => ({
-            ...item,
-            is_read: true,
-            read_at: item.read_at || nowIso,
-          })),
-        }
-      })
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        markAllNotificationsRead(current),
+      )
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (notificationId: number) => api.deleteNotification(notificationId),
-    onSuccess: (_, notificationId) => {
-      removeNotificationFromCache(notificationId)
+    onMutate: async (notificationId) => {
+      await queryClient.cancelQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
+      const previous = queryClient.getQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY)
+      queryClient.setQueryData<NotificationListResponse>(NOTIFICATIONS_QUERY_KEY, (current) =>
+        removeNotification(current, notificationId),
+      )
+      return { previous }
+    },
+    onError: (_error, _notificationId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(NOTIFICATIONS_QUERY_KEY, context.previous)
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY })
     },
   })
 
@@ -139,7 +163,7 @@ export default function NotificationBell() {
       return
     }
 
-    setIsOpen(false)
+    closeDropdown()
     const link = notification.link
     if (link.startsWith('http://') || link.startsWith('https://')) {
       window.open(link, '_blank', 'noopener,noreferrer')
@@ -192,13 +216,18 @@ export default function NotificationBell() {
     <div className="relative" ref={dropdownRef}>
       {/* Bell Icon Button */}
       <button
+        ref={triggerRef}
+        type="button"
         onClick={() => setIsOpen((previous) => !previous)}
-        className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+        className="relative rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         aria-label="Notifications"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        aria-haspopup="dialog"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-bold text-white bg-sky-600 rounded-full" aria-live="polite" role="status">
+          <span className="motion-enter-scale absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-sky-600 px-1 text-xs font-bold text-white" aria-live="polite" role="status">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -206,22 +235,34 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 surface-card overflow-hidden">
+        <div
+          id={panelId}
+          className="dropdown-menu motion-enter-slide absolute right-0 mt-2 w-96 overflow-hidden p-0 dark:bg-slate-900"
+          role="dialog"
+          aria-label="Notifications panel"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <h3 className="font-semibold text-slate-900 font-display">Notifications</h3>
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/70">
+            <h3 className="font-display font-semibold text-slate-900 dark:text-slate-100">Notifications</h3>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   onClick={() => markAllReadMutation.mutate()}
-                  className="text-xs text-sky-600 hover:text-sky-800 flex items-center gap-1"
+                  className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
                   disabled={isBusy}
+                  aria-label="Mark all notifications as read"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
                   Mark all read
                 </button>
               )}
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => closeDropdown({ restoreFocus: true })}
+                className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200"
+                aria-label="Close notifications panel"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -234,70 +275,84 @@ export default function NotificationBell() {
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-600"></div>
               </div>
             ) : !data && !isLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500">
-                <AlertCircle className="w-8 h-8 mb-2 text-rose-300" />
+              <div className="flex flex-col items-center justify-center py-8 text-slate-500 dark:text-slate-400">
+                <AlertCircle className="mb-2 h-8 w-8 text-rose-300 dark:text-rose-400" />
                 <p className="text-sm">Failed to load notifications</p>
                 <button
+                  type="button"
                   onClick={() => void refetch()}
-                  className="mt-2 text-xs text-sky-600 hover:text-sky-800"
+                  className="mt-2 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
                 >
                   Try again
                 </button>
               </div>
             ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500">
-                <Bell className="w-8 h-8 mb-2 text-slate-300" />
+              <div className="flex flex-col items-center justify-center py-8 text-slate-500 dark:text-slate-400">
+                <Bell className="mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" />
                 <p className="text-sm">No notifications yet</p>
               </div>
             ) : (
-              notifications.map((notification) => (
+              notifications.map((notification, index) => (
                 <div
                   key={notification.id}
                   onClick={() => void handleNotificationClick(notification)}
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer transition-colors ${
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      void handleNotificationClick(notification)
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  style={{ '--enter-delay': `${Math.min(index, 7) * 35}ms` } as CSSProperties}
+                  className={`motion-enter-fade flex cursor-pointer items-start gap-3 border-b border-slate-50 px-4 py-3 transition-colors dark:border-slate-800 ${
                     notification.is_read
-                      ? 'bg-white hover:bg-slate-50'
-                      : 'bg-sky-50 hover:bg-sky-100'
+                      ? 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80'
+                      : 'bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/30 dark:hover:bg-sky-900/40'
                   }`}
                 >
                   <div className="flex-shrink-0 mt-0.5">
                     {getNotificationIcon(notification.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${notification.is_read ? 'text-slate-700' : 'text-slate-900 font-medium'}`}>
+                    <p className={`text-sm ${notification.is_read ? 'text-slate-700 dark:text-slate-200' : 'font-medium text-slate-900 dark:text-slate-100'}`}>
                       {notification.title}
                     </p>
                     {notification.message && (
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
                         {notification.message}
                       </p>
                     )}
-                    <p className="text-xs text-slate-400 mt-1" title={new Date(notification.created_at).toLocaleString()}>
+                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500" title={new Date(notification.created_at).toLocaleString()}>
                       {formatTime(notification.created_at)}
                     </p>
                   </div>
                   <div className="flex-shrink-0 flex gap-1">
                     {!notification.is_read && (
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
                           markReadMutation.mutate(notification.id)
                         }}
-                        className="p-1 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-full"
+                        className="rounded-full p-1 text-slate-400 hover:bg-sky-50 hover:text-sky-600 dark:text-slate-500 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"
                         title="Mark as read"
                         disabled={isBusy}
+                        aria-label={`Mark notification "${notification.title}" as read`}
                       >
                         <Check className="w-3.5 h-3.5" />
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         deleteMutation.mutate(notification.id)
                       }}
-                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                      className="rounded-full p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-500 dark:hover:bg-rose-950/30 dark:hover:text-rose-300"
                       title="Delete"
                       disabled={isBusy}
+                      aria-label={`Delete notification "${notification.title}"`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -308,13 +363,14 @@ export default function NotificationBell() {
           </div>
 
           {/* Footer */}
-          <div className="px-4 py-2 border-t border-slate-100 bg-slate-50">
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 dark:border-slate-800 dark:bg-slate-950/70">
             <button
+              type="button"
               onClick={() => {
-                setIsOpen(false)
+                closeDropdown()
                 navigate('/notifications')
               }}
-              className="text-xs text-sky-600 hover:text-sky-800 w-full text-center"
+              className="w-full text-center text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
             >
               See all notifications
             </button>

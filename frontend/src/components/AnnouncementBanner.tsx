@@ -46,7 +46,7 @@ export default function AnnouncementBanner() {
   }
 
   return (
-    <div className="space-y-0">
+    <div className="space-y-0" role="region" aria-label="Announcements" aria-live="polite">
       {visible.map((a) => {
         const config = typeConfig[a.type] || typeConfig.info
         const Icon = config.icon
@@ -58,9 +58,11 @@ export default function AnnouncementBanner() {
             <Icon className={`h-4 w-4 flex-shrink-0 ${config.text}`} />
             <p className={`text-sm flex-1 ${config.text}`}>{a.message}</p>
             <button
+              type="button"
               onClick={() => handleDismiss(a.id)}
               className={`p-1 rounded hover:bg-black/5 ${config.text}`}
               aria-label="Dismiss announcement"
+              title="Dismiss announcement"
             >
               <X className="h-4 w-4" />
             </button>

@@ -113,7 +113,7 @@ describe('ChatMessage', () => {
       isActiveResult: true,
     })
 
-    const activeEl = container.querySelector('.ring-blue-500')
+    const activeEl = container.querySelector('.ring-sky-500')
     expect(activeEl).toBeTruthy()
   })
 
@@ -142,5 +142,9 @@ describe('ChatMessage', () => {
     })
 
     expect(screen.getByText('report.pdf')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /download report\.pdf/i })).toHaveAttribute(
+      'href',
+      '/files/report.pdf',
+    )
   })
 })

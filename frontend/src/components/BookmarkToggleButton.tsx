@@ -4,12 +4,14 @@ import { api } from '@/lib/api'
 
 type BookmarkToggleButtonProps = {
   documentId: number
+  documentTitle?: string
   showLabel?: boolean
   className?: string
 }
 
 export default function BookmarkToggleButton({
   documentId,
+  documentTitle,
   showLabel = true,
   className = '',
 }: BookmarkToggleButtonProps) {
@@ -51,21 +53,30 @@ export default function BookmarkToggleButton({
   })
 
   const isBookmarked = bookmarkStatusQuery.data?.is_bookmarked ?? false
+  const accessibleLabel = documentTitle
+    ? `${isBookmarked ? 'Remove bookmark from' : 'Add bookmark to'} ${documentTitle}`
+    : isBookmarked
+      ? 'Remove bookmark'
+      : 'Add bookmark'
 
   return (
     <button
       type="button"
       onClick={() => toggleBookmarkMutation.mutate()}
       disabled={bookmarkStatusQuery.isLoading || toggleBookmarkMutation.isPending}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors disabled:opacity-60 ${
+      aria-pressed={isBookmarked}
+      aria-label={!showLabel ? accessibleLabel : undefined}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition hover:scale-[1.02] disabled:opacity-60 ${
         isBookmarked
           ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
           : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
       } ${className}`}
       title={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
     >
-      <Star className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
-      {showLabel ? <span>{isBookmarked ? 'Saved' : 'Save'}</span> : null}
+      <span key={isBookmarked ? 'saved' : 'unsaved'} className="motion-enter-scale inline-flex items-center gap-2">
+        <Star className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
+        {showLabel ? <span>{isBookmarked ? 'Saved' : 'Save'}</span> : null}
+      </span>
     </button>
   )
 }

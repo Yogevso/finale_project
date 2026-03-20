@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { useFocusTrap } from '@/hooks/useAccessibility'
 
 type ConfirmationDialogProps = {
   open: boolean
@@ -24,22 +25,16 @@ export default function ConfirmationDialog({
   onConfirm,
   onCancel,
 }: ConfirmationDialogProps) {
-  const confirmRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
+  const descriptionId = useId()
+  const { containerRef } = useFocusTrap(isLoading ? undefined : onCancel)
 
   useEffect(() => {
     if (open) {
-      confirmRef.current?.focus()
+      cancelRef.current?.focus()
     }
   }, [open])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape' && !isLoading) {
-        onCancel()
-      }
-    },
-    [onCancel, isLoading],
-  )
 
   if (!open) return null
 
@@ -47,16 +42,24 @@ export default function ConfirmationDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-      onClick={isLoading ? undefined : onCancel}
+      className="modal-overlay flex items-center justify-center p-4"
     >
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={isLoading ? undefined : onCancel}
+        aria-label="Close confirmation dialog"
+        tabIndex={-1}
+      />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className="w-full max-w-md rounded-2xl bg-white shadow-xl p-6 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        aria-busy={isLoading}
+        tabIndex={-1}
+        className="modal-content motion-enter-scale w-full max-w-md space-y-4 p-6 dark:bg-slate-900"
       >
         <div className="flex items-start gap-3">
           <div
@@ -65,20 +68,25 @@ export default function ConfirmationDialog({
             }`}
           >
             <AlertTriangle
-              className={`h-5 w-5 ${isDanger ? 'text-rose-600' : 'text-amber-600'}`}
+              className={`h-5 w-5 ${isDanger ? 'text-rose-600 dark:text-rose-300' : 'text-amber-600 dark:text-amber-300'}`}
               aria-hidden="true"
             />
           </div>
           <div>
-            <h3 className="text-lg font-display font-semibold text-slate-900">{title}</h3>
+            <h3 id={titleId} className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100">
+              {title}
+            </h3>
             {description && (
-              <p className="mt-1 text-sm text-slate-600">{description}</p>
+              <p id={descriptionId} className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                {description}
+              </p>
             )}
           </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             disabled={isLoading}
@@ -87,14 +95,13 @@ export default function ConfirmationDialog({
             {cancelLabel}
           </button>
           <button
-            ref={confirmRef}
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50 ${
               isDanger
-                ? 'bg-rose-600 hover:bg-rose-700'
-                : 'bg-amber-600 hover:bg-amber-700'
+                ? 'bg-rose-600 hover:bg-rose-700 hover:scale-[1.02]'
+                : 'bg-amber-600 hover:bg-amber-700 hover:scale-[1.02]'
             }`}
           >
             {isLoading && (

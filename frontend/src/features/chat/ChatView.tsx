@@ -8,6 +8,9 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { MessageSkeleton } from '@/components/skeletons'
 import type { ChatDetail, ChatMessage as ChatMessageType } from '@/types/chat'
 import ChatHeader from './ChatHeader'
 import ChatMessageBubble from './ChatMessage'
@@ -20,6 +23,8 @@ interface ChatViewProps {
   typingText: string
   isConnected: boolean
   isLoading: boolean
+  isError?: boolean
+  onRetry?: () => void
   onSend: (content: string) => void
   onFileUpload?: (file: File) => void
   onTyping: () => void
@@ -41,6 +46,8 @@ export default function ChatView({
   typingText,
   isConnected,
   isLoading,
+  isError = false,
+  onRetry,
   onSend,
   onFileUpload,
   onTyping,
@@ -59,6 +66,7 @@ export default function ChatView({
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeResultIndex, setActiveResultIndex] = useState(0)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const debouncedSearch = useDebouncedValue(searchQuery, 300)
 
   const searchResults = useQuery({
@@ -125,16 +133,21 @@ export default function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
+  useEffect(() => {
+    if (showSearch) {
+      searchInputRef.current?.focus()
+    }
+  }, [showSearch])
+
   if (!chat) {
     return (
-      <div className="flex h-full items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
-            <MessageCircle className="h-8 w-8 text-blue-400" />
-          </div>
-          <p className="text-lg font-medium text-gray-700">Select a conversation</p>
-          <p className="mt-1 text-sm text-gray-400">Choose a chat from the sidebar or start a new one</p>
-        </div>
+      <div className="flex h-full items-center justify-center bg-gray-50 p-6 dark:bg-slate-950">
+        <EmptyState
+          icon={<MessageCircle className="h-8 w-8" aria-hidden="true" />}
+          title="Select a conversation"
+          description="Choose a chat from the sidebar or start a new one."
+          className="w-full max-w-md"
+        />
       </div>
     )
   }
@@ -161,12 +174,12 @@ export default function ChatView({
         <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
           <Search className="h-4 w-4 text-gray-400" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search messages..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
-            autoFocus
           />
           {debouncedSearch && matchedIds.length > 0 && (
             <span className="text-xs text-gray-500 tabular-nums">
@@ -177,24 +190,30 @@ export default function ChatView({
             <span className="text-xs text-gray-400">No results</span>
           )}
           <button
+            type="button"
             onClick={() => setActiveResultIndex((i) => (i > 0 ? i - 1 : matchedIds.length - 1))}
             disabled={matchedIds.length === 0}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
             title="Previous result"
+            aria-label="Go to previous search result"
           >
             <ChevronUp className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => setActiveResultIndex((i) => (i < matchedIds.length - 1 ? i + 1 : 0))}
             disabled={matchedIds.length === 0}
             className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-30"
             title="Next result"
+            aria-label="Go to next search result"
           >
             <ChevronDown className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => { setShowSearch(false); setSearchQuery('') }}
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close message search"
           >
             <X className="h-4 w-4" />
           </button>
@@ -202,18 +221,34 @@ export default function ChatView({
       )}
 
       {/* Messages */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-gray-50 px-4 py-3">
+      <div
+        ref={scrollContainerRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-busy={isLoading}
+        aria-label={`${displayName} conversation messages`}
+        className="flex-1 overflow-y-auto bg-gray-50 px-4 py-3 dark:bg-slate-950"
+      >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+          <MessageSkeleton rows={5} />
+        ) : isError ? (
+          <div className="flex h-full items-center justify-center py-8">
+            <ErrorState
+              title="Messages could not be loaded"
+              message="We could not load this conversation right now."
+              onRetry={onRetry}
+              className="w-full max-w-md"
+            />
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-gray-400">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-              <MessageCircle className="h-6 w-6" />
-            </div>
-            <p className="text-sm font-medium">No messages yet</p>
-            <p className="mt-0.5 text-xs">Send a message to start the conversation</p>
+          <div className="flex h-full items-center justify-center py-8">
+            <EmptyState
+              icon={<MessageCircle className="h-8 w-8" aria-hidden="true" />}
+              title="No messages yet"
+              description="Send a message to start this conversation."
+              className="w-full max-w-md"
+            />
           </div>
         ) : (
           <>

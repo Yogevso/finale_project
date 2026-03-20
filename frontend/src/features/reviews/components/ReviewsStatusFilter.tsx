@@ -10,12 +10,15 @@ export function ReviewsStatusFilter({
   onStatusFilterChange,
 }: ReviewsStatusFilterProps) {
   return (
-    <div className="flex items-center gap-4">
-      <label className="text-sm text-slate-600">Filter by status:</label>
+    <div className="surface-card flex flex-wrap items-center gap-3 rounded-2xl p-4">
+      <label htmlFor="reviews-status-filter" className="helper-copy font-medium uppercase tracking-wide">
+        Filter by status
+      </label>
       <select
+        id="reviews-status-filter"
         value={statusFilter}
         onChange={(e) => onStatusFilterChange(e.target.value as ReviewStatus | '')}
-        className="select-field"
+        className="select-field max-w-[220px]"
       >
         <option value="">All</option>
         <option value="pending">Pending</option>
@@ -26,4 +29,3 @@ export function ReviewsStatusFilter({
     </div>
   )
 }
-

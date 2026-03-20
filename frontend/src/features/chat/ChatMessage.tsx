@@ -2,10 +2,11 @@
  * ChatMessage — single message bubble with rich rendering (X1-029)
  */
 
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { FileText, ExternalLink, Download, Paperclip, Check, CheckCheck } from 'lucide-react'
+import OptimizedImage from '@/components/OptimizedImage'
 import type { ChatMessage as ChatMessageType } from '@/types/chat'
 
 interface ChatMessageProps {
@@ -46,7 +47,7 @@ function renderRichText(text: string, isOwn: boolean) {
         <a
           key={key++}
           href={href}
-          className={`underline ${isOwn ? 'text-blue-200 hover:text-white' : 'text-blue-600 hover:text-blue-800'}`}
+          className={`underline ${isOwn ? 'text-sky-200 hover:text-white' : 'text-sky-600 hover:text-sky-800'}`}
           {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         >
           {match[2]}
@@ -61,8 +62,8 @@ function renderRichText(text: string, isOwn: boolean) {
           href={`/documents/${docId}`}
           className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-xs font-medium ${
             isOwn
-              ? 'bg-blue-500/30 text-blue-100 hover:bg-blue-500/50'
-              : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+              ? 'bg-sky-500/30 text-sky-100 hover:bg-sky-500/50'
+              : 'bg-sky-50 text-sky-700 hover:bg-sky-100'
           }`}
         >
           📄 Document #{docId}
@@ -95,13 +96,13 @@ function CommentReferenceCard({
   return (
     <div
       className={`rounded-xl overflow-hidden ${
-        isOwn ? 'bg-blue-700/50' : 'bg-white border border-gray-200 shadow-sm'
+        isOwn ? 'bg-sky-700/50' : 'bg-white border border-gray-200 shadow-sm'
       }`}
     >
       {/* Card header */}
       <div
         className={`flex items-center gap-2 px-3 py-2 ${
-          isOwn ? 'bg-blue-700/40 text-blue-100' : 'bg-gray-50 text-gray-600 border-b border-gray-100'
+          isOwn ? 'bg-sky-700/40 text-sky-100' : 'bg-gray-50 text-gray-600 border-b border-gray-100'
         }`}
       >
         <FileText className="h-4 w-4 flex-shrink-0" />
@@ -113,7 +114,7 @@ function CommentReferenceCard({
         <div
           className={`mx-3 mt-2 rounded-lg px-3 py-1.5 text-xs italic ${
             isOwn
-              ? 'bg-blue-600/40 text-blue-200 border-l-2 border-blue-300'
+              ? 'bg-sky-600/40 text-sky-200 border-l-2 border-sky-300'
               : 'bg-amber-50 text-amber-800 border-l-2 border-amber-400'
           }`}
         >
@@ -129,11 +130,12 @@ function CommentReferenceCard({
       {/* View link */}
       <div className={`px-3 pb-2`}>
         <button
+          type="button"
           onClick={() => navigate(link)}
           className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
             isOwn
-              ? 'bg-blue-500/40 text-blue-100 hover:bg-blue-500/60'
-              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+              ? 'bg-sky-500/40 text-sky-100 hover:bg-sky-500/60'
+              : 'bg-sky-50 text-sky-600 hover:bg-sky-100'
           }`}
         >
           <ExternalLink className="h-3 w-3" />
@@ -172,9 +174,13 @@ export default function ChatMessage({ message, isOwn, isRead, isHighlighted, isA
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  const motionStyle = {
+    '--enter-delay': `${message.id < 0 ? 0 : Math.min(Math.abs(message.id) % 6, 5) * 25}ms`,
+  } as CSSProperties
+
   return (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div className={`max-w-[75%] ${isOwn ? 'order-2' : ''} ${isActiveResult ? 'ring-2 ring-blue-500 rounded-2xl bg-blue-50/60' : isHighlighted ? 'ring-2 ring-yellow-400 rounded-2xl bg-yellow-50/50' : ''}`}>
+    <div className={`motion-enter-fade mb-3 flex ${isOwn ? 'justify-end' : 'justify-start'}`} style={motionStyle}>
+      <div className={`max-w-[75%] ${isOwn ? 'order-2' : ''} ${isActiveResult ? 'rounded-2xl bg-sky-50/60 ring-2 ring-sky-500' : isHighlighted ? 'rounded-2xl bg-yellow-50/50 ring-2 ring-yellow-400' : ''}`}>
         {/* Sender name for received messages */}
         {!isOwn && (
           <p className="mb-0.5 px-1 text-xs font-medium text-gray-500">
@@ -184,13 +190,16 @@ export default function ChatMessage({ message, isOwn, isRead, isHighlighted, isA
 
         {isImage && message.file_url ? (
           /* Image message */
-          <div className={`rounded-2xl overflow-hidden ${isOwn ? 'bg-blue-600' : 'bg-gray-100'}`}>
+          <div className={`rounded-2xl overflow-hidden ${isOwn ? 'bg-sky-600' : 'bg-gray-100'}`}>
             <a href={message.file_url} target="_blank" rel="noopener noreferrer">
-              <img
+              <OptimizedImage
                 src={message.file_url}
                 alt={message.file_name || 'image'}
-                className="max-h-64 w-auto rounded-2xl object-cover"
-                loading="lazy"
+                className="max-h-64 max-w-full w-auto rounded-2xl object-cover"
+                containerClassName="block"
+                height={768}
+                sizes="(min-width: 768px) 24rem, 75vw"
+                width={1024}
               />
             </a>
           </div>
@@ -198,21 +207,22 @@ export default function ChatMessage({ message, isOwn, isRead, isHighlighted, isA
           /* File attachment card */
           <div
             className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${
-              isOwn ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+              isOwn ? 'bg-sky-600 text-white' : 'bg-gray-100 text-gray-900'
             }`}
           >
-            <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${isOwn ? 'bg-blue-500' : 'bg-gray-200'}`}>
+            <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${isOwn ? 'bg-sky-500' : 'bg-gray-200'}`}>
               <Paperclip className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{message.file_name}</p>
-              <p className={`text-xs ${isOwn ? 'text-blue-200' : 'text-gray-400'}`}>{formatSize(message.file_size)}</p>
+              <p className={`text-xs ${isOwn ? 'text-sky-200' : 'text-gray-400'}`}>{formatSize(message.file_size)}</p>
             </div>
             <a
               href={message.file_url}
               download={message.file_name || undefined}
+              aria-label={`Download ${message.file_name || 'attachment'}`}
               className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                isOwn ? 'hover:bg-blue-500' : 'hover:bg-gray-200'
+                isOwn ? 'hover:bg-sky-500' : 'hover:bg-gray-200'
               }`}
             >
               <Download className="h-4 w-4" />
@@ -232,7 +242,7 @@ export default function ChatMessage({ message, isOwn, isRead, isHighlighted, isA
           <div
             className={`rounded-2xl px-4 py-2 ${
               isOwn
-                ? 'bg-blue-600 text-white'
+                ? 'bg-sky-600 text-white'
                 : 'bg-gray-100 text-gray-900'
             }`}
           >
@@ -250,7 +260,7 @@ export default function ChatMessage({ message, isOwn, isRead, isHighlighted, isA
               <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
               {isOwn && (
                 isRead
-                  ? <CheckCheck className="h-3 w-3 text-blue-400" />
+                  ? <CheckCheck className="h-3 w-3 text-sky-400" />
                   : <Check className="h-3 w-3" />
               )}
             </>

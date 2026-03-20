@@ -71,7 +71,15 @@ export default function AvatarUpload({ currentAvatarUrl, onUploaded }: AvatarUpl
       <div className="flex items-center gap-4">
         <div className="h-20 w-20 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
           {effectivePreviewUrl ? (
-            <img src={effectivePreviewUrl} alt="Avatar preview" className="h-full w-full object-cover" />
+            <img
+              src={effectivePreviewUrl}
+              alt="Avatar preview"
+              className="h-full w-full object-cover"
+              decoding="async"
+              height={80}
+              loading="lazy"
+              width={80}
+            />
           ) : (
             <UserCircle2 className="h-10 w-10 text-slate-400" />
           )}

@@ -1,7 +1,8 @@
 import { Calendar, FileText, MessageSquare, User } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import Skeleton from '@/components/Skeleton'
+import { EmptyState } from '@/components/EmptyState'
+import { TableSkeleton } from '@/components/skeletons'
 import type { ReviewRequest } from '@/types'
 
 import { reviewStatusConfig, type ReviewsTabType } from '../constants'
@@ -28,21 +29,18 @@ export function ReviewsTable({
   return (
     <div className="surface-card rounded-2xl overflow-hidden">
       {isLoading ? (
-        <div className="p-8">
-          <div className="space-y-3 max-w-md mx-auto">
-            <Skeleton className="h-4 w-52" />
-            <Skeleton className="h-4 w-44" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        </div>
+        <TableSkeleton rows={6} columns={5} />
       ) : !reviews?.length ? (
-        <div className="p-8 text-center text-slate-500">
-          <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>
-            {activeTab === 'pending'
-              ? 'No documents pending your review'
-              : 'You have not submitted any documents for review'}
-          </p>
+        <div className="p-8">
+          <EmptyState
+            icon={<FileText className="h-8 w-8" aria-hidden="true" />}
+            title={activeTab === 'pending' ? 'No pending reviews' : 'No review submissions yet'}
+            description={
+              activeTab === 'pending'
+                ? 'Documents that need your review will appear here.'
+                : 'Your submitted review requests will appear here once you send one.'
+            }
+          />
         </div>
       ) : (
         <table className="min-w-full divide-y divide-slate-200">

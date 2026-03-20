@@ -19,7 +19,7 @@ interface ToastItem {
   notification: CollaborationNotification
 }
 
-export function useCollaborationToasts(documentId: number, enabled = true) {
+function useCollaborationToasts(documentId: number, enabled = true) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const notifications = useCollaborationStore((state) => state.notifications)
   const dismissNotification = useCollaborationStore((state) => state.dismissNotification)
@@ -104,7 +104,9 @@ function CollaborationToastItem({
 
   return (
     <div
-      className={`flex items-start gap-3 p-3 rounded-lg border shadow-sm animate-in slide-in-from-right-5 ${bgColorMap[notification.type]}`}
+      className={`flex items-start gap-3 rounded-lg border p-3 shadow-sm animate-in slide-in-from-right-5 ${bgColorMap[notification.type]}`}
+      role="alert"
+      aria-atomic="true"
     >
       <Icon className={`w-5 h-5 mt-0.5 ${iconColorMap[notification.type]}`} />
       <div className="flex-1 min-w-0">
@@ -114,8 +116,10 @@ function CollaborationToastItem({
         <p className="text-sm text-slate-600 truncate">{notification.message}</p>
       </div>
       <button
+        type="button"
         onClick={onDismiss}
         className="text-slate-400 hover:text-slate-600 transition-colors"
+        aria-label={`Dismiss ${titleMap[notification.type]} notification`}
       >
         <X className="w-4 h-4" />
       </button>
@@ -135,7 +139,11 @@ export function CollaborationToastProvider({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80">
+    <div
+      className="fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"
+      aria-live="polite"
+      aria-relevant="additions text"
+    >
       {toasts.map((toast) => (
         <CollaborationToastItem
           key={toast.id}

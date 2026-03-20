@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import mammoth from 'mammoth'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import RichTextEditor from './RichTextEditor'
-import CollaborativeEditor from './CollaborativeEditor'
 import { api } from '@/lib/api'
 import {
   getPreferredEditorAttachment,
@@ -11,6 +9,8 @@ import { useCollaboration } from '@/lib/useCollaboration'
 import { getUserColor } from '@/lib/userColors'
 import { useAuth } from '@/lib/auth'
 import type { Attachment } from '@/types'
+
+const CollaborativeEditor = lazy(() => import('./CollaborativeEditor'))
 
 interface DocumentEditorProps {
   documentId: number
@@ -96,6 +96,7 @@ export default function DocumentEditor({
           activeSelection.mime_type ===
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ) {
+          const { default: mammoth } = await import('mammoth')
           const arrayBuffer = await blob.arrayBuffer()
           const result = await mammoth.convertToHtml({ arrayBuffer })
           setContent(result.value)
@@ -273,25 +274,27 @@ export default function DocumentEditor({
         )}
 
         {collaborationEnabled && isEditing && user ? (
-          <CollaborativeEditor
-            ydoc={collaboration.ydoc}
-            provider={collaboration.provider}
-            isConnected={collaboration.isConnected}
-            isConnecting={collaboration.isConnecting}
-            isSynced={collaboration.isSynced}
-            error={collaboration.error}
-            collaborators={collaboration.collaborators}
-            currentUser={{
-              userId: user.id,
-              username: user.username,
-              color: userColor.color,
-            }}
-            content={content}
-            onChange={handleContentChange}
-            editable={isEditing}
-            className={isEditing ? 'ring-2 ring-sky-500' : ''}
-            onRetry={collaboration.connect}
-          />
+          <Suspense fallback={<CollaborativeEditorFallback className={isEditing ? 'ring-2 ring-sky-500' : ''} />}>
+            <CollaborativeEditor
+              ydoc={collaboration.ydoc}
+              provider={collaboration.provider}
+              isConnected={collaboration.isConnected}
+              isConnecting={collaboration.isConnecting}
+              isSynced={collaboration.isSynced}
+              error={collaboration.error}
+              collaborators={collaboration.collaborators}
+              currentUser={{
+                userId: user.id,
+                username: user.username,
+                color: userColor.color,
+              }}
+              content={content}
+              onChange={handleContentChange}
+              editable={isEditing}
+              className={isEditing ? 'ring-2 ring-sky-500' : ''}
+              onRetry={collaboration.connect}
+            />
+          </Suspense>
         ) : (
           <RichTextEditor
             content={content}
@@ -300,6 +303,35 @@ export default function DocumentEditor({
             className={isEditing ? 'ring-2 ring-sky-500' : ''}
           />
         )}
+      </div>
+    </div>
+  )
+}
+
+function CollaborativeEditorFallback({ className = '' }: { className?: string }) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading..."
+      className={`overflow-hidden rounded-xl border border-slate-300 ${className}`}
+    >
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-8 w-12 animate-pulse rounded-lg bg-slate-200"
+            />
+          ))}
+        </div>
+        <div className="h-8 w-40 animate-pulse rounded-lg bg-slate-200" />
+      </div>
+      <div className="space-y-3 bg-white p-4">
+        <div className="h-4 w-2/3 animate-pulse rounded-full bg-slate-200" />
+        <div className="h-4 w-full animate-pulse rounded-full bg-slate-200" />
+        <div className="h-4 w-5/6 animate-pulse rounded-full bg-slate-200" />
+        <div className="h-4 w-3/4 animate-pulse rounded-full bg-slate-200" />
+        <div className="h-56 animate-pulse rounded-2xl bg-slate-100" />
       </div>
     </div>
   )

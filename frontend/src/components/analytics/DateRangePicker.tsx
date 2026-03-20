@@ -39,10 +39,10 @@ export function DateRangePicker({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-4 bg-white rounded-xl shadow p-4">
+    <div className="surface-card flex flex-wrap items-center gap-4 rounded-2xl p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-2">
-        <Calendar className="w-5 h-5 text-slate-400" />
-        <span className="text-sm font-medium text-slate-700">Date Range:</span>
+        <Calendar className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+        <span className="helper-copy font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200">Date range</span>
       </div>
       
       <div className="flex items-center gap-2">
@@ -50,31 +50,33 @@ export function DateRangePicker({
           type="date"
           value={startDate}
           onChange={(e) => onStartDateChange(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+          className="input-field py-1.5"
         />
-        <span className="text-slate-500">to</span>
+        <span className="text-slate-500 dark:text-slate-400">to</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => onEndDateChange(e.target.value)}
-          className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+          className="input-field py-1.5"
         />
       </div>
 
       <div className="relative">
         <button
+          type="button"
           onClick={() => setShowPresets(!showPresets)}
-          className="px-3 py-1.5 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+          className="btn-ghost table-action-btn"
         >
           Quick Select
         </button>
         {showPresets && (
-          <div className="absolute top-full mt-1 left-0 bg-white border border-slate-200 rounded-xl shadow-lg z-10">
+          <div className="dropdown-menu absolute left-0 top-full z-10 mt-1 min-w-[11rem]">
             {presets.map((preset) => (
               <button
                 key={preset.label}
+                type="button"
                 onClick={() => applyPreset(preset.days)}
-                className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 first:rounded-t-xl last:rounded-b-xl"
+                className="dropdown-item block w-full first:rounded-t-xl last:rounded-b-xl"
               >
                 {preset.label}
               </button>
@@ -83,12 +85,12 @@ export function DateRangePicker({
         )}
       </div>
 
-      <div className="flex items-center gap-2 ml-auto">
-        <span className="text-sm font-medium text-slate-700">Group by:</span>
+      <div className="ml-auto flex items-center gap-2">
+        <span className="helper-copy font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200">Group by</span>
         <select
           value={granularity}
           onChange={(e) => onGranularityChange(e.target.value as TimeGranularity)}
-          className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+          className="select-field py-1.5"
         >
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>

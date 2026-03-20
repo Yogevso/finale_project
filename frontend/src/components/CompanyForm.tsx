@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { X } from 'lucide-react'
@@ -13,6 +13,7 @@ interface CompanyFormProps {
 
 export default function CompanyForm({ company, onClose, onSuccess }: CompanyFormProps) {
   const isEditing = !!company
+  const titleId = useId()
   
   const [formData, setFormData] = useState<CompanyCreate>({
     name: company?.name || '',
@@ -23,7 +24,7 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
     is_active: company?.is_active ?? true,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+  const { containerRef } = useFocusTrap(onClose)
 
   const createMutation = useMutation({
     mutationFn: (data: CompanyCreate) => api.createCompany(data),
@@ -70,21 +71,27 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
   const isLoading = createMutation.isPending || updateMutation.isPending
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label={isEditing ? 'Edit Company' : 'Create New Company'} className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4" onKeyDown={handleKeyDown}>
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900 font-display">
+    <div className="modal-overlay flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close company form"
+        tabIndex={-1}
+      />
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="modal-content motion-enter-scale relative w-full max-w-lg dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
+          <h2 id={titleId} className="text-lg font-semibold text-slate-900 font-display dark:text-slate-100">
             {isEditing ? 'Edit Company' : 'Create New Company'}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full" aria-label="Close company form">
-            <X className="w-5 h-5 text-slate-500" />
+          <button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close company form">
+            <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {errors.submit && (
-            <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200 text-sm">
+            <div role="alert" aria-live="assertive" className="p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200 text-sm">
               {errors.submit}
             </div>
           )}
@@ -99,20 +106,21 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className={`input-field ${
-                errors.name ? 'border-rose-500 focus:ring-rose-500' : ''
+                errors.name ? 'border-rose-500 focus:ring-rose-500 motion-error-shake' : ''
               }`}
               placeholder="Acme Corporation"
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? 'company-name-error' : undefined}
             />
-            {errors.name && <p id="company-name-error" className="mt-1 text-sm text-rose-500">{errors.name}</p>}
+            {errors.name && <p id="company-name-error" role="alert" className="mt-1 text-sm text-rose-500">{errors.name}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="company-slug" className="block text-sm font-medium text-slate-700 mb-1">
               Slug
             </label>
             <input
+              id="company-slug"
               type="text"
               value={formData.slug}
               onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
@@ -126,26 +134,30 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="company-contact-email" className="block text-sm font-medium text-slate-700 mb-1">
               Contact Email
             </label>
             <input
+              id="company-contact-email"
               type="email"
               value={formData.contact_email}
               onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
               className={`input-field ${
-                errors.contact_email ? 'border-rose-500 focus:ring-rose-500' : ''
+                errors.contact_email ? 'border-rose-500 focus:ring-rose-500 motion-error-shake' : ''
               }`}
               placeholder="contact@acme.com"
+              aria-invalid={!!errors.contact_email}
+              aria-describedby={errors.contact_email ? 'company-contact-email-error' : undefined}
             />
-            {errors.contact_email && <p className="mt-1 text-sm text-rose-500">{errors.contact_email}</p>}
+            {errors.contact_email && <p id="company-contact-email-error" role="alert" className="mt-1 text-sm text-rose-500">{errors.contact_email}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="company-type" className="block text-sm font-medium text-slate-700 mb-1">
               Company Type
             </label>
             <select
+              id="company-type"
               value={formData.company_type}
               onChange={(e) => setFormData({ ...formData, company_type: e.target.value as CompanyType })}
               className="select-field"
@@ -157,10 +169,11 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
+            <label htmlFor="company-logo-url" className="block text-sm font-medium text-slate-700 mb-1">
               Company Logo URL
             </label>
             <input
+              id="company-logo-url"
               type="url"
               value={formData.company_logo}
               onChange={(e) => setFormData({ ...formData, company_logo: e.target.value })}
@@ -175,6 +188,10 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
                 src={formData.company_logo}
                 alt="Logo preview"
                 className="mt-2 h-10 w-10 rounded object-contain border border-slate-200"
+                decoding="async"
+                height={40}
+                loading="lazy"
+                width={40}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
               />
             )}
@@ -193,7 +210,7 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
             </label>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}

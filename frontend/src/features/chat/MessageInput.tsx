@@ -3,10 +3,11 @@
  * plus file/image upload (X1-032)
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useId } from 'react'
 import { Send, Paperclip, Image, X, Smile } from 'lucide-react'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
+import OptimizedImage from '@/components/OptimizedImage'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -33,6 +34,8 @@ export default function MessageInput({
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const emojiPickerRef = useRef<HTMLDivElement>(null)
+  const emojiButtonRef = useRef<HTMLButtonElement>(null)
+  const emojiPickerId = useId()
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -43,6 +46,22 @@ export default function MessageInput({
     }
     if (showEmojiPicker) document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [showEmojiPicker])
+
+  useEffect(() => {
+    if (!showEmojiPicker) {
+      return
+    }
+
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowEmojiPicker(false)
+        emojiButtonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [showEmojiPicker])
 
   const handleEmojiSelect = useCallback((emoji: { native: string }) => {
@@ -119,7 +138,13 @@ export default function MessageInput({
       {pendingFile && (
         <div className="flex items-center gap-3 px-4 pt-3">
           {previewUrl ? (
-            <img src={previewUrl} alt="preview" className="h-16 w-16 rounded-lg object-cover border border-gray-200" />
+            <OptimizedImage
+              src={previewUrl}
+              alt="preview"
+              className="h-16 w-16 rounded-lg border border-gray-200 object-cover"
+              height={64}
+              width={64}
+            />
           ) : (
             <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 border border-gray-200">
               <Paperclip className="h-6 w-6 text-gray-400" />
@@ -129,7 +154,12 @@ export default function MessageInput({
             <p className="text-sm font-medium text-gray-700 truncate">{pendingFile.name}</p>
             <p className="text-xs text-gray-400">{formatSize(pendingFile.size)}</p>
           </div>
-          <button onClick={clearPending} className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600">
+          <button
+            type="button"
+            onClick={clearPending}
+            className="p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+            aria-label={`Remove ${pendingFile.name}`}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -143,10 +173,12 @@ export default function MessageInput({
         {/* Attachment button */}
         {onFileUpload && (
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={disabled}
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
             title="Attach file"
+            aria-label="Attach file"
           >
             <Paperclip className="h-4 w-4" />
           </button>
@@ -155,10 +187,12 @@ export default function MessageInput({
         {/* Image button */}
         {onFileUpload && (
           <button
+            type="button"
             onClick={() => imageInputRef.current?.click()}
             disabled={disabled}
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
             title="Send image"
+            aria-label="Send image"
           >
             <Image className="h-4 w-4" />
           </button>
@@ -167,15 +201,26 @@ export default function MessageInput({
         {/* Emoji picker */}
         <div className="relative" ref={emojiPickerRef}>
           <button
+            ref={emojiButtonRef}
+            type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             disabled={disabled}
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
             title="Emoji"
+            aria-label={showEmojiPicker ? 'Close emoji picker' : 'Open emoji picker'}
+            aria-expanded={showEmojiPicker}
+            aria-haspopup="dialog"
+            aria-controls={emojiPickerId}
           >
             <Smile className="h-4 w-4" />
           </button>
           {showEmojiPicker && (
-            <div className="absolute bottom-12 left-0 z-50">
+            <div
+              id={emojiPickerId}
+              role="dialog"
+              aria-label="Emoji picker"
+              className="absolute bottom-12 left-0 z-50"
+            >
               <Picker data={data} onEmojiSelect={handleEmojiSelect} theme="light" previewPosition="none" skinTonePosition="none" maxFrequentRows={1} />
             </div>
           )}
@@ -189,12 +234,14 @@ export default function MessageInput({
           placeholder={pendingFile ? `Send ${pendingFile.name}` : placeholder}
           disabled={disabled || !!pendingFile}
           rows={1}
-          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
         />
         <button
+          type="button"
           onClick={handleSend}
           disabled={disabled || (!value.trim() && !pendingFile)}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+          aria-label={pendingFile ? `Send ${pendingFile.name}` : 'Send message'}
         >
           <Send className="h-4 w-4" />
         </button>

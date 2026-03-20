@@ -2,7 +2,7 @@
  * GroupSettingsModal — rename group, manage members & roles (X1-045/046)
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Crown, Shield, UserMinus, Check } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -18,7 +18,8 @@ interface GroupSettingsModalProps {
 export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModalProps) {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
-  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+  const { containerRef } = useFocusTrap(onClose)
+  const titleId = useId()
   const [name, setName] = useState(chat.name || '')
   const [nameChanged, setNameChanged] = useState(false)
 
@@ -59,7 +60,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
 
   const roleIcon = (role: ChatParticipantRole) => {
     if (role === 'owner') return <Crown className="h-3.5 w-3.5 text-amber-500" />
-    if (role === 'admin') return <Shield className="h-3.5 w-3.5 text-blue-500" />
+    if (role === 'admin') return <Shield className="h-3.5 w-3.5 text-sky-500" />
     return null
   }
 
@@ -69,35 +70,51 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
   })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Group Settings" className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close group settings dialog"
+        tabIndex={-1}
+      />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative w-full max-w-md rounded-2xl bg-white shadow-xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">Group Settings</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600" aria-label="Close group settings">
+          <h2 id={titleId} className="text-lg font-semibold text-gray-900">Group Settings</h2>
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600" aria-label="Close group settings">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Rename group */}
         <div className="border-b border-gray-100 px-6 py-4">
-          <label className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <label htmlFor="group-name" className="mb-1.5 block text-xs font-medium text-gray-500 uppercase tracking-wide">
             Group Name
           </label>
           <div className="flex items-center gap-2">
             <input
+              id="group-name"
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); setNameChanged(true) }}
               disabled={!isAdmin}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
               placeholder="Group name"
             />
             {isAdmin && nameChanged && name.trim() && (
               <button
+                type="button"
                 onClick={() => renameMutation.mutate()}
                 disabled={renameMutation.isPending}
-                className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
                 Save
@@ -138,14 +155,16 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
               {isAdmin && p.user_id !== currentUser?.id && p.role !== 'owner' && (
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => handleRoleToggle(p)}
                     disabled={roleMutation.isPending}
-                    className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50 disabled:opacity-50"
                     title={p.role === 'admin' ? 'Demote to member' : 'Promote to admin'}
                   >
                     {p.role === 'admin' ? 'Demote' : 'Promote'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       if (confirm(`Remove ${p.user_full_name || 'this user'} from the group?`)) {
                         removeMutation.mutate(p.user_id)
@@ -154,6 +173,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
                     disabled={removeMutation.isPending}
                     className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
                     title="Remove from group"
+                    aria-label={`Remove ${p.user_full_name || `user ${p.user_id}`} from group`}
                   >
                     <UserMinus className="h-4 w-4" />
                   </button>

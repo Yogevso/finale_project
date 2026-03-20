@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import {
   X,
   FileText,
@@ -57,19 +57,44 @@ export default function FeedbackResponseDialog({
   isLoading,
 }: FeedbackResponseDialogProps) {
   const [response, setResponse] = useState(feedback.response || '')
+  const [responseError, setResponseError] = useState('')
+  const titleId = useId()
   const type = typeConfig[feedback.feedback_type]
 
-  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+  const { containerRef } = useFocusTrap(onClose)
+
+  const submitResponse = () => {
+    if (!response.trim()) {
+      setResponseError('A response is required before sending.')
+      return
+    }
+
+    setResponseError('')
+    onRespond(response.trim())
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!response.trim()) return
-    onRespond(response)
+    submitResponse()
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Feedback Response" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={onClose}
+        aria-label="Close feedback dialog"
+        tabIndex={-1}
+      />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
@@ -77,7 +102,7 @@ export default function FeedbackResponseDialog({
               {type.icon}
             </div>
             <div>
-              <h2 className="text-lg font-display font-semibold text-slate-900">
+              <h2 id={titleId} className="text-lg font-display font-semibold text-slate-900">
                 {type.label} from {feedback.user_name}
               </h2>
               <p className="text-sm text-slate-500">
@@ -86,6 +111,7 @@ export default function FeedbackResponseDialog({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600"
             aria-label="Close feedback dialog"
@@ -116,6 +142,7 @@ export default function FeedbackResponseDialog({
             <Link
               to={`/documents/${feedback.document_id}/fullscreen`}
               target="_blank"
+              rel="noreferrer"
               className="flex items-center gap-2 text-sky-600 hover:text-sky-700"
             >
               <FileText className="w-4 h-4" />
@@ -155,16 +182,29 @@ export default function FeedbackResponseDialog({
           {feedback.status === 'pending' && (
             <form onSubmit={handleSubmit}>
               <label htmlFor="feedback-response" className="block text-sm font-medium text-slate-700 mb-2">
-                Your Response
+                Your Response <span className="text-rose-500">*</span>
               </label>
               <textarea
                 id="feedback-response"
                 value={response}
-                onChange={(e) => setResponse(e.target.value)}
+                onChange={(e) => {
+                  setResponse(e.target.value)
+                  if (responseError) {
+                    setResponseError('')
+                  }
+                }}
                 rows={5}
                 placeholder="Type your response to the customer..."
                 className="input-field resize-none"
+                required
+                aria-invalid={!!responseError}
+                aria-describedby={responseError ? 'feedback-response-error' : undefined}
               />
+              {responseError ? (
+                <p id="feedback-response-error" role="alert" className="mt-2 text-sm text-rose-500">
+                  {responseError}
+                </p>
+              ) : null}
             </form>
           )}
         </div>
@@ -199,6 +239,7 @@ export default function FeedbackResponseDialog({
 
             {feedback.status === 'responded' && (
               <button
+                type="button"
                 onClick={() => onUpdateStatus('closed')}
                 disabled={isLoading}
                 className="btn-secondary disabled:opacity-50"
@@ -209,7 +250,8 @@ export default function FeedbackResponseDialog({
 
             {feedback.status === 'pending' && (
               <button
-                onClick={handleSubmit}
+                type="button"
+                onClick={submitResponse}
                 disabled={isLoading || !response.trim()}
                 className="btn-primary flex items-center gap-2 disabled:opacity-50"
               >

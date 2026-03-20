@@ -7,7 +7,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider } from '@/lib/auth'
 import GlobalSearchBar from '@/components/GlobalSearchBar'
 
 // Mock the API module
@@ -32,15 +31,15 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function createQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+}
 
 function renderSearchBar() {
   return render(
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={createQueryClient()}>
       <BrowserRouter>
-        <AuthProvider>
-          <GlobalSearchBar />
-        </AuthProvider>
+        <GlobalSearchBar />
       </BrowserRouter>
     </QueryClientProvider>,
   )
@@ -65,14 +64,7 @@ describe('GlobalSearchBar (Y2-027)', () => {
     await user.type(input, 'Kub')
 
     // Wait for debounce + API call
-    await waitFor(
-      () => {
-        expect(screen.getByRole('listbox')).toBeInTheDocument()
-      },
-      { timeout: 2000 },
-    )
-
-    expect(screen.getByText('Kubernetes Guide')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Kubernetes Guide')).toBeInTheDocument(), { timeout: 2000 })
     expect(screen.getByText('React Tutorial')).toBeInTheDocument()
   })
 
@@ -83,10 +75,7 @@ describe('GlobalSearchBar (Y2-027)', () => {
     const input = screen.getByRole('combobox', { name: /search documents/i })
     await user.type(input, 'test')
 
-    await waitFor(
-      () => expect(screen.getByRole('listbox')).toBeInTheDocument(),
-      { timeout: 2000 },
-    )
+    await waitFor(() => expect(screen.getByText('Kubernetes Guide')).toBeInTheDocument(), { timeout: 2000 })
 
     await user.keyboard('{ArrowDown}')
 

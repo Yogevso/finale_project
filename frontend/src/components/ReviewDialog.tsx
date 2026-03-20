@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   X, 
@@ -36,8 +36,12 @@ export default function ReviewDialog({
   const [showConfirm, setShowConfirm] = useState(false)
   const [version, setVersion] = useState<Version | null>(null)
   const [loadingVersion, setLoadingVersion] = useState(false)
+  const titleId = useId()
+  const commentsErrorId = useId()
+  const commentsRef = useRef<HTMLTextAreaElement>(null)
 
-  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+  const { containerRef } = useFocusTrap(onClose)
+  const showRejectionError = action === 'reject' && showConfirm && !comments.trim()
 
   // Fetch version details if version_id is present
   useEffect(() => {
@@ -60,7 +64,7 @@ export default function ReviewDialog({
       onApprove(comments || undefined)
     } else if (action === 'reject') {
       if (!comments.trim()) {
-        alert('Please provide a reason for rejection')
+        commentsRef.current?.focus()
         return
       }
       onReject(comments)
@@ -68,15 +72,30 @@ export default function ReviewDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Review Document" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className="modal-overlay flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0"
+        onClick={onClose}
+        aria-label="Close review dialog"
+        tabIndex={-1}
+      />
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="modal-content motion-enter-scale relative z-10 max-h-[90vh] w-full max-w-2xl overflow-hidden dark:bg-slate-900"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900 font-display">Review Document</h2>
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+          <h2 id={titleId} className="text-lg font-semibold text-slate-900 font-display dark:text-slate-100">Review Document</h2>
           <button
+            type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
+            className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             aria-label="Close review dialog"
           >
             <X className="w-5 h-5" />
@@ -182,6 +201,7 @@ export default function ReviewDialog({
               Review Comments {action === 'reject' && <span className="text-rose-500">*</span>}
             </label>
             <textarea
+              ref={commentsRef}
               id="review-comments"
               value={comments}
               onChange={(e) => setComments(e.target.value)}
@@ -195,7 +215,14 @@ export default function ReviewDialog({
               disabled={isLoading}
               required={action === 'reject'}
               aria-required={action === 'reject'}
+              aria-invalid={showRejectionError}
+              aria-describedby={showRejectionError ? commentsErrorId : undefined}
             />
+            {showRejectionError ? (
+              <p id={commentsErrorId} role="alert" className="mt-2 text-sm text-rose-600">
+                Rejection comments are required before you can confirm.
+              </p>
+            ) : null}
           </div>
 
           {/* Confirmation */}
@@ -239,8 +266,9 @@ export default function ReviewDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/70">
           <button
+            type="button"
             onClick={onClose}
             disabled={isLoading}
             className="btn-ghost"
@@ -252,6 +280,7 @@ export default function ReviewDialog({
             {!showConfirm ? (
               <>
                 <button
+                  type="button"
                   onClick={() => handleAction('reject')}
                   disabled={isLoading}
                   className="flex items-center gap-2 px-4 py-2 bg-rose-100 text-rose-700 rounded-full hover:bg-rose-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
@@ -260,6 +289,7 @@ export default function ReviewDialog({
                   Reject
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleAction('approve')}
                   disabled={isLoading}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
@@ -271,6 +301,7 @@ export default function ReviewDialog({
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setShowConfirm(false)}
                   disabled={isLoading}
                   className="btn-ghost"
@@ -278,6 +309,7 @@ export default function ReviewDialog({
                   Back
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfirm}
                   disabled={isLoading || (action === 'reject' && !comments.trim())}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed font-medium transition ${
