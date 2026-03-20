@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { portalApi } from '../../lib/portalApi'
+import { portalApi, type FeedbackItem, type FeedbackListResponse } from '../../lib/portalApi'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
@@ -52,7 +52,6 @@ export default function CustomerDocumentPage() {
   const rafId = useRef<number | null>(null)
   const isFullscreen = location.search.includes('fullscreen=1')
 
-  // Fetch document
   const { data: document, isLoading, error } = useQuery({
     queryKey: ['portal', 'document', id],
     queryFn: () => portalApi.getDocument(Number(id)),
@@ -60,23 +59,81 @@ export default function CustomerDocumentPage() {
   })
   const renderedContent = useMemo(() => parseDocumentHtml(document?.content ?? ''), [document?.content])
 
-  // Fetch related documents
   const { data: relatedDocs } = useQuery({
     queryKey: ['portal', 'document', id, 'related'],
     queryFn: () => portalApi.getRelatedDocuments(Number(id)),
     enabled: !!id,
   })
 
-  // Feedback mutation
   const feedbackMutation = useMutation({
     mutationFn: (data: { feedback_type: 'question' | 'suggestion' | 'issue' | 'other'; content: string }) =>
       portalApi.submitFeedback({
         document_id: Number(id),
         ...data,
       }),
-    onSuccess: () => {
+    onMutate: async (data) => {
       setFeedbackSubmitted(true)
-      queryClient.invalidateQueries({ queryKey: ['portal', 'feedback'] })
+
+      const optimisticFeedbackId = -Date.now()
+      const nowIso = new Date().toISOString()
+      const optimisticFeedback: FeedbackItem = {
+        id: optimisticFeedbackId,
+        document_id: Number(id),
+        document_title: document?.title || 'Current document',
+        feedback_type: data.feedback_type,
+        content: data.content,
+        status: 'pending',
+        created_at: nowIso,
+        updated_at: nowIso,
+      }
+
+      const previousFeedbackQueries = queryClient.getQueriesData<FeedbackListResponse>({
+        queryKey: ['portal', 'feedback'],
+      })
+
+      previousFeedbackQueries.forEach(([queryKey, previous]) => {
+        if (!previous) return
+
+        const filters =
+          Array.isArray(queryKey) && typeof queryKey[2] === 'object' && queryKey[2] !== null
+            ? (queryKey[2] as { status?: 'pending' | 'responded' | 'closed' })
+            : undefined
+
+        if (filters?.status && filters.status !== 'pending') {
+          return
+        }
+
+        queryClient.setQueryData<FeedbackListResponse>(queryKey, {
+          ...previous,
+          items: [optimisticFeedback, ...previous.items],
+          total: previous.total + 1,
+        })
+      })
+
+      return { optimisticFeedbackId, previousFeedbackQueries }
+    },
+    onError: (_error, _variables, context) => {
+      setFeedbackSubmitted(false)
+      context?.previousFeedbackQueries.forEach(([queryKey, previous]) => {
+        queryClient.setQueryData(queryKey, previous)
+      })
+    },
+    onSuccess: (createdFeedback, _variables, context) => {
+      queryClient.setQueriesData<FeedbackListResponse>(
+        { queryKey: ['portal', 'feedback'] },
+        (current) => {
+          if (!current) return current
+          return {
+            ...current,
+            items: current.items.map((item) =>
+              item.id === context?.optimisticFeedbackId ? createdFeedback : item,
+            ),
+          }
+        },
+      )
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'feedback'] })
     },
   })
 
@@ -154,25 +211,25 @@ export default function CustomerDocumentPage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+      <div className="content-shell flex animate-fade-in justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600"></div>
       </div>
     )
   }
 
   if (error || !document) {
     return (
-      <div className="py-12">
+      <div className="content-shell animate-fade-in py-12">
         <NotFoundState
           title="Document Not Found"
           description="This document may not exist or you don't have access to view it."
-          icon={<FileText className="h-12 w-12 text-slate-300" />}
+          icon={<FileText className="h-12 w-12 text-slate-300 dark:text-slate-600" />}
           action={
             <Link
               to="/portal/documents"
-              className="inline-flex items-center text-sky-600 hover:text-sky-500"
+              className="btn-secondary table-action-btn inline-flex items-center gap-2"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Documents
             </Link>
           }
@@ -182,7 +239,7 @@ export default function CustomerDocumentPage() {
   }
 
   return (
-    <div className={`${isFullscreen ? 'min-h-screen bg-white py-6' : ''}`}>
+    <div className={`${isFullscreen ? 'min-h-screen bg-white py-6 dark:bg-slate-950' : 'page-stack'} animate-fade-in`}>
       <FullscreenTopBar
         isFullscreen={isFullscreen}
         documentTitle={document.title}
@@ -190,219 +247,227 @@ export default function CustomerDocumentPage() {
         onExitFullscreen={() => navigate(`/portal/documents/${id}`)}
         onSetReadingWidth={() => applyWidth('reading')}
         onSetFluidWidth={() => applyWidth('fluid')}
-        wrapperClassName="mx-6 md:mx-10 lg:mx-16 rounded-2xl px-4"
+        wrapperClassName="mx-6 rounded-2xl px-4 md:mx-10 lg:mx-16"
       />
 
-      <div className={`space-y-6 ${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'max-w-5xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : ''}`}>
+      <div
+        className={`space-y-6 ${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `w-full ${contentWidth === 'reading' ? 'mx-auto max-w-5xl' : 'max-w-none'} px-6 md:px-10 lg:px-16` : ''}`}
+      >
         <div className="flex items-center justify-between">
           <Link
             to="/portal/documents"
-            className="inline-flex items-center text-slate-600 hover:text-slate-900"
+            className="btn-ghost table-action-btn inline-flex items-center gap-2"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Documents
           </Link>
           {!isFullscreen && (
             <button
+              type="button"
               onClick={() => navigate(`/portal/documents/${id}?fullscreen=1`)}
-              className="btn-ghost"
+              className="btn-ghost table-action-btn"
             >
               Fullscreen
             </button>
           )}
         </div>
 
-      {/* Document header */}
-      <div className="surface-card rounded-2xl">
-        <div className="p-6 border-b border-slate-200">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-display font-bold text-slate-900">{document.title}</h1>
-              {document.description && (
-                <p className="mt-2 text-slate-600">{document.description}</p>
-              )}
-            </div>
-            <span className="pill bg-emerald-100 text-emerald-700">
-              v{document.version}
-            </span>
-          </div>
-
-          {/* Metadata */}
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-500">
-            {document.category && (
-              <span className="inline-flex items-center">
-                <Folder className="h-4 w-4 mr-1" />
-                {document.category}
+        <div className="surface-card rounded-2xl">
+          <div className="border-b border-slate-200 p-6 dark:border-slate-800">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="page-title text-slate-900 dark:text-slate-100">
+                  {document.title}
+                </h1>
+                {document.description && (
+                  <p className="body-copy mt-2 dark:text-slate-300">{document.description}</p>
+                )}
+              </div>
+              <span className="pill border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                v{document.version}
               </span>
-            )}
-            <span className="inline-flex items-center">
-              <Clock className="h-4 w-4 mr-1" />
-              Updated {formatDate(document.updated_at)}
-            </span>
-          </div>
+            </div>
 
-          {/* Tags */}
-          {document.tags.length > 0 && (
-            <div className="mt-4 flex items-center gap-2">
-              <Tag className="h-4 w-4 text-slate-400" />
-              {document.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="pill bg-sky-100 text-sky-700"
-                >
-                  {tag}
+            <div className="helper-copy mt-4 flex flex-wrap gap-4 dark:text-slate-400">
+              {document.category && (
+                <span className="inline-flex items-center">
+                  <Folder className="mr-1 h-4 w-4" />
+                  {document.category}
                 </span>
-              ))}
+              )}
+              <span className="inline-flex items-center">
+                <Clock className="mr-1 h-4 w-4" />
+                Updated {formatDate(document.updated_at)}
+              </span>
             </div>
-          )}
-        </div>
 
-        {/* Document content */}
-        <div className="p-6">
-          <div
-            ref={contentRef}
-            className="prose max-w-none"
-          >
-            {renderedContent}
-          </div>
-        </div>
-      </div>
-
-      {/* Attachments */}
-      {document.attachments.length > 0 && (
-        <div className="surface-card rounded-2xl">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
-              <Paperclip className="h-5 w-5 mr-2" />
-              Attachments ({document.attachments.length})
-            </h2>
-          </div>
-          <div className="p-6">
-            <div className="space-y-3">
-              {document.attachments.map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-xl"
-                >
-                  <div className="flex items-center min-w-0">
-                    <FileText className="h-8 w-8 text-slate-400 flex-shrink-0" />
-                    <div className="ml-3 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{attachment.filename}</p>
-                      <p className="text-sm text-slate-500">
-                        {formatFileSize(attachment.file_size)}
-                        {attachment.mime_type && ` • ${attachment.mime_type}`}
-                      </p>
-                    </div>
-                  </div>
-                  <a
-                    href={
-                      attachment.download_url ?? `/api/v1/documents/${document.id}/attachments/${attachment.id}/download`
-                    }
-                    className="ml-4 flex items-center px-3 py-2 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700"
+            {document.tags.length > 0 && (
+              <div className="mt-4 flex items-center gap-2">
+                <Tag className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                {document.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200"
                   >
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </a>
-                </div>
-              ))}
-            </div>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Related Documents */}
-      {relatedDocs && relatedDocs.length > 0 && (
-        <div className="surface-card rounded-2xl">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
-              <BookOpen className="h-5 w-5 mr-2" />
-              Related Documents
-            </h2>
-          </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {relatedDocs.map((related) => (
-                <Link
-                  key={related.id}
-                  to={`/portal/documents/${related.id}`}
-                  className="block p-4 rounded-xl border border-slate-200 hover:border-sky-300 hover:shadow-sm transition-all"
-                >
-                  <h3 className="font-medium text-slate-900 line-clamp-2">{related.title}</h3>
-                  {related.description && (
-                    <p className="mt-1 text-sm text-slate-500 line-clamp-2">{related.description}</p>
-                  )}
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    {related.category && (
-                      <span className="px-2 py-0.5 bg-slate-100 rounded-full">{related.category}</span>
-                    )}
-                    {related.updated_at && (
-                      <span>{formatDate(related.updated_at)}</span>
-                    )}
-                  </div>
-                </Link>
-              ))}
+            <div ref={contentRef} className="prose prose-slate max-w-none dark:prose-invert">
+              {renderedContent}
             </div>
           </div>
         </div>
-      )}
 
-      {/* Feedback section */}
-      <div className="surface-card rounded-2xl">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-display font-semibold text-slate-900">Submit Feedback</h2>
-          <p className="text-sm text-slate-500">
-            Have a question or suggestion about this document? Let us know!
-          </p>
-        </div>
-        <div className="p-6">
-          {feedbackSubmitted ? (
-            <div className="text-center py-8">
-              <CheckCircle className="h-12 w-12 mx-auto text-emerald-500" />
-              <h3 className="mt-4 font-medium text-slate-900">Thank you for your feedback!</h3>
-              <p className="mt-2 text-slate-500">
-                We've received your submission and will respond soon.
-              </p>
-              <div className="mt-4 flex justify-center gap-4">
-                <button
-                  onClick={() => setFeedbackSubmitted(false)}
-                  className="text-sky-600 hover:text-sky-500"
-                >
-                  Submit another
-                </button>
-                <Link to="/portal/feedback" className="text-sky-600 hover:text-sky-500">
-                  View my feedback
-                </Link>
-                <Link to="/portal/support" className="text-sky-600 hover:text-sky-500">
-                  View support tickets
-                </Link>
+        {document.attachments.length > 0 && (
+          <div className="surface-card rounded-2xl">
+            <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <h2 className="section-title flex items-center dark:text-slate-100">
+                <Paperclip className="mr-2 h-5 w-5" />
+                Attachments ({document.attachments.length})
+              </h2>
+            </div>
+            <div className="p-6">
+              <div className="space-y-3">
+                {document.attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-950"
+                  >
+                    <div className="flex min-w-0 items-center">
+                      <FileText className="h-8 w-8 flex-shrink-0 text-slate-400 dark:text-slate-500" />
+                      <div className="ml-3 min-w-0">
+                        <p className="card-title truncate dark:text-slate-100">
+                          {attachment.filename}
+                        </p>
+                        <p className="helper-copy dark:text-slate-400">
+                          {formatFileSize(attachment.file_size)}
+                          {attachment.mime_type && ` - ${attachment.mime_type}`}
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={
+                        attachment.download_url ??
+                        `/api/v1/documents/${document.id}/attachments/${attachment.id}/download`
+                      }
+                      className="btn-primary table-action-btn ml-4"
+                    >
+                      <Download className="mr-1 h-4 w-4" />
+                      Download
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : (
-            <FeedbackForm
-              onSubmit={(data) => feedbackMutation.mutate(data)}
-              isLoading={feedbackMutation.isPending}
-              error={feedbackMutation.error?.message}
-            />
-          )}
-        </div>
-      </div>
+          </div>
+        )}
 
-      {/* Contact Support handoff (Y2-020) */}
-      <div className="surface-card rounded-2xl px-6 py-5 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-display font-semibold text-slate-900">Need more help?</h2>
-          <p className="text-sm text-slate-500">
-            Open a support ticket with this document's context pre-filled.
-          </p>
+        {relatedDocs && relatedDocs.length > 0 && (
+          <div className="surface-card rounded-2xl">
+            <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+              <h2 className="section-title flex items-center dark:text-slate-100">
+                <BookOpen className="mr-2 h-5 w-5" />
+                Related Documents
+              </h2>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {relatedDocs.map((related) => (
+                  <Link
+                    key={related.id}
+                    to={`/portal/documents/${related.id}`}
+                    className="surface-card-hover block rounded-2xl p-4"
+                  >
+                    <h3 className="card-title line-clamp-2 dark:text-slate-100">
+                      {related.title}
+                    </h3>
+                    {related.description && (
+                      <p className="body-copy mt-1 line-clamp-2 dark:text-slate-400">
+                        {related.description}
+                      </p>
+                    )}
+                    <div className="helper-copy mt-2 flex items-center gap-2 dark:text-slate-500">
+                      {related.category && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800 dark:text-slate-200">
+                          {related.category}
+                        </span>
+                      )}
+                      {related.updated_at && <span>{formatDate(related.updated_at)}</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="surface-card rounded-2xl">
+          <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+            <h2 className="section-title dark:text-slate-100">
+              Submit Feedback
+            </h2>
+            <p className="body-copy dark:text-slate-400">
+              Have a question or suggestion about this document? Let us know!
+            </p>
+          </div>
+          <div className="p-6">
+            {feedbackSubmitted ? (
+              <div className="py-8 text-center">
+                <CheckCircle className="mx-auto h-12 w-12 text-emerald-500" />
+                <h3 className="section-title mt-4 text-base dark:text-slate-100">
+                  Thank you for your feedback!
+                </h3>
+                <p className="body-copy mt-2 dark:text-slate-400">
+                  We've received your submission and will respond soon.
+                </p>
+                <div className="mt-4 flex justify-center gap-4">
+                  <button
+                    onClick={() => setFeedbackSubmitted(false)}
+                    className="btn-secondary table-action-btn"
+                    type="button"
+                  >
+                    Submit another
+                  </button>
+                  <Link to="/portal/feedback" className="btn-secondary table-action-btn">
+                    View my feedback
+                  </Link>
+                  <Link to="/portal/support" className="btn-secondary table-action-btn">
+                    View support tickets
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <FeedbackForm
+                onSubmit={(data) => feedbackMutation.mutate(data)}
+                isLoading={feedbackMutation.isPending}
+                error={feedbackMutation.error?.message}
+              />
+            )}
+          </div>
         </div>
-        <Link
-          to={`/portal/support?new=1&subject=${encodeURIComponent(`Help with: ${document?.title ?? 'Document #' + id}`)}&content=${encodeURIComponent(`Document: ${document?.title ?? ''} (ID: ${id})\nURL: ${window.location.href}\nBrowser: ${navigator.userAgent}\n\nDescribe your issue:\n`)}`}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 whitespace-nowrap"
-        >
-          <LifeBuoy className="h-4 w-4" />
-          Contact Support
-        </Link>
-      </div>
+
+        <div className="surface-card flex items-center justify-between rounded-2xl px-6 py-5">
+          <div>
+            <h2 className="section-title dark:text-slate-100">
+              Need more help?
+            </h2>
+            <p className="body-copy dark:text-slate-400">
+              Open a support ticket with this document's context pre-filled.
+            </p>
+          </div>
+          <Link
+            to={`/portal/support?new=1&subject=${encodeURIComponent(`Help with: ${document?.title ?? 'Document #' + id}`)}&content=${encodeURIComponent(`Document: ${document?.title ?? ''} (ID: ${id})\nURL: ${window.location.href}\nBrowser: ${navigator.userAgent}\n\nDescribe your issue:\n`)}`}
+            className="btn-primary table-action-btn inline-flex items-center gap-2 whitespace-nowrap"
+          >
+            <LifeBuoy className="h-4 w-4" />
+            Contact Support
+          </Link>
+        </div>
       </div>
     </div>
   )

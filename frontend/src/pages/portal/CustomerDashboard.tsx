@@ -3,9 +3,11 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { ErrorState } from '@/components/ErrorState'
 import { useAuth } from '../../lib/auth'
 import { portalApi } from '../../lib/portalApi'
 import PageHeader from '@/components/PageHeader'
+import { StatCardSkeleton } from '@/components/skeletons'
 import {
   FileText,
   MessageSquare,
@@ -19,136 +21,146 @@ import {
 export default function CustomerDashboard() {
   const { user } = useAuth()
 
-  // Fetch dashboard stats
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: isStatsError,
+    refetch: refetchStats,
+  } = useQuery({
     queryKey: ['portal', 'stats'],
     queryFn: () => portalApi.getDashboardStats(),
   })
 
-  // Fetch recent documents
   const { data: recentDocs, isLoading: docsLoading } = useQuery({
     queryKey: ['portal', 'documents', 'recent'],
     queryFn: () => portalApi.getDocuments({ per_page: 6 }),
   })
 
-  // Fetch categories
   const { data: categories } = useQuery({
     queryKey: ['portal', 'categories'],
     queryFn: () => portalApi.getCategories(),
   })
 
-  // Fetch continue reading
   const { data: continueReading } = useQuery({
     queryKey: ['portal', 'continue-reading'],
     queryFn: () => portalApi.getContinueReading(4),
   })
 
-  // Fetch recently viewed
   const { data: recentlyViewed } = useQuery({
     queryKey: ['portal', 'recently-viewed'],
     queryFn: () => portalApi.getRecentlyViewed(6),
   })
 
   return (
-    <div className="space-y-8">
+    <div className="page-stack-lg">
       <PageHeader
         eyebrow="Customer Portal"
         title={`Welcome back, ${user?.full_name || 'Customer'}!`}
         subtitle="Access your documents and resources from your personalized portal."
       />
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="surface-card rounded-2xl p-5">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 p-3 bg-sky-100 rounded-xl">
-              <FileText className="h-6 w-6 text-sky-600" />
+      {isStatsError ? (
+        <ErrorState
+          title="Dashboard stats unavailable"
+          message="We could not load your customer dashboard summary."
+          onRetry={() => void refetchStats()}
+        />
+      ) : statsLoading ? (
+        <StatCardSkeleton count={4} />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="surface-card rounded-2xl p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-xl bg-sky-100 p-3 dark:bg-sky-950/50">
+                <FileText className="h-6 w-6 text-sky-600" />
+              </div>
+              <div className="ml-4">
+                <p className="eyebrow">Total Documents</p>
+                <p className="metric-value">
+                  {stats?.total_documents || 0}
+                </p>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="eyebrow">Total Documents</p>
-              <p className="text-2xl font-display font-semibold text-slate-900">
-                {statsLoading ? '...' : stats?.total_documents || 0}
-              </p>
+          </div>
+
+          <div className="surface-card rounded-2xl p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-xl bg-emerald-100 p-3 dark:bg-emerald-950/50">
+                <Folder className="h-6 w-6 text-emerald-600" />
+              </div>
+              <div className="ml-4">
+                <p className="eyebrow">Company Documents</p>
+                <p className="metric-value">
+                  {stats?.company_documents || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="surface-card rounded-2xl p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-xl bg-amber-100 p-3 dark:bg-amber-950/50">
+                <Clock className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="ml-4">
+                <p className="eyebrow">Pending Feedback</p>
+                <p className="metric-value">
+                  {stats?.pending_feedback || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="surface-card rounded-2xl p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-xl bg-violet-100 p-3 dark:bg-violet-950/50">
+                <CheckCircle className="h-6 w-6 text-violet-600 dark:text-violet-300" />
+              </div>
+              <div className="ml-4">
+                <p className="eyebrow">Responded</p>
+                <p className="metric-value">
+                  {stats?.responded_feedback || 0}
+                </p>
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="surface-card rounded-2xl p-5">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 p-3 bg-emerald-100 rounded-xl">
-              <Folder className="h-6 w-6 text-emerald-600" />
-            </div>
-            <div className="ml-4">
-              <p className="eyebrow">Company Documents</p>
-              <p className="text-2xl font-display font-semibold text-slate-900">
-                {statsLoading ? '...' : stats?.company_documents || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="surface-card rounded-2xl p-5">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 p-3 bg-amber-100 rounded-xl">
-              <Clock className="h-6 w-6 text-amber-600" />
-            </div>
-            <div className="ml-4">
-              <p className="eyebrow">Pending Feedback</p>
-              <p className="text-2xl font-display font-semibold text-slate-900">
-                {statsLoading ? '...' : stats?.pending_feedback || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="surface-card rounded-2xl p-5">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 p-3 bg-purple-100 rounded-xl">
-              <CheckCircle className="h-6 w-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="eyebrow">Responded</p>
-              <p className="text-2xl font-display font-semibold text-slate-900">
-                {statsLoading ? '...' : stats?.responded_feedback || 0}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Continue Reading */}
       {continueReading && continueReading.length > 0 && (
         <div className="surface-card rounded-2xl">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
-              <PlayCircle className="h-5 w-5 mr-2 text-sky-600" />
+          <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+            <h2 className="section-title flex items-center">
+              <PlayCircle className="mr-2 h-5 w-5 text-sky-600" />
               Continue Reading
             </h2>
-            <p className="text-sm text-slate-500">Pick up where you left off</p>
+            <p className="body-copy">Pick up where you left off</p>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {continueReading.map((item) => (
                 <Link
                   key={item.document_id}
                   to={`/portal/documents/${item.document_id}?fullscreen=1`}
-                  className="flex items-center p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-sm transition-all"
+                  className="flex items-center rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-sky-700"
                 >
-                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-950/40">
                     <BookOpen className="h-6 w-6 text-sky-600" />
                   </div>
                   <div className="ml-3 min-w-0 flex-1">
-                    <h3 className="font-medium text-slate-900 truncate">{item.title}</h3>
+                    <h3 className="card-title truncate">{item.title}</h3>
                     {item.category && (
-                      <span className="text-xs text-slate-500">{item.category}</span>
+                      <span className="helper-copy">{item.category}</span>
                     )}
-                    <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1.5">
+                    <div className="progress-track mt-1.5 h-1.5 w-full bg-slate-100 dark:bg-slate-800">
                       <div
-                        className="bg-sky-500 h-1.5 rounded-full transition-all"
+                        className="progress-fill"
                         style={{ width: `${item.progress_percent}%` }}
                       />
                     </div>
-                    <span className="text-xs text-slate-400">{item.progress_percent}% complete</span>
+                    <span className="helper-copy">
+                      {item.progress_percent}% complete
+                    </span>
                   </div>
                 </Link>
               ))}
@@ -157,32 +169,33 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* Recently Viewed */}
       {recentlyViewed && recentlyViewed.length > 0 && (
         <div className="surface-card rounded-2xl">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-display font-semibold text-slate-900 flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-slate-500" />
+          <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+            <h2 className="section-title flex items-center">
+              <Clock className="mr-2 h-5 w-5 text-slate-500 dark:text-slate-400" />
               Recently Viewed
             </h2>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {recentlyViewed.map((item) => (
                 <Link
                   key={item.document_id}
                   to={`/portal/documents/${item.document_id}?fullscreen=1`}
-                  className="block p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-sm transition-all"
+                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-sky-700"
                 >
                   <div className="flex items-start">
-                    <FileText className="h-6 w-6 text-slate-400 flex-shrink-0" />
+                    <FileText className="h-6 w-6 flex-shrink-0 text-slate-400 dark:text-slate-500" />
                     <div className="ml-3 min-w-0">
-                      <h3 className="font-medium text-slate-900 truncate text-sm">{item.title}</h3>
+                      <h3 className="card-title truncate">
+                        {item.title}
+                      </h3>
                       {item.category && (
-                        <span className="text-xs text-slate-400">{item.category}</span>
+                        <span className="helper-copy">{item.category}</span>
                       )}
                       {item.last_read_at && (
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="helper-copy mt-1">
                           {new Date(item.last_read_at).toLocaleDateString()}
                         </p>
                       )}
@@ -195,47 +208,48 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* Recent documents */}
       <div className="surface-card rounded-2xl">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-display font-semibold text-slate-900">Recent Documents</h2>
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+          <h2 className="section-title">
+            Recent Documents
+          </h2>
           <Link
             to="/portal/documents"
-            className="text-sm text-sky-600 hover:text-sky-700 font-medium"
+            className="btn-secondary table-action-btn"
           >
-            View all →
+            View all -&gt;
           </Link>
         </div>
         <div className="p-6">
           {docsLoading ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600"></div>
             </div>
           ) : recentDocs?.items.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
-              <FileText className="h-12 w-12 mx-auto text-slate-300" />
+            <div className="py-8 text-center text-slate-500 dark:text-slate-400">
+              <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
               <p className="mt-2">No documents available yet</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {recentDocs?.items.map((doc) => (
                 <Link
                   key={doc.id}
                   to={`/portal/documents/${doc.id}?fullscreen=1`}
-                  className="block p-4 border border-slate-200 rounded-xl hover:border-sky-300 hover:shadow-md transition-all"
+                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-md dark:border-slate-800 dark:hover:border-sky-700"
                 >
                   <div className="flex items-start">
-                    <FileText className="h-8 w-8 text-slate-400 flex-shrink-0" />
+                    <FileText className="h-8 w-8 flex-shrink-0 text-slate-400 dark:text-slate-500" />
                     <div className="ml-3 min-w-0">
-                      <h3 className="font-medium text-slate-900 truncate">{doc.title}</h3>
+                      <h3 className="card-title truncate">{doc.title}</h3>
                       {doc.description && (
-                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">
+                        <p className="body-copy mt-1 line-clamp-2">
                           {doc.description}
                         </p>
                       )}
-                      <div className="flex items-center mt-2 text-xs text-slate-400">
+                      <div className="helper-copy mt-2 flex items-center">
                         {doc.category && (
-                          <span className="pill bg-slate-100 text-slate-600 border-slate-200 mr-2">
+                          <span className="mr-2 pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             {doc.category}
                           </span>
                         )}
@@ -250,11 +264,12 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
-      {/* Categories */}
       {categories && categories.length > 0 && (
         <div className="surface-card rounded-2xl">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-display font-semibold text-slate-900">Browse by Category</h2>
+          <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+            <h2 className="section-title">
+              Browse by Category
+            </h2>
           </div>
           <div className="p-6">
             <div className="flex flex-wrap gap-2">
@@ -262,11 +277,11 @@ export default function CustomerDashboard() {
                 <Link
                   key={cat.category}
                   to={`/portal/documents?category=${encodeURIComponent(cat.category)}`}
-                  className="inline-flex items-center px-4 py-2 bg-slate-100 hover:bg-sky-100 text-slate-700 hover:text-sky-700 rounded-full transition-colors"
+                  className="inline-flex items-center rounded-full bg-slate-100 px-4 py-2 text-slate-700 transition-colors hover:bg-sky-100 hover:text-sky-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-sky-950/50 dark:hover:text-sky-200"
                 >
-                  <Folder className="h-4 w-4 mr-2" />
+                  <Folder className="mr-2 h-4 w-4" />
                   {cat.category}
-                  <span className="ml-2 bg-white px-2 py-0.5 rounded-full text-xs">
+                  <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs dark:bg-slate-950 dark:text-slate-200">
                     {cat.count}
                   </span>
                 </Link>
@@ -276,31 +291,38 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Link
           to="/portal/documents"
-          className="flex items-center p-6 surface-card-hover rounded-2xl"
+          className="surface-card-hover flex items-center rounded-2xl p-6"
         >
-          <div className="p-3 bg-sky-100 rounded-xl">
+          <div className="rounded-xl bg-sky-100 p-3 dark:bg-sky-950/50">
             <FileText className="h-8 w-8 text-sky-600" />
           </div>
           <div className="ml-4">
-            <h3 className="font-display font-semibold text-slate-900">Browse Documents</h3>
-            <p className="text-sm text-slate-500">View all available documents and resources</p>
+            <h3 className="card-title">
+              Browse Documents
+            </h3>
+            <p className="body-copy">
+              View all available documents and resources
+            </p>
           </div>
         </Link>
 
         <Link
           to="/portal/feedback"
-          className="flex items-center p-6 surface-card-hover rounded-2xl"
+          className="surface-card-hover flex items-center rounded-2xl p-6"
         >
-          <div className="p-3 bg-purple-100 rounded-xl">
-            <MessageSquare className="h-8 w-8 text-purple-600" />
+          <div className="rounded-xl bg-violet-100 p-3 dark:bg-violet-950/50">
+            <MessageSquare className="h-8 w-8 text-violet-600 dark:text-violet-300" />
           </div>
           <div className="ml-4">
-            <h3 className="font-display font-semibold text-slate-900">My Feedback</h3>
-            <p className="text-sm text-slate-500">View and track your feedback submissions</p>
+            <h3 className="card-title">
+              My Feedback
+            </h3>
+            <p className="body-copy">
+              View and track your feedback submissions
+            </p>
           </div>
         </Link>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 /**
  * AC-009: Focus trapping hook for modals and dialogs.
@@ -6,28 +6,12 @@ import { useEffect, useRef, useCallback } from 'react'
  * Traps Tab/Shift+Tab within the referenced container, handles Escape to close,
  * and returns focus to the previously-focused element on unmount.
  */
-export function useFocusTrap(onClose?: () => void) {
-  const containerRef = useRef<HTMLDivElement>(null)
+export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(onClose?: () => void) {
+  const containerRef = useRef<T>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement | null
-
-    // Focus the first focusable element inside the trap
-    const timer = setTimeout(() => {
-      const first = getFocusableElements(containerRef.current)?.[0]
-      first?.focus()
-    }, 0)
-
-    return () => {
-      clearTimeout(timer)
-      // Return focus to the element that opened the dialog
-      previousFocusRef.current?.focus()
-    }
-  }, [])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+  const handleTrapKeyDown = useCallback(
+    (e: KeyboardEvent | ReactKeyboardEvent) => {
       if (e.key === 'Escape' && onClose) {
         e.stopPropagation()
         onClose()
@@ -57,7 +41,31 @@ export function useFocusTrap(onClose?: () => void) {
     [onClose],
   )
 
-  return { containerRef, handleKeyDown }
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null
+
+    // Focus the first focusable element inside the trap
+    const timer = setTimeout(() => {
+      const first = getFocusableElements(containerRef.current)?.[0]
+      first?.focus()
+    }, 0)
+
+    const handleNativeKeyDown = (event: KeyboardEvent) => {
+      handleTrapKeyDown(event)
+    }
+
+    const container = containerRef.current
+    container?.addEventListener('keydown', handleNativeKeyDown)
+
+    return () => {
+      clearTimeout(timer)
+      container?.removeEventListener('keydown', handleNativeKeyDown)
+      // Return focus to the element that opened the dialog
+      previousFocusRef.current?.focus()
+    }
+  }, [handleTrapKeyDown])
+
+  return { containerRef, handleKeyDown: handleTrapKeyDown }
 }
 
 function getFocusableElements(container: HTMLElement | null): HTMLElement[] | null {
@@ -65,7 +73,17 @@ function getFocusableElements(container: HTMLElement | null): HTMLElement[] | nu
   const elements = container.querySelectorAll<HTMLElement>(
     'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
   )
-  return Array.from(elements).filter((el) => el.offsetParent !== null)
+  return Array.from(elements).filter((el) => {
+    if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') {
+      return false
+    }
+
+    if (el.getAttribute('tabindex') === '-1') {
+      return false
+    }
+
+    return !el.closest('[hidden], [aria-hidden="true"]')
+  })
 }
 
 /**

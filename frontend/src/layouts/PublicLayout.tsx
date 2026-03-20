@@ -26,7 +26,7 @@ export default function PublicLayout() {
                 DP
               </div>
               <div>
-                <div className="text-xs uppercase tracking-widest text-slate-400">Viewer Portal</div>
+                <div className="text-xs uppercase tracking-widest text-slate-600">Viewer Portal</div>
                 <div className="text-lg font-semibold text-slate-900 leading-tight font-display">Developer Portal</div>
               </div>
             </Link>
@@ -109,7 +109,7 @@ export default function PublicLayout() {
               </button>
             ) : (
               <>
-                <span className="text-xs text-slate-500">External access to approved documentation</span>
+                <span className="text-xs text-slate-700">External access to approved documentation</span>
                 <Link to="/login" className="btn-primary">
                   Sign in
                 </Link>
@@ -177,7 +177,7 @@ export default function PublicLayout() {
               <hr className="my-3 border-slate-200" />
               {/* Mobile search (#70) */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" aria-hidden="true" />
                 <input
                   type="search"
                   placeholder="Search documentation..."
@@ -239,7 +239,7 @@ export default function PublicLayout() {
                 </div>
                 <span className="text-lg font-semibold text-slate-900 font-display">Documentation Platform</span>
               </div>
-              <p className="text-slate-500 text-sm">
+              <p className="text-sm text-slate-700">
                 Your central hub for documentation and knowledge sharing.
               </p>
             </div>
@@ -247,17 +247,17 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/docs" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/docs" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Docs Library
                   </Link>
                 </li>
                 <li>
-                  <Link to="/platforms" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/platforms" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Platform History
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/search" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Search
                   </Link>
                 </li>
@@ -267,14 +267,14 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Access</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/login" className="text-slate-500 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/login" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
                     Login for more content
                   </Link>
                 </li>
               </ul>
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-500">
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center text-sm text-slate-700">
             © {new Date().getFullYear()} DocPortal. All rights reserved.
           </div>
         </div>

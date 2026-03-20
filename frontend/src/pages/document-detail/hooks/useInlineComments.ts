@@ -2,7 +2,9 @@ import { useCallback, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { queryKeys } from '@/lib/queryKeys'
+import type { Comment } from '@/types'
 
 export interface SelectionPopupState {
   show: boolean
@@ -24,6 +26,7 @@ const EMPTY_COMMENT_POPUP: CommentPopupState = { show: false, x: 0, y: 0, text: 
 
 export function useInlineComments(documentId: number) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [selectionPopup, setSelectionPopup] = useState<SelectionPopupState>(EMPTY_SELECTION_POPUP)
   const [commentPopup, setCommentPopup] = useState<CommentPopupState>(EMPTY_COMMENT_POPUP)
   const [commentText, setCommentText] = useState('')
@@ -33,14 +36,75 @@ export function useInlineComments(documentId: number) {
   const createCommentMutation = useMutation({
     mutationFn: (data: { content: string; is_private?: boolean; anchor_text?: string; anchor_id?: string }) =>
       api.createComment(documentId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
+
+      const previousComments = queryClient.getQueryData<Comment[]>(queryKeys.comments.byDocument(documentId))
+      const optimisticId = -Date.now()
+      const nowIso = new Date().toISOString()
+      const optimisticComment: Comment = {
+        id: optimisticId,
+        document_id: documentId,
+        user_id: user?.id || 0,
+        author_id: user?.id,
+        author_name: user?.full_name || user?.username || 'You',
+        parent_id: null,
+        content: data.content,
+        is_private: !!data.is_private,
+        anchor_text: data.anchor_text ?? null,
+        anchor_id: data.anchor_id ?? null,
+        is_resolved: false,
+        created_at: nowIso,
+        updated_at: nowIso,
+        user: user
+          ? {
+              id: user.id,
+              username: user.username,
+              full_name: user.full_name,
+              role: user.role,
+            }
+          : undefined,
+        replies: [],
+        reply_count: 0,
+        chat_id: null,
+      }
+
+      queryClient.setQueryData<Comment[]>(queryKeys.comments.byDocument(documentId), (current) =>
+        current ? [optimisticComment, ...current] : [optimisticComment],
+      )
+
+      const previousCommentPopup = commentPopup
+      const previousCommentText = commentText
+      const previousIsPrivateComment = isPrivateComment
+
       setCommentPopup(EMPTY_COMMENT_POPUP)
       setCommentText('')
       setIsPrivateComment(false)
       setIsSubmittingComment(false)
+      window.getSelection()?.removeAllRanges()
+
+      return {
+        optimisticId,
+        previousComments,
+        previousCommentPopup,
+        previousCommentText,
+        previousIsPrivateComment,
+      }
     },
-    onError: () => {
+    onSuccess: (createdComment, _variables, context) => {
+      queryClient.setQueryData<Comment[]>(queryKeys.comments.byDocument(documentId), (current) => {
+        if (!current) return [createdComment]
+        return current.map((comment) => (comment.id === context?.optimisticId ? createdComment : comment))
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
+    },
+    onError: (_error, _variables, context) => {
+      if (context) {
+        queryClient.setQueryData(queryKeys.comments.byDocument(documentId), context.previousComments)
+      }
+      setCommentPopup(context?.previousCommentPopup ?? EMPTY_COMMENT_POPUP)
+      setCommentText(context?.previousCommentText ?? '')
+      setIsPrivateComment(context?.previousIsPrivateComment ?? false)
       setIsSubmittingComment(false)
     },
   })

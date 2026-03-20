@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ShieldAlert } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
 import ProfileSettingsNav from '@/components/ProfileSettingsNav'
-import Skeleton from '@/components/Skeleton'
+import { TableSkeleton } from '@/components/skeletons'
+import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import type { SecurityEvent } from '@/types'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 100
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   login: 'Successful login',
@@ -43,7 +46,7 @@ export default function SecurityEventsPage() {
   const totalPages = data?.total_pages ?? 0
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="Security Events"
         subtitle="Recent login and account-security activity for your account."
@@ -51,79 +54,80 @@ export default function SecurityEventsPage() {
 
       <ProfileSettingsNav />
 
-      <div className="surface-card rounded-2xl overflow-hidden">
-        {securityEventsQuery.isLoading ? (
-          <div className="p-6 space-y-3">
-            <Skeleton className="h-4 w-44" />
-            <Skeleton className="h-4 w-56" />
-            <Skeleton className="h-4 w-48" />
-          </div>
-        ) : securityEventsQuery.isError ? (
-          <div className="p-8 text-center">
-            <ShieldAlert className="h-8 w-8 mx-auto text-rose-500 mb-2" />
-            <p className="text-rose-600">Failed to load security events.</p>
-          </div>
-        ) : events.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">
-            <p>No security events found.</p>
-          </div>
-        ) : (
-          <>
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Event</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">IP Address</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">Date/Time</th>
-                  <th className="text-left text-xs uppercase tracking-wider text-slate-500 px-4 py-3">User Agent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((event: SecurityEvent) => (
-                  <tr key={event.id} className="border-b border-slate-100">
-                    <td className="px-4 py-4 text-sm text-slate-900 capitalize">
-                      {getEventLabel(event.event_type)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {event.ip_address || 'Unknown'}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700">
-                      {formatDate(event.created_at)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-700" title={event.user_agent || undefined}>
-                      {getAgentSnippet(event.user_agent)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {securityEventsQuery.isLoading ? (
+        <TableSkeleton rows={8} columns={4} />
+      ) : securityEventsQuery.isError ? (
+        <ErrorState
+          title="Security events could not be loaded"
+          message="We could not fetch your recent account activity."
+          onRetry={() => void securityEventsQuery.refetch()}
+        />
+      ) : events.length === 0 ? (
+        <EmptyState
+          icon={<Activity className="h-8 w-8" aria-hidden="true" />}
+          title="No security events found"
+          description="Recent sign-ins and account-security changes will appear here."
+        />
+      ) : (
+        <div className="space-y-4">
+          <VirtualizedTable
+            items={events}
+            ariaLabel="Security events"
+            columns={[
+              { header: 'Event' },
+              { header: 'IP Address' },
+              { header: 'Date/Time' },
+              { header: 'User Agent' },
+            ]}
+            gridTemplateColumns="minmax(14rem, 1.3fr) minmax(8rem, 0.8fr) minmax(10rem, 0.9fr) minmax(18rem, 1.4fr)"
+            estimateRowHeight={72}
+            rowKey={(event) => event.id}
+            renderRow={(event: SecurityEvent) => (
+              <>
+                <div className="admin-table-cell text-sm capitalize text-slate-900 dark:text-slate-100">
+                  {getEventLabel(event.event_type)}
+                </div>
+                <div className="admin-table-cell text-sm text-slate-700 dark:text-slate-300">
+                  {event.ip_address || 'Unknown'}
+                </div>
+                <div className="admin-table-cell text-sm text-slate-700 dark:text-slate-300">
+                  {formatDate(event.created_at)}
+                </div>
+                <div
+                  className="admin-table-cell text-sm text-slate-700 dark:text-slate-300"
+                  title={event.user_agent || undefined}
+                >
+                  {getAgentSnippet(event.user_agent)}
+                </div>
+              </>
+            )}
+          />
 
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-sm">
-              <p className="text-slate-600">
-                Page {data?.page ?? 1} of {totalPages || 1}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={page <= 1}
-                  onClick={() => setPage((previous) => Math.max(previous - 1, 1))}
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={totalPages === 0 || page >= totalPages}
-                  onClick={() => setPage((previous) => previous + 1)}
-                >
-                  Next
-                </button>
-              </div>
+          <div className="surface-muted flex items-center justify-between px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+            <p>
+              Page {data?.page ?? 1} of {totalPages || 1}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-sm"
+                disabled={page <= 1}
+                onClick={() => setPage((previous) => Math.max(previous - 1, 1))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-sm"
+                disabled={totalPages === 0 || page >= totalPages}
+                onClick={() => setPage((previous) => previous + 1)}
+              >
+                Next
+              </button>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

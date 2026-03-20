@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
+import { CheckCircle2 } from 'lucide-react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -51,6 +52,8 @@ import AcceptInvitationPage from './pages/AcceptInvitationPage'
 // Route guards
 import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard } from './components/guards/RoleGuard'
 import { RouteAnnouncer } from './components/a11y/SkipNavLink'
+import RouteTransition from './components/RouteTransition'
+import { useTheme } from './hooks/useTheme'
 
 // Smart redirect based on user role
 function RoleBasedRedirect() {
@@ -147,12 +150,38 @@ function RouteChangeAnnouncer() {
 }
 
 function App() {
+  const { theme } = useTheme()
+
   return (
     <AuthProvider>
-      <Toaster position="top-right" richColors />
+      <Toaster
+        position="top-right"
+        richColors
+        theme={theme}
+        icons={{
+          success: <CheckCircle2 className="motion-enter-scale h-4 w-4 text-emerald-500" />,
+        }}
+        toastOptions={{
+          classNames: {
+            toast:
+              'motion-enter-slide border border-slate-200 bg-white text-slate-900 shadow-lg dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100',
+            title: 'text-slate-900 dark:text-slate-100',
+            description: 'text-slate-600 dark:text-slate-300',
+            success: 'border-emerald-200/80 dark:border-emerald-900/70',
+            icon: 'motion-enter-scale',
+            actionButton:
+              'bg-sky-600 text-white hover:bg-sky-500 focus-visible:ring-sky-400',
+            cancelButton:
+              'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800',
+            closeButton:
+              'border-slate-200 bg-white text-slate-500 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white',
+          },
+        }}
+      />
       <RouteChangeAnnouncer />
       <Suspense fallback={<RouteLoadingFallback />}>
-        <Routes>
+        <RouteTransition>
+          <Routes>
         {/* ==================== PUBLIC PORTAL ==================== */}
         {/* No auth required - accessible to everyone */}
         <Route
@@ -460,7 +489,8 @@ function App() {
 
         {/* ==================== CATCH ALL ==================== */}
         <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+          </Routes>
+        </RouteTransition>
       </Suspense>
     </AuthProvider>
   )

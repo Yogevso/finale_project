@@ -228,6 +228,27 @@ describe('useCreateDocumentFlow', () => {
     })
   })
 
+  it('blocks document creation when title is missing', () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateDocumentFlow({ onClose }), { wrapper })
+
+    act(() => {
+      result.current.setFormData((previous) => ({
+        ...previous,
+        platform: 'Core Platform',
+      }))
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    expect(result.current.fieldErrors.title).toBe('Title is required')
+    expect(result.current.error).toBe('')
+    expect(createDraftDocumentMock).not.toHaveBeenCalled()
+  })
+
   it('blocks document creation when platform is missing', () => {
     const onClose = vi.fn()
     const { wrapper } = createWrapper()
@@ -244,7 +265,8 @@ describe('useCreateDocumentFlow', () => {
       result.current.handleSubmit({ preventDefault: vi.fn() } as never)
     })
 
-    expect(result.current.error).toBe('Platform is required')
+    expect(result.current.fieldErrors.platform).toBe('Platform is required')
+    expect(result.current.error).toBe('')
     expect(createDraftDocumentMock).not.toHaveBeenCalled()
   })
 })

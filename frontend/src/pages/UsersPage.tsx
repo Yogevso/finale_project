@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import {
-  Search,
   Plus,
   User as UserIcon,
   Building2,
@@ -21,8 +20,13 @@ import {
 import type { User, UserRole, Company, Invitation, InvitationStatus } from '@/types'
 import InviteUserDialog from '@/components/InviteUserDialog'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
+import { SearchInput } from '@/components/form'
 import Skeleton from '@/components/Skeleton'
+import { TableSkeleton } from '@/components/skeletons'
+import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 type UserCreateFormData = {
@@ -159,7 +163,7 @@ export default function UsersPage() {
 
   if (!isAdmin) {
     return (
-      <div className="surface-card rounded-2xl p-6 text-amber-700 bg-amber-50">
+      <div className="surface-card rounded-2xl bg-amber-50 p-6 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
         You don't have permission to view this page.
       </div>
     )
@@ -168,17 +172,17 @@ export default function UsersPage() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'system_admin':
-        return 'bg-rose-100 text-rose-700'
+        return 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200'
       case 'admin':
-        return 'bg-purple-100 text-purple-700'
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200'
       case 'manager':
-        return 'bg-amber-100 text-amber-700'
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'
       case 'editor':
-        return 'bg-sky-100 text-sky-700'
+        return 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200'
       case 'customer':
-        return 'bg-emerald-100 text-emerald-700'
+        return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
       default:
-        return 'bg-slate-100 text-slate-700'
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
     }
   }
 
@@ -186,22 +190,24 @@ export default function UsersPage() {
   const totalUsers = users?.length ?? 0
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="User Management"
         subtitle="Manage users in your organization"
         actions={
           <>
             <button
+              type="button"
               onClick={() => setShowInviteDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700"
+              className="btn-success table-action-btn"
             >
               <Mail className="w-4 h-4" />
               Invite User
             </button>
             <button
+              type="button"
               onClick={() => setShowCreateDialog(true)}
-              className="btn-primary flex items-center gap-2"
+              className="btn-primary table-action-btn"
             >
               <Plus className="w-4 h-4" />
               Add User
@@ -213,26 +219,24 @@ export default function UsersPage() {
       {/* Filters */}
       <div className="admin-sticky-toolbar">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="inline-flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <div className="body-copy inline-flex flex-wrap items-center gap-2">
             <span className="admin-summary-badge">
               {isLoading ? <Skeleton className="h-4 w-20" /> : `${totalUsers} users`}
             </span>
             {pendingInvitations.length > 0 && (
-              <span className="pill bg-amber-50 border-amber-200 text-amber-700">
+              <span className="pill border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
                 {pendingInvitations.length} pending invites
               </span>
             )}
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 xl:items-center">
-            <div className="relative sm:col-span-2 xl:col-span-1 min-w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
+            <div className="sm:col-span-2 xl:col-span-1 min-w-[220px]">
+              <SearchInput
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
+                onClear={() => setSearchInput('')}
                 placeholder="Search users..."
-                className="input-field pl-10"
                 aria-label="Search users by name or email"
               />
             </div>
@@ -279,142 +283,144 @@ export default function UsersPage() {
       </div>
 
       {/* Users table */}
-      <div className="admin-table-shell">
-        <div className="admin-table-scroll">
-          <table className="admin-table">
-            <thead className="admin-table-head">
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Company</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr className="admin-table-row">
-                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                    <div className="space-y-3">
-                      <Skeleton className="h-4 w-44 mx-auto" />
-                      <Skeleton className="h-4 w-36 mx-auto" />
-                      <Skeleton className="h-4 w-40 mx-auto" />
-                    </div>
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr className="admin-table-row">
-                  <td colSpan={5} className="px-5 py-10 text-center text-rose-500">
-                    Failed to load users
-                  </td>
-                </tr>
-              ) : users?.length === 0 ? (
-                <tr className="admin-table-row">
-                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
-                    No users found
-                  </td>
-                </tr>
-              ) : (
-                users?.map((user: User) => (
-                  <tr key={user.id} className="admin-table-row">
-                    <td className="admin-table-cell">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
-                          <UserIcon className="w-4 h-4 text-sky-600" />
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-900">{user.full_name}</div>
-                          <div className="text-xs text-slate-500">{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="admin-table-cell">
-                      <span className={`pill capitalize ${getRoleBadgeColor(user.role)}`}>
-                        {user.role.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="admin-table-cell">
-                      {user.company_name ? (
-                        <div className="flex items-center gap-1 text-sm text-slate-600">
-                          <Building2 className="w-3 h-3" />
-                          {user.company_name}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-sm italic">No company</span>
-                      )}
-                    </td>
-                    <td className="admin-table-cell">
-                      <span className={`pill ${
-                        user.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                      }`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="admin-table-cell text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {user.id !== currentUser?.id && user.role !== 'viewer' && (
-                          <button
-                            onClick={() => messageMutation.mutate(user.id)}
-                            disabled={messageMutation.isPending}
-                            className="admin-icon-action"
-                            title="Send message"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setEditingUser(user)}
-                          className="admin-icon-action"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        {user.id !== currentUser?.id && (
-                          <button
-                            onClick={() => {
-                              setPendingConfirm({
-                                title: 'Deactivate user',
-                                description: `Are you sure you want to deactivate ${user.full_name}?`,
-                                onConfirm: () => { deleteMutation.mutate(user.id); setPendingConfirm(null) },
-                              })
-                            }}
-                            className="admin-icon-action-danger"
-                            title="Deactivate"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {isLoading ? (
+        <TableSkeleton rows={7} columns={5} />
+      ) : error ? (
+        <ErrorState
+          title="Users could not be loaded"
+          message="We could not fetch the current user roster."
+          onRetry={() => void queryClient.invalidateQueries({ queryKey: ['users'] })}
+        />
+      ) : users?.length === 0 ? (
+        <EmptyState
+          icon={<UserIcon className="h-8 w-8" aria-hidden="true" />}
+          title="No users found"
+          description="Try adjusting the filters or add a new user to get started."
+          action={{ label: 'Add User', onClick: () => setShowCreateDialog(true) }}
+        />
+      ) : (
+        <VirtualizedTable
+          items={users ?? []}
+          ariaLabel="Users"
+          columns={[
+            { header: 'User' },
+            { header: 'Role' },
+            { header: 'Company' },
+            { header: 'Status' },
+            { header: 'Actions', headerClassName: 'text-right' },
+          ]}
+          gridTemplateColumns="minmax(18rem, 2fr) minmax(8rem, 0.8fr) minmax(12rem, 1fr) minmax(8rem, 0.8fr) minmax(10rem, 0.9fr)"
+          estimateRowHeight={84}
+          rowKey={(user) => user.id}
+          renderRow={(user: User) => (
+            <>
+              <div className="admin-table-cell">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100">
+                    <UserIcon className="h-4 w-4 text-sky-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-900 dark:text-slate-100">{user.full_name}</div>
+                    <div className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="admin-table-cell">
+                <span className={`pill capitalize ${getRoleBadgeColor(user.role)}`}>
+                  {user.role.replace('_', ' ')}
+                </span>
+              </div>
+              <div className="admin-table-cell">
+                {user.company_name ? (
+                  <div className="body-copy flex items-center gap-1">
+                    <Building2 className="h-3 w-3" />
+                    {user.company_name}
+                  </div>
+                ) : (
+                  <span className="text-sm italic text-slate-400">No company</span>
+                )}
+              </div>
+              <div className="admin-table-cell">
+                  <span className={`pill ${
+                  user.is_active
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200'
+                }`}>
+                  {user.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <div className="admin-table-cell">
+                <div className="flex items-center justify-end gap-1">
+                  {user.id !== currentUser?.id && user.role !== 'viewer' ? (
+                    <button
+                      onClick={() => messageMutation.mutate(user.id)}
+                      disabled={messageMutation.isPending}
+                      className="admin-icon-action"
+                      title="Send message"
+                      aria-label={`Send message to ${user.full_name}`}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={() => setEditingUser(user)}
+                    className="admin-icon-action"
+                    title="Edit"
+                    aria-label={`Edit ${user.full_name}`}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  {user.id !== currentUser?.id ? (
+                    <button
+                      onClick={() => {
+                        setPendingConfirm({
+                          title: 'Deactivate user',
+                          description: `Are you sure you want to deactivate ${user.full_name}?`,
+                          onConfirm: () => {
+                            deleteMutation.mutate(user.id)
+                            setPendingConfirm(null)
+                          },
+                        })
+                      }}
+                      className="admin-icon-action-danger"
+                      title="Deactivate"
+                      aria-label={`Deactivate ${user.full_name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
+        />
+      )}
 
       {/* Pending Invitations */}
-      {(pendingInvitations.length > 0 || isInvitationsLoading) && (
-        <div className="admin-table-shell">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <h3 className="font-display font-semibold text-slate-900">Pending Invitations</h3>
-              {!isInvitationsLoading && (
-              <span className="pill bg-amber-100 text-amber-700">
+      <div className="admin-table-shell">
+        <div className="border-b border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/70">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-600" />
+            <h3 className="section-title">Pending Invitations</h3>
+            {!isInvitationsLoading && pendingInvitations.length > 0 && (
+              <span className="pill bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
                 {pendingInvitations.length}
               </span>
-              )}
-            </div>
+            )}
           </div>
-          {isInvitationsLoading ? (
-            <div className="p-6 space-y-3">
-              <Skeleton className="h-4 w-44 mx-auto" />
-              <Skeleton className="h-4 w-36 mx-auto" />
-              <Skeleton className="h-4 w-40 mx-auto" />
-            </div>
-          ) : (
+        </div>
+        {isInvitationsLoading ? (
+          <TableSkeleton rows={3} columns={6} />
+        ) : pendingInvitations.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={<Mail className="h-8 w-8" aria-hidden="true" />}
+              title="No pending invitations"
+              description="New user invitations will appear here until they are accepted or canceled."
+              action={{ label: 'Invite User', onClick: () => setShowInviteDialog(true) }}
+            />
+          </div>
+        ) : (
           <div className="admin-table-scroll">
             <table className="admin-table">
               <thead className="admin-table-head">
@@ -432,8 +438,8 @@ export default function UsersPage() {
                   <tr key={invitation.id} className="admin-table-row">
                     <td className="admin-table-cell">
                       <div className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-slate-400" />
-                        <span className="text-slate-900">{invitation.email}</span>
+                        <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                        <span className="text-slate-900 dark:text-slate-100">{invitation.email}</span>
                       </div>
                     </td>
                     <td className="admin-table-cell">
@@ -443,19 +449,19 @@ export default function UsersPage() {
                     </td>
                     <td className="admin-table-cell">
                       {invitation.tenant_name ? (
-                        <div className="flex items-center gap-1 text-sm text-slate-600">
+                        <div className="body-copy flex items-center gap-1">
                           <Building2 className="w-3 h-3" />
                           {invitation.tenant_name}
                         </div>
                       ) : (
-                        <span className="text-slate-400 text-sm">-</span>
+                        <span className="text-sm text-slate-400 dark:text-slate-500">-</span>
                       )}
                     </td>
-                    <td className="admin-table-cell text-sm text-slate-600">
+                    <td className="admin-table-cell body-copy">
                       {invitation.inviter_name || '-'}
                     </td>
                     <td className="admin-table-cell">
-                      <span className="text-sm text-slate-500">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
                         {new Date(invitation.expires_at).toLocaleDateString()}
                       </span>
                     </td>
@@ -466,6 +472,7 @@ export default function UsersPage() {
                           disabled={resendInvitationMutation.isPending}
                           className="admin-icon-action"
                           title="Resend Invitation"
+                          aria-label={`Resend invitation to ${invitation.email}`}
                         >
                           <RefreshCw className="w-4 h-4" />
                         </button>
@@ -480,6 +487,7 @@ export default function UsersPage() {
                           disabled={cancelInvitationMutation.isPending}
                           className="admin-icon-action-danger"
                           title="Cancel Invitation"
+                          aria-label={`Cancel invitation for ${invitation.email}`}
                         >
                           <XCircle className="w-4 h-4" />
                         </button>
@@ -490,9 +498,8 @@ export default function UsersPage() {
               </tbody>
             </table>
           </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog
@@ -601,11 +608,12 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h2 className="text-lg font-display font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+    <div className="modal-overlay flex items-center justify-center p-4">
+      <button type="button" className="absolute inset-0" onClick={onClose} aria-label={`Close ${title} dialog`} />
+      <div className="modal-content relative w-full max-w-md">
+        <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-800">
+          <h2 className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -614,8 +622,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           {!isEdit && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                <label htmlFor="user-form-username" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Username</label>
                 <input
+                  id="user-form-username"
                   type="text"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -625,8 +634,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <label htmlFor="user-form-password" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Password</label>
                 <input
+                  id="user-form-password"
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -639,8 +649,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <label htmlFor="user-form-email" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Email</label>
             <input
+              id="user-form-email"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -650,8 +661,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+            <label htmlFor="user-form-full-name" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Full Name</label>
             <input
+              id="user-form-full-name"
               type="text"
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
@@ -661,8 +673,9 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+            <label htmlFor="user-form-role" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Role</label>
             <select
+              id="user-form-role"
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
               className="select-field"
@@ -678,10 +691,11 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
           {/* Show company selector for customer role or if editing a customer */}
           {(formData.role === 'customer' || user?.role === 'customer') && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label htmlFor="user-form-company" className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">
                 Company <span className="text-rose-500">*</span>
               </label>
               <select
+                id="user-form-company"
                 value={formData.tenant_id}
                 onChange={(e) => setFormData({ ...formData, tenant_id: e.target.value ? Number(e.target.value) : '' })}
                 required={formData.role === 'customer'}
@@ -695,7 +709,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
                 ))}
               </select>
               {formData.role === 'customer' && (
-                <p className="text-xs text-slate-500 mt-1">Customers must be assigned to a company</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Customers must be assigned to a company</p>
               )}
             </div>
           )}
@@ -709,7 +723,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                 className="rounded border-slate-300"
               />
-              <label htmlFor="is_active" className="text-sm text-slate-700">Active</label>
+              <label htmlFor="is_active" className="text-sm text-slate-700 dark:text-slate-200">Active</label>
             </div>
           )}
 
@@ -717,7 +731,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-700 hover:text-slate-900"
+              className="px-4 py-2 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
             >
               Cancel
             </button>

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import { useTheme } from '@/hooks/useTheme'
 import type {
   Attachment,
   Document,
@@ -17,6 +18,7 @@ export default function ViewerDocumentPage() {
   const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
   const location = useLocation()
   const navigate = useNavigate()
+  const { theme } = useTheme()
   const isFullscreen = location.search.includes('fullscreen=1')
 
   const applyWidth = (value: ReadingWidth) => {
@@ -82,7 +84,10 @@ export default function ViewerDocumentPage() {
     return trimmed.length > 0 && !isSyntheticUploadPlaceholder(trimmed)
   }
 
-  const normalizedVersions: Version[] = Array.isArray(versions) ? versions : []
+  const normalizedVersions = useMemo<Version[]>(
+    () => (Array.isArray(versions) ? versions : []),
+    [versions],
+  )
   const requestedVersionId = Number(new URLSearchParams(location.search).get('version') || '')
 
   useEffect(() => {
@@ -134,22 +139,22 @@ export default function ViewerDocumentPage() {
   const versionLabel = (version: { semantic_version?: string | null; version_number?: number }) =>
     version?.semantic_version || `${version?.version_number || 1}.0.0`
   const documentPaperClass =
-    contentWidth === 'fluid'
-      ? 'document-preview-paper document-preview-paper-fluid'
-      : 'document-preview-paper'
+    `${contentWidth === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'} ${
+      theme === 'dark' ? 'document-preview-paper--dark' : 'document-preview-paper--light'
+    }`
 
   if (docLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900">
         <Header />
-        <main className="max-w-4xl mx-auto px-4 py-8">
-          <div className="surface-card rounded-2xl p-8 animate-pulse">
-            <div className="h-8 bg-slate-200 rounded w-3/4 mb-4"></div>
-            <div className="h-4 bg-slate-100 rounded w-1/4 mb-8"></div>
+        <main className="content-shell max-w-4xl py-8">
+          <div className="surface-card animate-pulse rounded-2xl p-8">
+            <div className="mb-4 h-8 w-3/4 rounded bg-slate-200 dark:bg-slate-800"></div>
+            <div className="mb-8 h-4 w-1/4 rounded bg-slate-100 dark:bg-slate-900"></div>
             <div className="space-y-3">
-              <div className="h-4 bg-slate-100 rounded w-full"></div>
-              <div className="h-4 bg-slate-100 rounded w-full"></div>
-              <div className="h-4 bg-slate-100 rounded w-2/3"></div>
+              <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-900"></div>
+              <div className="h-4 w-full rounded bg-slate-100 dark:bg-slate-900"></div>
+              <div className="h-4 w-2/3 rounded bg-slate-100 dark:bg-slate-900"></div>
             </div>
           </div>
         </main>
@@ -159,14 +164,14 @@ export default function ViewerDocumentPage() {
 
   if (error || !document) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-sky-50">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900">
         <Header />
-        <main className="max-w-4xl mx-auto px-4 py-16">
+        <main className="content-shell max-w-4xl py-16">
           <NotFoundState
             title="Document Not Found"
             description="The document you're looking for doesn't exist or is not published."
             action={
-              <Link to="/viewer" className="btn-primary inline-block">
+              <Link to="/viewer" className="btn-primary table-action-btn inline-flex">
                 Back to Documents
               </Link>
             }
@@ -178,35 +183,33 @@ export default function ViewerDocumentPage() {
 
   if (isPrintMode) {
     return (
-      <div className="min-h-screen bg-white print:bg-white">
-        <div className="print:hidden bg-slate-100 p-4 flex items-center justify-between">
-          <button onClick={() => setIsPrintMode(false)} className="btn-ghost">
+      <div className="min-h-screen animate-fade-in bg-white print:bg-white">
+        <div className="flex items-center justify-between bg-slate-100 p-4 print:hidden">
+          <button onClick={() => setIsPrintMode(false)} className="btn-ghost" type="button">
             Back to Document
           </button>
-          <button onClick={() => window.print()} className="btn-primary">
+          <button onClick={() => window.print()} className="btn-primary" type="button">
             Print Document
           </button>
         </div>
 
-        <div className="max-w-3xl mx-auto p-8 print:p-0 print:max-w-none">
-          <div className="border-b-2 border-slate-300 pb-4 mb-6">
-            <div className="flex justify-between text-sm text-slate-500 mb-2">
+        <div className="mx-auto max-w-3xl p-8 print:max-w-none print:p-0">
+          <div className="mb-6 border-b-2 border-slate-300 pb-4">
+            <div className="mb-2 flex justify-between text-sm text-slate-500">
               <span>{document.document_number}</span>
               <span>{document.category || 'General'}</span>
             </div>
-            <h1 className="text-3xl font-display font-bold text-slate-900 mb-2">
+            <h1 className="mb-2 text-3xl font-display font-bold text-slate-900">
               {document.title}
             </h1>
-            {document.description && (
-              <p className="text-slate-600">{document.description}</p>
-            )}
-            <div className="mt-4 text-sm text-slate-500 flex gap-6">
+            {document.description && <p className="text-slate-600">{document.description}</p>}
+            <div className="mt-4 flex gap-6 text-sm text-slate-500">
               <span>Published: {new Date(document.updated_at).toLocaleDateString()}</span>
               {selectedVersion && <span>Version: {versionLabel(selectedVersion)}</span>}
             </div>
           </div>
 
-          <div className="prose prose-lg max-w-none mb-8">
+          <div className="prose prose-lg mb-8 max-w-none">
             {content ? (
               isHtmlContent ? (
                 <div className="document-preview-content">{renderedContent}</div>
@@ -214,14 +217,14 @@ export default function ViewerDocumentPage() {
                 <div className="whitespace-pre-wrap text-slate-700">{content}</div>
               )
             ) : (
-              <p className="text-slate-400 italic">No content available.</p>
+              <p className="italic text-slate-400">No content available.</p>
             )}
           </div>
 
           {effectiveAttachments.length > 0 && (
-            <div className="border-t border-slate-200 pt-4 mt-8">
-              <h2 className="text-lg font-display font-semibold mb-2">Attachments</h2>
-              <ul className="list-disc list-inside text-sm text-slate-600">
+            <div className="mt-8 border-t border-slate-200 pt-4">
+              <h2 className="mb-2 text-lg font-display font-semibold">Attachments</h2>
+              <ul className="list-inside list-disc text-sm text-slate-600">
                 {effectiveAttachments.map((attachment) => (
                   <li key={attachment.id}>
                     {attachment.filename} ({formatFileSize(attachment.file_size)})
@@ -236,40 +239,49 @@ export default function ViewerDocumentPage() {
   }
 
   return (
-    <div className={`${isFullscreen ? 'fixed inset-0 bg-white' : 'min-h-screen bg-gradient-to-br from-slate-50 to-sky-50'}`}>
+    <div
+      className={
+        isFullscreen
+          ? 'fixed inset-0 animate-fade-in bg-white dark:bg-slate-950'
+          : 'min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900'
+      }
+    >
       {!isFullscreen ? (
         <Header />
       ) : (
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg gap-4">
+        <div className="flex items-center justify-between gap-4 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 px-4 py-3 text-white shadow-lg">
           <button
             onClick={() => {
               const params = new URLSearchParams(location.search)
               params.delete('fullscreen')
               navigate(`/viewer/documents/${id}${params.toString() ? `?${params.toString()}` : ''}`)
             }}
-            className="px-3 py-1.5 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+            className="rounded-lg bg-white/20 px-3 py-1.5 transition-colors hover:bg-white/30"
+            type="button"
           >
             Exit Fullscreen
           </button>
-          <div className="flex-1 text-center font-display font-semibold truncate">{document.title}</div>
+          <div className="flex-1 truncate text-center font-display font-semibold">{document.title}</div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => applyWidth('reading')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                 contentWidth === 'reading'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                  ? 'border-white bg-white text-sky-900'
+                  : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
               }`}
+              type="button"
             >
               Reading width
             </button>
             <button
               onClick={() => applyWidth('fluid')}
-              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                 contentWidth === 'fluid'
-                  ? 'bg-white text-sky-900 border-white'
-                  : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                  ? 'border-white bg-white text-sky-900'
+                  : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
               }`}
+              type="button"
             >
               Full width
             </button>
@@ -277,14 +289,20 @@ export default function ViewerDocumentPage() {
         </div>
       )}
 
-      <main className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${isFullscreen ? `h-[calc(100vh-56px)] overflow-y-auto w-full ${contentWidth === 'reading' ? 'max-w-4xl mx-auto' : 'max-w-none'} px-6 md:px-10 lg:px-16` : `${contentWidth === 'reading' ? 'max-w-4xl mx-auto px-4' : 'max-w-none px-6 md:px-10 lg:px-16'}`} py-8`}>
-        <nav className="mb-6 text-sm flex items-center justify-between">
-          <Link to="/viewer" className="text-sky-600 hover:underline">
+      <main
+        className={`${contentWidth === 'reading' ? 'reading-mode' : ''} ${
+          isFullscreen
+            ? `h-[calc(100vh-56px)] w-full overflow-y-auto ${contentWidth === 'reading' ? 'mx-auto max-w-4xl' : 'max-w-none'} px-6 md:px-10 lg:px-16`
+            : `${contentWidth === 'reading' ? 'content-shell max-w-4xl' : 'px-6 md:px-10 lg:px-16'}`
+        } py-8`}
+      >
+        <nav className="mb-6 flex items-center justify-between">
+          <Link to="/viewer" className="body-copy text-sky-600 hover:underline">
             Documents
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-slate-400">/</span>
-            <span className="text-slate-600">{document.title}</span>
+            <span className="helper-copy">/</span>
+            <span className="body-copy text-slate-600 dark:text-slate-300">{document.title}</span>
           </div>
           {!isFullscreen && (
             <button
@@ -293,34 +311,35 @@ export default function ViewerDocumentPage() {
                 params.set('fullscreen', '1')
                 navigate(`/viewer/documents/${id}?${params.toString()}`)
               }}
-              className="btn-ghost text-sm"
+              className="btn-ghost table-action-btn"
+              type="button"
             >
               Fullscreen
             </button>
           )}
         </nav>
 
-        <div className="surface-card rounded-2xl p-8 mb-6">
-          <div className="flex items-start justify-between mb-4">
-            <span className="pill bg-sky-100 text-sky-700">
+        <div className="surface-card mb-6 rounded-2xl p-8">
+          <div className="mb-4 flex items-start justify-between">
+            <span className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
               {document.category || 'General'}
             </span>
-            <span className="text-sm text-slate-400 font-mono">
+            <span className="font-mono text-sm text-slate-400 dark:text-slate-500">
               {document.document_number}
             </span>
           </div>
 
-          <h1 className="text-3xl font-display font-bold text-slate-900 mb-4">
+          <h1 className="mb-4 text-3xl font-display font-bold text-slate-900 dark:text-slate-100">
             {document.title}
           </h1>
 
           {document.description && (
-            <p className="text-lg text-slate-600 mb-6">{document.description}</p>
+            <p className="body-copy mb-6 text-base">{document.description}</p>
           )}
 
-          <div className="flex flex-wrap gap-6 text-sm text-slate-500 border-t border-slate-200 pt-4">
+          <div className="helper-copy flex flex-wrap gap-6 border-t border-slate-200 pt-4 dark:border-slate-800">
             <div>
-              <span className="font-medium text-slate-700">Published:</span>{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-200">Published:</span>{' '}
               {new Date(document.updated_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -329,32 +348,32 @@ export default function ViewerDocumentPage() {
             </div>
             {selectedVersion && (
               <div>
-                <span className="font-medium text-slate-700">Version:</span>{' '}
+                <span className="font-medium text-slate-700 dark:text-slate-200">Version:</span>{' '}
                 {versionLabel(selectedVersion)}
               </div>
             )}
             <div className="ml-auto flex gap-2">
-              <button onClick={() => setIsPrintMode(true)} className="btn-ghost text-sm">
+              <button onClick={() => setIsPrintMode(true)} className="btn-ghost table-action-btn" type="button">
                 Print View
               </button>
             </div>
           </div>
         </div>
 
-        <div className="surface-card rounded-2xl p-8 mb-6">
-          <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">Content</h2>
+        <div className="surface-card mb-6 rounded-2xl p-8">
+          <h2 className="section-title mb-4">Content</h2>
           <div className="max-w-none">
             {!selectedVersion ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-                <p className="text-slate-700 font-medium">Select a version to load preview.</p>
-                <p className="text-sm text-slate-500 mt-1">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-950">
+                <p className="card-title text-slate-700 dark:text-slate-200">Select a version to load preview.</p>
+                <p className="body-copy mt-1">
                   Viewer does not auto-select the latest version.
                 </p>
               </div>
             ) : selectedVersionAttachmentsLoading ? (
-              <div className="h-[40vh] flex items-center justify-center">
-                <div className="text-center text-slate-500">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600 mx-auto mb-3"></div>
+              <div className="flex h-[40vh] items-center justify-center">
+                <div className="body-copy text-center">
+                  <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-b-2 border-sky-600"></div>
                   Loading version content...
                 </div>
               </div>
@@ -364,43 +383,43 @@ export default function ViewerDocumentPage() {
                   <div className="document-preview-content">{renderedContent}</div>
                 </div>
               ) : (
-                <div className="prose prose-lg max-w-none">
-                  <div className="whitespace-pre-wrap text-slate-700">{content}</div>
+                <div className="prose prose-lg max-w-none dark:prose-invert">
+                  <div className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{content}</div>
                 </div>
               )
             ) : effectiveAttachments.length > 0 ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-                <p className="text-amber-900 font-medium">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center dark:border-amber-900 dark:bg-amber-950/40">
+                <p className="card-title text-amber-900 dark:text-amber-200">
                   No inline preview is available for the selected version.
                 </p>
-                <p className="text-sm text-amber-800 mt-1">
+                <p className="body-copy mt-1 text-amber-800 dark:text-amber-300">
                   Download one of the attached files below to view the original document.
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
-                <p className="text-slate-700 font-medium">No content available for this version.</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-950">
+                <p className="card-title text-slate-700 dark:text-slate-200">No content available for this version.</p>
               </div>
             )}
           </div>
         </div>
 
         {effectiveAttachments.length > 0 && (
-          <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
+          <div className="surface-card mb-6 rounded-2xl p-8">
+            <h2 className="section-title mb-4">
               Attachments ({effectiveAttachments.length})
             </h2>
             <div className="space-y-3">
               {effectiveAttachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
+                  className="flex items-center justify-between rounded-xl bg-slate-50 p-4 transition-colors hover:bg-slate-100 dark:bg-slate-950 dark:hover:bg-slate-900"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{getFileIcon(attachment.mime_type)}</span>
                     <div>
-                      <p className="font-medium text-slate-900">{attachment.filename}</p>
-                      <p className="text-sm text-slate-500">
+                      <p className="card-title">{attachment.filename}</p>
+                      <p className="body-copy">
                         {formatFileSize(attachment.file_size)}
                       </p>
                     </div>
@@ -411,7 +430,7 @@ export default function ViewerDocumentPage() {
                         ? `/api/v1/viewer/documents/${id}/attachments/${attachment.id}/download`
                         : '#'
                     }
-                    className="btn-primary text-sm"
+                    className="btn-primary table-action-btn"
                   >
                     Download
                   </a>
@@ -422,8 +441,8 @@ export default function ViewerDocumentPage() {
         )}
 
         {versions.length > 0 && (
-          <div className="surface-card rounded-2xl p-8 mb-6">
-            <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">
+          <div className="surface-card mb-6 rounded-2xl p-8">
+            <h2 className="section-title mb-4">
               Version History ({versions.length})
             </h2>
             <div className="space-y-3">
@@ -432,34 +451,36 @@ export default function ViewerDocumentPage() {
                   key={version.id}
                   type="button"
                   onClick={() => handleVersionSelect(version.id)}
-                  className={`p-4 rounded-xl border ${
+                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:border-sky-300 dark:hover:border-sky-700 ${
                     selectedVersionId === version.id
-                      ? 'border-sky-400 bg-sky-50'
+                      ? 'border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40'
                       : version.is_published
-                      ? 'border-emerald-200 bg-emerald-50'
-                      : 'border-slate-200 bg-slate-50'
-                  } w-full text-left transition-colors hover:border-sky-300`}
+                        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'
+                        : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="font-mono font-medium text-slate-900">
+                      <span className="font-mono font-medium text-slate-900 dark:text-slate-100">
                         v{versionLabel(version)}
                       </span>
                       {selectedVersionId === version.id && (
-                        <span className="pill bg-sky-100 text-sky-700">Viewing</span>
+                        <span className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          Viewing
+                        </span>
                       )}
                       {version.is_published && (
-                        <span className="pill bg-emerald-100 text-emerald-700">
+                        <span className="pill border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
                           Published
                         </span>
                       )}
                     </div>
-                    <span className="text-sm text-slate-500">
+                    <span className="body-copy">
                       {new Date(version.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   {version.changes_summary && (
-                    <p className="text-sm text-slate-600 mt-2">
+                    <p className="body-copy mt-2">
                       {version.changes_summary}
                     </p>
                   )}
@@ -469,10 +490,8 @@ export default function ViewerDocumentPage() {
           </div>
         )}
 
-
-
-        <div className="text-center pt-4">
-          <Link to="/viewer" className="btn-ghost inline-block">
+        <div className="pt-4 text-center">
+          <Link to="/viewer" className="btn-ghost table-action-btn inline-flex">
             Back to All Documents
           </Link>
         </div>
@@ -483,15 +502,17 @@ export default function ViewerDocumentPage() {
 
 function Header() {
   return (
-    <header className="bg-white shadow-sm border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+    <header className="border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="content-shell py-6">
         <div className="flex items-center justify-between">
           <Link to="/viewer" className="flex items-center gap-2">
-            <h1 className="text-2xl font-display font-bold text-slate-900">Documentation Platform</h1>
+            <h1 className="text-2xl font-display font-bold text-slate-900 dark:text-slate-100">
+              Documentation Platform
+            </h1>
           </Link>
           <Link
             to="/login"
-            className="text-sm text-sky-600 hover:text-sky-700 font-medium"
+            className="btn-secondary table-action-btn"
           >
             Staff Login
           </Link>

@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { Link, useParams } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { TableSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
 
 type DocumentSort = 'latest' | 'name' | 'category' | 'version' | 'status'
@@ -14,7 +18,12 @@ export default function PublicPlatformDetailPage() {
   const parsedPlatformId = useMemo(() => Number(platformId), [platformId])
   const isValidPlatformId = Number.isInteger(parsedPlatformId) && parsedPlatformId > 0
 
-  const { data, isLoading, error } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError: platformError,
+    refetch: refetchPlatformDocuments,
+  } = useQuery({
     queryKey: ['platform-documents', parsedPlatformId, searchTerm, sortBy, sortOrder],
     queryFn: () =>
       publicApi.getPlatformDocuments(parsedPlatformId, {
@@ -26,7 +35,7 @@ export default function PublicPlatformDetailPage() {
   })
 
   const formatDateOrDash = (value?: string) => {
-    if (!value) return '—'
+    if (!value) return '-'
     return new Date(value).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -39,15 +48,15 @@ export default function PublicPlatformDetailPage() {
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (ch) => ch.toUpperCase())
 
+  const hasCustomFilters = searchTerm.trim().length > 0 || sortBy !== 'latest' || sortOrder !== 'desc'
+
   if (!isValidPlatformId) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <section className="max-w-5xl mx-auto px-6 py-12">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <section className="content-shell py-12">
           <div className="surface-card rounded-3xl p-8 text-center">
-            <h1 className="text-2xl font-display font-semibold text-slate-900 mb-3">
-              Invalid Platform
-            </h1>
-            <p className="text-slate-500 mb-6">The platform id in the URL is not valid.</p>
+            <h1 className="page-title mb-3">Invalid Platform</h1>
+            <p className="body-copy mb-6">The platform id in the URL is not valid.</p>
             <Link to="/platforms" className="btn-primary">
               Back to Platforms
             </Link>
@@ -58,23 +67,21 @@ export default function PublicPlatformDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-9">
+        <div className="content-shell py-9">
           <div className="max-w-3xl">
-            <div className="text-xs uppercase tracking-widest text-slate-300 mb-2">
+            <div className="mb-2 text-xs uppercase tracking-widest text-slate-300">
               <Link to="/platforms" className="hover:text-white/90">
                 Platforms
               </Link>
               <span className="mx-2 text-white/40">/</span>
               Platform
             </div>
-            <h1 className="text-3xl font-display font-bold mb-2">
+            <h1 className="mb-2 text-3xl font-display font-bold">
               {data?.platform || 'Platform Documents'}
             </h1>
-            <p className="text-slate-200">
-              Full document table for this platform release line.
-            </p>
+            <p className="text-slate-200">Full document table for this platform release line.</p>
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs text-slate-100">
               <span className="font-semibold">{data?.total || 0}</span>
               documents
@@ -83,17 +90,17 @@ export default function PublicPlatformDetailPage() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="surface-card rounded-3xl overflow-hidden">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-200">
+      <section className="content-shell py-8">
+        <div className="public-table-shell">
+          <div className="public-table-section-head">
             <div>
-              <h2 className="text-2xl font-display font-semibold text-slate-900">Documents</h2>
-              <p className="text-sm text-slate-500 mt-1">{data?.total || 0} documents</p>
+              <h2 className="page-title">Documents</h2>
+              <p className="body-copy mt-1">{data?.total || 0} documents</p>
             </div>
           </div>
 
-          <div className="sticky top-2 z-20 border-b border-slate-200 bg-white/95 backdrop-blur px-6 py-3">
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+          <div className="public-table-toolbar">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <input
                 type="text"
                 value={searchTerm}
@@ -115,86 +122,107 @@ export default function PublicPlatformDetailPage() {
               <button
                 type="button"
                 onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                className="btn-secondary text-xs"
+                className="btn-secondary table-action-btn"
               >
                 Order: {sortOrder.toUpperCase()}
               </button>
-              <Link to="/platforms" className="btn-secondary text-xs">
+              <Link to="/platforms" className="btn-secondary table-action-btn">
                 Back to Platforms
               </Link>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50/90">
-                <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
-                  <th className="py-3.5 px-4">Document Name</th>
-                  <th className="py-3.5 px-4">Category</th>
-                  <th className="py-3.5 px-4">Version</th>
-                  <th className="py-3.5 px-4">Published</th>
-                  <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.items.map((doc) => (
-                  <tr key={doc.id} className="group border-t border-slate-200 hover:bg-sky-50/60 transition-colors">
-                    <td className="py-3.5 px-4 font-semibold text-slate-900">
-                      <Link to={`/doc/${doc.id}?fullscreen=1`} className="hover:text-sky-700">
-                        {doc.title}
-                      </Link>
-                      <span className="ml-2 text-xs text-slate-400 font-mono">
-                        {doc.document_number}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">{doc.category || 'General'}</td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {doc.version_label || (doc.version_number ? `v${doc.version_number}` : '—')}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {formatDateOrDash(doc.published_at || doc.updated_at)}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                        {formatStatus(doc.status)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Link
-                        to={`/doc/${doc.id}?fullscreen=1`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800"
-                      >
-                        Open
-                        <span aria-hidden>→</span>
-                      </Link>
-                    </td>
+          {isLoading ? (
+            <div className="p-6">
+              <TableSkeleton rows={6} columns={6} />
+            </div>
+          ) : platformError ? (
+            <div className="p-6">
+              <ErrorState
+                title="Unable to load platform documents"
+                message="This platform release line could not be loaded right now."
+                onRetry={() => {
+                  void refetchPlatformDocuments()
+                }}
+              />
+            </div>
+          ) : !data?.items.length ? (
+            <div className="p-6">
+              <EmptyState
+                title="No documents found for this platform"
+                description={
+                  hasCustomFilters
+                    ? 'Try resetting your filters to see the full platform release line.'
+                    : 'Documents will appear here as releases are published for this platform.'
+                }
+                action={
+                  hasCustomFilters
+                    ? {
+                        label: 'Reset filters',
+                        onClick: () => {
+                          setSearchTerm('')
+                          setSortBy('latest')
+                          setSortOrder('desc')
+                        },
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="public-table-head">
+                  <tr className="public-table-head-row">
+                    <th className="px-4 py-3">Document Name</th>
+                    <th className="px-4 py-3">Category</th>
+                    <th className="px-4 py-3">Version</th>
+                    <th className="px-4 py-3">Published</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Open</th>
                   </tr>
-                ))}
-                {!isLoading && !data?.items.length && !error && (
-                  <tr>
-                    <td colSpan={6} className="py-8 px-4 text-center text-slate-400">
-                      No documents found for this platform.
-                    </td>
-                  </tr>
-                )}
-                {isLoading && (
-                  <tr>
-                    <td colSpan={6} className="py-8 px-4 text-center text-slate-400">
-                      Loading platform documents...
-                    </td>
-                  </tr>
-                )}
-                {error && (
-                  <tr>
-                    <td colSpan={6} className="py-8 px-4 text-center text-rose-500">
-                      Failed to load platform documents.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.items.map((doc) => (
+                    <tr
+                      key={doc.id}
+                      className="public-table-row group"
+                    >
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                        <Link to={`/doc/${doc.id}?fullscreen=1`} className="hover:text-sky-700">
+                          {doc.title}
+                        </Link>
+                        <span className="ml-2 text-xs font-mono text-slate-400 dark:text-slate-500">
+                          {doc.document_number}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{doc.category || 'General'}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        {doc.version_label || (doc.version_number ? `v${doc.version_number}` : '-')}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        {formatDateOrDash(doc.published_at || doc.updated_at)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          {formatStatus(doc.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          to={`/doc/${doc.id}?fullscreen=1`}
+                          className="btn-secondary table-action-btn"
+                        >
+                          Open
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
     </div>

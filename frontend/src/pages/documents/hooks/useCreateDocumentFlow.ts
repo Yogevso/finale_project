@@ -19,6 +19,12 @@ import type { DocumentListResponse } from '@/types'
 
 type SourceDocumentSummary = Pick<DocumentListResponse['items'][number], 'id' | 'title' | 'document_number'>
 
+type CreateDocumentFieldErrors = {
+  title?: string
+  platform?: string
+  templateName?: string
+}
+
 export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -49,6 +55,7 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     content: '',
   })
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<CreateDocumentFieldErrors>({})
   const [generateWord, setGenerateWord] = useState(false)
   const debouncedTitle = useDebouncedValue(formData.title, 250)
   const debouncedCopySourceSearch = useDebouncedValue(copySourceSearch, 250)
@@ -197,19 +204,23 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setFieldErrors({})
 
-    if (!formData.title.trim()) {
-      setError('Title is required')
+    if (!saveAsTemplate && !formData.title.trim()) {
+      setFieldErrors({ title: 'Title is required' })
       return
     }
 
     if (!saveAsTemplate && !formData.platform?.trim() && !formData.platform_id) {
-      setError('Platform is required')
+      setFieldErrors({ platform: 'Platform is required' })
       return
     }
 
     if (saveAsTemplate && !(templateName.trim() || formData.title.trim())) {
-      setError('Add a template name before saving to the Template Library')
+      setFieldErrors({
+        title: 'Add a template title or use a template name override.',
+        templateName: 'Add a template name override or template title.',
+      })
       return
     }
 
@@ -246,6 +257,8 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     setFormData,
     error,
     setError,
+    fieldErrors,
+    setFieldErrors,
     generateWord,
     setGenerateWord,
     selectedTemplateId,

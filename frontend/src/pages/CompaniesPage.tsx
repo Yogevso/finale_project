@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
@@ -20,6 +20,9 @@ export default function CompaniesPage() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null)
   const [openDropdown, setOpenDropdown] = useState<number | null>(null)
   const [companyToDeactivate, setCompanyToDeactivate] = useState<Company | null>(null)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
+  const actionTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({})
+  const previousOpenDropdownRef = useRef<number | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['companies', page, search, typeFilter, activeFilter],
@@ -40,9 +43,74 @@ export default function CompaniesPage() {
     },
   })
 
+  useEffect(() => {
+    if (openDropdown !== null) {
+      requestAnimationFrame(() => {
+        actionMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+      })
+    } else if (previousOpenDropdownRef.current !== null) {
+      actionTriggerRefs.current[previousOpenDropdownRef.current]?.focus()
+    }
+
+    previousOpenDropdownRef.current = openDropdown
+  }, [openDropdown])
+
+  useEffect(() => {
+    if (openDropdown === null) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenDropdown(null)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [openDropdown])
+
   const handleDeleteCompany = (company: Company) => {
     setCompanyToDeactivate(company)
     setOpenDropdown(null)
+  }
+
+  const handleActionMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(actionMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    if (items.length === 0) {
+      return
+    }
+
+    const currentIndex = items.findIndex((item) => item === document.activeElement)
+
+    switch (event.key) {
+      case 'ArrowDown': {
+        event.preventDefault()
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % items.length : 0
+        items[nextIndex]?.focus()
+        break
+      }
+      case 'ArrowUp': {
+        event.preventDefault()
+        const nextIndex = currentIndex >= 0 ? (currentIndex - 1 + items.length) % items.length : items.length - 1
+        items[nextIndex]?.focus()
+        break
+      }
+      case 'Home':
+        event.preventDefault()
+        items[0]?.focus()
+        break
+      case 'End':
+        event.preventDefault()
+        items[items.length - 1]?.focus()
+        break
+      case 'Escape':
+        event.preventDefault()
+        setOpenDropdown(null)
+        break
+      default:
+        break
+    }
   }
 
   const getTypeBadgeColor = (type: CompanyType) => {
@@ -60,21 +128,21 @@ export default function CompaniesPage() {
 
   if (!isAdmin) {
     return (
-      <div className="surface-card rounded-2xl p-6 text-amber-700 bg-amber-50">
+      <div className="surface-card animate-fade-in rounded-2xl p-6 text-amber-700 bg-amber-50">
         You don't have permission to view this page.
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <PageHeader
         title="Company Management"
         subtitle="Manage companies and their users"
         actions={
           <button
             onClick={() => setShowCreateForm(true)}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary table-action-btn flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             Add Company
@@ -85,7 +153,7 @@ export default function CompaniesPage() {
       {/* Filters */}
       <div className="admin-sticky-toolbar">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="inline-flex items-center gap-2 text-sm text-slate-600">
+          <div className="body-copy inline-flex items-center gap-2">
             <span className="admin-summary-badge">
               {isLoading ? 'Loading...' : `${data?.total ?? 0} companies`}
             </span>
@@ -154,19 +222,19 @@ export default function CompaniesPage() {
             <tbody>
               {isLoading ? (
                 <tr className="admin-table-row">
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-10 text-center body-copy">
                     Loading companies...
                   </td>
                 </tr>
               ) : error ? (
                 <tr className="admin-table-row">
-                  <td colSpan={6} className="px-5 py-10 text-center text-rose-500">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-rose-600">
                     Failed to load companies
                   </td>
                 </tr>
               ) : data?.items.length === 0 ? (
                 <tr className="admin-table-row">
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-5 py-10 text-center body-copy">
                     No companies found
                   </td>
                 </tr>
@@ -179,8 +247,8 @@ export default function CompaniesPage() {
                           <Building2 className="w-5 h-5 text-sky-600" />
                         </div>
                         <div>
-                          <div className="font-medium text-slate-900">{company.name}</div>
-                          <div className="text-xs text-slate-500">{company.slug}</div>
+                          <div className="card-title">{company.name}</div>
+                          <div className="helper-copy">{company.slug}</div>
                         </div>
                       </div>
                     </td>
@@ -190,13 +258,13 @@ export default function CompaniesPage() {
                       </span>
                     </td>
                     <td className="admin-table-cell">
-                      <Link to={`/admin/companies/${company.id}`} className="flex items-center gap-2 text-slate-600 hover:text-sky-700">
+                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-sky-700">
                         <Users className="w-4 h-4" />
                         {company.user_count}
                       </Link>
                     </td>
                     <td className="admin-table-cell">
-                      <Link to={`/admin/companies/${company.id}`} className="flex items-center gap-2 text-slate-600 hover:text-sky-700">
+                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-sky-700">
                         <FileText className="w-4 h-4" />
                         {company.assigned_document_count}
                       </Link>
@@ -211,32 +279,59 @@ export default function CompaniesPage() {
                     <td className="admin-table-cell text-right">
                       <div className="relative inline-block">
                         <button
+                          ref={(node) => {
+                            actionTriggerRefs.current[company.id] = node
+                          }}
+                          type="button"
                           onClick={() => setOpenDropdown(openDropdown === company.id ? null : company.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'ArrowDown') {
+                              event.preventDefault()
+                              setOpenDropdown(company.id)
+                            }
+                          }}
                           className="admin-icon-action"
+                          aria-label={`Open actions for ${company.name}`}
+                          aria-haspopup="menu"
+                          aria-expanded={openDropdown === company.id}
+                          aria-controls={`company-actions-${company.id}`}
                         >
                           <MoreVertical className="w-4 h-4 text-slate-500" />
                         </button>
                         {openDropdown === company.id && (
-                          <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                          <div
+                            ref={actionMenuRef}
+                            id={`company-actions-${company.id}`}
+                            role="menu"
+                            tabIndex={-1}
+                            aria-label={`${company.name} actions`}
+                            className="dropdown-menu absolute right-0 mt-1 w-48 z-50"
+                            onKeyDown={handleActionMenuKeyDown}
+                          >
                             <Link
                               to={`/admin/companies/${company.id}`}
-                              className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-50 rounded-t-xl"
+                              className="dropdown-item rounded-t-xl"
                               onClick={() => setOpenDropdown(null)}
+                              role="menuitem"
                             >
                               <Eye className="w-4 h-4" />
                               View Details
                             </Link>
                             <button
+                              type="button"
                               onClick={() => { setEditingCompany(company); setOpenDropdown(null) }}
-                              className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-50 w-full text-left"
+                              className="dropdown-item w-full"
+                              role="menuitem"
                             >
                               <Edit className="w-4 h-4" />
                               Edit
                             </button>
                             {company.is_active && (
                               <button
+                                type="button"
                                 onClick={() => handleDeleteCompany(company)}
-                                className="flex items-center gap-2 px-4 py-2 text-rose-600 hover:bg-rose-50 w-full text-left rounded-b-xl"
+                                className="dropdown-item w-full rounded-b-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                                role="menuitem"
                               >
                                 <Trash2 className="w-4 h-4" />
                                 Deactivate
@@ -256,21 +351,21 @@ export default function CompaniesPage() {
 
       {/* Pagination */}
       {data && data.total_pages > 1 && (
-        <div className="flex justify-center gap-2">
+        <div className="surface-card flex justify-center gap-2 rounded-2xl px-4 py-3">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="btn-ghost disabled:opacity-50"
+            className="btn-ghost table-action-btn disabled:opacity-50"
           >
             Previous
           </button>
-          <span className="px-4 py-2 text-slate-600">
+          <span className="body-copy px-4 py-2">
             Page {page} of {data.total_pages}
           </span>
           <button
             onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
             disabled={page === data.total_pages}
-            className="btn-ghost disabled:opacity-50"
+            className="btn-ghost table-action-btn disabled:opacity-50"
           >
             Next
           </button>
@@ -292,9 +387,12 @@ export default function CompaniesPage() {
 
       {/* Click outside to close dropdown */}
       {openDropdown && (
-        <div
+        <button
+          type="button"
           className="fixed inset-0 z-0"
           onClick={() => setOpenDropdown(null)}
+          aria-label="Close company actions menu"
+          tabIndex={-1}
         />
       )}
 

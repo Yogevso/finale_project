@@ -68,15 +68,15 @@ export function TocPanel({
 
   return (
     <div
-      className={`document-detail-toc-panel bg-slate-50 border-r border-slate-200 transition-all duration-300 ${
+      className={`document-detail-toc-panel surface-muted rounded-none border-x-0 border-l-0 transition-all duration-300 ${
         tocCollapsed ? 'w-10' : 'w-72'
       } h-full flex flex-col flex-shrink-0 overflow-hidden`}
       data-tour="document-toc-panel"
     >
       <div className="sticky top-0 flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between p-3 border-b border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-white p-3 dark:bg-slate-950">
           {!tocCollapsed && (
-            <h3 className="font-medium text-sm text-slate-700 flex items-center gap-2">
+            <h3 className="card-title flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -89,8 +89,9 @@ export function TocPanel({
             </h3>
           )}
           <button
+            type="button"
             onClick={onToggleCollapsed}
-            className="p-1 hover:bg-slate-200 rounded text-slate-500"
+            className="btn-icon h-8 w-8 border-0 bg-transparent text-slate-500 hover:bg-slate-200 hover:text-slate-700"
             title={tocCollapsed ? 'Expand' : 'Collapse'}
           >
             <svg
@@ -123,8 +124,8 @@ export function TocPanel({
 
         {!tocCollapsed && (
           <nav className="flex-1 h-0 overflow-y-auto p-2">
-            {sections.length === 0 ? (
-              <p className="px-2 py-2 text-sm text-slate-500">No TOC available</p>
+              {sections.length === 0 ? (
+              <p className="body-copy px-2 py-2">No TOC available</p>
             ) : (
               <ul className="space-y-1">
                 {sections.map((item) => {
@@ -137,12 +138,13 @@ export function TocPanel({
                     <li key={item.id} className="group">
                       <div className="flex items-center gap-1">
                         <button
+                          type="button"
                           onClick={() => onSectionClick(item)}
                           title={item.text}
-                          className={`flex-1 text-left px-2 py-1.5 text-sm rounded-l transition-colors hover:bg-sky-50 hover:text-sky-700 ${
+                          className={`body-copy flex-1 rounded-l px-2 py-1.5 text-left transition-colors hover:bg-sky-50 hover:text-sky-700 ${
                             isActiveItem
-                              ? 'bg-sky-100 text-sky-700 font-medium'
-                              : 'text-slate-600'
+                              ? 'bg-sky-100 text-sky-700 font-medium dark:bg-sky-950/40 dark:text-sky-200'
+                              : 'text-slate-600 dark:text-slate-300'
                           }`}
                           style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
                         >
@@ -160,8 +162,9 @@ export function TocPanel({
 
                         {isEditor && !showingReaderView && (
                           <button
+                            type="button"
                             onClick={() => onEditSection(item)}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-sky-100 rounded text-sky-600 transition-opacity"
+                            className="btn-icon h-8 w-8 border-0 bg-transparent p-0 text-sky-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sky-100 hover:text-sky-700"
                             title="Edit section"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -173,7 +176,7 @@ export function TocPanel({
                             event.stopPropagation()
                             void handleCopySectionLink(item)
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-sky-100 rounded text-sky-600 transition-opacity"
+                          className="btn-icon h-8 w-8 border-0 bg-transparent p-0 text-sky-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sky-100 hover:text-sky-700"
                           title="Copy link to section"
                         >
                           {copiedSectionId === item.id ? (

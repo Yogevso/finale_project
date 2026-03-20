@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { ArrowRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
+import { TableSkeleton } from '@/components/skeletons'
 import { publicApi, type PublicPlatformOverviewItem } from '@/lib/publicApi'
 
 type PlatformSort = 'latest' | 'docs' | 'name'
@@ -10,7 +14,12 @@ export default function PublicPlatformsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<PlatformSort>('latest')
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError: platformError,
+    refetch: refetchPlatforms,
+  } = useQuery({
     queryKey: ['platform-overview'],
     queryFn: () => publicApi.getPlatformsOverview(),
   })
@@ -33,7 +42,7 @@ export default function PublicPlatformsPage() {
   }, [data?.items, searchTerm, sortBy])
 
   const formatDateOrDash = (value?: string) => {
-    if (!value) return '—'
+    if (!value) return '-'
     return new Date(value).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -46,12 +55,12 @@ export default function PublicPlatformsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-9">
+        <div className="content-shell py-9">
           <div className="max-w-3xl">
-            <div className="text-xs uppercase tracking-widest text-slate-300 mb-3">Viewer Portal</div>
-            <h1 className="text-3xl font-display font-bold mb-2">Platform Release History</h1>
+            <div className="mb-3 text-xs uppercase tracking-widest text-slate-300">Viewer Portal</div>
+            <h1 className="mb-2 text-3xl font-display font-bold">Platform Release History</h1>
             <p className="text-slate-200">
               Browse platform documentation by category, year, and release lineage.
             </p>
@@ -63,22 +72,20 @@ export default function PublicPlatformsPage() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="surface-card rounded-3xl overflow-hidden">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-200">
+      <section className="content-shell py-8">
+        <div className="public-table-shell">
+          <div className="public-table-section-head">
             <div>
               <div className="text-xs uppercase tracking-widest text-slate-400">Latest Releases</div>
-              <h2 className="text-2xl font-display font-semibold text-slate-900">
-                Active platform lines
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
+              <h2 className="page-title">Active platform lines</h2>
+              <p className="body-copy mt-1">
                 Click a platform row to open its full document table.
               </p>
             </div>
           </div>
 
-          <div className="sticky top-2 z-20 border-b border-slate-200 bg-white/95 backdrop-blur px-6 py-3">
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+          <div className="public-table-toolbar">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               <input
                 type="text"
                 value={searchTerm}
@@ -95,77 +102,100 @@ export default function PublicPlatformsPage() {
                 <option value="docs">Sort by doc count</option>
                 <option value="name">Sort by name</option>
               </select>
-              <Link to="/docs" className="btn-secondary text-xs">
+              <Link to="/docs" className="btn-secondary table-action-btn">
                 Back to Docs
               </Link>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50/90">
-                <tr className="text-left text-xs uppercase tracking-widest text-slate-500">
-                  <th className="py-3.5 px-4">Platform</th>
-                  <th className="py-3.5 px-4">Latest Release</th>
-                  <th className="py-3.5 px-4">Branch</th>
-                  <th className="py-3.5 px-4">Version</th>
-                  <th className="py-3.5 px-4">Published</th>
-                  <th className="py-3.5 px-4 text-right">Docs</th>
-                  <th className="py-3.5 px-4 text-right">Open</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSummaries.map((platform) => (
-                  <tr
-                    key={platform.id}
-                    className="group border-t border-slate-200 hover:bg-sky-50/60 cursor-pointer transition-colors"
-                    onClick={() => openPlatform(platform)}
-                  >
-                    <td className="py-3.5 px-4 font-semibold text-slate-900">{platform.platform}</td>
-                    <td className="py-3 px-4 text-slate-700">
-                      {platform.latest_release?.title || '—'}
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      {platform.latest_release?.release_branch || '—'}
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      {platform.latest_release?.version_label ||
-                        (platform.latest_release?.version_number
-                          ? `v${platform.latest_release.version_number}`
-                          : '—')}
-                    </td>
-                    <td className="py-3 px-4 text-slate-500">
-                      {formatDateOrDash(
-                        platform.latest_release?.published_at ||
-                          platform.latest_release?.updated_at
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right text-slate-600">{platform.doc_count}</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 group-hover:text-sky-800">
-                        Open
-                        <span aria-hidden>→</span>
-                      </span>
-                    </td>
+          {isLoading ? (
+            <div className="p-6">
+              <TableSkeleton rows={6} columns={7} />
+            </div>
+          ) : platformError ? (
+            <div className="p-6">
+              <ErrorState
+                title="Unable to load platform history"
+                message="The public platform overview is unavailable right now."
+                onRetry={() => {
+                  void refetchPlatforms()
+                }}
+              />
+            </div>
+          ) : !filteredSummaries.length ? (
+            <div className="p-6">
+              <EmptyState
+                title="No platform releases found"
+                description={
+                  searchTerm
+                    ? `No platform lines match "${searchTerm}".`
+                    : 'Platform release history will appear here after the first public release.'
+                }
+                action={
+                  searchTerm
+                    ? {
+                        label: 'Clear search',
+                        onClick: () => {
+                          setSearchTerm('')
+                        },
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="public-table-head">
+                  <tr className="public-table-head-row">
+                    <th className="px-4 py-3">Platform</th>
+                    <th className="px-4 py-3">Latest Release</th>
+                    <th className="px-4 py-3">Branch</th>
+                    <th className="px-4 py-3">Version</th>
+                    <th className="px-4 py-3">Published</th>
+                    <th className="px-4 py-3 text-right">Docs</th>
+                    <th className="px-4 py-3 text-right">Open</th>
                   </tr>
-                ))}
-                {!filteredSummaries.length && !isLoading && (
-                  <tr>
-                    <td colSpan={7} className="py-8 px-4 text-center text-slate-400">
-                      No platform data available yet.
-                    </td>
-                  </tr>
-                )}
-                {isLoading && (
-                  <tr>
-                    <td colSpan={7} className="py-8 px-4 text-center text-slate-400">
-                      Loading platform overview...
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredSummaries.map((platform) => (
+                    <tr
+                      key={platform.id}
+                      className="public-table-row group cursor-pointer"
+                      onClick={() => openPlatform(platform)}
+                    >
+                      <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{platform.platform}</td>
+                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
+                        {platform.latest_release?.title || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                        {platform.latest_release?.release_branch || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                        {platform.latest_release?.version_label ||
+                          (platform.latest_release?.version_number
+                            ? `v${platform.latest_release.version_number}`
+                            : '-')}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                        {formatDateOrDash(
+                          platform.latest_release?.published_at ||
+                            platform.latest_release?.updated_at,
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">{platform.doc_count}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="btn-secondary table-action-btn pointer-events-none">
+                          Open
+                          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
     </div>

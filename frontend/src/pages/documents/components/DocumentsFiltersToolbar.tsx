@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
 import { Search } from 'lucide-react'
 
 import type { Company, DocumentStatus, DocumentVisibility } from '@/types'
@@ -57,6 +57,93 @@ export function DocumentsFiltersToolbar({
   statusDetailsRef,
   visibilityDetailsRef,
 }: DocumentsFiltersToolbarProps) {
+  const focusFilterMenuItem = (
+    detailsRef: RefObject<HTMLDetailsElement>,
+    target: 'first' | 'last' | number,
+  ) => {
+    const items = Array.from(
+      detailsRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? [],
+    )
+    if (items.length === 0) {
+      return
+    }
+
+    if (target === 'first') {
+      items[0]?.focus()
+      return
+    }
+
+    if (target === 'last') {
+      items[items.length - 1]?.focus()
+      return
+    }
+
+    const normalizedIndex = (target + items.length) % items.length
+    items[normalizedIndex]?.focus()
+  }
+
+  const openFilterMenu = (detailsRef: RefObject<HTMLDetailsElement>, target: 'first' | 'last') => {
+    detailsRef.current?.setAttribute('open', '')
+    focusFilterMenuItem(detailsRef, target)
+  }
+
+  const closeFilterMenu = (detailsRef: RefObject<HTMLDetailsElement>) => {
+    detailsRef.current?.removeAttribute('open')
+    detailsRef.current?.querySelector<HTMLElement>('summary')?.focus()
+  }
+
+  const handleFilterSummaryKeyDown = (
+    event: ReactKeyboardEvent<HTMLElement>,
+    detailsRef: RefObject<HTMLDetailsElement>,
+  ) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      openFilterMenu(detailsRef, 'first')
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      openFilterMenu(detailsRef, 'last')
+    }
+  }
+
+  const handleFilterMenuKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+    detailsRef: RefObject<HTMLDetailsElement>,
+  ) => {
+    const items = Array.from(
+      detailsRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? [],
+    )
+    if (items.length === 0) {
+      return
+    }
+
+    const currentIndex = items.findIndex((item) => item === document.activeElement)
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        focusFilterMenuItem(detailsRef, currentIndex >= 0 ? currentIndex + 1 : 0)
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        focusFilterMenuItem(detailsRef, currentIndex >= 0 ? currentIndex - 1 : items.length - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        focusFilterMenuItem(detailsRef, 'first')
+        break
+      case 'End':
+        event.preventDefault()
+        focusFilterMenuItem(detailsRef, 'last')
+        break
+      case 'Escape':
+        event.preventDefault()
+        closeFilterMenu(detailsRef)
+        break
+      default:
+        break
+    }
+  }
+
   return (
     <div className="admin-sticky-toolbar space-y-4" data-tour="documents-filter-panel">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -74,6 +161,7 @@ export function DocumentsFiltersToolbar({
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 className="input-field pl-9"
+                aria-label="Search documents"
               />
             </div>
             <input
@@ -82,6 +170,7 @@ export function DocumentsFiltersToolbar({
               value={categoryFilter}
               onChange={(event) => onCategoryFilterChange(event.target.value)}
               className="input-field w-full sm:w-44"
+              aria-label="Filter by category"
             />
             <select
               value={companyIdFilter ?? ''}
@@ -89,6 +178,7 @@ export function DocumentsFiltersToolbar({
                 onCompanyIdFilterChange(event.target.value ? Number(event.target.value) : null)
               }
               className="select-field w-full sm:w-44"
+              aria-label="Filter by company"
             >
               <option value="">All companies</option>
               {companies.map((company) => (
@@ -102,7 +192,12 @@ export function DocumentsFiltersToolbar({
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
             <div className="flex flex-wrap gap-2">
               <details ref={statusDetailsRef} className="relative">
-                <summary className="list-none cursor-pointer whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                <summary
+                  className="list-none cursor-pointer whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  aria-haspopup="menu"
+                  aria-label="Filter by status"
+                  onKeyDown={(event) => handleFilterSummaryKeyDown(event, statusDetailsRef)}
+                >
                   Status:{' '}
                   {statusFilter === 'active'
                     ? 'Published'
@@ -110,7 +205,13 @@ export function DocumentsFiltersToolbar({
                       ? 'Approved'
                       : statusFilter || 'All'}
                 </summary>
-                <div className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <div
+                  role="menu"
+                  tabIndex={-1}
+                  aria-label="Status filter options"
+                  className="absolute right-0 z-10 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                  onKeyDown={(event) => handleFilterMenuKeyDown(event, statusDetailsRef)}
+                >
                   {[
                     { label: 'All', value: '' },
                     { label: 'Draft', value: 'draft' },
@@ -126,6 +227,8 @@ export function DocumentsFiltersToolbar({
                         onStatusFilterChange(item.value as DocumentStatus | '')
                         statusDetailsRef.current?.removeAttribute('open')
                       }}
+                      role="menuitemradio"
+                      aria-checked={statusFilter === item.value}
                       className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 ${
                         statusFilter === item.value ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
                       }`}
@@ -137,10 +240,21 @@ export function DocumentsFiltersToolbar({
               </details>
 
               <details ref={visibilityDetailsRef} className="relative">
-                <summary className="list-none cursor-pointer whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                <summary
+                  className="list-none cursor-pointer whitespace-nowrap rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                  aria-haspopup="menu"
+                  aria-label="Filter by visibility"
+                  onKeyDown={(event) => handleFilterSummaryKeyDown(event, visibilityDetailsRef)}
+                >
                   Visibility: {visibilityFilter || 'All'}
                 </summary>
-                <div className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <div
+                  role="menu"
+                  tabIndex={-1}
+                  aria-label="Visibility filter options"
+                  className="absolute right-0 z-10 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+                  onKeyDown={(event) => handleFilterMenuKeyDown(event, visibilityDetailsRef)}
+                >
                   {[
                     { label: 'All', value: '' },
                     { label: 'Public', value: 'public' },
@@ -154,6 +268,8 @@ export function DocumentsFiltersToolbar({
                         onVisibilityFilterChange(item.value as DocumentVisibility | '')
                         visibilityDetailsRef.current?.removeAttribute('open')
                       }}
+                      role="menuitemradio"
+                      aria-checked={visibilityFilter === item.value}
                       className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 ${
                         visibilityFilter === item.value ? 'bg-slate-100 text-slate-900' : 'text-slate-600'
                       }`}
@@ -189,6 +305,7 @@ export function DocumentsFiltersToolbar({
                   }
                 }}
                 className="select-field w-full sm:w-52"
+                aria-label="Apply a saved documents view"
               >
                 <option value="">Saved views</option>
                 {savedViews.map((savedView) => (

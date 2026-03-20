@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { FileQuestion } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
@@ -50,7 +51,10 @@ export function DocumentsTable({
   return (
     <div className="admin-table-shell">
       <div className="admin-table-scroll">
-        <table className="admin-table">
+        <table className="admin-table" aria-label="Documents list">
+          <caption className="sr-only">
+            Documents list showing title, status, visibility, category, and document actions.
+          </caption>
           <thead className="admin-table-head">
             <tr>
               {isManager ? (
@@ -92,8 +96,12 @@ export function DocumentsTable({
                 </td>
               </tr>
             ) : (
-              data?.items.map((doc) => (
-                <tr key={doc.id} className="admin-table-row">
+              data?.items.map((doc, index) => (
+                <tr
+                  key={doc.id}
+                  className="admin-table-row motion-enter-fade"
+                  style={{ '--enter-delay': `${Math.min(index, 6) * 25}ms` } as CSSProperties}
+                >
                   {isManager ? (
                     <td className="admin-table-cell w-12">
                       <input
@@ -104,7 +112,7 @@ export function DocumentsTable({
                       />
                     </td>
                   ) : null}
-                  <td className="admin-table-cell w-[36%]">
+                  <th scope="row" className="admin-table-cell w-[36%]">
                     <div className="flex items-start justify-between gap-3">
                       <Link to={`/documents/${doc.id}/fullscreen`} className="block hover:text-sky-700 min-w-0">
                         <div className="font-medium text-slate-900 truncate max-w-[300px]" title={doc.title}>{doc.title}</div>
@@ -120,9 +128,9 @@ export function DocumentsTable({
                           </div>
                         ) : null}
                       </Link>
-                      <BookmarkToggleButton documentId={doc.id} showLabel={false} />
+                      <BookmarkToggleButton documentId={doc.id} documentTitle={doc.title} showLabel={false} />
                     </div>
-                  </td>
+                  </th>
                   <td className="admin-table-cell w-[14%]">
                     <span
                       className={`pill whitespace-nowrap ${
@@ -189,7 +197,9 @@ export function DocumentsTable({
                     {isManager ? (
                       <div className="flex items-center justify-end gap-3">
                         <button
+                          type="button"
                           onClick={() => onArchiveOrRestore(doc.id, doc.title, doc.status)}
+                          aria-label={`${doc.status === 'archived' ? 'Restore' : 'Archive'} ${doc.title}`}
                           className={`text-xs font-semibold uppercase tracking-wide ${
                             doc.status === 'archived'
                               ? 'text-emerald-600 hover:text-emerald-700'
@@ -199,7 +209,9 @@ export function DocumentsTable({
                           {doc.status === 'archived' ? 'Restore' : 'Archive'}
                         </button>
                         <button
+                          type="button"
                           onClick={() => onDelete(doc.id, doc.title)}
+                          aria-label={`Delete ${doc.title}`}
                           className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
                         >
                           Delete

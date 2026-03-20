@@ -11,8 +11,11 @@ import {
   Search,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import { publicApi } from '@/lib/publicApi'
 import { SEO } from '@/components/SEO'
+import { CardSkeleton, ListSkeleton } from '@/components/skeletons'
 
 type LatestPlatformRelease = {
   title: string
@@ -117,7 +120,12 @@ export default function PublicDocumentsPage() {
   }, [search])
 
   // Fetch documents
-  const { data: docs, isLoading: docsLoading } = useQuery({
+  const {
+    data: docs,
+    isLoading: docsLoading,
+    isError: docsError,
+    refetch: refetchDocs,
+  } = useQuery({
     queryKey: ['public-documents', { page, page_size: 12, category, search }],
     queryFn: () => publicApi.getDocuments({ page, page_size: 12, category, search }),
   })
@@ -288,7 +296,9 @@ export default function PublicDocumentsPage() {
         <li key={node.id}>
           <div
             className={`flex items-center gap-2 rounded-xl transition-colors ${
-              isSelected ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50'
+              isSelected
+                ? 'bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
             style={{ paddingLeft: `${0.75 + level * 0.8}rem` }}
           >
@@ -296,7 +306,7 @@ export default function PublicDocumentsPage() {
               <button
                 type="button"
                 onClick={() => toggleCategoryNode(node.id)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-500 dark:hover:bg-slate-900 dark:hover:text-slate-200"
                 aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
               >
                 {isExpanded ? (
@@ -306,7 +316,7 @@ export default function PublicDocumentsPage() {
                 )}
               </button>
             ) : (
-              <span className="inline-flex h-8 w-8 items-center justify-center text-slate-300">•</span>
+              <span className="inline-flex h-8 w-8 items-center justify-center text-slate-500 dark:text-slate-700" aria-hidden="true">*</span>
             )}
             <button
               type="button"
@@ -316,7 +326,7 @@ export default function PublicDocumentsPage() {
               className="flex min-w-0 flex-1 items-center justify-between gap-3 py-2 pr-3 text-left"
             >
               <span className={`truncate ${isSelected ? 'font-medium' : ''}`}>{node.label}</span>
-              <span className="pill bg-slate-100 text-slate-600 border-slate-200">{node.count}</span>
+              <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{node.count}</span>
             </button>
           </div>
           {hasChildren && isExpanded ? (
@@ -327,15 +337,15 @@ export default function PublicDocumentsPage() {
     })
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
       <SEO
         title="Documentation Library"
         description="Explore approved documentation, release notes, and technical guides."
       />
       <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
-        <div className="max-w-7xl mx-auto px-6 py-14">
+        <div className="content-shell py-14">
           <div className="max-w-3xl">
-            <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
+            <div className="mb-3 text-xs uppercase tracking-widest text-white/85">Viewer Portal</div>
             <h1 className="text-4xl font-display font-bold mb-3">Documentation Library</h1>
             <p className="text-sky-100">
               Explore approved documentation, release notes, and technical guides curated by the docs team.
@@ -344,7 +354,7 @@ export default function PublicDocumentsPage() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <section className="content-shell py-10">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
           <aside className="lg:w-72 lg:sticky lg:top-6 lg:self-start flex-shrink-0">
@@ -358,28 +368,29 @@ export default function PublicDocumentsPage() {
                   onChange={(e) => setLocalSearch(e.target.value)}
                   className="input-field pl-10"
                 />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600 dark:text-slate-500" aria-hidden="true" />
               </div>
             </form>
 
             {/* Categories */}
             <div className="surface-card rounded-2xl p-4">
               <div className="mb-3">
-                <h3 className="font-display font-semibold text-slate-900">Categories</h3>
-                <p className="text-xs text-slate-500 mt-1">Browse nested documentation areas</p>
+                <h3 className="card-title">Categories</h3>
+                <p className="helper-copy mt-1">Browse nested documentation areas</p>
               </div>
               <ul className="space-y-1">
                 <li>
                   <button
+                    type="button"
                     onClick={() => handleCategoryClick(null)}
                     className={`w-full text-left px-3 py-2 rounded-xl transition-colors flex justify-between items-center ${
                       !category
-                        ? 'bg-sky-50 text-sky-700 font-medium'
-                        : 'text-slate-600 hover:bg-slate-50'
+                        ? 'bg-sky-50 text-sky-800 font-medium dark:bg-sky-950/40 dark:text-sky-200'
+                        : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
                     }`}
                   >
                     <span>All Categories</span>
-                    <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                    <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       {totalCategoryDocuments}
                     </span>
                   </button>
@@ -394,14 +405,14 @@ export default function PublicDocumentsPage() {
             {latestPlatformReleases.length > 0 && (
               <div className="surface-card rounded-3xl p-6 mb-8">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                  <div>
-                    <div className="text-xs uppercase tracking-widest text-slate-400">Latest Releases</div>
-                    <h2 className="text-2xl font-display font-semibold text-slate-900">Platform highlights</h2>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <div>
+                      <div className="text-xs uppercase tracking-widest text-slate-600">Latest Releases</div>
+                    <h2 className="page-title">Platform highlights</h2>
+                    <p className="body-copy mt-1">
                       The newest published documents across active platforms.
                     </p>
                   </div>
-                  <Link to="/platforms" className="btn-secondary text-xs">
+                  <Link to="/platforms" className="btn-secondary table-action-btn">
                     Full platform history
                   </Link>
                 </div>
@@ -413,30 +424,30 @@ export default function PublicDocumentsPage() {
                       to={item.platformId ? `/platforms/${item.platformId}` : '/platforms'}
                       className="surface-muted rounded-2xl p-4 block cursor-pointer transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                     >
-                      <div className="text-xs uppercase tracking-widest text-slate-400">Platform</div>
-                      <div className="text-lg font-display font-semibold text-slate-900 mt-1">
+                      <div className="text-xs uppercase tracking-widest text-slate-600">Platform</div>
+                      <div className="section-title mt-1">
                         {item.platform}
                       </div>
-                      <div className="mt-3 text-sm text-slate-600">
+                      <div className="body-copy mt-3">
                         {item.latestDoc.title}
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <div className="helper-copy mt-3 flex flex-wrap items-center gap-2">
                         {item.latestDoc.releaseBranch && (
-                          <span className="pill bg-white text-slate-600 border-slate-200">
+                          <span className="pill border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                             {item.latestDoc.releaseBranch}
                           </span>
                         )}
-                        <span className="pill bg-white text-slate-600 border-slate-200">
+                        <span className="pill border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                           {item.latestDoc.versionLabel ||
                             (item.latestDoc.versionNumber
                               ? `v${item.latestDoc.versionNumber}`
-                              : 'Version —')}
+                              : 'Version -')}
                         </span>
                         {item.latestDoc.publishedAt && (
                           <span>{formatDate(item.latestDoc.publishedAt)}</span>
                         )}
                       </div>
-                      <div className="mt-3 text-xs text-slate-400 font-mono">
+                      <div className="mt-3 font-mono text-xs text-slate-600">
                         {item.latestDoc.documentNumber}
                       </div>
                     </Link>
@@ -448,31 +459,33 @@ export default function PublicDocumentsPage() {
             {/* Toolbar */}
             <div className="surface-card rounded-2xl px-4 py-3 mb-6">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="text-sm text-slate-600">
-                  <span className="font-semibold text-slate-900">{docs?.total || 0}</span> documents found
-                </div>
-                <div className="flex gap-2 items-center">
-                  <Link to="/platforms" className="btn-secondary text-xs">
+              <div className="body-copy">
+                <span className="font-semibold text-slate-900 dark:text-slate-100">{docs?.total || 0}</span> documents found
+              </div>
+              <div className="flex gap-2 items-center">
+                  <Link to="/platforms" className="btn-secondary table-action-btn">
                     Explore Platforms
                   </Link>
-                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
                     <button
+                      type="button"
                       onClick={() => setViewMode('grid')}
                       className={`p-2 rounded-lg ${
                         viewMode === 'grid'
-                          ? 'bg-sky-100 text-sky-700'
-                          : 'text-slate-400 hover:bg-slate-100'
+                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800'
                       }`}
                       aria-label="Grid view"
                     >
                       <Grid className="h-5 w-5" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setViewMode('list')}
                       className={`p-2 rounded-lg ${
                         viewMode === 'list'
-                          ? 'bg-sky-100 text-sky-700'
-                          : 'text-slate-400 hover:bg-slate-100'
+                          ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800'
                       }`}
                       aria-label="List view"
                     >
@@ -488,10 +501,10 @@ export default function PublicDocumentsPage() {
                     <button
                       type="button"
                       onClick={() => handleCategoryClick(null)}
-                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700"
+                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200"
                     >
                       Category: {category}
-                      <span aria-hidden>×</span>
+                      <span aria-hidden>x</span>
                     </button>
                   )}
                   {search && (
@@ -504,10 +517,10 @@ export default function PublicDocumentsPage() {
                         setSearchParams(params)
                         setLocalSearch('')
                       }}
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                     >
                       Search: {search}
-                      <span aria-hidden>×</span>
+                      <span aria-hidden>x</span>
                     </button>
                   )}
                   <button
@@ -516,7 +529,7 @@ export default function PublicDocumentsPage() {
                       setSearchParams({})
                       setLocalSearch('')
                     }}
-                    className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                    className="text-xs font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                   >
                     Clear all
                   </button>
@@ -526,11 +539,19 @@ export default function PublicDocumentsPage() {
 
             {/* Documents */}
             {docsLoading ? (
-              <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="h-40 bg-slate-100 rounded-2xl animate-pulse" />
-                ))}
-              </div>
+              viewMode === 'grid' ? (
+                <CardSkeleton count={6} className="md:grid-cols-2 xl:grid-cols-3" />
+              ) : (
+                <ListSkeleton rows={6} />
+              )
+            ) : docsError ? (
+              <ErrorState
+                title="Unable to load documents"
+                message="The documentation library could not be loaded right now."
+                onRetry={() => {
+                  void refetchDocs()
+                }}
+              />
             ) : docs?.items && docs.items.length > 0 ? (
               <>
                 {viewMode === 'grid' ? (
@@ -542,33 +563,33 @@ export default function PublicDocumentsPage() {
                         className="surface-card-hover rounded-2xl p-6 group"
                       >
                         <div className="flex items-start gap-4">
-                          <div className="bg-sky-100 rounded-xl p-3">
-                            <FileText className="h-6 w-6 text-sky-600" />
+                          <div className="rounded-xl bg-sky-100 p-3 dark:bg-sky-950/40">
+                            <FileText className="h-6 w-6 text-sky-700" aria-hidden="true" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-display font-semibold text-slate-900 truncate group-hover:text-sky-600">
+                            <h3 className="card-title truncate group-hover:text-sky-700">
                               {doc.title}
                             </h3>
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className="helper-copy mt-1">
                               {doc.document_number}
                             </p>
-                            <p className="text-sm text-slate-500 mt-2 line-clamp-2">
+                            <p className="body-copy mt-2 line-clamp-2">
                               {doc.description || 'No description'}
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                              {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
+                              {doc.platform && <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{doc.platform}</span>}
                               {getTags(doc.tags).map((tag) => (
-                                <span key={tag} className="pill bg-white text-slate-600 border-slate-200">
+                                <span key={tag} className="pill border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                                   {tag}
                                 </span>
                               ))}
                             </div>
                           </div>
                         </div>
-                        <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                        <div className="mt-4 flex items-center justify-between text-xs text-slate-600 dark:text-slate-500">
                           <span>{formatDate(doc.created_at)}</span>
                           {doc.category && (
-                            <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                            <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                               {doc.category}
                             </span>
                           )}
@@ -585,34 +606,34 @@ export default function PublicDocumentsPage() {
                         className="block surface-card-hover rounded-2xl p-4 group"
                       >
                         <div className="flex items-center gap-4">
-                          <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
+                          <FileText className="h-8 w-8 flex-shrink-0 text-sky-700" aria-hidden="true" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3">
-                              <h3 className="font-display font-semibold text-slate-900 group-hover:text-sky-600">
+                              <h3 className="card-title group-hover:text-sky-700">
                                 {doc.title}
                               </h3>
-                              <span className="text-xs text-slate-400">
+                              <span className="helper-copy">
                                 {doc.document_number}
                               </span>
                             </div>
-                            <p className="text-sm text-slate-500 truncate">
+                            <p className="body-copy truncate">
                               {doc.description || 'No description'}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                              {doc.platform && <span className="pill bg-slate-100 text-slate-600 border-slate-200">{doc.platform}</span>}
+                              {doc.platform && <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{doc.platform}</span>}
                               {getTags(doc.tags).map((tag) => (
-                                <span key={tag} className="pill bg-white text-slate-600 border-slate-200">
+                                <span key={tag} className="pill border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                                   {tag}
                                 </span>
                               ))}
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <div className="text-sm text-slate-400">
+                            <div className="body-copy">
                               {formatDate(doc.created_at)}
                             </div>
                             {doc.category && (
-                              <span className="pill bg-slate-100 text-slate-600 border-slate-200">
+                              <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                                 {doc.category}
                               </span>
                             )}
@@ -627,19 +648,23 @@ export default function PublicDocumentsPage() {
               {docs.total_pages > 1 && (
                 <div className="mt-8 flex justify-center items-center gap-4">
                   <button
+                    type="button"
                     onClick={() => handlePageChange(page - 1)}
                     disabled={page <= 1}
                     className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Previous page"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
-                  <span className="text-sm text-slate-600">
+                  <span className="body-copy">
                     Page {page} of {docs.total_pages}
                   </span>
                   <button
+                    type="button"
                     onClick={() => handlePageChange(page + 1)}
                     disabled={page >= docs.total_pages}
                     className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
+                    aria-label="Next page"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
@@ -647,24 +672,26 @@ export default function PublicDocumentsPage() {
               )}
             </>
           ) : (
-            <div className="text-center py-16">
-              <Folder className="h-16 w-16 mx-auto mb-4 text-slate-300" />
-              <h3 className="text-lg font-display font-medium text-slate-900 mb-2">No documents found</h3>
-              <p className="text-slate-500">
-                {search ? `No documents match "${search}"` : 'No approved documents available in this category'}
-              </p>
-              {(category || search) && (
-                <button
-                  onClick={() => {
-                    setSearchParams({})
-                    setLocalSearch('')
-                  }}
-                  className="mt-4 text-sky-600 hover:text-sky-700 font-medium"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon={<Folder className="h-8 w-8" aria-hidden="true" />}
+              title="No documents found"
+              description={
+                search
+                  ? `No documents match "${search}".`
+                  : 'No approved documents are available for the current category.'
+              }
+              action={
+                category || search
+                  ? {
+                      label: 'Clear filters',
+                      onClick: () => {
+                        setSearchParams({})
+                        setLocalSearch('')
+                      },
+                    }
+                  : undefined
+              }
+            />
           )}
           </main>
         </div>
