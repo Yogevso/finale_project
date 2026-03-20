@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies.permissions import require_admin
+from app.dependencies.tenant import TenantContext
 from app.models import Document, DocumentStatus, DocumentVisibility, User, UserRole
 from app.services.permissions import ROLE_PERMISSIONS, Permission
 
