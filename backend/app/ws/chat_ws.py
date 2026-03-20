@@ -1,7 +1,9 @@
 """Chat WebSocket endpoint — real-time messaging (X1-019 to X1-023).
 
 Protocol:
-  Connect: ws://host/ws/chat?token=JWT
+  Connect: ws://host/ws/chat
+  First message (H-21):
+    {"event": "authenticate", "data": {"token": "JWT"}}
   Events sent by client:
     {"event": "send_message", "data": {"chat_id": 1, "content": "hello"}}
     {"event": "typing", "data": {"chat_id": 1}}
@@ -69,10 +71,33 @@ def _authenticate_ws(token: str, db: Session) -> User | None:
 @router.websocket("/ws/chat")
 async def chat_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Main chat WebSocket endpoint (X1-019)."""
+    """Main chat WebSocket endpoint (X1-019).
+
+    H-21: Token is sent in the first WS message (``authenticate`` event)
+    rather than in the query string to avoid leaking credentials into
+    proxy/access logs.  The legacy ``?token=`` query param is still
+    accepted for backwards compatibility but the first-message approach
+    is preferred.
+    """
+    await websocket.accept()
+
+    # H-21: prefer token from first message over query string
+    if not token:
+        try:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            if msg.get("event") == "authenticate":
+                token = msg.get("data", {}).get("token")
+        except Exception:
+            pass
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
     user = _authenticate_ws(token, db)
     if not user:
         await websocket.close(code=4001, reason="Authentication failed")

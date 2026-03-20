@@ -15,7 +15,7 @@ class TestUserCompanyInvariants:
                 "email": "customer-default-tenant@example.com",
                 "username": "customer_default_tenant",
                 "full_name": "Customer Default Tenant",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "customer",
             },
         )

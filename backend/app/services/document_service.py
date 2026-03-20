@@ -260,7 +260,19 @@ class DocumentService(TenantAwareService[Document]):
 
         platform = Platform(name=normalized_name, slug=slug)
         self.db.add(platform)
-        self.db.flush()
+        try:
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            # Race condition: another request created this slug concurrently — retry lookup
+            existing = (
+                self.db.query(Platform)
+                .filter(func.lower(Platform.name) == normalized_name.lower())
+                .first()
+            )
+            if existing:
+                return existing
+            raise
         return platform
 
     @staticmethod

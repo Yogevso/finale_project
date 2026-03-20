@@ -29,9 +29,9 @@ class SearchAuditLogsTool(BaseTool):
         "type": "object",
         "properties": {
             "user_id": {"type": "integer", "description": "Filter by user ID"},
-            "action_type": {"type": "string", "description": "Filter by action type"},
-            "from_date": {"type": "string", "description": "Start date (ISO format, e.g. 2025-01-01)"},
-            "to_date": {"type": "string", "description": "End date (ISO format)"},
+            "action_type": {"type": "string", "description": "Filter by action type", "maxLength": 100},
+            "from_date": {"type": "string", "description": "Start date (ISO format, e.g. 2025-01-01)", "maxLength": 50},
+            "to_date": {"type": "string", "description": "End date (ISO format)", "maxLength": 50},
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],

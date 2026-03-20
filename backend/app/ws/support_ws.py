@@ -1,7 +1,9 @@
 """Support ticket WebSocket endpoint — real-time support chat (X1-083 to X1-087).
 
 Protocol:
-  Connect: ws://host/ws/support?token=JWT
+  Connect: ws://host/ws/support
+  First message (H-21):
+    {"event": "authenticate", "data": {"token": "JWT"}}
   Events sent by client:
     {"event": "send_message", "data": {"ticket_id": 1, "content": "hello", "is_internal_note": false}}
     {"event": "typing", "data": {"ticket_id": 1}}
@@ -77,10 +79,31 @@ def _authenticate_ws(token: str, db: Session) -> User | None:
 @router.websocket("/ws/support")
 async def support_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Support ticket WebSocket endpoint (X1-083)."""
+    """Support ticket WebSocket endpoint (X1-083).
+
+    H-21: Token is sent in the first WS message (``authenticate`` event)
+    rather than in the query string.  Legacy ``?token=`` query param is
+    still accepted for backwards compatibility.
+    """
+    await websocket.accept()
+
+    # H-21: prefer token from first message over query string
+    if not token:
+        try:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            if msg.get("event") == "authenticate":
+                token = msg.get("data", {}).get("token")
+        except Exception:
+            pass
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
     user = _authenticate_ws(token, db)
     if not user:
         await websocket.close(code=4001, reason="Authentication failed")

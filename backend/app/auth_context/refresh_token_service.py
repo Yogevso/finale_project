@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -35,7 +35,7 @@ class RefreshTokenService:
         token = secrets.token_urlsafe(32)
         if session_identifier:
             token = f"{session_identifier}.{token}"
-        expires_at = datetime.utcnow() + timedelta(days=refresh_token_expire_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=refresh_token_expire_days)
         return token, expires_at
 
     @staticmethod
@@ -43,7 +43,7 @@ class RefreshTokenService:
         if "." not in refresh_token:
             return None
         session_identifier, _ = refresh_token.split(".", 1)
-        return session_identifier or None
+        return session_identifier.strip() or None
 
     @staticmethod
     def extract_token_prefix(refresh_token: str) -> str:
@@ -77,7 +77,7 @@ class RefreshTokenService:
         if refresh_token.startswith("pr_") or refresh_token.startswith("ev_"):
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         token_prefix = self.extract_token_prefix(refresh_token)
         
         # Use indexed token_prefix for fast lookup instead of scanning all records.
@@ -113,7 +113,7 @@ class RefreshTokenService:
         return None
 
     def invalidate_user_tokens(self, user_id: int) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self.db.query(PasswordReset).filter(
             PasswordReset.user_id == user_id,
             PasswordReset.used_at.is_(None),

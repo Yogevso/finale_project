@@ -302,8 +302,8 @@ def refresh_token(
     The refresh token can be provided in the request body or via an httpOnly cookie.
     Returns new JWT access token (with httpOnly cookie updated).
     """
-    # AD-004: prefer body, fallback to httpOnly cookie
-    rt = token_data.refresh_token or refresh_token_cookie
+    # AD-004 / M-06: prefer httpOnly cookie over body (cookie is immune to XSS)
+    rt = refresh_token_cookie or token_data.refresh_token
     if not rt:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -570,12 +570,19 @@ def get_collab_token(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-    # Check permissions
+    # Check permissions — require at least read access
     permissions = collab_service.get_user_permissions_for_document(current_user, document)
     if not permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to access this document",
+        )
+
+    # H-03: Require write permission for collab tokens (editing)
+    if "write" not in permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have edit permission for this document",
         )
 
     # Create the collaboration token
@@ -585,8 +592,15 @@ def get_collab_token(
         permissions=permissions,
     )
 
-    # Get WebSocket URL from config or default
-    websocket_url = f"ws://localhost:8002/document/{request.document_id}"
+    # Get WebSocket URL from config — convert http(s) to ws(s)
+    collab_base = settings.COLLAB_SERVER_URL
+    if collab_base.startswith("https://"):
+        ws_base = "wss://" + collab_base[len("https://"):]
+    elif collab_base.startswith("http://"):
+        ws_base = "ws://" + collab_base[len("http://"):]
+    else:
+        ws_base = collab_base
+    websocket_url = f"{ws_base.rstrip('/')}/document/{request.document_id}"
 
     return CollabTokenResponse(
         token=token,

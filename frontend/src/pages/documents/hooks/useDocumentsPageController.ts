@@ -284,6 +284,10 @@ export function useDocumentsPageController() {
   }
 
   const handleVisibilityChange = (change: VisibilityChangeRequest) => {
+    // M-18: guard against non-managers triggering visibility changes
+    if (!isManager) {
+      return
+    }
     if (change.currentVisibility === change.nextVisibility) {
       setVisibilityOverrides((previous) => {
         const nextOverrides = { ...previous }

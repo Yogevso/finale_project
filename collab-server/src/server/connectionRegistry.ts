@@ -23,7 +23,7 @@ export interface CollabServerInfo {
   status: 'healthy';
   port: number;
   activeDocuments: number;
-  documents: Record<string, number>;
+  totalConnections: number;
   uptime: number;
 }
 
@@ -84,9 +84,9 @@ export class ConnectionRegistry {
   }
 
   getServerInfo(port: number, uptime: number): CollabServerInfo {
-    const documents: Record<string, number> = {};
-    for (const [documentId, connections] of this.activeConnections.entries()) {
-      documents[documentId] = connections.size;
+    let totalConnections = 0;
+    for (const connections of this.activeConnections.values()) {
+      totalConnections += connections.size;
     }
 
     return {
@@ -94,7 +94,7 @@ export class ConnectionRegistry {
       status: 'healthy',
       port,
       activeDocuments: this.activeConnections.size,
-      documents,
+      totalConnections,
       uptime,
     };
   }

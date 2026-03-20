@@ -309,33 +309,25 @@ class TestAD023ChangelogDefault:
         db.commit()
 
         # Public call (no auth, default published_only=True)
-        r = client.get("/api/v1/changelog")
+        r = client.get("/api/v1/public/changelog")
         assert r.status_code == 200
         data = r.json()
         titles = [e["title"] for e in data["items"]]
         assert "Released Feature" in titles
         assert "Secret Draft" not in titles
 
-    def test_explicit_unpublished_shows_all(self, client, db):
-        """Explicitly passing published_only=false shows drafts (admin flow)."""
-        admin = create_user(
-            db,
-            username="cl_admin2",
-            email="cl2@admin.com",
-            plain_password="clpass123",
-            role=UserRole.ADMIN,
-            is_active=True,
-        )
+    def test_explicit_unpublished_shows_all(self, client, db, admin_headers, test_admin):
+        """Explicitly passing published_only=false shows drafts (admin/management flow)."""
         draft = ChangelogEntry(
             title="Draft Entry",
             content="WIP",
             published=False,
-            created_by=admin.id,
+            created_by=test_admin.id,
         )
         db.add(draft)
         db.commit()
 
-        r = client.get("/api/v1/changelog", params={"published_only": "false"})
+        r = client.get("/api/v1/changelog", params={"published_only": "false"}, headers=admin_headers)
         assert r.status_code == 200
         titles = [e["title"] for e in r.json()["items"]]
         assert "Draft Entry" in titles

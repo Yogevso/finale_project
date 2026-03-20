@@ -22,12 +22,12 @@ class CreateInvitationTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "email": {"type": "string", "description": "Email address to invite"},
+            "email": {"type": "string", "description": "Email address to invite", "maxLength": 255},
             "role": {
                 "type": "string",
                 "description": "Role for the new user (e.g. VIEWER, EDITOR, ADMIN, CUSTOMER)",
             },
-            "message": {"type": "string", "description": "Optional message to include"},
+            "message": {"type": "string", "description": "Optional message to include", "maxLength": 1000},
         },
         "required": ["email", "role"],
     }

@@ -27,7 +27,8 @@ describe('ConnectionRegistry', () => {
 
     const info = registry.getServerInfo(8002, 12.5);
     expect(info.activeDocuments).toBe(1);
-    expect(info.documents['doc-1']).toBe(2);
+    expect(info.totalConnections).toBe(2);
+    expect(info).not.toHaveProperty('documents');
     expect(hooks.registerDocumentConnectionAuth).toHaveBeenCalledTimes(2);
   });
 

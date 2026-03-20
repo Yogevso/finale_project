@@ -565,9 +565,33 @@ def tenant_isolation_scenario(db):
         message="Harness review seed",
     )
     db.add(review)
+
+    # H-23: Feedback isolation seed
+    from app.models import Feedback, FeedbackType, FeedbackStatus, SearchAnalytics
+
+    feedback = Feedback(
+        document_id=document.id,
+        user_id=owner_user.id,
+        feedback_type=FeedbackType.OTHER,
+        status=FeedbackStatus.PENDING,
+        content="Harness feedback seed",
+    )
+    db.add(feedback)
+
+    # H-23: Search analytics isolation seed
+    search_analytics = SearchAnalytics(
+        query="harness search test",
+        user_id=owner_user.id,
+        tenant_id=owner_tenant.id,
+        results_count=3,
+    )
+    db.add(search_analytics)
+
     db.commit()
     db.refresh(document)
     db.refresh(review)
+    db.refresh(feedback)
+    db.refresh(search_analytics)
 
     return TenantIsolationScenario(
         owner_tenant=owner_tenant,
@@ -579,6 +603,8 @@ def tenant_isolation_scenario(db):
         attacker_manager_password=attacker_manager_password,
         document=document,
         review=review,
+        feedback=feedback,
+        search_analytics=search_analytics,
     )
 
 

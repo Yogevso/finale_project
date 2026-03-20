@@ -50,9 +50,12 @@ export function useChatSocket(options: UseChatSocketOptions = {}): UseChatSocket
     const token = api.getToken()
     if (!token || !enabled) return
 
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/chat?token=${encodeURIComponent(token)}`)
+    // H-21: connect without token in URL to avoid leaking credentials in logs
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/chat`)
 
     ws.onopen = () => {
+      // Send token as first message instead of query string
+      ws.send(JSON.stringify({ event: 'authenticate', data: { token } }))
       setIsConnected(true)
       attemptRef.current = 0
       setConnectionFailures(0)

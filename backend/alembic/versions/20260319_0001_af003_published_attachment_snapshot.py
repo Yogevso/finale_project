@@ -9,13 +9,18 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "af003_attach_snap"
-down_revision = None  # standalone — run after existing head
+down_revision = "wave_ab_001"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("versions") as batch_op:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = {c["name"] for c in inspector.get_columns("versions")}
+    if "published_attachment_ids_snapshot" in existing:
+        return
+    with op.batch_alter_table("versions", recreate="never") as batch_op:
         batch_op.add_column(
             sa.Column("published_attachment_ids_snapshot", sa.Text(), nullable=True)
         )

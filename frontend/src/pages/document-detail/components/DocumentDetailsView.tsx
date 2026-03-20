@@ -9,6 +9,7 @@ import { AlertTriangle, Building2, CheckCircle, Clock, History, X, XCircle } fro
 interface DocumentDetailsViewProps {
   document: Document
   isEditor: boolean
+  canAssignCompanies: boolean
   showCompanySelector: boolean
   onToggleCompanySelector: () => void
   assignedCompanies: Company[]
@@ -29,6 +30,7 @@ interface DocumentDetailsViewProps {
 export function DocumentDetailsView({
   document,
   isEditor,
+  canAssignCompanies,
   showCompanySelector,
   onToggleCompanySelector,
   assignedCompanies,
@@ -46,7 +48,7 @@ export function DocumentDetailsView({
   reviewHistoryItems,
 }: DocumentDetailsViewProps) {
   const showAssignmentSection =
-    document.visibility === 'company' || isEditor || assignedCompanies.length > 0
+    document.visibility === 'company' || canAssignCompanies || assignedCompanies.length > 0
   const isOverdue = isOverdueDueDate(document.due_date)
 
   return (
@@ -187,7 +189,7 @@ export function DocumentDetailsView({
               <Building2 className="w-5 h-5 text-slate-500" />
               <p className="section-title text-base">Company Assignments</p>
             </div>
-            {isEditor ? (
+            {canAssignCompanies ? (
               <button
                 type="button"
                 onClick={onToggleCompanySelector}
@@ -254,7 +256,7 @@ export function DocumentDetailsView({
                 >
                   <Building2 className="w-4 h-4" />
                   <span>{company.name}</span>
-                  {isEditor ? (
+                  {canAssignCompanies ? (
                     <button
                       type="button"
                       onClick={() => onRemoveCompany(company.id)}
@@ -270,7 +272,7 @@ export function DocumentDetailsView({
             </div>
           ) : (
             <p className="body-copy">
-              No companies assigned yet. {isEditor ? 'Click "Assign Companies" to add.' : ''}
+              No companies assigned yet. {canAssignCompanies ? 'Click "Assign Companies" to add.' : ''}
             </p>
           )}
         </div>

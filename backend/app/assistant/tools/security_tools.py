@@ -124,7 +124,7 @@ class GetSecurityEventsAdminTool(BaseTool):
         "type": "object",
         "properties": {
             "user_id": {"type": "integer", "description": "Filter by user ID (optional)"},
-            "event_type": {"type": "string", "description": "Filter by event type (optional)"},
+            "event_type": {"type": "string", "description": "Filter by event type (optional)", "maxLength": 100},
             "limit": {"type": "integer", "description": "Max results (default 25)"},
         },
         "required": [],
@@ -159,7 +159,7 @@ class GetInvitationStatusTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "status": {"type": "string", "description": "Filter: pending, accepted, expired, cancelled (optional)"},
+            "status": {"type": "string", "description": "Filter: pending, accepted, expired, cancelled (optional)", "maxLength": 50},
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],

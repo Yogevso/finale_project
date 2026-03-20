@@ -35,6 +35,7 @@ class SemanticSearchTool(BaseTool):
             "query": {
                 "type": "string",
                 "description": "The search query — what you're looking for in document content.",
+                "maxLength": 1000,
             },
             "limit": {
                 "type": "integer",
@@ -43,6 +44,8 @@ class SemanticSearchTool(BaseTool):
         },
         "required": ["query"],
     }
+    # H-04: Block CUSTOMER role from internal semantic search
+    required_role = "EDITOR"
 
     async def execute(
         self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
@@ -64,6 +67,7 @@ class SemanticSearchTool(BaseTool):
         results = _vector_store.query(
             query_embedding=query_embedding,
             n_results=limit,
+            tenant_id=tenant_id,
         )
 
         if not results:
@@ -206,6 +210,7 @@ class AskAboutDocumentTool(BaseTool):
             "question": {
                 "type": "string",
                 "description": "The question to ask about the document's content.",
+                "maxLength": 1000,
             },
         },
         "required": ["document_id", "question"],
@@ -234,6 +239,7 @@ class AskAboutDocumentTool(BaseTool):
                 query_embedding=query_embedding,
                 n_results=5,
                 document_id=doc_id,
+                tenant_id=tenant_id,
             )
         except Exception:
             logger.warning("RAG query failed, falling back to direct content")

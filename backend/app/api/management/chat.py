@@ -85,11 +85,16 @@ def _participant_to_response(p) -> ChatParticipantResponse:
 
 @router.get("/chats", response_model=ChatListResponse)
 def list_my_chats(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(require_internal_user),
     svc: ChatService = Depends(_get_chat_service),
 ):
     """List all chats for the current user."""
-    items = svc.get_user_chats(current_user)
+    all_items = svc.get_user_chats(current_user)
+    total = len(all_items)
+    offset = (page - 1) * page_size
+    page_items = all_items[offset:offset + page_size]
     return ChatListResponse(
         items=[
             ChatListItem(
@@ -99,9 +104,11 @@ def list_my_chats(
                 unread_count=i["unread_count"],
                 is_muted=i["is_muted"],
             )
-            for i in items
+            for i in page_items
         ],
-        total=len(items),
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

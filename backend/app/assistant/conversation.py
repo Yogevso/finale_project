@@ -262,9 +262,12 @@ class ConversationManager:
                 max_tokens=200,
             )
             summary = response.get("message", {}).get("content", "")
-            if summary:
-                conv.summary = summary[:1000]
+            # M-17: validate LLM response quality before storing
+            if summary and len(summary.strip()) >= 20 and not summary.strip().startswith("Error"):
+                conv.summary = summary.strip()[:1000]
                 self._db.commit()
                 logger.info("Auto-summarized conversation %d (%d messages)", conversation_id, msg_count)
+            else:
+                logger.warning("LLM summary rejected for conversation %d (too short or invalid)", conversation_id)
         except Exception:
             logger.warning("Failed to auto-summarize conversation %d", conversation_id, exc_info=True)

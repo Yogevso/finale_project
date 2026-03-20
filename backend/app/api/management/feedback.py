@@ -182,7 +182,7 @@ async def list_all_feedback(
     company_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_internal_staff),
+    current_user: User = Depends(require_admin_or_manager),
 ):
     """
     List feedback with contributor-based visibility filtering.
@@ -196,6 +196,12 @@ async def list_all_feedback(
         joinedload(Feedback.document),
         joinedload(Feedback.responder),
     )
+
+    # Tenant scoping for non-system-admins
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        query = query.join(Feedback.user, isouter=True).filter(
+            User.tenant_id == current_user.tenant_id
+        )
 
     # Apply filters
     if status_filter:
@@ -262,7 +268,7 @@ async def list_all_feedback(
                 document_number=fb.document.document_number if fb.document else "",
                 user_id=fb.user_id,
                 user_name=fb.user.full_name if fb.user else "Unknown",
-                user_email=fb.user.email if fb.user else "",
+                user_email=fb.user.email if fb.user and current_user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN) else "",
                 tenant_id=fb.user.tenant_id if fb.user else None,
                 tenant_name=tenant.name if tenant else None,
                 feedback_type=fb.feedback_type,
@@ -290,7 +296,7 @@ async def list_all_feedback(
 async def get_feedback(
     feedback_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_internal_staff),
+    current_user: User = Depends(require_admin_or_manager),
 ):
     """
     Get feedback details with contributor-based visibility.
@@ -329,7 +335,7 @@ async def get_feedback(
         document_number=feedback.document.document_number if feedback.document else "",
         user_id=feedback.user_id,
         user_name=feedback.user.full_name if feedback.user else "Unknown",
-        user_email=feedback.user.email if feedback.user else "",
+        user_email=feedback.user.email if feedback.user and current_user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN) else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
         feedback_type=feedback.feedback_type,

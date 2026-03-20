@@ -60,14 +60,13 @@ class TestAttachments:
         assert "id" in data
         assert "sha256" in data
 
-    def test_rejects_pdf_upload(self, client: TestClient, auth_headers: dict, test_document):
+    def test_accepts_pdf_upload(self, client: TestClient, auth_headers: dict, test_document):
         response = client.post(
             f"/api/v1/documents/{test_document.id}/attachments",
             headers=auth_headers,
             files={"file": ("legacy.pdf", io.BytesIO(b"%PDF-1.4\n%EOF"), "application/pdf")},
         )
-        assert response.status_code == 400
-        assert "File type not allowed" in response.json()["detail"]
+        assert response.status_code == 201
 
     def test_original_download_preserves_bytes_and_sha256(
         self, client: TestClient, auth_headers: dict, test_document

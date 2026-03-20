@@ -19,8 +19,9 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.db import get_db
-from app.models import SavedSearch, SearchAnalytics, User
+from app.models import SavedSearch, SearchAnalytics, User, UserRole
 from app.security import get_current_active_user
+from app.dependencies.permissions import require_any_role
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ def record_search_click(
 def get_search_analytics(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])),
 ):
     """Get search analytics — top queries, zero-result queries, click-through."""
     since = datetime.utcnow() - timedelta(days=days)
@@ -237,6 +238,10 @@ def get_search_analytics(
             SearchAnalytics.clicked_document_id.is_(None),
         )
     )
+
+    # Tenant scoping for non-system-admins
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        search_events = search_events.filter(SearchAnalytics.tenant_id == current_user.tenant_id)
 
     # Top queries
     top_queries = (
@@ -266,14 +271,16 @@ def get_search_analytics(
 
     # Click-through rate
     total_searches = search_events.count()
-    total_clicks = (
+    click_query = (
         db.query(SearchAnalytics)
         .filter(
             SearchAnalytics.created_at >= since,
             SearchAnalytics.clicked_document_id.isnot(None),
         )
-        .count()
     )
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        click_query = click_query.filter(SearchAnalytics.tenant_id == current_user.tenant_id)
+    total_clicks = click_query.count()
     ctr = (total_clicks / total_searches * 100) if total_searches > 0 else 0
 
     return {

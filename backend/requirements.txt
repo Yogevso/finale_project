@@ -27,6 +27,9 @@ python-dotenv==1.0.1
 pydantic==2.9.2
 pydantic-settings==2.6.1
 
+# Redis (optional — distributed rate limiting)
+redis>=5.0.0
+
 # PDF Generation
 reportlab>=4.0.0
 

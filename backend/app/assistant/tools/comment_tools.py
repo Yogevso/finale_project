@@ -92,7 +92,7 @@ class AddCommentTool(BaseTool):
         "type": "object",
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID"},
-            "content": {"type": "string", "description": "Comment text"},
+            "content": {"type": "string", "description": "Comment text", "maxLength": 5000},
             "parent_id": {"type": "integer", "description": "Parent comment ID for threaded reply"},
         },
         "required": ["document_id", "content"],

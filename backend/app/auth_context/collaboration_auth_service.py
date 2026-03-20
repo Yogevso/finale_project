@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
@@ -46,13 +47,14 @@ class CollaborationAuthService:
             permissions=permissions,
         )
         payload = claims.to_payload()
-        issued_at = datetime.utcnow()
+        issued_at = datetime.now(timezone.utc)
         expires_at = issued_at + (
             expires_delta or timedelta(minutes=self.collab_token_expire_minutes)
         )
         payload.update(
             {
                 "type": COLLABORATION_TOKEN_TYPE,
+                "jti": str(uuid.uuid4()),
                 "iat": issued_at,
                 "exp": expires_at,
             }

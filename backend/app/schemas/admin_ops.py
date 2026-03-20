@@ -5,7 +5,22 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+import re
+
+
+def _validate_password_complexity(v: str) -> str:
+    """M-08: shared password complexity check."""
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", v):
+        raise ValueError("Password must contain at least one digit")
+    if not re.search(r"[^A-Za-z0-9]", v):
+        raise ValueError("Password must contain at least one special character")
+    return v
 
 
 # ── Z-001: Impersonation ──────────────────────────────────────────
@@ -161,6 +176,11 @@ class TenantProvisionRequest(BaseModel):
     admin_password: str = Field(..., min_length=8)
     company_type: str = Field(default="customer", pattern=r"^(customer|partner|internal)$")
     contact_email: str | None = None
+
+    @field_validator("admin_password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 class TenantProvisionResponse(BaseModel):

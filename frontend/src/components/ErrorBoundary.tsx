@@ -19,6 +19,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Unhandled React error:', error, errorInfo)
+    // Report to external monitoring (e.g. Sentry, Datadog)
+    if (typeof window !== 'undefined' && (window as any).__ERROR_REPORTER__) {
+      (window as any).__ERROR_REPORTER__(error, errorInfo)
+    }
   }
 
   handleGoHome = () => {

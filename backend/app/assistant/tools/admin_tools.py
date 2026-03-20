@@ -63,7 +63,7 @@ class ToggleFeatureFlagTool(BaseTool):
         "type": "object",
         "properties": {
             "tenant_id": {"type": "integer", "description": "Tenant ID"},
-            "feature_key": {"type": "string", "description": "Feature flag key name"},
+            "feature_key": {"type": "string", "description": "Feature flag key name", "maxLength": 255},
             "enabled": {"type": "boolean", "description": "True to enable, False to disable"},
         },
         "required": ["tenant_id", "feature_key", "enabled"],
@@ -137,10 +137,10 @@ class CreateMaintenanceWindowTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "title": {"type": "string", "description": "Title of the maintenance window"},
-            "description": {"type": "string", "description": "Details about the maintenance"},
-            "scheduled_start": {"type": "string", "description": "Start time (ISO 8601, e.g. 2025-01-15T02:00:00)"},
-            "scheduled_end": {"type": "string", "description": "End time (ISO 8601)"},
+            "title": {"type": "string", "description": "Title of the maintenance window", "maxLength": 255},
+            "description": {"type": "string", "description": "Details about the maintenance", "maxLength": 2000},
+            "scheduled_start": {"type": "string", "description": "Start time (ISO 8601, e.g. 2025-01-15T02:00:00)", "maxLength": 50},
+            "scheduled_end": {"type": "string", "description": "End time (ISO 8601)", "maxLength": 50},
             "is_read_only": {"type": "boolean", "description": "Put system in read-only mode (default true)"},
         },
         "required": ["title", "scheduled_start", "scheduled_end"],

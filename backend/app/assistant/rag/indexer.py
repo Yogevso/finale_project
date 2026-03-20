@@ -35,6 +35,7 @@ class DocumentIndexer:
         title: str,
         content: str,
         version_id: int | None = None,
+        tenant_id: int | None = None,
     ) -> int:
         """Index a document's content into the vector store.
 
@@ -43,6 +44,7 @@ class DocumentIndexer:
             title: Document title (stored as metadata)
             content: HTML or plain text content
             version_id: Optional version ID for metadata
+            tenant_id: Tenant ID for access scoping
 
         Returns:
             Number of chunks indexed
@@ -84,7 +86,7 @@ class DocumentIndexer:
             }
             for c in chunks
         ]
-        stored = self._store.add_chunks(document_id, title, chunk_dicts, embeddings)
+        stored = self._store.add_chunks(document_id, title, chunk_dicts, embeddings, tenant_id=tenant_id)
         return stored
 
     async def remove_document(self, document_id: int) -> int:
@@ -129,6 +131,7 @@ class DocumentIndexer:
             try:
                 count = await self.index_document(
                     doc.id, doc.title, version.content, version.id,
+                    tenant_id=doc.tenant_id,
                 )
                 if count > 0:
                     indexed += 1

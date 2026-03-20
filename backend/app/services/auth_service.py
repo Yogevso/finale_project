@@ -126,6 +126,8 @@ class AuthService(SessionService):
             user = self.user_repository.get_by_username(normalized_identifier)
 
         if user is None or not user.is_active:
+            # H-08: Perform dummy work to prevent timing-based user enumeration
+            get_password_hash(f"dummy_{secrets.token_urlsafe(16)}")
             return None
 
         token = f"pr_{secrets.token_urlsafe(32)}"
@@ -280,16 +282,18 @@ class AuthService(SessionService):
 
         if self._is_locked(user, now):
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="account_locked",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         if not verify_password(password, user.hashed_password):
             self._record_failed_login_attempt(user, now)
             if self._is_locked(user, datetime.utcnow()):
                 raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="account_locked",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect username or password",
+                    headers={"WWW-Authenticate": "Bearer"},
                 )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -406,7 +410,14 @@ class AuthService(SessionService):
             session_identifier=session_identifier,
         )
 
-        return TokenResponse(access_token=access_token, token_type="bearer")
+        # M-10: Rotate refresh token — invalidate old, issue new
+        valid_record.used_at = datetime.utcnow()
+        new_refresh_token, _ = self.refresh_token_service.issue_refresh_token(
+            user.id,
+            session_identifier=session_identifier,
+        )
+
+        return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
     def logout(self, user_id: int) -> None:
         """Invalidate all refresh tokens and revoke all active sessions for user."""
@@ -475,17 +486,24 @@ class AuthService(SessionService):
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password"
             )
 
+        # M-11: atomic password change + session revocation in single transaction
+        now = datetime.utcnow()
+
         # Update password
         user.hashed_password = get_password_hash(new_password)
         self.db.add(SecurityEvent(user_id=user.id, event_type="password_changed"))
 
-        # Invalidate all refresh tokens and sessions for security
-        # User must re-authenticate on all devices after password change
-        self.refresh_token_service.invalidate_user_tokens(user.id)
-        now = datetime.utcnow()
+        # Invalidate all refresh tokens (inline to avoid separate commit)
+        self.db.query(PasswordReset).filter(
+            PasswordReset.user_id == user.id,
+            PasswordReset.used_at.is_(None),
+        ).update({"used_at": now})
+
+        # Revoke all active sessions
         self.db.query(UserSession).filter(
             UserSession.user_id == user.id,
             UserSession.revoked_at.is_(None),
         ).update({"revoked_at": now})
 
+        # Single atomic commit
         self.db.commit()

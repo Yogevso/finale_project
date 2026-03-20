@@ -160,6 +160,7 @@ def test_document_conversion_pipeline_describes_registered_strategy_capabilities
     assert pipeline.describe_strategy_capabilities() == {
         "word": ("html", "reader_artifact"),
         "powerpoint": ("html", "reader_artifact"),
+        "pdf": ("html", "reader_artifact"),
         "html": ("html",),
         "text": ("html",),
     }

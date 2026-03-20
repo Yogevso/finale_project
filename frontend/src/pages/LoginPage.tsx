@@ -289,6 +289,7 @@ export default function LoginPage() {
             </SubmitButton>
           </form>
 
+          {import.meta.env.DEV && (
           <div className="mt-8 pt-6 border-t border-slate-200">
             <p className="helper-copy mb-3 text-center font-medium uppercase tracking-wide">Demo Credentials</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -339,6 +340,7 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

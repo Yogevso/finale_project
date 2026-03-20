@@ -354,7 +354,7 @@ class Document(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
     )  # Multi-tenancy
     title = Column(String(500), nullable=False, index=True)
     document_number = Column(String(100), unique=True, index=True, nullable=False)

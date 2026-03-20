@@ -41,6 +41,7 @@ class AnalyzeUploadedFileTool(BaseTool):
             "question": {
                 "type": "string",
                 "description": "Optional question to answer about the file content",
+                "maxLength": 1000,
             },
         },
         "required": ["file_id"],

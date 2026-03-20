@@ -130,9 +130,12 @@ class SupportTicketService:
         """List tickets visible to the current user (X1-069)."""
         query = self.db.query(SupportTicket).options(joinedload(SupportTicket.customer))
 
-        # Customers/viewers see only their own tickets; internal staff see all
+        # Customers/viewers see only their own tickets
         if current_user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
             query = query.filter(SupportTicket.customer_id == current_user.id)
+        elif current_user.role != UserRole.SYSTEM_ADMIN:
+            # Internal staff see only tickets within their tenant
+            query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
 
         if status_filter:
             query = query.filter(SupportTicket.status == status_filter)
@@ -442,18 +445,27 @@ class SupportTicketService:
     # ------------------------------------------------------------------
 
     def _check_ticket_access(self, ticket: SupportTicket, user: User) -> None:
-        """Enforce role-based access. Internal staff can access all tickets."""
-        if user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
+        """Enforce role-based and tenant-scoped access."""
+        if user.role == UserRole.SYSTEM_ADMIN:
+            return
+        # Tenant isolation for all non-system-admin users
+        if ticket.tenant_id is not None and user.tenant_id is not None and ticket.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if user.role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
             return
         # Customers/viewers can only see their own tickets
         if ticket.customer_id != user.id:
             raise HTTPException(status_code=403, detail="Access denied")
 
     def _get_ticket_for_agent(self, ticket_id: int, user: User) -> SupportTicket:
-        """Get ticket ensuring user has agent-level access."""
+        """Get ticket ensuring user has agent-level access with tenant scoping."""
         ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        if user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
+        if user.role == UserRole.SYSTEM_ADMIN:
+            return ticket
+        if user.role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
+            if ticket.tenant_id is not None and user.tenant_id is not None and ticket.tenant_id != user.tenant_id:
+                raise HTTPException(status_code=403, detail="Access denied")
             return ticket
         raise HTTPException(status_code=403, detail="Agent-level access required")

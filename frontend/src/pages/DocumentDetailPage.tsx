@@ -223,6 +223,7 @@ export default function DocumentDetailPage() {
               <DocumentDetailsView
                 document={document}
                 isEditor={isEditor}
+                canAssignCompanies={isManager}
                 showCompanySelector={showCompanySelector}
                 onToggleCompanySelector={toggleCompanySelector}
                 assignedCompanies={assignedCompanies}

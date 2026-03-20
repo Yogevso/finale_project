@@ -5,18 +5,39 @@
 interface DocumentAuthState {
   tokensByConnection: Map<string, string>;
   writeConnectionIds: Set<string>;
+  lastAccess: number;
 }
 
 const documentAuth = new Map<string, DocumentAuthState>();
 
+/** Maximum age (ms) before a document auth entry is considered stale. */
+const AUTH_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** How often the sweep runs (ms). */
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+function sweepStaleEntries(): void {
+  const now = Date.now();
+  for (const [docId, state] of documentAuth) {
+    if (now - state.lastAccess > AUTH_TTL_MS) {
+      documentAuth.delete(docId);
+    }
+  }
+}
+
+const sweepTimer = setInterval(sweepStaleEntries, SWEEP_INTERVAL_MS);
+sweepTimer.unref(); // don't keep the process alive for cleanup
+
 function getOrCreateState(documentId: string): DocumentAuthState {
   const existing = documentAuth.get(documentId);
   if (existing) {
+    existing.lastAccess = Date.now();
     return existing;
   }
   const state: DocumentAuthState = {
     tokensByConnection: new Map<string, string>(),
     writeConnectionIds: new Set<string>(),
+    lastAccess: Date.now(),
   };
   documentAuth.set(documentId, state);
   return state;
@@ -78,6 +99,7 @@ export function getDocumentTokenForLoad(documentId: string): string | null {
   if (!state) {
     return null;
   }
+  state.lastAccess = Date.now();
   return getWriteToken(state) ?? getFirstToken(state);
 }
 
@@ -86,6 +108,7 @@ export function getDocumentTokenForStore(documentId: string): string | null {
   if (!state) {
     return null;
   }
+  state.lastAccess = Date.now();
   return getWriteToken(state);
 }
 

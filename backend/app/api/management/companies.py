@@ -8,6 +8,7 @@ from typing import Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth_context.refresh_token_service import RefreshTokenService
@@ -56,6 +57,12 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
     if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+def _enforce_tenant_scope(current_user: User, company_id: int) -> None:
+    """Non-system-admins can only access their own tenant's company."""
+    if current_user.role != UserRole.SYSTEM_ADMIN and current_user.tenant_id != company_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
 
 def generate_slug(name: str) -> str:
@@ -265,7 +272,11 @@ async def create_company(
     )
 
     db.add(company)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Company with this slug already exists")
     db.refresh(company)
 
     return CompanyResponse(
@@ -299,6 +310,7 @@ async def get_company(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     # Get users
     users = db.query(User).filter(User.tenant_id == company_id).all()
@@ -352,6 +364,7 @@ async def update_company(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     # Check slug uniqueness if changing
     if company_data.slug and company_data.slug != company.slug:
@@ -526,6 +539,7 @@ async def list_company_users(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     users = db.query(User).filter(User.tenant_id == company_id).order_by(User.full_name).all()
 
@@ -556,6 +570,7 @@ async def add_user_to_company(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     # Find user by id or email
     user = None
@@ -638,6 +653,7 @@ async def list_company_documents(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     if scope == "owned":
         query = db.query(Document).filter(Document.tenant_id == company_id)
@@ -715,6 +731,7 @@ async def get_audience_blockers(
     company = db.query(Tenant).filter(Tenant.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    _enforce_tenant_scope(current_user, company_id)
 
     # Get documents assigned to this company
     assigned_docs = (

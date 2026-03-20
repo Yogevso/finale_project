@@ -201,7 +201,7 @@ class TestRoleEscalationSecurity:
                 "email": "hacker@example.com",
                 "username": "hacker",
                 "full_name": "Hacker",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "system_admin",
             },
         )
@@ -216,7 +216,7 @@ class TestRoleEscalationSecurity:
                 "email": "hacker@example.com",
                 "username": "hacker",
                 "full_name": "Hacker",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "admin",
             },
         )
@@ -231,7 +231,7 @@ class TestRoleEscalationSecurity:
                 "email": "newuser@example.com",
                 "username": "newuser",
                 "full_name": "New User",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "viewer",
             },
         )
@@ -303,7 +303,7 @@ class TestInvitationSecurity:
                 "token": "invalid_token",
                 "username": "hacker",
                 "full_name": "Hacker",
-                "password": "password123",
+                "password": "Password1!",
             },
         )
         assert response.status_code in [400, 404]

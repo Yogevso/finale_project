@@ -93,8 +93,8 @@ def list_public_documents(
     topic: Optional[str] = Query(None, description="Filter by topic"),
     platform: Optional[str] = Query(None, description="Filter by platform"),
     search: Optional[str] = Query(None, description="Search in title/description"),
-    sort_by: Optional[str] = Query("created_at", description="Sort field"),
-    sort_order: Optional[str] = Query("desc", description="Sort order (asc/desc)"),
+    sort_by: Optional[str] = Query("created_at", pattern="^(title|created_at|updated_at)$", description="Sort field: title, created_at, updated_at"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort order (asc/desc)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -386,7 +386,7 @@ def list_public_categories(db: Session = Depends(get_db)):
         db.query(Document.category, func.count(Document.id).label("count"))
         .filter(
             Document.visibility == DocumentVisibility.PUBLIC,
-            Document.status == DocumentStatus.PUBLISHED,
+            Document.status == DocumentStatus.ACTIVE,
             Document.category != None,  # noqa: E711
             Document.category != "",
         )
@@ -411,7 +411,7 @@ def search_public_documents(
     db: Session = Depends(get_db),
 ):
     """
-    Full-text search across public documents.
+    Search across public document metadata.
 
     No authentication required.
 
@@ -419,7 +419,11 @@ def search_public_documents(
     - Title
     - Description
     - Tags
-    - Document content (latest published version)
+    - Document number
+    - Topic
+    - Platform
+
+    Note: This endpoint searches metadata fields only, not document body content.
     """
     search_term = f"%{q}%"
 
@@ -547,7 +551,7 @@ def get_public_stats(db: Session = Depends(get_db)):
         db.query(func.count(func.distinct(Document.category)))
         .filter(
             Document.visibility == DocumentVisibility.PUBLIC,
-            Document.status == DocumentStatus.PUBLISHED,
+            Document.status == DocumentStatus.ACTIVE,
             Document.category != None,  # noqa: E711
             Document.category != "",
         )
@@ -667,14 +671,14 @@ def get_public_rss_feed(
         pub_date = updated_at.strftime("%a, %d %b %Y %H:%M:%S GMT") if updated_at else ""
         lines.append("    <item>\n")
         lines.append(f"      <title>{_escape(title)}</title>\n")
-        lines.append(f"      <link>{_escape(origin)}/docs/{doc_id}</link>\n")
+        lines.append(f"      <link>{_escape(origin)}/doc/{doc_id}</link>\n")
         if description:
             lines.append(f"      <description>{_escape(description)}</description>\n")
         if category:
             lines.append(f"      <category>{_escape(category)}</category>\n")
         if pub_date:
             lines.append(f"      <pubDate>{pub_date}</pubDate>\n")
-        lines.append(f"      <guid>{_escape(origin)}/docs/{doc_id}</guid>\n")
+        lines.append(f"      <guid>{_escape(origin)}/doc/{doc_id}</guid>\n")
         lines.append("    </item>\n")
 
     lines.append("  </channel>\n")

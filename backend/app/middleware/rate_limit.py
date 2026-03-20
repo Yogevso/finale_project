@@ -16,6 +16,31 @@ from app.utils.request_ip import get_client_ip
 
 logger = logging.getLogger(__name__)
 
+# Lazy Redis client — initialized once when REDIS_URL is configured
+_redis_client = None
+_redis_init_done = False
+
+
+def _get_redis_client():
+    """Return a Redis client if REDIS_URL is configured, else None."""
+    global _redis_client, _redis_init_done
+    if _redis_init_done:
+        return _redis_client
+    _redis_init_done = True
+    if settings.REDIS_URL:
+        try:
+            import redis as redis_lib
+
+            _redis_client = redis_lib.Redis.from_url(
+                settings.REDIS_URL, decode_responses=True, socket_connect_timeout=2
+            )
+            _redis_client.ping()
+            logger.info("Rate limiter using Redis backend")
+        except Exception:
+            logger.warning("Redis unavailable — falling back to in-memory rate limiting")
+            _redis_client = None
+    return _redis_client
+
 
 @dataclass
 class RateLimitInfo:
@@ -44,6 +69,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         f"{settings.API_PREFIX}/docs",
         f"{settings.API_PREFIX}/redoc",
         f"{settings.API_PREFIX}/openapi.json",
+    }
+    AUTH_PATHS = {
         f"{settings.API_PREFIX}/auth/login",
         f"{settings.API_PREFIX}/auth/forgot-password",
     }
@@ -81,6 +108,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _resolve_limit_profile(self, *, request_path: str, method: str) -> tuple[int, int, str]:
         """Resolve path-specific rate-limit profile."""
+        # Auth endpoints get a strict limit (10 req/min) to prevent brute-force
+        if request_path in self.AUTH_PATHS:
+            return 10, 60, "auth"
         # Z-017: Admin endpoints get a higher limit (500 req/min)
         if request_path.startswith(self.ADMIN_PATH_PREFIX):
             return 500, 60, "admin"
@@ -104,37 +134,72 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     ) -> tuple[bool, int, int]:
         """
         Check if client is rate limited.
+        Uses Redis when available, falls back to in-memory.
 
         Returns:
             (is_limited, remaining_requests, reset_time)
         """
         resolved_limit = max(1, int(max_requests if max_requests is not None else self.max_requests))
         resolved_window = max(1, int(window_seconds if window_seconds is not None else self.window_seconds))
+        bucket_key = f"rl:{scope}:{client_ip}"
+
+        rclient = _get_redis_client()
+        if rclient is not None:
+            return self._redis_rate_check(rclient, bucket_key, resolved_limit, resolved_window)
+
+        return self._memory_rate_check(client_ip, scope, resolved_limit, resolved_window)
+
+    def _redis_rate_check(
+        self, rclient, bucket_key: str, limit: int, window: int
+    ) -> tuple[bool, int, int]:
+        """Atomic rate check via Redis INCR + EXPIRE."""
+        try:
+            pipe = rclient.pipeline(transaction=True)
+            pipe.incr(bucket_key)
+            pipe.ttl(bucket_key)
+            count, ttl = pipe.execute()
+
+            if ttl == -1:
+                # Key exists but has no TTL — set it
+                rclient.expire(bucket_key, window)
+                ttl = window
+
+            reset_time = int(time.time()) + max(ttl, 1)
+
+            if count > limit:
+                return True, 0, reset_time
+
+            remaining = limit - count
+            return False, remaining, reset_time
+        except Exception:
+            logger.warning("Redis rate-limit error — falling back to in-memory")
+            return False, limit - 1, int(time.time()) + window
+
+    def _memory_rate_check(
+        self, client_ip: str, scope: str, limit: int, window: int
+    ) -> tuple[bool, int, int]:
+        """In-memory sliding-window rate check (original logic)."""
         current_time = time.time()
         bucket_key = f"{scope}:{client_ip}"
         info = self.clients[bucket_key]
 
-        # Check if window has expired
         if (
             info.window_start == 0.0
-            or info.window_seconds != resolved_window
-            or current_time - info.window_start > resolved_window
+            or info.window_seconds != window
+            or current_time - info.window_start > window
         ):
-            # Reset window
             info.window_start = current_time
-            info.window_seconds = resolved_window
+            info.window_seconds = window
             info.count = 1
-            return False, resolved_limit - 1, int(current_time + resolved_window)
+            return False, limit - 1, int(current_time + window)
 
-        # Within window, check count
-        if info.count >= resolved_limit:
-            reset_time = int(info.window_start + resolved_window)
+        if info.count >= limit:
+            reset_time = int(info.window_start + window)
             return True, 0, reset_time
 
-        # Increment count
         info.count += 1
-        remaining = resolved_limit - info.count
-        reset_time = int(info.window_start + resolved_window)
+        remaining = limit - info.count
+        reset_time = int(info.window_start + window)
         return False, remaining, reset_time
 
     @staticmethod

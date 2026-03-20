@@ -66,7 +66,7 @@ class SearchPublicDocumentsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search query"},
+            "query": {"type": "string", "description": "Search query", "maxLength": 500},
             "limit": {"type": "integer", "description": "Max results (default 10)"},
         },
         "required": ["query"],

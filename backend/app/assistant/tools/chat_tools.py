@@ -138,7 +138,7 @@ class SearchChatMessagesTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search keyword or phrase"},
+            "query": {"type": "string", "description": "Search keyword or phrase", "maxLength": 500},
             "chat_id": {"type": "integer", "description": "Limit to a specific chat (optional)"},
             "limit": {"type": "integer", "description": "Max results (default 15)"},
         },
