@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/Yogevso/finale_project/actions/workflows/test.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/test.yml)
 
-A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time notifications, customer portal with company-based access, and a public viewer portal.
+A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time collaboration, AI-powered assistant with RAG, customer portal with company-based access, and a public viewer portal.
 
 ---
 
@@ -72,6 +72,19 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
   - Export reports (CSV/PDF)
   - Interactive charts with Recharts
 
+- **🤖 AI Assistant**
+  - Self-hosted LLM via Ollama (llama3.1:8b)
+  - RAG pipeline with ChromaDB vector storage
+  - Tool-augmented responses (document search, analytics queries)
+  - Document content extraction and understanding
+  - Conversation history with context management
+
+- **💬 Chat & Messaging**
+  - Real-time direct and group messaging
+  - Group creation and management
+  - Message reactions and threading
+  - Online presence indicators
+
 - **🔍 Search & Filtering**
   - Full-text search across documents
   - Filter by category, status, date range
@@ -138,18 +151,20 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   React SPA     │────▶│  FastAPI        │     │  Hocuspocus     │
-│   (Vite + TS)   │     │  Backend        │◀───▶│  Collab Server  │
-│   Port: 3000    │     │  Port: 8000     │     │  Port: 8002     │
+│   React SPA     │────▶│  FastAPI        │────▶│  Ollama (LLM)   │
+│   (Vite + TS)   │     │  Backend        │     │  llama3.1:8b    │
+│   Port: 3000    │     │  Port: 8000     │     │  Port: 11434    │
 └────────┬────────┘     └────────┬────────┘     └─────────────────┘
-         │                       │                      ▲
-         │   WebSocket           │                      │
-         └───────────────────────┼──────────────────────┘
-                    ┌────────────┼────────────┐
+         │                       │
+         │   WebSocket           │◀───▶┌─────────────────┐
+         │                       │     │  Hocuspocus     │
+         └───────────────────────┼────▶│  Collab Server  │
+                                 │     │  Port: 8002     │
+                    ┌────────────┼─────└─────────────────┘
                     ▼            ▼            ▼
               ┌──────────┐ ┌──────────┐ ┌──────────┐
-              │  SQLite  │ │ S3/MinIO │ │  SMTP    │
-              │ Database │ │ Storage  │ │  Email   │
+              │  SQLite  │ │ ChromaDB │ │ S3/MinIO │
+              │ Database │ │ Vectors  │ │ Storage  │
               └──────────┘ └──────────┘ └──────────┘
 ```
 
@@ -157,39 +172,40 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
 
 | Layer             | Technology                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------ |
-| **Frontend**      | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor                         |
-| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette)                |
+| **Frontend**      | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor, Recharts              |
+| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette), Dark Mode     |
 | **Real-time**     | Hocuspocus (Yjs CRDT), WebSocket collaboration                                       |
-| **Backend**       | FastAPI 0.109+, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0                           |
+| **Backend**       | FastAPI 0.115, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0                            |
+| **AI / RAG**      | Ollama (llama3.1:8b), ChromaDB vector store, tool-augmented generation               |
 | **Database**      | SQLite (development), PostgreSQL (production ready)                                  |
 | **Storage**       | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem)                          |
 | **Email**         | aiosmtplib (SMTP), HTML templates                                                    |
-| **Testing**       | Pytest 262+ tests (backend), Vitest (frontend), Playwright 278 E2E tests (100% pass) |
-| **CI/CD**         | GitHub Actions (lint, test, build, docker)                                           |
-| **Deployment**    | Docker Compose                                                                       |
+| **Testing**       | Pytest (backend), Vitest (frontend), Playwright E2E, Lighthouse CI                   |
+| **CI/CD**         | GitHub Actions (8 workflows: CI, CD, PR checks, security, architecture, SLO, chaos)  |
+| **Deployment**    | Docker Compose (4 services)                                                          |
 
 ---
 
 ## 📦 Project Structure
 
-As of 2026-02-28:
+As of 2026-03-20:
 
-- Refactor waves `E` through `O` are complete.
+- Refactor waves `E` through `Y` are complete.
 - Architecture governance, migration safety, contract testing, and resilience/chaos checks are in place.
-- Wave O observability is implemented:
-  - use-case telemetry/tracing
-  - SLO evaluation
-  - burn-rate alert evaluation
-  - scheduled SLO evidence workflow
-- Selective event-sourcing pilot (review workflow) is implemented behind a feature flag.
+- Wave O observability: use-case telemetry, SLO evaluation, burn-rate alerts.
+- Selective event-sourcing pilot (review workflow) behind a feature flag.
+- Wave X: AI assistant with Ollama + RAG + tool-augmented chat.
+- Wave Y: DOCX/PPTX ingestion pipeline.
+- Audit wave: accessibility, dark mode, skeleton loading, e2e test suites (a11y, performance, responsive, visual, UX).
 
 ## Repository Layout
 
-- `backend/`: FastAPI app, domain/application layers, persistence, tests
-- `frontend/`: React + TypeScript SPA
-- `collab-server/`: Hocuspocus real-time editing server
+- `backend/`: FastAPI app, domain/application layers, AI assistant, persistence, tests
+- `frontend/`: React + TypeScript SPA (pages, features, components, e2e tests)
+- `collab-server/`: Hocuspocus real-time editing server (Yjs CRDT)
 - `docs/`: ADRs, migration playbooks, architecture docs, SLO and chaos evidence
 - `scripts/`: migration safety, chaos, observability, scaffolding tools
+- `data/`: ChromaDB vector store, uploaded files
 - `plan`: active execution plan and wave progress log
 
 ### Typography
@@ -266,7 +282,7 @@ Backend:
 
 ---
 
-### Real-time Collaboration Server (Hocuspocus + Yjs)
+### Frontend (React + Vite)
 
 ```bash
 cd frontend
@@ -274,12 +290,11 @@ npm install
 npm run dev
 ```
 
-- WebSocket: ws://localhost:8002
-- Health (dev): http://localhost:8003/health
+- Frontend: http://localhost:3000
 
 ---
 
-### Frontend (React + Vite)
+### Real-time Collaboration Server (Hocuspocus + Yjs)
 
 ```bash
 cd collab-server
@@ -287,7 +302,8 @@ npm install
 npm run dev
 ```
 
-- Frontend: http://localhost:3000
+- WebSocket: ws://localhost:8002
+- Health (dev): http://localhost:8003/health
 
 ---
 
@@ -313,6 +329,7 @@ Services started:
 - Backend (8000)
 - Frontend (3000)
 - Collab Server (8002 + 8003)
+- Ollama LLM (11434)
 
 Access:
 
@@ -320,6 +337,7 @@ Access:
 - Backend: http://localhost:8000
 - Swagger: http://localhost:8000/api/v1/docs
 - Collab WS: ws://localhost:8002
+- Ollama API: http://localhost:11434
 
 Stop:
 
@@ -537,14 +555,18 @@ ruff format app/
 
 ## 🔄 CI/CD Pipeline
 
-The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
+GitHub Actions workflows in `.github/workflows/`:
 
-1. **Backend Lint** - Ruff code quality checks
-2. **Backend Tests** - Pytest with SQLite
-3. **Frontend Lint** - ESLint + TypeScript checks
-4. **Frontend Build** - Vite production build
-5. **Frontend Tests** - Vitest unit tests
-6. **Docker Build** - Build and validate images (main branch only)
+| Workflow | Purpose |
+| --- | --- |
+| `ci.yml` | Lint, test, build (backend + frontend) |
+| `cd.yml` | Continuous deployment |
+| `pr-checks.yml` | Pull request validation gates |
+| `security.yml` | Security scanning |
+| `architecture-fitness.yml` | Architecture compliance checks |
+| `architecture-governance.yml` | Governance rules enforcement |
+| `slo-burn-rate.yml` | SLO burn-rate monitoring |
+| `staging-chaos.yml` | Chaos testing on staging |
 
 ---
 
@@ -552,28 +574,34 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs:
 
 ### Completed ✅
 
-- [x] User authentication & authorization
-- [x] Document CRUD with rich text
+- [x] User authentication & authorization (JWT, RBAC, multi-tenancy)
+- [x] Document CRUD with rich text (TipTap)
 - [x] Version control with publishing
-- [x] File attachments (S3)
-- [x] Threaded comments
+- [x] File attachments (S3-compatible)
+- [x] Threaded & inline comments
 - [x] Notifications (in-app + email)
-- [x] Multi-tenancy
+- [x] Multi-tenancy with tenant isolation
 - [x] Public viewer portal
 - [x] Search & saved searches
-- [x] Engagement tracking
-- [x] Customer Portal (company-based document access, feedback)
-- [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant sections)
+- [x] Engagement tracking & bookmarks
+- [x] Customer Portal (company-based document access, feedback, NPS)
+- [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant)
 - [x] Real-time collaboration (TipTap + Yjs + Hocuspocus, presence, offline, snapshots)
+- [x] AI-powered assistant (Ollama + RAG + ChromaDB + tool-augmented chat)
+- [x] Real-time chat & messaging (direct, groups, reactions)
+- [x] DOCX/PPTX content ingestion pipeline
+- [x] Dark mode support
+- [x] Accessibility audit & improvements (WCAG compliance)
+- [x] Skeleton loading states & performance optimizations
+- [x] E2E test suites (a11y, performance, responsive, visual, UX)
+- [x] Architecture governance & SLO monitoring
+- [x] GDPR compliance endpoints
 
 ### Planned 🔜
 
 - [ ] Document templates
 - [ ] Workflow approvals
 - [ ] Mobile app (React Native)
-- [ ] AI-powered search and summaries
-
-> Implementation details: see REALTIME_COLLABORATION_PLAN.md
 
 ---
 
