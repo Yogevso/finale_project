@@ -904,6 +904,7 @@ class DocumentService(TenantAwareService[Document]):
                 )
                 if document.platform_id != platform.id:
                     changes.append(f"Platform changed to '{platform.name}'")
+                # H-14: Only set the FK; keep string in sync during deprecation period
                 document.platform = platform.name
                 document.platform_id = platform.id
 

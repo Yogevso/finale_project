@@ -259,7 +259,7 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
         description=document.description,
         category=document.category,
         topic=document.topic,
-        platform=document.platform,
+        platform=document.platform_name,
         release_branch=document.release_branch,
         tags=document.tags,
         created_at=document.created_at,
@@ -514,6 +514,12 @@ def get_public_attachment(document_id: int, attachment_id: int, db: Session = De
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or not publicly accessible",
         )
+
+    # C6: Only serve attachments that existed at publish time
+    from app.services.published_attachment_resolver import is_attachment_in_published_snapshot
+
+    if not is_attachment_in_published_snapshot(db, document_id, attachment_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
     # Get attachment
     attachment = (

@@ -368,7 +368,7 @@ class Document(Base):
     )
     category = Column(String(100), nullable=True, index=True)
     topic = Column(String(150), nullable=True, index=True)
-    platform = Column(String(100), nullable=True, index=True)
+    platform = Column(String(100), nullable=True, index=True)  # DEPRECATED: use platform_id / platform_ref. Will be dropped in next major version.
     platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
@@ -393,6 +393,13 @@ class Document(Base):
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="document")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
+
+    @property
+    def platform_name(self) -> str | None:
+        """H-14: Resolve platform name through the FK relationship first, fall back to legacy string."""
+        if self.platform_ref is not None:
+            return self.platform_ref.name
+        return self.platform
     watchers = relationship(
         "DocumentWatcher", back_populates="document", cascade="all, delete-orphan"
     )

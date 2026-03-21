@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
+from app.application.policies.access_policies import SupportAccessPolicy
 from app.models import SupportTicketStatus, User
 from app.schemas.chat import (
     AssignAgentRequest,
@@ -26,6 +27,8 @@ from app.services.support_service import SupportTicketService
 from app.ws.manager import chat_manager
 
 router = APIRouter()
+
+_support_policy = SupportAccessPolicy()
 
 
 def _get_support_service(db: Session = Depends(get_db)) -> SupportTicketService:

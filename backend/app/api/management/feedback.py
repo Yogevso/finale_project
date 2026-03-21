@@ -26,6 +26,9 @@ from app.models import (
     Version,
 )
 from app.security import get_current_active_user
+from app.application.policies.access_policies import FeedbackAccessPolicy
+
+_feedback_policy = FeedbackAccessPolicy()
 
 
 def get_document_contributors(db: Session, document_id: int) -> Set[int]:
@@ -72,29 +75,10 @@ def get_document_contributors(db: Session, document_id: int) -> Set[int]:
 def can_view_feedback(
     db: Session, feedback: Feedback, current_user: User, contributors: Set[int] = None
 ) -> bool:
-    """
-    Check if a user can view a specific feedback.
-    Rules:
-    - Feedback author can always see their own feedback
-    - Internal staff who have contributed to the document can see all feedback
-    - System admins can see all feedback
-    """
-    # Feedback author can always see their own
-    if feedback.user_id == current_user.id:
-        return True
-
-    # System admin can see all
-    if current_user.role == UserRole.SYSTEM_ADMIN:
-        return True
-
-    # Internal staff who have contributed to this document can see feedback
-    if current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR, UserRole.VIEWER]:
-        if contributors is None:
-            contributors = get_document_contributors(db, feedback.document_id)
-        if current_user.id in contributors:
-            return True
-
-    return False
+    """Delegate to FeedbackAccessPolicy (M-29 centralisation)."""
+    if contributors is None:
+        contributors = get_document_contributors(db, feedback.document_id)
+    return _feedback_policy.can_view_feedback(current_user, feedback, contributors)
 
 
 # ========== Schemas ==========
@@ -149,8 +133,8 @@ router = APIRouter(prefix="/feedback", tags=["Feedback Management"])
 
 
 def require_admin_or_manager(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require admin or manager role"""
-    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
+    """Require admin or manager role — delegates to FeedbackAccessPolicy (M-29)."""
+    if not _feedback_policy.can_manage_feedback(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin or manager access required"
         )
@@ -158,14 +142,8 @@ def require_admin_or_manager(current_user: User = Depends(get_current_active_use
 
 
 def require_internal_staff(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require internal staff role (not customer)"""
-    if current_user.role not in [
-        UserRole.SYSTEM_ADMIN,
-        UserRole.ADMIN,
-        UserRole.MANAGER,
-        UserRole.EDITOR,
-        UserRole.VIEWER,
-    ]:
+    """Require internal staff role — delegates to FeedbackAccessPolicy (M-29)."""
+    if not _feedback_policy.can_update_status(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Internal staff access required"
         )
@@ -268,7 +246,7 @@ async def list_all_feedback(
                 document_number=fb.document.document_number if fb.document else "",
                 user_id=fb.user_id,
                 user_name=fb.user.full_name if fb.user else "Unknown",
-                user_email=fb.user.email if fb.user and current_user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN) else "",
+                user_email=fb.user.email if fb.user and _feedback_policy.can_see_email(current_user) else "",
                 tenant_id=fb.user.tenant_id if fb.user else None,
                 tenant_name=tenant.name if tenant else None,
                 feedback_type=fb.feedback_type,
@@ -335,7 +313,7 @@ async def get_feedback(
         document_number=feedback.document.document_number if feedback.document else "",
         user_id=feedback.user_id,
         user_name=feedback.user.full_name if feedback.user else "Unknown",
-        user_email=feedback.user.email if feedback.user and current_user.role in (UserRole.SYSTEM_ADMIN, UserRole.ADMIN) else "",
+        user_email=feedback.user.email if feedback.user and _feedback_policy.can_see_email(current_user) else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
         feedback_type=feedback.feedback_type,

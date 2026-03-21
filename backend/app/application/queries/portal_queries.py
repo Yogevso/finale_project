@@ -221,7 +221,7 @@ class PortalDocumentsQueryHandler:
                         description=doc.description,
                         category=doc.category,
                         topic=doc.topic,
-                        platform=doc.platform,
+                        platform=doc.platform_name,
                         release_branch=doc.release_branch,
                         tags=doc.tags,
                         visibility=doc.visibility.value if doc.visibility else "internal",
@@ -282,7 +282,7 @@ class PortalDocumentsQueryHandler:
                 content=content,
                 category=document.category,
                 topic=document.topic,
-                platform=document.platform,
+                platform=document.platform_name,
                 release_branch=document.release_branch,
                 tags=tags,
                 visibility=document.visibility.value if document.visibility else "internal",
@@ -318,6 +318,12 @@ class PortalDocumentsQueryHandler:
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         self._ensure_customer_document_access(document, query.current_user)
+
+        # C6: Only serve attachments present at publish time
+        from app.services.published_attachment_resolver import is_attachment_in_published_snapshot
+
+        if not is_attachment_in_published_snapshot(self.db, query.document_id, query.attachment_id):
+            raise HTTPException(status_code=404, detail="Attachment not found")
 
         attachment = (
             self.db.query(Attachment)
