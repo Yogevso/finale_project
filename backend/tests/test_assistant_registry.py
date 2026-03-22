@@ -179,7 +179,7 @@ class TestToolExecution:
         user = _make_user()
         result = _run(reg.execute_tool("failing_tool", user, 1, {}, MagicMock()))
         assert result.success is False
-        assert "boom" in result.error
+        assert "internal error" in result.error.lower()
 
 
 # ---------------------------------------------------------------------------

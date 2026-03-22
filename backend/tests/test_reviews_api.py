@@ -382,7 +382,7 @@ class TestPeerReview:
     """Test peer review workflow between editors"""
 
     @pytest.fixture
-    def second_editor(self, db):
+    def second_editor(self, db, default_tenant):
         """Create a second editor for peer review testing"""
         from app.models import User, UserRole
         from app.security import get_password_hash
@@ -395,6 +395,7 @@ class TestPeerReview:
             role=UserRole.EDITOR,
             is_active=True,
             is_email_verified=True,
+            tenant_id=default_tenant.id,
         )
         db.add(editor)
         db.commit()
@@ -439,6 +440,7 @@ class TestPeerReview:
             document_number=f"DOC-MGR-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.DRAFT,
             created_by=test_manager.id,
+            tenant_id=test_manager.tenant_id,
         )
         db.add(manager_doc)
         db.commit()

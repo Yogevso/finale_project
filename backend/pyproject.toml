@@ -24,16 +24,17 @@ python_files = ["test_*.py", "audience_smoke.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "-n", "8",
     "--strict-markers",
     "--tb=short",
     "-p", "no:asyncio",
+    "--durations=20",
 ]
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow tests",
     "smoke: Critical-path smoke tests",
+    "asyncio: Async tests",
 ]
 filterwarnings = [
     "ignore::pydantic.warnings.PydanticDeprecatedSince20",

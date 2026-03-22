@@ -64,6 +64,7 @@ def test_assign_company_set_use_case_replaces_assignments(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -91,6 +92,7 @@ def test_assign_company_set_use_case_replay_is_state_idempotent(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(document)
     db.commit()

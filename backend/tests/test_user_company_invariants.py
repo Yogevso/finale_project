@@ -1,5 +1,8 @@
 """Regression tests for customer-company invariants across user/company flows."""
 
+from app.models import UserRole
+from tests.factories import create_user
+
 
 class TestUserCompanyInvariants:
     def test_admin_create_customer_defaults_to_admin_tenant(
@@ -59,10 +62,20 @@ class TestUserCompanyInvariants:
         assert "Customers must be assigned to a company" in response.json()["detail"]
 
     def test_transition_to_customer_requires_tenant_or_same_request_assignment(
-        self, client, system_admin_headers, test_user, test_tenant
+        self, client, db, system_admin_headers, test_tenant
     ):
+        # Create a user WITHOUT tenant_id so the transition to customer fails
+        no_tenant_user = create_user(
+            db,
+            email="no_tenant@example.com",
+            username="no_tenant_user",
+            full_name="No Tenant User",
+            role=UserRole.EDITOR,
+            is_active=True,
+        )
+
         fail_response = client.put(
-            f"/api/v1/users/{test_user.id}",
+            f"/api/v1/users/{no_tenant_user.id}",
             headers=system_admin_headers,
             json={"role": "customer"},
         )
@@ -70,7 +83,7 @@ class TestUserCompanyInvariants:
         assert fail_response.json()["detail"] == "Customers must be assigned to a company"
 
         success_response = client.put(
-            f"/api/v1/users/{test_user.id}",
+            f"/api/v1/users/{no_tenant_user.id}",
             headers=system_admin_headers,
             json={"role": "customer", "tenant_id": test_tenant.id},
         )

@@ -160,6 +160,7 @@ class TestPortalDocumentDetailEndpoint:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add(document)
         db.commit()
@@ -213,6 +214,7 @@ class TestPortalDocumentDetailEndpoint:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add(document)
         db.commit()

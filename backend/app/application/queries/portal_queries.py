@@ -133,7 +133,14 @@ class PortalDocumentsQueryHandler:
 
     def _customer_documents_query(self, user: User):
         repository = DocumentRepository(self.db)
-        return self._customer_visibility_spec(user).apply(repository.query(), Document)
+        base = self._customer_visibility_spec(user).apply(repository.query(), Document)
+        # H-23: Only include documents that have at least one published version
+        published_doc_ids = (
+            self.db.query(Version.document_id)
+            .filter(Version.is_published.is_(True))
+            .subquery()
+        )
+        return base.filter(Document.id.in_(published_doc_ids))
 
     @staticmethod
     def _tenant_scope(user: User) -> str:

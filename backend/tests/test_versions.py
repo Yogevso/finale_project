@@ -124,7 +124,7 @@ class TestVersionsAPI:
         self,
         client: TestClient,
         db,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         monkeypatch,
@@ -132,7 +132,7 @@ class TestVersionsAPI:
         """Simulate publish crash and verify state remains at pre-publish values."""
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Chaos publish candidate", "changes_summary": "chaos"},
         )
         assert create_resp.status_code == 201
@@ -140,7 +140,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "ready for chaos approval"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -168,7 +168,7 @@ class TestVersionsAPI:
         with pytest.raises(RuntimeError, match="chaos publish failure"):
             client.post(
                 f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-                headers=admin_headers,
+                headers=system_admin_headers,
             )
 
         document_after = db.query(Document).filter(Document.id == sample_document["id"]).first()
@@ -184,7 +184,7 @@ class TestVersionsAPI:
         self,
         client: TestClient,
         db,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         monkeypatch,
@@ -193,7 +193,7 @@ class TestVersionsAPI:
 
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Kill-switch control", "changes_summary": "pre-enforcement"},
         )
         assert create_resp.status_code == 201
@@ -201,7 +201,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "review for enforcement-on test"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -222,7 +222,7 @@ class TestVersionsAPI:
 
         publish_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert publish_resp.status_code == 400
         assert "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
@@ -231,7 +231,7 @@ class TestVersionsAPI:
         self,
         client: TestClient,
         db,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         monkeypatch,
@@ -240,7 +240,7 @@ class TestVersionsAPI:
 
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Kill-switch advisory", "changes_summary": "enforcement off"},
         )
         assert create_resp.status_code == 201
@@ -248,7 +248,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "review for enforcement-off test"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -269,7 +269,7 @@ class TestVersionsAPI:
 
         publish_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert publish_resp.status_code == 200
         payload = publish_resp.json()
@@ -281,7 +281,7 @@ class TestVersionsAPI:
         self,
         client: TestClient,
         db,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         monkeypatch,
@@ -291,7 +291,7 @@ class TestVersionsAPI:
 
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Safe mode off", "changes_summary": "unreachable validation"},
         )
         assert create_resp.status_code == 201
@@ -299,7 +299,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "ready for safe-mode off check"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -323,7 +323,7 @@ class TestVersionsAPI:
 
         publish_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert publish_resp.status_code == 400
         assert "Audience validation service is unavailable" in publish_resp.json()["detail"]
@@ -335,7 +335,7 @@ class TestVersionsAPI:
     def test_publish_safe_mode_allows_when_audience_validation_service_unreachable(
         self,
         client: TestClient,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         monkeypatch,
@@ -345,7 +345,7 @@ class TestVersionsAPI:
 
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Safe mode on", "changes_summary": "unreachable validation fallback"},
         )
         assert create_resp.status_code == 201
@@ -353,7 +353,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "ready for safe-mode on check"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -377,7 +377,7 @@ class TestVersionsAPI:
 
         publish_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert publish_resp.status_code == 200
         payload = publish_resp.json()
@@ -525,13 +525,13 @@ class TestVersionsAPI:
     def test_schedule_publish_and_cancel_manage_audience_snapshots(
         self,
         client: TestClient,
-        admin_token: str,
+        system_admin_headers: dict,
         manager_headers: dict,
         sample_document: dict,
         test_tenant,
     ):
         """Scheduling captures audience snapshots and cancelling clears them."""
-        headers = {"Authorization": f"Bearer {admin_token}"}
+        headers = system_admin_headers
 
         update_doc_resp = client.put(
             f"/api/v1/documents/{sample_document['id']}",
@@ -605,7 +605,7 @@ class TestVersionsAPI:
         self,
         client: TestClient,
         db,
-        admin_headers: dict,
+        system_admin_headers: dict,
         manager_headers: dict,
         test_admin,
         sample_document: dict,
@@ -613,7 +613,7 @@ class TestVersionsAPI:
         """Processor must refuse scheduled publish if latest review is no longer approved."""
         create_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"content": "Scheduled candidate", "changes_summary": "v2"},
         )
         assert create_resp.status_code == 201
@@ -621,7 +621,7 @@ class TestVersionsAPI:
 
         submit_resp = client.post(
             f"/api/v1/reviews/documents/{sample_document['id']}/submit",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"version_id": version_id, "message": "approve this for scheduler"},
         )
         assert submit_resp.status_code in [200, 201]
@@ -636,7 +636,7 @@ class TestVersionsAPI:
 
         schedule_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={
                 "scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
             },
@@ -659,7 +659,7 @@ class TestVersionsAPI:
 
         process_resp = client.post(
             "/api/v1/scheduled-publishes/process",
-            headers=admin_headers,
+            headers=system_admin_headers,
             params={"batch_size": 10},
         )
         assert process_resp.status_code == 200

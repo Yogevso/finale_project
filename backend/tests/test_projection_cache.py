@@ -12,7 +12,7 @@ from app.application.queries.search_queries import (
     SearchFacetsQuery,
     SearchQueryHandler,
 )
-from app.models import Document, DocumentStatus, DocumentVisibility, Tenant
+from app.models import Document, DocumentStatus, DocumentVisibility, Tenant, Version
 from app.projections import ProjectionCacheError, get_projection_cache
 
 
@@ -77,8 +77,20 @@ def test_portal_projection_invalidates_after_document_write(db, test_admin, test
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(document)
+    db.flush()
+
+    version = Version(
+        document_id=document.id,
+        version_number=1,
+        content="Published content",
+        is_published=True,
+        published_at=datetime.utcnow(),
+        created_by=test_admin.id,
+    )
+    db.add(version)
     db.commit()
     db.refresh(document)
 

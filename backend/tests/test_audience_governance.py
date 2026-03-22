@@ -128,27 +128,27 @@ def test_signed_visibility_change_audit_record_is_verifiable(
 def test_exposure_risk_and_assignment_churn_metrics(
     client,
     db,
-    admin_headers,
+    system_admin_headers,
     manager_headers,
     test_tenant,
     test_tenant_2,
 ):
     exposure_doc = _create_document_with_visibility(
         client,
-        admin_headers,
+        system_admin_headers,
         title="Exposure transition doc",
         visibility="internal",
     )
     exposure_update = client.put(
         f"/api/v1/documents/{exposure_doc['id']}",
-        headers={**admin_headers, "If-Match": exposure_doc["etag"]},
+        headers={**system_admin_headers, "If-Match": exposure_doc["etag"]},
         json={"visibility": "public", "reason": "Intentional public release"},
     )
     assert exposure_update.status_code == 200
 
     churn_doc = _create_document_with_visibility(
         client,
-        admin_headers,
+        system_admin_headers,
         title="Churn metric doc",
         visibility="company",
         company_ids=[test_tenant.id],
@@ -156,7 +156,7 @@ def test_exposure_risk_and_assignment_churn_metrics(
 
     assign_response = client.post(
         f"/api/v1/documents/{churn_doc['id']}/assign-companies",
-        headers={**admin_headers, "If-Match": churn_doc["etag"]},
+        headers={**system_admin_headers, "If-Match": churn_doc["etag"]},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert assign_response.status_code == 200
@@ -164,7 +164,7 @@ def test_exposure_risk_and_assignment_churn_metrics(
 
     remove_response = client.delete(
         f"/api/v1/documents/{churn_doc['id']}/assign-companies/{test_tenant_2.id}",
-        headers={**admin_headers, "If-Match": next_etag},
+        headers={**system_admin_headers, "If-Match": next_etag},
     )
     assert remove_response.status_code == 200
 

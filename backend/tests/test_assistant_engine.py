@@ -320,20 +320,20 @@ class TestAuditLogging:
             tool_call_id="tc1", name="list_users",
             success=True, result="Found 3 users",
         )
-        AssistantEngine._log_tool_use(db, user, tc, result)
-        db.add.assert_called_once()
-        db.commit.assert_called_once()
+        with patch("app.assistant.engine.write_audit_log") as mock_wal:
+            AssistantEngine._log_tool_use(db, user, tc, result)
+            mock_wal.assert_called_once()
 
     def test_log_tool_use_handles_db_error(self):
         """Audit log failure should not crash the engine."""
         from app.assistant.schemas import ToolCall, ToolResult
         db = MagicMock()
-        db.commit.side_effect = Exception("DB error")
         user = _make_user()
         tc = ToolCall(id="tc1", name="test", arguments={})
         result = ToolResult(tool_call_id="tc1", name="test", success=True, result="ok")
-        # Should not raise
-        AssistantEngine._log_tool_use(db, user, tc, result)
+        # Should not raise even when write_audit_log fails
+        with patch("app.assistant.engine.write_audit_log", side_effect=Exception("DB error")):
+            AssistantEngine._log_tool_use(db, user, tc, result)
 
 
 # ---------------------------------------------------------------------------

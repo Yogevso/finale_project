@@ -90,6 +90,7 @@ def test_portal_query_handler_prefers_published_version_in_list(db, test_admin, 
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -139,6 +140,7 @@ def test_portal_query_handler_dashboard_counts_visible_docs(db, test_admin, test
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     company_doc = Document(
         title="Portal Handler Company",
@@ -146,6 +148,7 @@ def test_portal_query_handler_dashboard_counts_visible_docs(db, test_admin, test
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     hidden_company_doc = Document(
         title="Portal Handler Hidden",
@@ -153,12 +156,23 @@ def test_portal_query_handler_dashboard_counts_visible_docs(db, test_admin, test
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add_all([public_doc, company_doc, hidden_company_doc])
-    db.commit()
+    db.flush()
 
     company_doc.assigned_companies.append(test_customer.tenant)
     hidden_company_doc.assigned_companies.append(test_tenant_2)
+
+    for doc in [public_doc, company_doc, hidden_company_doc]:
+        db.add(Version(
+            document_id=doc.id,
+            version_number=1,
+            content="Published",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            created_by=test_admin.id,
+        ))
     db.commit()
 
     db.add_all(

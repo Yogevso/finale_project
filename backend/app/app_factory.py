@@ -179,16 +179,17 @@ class FastAPIAppFactory:
                 logger.warning("RBAC publish skipped: %s", exc)
 
             # Pre-warm the Ollama model so the first request is fast
-            try:
-                from app.assistant.ollama_client import OllamaClient
-                ollama = OllamaClient(
-                    base_url=settings.OLLAMA_BASE_URL,
-                    model=settings.ASSISTANT_MODEL,
-                )
-                import asyncio
-                asyncio.ensure_future(ollama.warmup())
-            except Exception as exc:
-                logger.warning("Ollama warmup skipped: %s", exc)
+            if settings.APP_ENV != "testing":
+                try:
+                    from app.assistant.ollama_client import OllamaClient
+                    ollama = OllamaClient(
+                        base_url=settings.OLLAMA_BASE_URL,
+                        model=settings.ASSISTANT_MODEL,
+                    )
+                    import asyncio
+                    asyncio.ensure_future(ollama.warmup())
+                except Exception as exc:
+                    logger.warning("Ollama warmup skipped: %s", exc)
 
     @staticmethod
     def _register_internal_routes(app: FastAPI) -> None:

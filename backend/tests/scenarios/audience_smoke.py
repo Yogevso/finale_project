@@ -18,12 +18,12 @@ def _create_publish_ready_version(
     *,
     client: TestClient,
     document_id: int,
-    admin_headers: dict,
+    system_admin_headers: dict,
     manager_headers: dict,
 ) -> int:
     create_resp = client.post(
         f"/api/v1/documents/{document_id}/versions",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={"content": "Smoke publish candidate", "changes_summary": "smoke"},
     )
     assert create_resp.status_code == 201
@@ -31,7 +31,7 @@ def _create_publish_ready_version(
 
     submit_resp = client.post(
         f"/api/v1/reviews/documents/{document_id}/submit",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={"version_id": version_id, "message": "smoke review"},
     )
     assert submit_resp.status_code in [200, 201]
@@ -72,13 +72,13 @@ def test_smoke_bulk_assign_companies_requires_auth(client: TestClient, sample_do
 
 def test_smoke_assign_companies_accepts_valid_payload(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     sample_document: dict,
     test_tenant,
 ):
     resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/assign-companies",
-        headers={**admin_headers, "If-Match": sample_document["etag"]},
+        headers={**system_admin_headers, "If-Match": sample_document["etag"]},
         json={"company_ids": [test_tenant.id]},
     )
     assert resp.status_code == 200
@@ -87,14 +87,14 @@ def test_smoke_assign_companies_accepts_valid_payload(
 
 def test_smoke_bulk_assign_companies_accepts_valid_payload(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     sample_document: dict,
     test_tenant,
 ):
     resp = client.put(
         f"/api/v1/documents/{sample_document['id']}/companies/batch",
         headers={
-            **admin_headers,
+            **system_admin_headers,
             "If-Match": sample_document["etag"],
             "Idempotency-Key": f"smoke-{uuid4().hex}",
         },
@@ -106,12 +106,12 @@ def test_smoke_bulk_assign_companies_accepts_valid_payload(
 
 def test_smoke_document_update_rejects_company_visibility_without_assignments(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     sample_document: dict,
 ):
     resp = client.put(
         f"/api/v1/documents/{sample_document['id']}",
-        headers={**admin_headers, "If-Match": sample_document["etag"]},
+        headers={**system_admin_headers, "If-Match": sample_document["etag"]},
         json={
             "visibility": "company",
             "reason": "Smoke: restrict without assignments",
@@ -124,12 +124,12 @@ def test_smoke_document_update_rejects_company_visibility_without_assignments(
 
 def test_smoke_publish_requires_approved_review(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     sample_document: dict,
 ):
     create_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={"content": "Smoke no review", "changes_summary": "should block"},
     )
     assert create_resp.status_code == 201
@@ -137,7 +137,7 @@ def test_smoke_publish_requires_approved_review(
 
     publish_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert publish_resp.status_code == 409
 
@@ -145,7 +145,7 @@ def test_smoke_publish_requires_approved_review(
 def test_smoke_publish_blocks_invalid_audience_when_enforcement_enabled(
     client: TestClient,
     db,
-    admin_headers: dict,
+    system_admin_headers: dict,
     manager_headers: dict,
     sample_document: dict,
     monkeypatch,
@@ -154,14 +154,14 @@ def test_smoke_publish_blocks_invalid_audience_when_enforcement_enabled(
     version_id = _create_publish_ready_version(
         client=client,
         document_id=sample_document["id"],
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         manager_headers=manager_headers,
     )
     _force_invalid_company_audience(db=db, document_id=sample_document["id"])
 
     publish_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert publish_resp.status_code == 400
     assert "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
@@ -170,7 +170,7 @@ def test_smoke_publish_blocks_invalid_audience_when_enforcement_enabled(
 def test_smoke_publish_warns_when_enforcement_disabled(
     client: TestClient,
     db,
-    admin_headers: dict,
+    system_admin_headers: dict,
     manager_headers: dict,
     sample_document: dict,
     monkeypatch,
@@ -179,14 +179,14 @@ def test_smoke_publish_warns_when_enforcement_disabled(
     version_id = _create_publish_ready_version(
         client=client,
         document_id=sample_document["id"],
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         manager_headers=manager_headers,
     )
     _force_invalid_company_audience(db=db, document_id=sample_document["id"])
 
     publish_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert publish_resp.status_code == 200
     payload = publish_resp.json()
@@ -196,7 +196,7 @@ def test_smoke_publish_warns_when_enforcement_disabled(
 
 def test_smoke_publish_blocks_when_validation_unreachable_and_safe_mode_off(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     manager_headers: dict,
     sample_document: dict,
     monkeypatch,
@@ -205,7 +205,7 @@ def test_smoke_publish_blocks_when_validation_unreachable_and_safe_mode_off(
     version_id = _create_publish_ready_version(
         client=client,
         document_id=sample_document["id"],
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         manager_headers=manager_headers,
     )
 
@@ -219,7 +219,7 @@ def test_smoke_publish_blocks_when_validation_unreachable_and_safe_mode_off(
     )
     publish_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert publish_resp.status_code == 400
     assert "Audience validation service is unavailable" in publish_resp.json()["detail"]
@@ -227,7 +227,7 @@ def test_smoke_publish_blocks_when_validation_unreachable_and_safe_mode_off(
 
 def test_smoke_publish_warns_when_validation_unreachable_and_safe_mode_on(
     client: TestClient,
-    admin_headers: dict,
+    system_admin_headers: dict,
     manager_headers: dict,
     sample_document: dict,
     monkeypatch,
@@ -236,7 +236,7 @@ def test_smoke_publish_warns_when_validation_unreachable_and_safe_mode_on(
     version_id = _create_publish_ready_version(
         client=client,
         document_id=sample_document["id"],
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         manager_headers=manager_headers,
     )
 
@@ -250,7 +250,7 @@ def test_smoke_publish_warns_when_validation_unreachable_and_safe_mode_on(
     )
     publish_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/publish",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert publish_resp.status_code == 200
     payload = publish_resp.json()

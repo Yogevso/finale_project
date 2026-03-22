@@ -40,7 +40,7 @@ def sysadmin_headers(client, sysadmin):
 
 
 @pytest.fixture
-def viewer_user(db):
+def viewer_user(db, default_tenant):
     return create_user(
         db,
         email="ai_viewer@example.com",
@@ -49,6 +49,7 @@ def viewer_user(db):
         plain_password="viewer123",
         role=UserRole.VIEWER,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 

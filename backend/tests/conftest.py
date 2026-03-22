@@ -68,6 +68,16 @@ from app.config import settings
 # generation on Windows/Python 3.14.
 settings.APP_ENV = "testing"
 
+# ---------------------------------------------------------------------------
+# Use fast bcrypt rounds during tests.  Default rounds=12 costs ~200-300 ms per
+# hash/verify.  With rounds=4 each call drops to <1 ms, saving minutes across
+# the full 1400+ test suite (every create_user + login fixture benefits).
+# ---------------------------------------------------------------------------
+from passlib.context import CryptContext as _CryptContext
+import app.auth_context.passwords as _pwd_mod
+
+_pwd_mod.pwd_context = _CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
+
 from app.db import Base, get_db, get_analytics_db, get_chat_db
 from app.db.bases import AnalyticsBase, ChatBase
 from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole, Version
@@ -528,6 +538,8 @@ def internal_document(db, test_admin):
 @pytest.fixture
 def company_document(db, test_admin, test_tenant):
     """Create a company-specific document assigned to test_tenant"""
+    from datetime import datetime
+
     doc = create_document(
         db,
         title="Company Document",
@@ -539,6 +551,16 @@ def company_document(db, test_admin, test_tenant):
     )
     # Assign to tenant
     doc.assigned_companies.append(test_tenant)
+    version = Version(
+        document_id=doc.id,
+        version_number=1,
+        content="Published company content",
+        is_published=True,
+        published_at=datetime.utcnow(),
+        created_by=test_admin.id,
+        published_by=test_admin.id,
+    )
+    db.add(version)
     db.commit()
     db.refresh(doc)
     return doc

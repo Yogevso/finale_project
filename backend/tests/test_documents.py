@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.db import Base
+from app.db import AnalyticsBase, Base
 from app.models import (
     ActionType,
     AuditLog,
@@ -96,11 +96,11 @@ def test_create_document_requires_platform(client, auth_headers):
 
 
 def test_create_company_visible_document_with_assignment(
-    client, auth_headers, test_tenant
+    client, system_admin_headers, test_tenant
 ):
     response = client.post(
         "/api/v1/documents",
-        headers=auth_headers,
+        headers=system_admin_headers,
         json=_document_create_payload(
             title="Company Scoped Doc",
             visibility="company",
@@ -131,14 +131,14 @@ def test_create_non_company_document_rejects_company_assignments(client, auth_he
 
 
 def test_create_company_visible_document_rejects_inactive_companies(
-    client, auth_headers, db, test_tenant
+    client, system_admin_headers, db, test_tenant
 ):
     test_tenant.is_active = False
     db.commit()
 
     response = client.post(
         "/api/v1/documents",
-        headers=auth_headers,
+        headers=system_admin_headers,
         json=_document_create_payload(
             title="Company Doc With Inactive Assignment",
             visibility="company",
@@ -180,15 +180,15 @@ def test_update_document_rejects_company_visibility_without_assignments(
 
 
 def test_update_document_allows_company_visibility_with_assignments(
-    client, admin_headers, db, test_admin, test_tenant
+    client, system_admin_headers, db, test_system_admin, test_tenant
 ):
     doc = Document(
         title="Visibility Transition With Assignment",
         document_number="DOC-VIS-TRANS-0002",
         status=DocumentStatus.DRAFT,
         visibility=DocumentVisibility.INTERNAL,
-        created_by=test_admin.id,
-        tenant_id=test_admin.tenant_id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -196,7 +196,7 @@ def test_update_document_allows_company_visibility_with_assignments(
 
     response = client.put(
         f"/api/v1/documents/{doc.id}",
-        headers={**admin_headers, "If-Match": doc.etag},
+        headers={**system_admin_headers, "If-Match": doc.etag},
         json={
             "visibility": "company",
             "reason": "Limit access to assigned companies",
@@ -622,6 +622,7 @@ def test_generate_document_number_seeds_from_existing_daily_documents(db, test_u
                 document_number=document_number,
                 status=DocumentStatus.DRAFT,
                 created_by=test_user.id,
+                tenant_id=test_user.tenant_id,
             )
         )
     db.commit()
@@ -644,6 +645,7 @@ def test_delete_document_rolls_back_audit_when_delete_fails(db, test_admin, monk
         document_number="DOC-DEL-ROLLBACK-0001",
         status=DocumentStatus.DRAFT,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -683,11 +685,21 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    AnalyticsBase.metadata.create_all(bind=engine)
 
     today_key = datetime.utcnow().strftime("%Y%m%d")
     prefix = f"DOC-{today_key}"
 
     with SessionLocal() as setup_db:
+        tenant = Tenant(
+            name="Sequence Tenant",
+            slug="sequence-tenant",
+            is_active=True,
+            company_type="customer",
+        )
+        setup_db.add(tenant)
+        setup_db.flush()
+
         user = User(
             email="sequence@example.com",
             username="sequence-user",
@@ -696,6 +708,7 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
             role=UserRole.EDITOR,
             is_active=True,
             is_email_verified=True,
+            tenant_id=tenant.id,
         )
         platform = Platform(name="Unspecified", slug="unspecified")
         setup_db.add(user)
@@ -703,6 +716,7 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
         setup_db.flush()
 
         user_id = user.id
+        tenant_id = tenant.id
         platform_id = platform.id
         for suffix in (1, 2, 3):
             setup_db.add(
@@ -711,6 +725,7 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
                     document_number=f"{prefix}-{suffix:04d}",
                     status=DocumentStatus.DRAFT,
                     created_by=user_id,
+                    tenant_id=tenant_id,
                     platform=platform.name,
                     platform_id=platform_id,
                 )
@@ -752,7 +767,7 @@ def test_create_document_concurrent_generation_uses_unique_sequences(tmp_path):
 
 
 def test_assign_companies_replaces_existing_set_on_each_request(
-    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    client, db, system_admin_headers, test_system_admin, test_tenant, test_tenant_2
 ):
     tenant_three = Tenant(
         name="Assignment Tenant Three",
@@ -768,7 +783,8 @@ def test_assign_companies_replaces_existing_set_on_each_request(
         document_number="DOC-ASG-SET-0001",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -777,7 +793,7 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
     first_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": document.etag},
+        headers={**system_admin_headers, "If-Match": document.etag},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert first_assign.status_code == 200
@@ -786,7 +802,7 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
     first_state = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert first_state.status_code == 200
     assert sorted(company["id"] for company in first_state.json()) == sorted(
@@ -795,14 +811,14 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
     second_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": next_etag},
+        headers={**system_admin_headers, "If-Match": next_etag},
         json={"company_ids": [test_tenant_2.id, tenant_three.id]},
     )
     assert second_assign.status_code == 200
 
     second_state = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert second_state.status_code == 200
     assert sorted(company["id"] for company in second_state.json()) == sorted(
@@ -811,14 +827,15 @@ def test_assign_companies_replaces_existing_set_on_each_request(
 
 
 def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibility(
-    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    client, db, system_admin_headers, test_system_admin, test_tenant, test_tenant_2
 ):
     document = Document(
         title="Set Semantics Idempotent Document",
         document_number="DOC-ASG-SET-0002",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -826,7 +843,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
     assign_with_duplicates = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": document.etag},
+        headers={**system_admin_headers, "If-Match": document.etag},
         json={"company_ids": [test_tenant.id, test_tenant.id, test_tenant_2.id]},
     )
     assert assign_with_duplicates.status_code == 200
@@ -835,7 +852,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
     state_after_first_assign = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert state_after_first_assign.status_code == 200
     assert sorted(company["id"] for company in state_after_first_assign.json()) == sorted(
@@ -845,7 +862,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
     etag_before_replay = next_etag
     idempotent_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": next_etag},
+        headers={**system_admin_headers, "If-Match": next_etag},
         json={"company_ids": [test_tenant_2.id, test_tenant.id]},
     )
     assert idempotent_assign.status_code == 200
@@ -855,7 +872,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
     state_after_idempotent_assign = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert state_after_idempotent_assign.status_code == 200
     assert sorted(company["id"] for company in state_after_idempotent_assign.json()) == sorted(
@@ -864,7 +881,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
     clear_assignments = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": next_etag},
+        headers={**system_admin_headers, "If-Match": next_etag},
         json={"company_ids": []},
     )
     assert clear_assignments.status_code == 400
@@ -872,7 +889,7 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
     state_after_clear = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert state_after_clear.status_code == 200
     assert sorted(company["id"] for company in state_after_clear.json()) == sorted(
@@ -881,14 +898,15 @@ def test_assign_companies_is_idempotent_and_rejects_clear_set_for_company_visibi
 
 
 def test_assign_companies_requires_if_match_header(
-    client, db, admin_headers, test_admin, test_tenant
+    client, db, system_admin_headers, test_system_admin, test_tenant
 ):
     document = Document(
         title="If-Match Required Document",
         document_number="DOC-ASG-PREC-0001",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -896,7 +914,7 @@ def test_assign_companies_requires_if_match_header(
 
     response = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={"company_ids": [test_tenant.id]},
     )
 
@@ -905,14 +923,15 @@ def test_assign_companies_requires_if_match_header(
 
 
 def test_assign_companies_rejects_stale_if_match_conflict(
-    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    client, db, system_admin_headers, test_system_admin, test_tenant, test_tenant_2
 ):
     document = Document(
         title="If-Match Conflict Document",
         document_number="DOC-ASG-CONFLICT-0001",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     db.add(document)
     db.commit()
@@ -921,14 +940,14 @@ def test_assign_companies_rejects_stale_if_match_conflict(
     stale_etag = document.etag
     first_assign = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": stale_etag},
+        headers={**system_admin_headers, "If-Match": stale_etag},
         json={"company_ids": [test_tenant.id]},
     )
     assert first_assign.status_code == 200
 
     stale_retry = client.post(
         f"/api/v1/documents/{document.id}/assign-companies",
-        headers={**admin_headers, "If-Match": stale_etag},
+        headers={**system_admin_headers, "If-Match": stale_etag},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert stale_retry.status_code == 409
@@ -936,14 +955,15 @@ def test_assign_companies_rejects_stale_if_match_conflict(
 
 
 def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
-    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    client, db, system_admin_headers, test_system_admin, test_tenant, test_tenant_2
 ):
     document = Document(
         title="Bulk assignment endpoint document",
         document_number="DOC-ASG-BULK-0001",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     document.assigned_companies = [test_tenant]
     db.add(document)
@@ -953,7 +973,7 @@ def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
     response = client.put(
         f"/api/v1/documents/{document.id}/companies/batch",
         headers={
-            **admin_headers,
+            **system_admin_headers,
             "If-Match": document.etag,
             "Idempotency-Key": f"bulk-set-{uuid4().hex}",
         },
@@ -966,7 +986,7 @@ def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
 
     assigned = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert assigned.status_code == 200
     assert sorted(company["id"] for company in assigned.json()) == sorted(
@@ -975,14 +995,15 @@ def test_bulk_assign_companies_endpoint_updates_set_and_emits_schema_header(
 
 
 def test_batch_assign_companies_put_endpoint_updates_set_in_single_request(
-    client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+    client, db, system_admin_headers, test_system_admin, test_tenant, test_tenant_2
 ):
     document = Document(
         title="Batch assignment endpoint document",
         document_number="DOC-ASG-BATCH-0001",
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
-        created_by=test_admin.id,
+        created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
     )
     document.assigned_companies = [test_tenant]
     db.add(document)
@@ -992,7 +1013,7 @@ def test_batch_assign_companies_put_endpoint_updates_set_in_single_request(
     response = client.put(
         f"/api/v1/documents/{document.id}/companies/batch",
         headers={
-            **admin_headers,
+            **system_admin_headers,
             "If-Match": document.etag,
             "Idempotency-Key": f"batch-set-{uuid4().hex}",
         },
@@ -1006,7 +1027,7 @@ def test_batch_assign_companies_put_endpoint_updates_set_in_single_request(
 
     assigned = client.get(
         f"/api/v1/documents/{document.id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert assigned.status_code == 200
     assert sorted(company["id"] for company in assigned.json()) == sorted(

@@ -2,7 +2,7 @@
 
 from app.models import Notification, NotificationType
 from app.services.notification_service import NotificationService
-from tests.factories import create_document, create_user
+from tests.factories import create_document, create_tenant, create_user
 
 
 def test_extract_mentions_strips_html_and_deduplicates_usernames():
@@ -14,23 +14,27 @@ def test_extract_mentions_strips_html_and_deduplicates_usernames():
 
 
 def test_notify_mentions_creates_notification_for_mentioned_user(db):
+    tenant = create_tenant(db, name="MentionCo", slug="mentionco")
     author = create_user(
         db,
         email="mention-author@example.com",
         username="mention_author",
         full_name="Mention Author",
+        tenant_id=tenant.id,
     )
     mentioned_user = create_user(
         db,
         email="mention-target@example.com",
         username="target_user",
         full_name="Mention Target",
+        tenant_id=tenant.id,
     )
     document = create_document(
         db,
         created_by=author.id,
         title="Mention Ready Document",
         document_number="DOC-MENTION-001",
+        tenant_id=tenant.id,
     )
 
     service = NotificationService(db)
