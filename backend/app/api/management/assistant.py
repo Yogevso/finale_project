@@ -25,7 +25,7 @@ from app.assistant.schemas import (
 )
 from app.assistant.tools import registry
 from app.config import settings
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import User, UserRole
 from app.security import get_current_active_user
@@ -155,7 +155,7 @@ def list_conversations(
     limit: int = 50,
     offset: int = 0,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """List the current user's conversations."""
     _require_enabled()
@@ -177,7 +177,7 @@ def list_conversations(
 def create_conversation(
     title: str = "New Chat",
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Create a new empty conversation."""
     _require_enabled()
@@ -196,7 +196,7 @@ def create_conversation(
 def get_conversation(
     conversation_id: int,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Get a conversation with all its messages."""
     _require_enabled()
@@ -236,7 +236,7 @@ def rename_conversation(
     conversation_id: int,
     title: str,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Rename a conversation."""
     _require_enabled()
@@ -252,7 +252,7 @@ def rename_conversation(
 def delete_conversation(
     conversation_id: int,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Delete a conversation and all its messages."""
     _require_enabled()
@@ -310,7 +310,7 @@ async def assistant_health(user: User = Depends(get_current_active_user)):
 async def upload_file(
     file: UploadFile = File(...),
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Upload a file for assistant analysis."""
     _require_enabled()
@@ -334,7 +334,7 @@ async def upload_file(
 def get_uploaded_file(
     file_id: int,
     user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
 ):
     """Get metadata and text preview for an uploaded file."""
     _require_enabled()

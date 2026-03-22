@@ -18,7 +18,7 @@ from app.application.queries.search_queries import (
     SearchFacetsQuery,
     SearchQueryHandler,
 )
-from app.db import get_db
+from app.db import get_analytics_db, get_db
 from app.models import SavedSearch, SearchAnalytics, User, UserRole
 from app.dependencies.permissions import require_any_role, require_internal_user
 from app.application.policies.access_policies import AnalyticsAccessPolicy
@@ -225,7 +225,7 @@ def record_search_click(
 @router.get("/analytics")
 def get_search_analytics(
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
     current_user: User = Depends(require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])),
 ):
     """Get search analytics — top queries, zero-result queries, click-through."""

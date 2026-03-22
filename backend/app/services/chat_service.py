@@ -329,7 +329,6 @@ class ChatService:
         query = (
             self.db.query(ChatMessage)
             .filter(ChatMessage.chat_id == chat_id, ChatMessage.deleted_at.is_(None))
-            .options(joinedload(ChatMessage.sender))
         )
         if before_id:
             query = query.filter(ChatMessage.id < before_id)
@@ -391,11 +390,14 @@ class ChatService:
             if chat.type == ChatType.DIRECT:
                 other = (
                     self.db.query(ChatParticipant)
-                    .options(joinedload(ChatParticipant.user))
                     .filter(ChatParticipant.chat_id == chat.id, ChatParticipant.user_id != user.id)
                     .first()
                 )
-                display_name = other.user.full_name if other and other.user else "Unknown"
+                if other:
+                    other_user = self.db.query(User).filter(User.id == other.user_id).first()
+                    display_name = other_user.full_name if other_user else "Unknown"
+                else:
+                    display_name = "Unknown"
 
             results.append({
                 "chat": chat,
@@ -449,7 +451,6 @@ class ChatService:
                 ChatMessage.deleted_at.is_(None),
                 ChatMessage.content.ilike(pattern),
             )
-            .options(joinedload(ChatMessage.sender))
             .order_by(ChatMessage.created_at.desc())
             .limit(min(limit, 100))
             .all()
@@ -476,7 +477,6 @@ class ChatService:
                 ChatMessage.deleted_at.is_(None),
                 ChatMessage.content.ilike(pattern),
             )
-            .options(joinedload(ChatMessage.sender))
             .order_by(ChatMessage.created_at.desc())
             .limit(min(limit, 100))
             .all()
@@ -551,7 +551,7 @@ class ChatService:
         """Validate chat access with tenant isolation (X1-009)."""
         query = self.db.query(Chat).filter(Chat.id == chat_id)
         if load_participants:
-            query = query.options(joinedload(Chat.participants).joinedload(ChatParticipant.user))
+            query = query.options(joinedload(Chat.participants))
         chat = query.first()
 
         if not chat:

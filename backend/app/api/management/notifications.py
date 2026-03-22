@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_chat_db
 from app.models import Notification, NotificationType, User
 from app.security import get_current_active_user
 
@@ -71,7 +71,7 @@ class NotificationMarkRead(BaseModel):
 def get_notifications(
     unread_only: bool = False,
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Get notifications for current user"""
@@ -110,7 +110,7 @@ def get_notifications(
 
 @router.get("/notifications/count")
 def get_notification_count(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Get unread notification count for current user"""
@@ -126,7 +126,7 @@ def get_notification_count(
 @router.post("/notifications/read")
 def mark_notifications_read(
     data: NotificationMarkRead,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Mark notifications as read"""
@@ -149,7 +149,7 @@ def mark_notifications_read(
 @router.post("/notifications/{notification_id}/read")
 def mark_notification_read(
     notification_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Mark a single notification as read"""
@@ -173,7 +173,7 @@ def mark_notification_read(
 @router.post("/notifications/{notification_id}/unread")
 def mark_notification_unread(
     notification_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Mark a single notification as unread"""
@@ -197,7 +197,7 @@ def mark_notification_unread(
 @router.delete("/notifications/{notification_id}")
 def delete_notification(
     notification_id: int,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete a notification"""
@@ -219,7 +219,7 @@ def delete_notification(
 @router.delete("/notifications")
 def delete_all_notifications(
     read_only: bool = True,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete notifications (by default only read ones)"""

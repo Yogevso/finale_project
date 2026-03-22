@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
-from app.models import User
+from app.models import User, ChatMessage, ChatParticipant
 
 CHAT_UPLOAD_DIR = Path("data/uploads/chat")
 CHAT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,8 @@ def _get_chat_service(db: Session = Depends(get_db)) -> ChatService:
     return ChatService(db)
 
 
-def _msg_to_response(msg) -> ChatMessageResponse:
+def _msg_to_response(msg, db: Session) -> ChatMessageResponse:
+    sender = db.query(User).filter(User.id == msg.sender_id).first() if msg.sender_id else None
     return ChatMessageResponse(
         id=msg.id,
         chat_id=msg.chat_id,
@@ -65,11 +66,12 @@ def _msg_to_response(msg) -> ChatMessageResponse:
         file_mime_type=msg.file_mime_type,
         created_at=msg.created_at,
         updated_at=msg.updated_at,
-        sender_full_name=msg.sender.full_name if msg.sender else None,
+        sender_full_name=sender.full_name if sender else None,
     )
 
 
-def _participant_to_response(p) -> ChatParticipantResponse:
+def _participant_to_response(p, db: Session) -> ChatParticipantResponse:
+    user = db.query(User).filter(User.id == p.user_id).first() if p.user_id else None
     return ChatParticipantResponse(
         id=p.id,
         user_id=p.user_id,
@@ -77,7 +79,7 @@ def _participant_to_response(p) -> ChatParticipantResponse:
         joined_at=p.joined_at,
         last_read_at=p.last_read_at,
         is_muted=p.is_muted,
-        user_full_name=p.user.full_name if p.user else None,
+        user_full_name=user.full_name if user else None,
     )
 
 
@@ -101,7 +103,7 @@ def list_my_chats(
             ChatListItem(
                 chat=ChatResponse.model_validate(i["chat"]),
                 display_name=i["display_name"],
-                last_message=_msg_to_response(i["last_message"]) if i["last_message"] else None,
+                last_message=_msg_to_response(i["last_message"], svc.db) if i["last_message"] else None,
                 unread_count=i["unread_count"],
                 is_muted=i["is_muted"],
             )
@@ -168,7 +170,7 @@ def get_chat(
         last_message_at=chat.last_message_at,
         created_at=chat.created_at,
         updated_at=chat.updated_at,
-        participants=[_participant_to_response(p) for p in chat.participants],
+        participants=[_participant_to_response(p, svc.db) for p in chat.participants],
     )
 
 
@@ -196,7 +198,7 @@ def get_messages(
     """Get paginated message history for a chat."""
     messages = svc.get_chat_history(chat_id, current_user, before_id=before_id, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m) for m in messages],
+        items=[_msg_to_response(m, svc.db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -210,7 +212,7 @@ def send_message(
 ):
     """Send a message in a chat."""
     msg = svc.send_message(chat_id, current_user, body.content, context_json=body.context_json)
-    return _msg_to_response(msg)
+    return _msg_to_response(msg, svc.db)
 
 
 @router.post("/chats/{chat_id}/messages/upload", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
@@ -245,7 +247,7 @@ async def upload_chat_file(
         file_size=len(data),
         file_mime_type=content_type,
     )
-    return _msg_to_response(msg)
+    return _msg_to_response(msg, svc.db)
 
 
 @router.get("/chats/{chat_id}/files/{filename}")
@@ -279,7 +281,7 @@ def add_participant(
 ):
     """Add a participant to a group chat. Requires owner/admin role."""
     p = svc.add_participant(chat_id, current_user, body.user_id)
-    return _participant_to_response(p)
+    return _participant_to_response(p, svc.db)
 
 
 @router.delete("/chats/{chat_id}/participants/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -319,7 +321,7 @@ def search_all_messages(
     """Search messages across all user's chats."""
     messages = svc.search_all_messages(current_user, q, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m) for m in messages],
+        items=[_msg_to_response(m, svc.db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -335,7 +337,7 @@ def search_messages(
     """Search messages in a chat by content (X1-043)."""
     messages = svc.search_messages(chat_id, current_user, q, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m) for m in messages],
+        items=[_msg_to_response(m, svc.db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -387,4 +389,4 @@ def update_participant_role(
 ):
     """Change a participant's role in a group chat (X1-046)."""
     p = svc.update_participant_role(chat_id, current_user, user_id, body.role)
-    return _participant_to_response(p)
+    return _participant_to_response(p, svc.db)

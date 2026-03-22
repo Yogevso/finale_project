@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_analytics_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context, require_system_admin
 from app.models import Experiment, ExperimentStatus
 from app.schemas.experimentation import (
@@ -336,7 +336,7 @@ def check_guardrails_endpoint(
 @router.get("/analytics/onboarding-funnel", response_model=list[OnboardingFunnelResponse])
 def onboarding_funnel_endpoint(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     data = get_onboarding_funnel(db, tenant_ctx.tenant_id)
     return [OnboardingFunnelResponse(**d) for d in data]
@@ -346,7 +346,7 @@ def onboarding_funnel_endpoint(
 def record_onboarding_endpoint(
     body: OnboardingEventCreate,
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     record_onboarding_event(db, body.user_id, tenant_ctx.tenant_id, body.step)
     return {"ok": True}
@@ -361,7 +361,7 @@ def record_onboarding_endpoint(
 def user_milestones_endpoint(
     user_id: int,
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     milestones = get_user_milestones(db, user_id)
     return ActivationMilestoneResponse(
@@ -375,7 +375,7 @@ def record_milestone_endpoint(
     user_id: int,
     milestone: str = Query(..., max_length=50),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     record_milestone(db, user_id, tenant_ctx.tenant_id, milestone)
     return {"ok": True}
@@ -384,7 +384,7 @@ def record_milestone_endpoint(
 @router.get("/analytics/activation-summary", response_model=list[UserActivationSummary])
 def activation_summary_endpoint(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     data = get_activation_summary(db, tenant_ctx.tenant_id)
     return [UserActivationSummary(**d) for d in data]
