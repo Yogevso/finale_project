@@ -98,18 +98,19 @@ class AppContainer:
     def auth_service(self, db: Session) -> AuthService:
         return AuthService(db)
 
-    def comment_service(self, db: Session) -> CommentService:
-        return CommentService(db)
+    def comment_service(self, db: Session, chat_db: Session | None = None) -> CommentService:
+        return CommentService(db, chat_db=chat_db)
 
     def document_service(
         self,
         db: Session,
         tenant_ctx: TenantContext | None = None,
+        chat_db: Session | None = None,
     ) -> DocumentService:
-        return DocumentService(db, tenant_ctx)
+        return DocumentService(db, tenant_ctx, chat_db=chat_db)
 
-    def version_service(self, db: Session) -> VersionService:
-        return VersionService(db)
+    def version_service(self, db: Session, chat_db: Session | None = None) -> VersionService:
+        return VersionService(db, chat_db=chat_db)
 
     def collaboration_service(self, db: Session | None = None) -> CollaborationService:
         state_port = self.collaboration_state_port(db) if db else None

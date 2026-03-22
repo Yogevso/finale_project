@@ -84,7 +84,7 @@ def search_documents(
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
-    db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Full-text search using SQLite FTS5"""
     result = search_query_handler.execute_search_documents(
@@ -101,13 +101,13 @@ def search_documents(
 
     # Log search analytics (fire-and-forget)
     try:
-        db.add(SearchAnalytics(
+        analytics_db.add(SearchAnalytics(
             query=q[:500],
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
             results_count=result.total,
         ))
-        db.commit()
+        analytics_db.commit()
     except Exception:
         logger.debug("Failed to log search analytics", exc_info=True)
 
@@ -207,7 +207,7 @@ class SearchClickBody(BaseModel):
 @router.post("/click")
 def record_search_click(
     body: SearchClickBody,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
     current_user: User = Depends(require_internal_user),
 ):
     """Record that a user clicked a search result."""

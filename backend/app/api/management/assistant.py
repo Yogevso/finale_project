@@ -54,13 +54,13 @@ def _require_enabled() -> None:
         raise HTTPException(status_code=503, detail="AI assistant is currently disabled.")
 
 
-def _build_engine(db: Session, user: User) -> AssistantEngine:
+def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
     ollama = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
         model=settings.ASSISTANT_MODEL,
         timeout=settings.ASSISTANT_REQUEST_TIMEOUT,
     )
-    conv_mgr = ConversationManager(db)
+    conv_mgr = ConversationManager(chat_db)
     return AssistantEngine(ollama, registry, conv_mgr)
 
 
@@ -74,12 +74,13 @@ async def chat(
     body: ChatRequest,
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
 ):
     """Send a message and receive a streamed SSE response."""
     _require_enabled()
     _check_rate_limit(user.id)
 
-    engine = _build_engine(db, user)
+    engine = _build_engine(chat_db, user)
     tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
 
     async def event_stream():

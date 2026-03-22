@@ -30,13 +30,14 @@ class CommentService(SessionService):
         self,
         db: Session,
         *,
+        chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
     ):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.comment_repository = CommentRepository(db)
         self.version_repository = VersionRepository(db)
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     @staticmethod

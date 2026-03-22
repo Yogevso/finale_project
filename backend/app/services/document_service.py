@@ -118,11 +118,12 @@ class DocumentService(TenantAwareService[Document]):
         db: Session,
         tenant_ctx: Optional[TenantContext] = None,
         *,
+        chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self._company_lookup_cache = _CompanyLookupLRU(
             max_entries=COMPANY_LOOKUP_CACHE_MAX_ENTRIES,
             ttl_seconds=COMPANY_LOOKUP_CACHE_TTL_SECONDS,

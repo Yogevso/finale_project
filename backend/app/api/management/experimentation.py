@@ -337,8 +337,9 @@ def check_guardrails_endpoint(
 def onboarding_funnel_endpoint(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_analytics_db),
+    core_db: Session = Depends(get_db),
 ):
-    data = get_onboarding_funnel(db, tenant_ctx.tenant_id)
+    data = get_onboarding_funnel(db, tenant_ctx.tenant_id, core_db=core_db)
     return [OnboardingFunnelResponse(**d) for d in data]
 
 

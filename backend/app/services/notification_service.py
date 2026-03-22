@@ -18,8 +18,9 @@ HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
 class NotificationService(SessionService):
     """Create in-app notifications tied to collaboration and document activity."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, chat_db: Session | None = None):
         super().__init__(db)
+        self.chat_db = chat_db or db
         self.user_repository = UserRepository(db)
 
     @staticmethod
@@ -47,7 +48,7 @@ class NotificationService(SessionService):
             message=message,
             link=link,
         )
-        self.db.add(notification)
+        self.chat_db.add(notification)
         return notification
 
     def notify_mentions(

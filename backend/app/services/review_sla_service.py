@@ -24,9 +24,9 @@ class ReviewSlaThresholds:
 class ReviewSlaService:
     """Scan pending reviews and emit reminder/escalation notifications."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, chat_db: Session | None = None):
         self.db = db
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
 
     def _pending_reviews(self, actor: User) -> list[ReviewRequest]:
         query = (

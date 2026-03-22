@@ -320,8 +320,9 @@ def record_onboarding_event(db: Session, user_id: int, tenant_id: int, step: str
     return evt
 
 
-def get_onboarding_funnel(db: Session, tenant_id: int) -> list[dict[str, Any]]:
-    total_users = db.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 1
+def get_onboarding_funnel(db: Session, tenant_id: int, core_db: Session | None = None) -> list[dict[str, Any]]:
+    _core = core_db or db
+    total_users = _core.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 1
 
     results = []
     for step in ONBOARDING_STEPS:

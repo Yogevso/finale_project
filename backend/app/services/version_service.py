@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.domain.aggregates import DocumentAggregate
@@ -51,12 +51,13 @@ class VersionService(SessionService):
         self,
         db,
         *,
+        chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
     ):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.version_repository = VersionRepository(db)
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     @staticmethod
