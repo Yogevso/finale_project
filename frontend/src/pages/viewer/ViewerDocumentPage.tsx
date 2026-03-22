@@ -109,7 +109,11 @@ export default function ViewerDocumentPage() {
       setSelectedVersionId(requestedVersionId)
       return
     }
-    setSelectedVersionId(null)
+    // Auto-select latest published version, or first version as fallback
+    const latestPublished = normalizedVersions
+      .filter((v) => v.is_published)
+      .sort((a, b) => b.version_number - a.version_number)[0]
+    setSelectedVersionId(latestPublished?.id ?? normalizedVersions[0]?.id ?? null)
   }, [normalizedVersions, requestedVersionId, selectedVersionId])
 
   const handleVersionSelect = (versionId: number) => {
@@ -365,9 +369,9 @@ export default function ViewerDocumentPage() {
           <div className="max-w-none">
             {!selectedVersion ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-950">
-                <p className="card-title text-slate-700 dark:text-slate-200">Select a version to load preview.</p>
+                <p className="card-title text-slate-700 dark:text-slate-200">No published versions available.</p>
                 <p className="body-copy mt-1">
-                  Viewer does not auto-select the latest version.
+                  This document has no versions to display.
                 </p>
               </div>
             ) : selectedVersionAttachmentsLoading ? (

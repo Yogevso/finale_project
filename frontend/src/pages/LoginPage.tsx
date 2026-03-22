@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
 import { FormField, PasswordInput, SubmitButton } from '@/components/form'
+import { loginSchema } from '@/lib/validation/schemas'
+import { validateForm } from '@/lib/validation'
 
 const REMEMBERED_USERNAME_KEY = 'remembered-username'
 
@@ -88,16 +90,10 @@ export default function LoginPage() {
     setUsernameError('')
     setPasswordError('')
 
-    let hasValidationError = false
-    if (!username.trim()) {
-      setUsernameError('Username is required.')
-      hasValidationError = true
-    }
-    if (!password) {
-      setPasswordError('Password is required.')
-      hasValidationError = true
-    }
-    if (hasValidationError) {
+    const result = validateForm(loginSchema, { username, password })
+    if (result.errors) {
+      if (result.errors.username) setUsernameError(result.errors.username)
+      if (result.errors.password) setPasswordError(result.errors.password)
       return
     }
 

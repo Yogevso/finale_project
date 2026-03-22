@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   MessageCircle,
 } from 'lucide-react'
+import { feedbackSchema } from '@/lib/validation/schemas'
+import { validateForm } from '@/lib/validation'
 
 interface FeedbackFormProps {
   onSubmit: (data: {
@@ -28,10 +30,16 @@ const feedbackTypes = [
 export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFormProps) {
   const [feedbackType, setFeedbackType] = useState<'question' | 'suggestion' | 'issue' | 'other'>('question')
   const [content, setContent] = useState('')
+  const [validationError, setValidationError] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (content.trim().length < 10) return
+    setValidationError('')
+    const result = validateForm(feedbackSchema, { feedback_type: feedbackType, content: content.trim() })
+    if (result.errors) {
+      setValidationError(Object.values(result.errors)[0] || 'Please fix the form errors')
+      return
+    }
     onSubmit({ feedback_type: feedbackType, content: content.trim() })
   }
 
@@ -97,9 +105,9 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
       </div>
 
       {/* Error message */}
-      {error && (
+      {(error || validationError) && (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm">
-          {error}
+          {validationError || error}
         </div>
       )}
 

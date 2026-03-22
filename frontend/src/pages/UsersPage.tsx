@@ -28,6 +28,8 @@ import Skeleton from '@/components/Skeleton'
 import { TableSkeleton } from '@/components/skeletons'
 import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import { userCreateSchema, userUpdateSchema } from '@/lib/validation/schemas'
+import { validateForm, type FieldErrors } from '@/lib/validation'
 
 type UserCreateFormData = {
   email: string
@@ -568,6 +570,7 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
     tenant_id: user?.tenant_id || '',
     is_active: user?.is_active ?? true,
   })
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   const isEdit = !!user
   const roles: UserRole[] = ['system_admin', 'admin', 'manager', 'editor', 'viewer', 'customer']
@@ -582,11 +585,21 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setFieldErrors({})
+
     if (isEdit) {
-      onSubmit({
+      const updates = {
         email: formData.email !== user.email ? formData.email : undefined,
         full_name: formData.full_name !== user.full_name ? formData.full_name : undefined,
         role: formData.role !== user.role ? formData.role : undefined,
+      }
+      const result = validateForm(userUpdateSchema, updates)
+      if (result.errors) {
+        setFieldErrors(result.errors)
+        return
+      }
+      onSubmit({
+        ...updates,
         is_active: formData.is_active !== user.is_active ? formData.is_active : undefined,
         tenant_id:
           formData.tenant_id !== user.tenant_id
@@ -596,6 +609,17 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
             : undefined,
       })
     } else {
+      const result = validateForm(userCreateSchema, {
+        username: formData.username,
+        email: formData.email,
+        full_name: formData.full_name,
+        password: formData.password,
+        role: formData.role,
+      })
+      if (result.errors) {
+        setFieldErrors(result.errors)
+        return
+      }
       onSubmit({
         email: formData.email,
         username: formData.username,
@@ -619,6 +643,11 @@ function UserFormDialog({ title, user, companies, currentUserRole, onSubmit, onC
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {Object.keys(fieldErrors).length > 0 && (
+            <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl border border-rose-200 text-sm">
+              {Object.values(fieldErrors)[0]}
+            </div>
+          )}
           {!isEdit && (
             <>
               <div>

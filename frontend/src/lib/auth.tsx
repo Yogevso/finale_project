@@ -59,7 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       if (!api.hasToken()) {
-        await api.tryRestoreSession()
+        // Skip session restore on public-only routes (no refresh cookie expected)
+        const publicPrefixes = ['/docs', '/platforms', '/tools', '/help', '/changelog', '/search']
+        const isPublicRoute = publicPrefixes.some((p) => window.location.pathname.startsWith(p))
+        if (!isPublicRoute) {
+          await api.tryRestoreSession()
+        }
       }
       await refreshUser()
       setIsLoading(false)

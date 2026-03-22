@@ -102,7 +102,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-900">Versions ({versions.length})</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {versions.length > 1 && (
+          {isEditor && versions.length > 1 && (
             <Link
               to={`/documents/${documentId}/compare`}
               className="btn-secondary inline-flex items-center gap-2 text-sm"

@@ -90,3 +90,14 @@ export function InternalGuard({ children }: { children: React.ReactNode }) {
     </RoleGuard>
   )
 }
+
+/**
+ * Guard for editor-level routes (system_admin, admin, manager, editor)
+ */
+export function EditorGuard({ children }: { children: React.ReactNode }) {
+  return (
+    <RoleGuard allowedRoles={['system_admin', 'admin', 'manager', 'editor']}>
+      {children}
+    </RoleGuard>
+  )
+}
