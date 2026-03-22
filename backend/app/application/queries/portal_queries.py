@@ -18,6 +18,7 @@ from app.models import (
     DocumentVisibility,
     Feedback,
     FeedbackStatus,
+    Platform,
     User,
     Version,
 )
@@ -178,7 +179,7 @@ class PortalDocumentsQueryHandler:
             if query.topic:
                 docs_query = docs_query.filter(Document.topic == query.topic)
             if query.platform:
-                docs_query = docs_query.filter(Document.platform == query.platform)
+                docs_query = docs_query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == query.platform)
             if query.date_from:
                 docs_query = docs_query.filter(Document.updated_at >= query.date_from)
             if query.date_to:
@@ -392,9 +393,10 @@ class PortalDocumentsQueryHandler:
             .all()
         )
         platforms = (
-            base.with_entities(Document.platform, func.count(Document.id))
-            .filter(Document.platform.isnot(None), Document.platform != "")
-            .group_by(Document.platform)
+            base.join(Platform, Document.platform_id == Platform.id)
+            .with_entities(Platform.name, func.count(Document.id))
+            .filter(Platform.name.isnot(None), Platform.name != "")
+            .group_by(Platform.name)
             .order_by(func.count(Document.id).desc())
             .all()
         )
@@ -556,7 +558,7 @@ class PortalDocumentsQueryHandler:
                 score += 3.0
             if source.topic and doc.topic == source.topic:
                 score += 2.0
-            if source.platform and doc.platform == source.platform:
+            if source.platform_name and doc.platform_name == source.platform_name:
                 score += 1.5
             if source_tags:
                 doc_tags = {

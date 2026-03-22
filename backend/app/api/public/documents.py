@@ -18,7 +18,7 @@ from app.domain.specifications.audience_policies import (
     ExternalEmbedPolicySpec,
     LinkSharingPolicySpec,
 )
-from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Topic, Version
+from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Platform, Topic, Version
 from app.schemas.public import (
     PublicAttachmentInfo,
     PublicCategoriesResponse,
@@ -92,7 +92,7 @@ def list_public_documents(
     category: Optional[str] = Query(None, description="Filter by category"),
     topic: Optional[str] = Query(None, description="Filter by topic"),
     platform: Optional[str] = Query(None, description="Filter by platform"),
-    search: Optional[str] = Query(None, description="Search in title/description"),
+    search: Optional[str] = Query(None, max_length=500, description="Search in title/description"),
     sort_by: Optional[str] = Query("created_at", pattern="^(title|created_at|updated_at)$", description="Sort field: title, created_at, updated_at"),
     sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort order (asc/desc)"),
     db: Session = Depends(get_db),
@@ -115,18 +115,19 @@ def list_public_documents(
     if topic:
         query = _apply_topic_filter(query, db, topic)
     if platform:
-        query = query.filter(Document.platform == platform)
+        query = query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == platform)
 
     # Apply search filter
     if search:
         search_term = f"%{search}%"
+        platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term)).subquery()
         query = query.filter(
             or_(
                 Document.title.ilike(search_term),
                 Document.description.ilike(search_term),
                 Document.tags.ilike(search_term),
                 Document.topic.ilike(search_term),
-                Document.platform.ilike(search_term),
+                Document.id.in_(db.query(platform_subq)),
             )
         )
 
@@ -178,7 +179,7 @@ def list_public_documents(
                 description=doc.description,
                 category=doc.category,
                 topic=doc.topic,
-                platform=doc.platform,
+                platform=doc.platform_name,
                 release_branch=doc.release_branch,
                 tags=doc.tags,
                 created_at=doc.created_at,
@@ -321,7 +322,7 @@ def get_platform_history(db: Session = Depends(get_db)):
     platform_map: dict[str, dict[str, dict[Optional[int], list[PublicPlatformDocument]]]] = {}
 
     for doc, published_at, version_number in rows:
-        platform = doc.platform or "Unspecified"
+        platform = doc.platform_name or "Unspecified"
         category = doc.category or "General"
         effective_date = published_at or doc.updated_at or doc.created_at
         year = effective_date.year if effective_date else None
@@ -336,7 +337,7 @@ def get_platform_history(db: Session = Depends(get_db)):
                 document_number=doc.document_number,
                 title=doc.title,
                 category=doc.category,
-                platform=doc.platform,
+                platform=doc.platform_name,
                 release_branch=doc.release_branch,
                 version_label=doc.version_label,
                 version_number=version_number,
@@ -402,7 +403,7 @@ def list_public_categories(db: Session = Depends(get_db)):
 
 @router.get("/search", response_model=PublicSearchResponse)
 def search_public_documents(
-    q: str = Query(..., min_length=2, description="Search query"),
+    q: str = Query(..., min_length=2, max_length=500, description="Search query"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     category: Optional[str] = Query(None, description="Filter by category"),
@@ -436,9 +437,10 @@ def search_public_documents(
     if topic:
         query = _apply_topic_filter(query, db, topic)
     if platform:
-        query = query.filter(Document.platform == platform)
+        query = query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == platform)
 
     # Search in document fields
+    platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term)).subquery()
     query = query.filter(
         or_(
             Document.title.ilike(search_term),
@@ -446,7 +448,7 @@ def search_public_documents(
             Document.tags.ilike(search_term),
             Document.document_number.ilike(search_term),
             Document.topic.ilike(search_term),
-            Document.platform.ilike(search_term),
+            Document.id.in_(db.query(platform_subq)),
         )
     )
 
@@ -488,7 +490,7 @@ def search_public_documents(
                 description=doc.description,
                 category=doc.category,
                 topic=doc.topic,
-                platform=doc.platform,
+                platform=doc.platform_name,
                 snippet=snippet,
                 score=1.0,  # Simple relevance score
             )

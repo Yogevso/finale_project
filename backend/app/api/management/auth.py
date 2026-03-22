@@ -528,7 +528,9 @@ def accept_invitation(
     db.refresh(user)
 
     # Generate tokens for immediate login
-    return auth_service.login(request.username, request.password)
+    # AD-004: use _token_json_response to set httpOnly refresh cookie (FIX-015)
+    token_response = auth_service.login(request.username, request.password)
+    return _token_json_response(token_response)
 
 
 # ========== Collaboration Token Endpoint ==========

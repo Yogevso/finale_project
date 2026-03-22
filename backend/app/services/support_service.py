@@ -464,7 +464,7 @@ class SupportTicketService:
             raise HTTPException(status_code=404, detail="Ticket not found")
         if user.role == UserRole.SYSTEM_ADMIN:
             return ticket
-        if user.role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
+        if user.role in (UserRole.ADMIN, UserRole.MANAGER):
             if ticket.tenant_id is not None and user.tenant_id is not None and ticket.tenant_id != user.tenant_id:
                 raise HTTPException(status_code=403, detail="Access denied")
             return ticket

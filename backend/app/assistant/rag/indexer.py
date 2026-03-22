@@ -53,6 +53,9 @@ class DocumentIndexer:
             logger.warning("No content to index for document %d", document_id)
             return 0
 
+        if tenant_id is None:
+            raise ValueError(f"tenant_id is required when indexing document {document_id}")
+
         # Remove old chunks first
         self._store.delete_document(document_id)
 

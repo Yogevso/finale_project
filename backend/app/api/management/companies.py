@@ -59,6 +59,13 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
     return current_user
 
 
+def require_system_admin(current_user: User = Depends(get_current_active_user)) -> User:
+    """Require system_admin role."""
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(status_code=403, detail="System admin access required")
+    return current_user
+
+
 def _enforce_tenant_scope(current_user: User, company_id: int) -> None:
     """Non-system-admins can only access their own tenant's company."""
     if current_user.role != UserRole.SYSTEM_ADMIN and current_user.tenant_id != company_id:
@@ -247,7 +254,7 @@ async def list_companies(
 async def create_company(
     company_data: CompanyCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_system_admin),
 ):
     """
     Create a new company.
@@ -394,12 +401,28 @@ async def update_company(
 
     # Company deactivation cascade events
     cancelled_invitations = 0
+    revoked_sessions = 0
+    invalidated_tokens = 0
     if is_deactivating:
         # Cancel all pending invitations for this company
         cancelled_invitations = db.query(Invitation).filter(
             Invitation.tenant_id == company_id,
             Invitation.status == InvitationStatus.PENDING,
         ).update({"status": InvitationStatus.CANCELLED})
+
+        # FIX-016: Revoke all active sessions for users in this company
+        company_user_ids = db.query(User.id).filter(User.tenant_id == company_id).subquery()
+        now = datetime.utcnow()
+        revoked_sessions = db.query(UserSession).filter(
+            UserSession.user_id.in_(company_user_ids),
+            UserSession.revoked_at.is_(None),
+        ).update({"revoked_at": now}, synchronize_session=False)
+
+        # FIX-016: Invalidate all refresh tokens for users in this company
+        invalidated_tokens = db.query(PasswordReset).filter(
+            PasswordReset.user_id.in_(company_user_ids),
+            PasswordReset.used_at.is_(None),
+        ).update({"used_at": now}, synchronize_session=False)
 
     # Company reactivation events - log and validate state
     reactivation_info = None
@@ -431,6 +454,8 @@ async def update_company(
     if is_deactivating:
         response.headers["X-Company-Event"] = "deactivated"
         response.headers["X-Invitations-Cancelled"] = str(cancelled_invitations)
+        response.headers["X-Sessions-Revoked"] = str(revoked_sessions)
+        response.headers["X-Tokens-Invalidated"] = str(invalidated_tokens)
     elif is_reactivating and reactivation_info:
         response.headers["X-Company-Event"] = "reactivated"
         response.headers["X-Active-Users"] = str(reactivation_info["active_users"])
@@ -582,6 +607,14 @@ async def add_user_to_company(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Cross-tenant check: only SYSTEM_ADMIN can reassign users from other tenants
+    if (
+        user.tenant_id is not None
+        and user.tenant_id != company_id
+        and current_user.role != UserRole.SYSTEM_ADMIN
+    ):
+        raise HTTPException(status_code=403, detail="Cannot add users from other tenants")
+
     # Update user's tenant
     user.tenant_id = company_id
     db.commit()
@@ -621,6 +654,13 @@ async def remove_user_from_company(
         raise HTTPException(
             status_code=400,
             detail="Customers must be assigned to a company; reassign role before removal",
+        )
+
+    # Only SYSTEM_ADMIN can detach internal users (setting tenant_id to None)
+    if current_user.role != UserRole.SYSTEM_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Only system administrators can remove users from companies",
         )
 
     # Remove from company

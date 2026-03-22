@@ -122,8 +122,11 @@ class CreateUserTool(BaseTool):
             return {"success": False, "result": "", "error": "Password must contain uppercase, lowercase, digit, and special character."}
 
         # Prevent creating users with higher privilege
-        target_role = UserRole(params["role"])
-        caller_role = UserRole(user.role)
+        try:
+            target_role = UserRole(params["role"])
+            caller_role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid role value."}
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         target_idx = self._ROLE_HIERARCHY.index(target_role)
         if target_idx > caller_idx:
@@ -213,8 +216,11 @@ class ChangeUserRoleTool(BaseTool):
         if tenant_id is not None and target.tenant_id != tenant_id:
             return {"success": False, "result": "", "error": "User not found."}
 
-        new_role = UserRole(params["new_role"])
-        caller_role = UserRole(user.role)
+        try:
+            new_role = UserRole(params["new_role"])
+            caller_role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid role value."}
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         new_role_idx = self._ROLE_HIERARCHY.index(new_role)
         if new_role_idx > caller_idx:

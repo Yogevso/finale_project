@@ -230,7 +230,9 @@ async def upload_chat_file(
 
     ext = Path(file.filename or "file").suffix
     storage_name = f"{uuid.uuid4().hex}{ext}"
-    file_path = CHAT_UPLOAD_DIR / storage_name
+    chat_dir = CHAT_UPLOAD_DIR / str(chat_id)
+    chat_dir.mkdir(parents=True, exist_ok=True)
+    file_path = chat_dir / storage_name
     file_path.write_bytes(data)
 
     file_url = f"/api/v1/chats/{chat_id}/files/{storage_name}"
@@ -257,7 +259,7 @@ def download_chat_file(
 
     # Prevent path traversal
     safe_name = Path(filename).name
-    file_path = CHAT_UPLOAD_DIR / safe_name
+    file_path = CHAT_UPLOAD_DIR / str(chat_id) / safe_name
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 

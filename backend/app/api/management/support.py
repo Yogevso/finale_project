@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
 from app.application.policies.access_policies import SupportAccessPolicy
-from app.models import SupportTicketStatus, User
+from app.models import SupportTicketStatus, User, UserRole
 from app.schemas.chat import (
     AssignAgentRequest,
     HandoffRequest,
@@ -33,6 +33,14 @@ _support_policy = SupportAccessPolicy()
 
 def _get_support_service(db: Session = Depends(get_db)) -> SupportTicketService:
     return SupportTicketService(db)
+
+
+def require_support_agent(current_user: User = Depends(require_internal_user)) -> User:
+    """Dependency: require SYSTEM_ADMIN, ADMIN, or MANAGER for agent-level operations."""
+    if not _support_policy.can_manage_ticket(current_user):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Agent-level access required")
+    return current_user
 
 
 def _ticket_to_response(t) -> SupportTicketResponse:
@@ -154,7 +162,7 @@ def get_ticket(
 def update_ticket(
     ticket_id: int,
     body: SupportTicketUpdate,
-    current_user: User = Depends(require_internal_user),
+    current_user: User = Depends(require_support_agent),
     db: Session = Depends(get_db),
     svc: SupportTicketService = Depends(_get_support_service),
 ):
@@ -229,7 +237,7 @@ def send_ticket_message(
 def assign_agent(
     ticket_id: int,
     body: AssignAgentRequest,
-    current_user: User = Depends(require_internal_user),
+    current_user: User = Depends(require_support_agent),
     svc: SupportTicketService = Depends(_get_support_service),
 ):
     """Assign an agent to a support ticket."""
@@ -247,7 +255,7 @@ def assign_agent(
 def unassign_agent(
     ticket_id: int,
     agent_id: int,
-    current_user: User = Depends(require_internal_user),
+    current_user: User = Depends(require_support_agent),
     svc: SupportTicketService = Depends(_get_support_service),
 ):
     """Remove an agent from a support ticket."""
@@ -261,7 +269,7 @@ def unassign_agent(
 def handoff_ticket(
     ticket_id: int,
     body: HandoffRequest,
-    current_user: User = Depends(require_internal_user),
+    current_user: User = Depends(require_support_agent),
     svc: SupportTicketService = Depends(_get_support_service),
 ):
     """Transfer ticket ownership to another agent with optional note (X1-102)."""

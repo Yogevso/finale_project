@@ -9,6 +9,8 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
+from app.middleware.logging_middleware import current_request_id
+
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 2
@@ -73,10 +75,14 @@ class OllamaClient:
             payload["tools"] = tools
 
         client = self._get_client()
+        headers = {}
+        rid = current_request_id.get(None)
+        if rid:
+            headers["X-Request-ID"] = rid
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload)
+                resp = await client.post(f"{self._base_url}/api/chat", json=payload, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
@@ -118,8 +124,12 @@ class OllamaClient:
             payload["tools"] = tools
 
         client = self._get_client()
+        headers = {}
+        rid = current_request_id.get(None)
+        if rid:
+            headers["X-Request-ID"] = rid
         async with client.stream(
-            "POST", f"{self._base_url}/api/chat", json=payload
+            "POST", f"{self._base_url}/api/chat", json=payload, headers=headers
         ) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():

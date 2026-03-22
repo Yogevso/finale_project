@@ -358,6 +358,14 @@ def export_csv(
         date_from = date_from or default_from
         date_to = date_to or default_to
 
+    # Cap export range to 90 days
+    max_span = timedelta(days=90)
+    if date_to - date_from > max_span:
+        raise HTTPException(
+            status_code=400,
+            detail="Export date range cannot exceed 90 days.",
+        )
+
     _validate_export_report(report, allowed=exporter.supported_reports, format_name="CSV")
     return exporter.export(
         report=report,

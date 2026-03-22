@@ -207,6 +207,7 @@ async def submit_for_review(
         status=ReviewStatus.PENDING,
         audience_visibility_snapshot=audience_visibility_snapshot,
         audience_company_ids_snapshot=audience_company_ids_snapshot,
+        audience_version_snapshot=document.audience_version,
     )
     db.add(review)
     db.flush()

@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.application.policies.access_policies import DocumentAccessPolicy
 from app.assistant.rag.chunker import DocumentChunker
 from app.assistant.rag.embeddings import OllamaEmbeddings
 from app.assistant.rag.vector_store import VectorStore
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 _embeddings = OllamaEmbeddings()
 _vector_store = VectorStore()
 _chunker = DocumentChunker()
+_access_policy = DocumentAccessPolicy()
 
 
 class SemanticSearchTool(BaseTool):
@@ -73,10 +75,11 @@ class SemanticSearchTool(BaseTool):
         if not results:
             return {"success": True, "result": "No relevant content found for your query."}
 
-        # Filter by user's accessible documents (tenant scoping)
-        accessible_doc_ids = _get_accessible_doc_ids(user, tenant_id, db)
-        if accessible_doc_ids is not None:
-            results = [r for r in results if r.document_id in accessible_doc_ids]
+        # Filter by user's accessible documents (tenant + visibility policy)
+        results = [
+            r for r in results
+            if _user_can_access_document(user, r.document_id, db)
+        ]
 
         if not results:
             return {"success": True, "result": "No relevant content found within your accessible documents."}
@@ -128,8 +131,8 @@ class SummarizeDocumentTool(BaseTool):
         if not doc:
             return {"success": False, "error": f"Document {doc_id} not found."}
 
-        # Check tenant access
-        if tenant_id and doc.tenant_id and doc.tenant_id != tenant_id:
+        # Check access via DocumentAccessPolicy (tenant + visibility + role)
+        if not _access_policy.can_view_document(user, doc):
             return {"success": False, "error": "You don't have access to this document."}
 
         # Get latest version content
@@ -229,7 +232,8 @@ class AskAboutDocumentTool(BaseTool):
         if not doc:
             return {"success": False, "error": f"Document {doc_id} not found."}
 
-        if tenant_id and doc.tenant_id and doc.tenant_id != tenant_id:
+        # Check access via DocumentAccessPolicy (tenant + visibility + role)
+        if not _access_policy.can_view_document(user, doc):
             return {"success": False, "error": "You don't have access to this document."}
 
         # Try RAG: embed question → retrieve relevant chunks from this doc
@@ -310,17 +314,11 @@ class AskAboutDocumentTool(BaseTool):
             return {"success": False, "error": "Q&A failed. The AI service may be busy."}
 
 
-def _get_accessible_doc_ids(
-    user: User, tenant_id: int | None, db: Session,
-) -> set[int] | None:
-    """Get set of document IDs the user can access, or None if unrestricted."""
-    from app.models import UserRole
-    role = UserRole(user.role) if isinstance(user.role, str) else user.role
-
-    if role == UserRole.SYSTEM_ADMIN:
-        return None  # Can see everything
-
-    query = db.query(Document.id)
-    if tenant_id:
-        query = query.filter(Document.tenant_id == tenant_id)
-    return {row[0] for row in query.all()}
+def _user_can_access_document(
+    user: User, document_id: int, db: Session,
+) -> bool:
+    """Check if user can access a specific document via DocumentAccessPolicy."""
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        return False
+    return _access_policy.can_view_document(user, doc)

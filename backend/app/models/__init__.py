@@ -378,6 +378,7 @@ class Document(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
     row_version = Column(Integer, nullable=False, default=1)
+    audience_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -862,6 +863,7 @@ class ReviewRequest(Base):
     # Audience state snapshot at submission time
     audience_visibility_snapshot = Column(String(50), nullable=True)
     audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
+    audience_version_snapshot = Column(Integer, nullable=True)
 
     # Relationships
     document = relationship("Document", back_populates="review_requests")

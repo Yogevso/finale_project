@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session, joinedload
 
+from app.application.policies.access_policies import DocumentAccessPolicy
 from app.models import (
     Chat,
     ChatMessage,
@@ -25,6 +26,7 @@ from app.models import (
 class ChatService:
     def __init__(self, db: Session):
         self.db = db
+        self._access_policy = DocumentAccessPolicy()
 
     # ------------------------------------------------------------------
     # Chat creation
@@ -39,10 +41,11 @@ class ChatService:
         if not user_b:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Tenant isolation (X1-009) — allow internal staff to chat with customers cross-tenant
-        internal_roles = {'system_admin', 'admin', 'manager', 'editor'}
+        # Tenant isolation — reject all cross-tenant chats unless SYSTEM_ADMIN
         if user_a.tenant_id != user_b.tenant_id:
-            if user_a.role not in internal_roles and user_b.role not in internal_roles:
+            a_is_sysadmin = user_a.role == UserRole.SYSTEM_ADMIN or user_a.role == 'system_admin'
+            b_is_sysadmin = user_b.role == UserRole.SYSTEM_ADMIN or user_b.role == 'system_admin'
+            if not a_is_sysadmin and not b_is_sysadmin:
                 raise HTTPException(status_code=403, detail="Cannot chat with users in another organization")
 
         # Deduplication — check if direct chat already exists between these two
@@ -141,6 +144,10 @@ class ChatService:
         doc = self.db.query(Document).filter(Document.id == document_id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+
+        # Verify creator has access to this document
+        if not self._access_policy.can_view_document(creator, doc):
+            raise HTTPException(status_code=403, detail="You don't have access to this document")
 
         # Check for existing document-scoped chat
         existing = (
@@ -550,14 +557,15 @@ class ChatService:
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found")
 
-        # Participation check — being a participant grants access regardless of tenant
+        # Tenant isolation — SYSTEM_ADMIN is exempt, everyone else must match
+        if user.role != UserRole.SYSTEM_ADMIN and chat.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=404, detail="Chat not found")
+
+        # Participation check
         participant = self.db.query(ChatParticipant).filter_by(
             chat_id=chat_id, user_id=user.id
         ).first()
         if not participant and user.role != UserRole.SYSTEM_ADMIN:
-            # Tenant isolation — non-participants can only see chats in their tenant
-            if chat.tenant_id != user.tenant_id:
-                raise HTTPException(status_code=404, detail="Chat not found")
             raise HTTPException(status_code=403, detail="You are not a participant in this chat")
 
         if require_admin and participant:

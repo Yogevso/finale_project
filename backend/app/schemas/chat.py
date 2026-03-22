@@ -1,9 +1,10 @@
 """Pydantic schemas for chat and support features (Wave X.1)."""
 
+import json
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import (
     ChatMessageType,
@@ -93,6 +94,28 @@ class CreateGroupChatRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=10000)
     context_json: Optional[str] = Field(None, max_length=5000, description="AH-009: context card metadata (document title, section, anchor, comment type)")
+
+    # FIX-026e: Validate context_json is well-formed JSON with known keys
+    _ALLOWED_CONTEXT_KEYS = {
+        "document_id", "document_title", "section", "section_id",
+        "anchor", "comment_type", "version_id", "page", "highlight",
+    }
+
+    @field_validator("context_json")
+    @classmethod
+    def validate_context_json(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            parsed = json.loads(v)
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError("context_json must be valid JSON")
+        if not isinstance(parsed, dict):
+            raise ValueError("context_json must be a JSON object")
+        unknown = set(parsed.keys()) - cls._ALLOWED_CONTEXT_KEYS
+        if unknown:
+            raise ValueError(f"context_json contains unknown keys: {', '.join(sorted(unknown))}")
+        return v
 
 
 class CreateDocumentChatRequest(BaseModel):

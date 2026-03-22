@@ -75,6 +75,9 @@ class VectorStore:
         if not chunks or not embeddings:
             return 0
 
+        if tenant_id is None:
+            raise ValueError(f"tenant_id is required when indexing document {doc_id}")
+
         collection = self._get_collection()
 
         ids = [f"doc_{doc_id}_chunk_{c['chunk_index']}" for c in chunks]
@@ -85,7 +88,7 @@ class VectorStore:
                 "document_title": doc_title,
                 "chunk_index": c["chunk_index"],
                 "section": c.get("section") or "",
-                "tenant_id": tenant_id if tenant_id is not None else 0,
+                "tenant_id": tenant_id,
             }
             for c in chunks
         ]

@@ -110,6 +110,35 @@ class DownloadTicketResponse(BaseModel):
     expires_in: int
 
 
+@router.get("/attachments/{attachment_id}/pdf-status")
+def get_pdf_export_status(
+    attachment_id: int,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Check PDF export generation status for an attachment."""
+    from app.models import AttachmentConversionJob
+    job = (
+        db.query(AttachmentConversionJob)
+        .filter(
+            AttachmentConversionJob.attachment_id == attachment_id,
+            AttachmentConversionJob.job_type == "pdf_export",
+        )
+        .first()
+    )
+    if not job:
+        return {"status": "none", "attachment_id": attachment_id}
+    return {
+        "status": job.status,
+        "attachment_id": attachment_id,
+        "attempts": job.attempts,
+        "max_attempts": job.max_attempts,
+        "last_error": job.last_error if job.status == "failed" else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+    }
+
+
 @router.post("/attachments/download-ticket", response_model=DownloadTicketResponse)
 def issue_download_ticket(
     body: DownloadTicketRequest,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ class SearchIndexSyncService:
             self.db.execute(FTS_DELETE_ROW_STATEMENT, {"doc_id": document_id})
             self.db.execute(FTS_INSERT_ROW_STATEMENT, {"doc_id": document_id})
             logger.debug("FTS5 index synced for document %d", document_id)
-        except Exception:
+        except OperationalError:
             logger.warning(
                 "FTS5 sync failed for document %d; will be fixed on next rebuild",
                 document_id,
@@ -106,7 +107,7 @@ class SearchIndexSyncService:
             self._ensure_index_exists()
             self.db.execute(FTS_DELETE_ROW_STATEMENT, {"doc_id": document_id})
             logger.debug("FTS5 index entry removed for document %d", document_id)
-        except Exception:
+        except OperationalError:
             logger.warning("FTS5 remove failed for document %d", document_id, exc_info=True)
 
     # ------------------------------------------------------------------
@@ -121,7 +122,7 @@ class SearchIndexSyncService:
             count = self.db.execute(text("SELECT COUNT(*) FROM documents")).scalar() or 0
             logger.info("FTS5 search index rebuilt - %d documents indexed", count)
             return int(count)
-        except Exception:
+        except OperationalError:
             logger.error("FTS5 full rebuild failed", exc_info=True)
             raise
 
@@ -131,6 +132,6 @@ class SearchIndexSyncService:
             self._ensure_index_exists()
             self.db.execute(FTS_INTEGRITY_CHECK_STATEMENT)
             return True
-        except Exception:
+        except OperationalError:
             logger.warning("FTS5 integrity check failed", exc_info=True)
             return False
