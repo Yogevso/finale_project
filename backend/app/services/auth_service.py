@@ -9,10 +9,11 @@ from fastapi import HTTPException, status
 from app.auth_context import RefreshTokenService, TokenService
 from app.auth_context.session_tokens import hash_session_identifier
 from app.config import settings
-from app.models import PasswordReset, SecurityEvent, Tenant, User, UserRole, UserSession
+from app.models import PasswordReset, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
 from app.schemas import PublicRegistrationRequest, TokenResponse, UserCreate
 from app.security import get_password_hash, verify_password
+from app.services.audit_helper import write_security_event
 from app.services.base_service import SessionService
 
 
@@ -187,7 +188,7 @@ class AuthService(SessionService):
             PasswordReset.user_id == user.id,
             PasswordReset.used_at.is_(None),
         ).update({"used_at": now})
-        self.db.add(SecurityEvent(user_id=user.id, event_type="password_reset"))
+        write_security_event(user_id=user.id, event_type="password_reset")
         self.db.commit()
 
     def unlock_user_account(self, user_id: int) -> None:
@@ -238,23 +239,19 @@ class AuthService(SessionService):
         ip_changed = user.last_login_ip != normalized_ip
         user_agent_changed = user.last_login_user_agent != normalized_user_agent
 
-        self.db.add(
-            SecurityEvent(
-                user_id=user.id,
-                event_type="login",
-                ip_address=normalized_ip,
-                user_agent=normalized_user_agent,
-            )
+        write_security_event(
+            user_id=user.id,
+            event_type="login",
+            ip_address=normalized_ip,
+            user_agent=normalized_user_agent,
         )
 
         if has_prior_login and (ip_changed or user_agent_changed):
-            self.db.add(
-                SecurityEvent(
-                    user_id=user.id,
-                    event_type="new_device_login",
-                    ip_address=normalized_ip,
-                    user_agent=normalized_user_agent,
-                )
+            write_security_event(
+                user_id=user.id,
+                event_type="new_device_login",
+                ip_address=normalized_ip,
+                user_agent=normalized_user_agent,
             )
 
         user.last_login_ip = normalized_ip
@@ -491,7 +488,7 @@ class AuthService(SessionService):
 
         # Update password
         user.hashed_password = get_password_hash(new_password)
-        self.db.add(SecurityEvent(user_id=user.id, event_type="password_changed"))
+        write_security_event(user_id=user.id, event_type="password_changed")
 
         # Invalidate all refresh tokens (inline to avoid separate commit)
         self.db.query(PasswordReset).filter(

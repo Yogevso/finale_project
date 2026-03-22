@@ -15,12 +15,12 @@ from app.jobs import AsyncJobBatchReport, run_polling_worker
 from app.models import (
     ActionType,
     AudienceEventType,
-    AuditLog,
     Document,
     DocumentVisibility,
     Tenant,
     document_company_assignments,
 )
+from app.services.audit_helper import write_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -98,31 +98,29 @@ def process_assignment_reconciliation_batch(
                 document.visibility = DocumentVisibility.INTERNAL
                 visibility_downgraded_to_internal = True
 
-            session.add(
-                AuditLog(
-                    user_id=None,
-                    document_id=document.id,
-                    action=ActionType.UPDATE,
-                    audience_event_type=AudienceEventType.ASSIGNMENT_REMOVED,
-                    details=json.dumps(
-                        {
-                            "event": "assignment_reconciler_cleanup",
-                            "removed_inactive_company_ids": removed_company_ids,
-                            "remaining_company_ids": new_company_ids,
-                            "visibility_downgraded_to_internal": visibility_downgraded_to_internal,
-                        },
-                        sort_keys=True,
-                    ),
-                    assignment_diff=json.dumps(
-                        {
-                            "old_company_ids": old_company_ids,
-                            "new_company_ids": new_company_ids,
-                            "added_company_ids": [],
-                            "removed_company_ids": removed_company_ids,
-                        },
-                        sort_keys=True,
-                    ),
-                )
+            write_audit_log(
+                user_id=None,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                audience_event_type=AudienceEventType.ASSIGNMENT_REMOVED,
+                details=json.dumps(
+                    {
+                        "event": "assignment_reconciler_cleanup",
+                        "removed_inactive_company_ids": removed_company_ids,
+                        "remaining_company_ids": new_company_ids,
+                        "visibility_downgraded_to_internal": visibility_downgraded_to_internal,
+                    },
+                    sort_keys=True,
+                ),
+                assignment_diff=json.dumps(
+                    {
+                        "old_company_ids": old_company_ids,
+                        "new_company_ids": new_company_ids,
+                        "added_company_ids": [],
+                        "removed_company_ids": removed_company_ids,
+                    },
+                    sort_keys=True,
+                ),
             )
             report.completed += 1
             report.recovered += len(removed_company_ids)

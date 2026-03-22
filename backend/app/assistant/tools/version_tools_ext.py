@@ -8,7 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import ActionType, AuditLog, Document, User, UserRole, Version
+from app.models import ActionType, Document, User, UserRole, Version
+from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
 
@@ -167,12 +168,12 @@ class CancelScheduledPublishTool(BaseTool):
             return {"success": False, "result": "This version is already published."}
         v.scheduled_publish_at = None
         # AE-005: Audit trail for AI-initiated scheduled publish cancellation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             document_id=v.document_id,
             action=ActionType.UPDATE,
             details=f"Cancelled scheduled publish for version #{v.id} via AI assistant",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"Scheduled publish cancelled for version #{v.id}."}
 

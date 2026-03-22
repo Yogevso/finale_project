@@ -21,7 +21,6 @@ from app.models import (
     AdminAction,
     AdminActionStatus,
     Announcement,
-    AuditLog,
     Document,
     DomainVerification,
     DomainVerificationStatus,
@@ -33,6 +32,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.audit_helper import write_audit_log
 from app.schemas.admin_ops import (
     AdminActionCreate,
     AdminActionResponse,
@@ -81,7 +81,7 @@ def _audit(
     payload = {"event": event}
     if details:
         payload.update(details)
-    db.add(AuditLog(user_id=user_id, action=action, details=json.dumps(payload)))
+    write_audit_log(user_id=user_id, action=action, details=json.dumps(payload))
 
 
 def _get_tenant_or_404(db: Session, tenant_id: int) -> Tenant:

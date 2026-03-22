@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, require_system_admin
-from app.models import ActionType, AuditLog
+from app.models import ActionType
+from app.services.audit_helper import write_audit_log
 from app.schemas.system_settings import SystemSettingsResponse, SystemSettingsUpdate
 from app.services.system_settings_service import SystemSettingsService
 
@@ -31,14 +32,13 @@ def update_system_settings(
 ):
     SystemSettingsService.upsert_settings(db, payload.settings, updated_by=tenant_ctx.user_id)
 
-    audit = AuditLog(
+    write_audit_log(
         user_id=tenant_ctx.user_id,
         action=ActionType.SYSTEM,
         details=json.dumps(
             {"event": "system_settings_updated", "keys": sorted(payload.settings.keys())}
         ),
     )
-    db.add(audit)
     db.commit()
 
     settings = SystemSettingsService.get_settings(db)

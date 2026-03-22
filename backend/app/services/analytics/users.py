@@ -54,41 +54,54 @@ class AnalyticsUsersMixin:
             TimeSeriesPoint(date=str(row.date), value=row.value) for row in new_users_query.all()
         ]
 
-        activity_query = (
-            self.db.query(
-                User.id.label("user_id"),
-                User.username.label("username"),
-                User.full_name.label("full_name"),
-                User.role.label("role"),
+        # Two-step query: aggregate AuditLog from analytics DB, then enrich with User from core DB
+        agg_query = (
+            self.analytics_db.query(
+                AuditLog.user_id.label("user_id"),
                 func.count(AuditLog.id).label("count"),
                 func.max(AuditLog.created_at).label("last_active"),
             )
-            .join(User, User.id == AuditLog.user_id)
             .filter(AuditLog.created_at.between(start_dt, end_dt))
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            activity_query = activity_query.filter(User.tenant_id == self.tenant_ctx.tenant_id)
-        activity_query = (
-            activity_query.group_by(User.id, User.username, User.full_name, User.role)
+            tenant_user_ids = [
+                row[0]
+                for row in self.db.query(User.id)
+                .filter(User.tenant_id == self.tenant_ctx.tenant_id)
+                .all()
+            ]
+            agg_query = agg_query.filter(AuditLog.user_id.in_(tenant_user_ids))
+        agg_query = (
+            agg_query.group_by(AuditLog.user_id)
             .order_by(
                 func.count(AuditLog.id).desc(),
                 func.max(AuditLog.created_at).desc(),
-                User.id.asc(),
+                AuditLog.user_id.asc(),
             )
             .limit(10)
         )
+        agg_rows = agg_query.all()
 
-        most_active = [
-            UserActivityItem(
-                user_id=row.user_id,
-                username=row.username,
-                full_name=row.full_name,
-                role=row.role.value if row.role else "unknown",
-                action_count=row.count,
-                last_active=row.last_active.isoformat() if row.last_active else None,
+        # Enrich with user details from core DB
+        user_ids = [row.user_id for row in agg_rows if row.user_id is not None]
+        users_by_id = {}
+        if user_ids:
+            for user in self.db.query(User).filter(User.id.in_(user_ids)).all():
+                users_by_id[user.id] = user
+
+        most_active = []
+        for row in agg_rows:
+            user = users_by_id.get(row.user_id)
+            most_active.append(
+                UserActivityItem(
+                    user_id=row.user_id,
+                    username=user.username if user else "unknown",
+                    full_name=user.full_name if user else None,
+                    role=user.role.value if user and user.role else "unknown",
+                    action_count=row.count,
+                    last_active=row.last_active.isoformat() if row.last_active else None,
+                )
             )
-            for row in activity_query.all()
-        ]
 
         return {
             "period_start": date_from,

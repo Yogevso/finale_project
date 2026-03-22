@@ -12,13 +12,13 @@ from sqlalchemy.orm import Session
 from app.collaboration.base import CollaborationManagerBase
 from app.models import (
     ActionType,
-    AuditLog,
     CollaborationActivity,
     CollaborationActivityType,
     CollaborationSession,
     User,
 )
 from app.repositories import UserRepository
+from app.services.audit_helper import write_audit_log
 
 
 class SessionManager(CollaborationManagerBase):
@@ -44,7 +44,7 @@ class SessionManager(CollaborationManagerBase):
             edits_count=0,
             last_activity_at=datetime.utcnow(),
         )
-        self.db.add(session)
+        self.chat_db.add(session)
 
         activity = CollaborationActivity(
             document_id=document_id,
@@ -53,16 +53,15 @@ class SessionManager(CollaborationManagerBase):
             activity_type=CollaborationActivityType.USER_JOINED,
             details=json.dumps({"username": current_user.username}),
         )
-        self.db.add(activity)
+        self.chat_db.add(activity)
 
-        audit_log = AuditLog(
+        write_audit_log(
             user_id=current_user.id,
             document_id=document_id,
             action=ActionType.VIEW,
             details=f"Started collaboration session: {session_id}",
         )
-        self.db.add(audit_log)
-        self.db.commit()
+        self.chat_db.commit()
 
         return {
             "session_id": session_id,
@@ -74,7 +73,7 @@ class SessionManager(CollaborationManagerBase):
         self, *, session_id: str, edits_count: int, current_user: User
     ) -> dict[str, str]:
         session = (
-            self.db.query(CollaborationSession)
+            self.chat_db.query(CollaborationSession)
             .filter(
                 CollaborationSession.session_id == session_id,
                 CollaborationSession.user_id == current_user.id,
@@ -104,8 +103,8 @@ class SessionManager(CollaborationManagerBase):
                 }
             ),
         )
-        self.db.add(activity)
-        self.db.commit()
+        self.chat_db.add(activity)
+        self.chat_db.commit()
 
         return {"message": "Session ended successfully", "session_id": session_id}
 
@@ -114,7 +113,7 @@ class SessionManager(CollaborationManagerBase):
         self.ensure_document_read_access(document=document, current_user=current_user)
 
         sessions = (
-            self.db.query(CollaborationSession)
+            self.chat_db.query(CollaborationSession)
             .filter(
                 CollaborationSession.document_id == document_id,
                 CollaborationSession.is_active.is_(True),
@@ -167,7 +166,7 @@ class SessionManager(CollaborationManagerBase):
         session = None
         if session_id:
             session = (
-                self.db.query(CollaborationSession)
+                self.chat_db.query(CollaborationSession)
                 .filter(CollaborationSession.session_id == session_id)
                 .first()
             )
@@ -194,14 +193,14 @@ class SessionManager(CollaborationManagerBase):
             activity_type=normalized_activity_type,
             details=json.dumps(details) if details else None,
         )
-        self.db.add(activity)
+        self.chat_db.add(activity)
 
         if session:
             session.last_activity_at = datetime.utcnow()
             if normalized_activity_type == CollaborationActivityType.CONTENT_EDITED:
                 session.edits_count += 1
 
-        self.db.commit()
+        self.chat_db.commit()
         return {"message": "Activity logged", "id": activity.id}
 
     def get_activity_feed(
@@ -216,7 +215,7 @@ class SessionManager(CollaborationManagerBase):
         self.ensure_document_read_access(document=document, current_user=current_user)
 
         query = (
-            self.db.query(CollaborationActivity)
+            self.chat_db.query(CollaborationActivity)
             .filter(CollaborationActivity.document_id == document_id)
             .order_by(CollaborationActivity.created_at.desc())
         )

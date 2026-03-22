@@ -24,7 +24,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.models import ChatParticipant, User
 from app.services.chat_service import ChatService
 from app.ws.auth import authenticate_ws
@@ -38,6 +38,7 @@ async def chat_websocket(
     websocket: WebSocket,
     token: str = Query(default=None),
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
 ):
     """Main chat WebSocket endpoint (X1-019).
 
@@ -71,7 +72,7 @@ async def chat_websocket(
     # Get all chat IDs this user participates in (X1-020)
     chat_ids = [
         p.chat_id
-        for p in db.query(ChatParticipant.chat_id).filter(ChatParticipant.user_id == user.id).all()
+        for p in chat_db.query(ChatParticipant.chat_id).filter(ChatParticipant.user_id == user.id).all()
     ]
 
     await chat_manager.connect_chat(websocket, user.id, chat_ids)
@@ -93,13 +94,13 @@ async def chat_websocket(
             data = msg.get("data", {})
 
             if event == "send_message":
-                await _handle_send_message(websocket, user, data, db)
+                await _handle_send_message(websocket, user, data, chat_db, db)
             elif event == "typing":
                 await _handle_typing(user, data)
             elif event == "mark_read":
-                await _handle_mark_read(user, data, db)
+                await _handle_mark_read(user, data, chat_db)
             elif event == "join_chat":
-                await _handle_join_chat(websocket, user, data, db)
+                await _handle_join_chat(websocket, user, data, chat_db)
             else:
                 await _send_error(websocket, f"Unknown event: {event}")
 
@@ -109,7 +110,7 @@ async def chat_websocket(
         chat_manager.disconnect(websocket, user.id)
 
 
-async def _handle_send_message(websocket: WebSocket, user: User, data: dict, db: Session) -> None:
+async def _handle_send_message(websocket: WebSocket, user: User, data: dict, chat_db: Session, core_db: Session) -> None:
     """Process send_message event and broadcast to participants (X1-021)."""
     chat_id = data.get("chat_id")
     content = (data.get("content") or "").strip()
@@ -119,7 +120,7 @@ async def _handle_send_message(websocket: WebSocket, user: User, data: dict, db:
         return
 
     try:
-        svc = ChatService(db)
+        svc = ChatService(chat_db, core_db=core_db)
         msg = svc.send_message(chat_id, user, content)
     except FastAPIHTTPException as exc:
         await _send_error(websocket, exc.detail)
@@ -150,16 +151,16 @@ async def _handle_typing(user: User, data: dict) -> None:
     }, exclude_user=user.id)
 
 
-async def _handle_mark_read(user: User, data: dict, db: Session) -> None:
+async def _handle_mark_read(user: User, data: dict, chat_db: Session) -> None:
     """Mark chat as read and broadcast receipt (X1-023)."""
     chat_id = data.get("chat_id")
     if not chat_id:
         return
 
-    db.query(ChatParticipant).filter_by(
+    chat_db.query(ChatParticipant).filter_by(
         chat_id=chat_id, user_id=user.id
     ).update({"last_read_at": datetime.utcnow()})
-    db.commit()
+    chat_db.commit()
 
     await chat_manager.broadcast_to_chat(chat_id, "message_read", {
         "chat_id": chat_id,
@@ -167,13 +168,13 @@ async def _handle_mark_read(user: User, data: dict, db: Session) -> None:
     }, exclude_user=user.id)
 
 
-async def _handle_join_chat(websocket: WebSocket, user: User, data: dict, db: Session) -> None:
+async def _handle_join_chat(websocket: WebSocket, user: User, data: dict, chat_db: Session) -> None:
     """Join a new chat room (e.g., after chat creation)."""
     chat_id = data.get("chat_id")
     if not chat_id:
         return
 
-    participant = db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user.id).first()
+    participant = chat_db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user.id).first()
     if participant:
         chat_manager.join_chat(websocket, user.id, chat_id)
 

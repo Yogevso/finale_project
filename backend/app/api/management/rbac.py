@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, require_system_admin
-from app.models import ActionType, AuditLog, UserRole
+from app.models import ActionType, UserRole
+from app.services.audit_helper import write_audit_log
 from app.schemas.rbac import RbacPoliciesResponse, RbacPoliciesUpdate, RbacPolicyResponse
 from app.services.permissions import ROLE_PERMISSIONS, Permission
 from app.services.rbac_service import RbacService
@@ -47,7 +48,7 @@ def update_policies(
     RbacService.upsert_policies(db, policy_map, updated_by=tenant_ctx.user_id)
     published = RbacService.publish_policies(db)
 
-    audit = AuditLog(
+    write_audit_log(
         user_id=tenant_ctx.user_id,
         action=ActionType.SYSTEM,
         details=json.dumps(
@@ -57,7 +58,6 @@ def update_policies(
             }
         ),
     )
-    db.add(audit)
     db.commit()
 
     return _policies_response(published)

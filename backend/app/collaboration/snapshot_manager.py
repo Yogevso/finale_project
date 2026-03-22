@@ -41,7 +41,7 @@ class SnapshotManager(CollaborationManagerBase):
             )
 
         snapshot = SnapshotService.create_snapshot(
-            db=self.db,
+            db=self.chat_db,
             document_id=document_id,
             snapshot_type=SnapshotType.MANUAL_SAVE,
             yjs_state=document.yjs_state,
@@ -65,7 +65,7 @@ class SnapshotManager(CollaborationManagerBase):
         self.ensure_document_read_access(document=document, current_user=current_user)
 
         snapshots, total = SnapshotService.list_snapshots(
-            db=self.db,
+            db=self.chat_db,
             document_id=document_id,
             include_expired=include_expired,
             limit=limit,
@@ -92,7 +92,7 @@ class SnapshotManager(CollaborationManagerBase):
         document = self.get_document_or_404(document_id)
         self.ensure_document_read_access(document=document, current_user=current_user)
 
-        snapshot = SnapshotService.get_snapshot(self.db, snapshot_id)
+        snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
@@ -117,12 +117,12 @@ class SnapshotManager(CollaborationManagerBase):
             denied_detail="You don't have permission to restore snapshots for this document",
         )
 
-        snapshot = SnapshotService.get_snapshot(self.db, snapshot_id)
+        snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
         updated_document = SnapshotService.restore_snapshot(
-            db=self.db,
+            db=self.chat_db,
             snapshot_id=snapshot_id,
             user_id=current_user.id,
             session_id=session_id,
@@ -157,12 +157,12 @@ class SnapshotManager(CollaborationManagerBase):
             denied_detail="You don't have permission to modify snapshots for this document",
         )
 
-        snapshot = SnapshotService.get_snapshot(self.db, snapshot_id)
+        snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
         updated_snapshot = SnapshotService.update_snapshot(
-            db=self.db,
+            db=self.chat_db,
             snapshot_id=snapshot_id,
             name=name,
             description=description,
@@ -190,11 +190,11 @@ class SnapshotManager(CollaborationManagerBase):
             denied_detail="You don't have permission to delete snapshots for this document",
         )
 
-        snapshot = SnapshotService.get_snapshot(self.db, snapshot_id)
+        snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
 
-        success = SnapshotService.delete_snapshot(self.db, snapshot_id)
+        success = SnapshotService.delete_snapshot(self.chat_db, snapshot_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -209,11 +209,11 @@ class SnapshotManager(CollaborationManagerBase):
 
         if not document.yjs_state:
             return {"created": False, "reason": "No collaboration state"}
-        if not SnapshotService.should_auto_save(self.db, document_id):
+        if not SnapshotService.should_auto_save(self.chat_db, document_id):
             return {"created": False, "reason": "Too soon since last auto-save"}
 
         snapshot = SnapshotService.create_snapshot(
-            db=self.db,
+            db=self.chat_db,
             document_id=document_id,
             snapshot_type=SnapshotType.AUTO_SAVE,
             yjs_state=document.yjs_state,

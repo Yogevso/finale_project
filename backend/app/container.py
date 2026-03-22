@@ -91,8 +91,9 @@ class AppContainer:
         self,
         db: Session,
         tenant_ctx: TenantContext | None = None,
+        analytics_db: Session | None = None,
     ) -> AnalyticsServiceStranglerWrapper:
-        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx))
+        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx, analytics_db=analytics_db))
 
     def auth_service(self, db: Session) -> AuthService:
         return AuthService(db)
@@ -192,11 +193,12 @@ class AppContainer:
         self,
         db: Session,
         tenant_ctx: TenantContext,
+        analytics_db: Session | None = None,
     ) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx))
+        return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx, analytics_db=analytics_db))
 
-    def system_analytics_query_handler(self, db: Session) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, None))
+    def system_analytics_query_handler(self, db: Session, analytics_db: Session | None = None) -> AnalyticsQueryHandler:
+        return AnalyticsQueryHandler(self.analytics_service(db, None, analytics_db=analytics_db))
 
     def search_query_handler(self, db: Session) -> SearchQueryHandler:
         return SearchQueryHandler(db)

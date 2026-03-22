@@ -19,7 +19,8 @@ from app.dependencies.permissions import require_admin, require_manager
 from app.dependencies.services import get_analytics_service
 from app.errors.audience_errors import AudienceErrorCode
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
-from app.models import ActionType, AuditLog, SystemSetting, User, UserRole
+from app.models import ActionType, SystemSetting, User, UserRole
+from app.services.audit_helper import write_audit_log
 
 router = APIRouter()
 
@@ -178,17 +179,14 @@ def create_audience_alert_rule(
     rules.append(created.model_dump())
     _save_alert_rules(db, rules=rules, updated_by=current_user.id)
 
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            action=ActionType.SYSTEM,
-            details=json.dumps(
-                {"event": "audience_alert_rule_created", "rule_id": created.id},
-                sort_keys=True,
-            ),
-        )
+    write_audit_log(
+        user_id=current_user.id,
+        action=ActionType.SYSTEM,
+        details=json.dumps(
+            {"event": "audience_alert_rule_created", "rule_id": created.id},
+            sort_keys=True,
+        ),
     )
-    db.commit()
     return created
 
 
@@ -204,17 +202,14 @@ def delete_audience_alert_rule(
         raise HTTPException(status_code=404, detail="Audience alert rule not found")
 
     _save_alert_rules(db, rules=remaining, updated_by=current_user.id)
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            action=ActionType.SYSTEM,
-            details=json.dumps(
-                {"event": "audience_alert_rule_deleted", "rule_id": rule_id},
-                sort_keys=True,
-            ),
-        )
+    write_audit_log(
+        user_id=current_user.id,
+        action=ActionType.SYSTEM,
+        details=json.dumps(
+            {"event": "audience_alert_rule_deleted", "rule_id": rule_id},
+            sort_keys=True,
+        ),
     )
-    db.commit()
     return {"message": "Audience alert rule deleted", "rule_id": rule_id}
 
 

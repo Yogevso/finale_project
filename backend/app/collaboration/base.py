@@ -18,8 +18,10 @@ class CollaborationManagerBase:
         db: Session,
         collaboration_service: CollaborationService | None = None,
         document_repository: DocumentRepository | None = None,
+        chat_db: Session | None = None,
     ) -> None:
         self.db = db
+        self.chat_db = chat_db or db
         self.collaboration_service = collaboration_service or CollaborationService()
         self.document_repository = document_repository or DocumentRepository(db)
 

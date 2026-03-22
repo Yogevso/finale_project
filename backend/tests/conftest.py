@@ -171,6 +171,8 @@ def db():
     transaction that is rolled back on teardown, so every test starts
     with a clean database.
     """
+    from app.services.audit_helper import set_session_factory
+
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
@@ -185,9 +187,14 @@ def db():
         if trans.nested and not trans._parent.nested:
             nested = connection.begin_nested()
 
+    # Override audit helper to use the same test connection so AuditLog
+    # writes are visible within the test and rolled back on teardown.
+    set_session_factory(lambda: TestingSessionLocal(bind=connection))
+
     try:
         yield session
     finally:
+        set_session_factory(None)
         session.close()
         transaction.rollback()
         connection.close()

@@ -26,19 +26,20 @@ class AnalyticsEngagementMixin:
         start_dt = datetime.combine(date_from, datetime.min.time())
         end_dt = datetime.combine(date_to, datetime.max.time())
 
-        tenant_doc_subquery = None
+        tenant_doc_ids = None
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_subquery = (
-                self.db.query(Document.id)
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
                 .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-                .subquery()
-            )
+                .all()
+            ]
 
         def apply_tenant_filter(query):
-            if tenant_doc_subquery is not None:
+            if tenant_doc_ids is not None:
                 return query.filter(
                     or_(
-                        AuditLog.document_id.in_(tenant_doc_subquery),
+                        AuditLog.document_id.in_(tenant_doc_ids),
                         AuditLog.document_id.is_(None),
                     )
                 )
@@ -46,7 +47,7 @@ class AnalyticsEngagementMixin:
 
         date_trunc = self._get_date_trunc(granularity, AuditLog.created_at)
         views_query = (
-            self.db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            self.analytics_db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
             .filter(
                 AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
             )
@@ -59,7 +60,7 @@ class AnalyticsEngagementMixin:
         ]
 
         downloads_query = (
-            self.db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            self.analytics_db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
             .filter(
                 AuditLog.action == ActionType.DOWNLOAD,
                 AuditLog.created_at.between(start_dt, end_dt),
@@ -72,7 +73,7 @@ class AnalyticsEngagementMixin:
             TimeSeriesPoint(date=str(row.date), value=row.value) for row in downloads_query.all()
         ]
 
-        visitors_query = self.db.query(func.count(func.distinct(AuditLog.user_id))).filter(
+        visitors_query = self.analytics_db.query(func.count(func.distinct(AuditLog.user_id))).filter(
             AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
         )
         visitors_query = apply_tenant_filter(visitors_query)
@@ -118,16 +119,17 @@ class AnalyticsEngagementMixin:
         start_dt = datetime.combine(date_from, datetime.min.time())
         end_dt = datetime.combine(date_to, datetime.max.time())
 
-        tenant_doc_subquery = None
+        tenant_doc_ids = None
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_subquery = (
-                self.db.query(Document.id)
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
                 .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-                .subquery()
-            )
+                .all()
+            ]
 
         def get_top_by_action(action: ActionType) -> List[DocumentStats]:
-            query = self.db.query(
+            query = self.analytics_db.query(
                 AuditLog.document_id, func.count(AuditLog.id).label("count")
             ).filter(
                 AuditLog.action == action,
@@ -135,8 +137,8 @@ class AnalyticsEngagementMixin:
                 AuditLog.document_id.isnot(None),
             )
 
-            if tenant_doc_subquery is not None:
-                query = query.filter(AuditLog.document_id.in_(tenant_doc_subquery))
+            if tenant_doc_ids is not None:
+                query = query.filter(AuditLog.document_id.in_(tenant_doc_ids))
 
             query = (
                 query.group_by(AuditLog.document_id)

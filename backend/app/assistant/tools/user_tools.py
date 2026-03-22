@@ -7,7 +7,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import ActionType, AuditLog, User, UserRole
+from app.models import ActionType, User, UserRole
+from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
 
@@ -149,11 +150,11 @@ class CreateUserTool(BaseTool):
         )
         db.add(new_user)
         # AE-005: Audit trail for AI-initiated user creation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.CREATE,
             details=f"Created user '{params['username']}' (role: {params['role']}) via AI assistant",
-        ))
+        )
         db.commit()
         db.refresh(new_user)
         return {"success": True, "result": f"User '{new_user.username}' created (ID: {new_user.id}, role: {new_user.role})."}
@@ -183,11 +184,11 @@ class DeactivateUserTool(BaseTool):
 
         target.is_active = False
         # AE-005: Audit trail for AI-initiated user deactivation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.UPDATE,
             details=f"Deactivated user '{target.username}' (ID: {target.id}) via AI assistant",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"User '{target.username}' (ID: {target.id}) has been deactivated."}
 
@@ -229,10 +230,10 @@ class ChangeUserRoleTool(BaseTool):
         old_role = target.role
         target.role = new_role
         # AE-005: Audit trail for AI-initiated role change
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.UPDATE,
             details=f"Changed role for user '{target.username}' from {old_role} to {new_role} via AI assistant",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"User '{target.username}' role changed from {old_role} to {new_role}."}

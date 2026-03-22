@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_internal_user
 from app.models import User, ChatMessage, ChatParticipant
 
@@ -48,8 +48,8 @@ from app.services.chat_service import ChatService
 router = APIRouter()
 
 
-def _get_chat_service(db: Session = Depends(get_db)) -> ChatService:
-    return ChatService(db)
+def _get_chat_service(chat_db: Session = Depends(get_chat_db), db: Session = Depends(get_db)) -> ChatService:
+    return ChatService(chat_db, core_db=db)
 
 
 def _msg_to_response(msg, db: Session) -> ChatMessageResponse:
@@ -103,7 +103,7 @@ def list_my_chats(
             ChatListItem(
                 chat=ChatResponse.model_validate(i["chat"]),
                 display_name=i["display_name"],
-                last_message=_msg_to_response(i["last_message"], svc.db) if i["last_message"] else None,
+                last_message=_msg_to_response(i["last_message"], svc.core_db) if i["last_message"] else None,
                 unread_count=i["unread_count"],
                 is_muted=i["is_muted"],
             )
@@ -170,7 +170,7 @@ def get_chat(
         last_message_at=chat.last_message_at,
         created_at=chat.created_at,
         updated_at=chat.updated_at,
-        participants=[_participant_to_response(p, svc.db) for p in chat.participants],
+        participants=[_participant_to_response(p, svc.core_db) for p in chat.participants],
     )
 
 
@@ -198,7 +198,7 @@ def get_messages(
     """Get paginated message history for a chat."""
     messages = svc.get_chat_history(chat_id, current_user, before_id=before_id, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m, svc.db) for m in messages],
+        items=[_msg_to_response(m, svc.core_db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -212,7 +212,7 @@ def send_message(
 ):
     """Send a message in a chat."""
     msg = svc.send_message(chat_id, current_user, body.content, context_json=body.context_json)
-    return _msg_to_response(msg, svc.db)
+    return _msg_to_response(msg, svc.core_db)
 
 
 @router.post("/chats/{chat_id}/messages/upload", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
@@ -247,7 +247,7 @@ async def upload_chat_file(
         file_size=len(data),
         file_mime_type=content_type,
     )
-    return _msg_to_response(msg, svc.db)
+    return _msg_to_response(msg, svc.core_db)
 
 
 @router.get("/chats/{chat_id}/files/{filename}")
@@ -281,7 +281,7 @@ def add_participant(
 ):
     """Add a participant to a group chat. Requires owner/admin role."""
     p = svc.add_participant(chat_id, current_user, body.user_id)
-    return _participant_to_response(p, svc.db)
+    return _participant_to_response(p, svc.core_db)
 
 
 @router.delete("/chats/{chat_id}/participants/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -321,7 +321,7 @@ def search_all_messages(
     """Search messages across all user's chats."""
     messages = svc.search_all_messages(current_user, q, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m, svc.db) for m in messages],
+        items=[_msg_to_response(m, svc.core_db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -337,7 +337,7 @@ def search_messages(
     """Search messages in a chat by content (X1-043)."""
     messages = svc.search_messages(chat_id, current_user, q, limit=limit)
     return ChatMessageListResponse(
-        items=[_msg_to_response(m, svc.db) for m in messages],
+        items=[_msg_to_response(m, svc.core_db) for m in messages],
         has_more=len(messages) == limit,
     )
 
@@ -389,4 +389,4 @@ def update_participant_role(
 ):
     """Change a participant's role in a group chat (X1-046)."""
     p = svc.update_participant_role(chat_id, current_user, user_id, body.role)
-    return _participant_to_response(p, svc.db)
+    return _participant_to_response(p, svc.core_db)
