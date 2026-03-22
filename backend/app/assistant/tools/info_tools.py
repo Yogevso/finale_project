@@ -78,7 +78,12 @@ class SearchPublicDocumentsTool(BaseTool):
         q = params["query"]
         limit = min(params.get("limit", 10), 50)
 
-        query = db.query(Document).filter(Document.title.ilike(f"%{q}%"))
+        pattern = f"%{q}%"
+        query = db.query(Document).filter(
+            (Document.title.ilike(pattern))
+            | (Document.description.ilike(pattern))
+            | (Document.tags.ilike(pattern))
+        )
 
         try:
             role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role

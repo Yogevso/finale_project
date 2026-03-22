@@ -26,6 +26,7 @@ from app.application.queries.portal_queries import (
     GetPortalDocumentQuery,
     ListPortalCategoriesQuery,
     ListPortalDocumentsQuery,
+    ListPortalFacetsQuery,
     PortalDashboardStatsQuery,
     PortalDocumentsQueryHandler,
     SearchPortalDocumentsQuery,
@@ -144,4 +145,5 @@ def get_portal_documents_query_handler(
     bus.register(ListPortalCategoriesQuery, handler.execute_categories)
     bus.register(PortalDashboardStatsQuery, handler.execute_dashboard_stats)
     bus.register(SearchPortalDocumentsQuery, handler.execute_search_documents)
+    bus.register(ListPortalFacetsQuery, handler.execute_facets)
     return QueryBusHandlerAdapter(bus)
