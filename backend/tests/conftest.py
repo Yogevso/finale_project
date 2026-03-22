@@ -141,6 +141,25 @@ def projection_cache_isolation():
     reset_projection_cache()
 
 
+@pytest.fixture(autouse=True)
+def auth_rate_limit_isolation():
+    """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
+    from app.services.auth_rate_limit_service import AuthRateLimitService
+    AuthRateLimitService.reset()
+    # Also clear the general middleware's per-IP buckets so auth-path limits
+    # don't carry over between tests that enable RATE_LIMIT_ENABLED.
+    from app.middleware.rate_limit import RateLimitMiddleware
+    # Walk the built middleware_stack chain (not .app) to find the live instance.
+    _app = getattr(_shared_test_client.app, "middleware_stack", None)
+    while _app is not None:
+        if isinstance(_app, RateLimitMiddleware):
+            _app.clients.clear()
+            break
+        _app = getattr(_app, "app", None)
+    yield
+    AuthRateLimitService.reset()
+
+
 @pytest.fixture(scope="function")
 def db():
     """Provide a DB session with per-test isolation via SAVEPOINT rollback.
@@ -200,7 +219,20 @@ def client(db):
 
 
 @pytest.fixture
-def test_user(db):
+def default_tenant(db):
+    """Provide a default tenant for tests that need one implicitly."""
+    return create_tenant(
+        db,
+        name="Default Test Tenant",
+        slug="default-test-tenant",
+        is_active=True,
+        contact_email="default@test.com",
+        company_type="customer",
+    )
+
+
+@pytest.fixture
+def test_user(db, default_tenant):
     """Create a test user"""
     return create_user(
         db,
@@ -210,11 +242,12 @@ def test_user(db):
         plain_password="testpass123",
         role=UserRole.EDITOR,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 
 @pytest.fixture
-def test_admin(db):
+def test_admin(db, default_tenant):
     """Create a test admin user"""
     return create_user(
         db,
@@ -224,6 +257,7 @@ def test_admin(db):
         plain_password="admin123",
         role=UserRole.ADMIN,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 
@@ -269,7 +303,7 @@ def sample_document(client, admin_token):
 
 
 @pytest.fixture
-def test_viewer(db):
+def test_viewer(db, default_tenant):
     """Create a test viewer user"""
     return create_user(
         db,
@@ -279,6 +313,7 @@ def test_viewer(db):
         plain_password="viewer123",
         role=UserRole.VIEWER,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 
@@ -310,7 +345,7 @@ def test_document(db, test_user):
 
 
 @pytest.fixture
-def test_system_admin(db):
+def test_system_admin(db, default_tenant):
     """Create a test system admin user"""
     return create_user(
         db,
@@ -320,6 +355,7 @@ def test_system_admin(db):
         plain_password="sysadmin123",
         role=UserRole.SYSTEM_ADMIN,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 
@@ -334,7 +370,7 @@ def system_admin_headers(client, test_system_admin):
 
 
 @pytest.fixture
-def test_manager(db):
+def test_manager(db, default_tenant):
     """Create a test manager user"""
     return create_user(
         db,
@@ -344,6 +380,7 @@ def test_manager(db):
         plain_password="manager123",
         role=UserRole.MANAGER,
         is_active=True,
+        tenant_id=default_tenant.id,
     )
 
 

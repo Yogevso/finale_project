@@ -24,6 +24,7 @@ class TestBookmarks:
             description="Test document for bookmarking",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -44,6 +45,7 @@ class TestBookmarks:
             document_number=f"DOC-DUP-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -65,6 +67,7 @@ class TestBookmarks:
             document_number=f"DOC-RMB-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -94,6 +97,7 @@ class TestFeedback:
             document_number=f"DOC-FBK-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -117,6 +121,7 @@ class TestFeedback:
             document_number=f"DOC-NFH-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -138,6 +143,7 @@ class TestFeedback:
             document_number=f"DOC-STS-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -162,6 +168,7 @@ class TestFeedback:
             document_number=f"DOC-GMF-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -230,6 +237,7 @@ class TestReadingProgress:
             document_number=f"DOC-RPG-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -251,6 +259,7 @@ class TestReadingProgress:
             document_number=f"DOC-CRD-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -275,6 +284,7 @@ class TestReadingProgress:
             document_number=f"DOC-LPT-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -299,6 +309,7 @@ class TestReadingProgress:
             document_number=f"DOC-CPL-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -333,6 +344,7 @@ class TestReadingProgress:
             document_number=f"DOC-INV-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()

@@ -356,6 +356,7 @@ class TestContentAnalytics:
             document_number="DOC-ANL-PUB-0001",
             status=DocumentStatus.ACTIVE,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add(document)
         db.flush()
@@ -397,6 +398,7 @@ class TestContentAnalytics:
             document_number="DOC-ANL-PUB-0002",
             status=DocumentStatus.ACTIVE,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add(document)
         db.flush()

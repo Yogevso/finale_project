@@ -374,6 +374,7 @@ class TestDocumentAccessChecker:
             status=DocumentStatus.DRAFT,
             visibility=DocumentVisibility.INTERNAL,
             created_by=test_manager.id,
+            tenant_id=test_manager.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -391,6 +392,7 @@ class TestDocumentAccessChecker:
             status=DocumentStatus.DRAFT,
             visibility=DocumentVisibility.INTERNAL,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -452,6 +454,7 @@ class TestPreConfiguredCheckers:
             status=DocumentStatus.DRAFT,
             visibility=DocumentVisibility.INTERNAL,
             created_by=test_manager.id,
+            tenant_id=test_manager.tenant_id,
         )
         db.add(doc)
         db.commit()

@@ -389,15 +389,14 @@ def test_login_lockout_then_auto_unlock_after_window(client, test_user, monkeypa
         "/api/v1/auth/login",
         json={"username": "testuser", "password": "wrongpassword"},
     )
-    assert locked_response.status_code == 403
-    assert locked_response.json()["detail"] == "account_locked"
+    # H-08: locked accounts return 401 (not 403) to prevent user enumeration
+    assert locked_response.status_code == 401
 
     while_locked_response = client.post(
         "/api/v1/auth/login",
         json={"username": "testuser", "password": "testpass123"},
     )
-    assert while_locked_response.status_code == 403
-    assert while_locked_response.json()["detail"] == "account_locked"
+    assert while_locked_response.status_code == 401
 
     fake_now["value"] = fake_now["value"] + timedelta(minutes=31)
     unlocked_response = client.post(

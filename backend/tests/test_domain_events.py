@@ -15,6 +15,7 @@ from app.models import (
     DocumentStatus,
     ReviewRequest,
     ReviewStatus,
+    Tenant,
     User,
     UserRole,
     Version,
@@ -63,6 +64,10 @@ def test_in_process_dispatcher_continues_after_handler_error():
 
 
 def test_version_service_emits_document_published_event(db):
+    tenant = Tenant(name="events-test-tenant", slug="events-test", company_type="customer")
+    db.add(tenant)
+    db.flush()
+
     author = User(
         email="author@example.com",
         username="author",
@@ -70,6 +75,7 @@ def test_version_service_emits_document_published_event(db):
         hashed_password="hashed",
         role=UserRole.EDITOR,
         is_active=True,
+        tenant_id=tenant.id,
     )
     publisher = User(
         email="manager@example.com",
@@ -78,6 +84,7 @@ def test_version_service_emits_document_published_event(db):
         hashed_password="hashed",
         role=UserRole.MANAGER,
         is_active=True,
+        tenant_id=tenant.id,
     )
     db.add_all([author, publisher])
     db.commit()
@@ -90,6 +97,7 @@ def test_version_service_emits_document_published_event(db):
         description="for events",
         status=DocumentStatus.APPROVED,
         created_by=author.id,
+        tenant_id=tenant.id,
     )
     db.add(document)
     db.commit()
@@ -136,6 +144,10 @@ def test_version_service_emits_document_published_event(db):
 
 
 def test_comment_service_emits_comment_created_event(db):
+    tenant = Tenant(name="comment-test-tenant", slug="comment-test", company_type="customer")
+    db.add(tenant)
+    db.flush()
+
     author = User(
         email="author-comment@example.com",
         username="authorcomment",
@@ -143,6 +155,7 @@ def test_comment_service_emits_comment_created_event(db):
         hashed_password="hashed",
         role=UserRole.EDITOR,
         is_active=True,
+        tenant_id=tenant.id,
     )
     commenter = User(
         email="commenter@example.com",
@@ -151,6 +164,7 @@ def test_comment_service_emits_comment_created_event(db):
         hashed_password="hashed",
         role=UserRole.EDITOR,
         is_active=True,
+        tenant_id=tenant.id,
     )
     db.add_all([author, commenter])
     db.commit()
@@ -163,6 +177,7 @@ def test_comment_service_emits_comment_created_event(db):
         description="for events",
         status=DocumentStatus.DRAFT,
         created_by=author.id,
+        tenant_id=tenant.id,
     )
     db.add(document)
     db.commit()

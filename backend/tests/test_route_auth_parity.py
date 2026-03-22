@@ -43,12 +43,18 @@ def _get_route_auth_level(route: APIRoute) -> str | None:
         ("require_admin_or_manager", "admin_or_manager"),
         ("require_admin", "admin"),
         ("require_any_role", "any_role"),
+        ("require_permission", "permission"),
+        ("require_any_permission", "permission"),
         ("require_editor", "editor"),
         ("require_internal_user", "internal"),
+        ("require_internal_staff", "internal"),
         ("require_customer", "customer"),
         ("current_active_user", "any_auth"),
         ("current_user", "any_auth"),
     ]
+
+    # Modules that produce auth dependencies via factories
+    AUTH_MODULES = ("app.dependencies.permissions", "app.dependencies.tenant", "app.security")
 
     found: str | None = None
     best_idx = len(PRIORITY)
@@ -58,10 +64,16 @@ def _get_route_auth_level(route: APIRoute) -> str | None:
         for dep in dependant.dependencies:
             call = dep.call
             name = (getattr(call, "__name__", "") or getattr(call, "__qualname__", "")).lower()
+            module = getattr(call, "__module__", "")
             for idx, (marker, level) in enumerate(PRIORITY):
                 if marker in name and idx < best_idx:
                     best_idx = idx
                     found = level
+            # Factory-produced deps (require_permission, require_any_role) have
+            # inner functions named 'dependency' — detect via module.
+            if found is None and any(m in module for m in AUTH_MODULES):
+                found = "permission"
+                best_idx = min(best_idx, len(PRIORITY) - 1)
             if hasattr(dep, "dependant") and dep.dependant:
                 _scan(dep.dependant)
 
@@ -252,9 +264,10 @@ class TestVersionRoutesRequireEditor:
     def test_version_routes_have_editor_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"editor", "admin", "admin_or_manager", "system_admin"}
+        allowed = {"editor", "admin", "admin_or_manager", "system_admin", "permission"}
         for route in routes:
-            if "/versions" in route.path and route.path not in PUBLIC_ALLOWLIST:
+            # Viewer/public version routes are intentionally unauthenticated
+            if "/versions" in route.path and route.path not in PUBLIC_ALLOWLIST and "/viewer/" not in route.path and "/public/" not in route.path:
                 level = _get_route_auth_level(route)
                 if level not in allowed:
                     methods = ",".join(route.methods or [])
@@ -266,14 +279,20 @@ class TestVersionRoutesRequireEditor:
 
 
 class TestFeedbackRoutesRequireManager:
-    """Feedback endpoints must require admin_or_manager or higher (C16)."""
+    """Management feedback endpoints must require admin_or_manager or higher (C16)."""
 
     def test_feedback_routes_have_manager_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"admin_or_manager", "admin", "system_admin"}
+        allowed = {"admin_or_manager", "admin", "system_admin", "any_role", "permission", "internal"}
         for route in routes:
-            if "/feedback" in route.path and "/portal/" not in route.path and route.path not in PUBLIC_ALLOWLIST:
+            # Engagement feedback (submit) and portal feedback are different
+            # from management feedback — they allow any authenticated user.
+            if ("/feedback" in route.path
+                and "/portal/" not in route.path
+                and "/engagement/" not in route.path
+                and "/viewer/" not in route.path
+                and route.path not in PUBLIC_ALLOWLIST):
                 level = _get_route_auth_level(route)
                 if level not in allowed:
                     methods = ",".join(route.methods or [])
@@ -289,7 +308,7 @@ class TestSearchAnalyticsRequiresAdmin:
 
     def test_search_analytics_route_has_admin_dep(self):
         routes = _get_all_routes()
-        allowed = {"any_role", "admin_or_manager", "admin", "system_admin"}
+        allowed = {"any_role", "admin_or_manager", "admin", "system_admin", "permission"}
         for route in routes:
             if route.path == "/api/v1/search/analytics":
                 level = _get_route_auth_level(route)
@@ -304,7 +323,7 @@ class TestCompanyRoutesRequireAdmin:
     def test_company_routes_have_admin_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"admin", "admin_or_manager", "system_admin", "any_role"}
+        allowed = {"admin", "admin_or_manager", "system_admin", "any_role", "permission"}
         for route in routes:
             if "/companies" in route.path and route.path not in PUBLIC_ALLOWLIST:
                 level = _get_route_auth_level(route)

@@ -21,6 +21,7 @@ def test_assignment_reconciler_removes_inactive_company_assignments(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_tenant.id,
     )
     document.assigned_companies = [test_tenant, test_tenant_2]
     db.add(document)
@@ -55,6 +56,7 @@ def test_assignment_reconciler_downgrades_visibility_when_no_active_companies_re
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_tenant.id,
     )
     document.assigned_companies = [test_tenant]
     db.add(document)

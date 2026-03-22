@@ -162,11 +162,11 @@ class TestChatTenantIsolation:
             svc._get_chat_with_permission(chat.id, foreign_customer)
         assert exc.value.status_code == 404
 
-    def test_internal_staff_can_chat_cross_tenant(self, svc, editor_a, foreign_customer):
-        """Internal staff (editor) can create a direct chat with a customer from another tenant."""
-        chat = svc.create_direct_chat(editor_a, foreign_customer.id)
-        assert chat is not None
-        assert chat.type == ChatType.DIRECT
+    def test_internal_staff_cannot_chat_cross_tenant(self, svc, editor_a, foreign_customer):
+        """Cross-tenant direct chats are rejected even for internal staff (FIX-002)."""
+        with pytest.raises(HTTPException) as exc:
+            svc.create_direct_chat(editor_a, foreign_customer.id)
+        assert exc.value.status_code == 403
 
 
 # =====================================================================

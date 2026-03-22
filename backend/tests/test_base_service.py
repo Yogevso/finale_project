@@ -926,6 +926,7 @@ class TestCrossTenantIsolation:
             status=DocumentStatus.DRAFT,
             visibility=DocumentVisibility.INTERNAL,
             created_by=tenant1_context.user_id,
+            tenant_id=tenant1.id,
         )
         created = service1.create(new_doc)
 
