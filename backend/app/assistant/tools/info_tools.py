@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Document, DocumentVisibility, User
+from app.models import Document, DocumentStatus, DocumentVisibility, User
 from app.services.permissions import Permission, get_user_permissions
 
 
@@ -75,15 +75,19 @@ class SearchPublicDocumentsTool(BaseTool):
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
         from app.models import UserRole, document_company_assignments
 
-        q = params["query"]
+        q = params["query"].strip()
         limit = min(params.get("limit", 10), 50)
 
-        pattern = f"%{q}%"
-        query = db.query(Document).filter(
-            (Document.title.ilike(pattern))
-            | (Document.description.ilike(pattern))
-            | (Document.tags.ilike(pattern))
-        )
+        # Split query into words so "API documentation" matches "API Reference Index"
+        words = q.split()
+        query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
+        for word in words:
+            pat = f"%{word}%"
+            query = query.filter(
+                (Document.title.ilike(pat))
+                | (Document.description.ilike(pat))
+                | (Document.tags.ilike(pat))
+            )
 
         try:
             role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
