@@ -88,5 +88,13 @@ _analytics_url = _resolve_url(settings.ANALYTICS_DATABASE_URL, _core_url)
 _chat_url = _resolve_url(settings.CHAT_DATABASE_URL, _core_url)
 
 core_engine = _build_engine(_core_url, echo=settings.SQL_ECHO, pool_size=10, max_overflow=20)
-analytics_engine = _build_engine(_analytics_url, echo=settings.SQL_ECHO, pool_size=5, max_overflow=10)
-chat_engine = _build_engine(_chat_url, echo=settings.SQL_ECHO, pool_size=8, max_overflow=15)
+analytics_engine = _build_engine(
+    _analytics_url,
+    echo=settings.ANALYTICS_SQL_ECHO if settings.ANALYTICS_SQL_ECHO is not None else settings.SQL_ECHO,
+    pool_size=5, max_overflow=10,
+)
+chat_engine = _build_engine(
+    _chat_url,
+    echo=settings.CHAT_SQL_ECHO if settings.CHAT_SQL_ECHO is not None else settings.SQL_ECHO,
+    pool_size=8, max_overflow=15,
+)

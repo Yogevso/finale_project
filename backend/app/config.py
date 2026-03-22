@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     ANALYTICS_DATABASE_URL: str = ""  # Defaults to DATABASE_URL when empty
     CHAT_DATABASE_URL: str = ""  # Defaults to DATABASE_URL when empty
     SQL_ECHO: bool = False
+    ANALYTICS_SQL_ECHO: bool | None = None  # Defaults to SQL_ECHO when None
+    CHAT_SQL_ECHO: bool | None = None  # Defaults to SQL_ECHO when None
 
     # CORS — M-14: override via CORS_ORIGINS env var (comma-separated or JSON array)
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
