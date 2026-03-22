@@ -106,14 +106,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             referer_host = parsed.netloc.lower() if parsed.netloc else ""
             return referer_host in self.allowed_origins
         
-        # No Origin or Referer - could be a same-origin request from older browser
-        # or a non-browser client. For API clients, this is typically fine
-        # since they must provide the Authorization header anyway.
-        # However, for extra safety in production, we can require these headers.
+        # No Origin or Referer — H-07: In production, reject requests
+        # missing both headers as potential CSRF attempts.
         if settings.APP_ENV.lower() == "production":
-            # In production, require Origin or Referer for browser requests
-            # Non-browser clients (curl, scripts) typically don't send these
-            # and also don't store auth tokens in browser storage
-            return True  # Allow - the JWT auth provides the real protection
+            return False
         
         return True  # Allow in development/testing

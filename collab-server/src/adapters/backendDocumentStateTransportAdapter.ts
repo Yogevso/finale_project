@@ -25,6 +25,9 @@ export function buildDocumentStateUrl(
   return `${backendUrl}${apiPrefix}${COLLAB_STATE_PATH}/${documentId}/state`;
 }
 
+// H-12: 10-second timeout for backend HTTP requests
+const BACKEND_TIMEOUT_MS = 10_000;
+
 export class BackendDocumentStateTransportAdapter implements DocumentStateTransportPort {
   async loadDocumentState(documentId: string, token: string): Promise<Uint8Array | null> {
     try {
@@ -33,6 +36,7 @@ export class BackendDocumentStateTransportAdapter implements DocumentStateTransp
           Authorization: `Bearer ${token}`,
         },
         responseType: 'arraybuffer',
+        timeout: BACKEND_TIMEOUT_MS,
       });
 
       if (response.status !== 200 || !response.data) {
@@ -53,6 +57,7 @@ export class BackendDocumentStateTransportAdapter implements DocumentStateTransp
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/octet-stream',
       },
+      timeout: BACKEND_TIMEOUT_MS,
     });
   }
 }

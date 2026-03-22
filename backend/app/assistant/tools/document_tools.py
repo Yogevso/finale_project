@@ -26,13 +26,13 @@ class SearchDocumentsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search query text"},
+            "query": {"type": "string", "description": "Search query text", "maxLength": 500},
             "status": {
                 "type": "string",
                 "description": "Filter by status",
                 "enum": ["draft", "pending_review", "approved", "active", "archived"],
             },
-            "topic": {"type": "string", "description": "Filter by topic slug"},
+            "topic": {"type": "string", "description": "Filter by topic slug", "maxLength": 100},
             "limit": {"type": "integer", "description": "Max results (default 10)"},
         },
         "required": ["query"],
@@ -121,8 +121,8 @@ class CreateDocumentTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "title": {"type": "string", "description": "Document title"},
-            "topic": {"type": "string", "description": "Topic slug (optional)"},
+            "title": {"type": "string", "description": "Document title", "maxLength": 500},
+            "topic": {"type": "string", "description": "Topic slug (optional)", "maxLength": 100},
             "visibility": {
                 "type": "string",
                 "description": "Visibility level (default: internal)",
@@ -167,10 +167,10 @@ class EditDocumentTool(BaseTool):
         "type": "object",
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID to edit"},
-            "title": {"type": "string", "description": "New title (optional)"},
+            "title": {"type": "string", "description": "New title (optional)", "maxLength": 500},
             # AE-003: "status" removed — status transitions must only happen
             # through the document state machine (review → approve → publish).
-            "topic": {"type": "string", "description": "New topic slug (optional)"},
+            "topic": {"type": "string", "description": "New topic slug (optional)", "maxLength": 100},
         },
         "required": ["document_id"],
     }

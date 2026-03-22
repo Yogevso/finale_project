@@ -50,7 +50,7 @@ const CustomerDocumentPage = lazy(() => import('./pages/portal/CustomerDocumentP
 const MyFeedbackPage = lazy(() => import('./pages/portal/MyFeedbackPage'))
 import AcceptInvitationPage from './pages/AcceptInvitationPage'
 // Route guards
-import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard } from './components/guards/RoleGuard'
+import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard, EditorGuard } from './components/guards/RoleGuard'
 import { RouteAnnouncer } from './components/a11y/SkipNavLink'
 import RouteTransition from './components/RouteTransition'
 import { useTheme } from './hooks/useTheme'
@@ -278,7 +278,7 @@ function App() {
         >
           <Route index element={<DocumentsPage />} />
           <Route path=":id" element={<DocumentDetailPage />} />
-          <Route path=":id/compare" element={<VersionComparePage />} />
+          <Route path=":id/compare" element={<EditorGuard><VersionComparePage /></EditorGuard>} />
         </Route>
 
         {/* Fullscreen Document View - use DocumentDetailPage */}

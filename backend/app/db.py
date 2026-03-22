@@ -42,12 +42,21 @@ def _set_sqlite_pragma(dbapi_conn, connection_record):
         cursor.close()
 
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=settings.SQL_ECHO,
-    pool_pre_ping=True,  # Additional pool-level health check (Y15-030)
-)
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
+_engine_kwargs: dict = {
+    "echo": settings.SQL_ECHO,
+    "pool_pre_ping": True,  # Additional pool-level health check (Y15-030)
+}
+
+if _is_sqlite:
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # Production-grade pool for PostgreSQL / other RDBMS
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
+engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

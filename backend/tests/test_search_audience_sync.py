@@ -70,6 +70,7 @@ class TestSearchIndexSyncService:
             description="Search index bootstrap",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()

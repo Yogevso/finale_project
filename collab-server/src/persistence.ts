@@ -15,6 +15,22 @@ export { buildDocumentStateUrl };
 
 // In-memory cache for document states (for quick access)
 const documentCache = new Map<string, Uint8Array>();
+const MAX_CACHE_SIZE = 200;
+
+function cacheSet(documentId: string, state: Uint8Array): void {
+  // Delete first so re-insertion moves key to end (most recent)
+  documentCache.delete(documentId);
+  documentCache.set(documentId, state);
+  // Evict oldest entries when cache exceeds limit
+  while (documentCache.size > MAX_CACHE_SIZE) {
+    const oldest = documentCache.keys().next().value;
+    if (oldest !== undefined) {
+      documentCache.delete(oldest);
+    } else {
+      break;
+    }
+  }
+}
 
 export interface PersistenceResult {
   success: boolean;
@@ -44,7 +60,7 @@ export async function loadDocument(
       await transport.loadDocumentState(documentId, token),
     );
     if (state) {
-      documentCache.set(documentId, state);
+      cacheSet(documentId, state);
       console.log(`[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`);
       return state;
     }
@@ -66,7 +82,7 @@ export async function saveDocument(
   transport: DocumentStateTransportPort = defaultTransport,
 ): Promise<PersistenceResult> {
   // Update cache
-  documentCache.set(documentId, state);
+  cacheSet(documentId, state);
 
   try {
     await transport.saveDocumentState(documentId, state, token);

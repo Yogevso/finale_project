@@ -93,6 +93,7 @@ def process_assignment_reconciliation_batch(
             changed = True
             visibility_downgraded_to_internal = False
             document.assigned_companies = new_companies
+            document.audience_version = (document.audience_version or 1) + 1
             if document.visibility == DocumentVisibility.COMPANY and not new_company_ids:
                 document.visibility = DocumentVisibility.INTERNAL
                 visibility_downgraded_to_internal = True

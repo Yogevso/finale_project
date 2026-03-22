@@ -171,6 +171,16 @@ class ApproveReviewCommandHandler:
             # Store resolution info on context for audit
             context.state["audience_resolution"] = audience_resolution
 
+        # Optimistic lock: reject approval if audience changed since submission
+        if (
+            review.audience_version_snapshot is not None
+            and document.audience_version != review.audience_version_snapshot
+        ):
+            raise ConflictError(
+                "Audience has changed since this review was submitted — "
+                "re-submit for review required."
+            )
+
         review_aggregate.approve(
             reviewer_id=current_user.id,
             comments=context.command.comments,

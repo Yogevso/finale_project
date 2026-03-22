@@ -23,7 +23,7 @@ class TestSystemAdminAccess:
                 "email": "newadmin@example.com",
                 "username": "newadmin",
                 "full_name": "New Admin",
-                "password": "newadmin123",
+                "password": "NewAdmin1!",
                 "role": "admin",
             },
         )
@@ -59,7 +59,7 @@ class TestAdminAccess:
                 "email": "newsysadmin@example.com",
                 "username": "newsysadmin",
                 "full_name": "New System Admin",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "system_admin",
             },
         )
@@ -104,7 +104,7 @@ class TestManagerAccess:
                 "email": "newadmin@example.com",
                 "username": "newadmin",
                 "full_name": "New Admin",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "admin",
             },
         )
@@ -119,7 +119,7 @@ class TestManagerAccess:
                 "email": "neweditor@example.com",
                 "username": "neweditor",
                 "full_name": "New Editor",
-                "password": "password123",
+                "password": "Password1!",
                 "role": "editor",
             },
         )

@@ -27,6 +27,7 @@ router = APIRouter()
 users_controller = UsersController()
 storage_backend = get_storage_backend()
 AVATAR_SIZE = (200, 200)
+MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024  # 2 MB
 ALLOWED_AVATAR_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
@@ -194,6 +195,11 @@ def upload_my_avatar(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Avatar file is empty",
+        )
+    if len(file_bytes) > MAX_AVATAR_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Avatar file too large (max {MAX_AVATAR_FILE_SIZE // 1024 // 1024} MB)",
         )
 
     try:

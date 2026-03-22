@@ -18,8 +18,8 @@ class SearchAttachmentsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search by filename keyword"},
-            "mime_type": {"type": "string", "description": "Filter by MIME type prefix (e.g. 'image/', 'application/pdf')"},
+            "query": {"type": "string", "description": "Search by filename keyword", "maxLength": 255},
+            "mime_type": {"type": "string", "description": "Filter by MIME type prefix (e.g. 'image/', 'application/pdf')", "maxLength": 255},
             "document_id": {"type": "integer", "description": "Limit to a specific document (optional)"},
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },

@@ -65,6 +65,7 @@ def _seed_fixture_document(
         status=DocumentStatus.DRAFT,
         visibility=visibility,
         created_by=created_by,
+        tenant_id=dell.id,
         row_version=row_version,
         created_at=datetime(2026, 3, 4, 10, 15, 0),
         updated_at=datetime(2026, 3, 4, 10, 15, 0),

@@ -32,6 +32,55 @@ def _route_has_dependency(route: APIRoute, dep_name: str) -> bool:
     return False
 
 
+def _get_route_auth_level(route: APIRoute) -> str | None:
+    """Return the most specific auth level required by a route.
+
+    Checks dependency callable names in priority order so that a
+    *require_system_admin* dependency beats a generic *current_user*.
+    """
+    PRIORITY = [
+        ("require_system_admin", "system_admin"),
+        ("require_admin_or_manager", "admin_or_manager"),
+        ("require_admin", "admin"),
+        ("require_any_role", "any_role"),
+        ("require_permission", "permission"),
+        ("require_any_permission", "permission"),
+        ("require_editor", "editor"),
+        ("require_internal_user", "internal"),
+        ("require_internal_staff", "internal"),
+        ("require_customer", "customer"),
+        ("current_active_user", "any_auth"),
+        ("current_user", "any_auth"),
+    ]
+
+    # Modules that produce auth dependencies via factories
+    AUTH_MODULES = ("app.dependencies.permissions", "app.dependencies.tenant", "app.security")
+
+    found: str | None = None
+    best_idx = len(PRIORITY)
+
+    def _scan(dependant) -> None:
+        nonlocal found, best_idx
+        for dep in dependant.dependencies:
+            call = dep.call
+            name = (getattr(call, "__name__", "") or getattr(call, "__qualname__", "")).lower()
+            module = getattr(call, "__module__", "")
+            for idx, (marker, level) in enumerate(PRIORITY):
+                if marker in name and idx < best_idx:
+                    best_idx = idx
+                    found = level
+            # Factory-produced deps (require_permission, require_any_role) have
+            # inner functions named 'dependency' — detect via module.
+            if found is None and any(m in module for m in AUTH_MODULES):
+                found = "permission"
+                best_idx = min(best_idx, len(PRIORITY) - 1)
+            if hasattr(dep, "dependant") and dep.dependant:
+                _scan(dep.dependant)
+
+    _scan(route.dependant)
+    return found
+
+
 def _route_has_any_auth(route: APIRoute) -> bool:
     """Return True if the route has ANY auth-related dependency.
 
@@ -202,4 +251,86 @@ class TestPublicRoutesAreOpen:
         assert over_protected == [], (
             f"Public routes that unexpectedly require auth:\n" +
             "\n".join(f"  - {r}" for r in over_protected)
+        )
+
+
+# ---------------------------------------------------------------------------
+# H-23: Role-specific auth parity tests
+# ---------------------------------------------------------------------------
+
+class TestVersionRoutesRequireEditor:
+    """Version endpoints must require editor or higher (H-17)."""
+
+    def test_version_routes_have_editor_dep(self):
+        routes = _get_all_routes()
+        bad = []
+        allowed = {"editor", "admin", "admin_or_manager", "system_admin", "permission"}
+        for route in routes:
+            # Viewer/public version routes are intentionally unauthenticated
+            if "/versions" in route.path and route.path not in PUBLIC_ALLOWLIST and "/viewer/" not in route.path and "/public/" not in route.path:
+                level = _get_route_auth_level(route)
+                if level not in allowed:
+                    methods = ",".join(route.methods or [])
+                    bad.append(f"{methods} {route.path} → {level}")
+        assert bad == [], (
+            "Version routes should require editor+:\n"
+            + "\n".join(f"  - {r}" for r in bad)
+        )
+
+
+class TestFeedbackRoutesRequireManager:
+    """Management feedback endpoints must require admin_or_manager or higher (C16)."""
+
+    def test_feedback_routes_have_manager_dep(self):
+        routes = _get_all_routes()
+        bad = []
+        allowed = {"admin_or_manager", "admin", "system_admin", "any_role", "permission", "internal"}
+        for route in routes:
+            # Engagement feedback (submit) and portal feedback are different
+            # from management feedback — they allow any authenticated user.
+            if ("/feedback" in route.path
+                and "/portal/" not in route.path
+                and "/engagement/" not in route.path
+                and "/viewer/" not in route.path
+                and route.path not in PUBLIC_ALLOWLIST):
+                level = _get_route_auth_level(route)
+                if level not in allowed:
+                    methods = ",".join(route.methods or [])
+                    bad.append(f"{methods} {route.path} → {level}")
+        assert bad == [], (
+            "Feedback routes should require admin_or_manager+:\n"
+            + "\n".join(f"  - {r}" for r in bad)
+        )
+
+
+class TestSearchAnalyticsRequiresAdmin:
+    """Search analytics endpoint must require admin-level auth (C15)."""
+
+    def test_search_analytics_route_has_admin_dep(self):
+        routes = _get_all_routes()
+        allowed = {"any_role", "admin_or_manager", "admin", "system_admin", "permission"}
+        for route in routes:
+            if route.path == "/api/v1/search/analytics":
+                level = _get_route_auth_level(route)
+                assert level in allowed, (
+                    f"Search analytics requires admin-level auth, got: {level}"
+                )
+
+
+class TestCompanyRoutesRequireAdmin:
+    """Company endpoints must require admin or higher (C4)."""
+
+    def test_company_routes_have_admin_dep(self):
+        routes = _get_all_routes()
+        bad = []
+        allowed = {"admin", "admin_or_manager", "system_admin", "any_role", "permission"}
+        for route in routes:
+            if "/companies" in route.path and route.path not in PUBLIC_ALLOWLIST:
+                level = _get_route_auth_level(route)
+                if level not in allowed:
+                    methods = ",".join(route.methods or [])
+                    bad.append(f"{methods} {route.path} → {level}")
+        assert bad == [], (
+            "Company routes should require admin+:\n"
+            + "\n".join(f"  - {r}" for r in bad)
         )

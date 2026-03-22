@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
 import { FormField, PasswordInput, SubmitButton } from '@/components/form'
+import { loginSchema } from '@/lib/validation/schemas'
+import { validateForm } from '@/lib/validation'
 
 const REMEMBERED_USERNAME_KEY = 'remembered-username'
 
@@ -88,16 +90,10 @@ export default function LoginPage() {
     setUsernameError('')
     setPasswordError('')
 
-    let hasValidationError = false
-    if (!username.trim()) {
-      setUsernameError('Username is required.')
-      hasValidationError = true
-    }
-    if (!password) {
-      setPasswordError('Password is required.')
-      hasValidationError = true
-    }
-    if (hasValidationError) {
+    const result = validateForm(loginSchema, { username, password })
+    if (result.errors) {
+      if (result.errors.username) setUsernameError(result.errors.username)
+      if (result.errors.password) setPasswordError(result.errors.password)
       return
     }
 
@@ -289,6 +285,7 @@ export default function LoginPage() {
             </SubmitButton>
           </form>
 
+          {import.meta.env.DEV && (
           <div className="mt-8 pt-6 border-t border-slate-200">
             <p className="helper-copy mb-3 text-center font-medium uppercase tracking-wide">Demo Credentials</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -339,6 +336,7 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

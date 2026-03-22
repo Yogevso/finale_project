@@ -30,7 +30,10 @@ def _html2docx_document(html: str) -> Any:
 
 def html_to_docx_bytes(html: str) -> bytes:
     """Convert HTML string to DOCX bytes."""
-    doc = _html2docx_document(html)
+    from app.utils.sanitization import sanitize_html_content
+
+    safe_html = sanitize_html_content(html) or ""
+    doc = _html2docx_document(safe_html)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)

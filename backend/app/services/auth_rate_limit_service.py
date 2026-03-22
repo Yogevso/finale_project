@@ -1,10 +1,19 @@
 """Authentication-specific rate limiting service."""
 
+import logging
 import math
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from threading import Lock
+
+logger = logging.getLogger(__name__)
+
+
+def _get_redis_client():
+    """Reuse the Redis client from the rate-limit middleware if available."""
+    from app.middleware.rate_limit import _get_redis_client as _rl_redis
+    return _rl_redis()
 
 
 @dataclass
@@ -79,6 +88,44 @@ class AuthRateLimitService:
         window_seconds: int,
         lock_seconds: int,
     ) -> tuple[bool, int]:
+        rclient = _get_redis_client()
+        if rclient is not None:
+            return cls._redis_check_allowed(rclient, key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+        return cls._memory_check_allowed(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+
+    @classmethod
+    def _redis_check_allowed(
+        cls,
+        rclient,
+        key: str,
+        *,
+        max_attempts: int,
+        window_seconds: int,
+        lock_seconds: int,
+    ) -> tuple[bool, int]:
+        try:
+            lock_key = f"authrl:lock:{key}"
+            locked_until = rclient.get(lock_key)
+            if locked_until:
+                locked_until_ts = float(locked_until)
+                now = time.time()
+                if locked_until_ts > now:
+                    return False, max(int(math.ceil(locked_until_ts - now)), 1)
+                rclient.delete(lock_key)
+            return True, 0
+        except Exception:
+            logger.warning("Redis auth rate-limit check failed, falling back to in-memory")
+            return cls._memory_check_allowed(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+
+    @classmethod
+    def _memory_check_allowed(
+        cls,
+        key: str,
+        *,
+        max_attempts: int,
+        window_seconds: int,
+        lock_seconds: int,
+    ) -> tuple[bool, int]:
         now_ts = time.time()
         with cls._lock:
             bucket = cls._buckets[key]
@@ -95,6 +142,49 @@ class AuthRateLimitService:
 
     @classmethod
     def _record_failure(
+        cls,
+        key: str,
+        *,
+        max_attempts: int,
+        window_seconds: int,
+        lock_seconds: int,
+    ) -> int:
+        rclient = _get_redis_client()
+        if rclient is not None:
+            return cls._redis_record_failure(rclient, key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+        return cls._memory_record_failure(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+
+    @classmethod
+    def _redis_record_failure(
+        cls,
+        rclient,
+        key: str,
+        *,
+        max_attempts: int,
+        window_seconds: int,
+        lock_seconds: int,
+    ) -> int:
+        try:
+            now = time.time()
+            zkey = f"authrl:attempts:{key}"
+            # Remove attempts outside the window
+            rclient.zremrangebyscore(zkey, 0, now - window_seconds)
+            # Add current attempt
+            rclient.zadd(zkey, {str(now): now})
+            rclient.expire(zkey, window_seconds + lock_seconds)
+            count = rclient.zcard(zkey)
+            if count >= max_attempts:
+                locked_until = now + lock_seconds
+                lock_key = f"authrl:lock:{key}"
+                rclient.set(lock_key, str(locked_until), ex=lock_seconds)
+                return max(int(math.ceil(lock_seconds)), 1)
+            return 0
+        except Exception:
+            logger.warning("Redis auth rate-limit record failed, falling back to in-memory")
+            return cls._memory_record_failure(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+
+    @classmethod
+    def _memory_record_failure(
         cls,
         key: str,
         *,
@@ -120,6 +210,13 @@ class AuthRateLimitService:
 
     @classmethod
     def _record_success(cls, key: str) -> None:
+        rclient = _get_redis_client()
+        if rclient is not None:
+            try:
+                rclient.delete(f"authrl:attempts:{key}", f"authrl:lock:{key}")
+                return
+            except Exception:
+                logger.warning("Redis auth rate-limit success record failed, falling back to in-memory")
         now_ts = time.time()
         with cls._lock:
             if key in cls._buckets:

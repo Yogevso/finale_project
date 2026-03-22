@@ -394,6 +394,14 @@ class AssistantEngine:
                         query = query.filter(Document.tenant_id == tenant_id)
                     doc = query.first()
                     if doc:
+                        from app.application.policies.access_policies import DocumentAccessPolicy
+                        _policy = DocumentAccessPolicy()
+                        if not _policy.can_view_document(user, doc):
+                            logger.warning(
+                                "User %d denied @mention access to document %d (%s)",
+                                user.id, doc.id, doc.title,
+                            )
+                            continue
                         resolved_docs.append(doc)
                         logger.info("Resolved @mention '%s' to document id=%d title='%s'", mention_clean, doc.id, doc.title)
                     else:
@@ -779,7 +787,7 @@ class AssistantEngine:
                     "tool": tc.name,
                     "arguments": tc.arguments,
                     "success": result.success,
-                    "result_preview": (result.result or "")[:200],
+                    "result_preview": (result.result or "")[:1000],
                 }),
             )
             db.add(entry)

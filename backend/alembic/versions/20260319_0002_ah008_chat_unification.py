@@ -15,25 +15,21 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # AH-008: document-scoped chats
-    with op.batch_alter_table("chats") as batch_op:
-        batch_op.add_column(
-            sa.Column("document_id", sa.Integer(), nullable=True)
-        )
-        batch_op.create_index("ix_chats_document_id", ["document_id"])
-        batch_op.create_foreign_key(
-            "fk_chats_document_id",
-            "documents",
-            ["document_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
+    if "chats" in inspector.get_table_names():
+        existing_chat_cols = {c["name"] for c in inspector.get_columns("chats")}
+        if "document_id" not in existing_chat_cols:
+            op.add_column("chats", sa.Column("document_id", sa.Integer(), nullable=True))
+            op.create_index("ix_chats_document_id", "chats", ["document_id"])
 
     # AH-009: context cards in chat messages
-    with op.batch_alter_table("chat_messages") as batch_op:
-        batch_op.add_column(
-            sa.Column("context_json", sa.Text(), nullable=True)
-        )
+    if "chat_messages" in inspector.get_table_names():
+        existing_msg_cols = {c["name"] for c in inspector.get_columns("chat_messages")}
+        if "context_json" not in existing_msg_cols:
+            op.add_column("chat_messages", sa.Column("context_json", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:

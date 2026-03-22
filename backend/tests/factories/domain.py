@@ -121,7 +121,18 @@ def build_document(
 
 
 def create_document(db: Session, **kwargs) -> Document:
-    return persist(db, build_document(**kwargs))
+    doc = build_document(**kwargs)
+    # C13: tenant_id is NOT NULL — resolve from the creating user, or auto-create
+    if doc.tenant_id is None and doc.created_by is not None:
+        creator = db.query(User).filter(User.id == doc.created_by).first()
+        if creator and creator.tenant_id:
+            doc.tenant_id = creator.tenant_id
+    if doc.tenant_id is None:
+        default_tenant = build_tenant(name="Auto Tenant", slug=f"auto-tenant-{_unique_suffix()}")
+        db.add(default_tenant)
+        db.flush()
+        doc.tenant_id = default_tenant.id
+    return persist(db, doc)
 
 
 def build_attachment(

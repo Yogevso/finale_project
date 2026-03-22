@@ -213,9 +213,11 @@ export class CollabServerApp {
           },
         }),
       ],
-      onAuthenticate: async ({ documentName, token: rawToken, requestParameters, connection }) => {
+      onAuthenticate: async ({ documentName, token: rawToken, connection }) => {
         const documentId = this.runtime.extractDocumentId(documentName);
-        const token = rawToken || this.runtime.extractToken(requestParameters);
+        // H-21: Only accept token from the WebSocket protocol message (first message),
+        // not from URL query string, to avoid token leakage in server logs.
+        const token = rawToken;
         if (!token) {
           throw new Error('No authentication token provided');
         }

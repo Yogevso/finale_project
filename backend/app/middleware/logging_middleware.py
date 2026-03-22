@@ -3,12 +3,16 @@
 import logging
 import time
 import uuid
+from contextvars import ContextVar
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("app.requests")
+
+# Task-local request ID accessible from anywhere in the async call stack
+current_request_id: ContextVar[str | None] = ContextVar("current_request_id", default=None)
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -34,6 +38,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         # Store in request state for use in handlers
         request.state.request_id = request_id
+        # Store in ContextVar for use in downstream async calls (e.g. Ollama)
+        token = current_request_id.set(request_id)
 
         # Get client info
         client_ip = self._get_client_ip(request)
@@ -62,6 +68,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
             raise
+        finally:
+            current_request_id.reset(token)
 
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000

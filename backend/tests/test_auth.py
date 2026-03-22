@@ -16,7 +16,7 @@ def test_register_user(client):
             "email": "newuser@example.com",
             "username": "newuser",
             "full_name": "New User",
-            "password": "newpass123",
+            "password": "NewPass1!",
             "role": "viewer",
         },
     )
@@ -25,7 +25,7 @@ def test_register_user(client):
     data = response.json()
     assert data["email"] == "newuser@example.com"
     assert data["username"] == "newuser"
-    assert data["role"] == "viewer"
+    assert data["role"] == "customer"
     assert "id" in data
 
 
@@ -98,14 +98,14 @@ def test_change_password(client, auth_headers):
     response = client.post(
         "/api/v1/auth/change-password",
         headers=auth_headers,
-        json={"old_password": "testpass123", "new_password": "newpass456"},
+        json={"old_password": "testpass123", "new_password": "NewPass4!"},
     )
 
     assert response.status_code == 200
 
     # Test login with new password
     login_response = client.post(
-        "/api/v1/auth/login", json={"username": "testuser", "password": "newpass456"}
+        "/api/v1/auth/login", json={"username": "testuser", "password": "NewPass4!"}
     )
     assert login_response.status_code == 200
 
@@ -115,7 +115,7 @@ def test_change_password_wrong_old_password(client, auth_headers):
     response = client.post(
         "/api/v1/auth/change-password",
         headers=auth_headers,
-        json={"old_password": "wrongpass", "new_password": "newpass456"},
+        json={"old_password": "wrongpass", "new_password": "NewPass4!"},
     )
 
     assert response.status_code == 400
@@ -312,7 +312,7 @@ def test_email_verification_register_verify_allows_login(client, monkeypatch):
         "email": "verify-flow@example.com",
         "username": "verify_flow_user",
         "full_name": "Verify Flow User",
-        "password": "verifypass123",
+        "password": "VerifyP1!",
         "role": "viewer",
     }
     register_response = client.post("/api/v1/auth/register", json=registration_payload)
@@ -321,7 +321,7 @@ def test_email_verification_register_verify_allows_login(client, monkeypatch):
 
     login_before_verify = client.post(
         "/api/v1/auth/login",
-        json={"username": "verify_flow_user", "password": "verifypass123"},
+        json={"username": "verify_flow_user", "password": "VerifyP1!"},
     )
     assert login_before_verify.status_code == 403
     assert login_before_verify.json()["detail"] == "email_not_verified"
@@ -333,7 +333,7 @@ def test_email_verification_register_verify_allows_login(client, monkeypatch):
 
     login_after_verify = client.post(
         "/api/v1/auth/login",
-        json={"username": "verify_flow_user", "password": "verifypass123"},
+        json={"username": "verify_flow_user", "password": "VerifyP1!"},
     )
     assert login_after_verify.status_code == 200
     assert "access_token" in login_after_verify.json()
@@ -350,7 +350,7 @@ def test_email_verification_register_without_verify_blocks_login(client, monkeyp
         "email": "verify-skip@example.com",
         "username": "verify_skip_user",
         "full_name": "Verify Skip User",
-        "password": "skipverify123",
+        "password": "SkipVer1!",
         "role": "viewer",
     }
     register_response = client.post("/api/v1/auth/register", json=registration_payload)
@@ -358,7 +358,7 @@ def test_email_verification_register_without_verify_blocks_login(client, monkeyp
 
     login_response = client.post(
         "/api/v1/auth/login",
-        json={"username": "verify_skip_user", "password": "skipverify123"},
+        json={"username": "verify_skip_user", "password": "SkipVer1!"},
     )
     assert login_response.status_code == 403
     assert login_response.json()["detail"] == "email_not_verified"
@@ -389,15 +389,14 @@ def test_login_lockout_then_auto_unlock_after_window(client, test_user, monkeypa
         "/api/v1/auth/login",
         json={"username": "testuser", "password": "wrongpassword"},
     )
-    assert locked_response.status_code == 403
-    assert locked_response.json()["detail"] == "account_locked"
+    # H-08: locked accounts return 401 (not 403) to prevent user enumeration
+    assert locked_response.status_code == 401
 
     while_locked_response = client.post(
         "/api/v1/auth/login",
         json={"username": "testuser", "password": "testpass123"},
     )
-    assert while_locked_response.status_code == 403
-    assert while_locked_response.json()["detail"] == "account_locked"
+    assert while_locked_response.status_code == 401
 
     fake_now["value"] = fake_now["value"] + timedelta(minutes=31)
     unlocked_response = client.post(
@@ -462,3 +461,41 @@ def test_login_anomaly_detection_records_security_event(client, test_user, db, m
     assert len(events) == 1
     assert events[0].ip_address == "10.10.0.2"
     assert events[0].user_agent == "BrowserA/1.0"
+
+
+# ---------------------------------------------------------------------------
+# H-23 / H-03: Collab token endpoint requires write permission
+# ---------------------------------------------------------------------------
+
+
+def test_collab_token_requires_write_permission(client, admin_headers, sample_document):
+    """Editors+ can obtain a collab token for a document they can edit."""
+    response = client.post(
+        "/api/v1/auth/collab-token",
+        headers=admin_headers,
+        json={"document_id": sample_document["id"]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "token" in data
+    assert "write" in data["permissions"]
+    assert data["document_id"] == sample_document["id"]
+
+
+def test_collab_token_rejected_for_viewer(client, viewer_auth_headers, sample_document):
+    """Viewers must be refused a collab token (no write permission)."""
+    response = client.post(
+        "/api/v1/auth/collab-token",
+        headers=viewer_auth_headers,
+        json={"document_id": sample_document["id"]},
+    )
+    assert response.status_code == 403
+
+
+def test_collab_token_requires_auth(client, sample_document):
+    """Unauthenticated requests must be rejected."""
+    response = client.post(
+        "/api/v1/auth/collab-token",
+        json={"document_id": sample_document["id"]},
+    )
+    assert response.status_code in (401, 403)

@@ -16,11 +16,8 @@ depends_on = None
 
 def _table_exists(table_name: str) -> bool:
     conn = op.get_bind()
-    result = conn.execute(
-        sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name=:t"),
-        {"t": table_name},
-    )
-    return result.scalar() is not None
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
 
 
 def _column_exists(table_name: str, column_name: str) -> bool:
@@ -124,7 +121,7 @@ def upgrade() -> None:
             sa.Column("payload_json", sa.Text, nullable=False),
             sa.Column("response_status", sa.Integer, nullable=True),
             sa.Column("response_body", sa.Text, nullable=True),
-            sa.Column("success", sa.Boolean, nullable=False, server_default="0"),
+            sa.Column("success", sa.Boolean, nullable=False, server_default=sa.false()),
             sa.Column("attempts", sa.Integer, nullable=False, server_default="1"),
             sa.Column("delivered_at", sa.DateTime, nullable=False, server_default=sa.func.now(), index=True),
         )

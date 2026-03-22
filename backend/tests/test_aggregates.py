@@ -24,6 +24,7 @@ def test_document_aggregate_requires_draft_for_review_submission(db, test_user):
         document_number="DOC-AGG-0001",
         status=DocumentStatus.ACTIVE,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
     )
 
     aggregate = DocumentAggregate(document)

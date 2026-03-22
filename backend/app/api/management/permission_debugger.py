@@ -69,7 +69,10 @@ def debug_access(
             return None
         if isinstance(u.role, UserRole):
             return u.role
-        return UserRole(u.role)
+        try:
+            return UserRole(u.role)
+        except (ValueError, KeyError):
+            return None
 
     role = get_role(user)
     is_active = user.is_active

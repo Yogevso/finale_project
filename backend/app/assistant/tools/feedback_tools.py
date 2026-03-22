@@ -19,7 +19,7 @@ class SubmitFeedbackTool(BaseTool):
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID"},
             "rating": {"type": "integer", "description": "Rating from 1 (poor) to 5 (excellent)"},
-            "comment": {"type": "string", "description": "Optional comment"},
+            "comment": {"type": "string", "description": "Optional comment", "maxLength": 2000},
         },
         "required": ["document_id", "rating"],
     }

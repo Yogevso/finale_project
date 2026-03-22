@@ -87,16 +87,22 @@ class CsvAnalyticsExporterPlugin:
             analytics_query_handler=analytics_query_handler,
         )
 
-        output = StringIO()
-        if rows:
+        def _iter_csv():
+            if not rows:
+                return
+            output = StringIO()
             writer = csv.DictWriter(output, fieldnames=rows[0].keys())
             writer.writeheader()
-            writer.writerows(rows)
+            yield output.getvalue()
+            for row in rows:
+                output = StringIO()
+                writer = csv.DictWriter(output, fieldnames=row.keys())
+                writer.writerow(row)
+                yield output.getvalue()
 
-        output.seek(0)
         filename = f"analytics_{report}_{date_to.isoformat()}.csv"
         return StreamingResponse(
-            iter([output.getvalue()]),
+            _iter_csv(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )

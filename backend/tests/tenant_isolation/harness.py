@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
 
-from app.models import Document, ReviewRequest, Tenant, User
+from app.models import Document, Feedback, ReviewRequest, SearchAnalytics, Tenant, User
 
 _PLACEHOLDER_PATTERN = re.compile(r"^\{([a-zA-Z_][a-zA-Z0-9_]*)\}$")
 
@@ -26,15 +26,23 @@ class TenantIsolationScenario:
     attacker_manager_password: str
     document: Document
     review: ReviewRequest
+    # H-23: extended isolation fields
+    feedback: Feedback | None = None
+    search_analytics: SearchAnalytics | None = None
 
     def template_context(self) -> dict[str, Any]:
         """Values available for path/body template interpolation."""
-        return {
+        ctx: dict[str, Any] = {
             "document_id": self.document.id,
             "review_id": self.review.id,
             "owner_tenant_id": self.owner_tenant.id,
             "attacker_tenant_id": self.attacker_tenant.id,
         }
+        if self.feedback:
+            ctx["feedback_id"] = self.feedback.id
+        if self.search_analytics:
+            ctx["search_analytics_id"] = self.search_analytics.id
+        return ctx
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models import User, UserRole
+from app.application.policies.access_policies import safe_user_role
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,7 +19,9 @@ class ActorContext:
 
     @classmethod
     def from_user(cls, user: User) -> ActorContext:
-        role = user.role if isinstance(user.role, UserRole) else UserRole(user.role)
+        role = safe_user_role(user)
+        if role is None:
+            raise ValueError(f"User {user.id} has invalid role: {user.role!r}")
         return cls(
             id=user.id,
             role=role,

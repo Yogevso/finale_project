@@ -171,14 +171,20 @@ def get_version_attachments(
 ):
     """Get document attachments available for a specific published version."""
     _get_active_document_or_404(db, document_id)
-    version = _get_published_version_or_404(db, document_id, version_id)
-    cutoff_timestamp = version.published_at or version.created_at
+    _get_published_version_or_404(db, document_id, version_id)
+
+    # C6: Use centralised resolver scoped to this specific version
+    from app.services.published_attachment_resolver import resolve_published_attachment_ids
+
+    allowed_ids = resolve_published_attachment_ids(db, document_id, version_id=version_id)
+    if not allowed_ids:
+        return []
 
     attachments = (
         db.query(Attachment)
         .filter(
             Attachment.document_id == document_id,
-            Attachment.uploaded_at <= cutoff_timestamp,
+            Attachment.id.in_(allowed_ids),
         )
         .order_by(Attachment.uploaded_at.desc())
         .all()
@@ -195,26 +201,18 @@ def get_document_attachments(
     """Get attachments for a published document (scoped to latest publish time)."""
     _get_active_document_or_404(db, document_id)
 
-    # AF-002: Scope attachments to the latest published version's publish time
-    # so uploads after publish don't leak to public viewers.
-    latest_published = (
-        db.query(Version)
-        .filter(
-            Version.document_id == document_id,
-            Version.is_published.is_(True),
-        )
-        .order_by(Version.version_number.desc())
-        .first()
-    )
-    if not latest_published:
+    # C6: Use centralised resolver for published attachment scoping
+    from app.services.published_attachment_resolver import resolve_published_attachment_ids
+
+    allowed_ids = resolve_published_attachment_ids(db, document_id)
+    if not allowed_ids:
         return []
 
-    cutoff = latest_published.published_at or latest_published.created_at
     attachments = (
         db.query(Attachment)
         .filter(
             Attachment.document_id == document_id,
-            Attachment.uploaded_at <= cutoff,
+            Attachment.id.in_(allowed_ids),
         )
         .order_by(Attachment.uploaded_at.desc())
         .all()
@@ -293,6 +291,13 @@ def download_attachment(
 ):
     """Download a published document attachment without authentication."""
     _get_active_document_or_404(db, document_id)
+
+    # C6: Only serve attachments present at publish time
+    from app.services.published_attachment_resolver import is_attachment_in_published_snapshot
+
+    if not is_attachment_in_published_snapshot(db, document_id, attachment_id):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
     return _stream_public_attachment(db, document_id, attachment_id, inline=False)
 
 

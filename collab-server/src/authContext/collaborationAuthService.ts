@@ -38,6 +38,11 @@ function getJwtSecret(): string {
       console.error('FATAL: JWT_SECRET is too short. Use at least 32 characters.');
       process.exit(1);
     }
+    // H-16: Enforce minimum 16 chars even in development
+    if (secret.length < 16) {
+      console.error('FATAL: JWT_SECRET must be at least 16 characters, even in development.');
+      process.exit(1);
+    }
     console.warn('WARNING: JWT_SECRET is shorter than recommended (32+ chars)');
   }
 

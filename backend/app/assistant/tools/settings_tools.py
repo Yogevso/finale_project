@@ -33,8 +33,8 @@ class UpdateSiteSettingTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "key": {"type": "string", "description": "Setting key"},
-            "value": {"type": "string", "description": "Setting value"},
+            "key": {"type": "string", "description": "Setting key", "maxLength": 255},
+            "value": {"type": "string", "description": "Setting value", "maxLength": 2000},
         },
         "required": ["key", "value"],
     }
@@ -64,7 +64,7 @@ class CreateAnnouncementTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "message": {"type": "string", "description": "Announcement message text"},
+            "message": {"type": "string", "description": "Announcement message text", "maxLength": 2000},
             "type": {
                 "type": "string",
                 "description": "Announcement type (default: info)",
@@ -132,9 +132,9 @@ class CreateTopicTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "name": {"type": "string", "description": "Topic name"},
-            "slug": {"type": "string", "description": "URL-friendly slug (optional, auto-generated)"},
-            "description": {"type": "string", "description": "Topic description (optional)"},
+            "name": {"type": "string", "description": "Topic name", "maxLength": 255},
+            "slug": {"type": "string", "description": "URL-friendly slug (optional, auto-generated)", "maxLength": 100},
+            "description": {"type": "string", "description": "Topic description (optional)", "maxLength": 1000},
         },
         "required": ["name"],
     }

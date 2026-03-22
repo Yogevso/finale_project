@@ -2,13 +2,13 @@ import type {
   LoginRequest,
   MessageResponse,
   PasswordChange,
+  PublicRegistrationData,
   RbacPoliciesResponse,
   RbacPoliciesUpdate,
   SystemSettingsResponse,
   SystemSettingsUpdate,
   TokenResponse,
   User,
-  UserCreate,
 } from '@/types'
 import {
   type MessageResponseDto,
@@ -56,7 +56,7 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
       return mapMessageResponseDto(data)
     }
 
-    async register(userData: UserCreate): Promise<User> {
+    async register(userData: PublicRegistrationData): Promise<User> {
       const { data } = await this.client.post<UserDto>('/auth/register', userData)
       return mapUserDto(data)
     }

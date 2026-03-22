@@ -89,7 +89,7 @@ class FastAPIAppFactory:
         app.add_middleware(LoggingMiddleware)
         # TenantContextMiddleware propagates tenant_id from auth layer to request context
         app.add_middleware(TenantContextMiddleware)
-        if settings.CSRF_PROTECTION_ENABLED:
+        if is_backend_feature_enabled(BackendFeatureFlag.CSRF_PROTECTION):
             app.add_middleware(CSRFMiddleware, allowed_origins=settings.CORS_ORIGINS)
         if is_backend_feature_enabled(BackendFeatureFlag.IDEMPOTENCY_MIDDLEWARE):
             app.add_middleware(IdempotencyMiddleware)

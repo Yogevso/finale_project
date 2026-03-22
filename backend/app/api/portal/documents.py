@@ -152,6 +152,12 @@ async def download_customer_attachment(
         raise HTTPException(status_code=404, detail="Document not found")
     portal_documents_query_handler._ensure_customer_document_access(doc, current_user)
 
+    # C6: Only serve attachments present at publish time
+    from app.services.published_attachment_resolver import is_attachment_in_published_snapshot
+
+    if not is_attachment_in_published_snapshot(db, document_id, attachment_id):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
     # AH-007: Serve PDF export artifact for portal users when available
     from app.models import AttachmentArtifact
 

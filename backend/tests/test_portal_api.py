@@ -202,14 +202,14 @@ class TestPortalDocumentDetailEndpoint:
         assert detail_payload["version"] == 1
         assert detail_payload["content"] == "published content"
 
-    def test_list_and_detail_fallback_to_latest_when_no_published_version_exists(
+    def test_list_and_detail_hide_docs_when_no_published_version_exists(
         self, client, db, customer_headers, test_admin
     ):
-        """Portal list/detail should use latest available version for legacy unpublished-only docs."""
+        """H-23: Portal must not expose unpublished content to customers."""
         document = Document(
-            title="Portal Version Consistency Fallback",
-            document_number=f"DOC-PORTAL-DRF-{uuid4().hex[:8]}",
-            description="Portal version fallback test",
+            title="Portal Version No Published",
+            document_number=f"DOC-PORTAL-NPV-{uuid4().hex[:8]}",
+            description="Portal unpublished test",
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_admin.id,
@@ -240,20 +240,24 @@ class TestPortalDocumentDetailEndpoint:
         )
         db.commit()
 
+        # List should NOT contain this document (no published version)
         list_response = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
         assert list_response.status_code == 200
         list_payload = list_response.json()
-        list_item = next(item for item in list_payload["items"] if item["id"] == document.id)
-        assert list_item["version"] == 2
+        doc_ids = [item["id"] for item in list_payload["items"]]
+        assert document.id not in doc_ids, "Unpublished-only document must not appear in portal list"
 
+        # Detail should return 404 or omit content
         detail_response = client.get(
             f"/api/v1/portal/documents/{document.id}",
             headers=customer_headers,
         )
-        assert detail_response.status_code == 200
-        detail_payload = detail_response.json()
-        assert detail_payload["version"] == 2
-        assert detail_payload["content"] == "latest draft content"
+        assert detail_response.status_code in (404, 200), "Expected 404 or 200 without draft content"
+        if detail_response.status_code == 200:
+            detail_payload = detail_response.json()
+            # If 200, content must NOT be the unpublished drafts
+            assert detail_payload.get("content") != "older draft content"
+            assert detail_payload.get("content") != "latest draft content"
 
 
 class TestPortalFeedbackEndpoint:

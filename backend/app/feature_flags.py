@@ -17,6 +17,10 @@ class BackendFeatureFlag(str, Enum):
     EVENT_SOURCING_REVIEW_PILOT = "event_sourcing_review_pilot"
     NEW_AUDIENCE_RULES = "new_audience_rules"
     COMPANY_AUDIENCE_ENFORCEMENT = "company_audience_enforcement"
+    PDF_OCR = "pdf_ocr"
+    AUDIENCE_VALIDATION_SAFE_MODE = "audience_validation_safe_mode"
+    ASSISTANT = "assistant"
+    CSRF_PROTECTION = "csrf_protection"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +33,10 @@ class BackendFeatureFlags:
     new_audience_rules: bool
     new_audience_rules_rollout_percentage: int
     company_audience_enforcement: bool
+    pdf_ocr: bool
+    audience_validation_safe_mode: bool
+    assistant: bool
+    csrf_protection: bool
 
     def is_enabled(
         self,
@@ -46,6 +54,14 @@ class BackendFeatureFlags:
             return self._is_new_audience_rules_enabled(rollout_key=rollout_key)
         if flag == BackendFeatureFlag.COMPANY_AUDIENCE_ENFORCEMENT:
             return bool(self.company_audience_enforcement)
+        if flag == BackendFeatureFlag.PDF_OCR:
+            return bool(self.pdf_ocr)
+        if flag == BackendFeatureFlag.AUDIENCE_VALIDATION_SAFE_MODE:
+            return bool(self.audience_validation_safe_mode)
+        if flag == BackendFeatureFlag.ASSISTANT:
+            return bool(self.assistant)
+        if flag == BackendFeatureFlag.CSRF_PROTECTION:
+            return bool(self.csrf_protection)
         return False
 
     def _is_new_audience_rules_enabled(self, *, rollout_key: str | int | None) -> bool:
@@ -77,6 +93,10 @@ def get_backend_feature_flags() -> BackendFeatureFlags:
             settings.FEATURE_FLAG_NEW_AUDIENCE_RULES_ROLLOUT_PERCENTAGE
         ),
         company_audience_enforcement=bool(settings.FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT),
+        pdf_ocr=bool(settings.FEATURE_FLAG_PDF_OCR),
+        audience_validation_safe_mode=bool(settings.AUDIENCE_VALIDATION_SAFE_MODE_ENABLED),
+        assistant=bool(settings.ASSISTANT_ENABLED),
+        csrf_protection=bool(settings.CSRF_PROTECTION_ENABLED),
     )
 
 

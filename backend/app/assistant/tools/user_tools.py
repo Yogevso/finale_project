@@ -23,7 +23,7 @@ class ListUsersTool(BaseTool):
                 "enum": ["system_admin", "admin", "manager", "editor", "viewer", "customer"],
             },
             "is_active": {"type": "boolean", "description": "Filter by active status"},
-            "search": {"type": "string", "description": "Search by username or email"},
+            "search": {"type": "string", "description": "Search by username or email", "maxLength": 255},
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],
@@ -96,26 +96,37 @@ class CreateUserTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "username": {"type": "string", "description": "Unique username"},
-            "email": {"type": "string", "description": "Email address"},
-            "full_name": {"type": "string", "description": "Full name"},
+            "username": {"type": "string", "description": "Unique username", "maxLength": 100},
+            "email": {"type": "string", "description": "Email address", "maxLength": 255},
+            "full_name": {"type": "string", "description": "Full name", "maxLength": 255},
             "role": {
                 "type": "string",
                 "description": "User role",
                 "enum": ["admin", "manager", "editor", "viewer", "customer"],
             },
-            "password": {"type": "string", "description": "Initial password (min 8 chars)"},
+            "password": {"type": "string", "description": "Initial password (min 8 chars)", "maxLength": 100},
         },
         "required": ["username", "email", "full_name", "role", "password"],
     }
     required_permission = Permission.MANAGE_USERS
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+        import re
         from app.security import get_password_hash
 
+        # M-08: enforce password complexity
+        pwd = params["password"]
+        if len(pwd) < 8:
+            return {"success": False, "result": "", "error": "Password must be at least 8 characters."}
+        if not re.search(r"[A-Z]", pwd) or not re.search(r"[a-z]", pwd) or not re.search(r"\d", pwd) or not re.search(r"[^A-Za-z0-9]", pwd):
+            return {"success": False, "result": "", "error": "Password must contain uppercase, lowercase, digit, and special character."}
+
         # Prevent creating users with higher privilege
-        target_role = UserRole(params["role"])
-        caller_role = UserRole(user.role)
+        try:
+            target_role = UserRole(params["role"])
+            caller_role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid role value."}
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         target_idx = self._ROLE_HIERARCHY.index(target_role)
         if target_idx > caller_idx:
@@ -205,8 +216,11 @@ class ChangeUserRoleTool(BaseTool):
         if tenant_id is not None and target.tenant_id != tenant_id:
             return {"success": False, "result": "", "error": "User not found."}
 
-        new_role = UserRole(params["new_role"])
-        caller_role = UserRole(user.role)
+        try:
+            new_role = UserRole(params["new_role"])
+            caller_role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid role value."}
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         new_role_idx = self._ROLE_HIERARCHY.index(new_role)
         if new_role_idx > caller_idx:

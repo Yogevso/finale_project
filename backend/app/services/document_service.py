@@ -50,7 +50,7 @@ from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 logger = logging.getLogger(__name__)
-COMPANY_LOOKUP_CACHE_TTL_SECONDS = 300
+COMPANY_LOOKUP_CACHE_TTL_SECONDS = 30
 COMPANY_LOOKUP_CACHE_MAX_ENTRIES = 1024
 
 
@@ -260,7 +260,19 @@ class DocumentService(TenantAwareService[Document]):
 
         platform = Platform(name=normalized_name, slug=slug)
         self.db.add(platform)
-        self.db.flush()
+        try:
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            # Race condition: another request created this slug concurrently — retry lookup
+            existing = (
+                self.db.query(Platform)
+                .filter(func.lower(Platform.name) == normalized_name.lower())
+                .first()
+            )
+            if existing:
+                return existing
+            raise
         return platform
 
     @staticmethod
@@ -892,6 +904,7 @@ class DocumentService(TenantAwareService[Document]):
                 )
                 if document.platform_id != platform.id:
                     changes.append(f"Platform changed to '{platform.name}'")
+                # H-14: Only set the FK; keep string in sync during deprecation period
                 document.platform = platform.name
                 document.platform_id = platform.id
 
@@ -928,6 +941,11 @@ class DocumentService(TenantAwareService[Document]):
                 company_id for company_id in old_company_ids if company_id not in new_company_ids
             ]
             company_assignment_changed = bool(added_company_ids or removed_company_ids)
+
+            # Bump audience_version on any audience mutation
+            if visibility_changed or company_assignment_changed:
+                document.audience_version = (document.audience_version or 1) + 1
+
             assignment_diff_payload = (
                 {
                     "old_company_ids": old_company_ids,
@@ -1086,6 +1104,7 @@ class DocumentService(TenantAwareService[Document]):
         with UnitOfWork(self.db):
             document.assigned_companies = assigned_companies
             document.updated_at = datetime.utcnow()
+            document.audience_version = (document.audience_version or 1) + 1
 
             new_company_ids = [company.id for company in assigned_companies]
             added_company_ids = [company_id for company_id in new_company_ids if company_id not in old_company_ids]

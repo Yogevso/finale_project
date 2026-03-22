@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import jwt
@@ -38,10 +39,10 @@ class TokenService:
         expires_delta: timedelta | None = None,
     ) -> str:
         payload: dict[str, Any] = dict(data)
-        expires_at = datetime.utcnow() + (
+        expires_at = datetime.now(timezone.utc) + (
             expires_delta or timedelta(minutes=self.access_token_expire_minutes)
         )
-        payload.update({"exp": expires_at, "type": ACCESS_TOKEN_TYPE})
+        payload.update({"exp": expires_at, "type": ACCESS_TOKEN_TYPE, "jti": str(uuid.uuid4())})
         return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
 
     def create_access_token_for_user(

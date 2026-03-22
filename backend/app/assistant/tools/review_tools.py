@@ -28,7 +28,7 @@ class SubmitReviewTool(BaseTool):
                 "description": "Review decision: 'approve' or 'reject'",
                 "enum": ["approve", "reject"],
             },
-            "comments": {"type": "string", "description": "Reviewer comments"},
+            "comments": {"type": "string", "description": "Reviewer comments", "maxLength": 5000},
         },
         "required": ["review_id", "decision"],
     }

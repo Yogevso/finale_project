@@ -133,6 +133,7 @@ def test_management_documents_list_matches_frontend_dto_shape(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.INTERNAL,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -165,6 +166,7 @@ def test_portal_documents_list_matches_frontend_dto_shape(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -195,6 +197,7 @@ def test_public_documents_list_matches_frontend_dto_shape(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.PUBLIC,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()

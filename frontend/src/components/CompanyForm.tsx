@@ -4,6 +4,8 @@ import { api } from '@/lib/api'
 import { X } from 'lucide-react'
 import type { Company, CompanyCreate, CompanyUpdate, CompanyType } from '@/types'
 import { useFocusTrap } from '@/hooks/useAccessibility'
+import { companySchema } from '@/lib/validation/schemas'
+import { validateForm } from '@/lib/validation'
 
 interface CompanyFormProps {
   company?: Company | null
@@ -50,14 +52,9 @@ export default function CompanyForm({ company, onClose, onSuccess }: CompanyForm
     e.preventDefault()
     setErrors({})
 
-    // Basic validation
-    if (!formData.name.trim()) {
-      setErrors({ name: 'Company name is required' })
-      return
-    }
-
-    if (formData.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email)) {
-      setErrors({ contact_email: 'Invalid email format' })
+    const result = validateForm(companySchema, formData)
+    if (result.errors) {
+      setErrors(result.errors)
       return
     }
 

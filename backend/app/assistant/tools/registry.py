@@ -98,7 +98,7 @@ class ToolRegistry:
                 name=name,
                 success=False,
                 result="",
-                error=f"Tool execution error: {exc}",
+                error="An internal error occurred while running this tool. Please try again.",
             )
 
     # Parameter names that should be integers (LLMs often send as strings)

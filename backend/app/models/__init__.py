@@ -354,7 +354,7 @@ class Document(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
     )  # Multi-tenancy
     title = Column(String(500), nullable=False, index=True)
     document_number = Column(String(100), unique=True, index=True, nullable=False)
@@ -368,7 +368,7 @@ class Document(Base):
     )
     category = Column(String(100), nullable=True, index=True)
     topic = Column(String(150), nullable=True, index=True)
-    platform = Column(String(100), nullable=True, index=True)
+    platform = Column(String(100), nullable=True, index=True)  # DEPRECATED: use platform_id / platform_ref. Will be dropped in next major version.
     platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True, index=True)
     release_branch = Column(String(100), nullable=True, index=True)
     tags = Column(Text, nullable=True)  # Comma-separated tags
@@ -378,6 +378,7 @@ class Document(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
     row_version = Column(Integer, nullable=False, default=1)
+    audience_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -393,6 +394,13 @@ class Document(Base):
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="document")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
+
+    @property
+    def platform_name(self) -> str | None:
+        """H-14: Resolve platform name through the FK relationship first, fall back to legacy string."""
+        if self.platform_ref is not None:
+            return self.platform_ref.name
+        return self.platform
     watchers = relationship(
         "DocumentWatcher", back_populates="document", cascade="all, delete-orphan"
     )
@@ -855,6 +863,7 @@ class ReviewRequest(Base):
     # Audience state snapshot at submission time
     audience_visibility_snapshot = Column(String(50), nullable=True)
     audience_company_ids_snapshot = Column(Text, nullable=True)  # JSON array of company IDs
+    audience_version_snapshot = Column(Integer, nullable=True)
 
     # Relationships
     document = relationship("Document", back_populates="review_requests")

@@ -12,7 +12,7 @@ services:
       - APP_ENV=production
       - DEBUG=false
       - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=sqlite:///./data/portal.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
       - CORS_ORIGINS=["https://portal.example.com"]
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
@@ -43,7 +43,7 @@ services:
       - backend-data:/app/data
       - backend-uploads:/app/uploads
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/ready"]
       interval: 30s
@@ -100,7 +100,7 @@ services:
       # Redis for horizontal scaling (optional)
       - REDIS_URL=${REDIS_URL:-}
     ports:
-      - "8002:8002"
+      - "127.0.0.1:8002:8002"
     depends_on:
       backend:
         condition: service_healthy
@@ -127,7 +127,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       - portal-network
     healthcheck:
@@ -151,7 +151,7 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:11434/api/tags || exit 1"]
       interval: 30s
@@ -172,6 +172,35 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # PostgreSQL — production database
+  # Set DATABASE_URL=postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
+  postgres:
+    image: postgres:16-alpine
+    container_name: portal-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=portal
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-portal}
+      - POSTGRES_DB=portal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - portal-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - with-postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   backend-data:
     name: portal-backend-data
@@ -181,6 +210,8 @@ volumes:
     name: portal-redis-data
   ollama-data:
     name: portal-ollama-data
+  postgres-data:
+    name: portal-postgres-data
 
 networks:
   portal-network:

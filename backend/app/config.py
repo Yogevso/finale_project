@@ -5,7 +5,7 @@ import logging.config
 import sys
 from typing import Optional
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 # Insecure default that must not be used in production
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     AUDIENCE_ASSIGNMENT_SCHEMA_VERSION: str = "1.0.0"
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 30
-    SESSION_INACTIVITY_DAYS: int = 30
+    SESSION_INACTIVITY_DAYS: int = 7  # M-13: reduced from 30
     MAX_CONCURRENT_SESSIONS: int = 5
     REVIEW_SLA_REMINDER_HOURS: int = 48
     REVIEW_SLA_ESCALATION_HOURS: int = 96
@@ -59,8 +59,22 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./data/portal.db"
     SQL_ECHO: bool = False
 
-    # CORS
+    # CORS — M-14: override via CORS_ORIGINS env var (comma-separated or JSON array)
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Storage (S3)
     S3_ENABLED: bool = False
@@ -113,6 +127,9 @@ class Settings(BaseSettings):
     # Collaboration server
     COLLAB_SERVER_URL: str = "http://collab-server:8002"
 
+    # Redis (optional — used for distributed rate limiting)
+    REDIS_URL: Optional[str] = None
+
     # RAG (Retrieval-Augmented Generation)
     ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"
     ASSISTANT_CHROMA_PERSIST_DIR: str = "./data/chromadb"
@@ -127,14 +144,15 @@ class Settings(BaseSettings):
         is_production = self.APP_ENV not in ("development", "test", "testing")
         
         # SECRET_KEY validation
-        if self.SECRET_KEY == _INSECURE_SECRET_KEY:
+        _insecure_patterns = ("insecure", "dev-only", "change-in-production")
+        if self.SECRET_KEY == _INSECURE_SECRET_KEY or (
+            is_production and any(p in self.SECRET_KEY.lower() for p in _insecure_patterns)
+        ):
             if is_production:
-                print(
-                    "FATAL: SECRET_KEY is set to the insecure default value. "
-                    "Set SECRET_KEY environment variable to a secure random value.",
-                    file=sys.stderr,
+                raise RuntimeError(
+                    "Insecure SECRET_KEY rejected in production. "
+                    "Set SECRET_KEY environment variable to a secure random value."
                 )
-                sys.exit(1)
             else:
                 # Log warning for development
                 logging.warning(

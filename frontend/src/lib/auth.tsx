@@ -2,13 +2,13 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import { syncDateFormatPreferences } from './dateUtils'
-import type { LoginRequest, Permission, User, UserCreate } from '@/types'
+import type { LoginRequest, Permission, PublicRegistrationData, User } from '@/types'
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (credentials: LoginRequest) => Promise<void>
-  register: (userData: UserCreate) => Promise<void>
+  register: (userData: PublicRegistrationData) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<User | null>
   // Role checks
@@ -59,9 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       if (!api.hasToken()) {
-        // Skip session restore on public-only routes where no auth is expected.
-        // This avoids a noisy 401 in the browser console for guest visitors.
-        const publicPrefixes = ['/docs', '/platforms', '/browse', '/topics', '/tools', '/help', '/changelog', '/accessibility', '/doc/', '/search']
+        // Skip session restore on public-only routes (no refresh cookie expected)
+        const publicPrefixes = ['/docs', '/platforms', '/tools', '/help', '/changelog', '/search']
         const isPublicRoute = publicPrefixes.some((p) => window.location.pathname.startsWith(p))
         if (!isPublicRoute) {
           await api.tryRestoreSession()
@@ -83,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const register = async (userData: UserCreate) => {
+  const register = async (userData: PublicRegistrationData) => {
     await api.register(userData)
     // After registration, login automatically
     await login({ username: userData.username, password: userData.password })

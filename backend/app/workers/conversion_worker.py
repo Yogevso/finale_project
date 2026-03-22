@@ -10,7 +10,7 @@ import argparse
 import logging
 
 from app.db import init_db
-from app.services.conversion_jobs import run_conversion_worker
+from app.services.conversion_jobs import run_all_jobs_worker, run_conversion_worker
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,7 +19,7 @@ logging.basicConfig(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run reader-artifact conversion worker")
+    parser = argparse.ArgumentParser(description="Run conversion and PDF export worker")
     parser.add_argument(
         "--poll-interval",
         type=float,
@@ -42,13 +42,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force regeneration even when the reader artifact is already ready",
     )
+    parser.add_argument(
+        "--reader-only",
+        action="store_true",
+        help="Only process reader_html conversion jobs (skip PDF export)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     init_db()
-    run_conversion_worker(
+    worker_fn = run_conversion_worker if args.reader_only else run_all_jobs_worker
+    worker_fn(
         poll_interval_seconds=args.poll_interval,
         batch_size=args.batch_size,
         once=args.once,

@@ -26,6 +26,7 @@ from app.assistant.schemas import (
 from app.assistant.tools import registry
 from app.config import settings
 from app.db import get_db
+from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import User, UserRole
 from app.security import get_current_active_user
 
@@ -49,7 +50,7 @@ def _check_rate_limit(user_id: int) -> None:
 
 
 def _require_enabled() -> None:
-    if not settings.ASSISTANT_ENABLED:
+    if not is_backend_feature_enabled(BackendFeatureFlag.ASSISTANT):
         raise HTTPException(status_code=503, detail="AI assistant is currently disabled.")
 
 
@@ -284,7 +285,7 @@ def list_tools(user: User = Depends(get_current_active_user)):
 @router.get("/health")
 async def assistant_health(user: User = Depends(get_current_active_user)):
     """Check if the AI assistant is ready."""
-    if not settings.ASSISTANT_ENABLED:
+    if not is_backend_feature_enabled(BackendFeatureFlag.ASSISTANT):
         return {"status": "disabled", "model": settings.ASSISTANT_MODEL, "ollama_healthy": False}
 
     client = OllamaClient(

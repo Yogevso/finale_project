@@ -16,6 +16,7 @@ from app.errors import (
     PermissionDeniedError,
     ValidationError,
 )
+from app.dependencies.permissions import require_editor
 from app.models import User
 from app.schemas import (
     CancelScheduledPublishResponse,
@@ -31,7 +32,6 @@ from app.schemas import (
     VersionResponse,
     VersionUpdate,
 )
-from app.security import get_current_active_user
 from app.services.version_service import VersionService
 
 router = APIRouter()
@@ -41,7 +41,7 @@ router = APIRouter()
 def list_versions(
     document_id: int,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     List all versions for a document.
@@ -56,7 +56,7 @@ def get_version(
     version_id: int,
     response: Response,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Get a specific version.
@@ -76,7 +76,7 @@ def create_version(
     version_data: VersionCreate,
     response: Response,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Create a new version for a document.
@@ -96,7 +96,7 @@ def update_version(
     response: Response,
     if_match: str | None = Header(None, alias="If-Match"),
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Update an unpublished version.
@@ -122,7 +122,7 @@ def publish_preflight(
     document_id: int,
     version_id: int,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Get a preflight checklist for publishing a version.
@@ -144,7 +144,7 @@ def publish_version(
     document_id: int,
     version_id: int,
     response: Response,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
     publish_approved_version_command_handler: PublishApprovedVersionCommandHandler = Depends(
         get_publish_approved_version_command_handler
     ),
@@ -187,7 +187,7 @@ def force_publish_version(
     version_id: int,
     data: ForcePublishRequest,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Force publish a version with admin override.
@@ -214,7 +214,7 @@ def delete_version(
     document_id: int,
     version_id: int,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Delete an unpublished version.
@@ -233,7 +233,7 @@ def restore_audience_from_version(
     document_id: int,
     version_id: int,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Restore document audience state from a published version's snapshot.
@@ -255,7 +255,7 @@ def schedule_publish(
     version_id: int,
     data: SchedulePublishRequest,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Schedule a version to be published at a specific future time.
@@ -282,7 +282,7 @@ def cancel_scheduled_publish(
     document_id: int,
     version_id: int,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Cancel a scheduled publish for a version.
@@ -304,7 +304,7 @@ def cancel_scheduled_publish(
 def process_scheduled_publishes(
     batch_size: int = 10,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_editor),
 ):
     """
     Process scheduled publishes that are due.

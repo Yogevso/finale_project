@@ -31,6 +31,7 @@ export class ApiHttpClient {
       },
       // AD-004: send httpOnly cookies for session persistence
       withCredentials: true,
+      timeout: 30_000,
     })
 
     // AD-004: tokens are stored in memory only — not localStorage.

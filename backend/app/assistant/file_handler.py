@@ -41,6 +41,8 @@ class AssistantFileHandler:
     ) -> AssistantUploadedFile:
         """Validate, save file to disk, extract text, and create DB record."""
         original = file.filename or "unknown"
+        # H-10: Strip directory components to prevent path traversal
+        original = Path(original).name
         ext = Path(original).suffix.lower()
 
         if ext not in ALLOWED_EXTENSIONS:

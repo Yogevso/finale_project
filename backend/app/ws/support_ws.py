@@ -1,7 +1,9 @@
 """Support ticket WebSocket endpoint — real-time support chat (X1-083 to X1-087).
 
 Protocol:
-  Connect: ws://host/ws/support?token=JWT
+  Connect: ws://host/ws/support
+  First message (H-21):
+    {"event": "authenticate", "data": {"token": "JWT"}}
   Events sent by client:
     {"event": "send_message", "data": {"ticket_id": 1, "content": "hello", "is_internal_note": false}}
     {"event": "typing", "data": {"ticket_id": 1}}
@@ -17,13 +19,10 @@ Protocol:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
-from app.auth_context.session_tokens import hash_session_identifier
-from app.config import settings
 from app.db import get_db
 from app.models import (
     SupportTicket,
@@ -32,56 +31,42 @@ from app.models import (
     SupportTicketStatus,
     User,
     UserRole,
-    UserSession,
 )
-from app.security import verify_token
+from app.ws.auth import authenticate_ws
 from app.ws.manager import chat_manager
 
 router = APIRouter()
 
 
-def _authenticate_ws(token: str, db: Session) -> User | None:
-    """Validate JWT *and* check session revocation/inactivity (AD-003)."""
-    payload = verify_token(token)
-    if not payload:
-        return None
-    user_id = payload.get("sub")
-    if not user_id:
-        return None
-
-    user = db.query(User).filter(User.id == int(user_id), User.is_active.is_(True)).first()
-    if not user:
-        return None
-
-    # Verify session is still valid (revocation + inactivity)
-    session_identifier = payload.get("sid")
-    if isinstance(session_identifier, str) and session_identifier.strip():
-        session_hash = hash_session_identifier(session_identifier)
-        user_session = (
-            db.query(UserSession)
-            .filter(
-                UserSession.user_id == user.id,
-                UserSession.session_token_hash == session_hash,
-            )
-            .first()
-        )
-        if user_session is None or user_session.revoked_at is not None:
-            return None
-        inactivity_cutoff = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
-        if user_session.last_active_at < inactivity_cutoff:
-            return None
-
-    return user
-
-
 @router.websocket("/ws/support")
 async def support_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Support ticket WebSocket endpoint (X1-083)."""
-    user = _authenticate_ws(token, db)
+    """Support ticket WebSocket endpoint (X1-083).
+
+    H-21: Token is sent in the first WS message (``authenticate`` event)
+    rather than in the query string.  Legacy ``?token=`` query param is
+    still accepted for backwards compatibility.
+    """
+    await websocket.accept()
+
+    # H-21: prefer token from first message over query string
+    if not token:
+        try:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            if msg.get("event") == "authenticate":
+                token = msg.get("data", {}).get("token")
+        except Exception:
+            pass
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
+    user = authenticate_ws(token, db)
     if not user:
         await websocket.close(code=4001, reason="Authentication failed")
         return

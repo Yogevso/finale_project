@@ -487,6 +487,19 @@ def get_feature_matrix(
     return FeatureMatrixResponse(tenants=rows)
 
 
+@router.get("/admin/config-flags")
+def get_config_flags(
+    tenant_ctx: TenantContext = Depends(require_system_admin),
+):
+    """Return current state of all global config-based feature flags (read-only)."""
+    from app.feature_flags import BackendFeatureFlag, get_backend_feature_flags
+    flags = get_backend_feature_flags()
+    return {
+        member.value: flags.is_enabled(member)
+        for member in BackendFeatureFlag
+    }
+
+
 @router.put("/admin/tenants/{tenant_id}/features", response_model=list[FeatureFlagResponse])
 def update_tenant_features(
     tenant_id: int,

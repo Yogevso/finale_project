@@ -230,7 +230,7 @@ export default function Layout() {
               <li key={crumb.path} className="flex items-center gap-1">
                 <ChevronRight className="h-3.5 w-3.5" />
                 {i === breadcrumbs.length - 1 ? (
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{crumb.label}</span>
+                  <span aria-current="page" className="font-medium text-slate-700 dark:text-slate-200">{crumb.label}</span>
                 ) : (
                   <Link to={crumb.path} className="hover:text-sky-700 transition-colors">{crumb.label}</Link>
                 )}

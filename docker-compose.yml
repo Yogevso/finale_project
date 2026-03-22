@@ -12,24 +12,24 @@ services:
       - ./data/chromadb:/app/data/chromadb
     environment:
       - APP_ENV=development
-      - SECRET_KEY=docker-dev-secret-key-change-in-prod
+      - SECRET_KEY=${SECRET_KEY:-}
       - DEBUG=true
       - SQL_ECHO=false
-      - DATABASE_URL=sqlite:///./data/portal.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:80"]
       - OLLAMA_BASE_URL=http://ollama:11434
       - ASSISTANT_MODEL=llama3.1:8b
       - ASSISTANT_MAX_TOKENS=2048
       - ASSISTANT_TEMPERATURE=0.7
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+      - REDIS_URL=redis://redis:6379/0
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:8000/health >/dev/null || exit 1"]
       interval: 10s
       timeout: 8s
       retries: 5
-      start_period: 30s
+      start_period: 60s
     depends_on:
-      ollama:
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -46,6 +46,7 @@ services:
     environment:
       - VITE_API_URL=/api/v1
       - VITE_API_PROXY_TARGET=http://backend:8000
+      # Browser connects from host, so localhost is correct for dev
       - VITE_COLLAB_SERVER_URL=ws://localhost:8002
     depends_on:
       backend:
@@ -64,24 +65,45 @@ services:
     environment:
       - PORT=8002
       - HOST=0.0.0.0
-      - JWT_SECRET=docker-dev-secret-key-change-in-prod
+      - JWT_SECRET=${JWT_SECRET:-dev-only-insecure-key-do-not-use-in-prod}
       - BACKEND_URL=http://backend:8000
+      - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=debug
     depends_on:
       backend:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8003/health"]
+      test: ["CMD", "node", "-e", "const http = require('http'); http.get('http://127.0.0.1:8003/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # Redis — shared rate-limiting and collab pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: v2-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 5s
     restart: unless-stopped
 
-  # Self-hosted LLM inference (AI Assistant)
+  # Self-hosted LLM inference (AI Assistant) — optional profile
+  # Start with: docker-compose --profile ai up
   ollama:
     image: ollama/ollama:latest
     container_name: v2-ollama
+    profiles:
+      - ai
     ports:
       - "11434:11434"
     volumes:
@@ -96,12 +118,33 @@ services:
     deploy:
       resources:
         reservations:
-          memory: 4G
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+          memory: 2G
+
+  # PostgreSQL — production-grade database (optional profile)
+  # Start with: docker-compose --profile postgres up
+  # Set DATABASE_URL=postgresql://portal:portal@postgres:5432/portal
+  postgres:
+    image: postgres:16-alpine
+    container_name: v2-postgres
+    profiles:
+      - postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=portal
+      - POSTGRES_PASSWORD=portal
+      - POSTGRES_DB=portal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   backend-data:
+  redis-data:
   ollama-data:
+  postgres-data:

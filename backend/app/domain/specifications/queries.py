@@ -248,7 +248,7 @@ class VisibilitySpec:
             vis_parts.append(
                 f"({visibility_col} = :vis_company AND {company_subquery_col} IN "
                 f"(SELECT document_id FROM document_company_assignments "
-                f"WHERE company_id = :vis_company_tid))"
+                f"WHERE tenant_id = :vis_company_tid))"
             )
             params["vis_company"] = DocumentVisibility.COMPANY.value
             params["vis_company_tid"] = self.company_tenant_id

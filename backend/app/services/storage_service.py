@@ -191,9 +191,18 @@ class S3StorageBackend(StorageBackend):
 def get_storage_backend() -> StorageBackend:
     """Factory function to get the configured storage backend"""
     if settings.S3_ENABLED:
-        return S3StorageBackend()
-    else:
-        return LocalStorageBackend()
+        try:
+            return S3StorageBackend()
+        except Exception:
+            if settings.ALLOW_LOCAL_STORAGE_FALLBACK:
+                logger.critical(
+                    "S3 storage backend initialisation failed — "
+                    "falling back to local storage",
+                    exc_info=True,
+                )
+                return LocalStorageBackend()
+            raise
+    return LocalStorageBackend()
 
 
 # Default storage instance

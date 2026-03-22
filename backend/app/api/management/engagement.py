@@ -409,6 +409,12 @@ def update_reading_progress(
     now = datetime.utcnow()
 
     if progress:
+        # FIX-026b: Reading progress must be monotonic (can only increase)
+        if data.progress_percent < progress.progress_percent:
+            raise HTTPException(
+                status_code=400,
+                detail="Progress cannot decrease",
+            )
         progress.progress_percent = data.progress_percent
         progress.last_read_at = now
         if data.progress_percent >= 100 and not progress.completed_at:

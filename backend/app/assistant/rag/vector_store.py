@@ -58,6 +58,7 @@ class VectorStore:
         doc_title: str,
         chunks: list[dict[str, Any]],
         embeddings: list[list[float]],
+        tenant_id: int | None = None,
     ) -> int:
         """Store document chunks with their embeddings.
 
@@ -66,12 +67,16 @@ class VectorStore:
             doc_title: Document title for metadata
             chunks: List of chunk dicts with keys: text, chunk_index, section
             embeddings: Corresponding embedding vectors
+            tenant_id: Tenant ID for access scoping
 
         Returns:
             Number of chunks stored
         """
         if not chunks or not embeddings:
             return 0
+
+        if tenant_id is None:
+            raise ValueError(f"tenant_id is required when indexing document {doc_id}")
 
         collection = self._get_collection()
 
@@ -83,6 +88,7 @@ class VectorStore:
                 "document_title": doc_title,
                 "chunk_index": c["chunk_index"],
                 "section": c.get("section") or "",
+                "tenant_id": tenant_id,
             }
             for c in chunks
         ]
@@ -102,6 +108,7 @@ class VectorStore:
         n_results: int | None = None,
         min_score: float | None = None,
         document_id: int | None = None,
+        tenant_id: int | None = None,
     ) -> list[SearchResult]:
         """Query the vector store for similar chunks.
 
@@ -110,6 +117,7 @@ class VectorStore:
             n_results: Max results to return
             min_score: Minimum similarity score (0-1)
             document_id: If set, only search within this document
+            tenant_id: If set, only return chunks belonging to this tenant
 
         Returns:
             Ranked list of SearchResult
@@ -119,8 +127,12 @@ class VectorStore:
         collection = self._get_collection()
 
         where_filter = None
-        if document_id is not None:
+        if document_id is not None and tenant_id is not None:
+            where_filter = {"$and": [{"document_id": document_id}, {"tenant_id": tenant_id}]}
+        elif document_id is not None:
             where_filter = {"document_id": document_id}
+        elif tenant_id is not None:
+            where_filter = {"tenant_id": tenant_id}
 
         try:
             results = collection.query(

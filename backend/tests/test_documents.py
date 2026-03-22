@@ -160,6 +160,7 @@ def test_update_document_rejects_company_visibility_without_assignments(
         status=DocumentStatus.DRAFT,
         visibility=DocumentVisibility.INTERNAL,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -187,6 +188,7 @@ def test_update_document_allows_company_visibility_with_assignments(
         status=DocumentStatus.DRAFT,
         visibility=DocumentVisibility.INTERNAL,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -217,6 +219,7 @@ def test_update_document_transition_away_from_company_clears_assignments(
         status=DocumentStatus.DRAFT,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     doc.assigned_companies = [test_tenant]
     db.add(doc)
@@ -249,6 +252,7 @@ def test_list_documents(client, auth_headers, db, test_user):
             status=DocumentStatus.ACTIVE,
             category="Test",
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
     db.commit()
@@ -272,6 +276,7 @@ def test_list_documents_with_pagination(client, auth_headers, db, test_user):
             document_number=f"DOC-TEST-{i:04d}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
     db.commit()
@@ -305,6 +310,7 @@ def test_get_document_stats(client, auth_headers, db, test_user):
                 document_number=f"DOC-STATS-{index:04d}",
                 status=doc_status,
                 created_by=test_user.id,
+                tenant_id=test_user.tenant_id,
             )
         )
     db.commit()
@@ -329,6 +335,7 @@ def test_get_document(client, auth_headers, db, test_user):
         description="Test description",
         status=DocumentStatus.ACTIVE,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -354,6 +361,7 @@ def test_document_detail_payload_budget_under_50kb(client, admin_headers, db, te
         category="Performance",
         tags=",".join(f"tag-{index:02d}" for index in range(40)),
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     doc.assigned_companies = [test_tenant]
     db.add(doc)
@@ -382,6 +390,7 @@ def test_update_document(client, auth_headers, db, test_user):
         document_number="DOC-TEST-0001",
         status=DocumentStatus.DRAFT,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -409,6 +418,7 @@ def test_delete_document(client, admin_headers, db, test_admin):
         document_number="DOC-TEST-0001",
         status=DocumentStatus.DRAFT,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -432,6 +442,7 @@ def test_delete_document_forbidden_for_editor(client, auth_headers, db, test_use
         document_number="DOC-TEST-0002",
         status=DocumentStatus.DRAFT,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
     )
     db.add(doc)
     db.commit()
@@ -452,18 +463,21 @@ def test_search_documents(client, auth_headers, db, test_user):
             document_number="DOC-TEST-0001",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
         Document(
             title="JavaScript Tutorial",
             document_number="DOC-TEST-0002",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
         Document(
             title="Python Best Practices",
             document_number="DOC-TEST-0003",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
     ]
     for doc in documents:
@@ -489,6 +503,7 @@ def test_filter_by_status(client, auth_headers, db, test_user):
                 document_number=f"DOC-{status.value.upper()}-{i:04d}",
                 status=status,
                 created_by=test_user.id,
+                tenant_id=test_user.tenant_id,
             )
             db.add(doc)
     db.commit()
@@ -511,6 +526,7 @@ def test_filter_by_visibility(client, auth_headers, db, test_user):
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
         Document(
             title="Internal document",
@@ -518,6 +534,7 @@ def test_filter_by_visibility(client, auth_headers, db, test_user):
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.INTERNAL,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
         Document(
             title="Company document",
@@ -525,6 +542,7 @@ def test_filter_by_visibility(client, auth_headers, db, test_user):
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.COMPANY,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         ),
     ]
     for doc in docs:

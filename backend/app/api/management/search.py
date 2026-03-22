@@ -19,8 +19,11 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.db import get_db
-from app.models import SavedSearch, SearchAnalytics, User
-from app.security import get_current_active_user
+from app.models import SavedSearch, SearchAnalytics, User, UserRole
+from app.dependencies.permissions import require_any_role, require_internal_user
+from app.application.policies.access_policies import AnalyticsAccessPolicy
+
+_analytics_policy = AnalyticsAccessPolicy()
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +82,7 @@ def search_documents(
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
     db: Session = Depends(get_db),
 ):
@@ -120,7 +123,7 @@ def search_documents(
 def autocomplete(
     q: str = Query(..., min_length=2, description="Partial search query"),
     limit: int = Query(10, ge=1, le=20),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
 ):
     """Get autocomplete suggestions for search"""
@@ -132,7 +135,7 @@ def autocomplete(
 
 @router.get("/facets")
 def get_search_facets(
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
 ):
     """Get facet counts for filtering"""
@@ -142,7 +145,7 @@ def get_search_facets(
 # Saved Searches
 @router.get("/saved", response_model=List[SavedSearchResponse])
 def list_saved_searches(
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
 ):
     """List user's saved searches"""
@@ -155,7 +158,7 @@ def list_saved_searches(
 def create_saved_search(
     data: SavedSearchCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """Save a search for quick access"""
     saved = SavedSearch(
@@ -176,7 +179,7 @@ def create_saved_search(
 def delete_saved_search(
     search_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """Delete a saved search"""
     saved = (
@@ -205,7 +208,7 @@ class SearchClickBody(BaseModel):
 def record_search_click(
     body: SearchClickBody,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """Record that a user clicked a search result."""
     db.add(SearchAnalytics(
@@ -223,7 +226,7 @@ def record_search_click(
 def get_search_analytics(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])),
 ):
     """Get search analytics — top queries, zero-result queries, click-through."""
     since = datetime.utcnow() - timedelta(days=days)
@@ -237,6 +240,10 @@ def get_search_analytics(
             SearchAnalytics.clicked_document_id.is_(None),
         )
     )
+
+    # Tenant scoping for non-system-admins (M-29: delegated to AnalyticsAccessPolicy)
+    if _analytics_policy.is_tenant_scoped(current_user):
+        search_events = search_events.filter(SearchAnalytics.tenant_id == current_user.tenant_id)
 
     # Top queries
     top_queries = (
@@ -266,14 +273,16 @@ def get_search_analytics(
 
     # Click-through rate
     total_searches = search_events.count()
-    total_clicks = (
+    click_query = (
         db.query(SearchAnalytics)
         .filter(
             SearchAnalytics.created_at >= since,
             SearchAnalytics.clicked_document_id.isnot(None),
         )
-        .count()
     )
+    if _analytics_policy.is_tenant_scoped(current_user):
+        click_query = click_query.filter(SearchAnalytics.tenant_id == current_user.tenant_id)
+    total_clicks = click_query.count()
     ctr = (total_clicks / total_searches * 100) if total_searches > 0 else 0
 
     return {

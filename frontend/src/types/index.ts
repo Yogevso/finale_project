@@ -42,6 +42,13 @@ export interface User {
   updated_at: string
 }
 
+export interface PublicRegistrationData {
+  email: string
+  username: string
+  full_name: string
+  password: string
+}
+
 export interface UserCreate {
   email: string
   username: string

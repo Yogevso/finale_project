@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:20-alpine3.20 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:20-alpine3.20 AS production
 
 WORKDIR /app
 
@@ -37,8 +37,8 @@ COPY --from=builder /app/dist ./dist
 # Switch to non-root user
 USER hocuspocus
 
-# Expose WebSocket port
-EXPOSE 8002
+# Expose WebSocket port and health port
+EXPOSE 8002 8003
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

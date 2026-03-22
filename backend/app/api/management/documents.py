@@ -1,6 +1,7 @@
 """Document Management API Routes"""
 
 import logging
+import os
 import re
 from datetime import date, datetime, timedelta
 from math import ceil
@@ -261,8 +262,8 @@ def list_documents(
     company_id: Optional[int] = Query(None, description="Filter by assigned company"),
     date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
     date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
-    sort_by: Optional[str] = Query(None, description="Sort field: title, created_at, updated_at, status, category"),
-    sort_order: Optional[str] = Query("desc", description="Sort direction: asc or desc"),
+    sort_by: Optional[str] = Query(None, pattern="^(title|created_at|updated_at|status|category)$", description="Sort field: title, created_at, updated_at, status, category"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"),
     current_user: User = Depends(require_internal_user),
     list_documents_query_handler: ListDocumentsQueryHandler = Depends(
         get_list_documents_query_handler
@@ -554,7 +555,10 @@ async def upload_document(
         raise ValidationError("Only DOCX and PPTX files are allowed")
 
     # Use filename as title if not provided
-    doc_title = title or file.filename.rsplit(".", 1)[0] if file.filename else "Uploaded Document"
+    raw_filename = file.filename or "Uploaded Document"
+    # H-10: Strip directory components to prevent path traversal
+    safe_filename = os.path.basename(raw_filename)
+    doc_title = title or safe_filename.rsplit(".", 1)[0] if safe_filename else "Uploaded Document"
     form = await request.form()
     raw_company_ids = form.getlist("company_ids")
     company_ids: List[int] = []

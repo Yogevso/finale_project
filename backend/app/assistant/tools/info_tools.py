@@ -66,7 +66,7 @@ class SearchPublicDocumentsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search query"},
+            "query": {"type": "string", "description": "Search query", "maxLength": 500},
             "limit": {"type": "integer", "description": "Max results (default 10)"},
         },
         "required": ["query"],
@@ -80,7 +80,10 @@ class SearchPublicDocumentsTool(BaseTool):
 
         query = db.query(Document).filter(Document.title.ilike(f"%{q}%"))
 
-        role = UserRole(user.role)
+        try:
+            role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid user role."}
         if role == UserRole.CUSTOMER:
             # Customers see only PUBLIC docs or COMPANY docs assigned to their tenant
             query = query.filter(
@@ -127,7 +130,10 @@ class GetDocumentContentTool(BaseTool):
             return {"success": False, "result": "", "error": "Document not found."}
 
         # Visibility check
-        role = UserRole(user.role)
+        try:
+            role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
+        except (ValueError, KeyError):
+            return {"success": False, "result": "", "error": "Invalid user role."}
         if role == UserRole.CUSTOMER:
             if doc.visibility == DocumentVisibility.INTERNAL:
                 return {"success": False, "result": "", "error": "You do not have access to this document."}

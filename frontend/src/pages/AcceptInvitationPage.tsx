@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { acceptInvitationSchema } from '@/lib/validation/schemas'
+import { validateForm } from '@/lib/validation'
 import {
   CheckCircle2,
   XCircle,
@@ -84,18 +86,11 @@ export default function AcceptInvitationPage() {
     e.preventDefault()
     setError('')
 
-    if (!formData.username || !formData.full_name || !formData.password) {
-      setError('All fields are required')
-      return
-    }
-
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match')
+    const result = validateForm(acceptInvitationSchema, formData)
+    if (result.errors) {
+      // Show first error found
+      const firstError = Object.values(result.errors)[0]
+      setError(firstError || 'Please fix the form errors')
       return
     }
 

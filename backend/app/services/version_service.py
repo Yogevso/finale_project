@@ -217,83 +217,9 @@ class VersionService(SessionService):
 
     @staticmethod
     def _schedule_pdf_export_generation(attachment_ids: list[int]) -> None:
-        """AH-006: Generate PDF export artifacts for portal/viewer downloads."""
-        import threading
-
-        from app.services.pdf_export_service import render_html_to_pdf
-
-        def _generate():
-            from app.db import SessionLocal
-            from app.models import Attachment, AttachmentArtifact
-
-            db = SessionLocal()
-            try:
-                for aid in attachment_ids:
-                    att = db.query(Attachment).filter(Attachment.id == aid).first()
-                    if not att:
-                        continue
-                    # Find existing reader_html artifact
-                    reader = (
-                        db.query(AttachmentArtifact)
-                        .filter(
-                            AttachmentArtifact.attachment_id == aid,
-                            AttachmentArtifact.kind == "reader_html",
-                            AttachmentArtifact.status == "completed",
-                        )
-                        .first()
-                    )
-                    html = reader.content_text if reader else None
-                    if not html:
-                        continue
-                    pdf_bytes = render_html_to_pdf(
-                        html, title=att.original_filename or "document"
-                    )
-                    if not pdf_bytes:
-                        continue
-                    existing = (
-                        db.query(AttachmentArtifact)
-                        .filter(
-                            AttachmentArtifact.attachment_id == aid,
-                            AttachmentArtifact.kind == "pdf_export",
-                        )
-                        .first()
-                    )
-                    if existing:
-                        existing.content_text = None
-                        existing.content_json = None
-                        existing.size_bytes = len(pdf_bytes)
-                        existing.status = "completed"
-                        existing.mime_type = "application/pdf"
-                        existing.storage_key = f"pdf_export/{aid}.pdf"
-                    else:
-                        existing = AttachmentArtifact(
-                            attachment_id=aid,
-                            kind="pdf_export",
-                            status="completed",
-                            mime_type="application/pdf",
-                            size_bytes=len(pdf_bytes),
-                            storage_key=f"pdf_export/{aid}.pdf",
-                        )
-                        db.add(existing)
-                    # Store PDF bytes via storage backend
-                    import io
-                    from app.services.attachment_service.common import get_storage_backend
-                    try:
-                        storage = get_storage_backend()
-                        storage.upload(
-                            io.BytesIO(pdf_bytes),
-                            f"pdf_export/{aid}.pdf",
-                            "application/pdf",
-                        )
-                    except Exception:
-                        pass  # PDF still generated, storage optional
-                    db.commit()
-            except Exception:
-                logging.getLogger(__name__).exception("PDF export generation failed")
-            finally:
-                db.close()
-
-        threading.Thread(target=_generate, daemon=True).start()
+        """AH-006: Enqueue durable PDF export jobs for portal/viewer downloads."""
+        from app.services.conversion_jobs import enqueue_pdf_export
+        enqueue_pdf_export(attachment_ids)
 
     def _notify_version_watchers(
         self,
@@ -495,7 +421,7 @@ class VersionService(SessionService):
         enforce_company_audience = self._is_company_audience_enforcement_enabled(
             rollout_key=document.tenant_id
         )
-        safe_mode_enabled = bool(getattr(settings, "AUDIENCE_VALIDATION_SAFE_MODE_ENABLED", False))
+        safe_mode_enabled = is_backend_feature_enabled(BackendFeatureFlag.AUDIENCE_VALIDATION_SAFE_MODE)
 
         version = self.version_repository.get_by_id_for_document(
             version_id,

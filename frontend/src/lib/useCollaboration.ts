@@ -74,7 +74,7 @@ export interface UseCollaborationReturn extends CollaborationState {
   sessionId: string | null
 }
 
-const COLLAB_SERVER_URL = import.meta.env.VITE_COLLAB_SERVER_URL || 'ws://localhost:8002'
+const COLLAB_SERVER_URL_FALLBACK = import.meta.env.VITE_COLLAB_SERVER_URL || 'ws://localhost:8002'
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 1000 // 1 second
 const DEFAULT_AUTO_SAVE_INTERVAL = 5 * 60 * 1000 // 5 minutes
@@ -120,6 +120,7 @@ export function useCollaboration({
   const editsCountRef = useRef<number>(0)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tokenRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const reconnectAttemptRef = useRef(0)
   const connectionMachineStateRef = useRef(initialConnectionState)
   const initialConnectionFlags = toCollaborationConnectionFlags(initialConnectionState)
@@ -272,9 +273,20 @@ export function useCollaboration({
         }
       })
 
+      // H-22: Derive collab server URL from backend response (single source of truth).
+      // The backend returns a full websocket_url like ws://host:port/document/{id}.
+      // Extract the base URL by stripping the /document/{id} suffix.
+      let collabServerUrl = COLLAB_SERVER_URL_FALLBACK
+      if (tokenResponse.websocket_url) {
+        const docPathIdx = tokenResponse.websocket_url.lastIndexOf('/document/')
+        if (docPathIdx !== -1) {
+          collabServerUrl = tokenResponse.websocket_url.substring(0, docPathIdx)
+        }
+      }
+
       // Create Hocuspocus provider
       const provider = new HocuspocusProvider({
-        url: COLLAB_SERVER_URL,
+        url: collabServerUrl,
         name: `document/${documentId}`,
         document: ydoc,
         token: tokenResponse.token,
@@ -621,6 +633,31 @@ export function useCollaboration({
     }
   }, [autoSaveInterval, canEdit, documentId, state.isConnected])
 
+  // M-21: Refresh collab token periodically for long edit sessions (45 min < 1h expiry)
+  useEffect(() => {
+    if (state.isConnected) {
+      if (tokenRefreshIntervalRef.current) {
+        clearInterval(tokenRefreshIntervalRef.current)
+      }
+      tokenRefreshIntervalRef.current = setInterval(async () => {
+        try {
+          const tokenResponse = await api.getCollabToken(documentId)
+          tokenRef.current = tokenResponse.token
+          permissionsRef.current = tokenResponse.permissions || []
+        } catch (error) {
+          console.error('Collab token refresh failed:', error)
+        }
+      }, 45 * 60 * 1000) // 45 minutes
+
+      return () => {
+        if (tokenRefreshIntervalRef.current) {
+          clearInterval(tokenRefreshIntervalRef.current)
+          tokenRefreshIntervalRef.current = null
+        }
+      }
+    }
+  }, [documentId, state.isConnected])
+
   // Auto-connect when enabled
   useEffect(() => {
     if (
@@ -655,6 +692,9 @@ export function useCollaboration({
       }
       if (autoSaveIntervalRef.current) {
         clearInterval(autoSaveIntervalRef.current)
+      }
+      if (tokenRefreshIntervalRef.current) {
+        clearInterval(tokenRefreshIntervalRef.current)
       }
     }
   }, [])

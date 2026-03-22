@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.domain.specifications import DateRangeSpec, TenantScopeSpec, VisibilitySpec
@@ -18,6 +20,8 @@ from app.repositories import DocumentRepository
 
 # Default BM25 weights for FTS5 columns: title, description, category, tags
 DEFAULT_RELEVANCE_WEIGHTS = {"title": 3.0, "description": 1.0, "category": 1.0, "tags": 2.0}
+
+logger = logging.getLogger(__name__)
 
 def escape_sql_wildcards(value: str) -> str:
     """Escape SQL LIKE wildcards to prevent injection."""
@@ -134,7 +138,7 @@ class SearchQueryHandler:
                     "category": float(weights.get("category", DEFAULT_RELEVANCE_WEIGHTS["category"])),
                     "tags": float(weights.get("tags", DEFAULT_RELEVANCE_WEIGHTS["tags"])),
                 }
-        except Exception:
+        except (json.JSONDecodeError, ValueError, TypeError, KeyError):
             pass
         return DEFAULT_RELEVANCE_WEIGHTS.copy()
 
@@ -261,7 +265,8 @@ class SearchQueryHandler:
                 )
                 count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
                 total = self.db.execute(count_query, count_params).scalar() or 0
-            except Exception:
+            except (OperationalError, ProgrammingError):
+                logger.warning("FTS5 query failed, falling back to LIKE search", exc_info=True)
                 escaped_q = escape_sql_wildcards(query.q)
                 fallback_query = document_repository.query().filter(
                     (Document.title.ilike(f"%{escaped_q}%", escape="\\"))
@@ -329,6 +334,9 @@ class SearchQueryHandler:
             Document.title.ilike(f"%{query.q}%")
         )
         title_query = TenantScopeSpec.for_user(query.current_user).apply(title_query, Document)
+        visibility_spec = self._visibility_spec_for_user(query.current_user)
+        if visibility_spec is not None:
+            title_query = visibility_spec.apply(title_query, Document)
         docs = title_query.limit(query.limit).all()
         return [doc.title for doc in docs]
 
@@ -345,13 +353,18 @@ class SearchQueryHandler:
 
     def _load_facets(self, query: SearchFacetsQuery) -> dict:
         tenant_scope_spec = TenantScopeSpec.for_user(query.current_user)
+        visibility_spec = self._visibility_spec_for_user(query.current_user)
 
         category_query = self.db.query(Document.category, text("COUNT(*)"))
         category_query = tenant_scope_spec.apply(category_query, Document)
+        if visibility_spec is not None:
+            category_query = visibility_spec.apply(category_query, Document)
         categories = category_query.group_by(Document.category).all()
 
         status_query = self.db.query(Document.status, text("COUNT(*)"))
         status_query = tenant_scope_spec.apply(status_query, Document)
+        if visibility_spec is not None:
+            status_query = visibility_spec.apply(status_query, Document)
         statuses = status_query.group_by(Document.status).all()
 
         return {

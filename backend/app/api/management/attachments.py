@@ -52,9 +52,9 @@ def _verify_download_ticket(
     """Validate a signed download ticket and return the authenticated user."""
     try:
         parts = ticket.split(":")
-        if len(parts) != 4:
+        if len(parts) != 5:
             raise ValueError("malformed ticket")
-        user_id_str, doc_id_str, att_id_str, ts_str = parts
+        user_id_str, doc_id_str, att_id_str, ts_str, provided_sig = parts
         user_id = int(user_id_str)
         ticket_doc_id = int(doc_id_str)
         ticket_att_id = int(att_id_str)
@@ -71,14 +71,20 @@ def _verify_download_ticket(
             detail="Invalid download ticket",
         )
 
-    if int(time.time()) - ts > _DOWNLOAD_TICKET_TTL_SECONDS:
+    now = int(time.time())
+    if ts > now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid download ticket",
+        )
+
+    if now - ts > _DOWNLOAD_TICKET_TTL_SECONDS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Download ticket expired",
         )
 
     expected_sig = _sign_download_ticket(user_id, document_id, attachment_id, ts)
-    provided_sig = _sign_download_ticket(user_id, ticket_doc_id, ticket_att_id, ts)
     if not hmac.compare_digest(expected_sig, provided_sig):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -104,15 +110,48 @@ class DownloadTicketResponse(BaseModel):
     expires_in: int
 
 
+@router.get("/attachments/{attachment_id}/pdf-status")
+def get_pdf_export_status(
+    attachment_id: int,
+    user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Check PDF export generation status for an attachment."""
+    from app.models import AttachmentConversionJob
+    job = (
+        db.query(AttachmentConversionJob)
+        .filter(
+            AttachmentConversionJob.attachment_id == attachment_id,
+            AttachmentConversionJob.job_type == "pdf_export",
+        )
+        .first()
+    )
+    if not job:
+        return {"status": "none", "attachment_id": attachment_id}
+    return {
+        "status": job.status,
+        "attachment_id": attachment_id,
+        "attempts": job.attempts,
+        "max_attempts": job.max_attempts,
+        "last_error": job.last_error if job.status == "failed" else None,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+    }
+
+
 @router.post("/attachments/download-ticket", response_model=DownloadTicketResponse)
 def issue_download_ticket(
     body: DownloadTicketRequest,
     current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Issue a short-lived signed download ticket (AD-002).
 
     The ticket replaces passing raw JWT tokens as URL query parameters.
     """
+    # H-02: Verify the user can actually access this document before issuing a ticket
+    AttachmentService.get_attachment(db, body.document_id, body.attachment_id, current_user)
+
     ts = int(time.time())
     sig = _sign_download_ticket(current_user.id, body.document_id, body.attachment_id, ts)
     ticket = f"{current_user.id}:{body.document_id}:{body.attachment_id}:{ts}"

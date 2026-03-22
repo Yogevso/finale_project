@@ -142,6 +142,7 @@ def test_duplicate_bulk_company_assignment_replays_response(
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
         created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
     )
     document.assigned_companies = [test_tenant]
     db.add(document)

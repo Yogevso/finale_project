@@ -16,8 +16,8 @@ class CreateSupportTicketTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "subject": {"type": "string", "description": "Ticket subject"},
-            "description": {"type": "string", "description": "Detailed description of the issue"},
+            "subject": {"type": "string", "description": "Ticket subject", "maxLength": 255},
+            "description": {"type": "string", "description": "Detailed description of the issue", "maxLength": 5000},
             "priority": {
                 "type": "string",
                 "description": "Priority level (default: normal)",

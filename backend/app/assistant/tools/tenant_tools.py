@@ -73,8 +73,8 @@ class UpdateTenantTool(BaseTool):
         "type": "object",
         "properties": {
             "tenant_id": {"type": "integer", "description": "The tenant ID"},
-            "name": {"type": "string", "description": "New tenant name (optional)"},
-            "contact_email": {"type": "string", "description": "New contact email (optional)"},
+            "name": {"type": "string", "description": "New tenant name (optional)", "maxLength": 255},
+            "contact_email": {"type": "string", "description": "New contact email (optional)", "maxLength": 255},
             "is_active": {"type": "boolean", "description": "Activate or deactivate (optional)"},
         },
         "required": ["tenant_id"],
