@@ -9,7 +9,7 @@ from alembic import op
 
 # revision identifiers
 revision = "h13_missing_indexes"
-down_revision = "20260320_0001_c13_document_tenant_not_null"
+down_revision = "c13_doc_tenant_not_null"
 branch_labels = None
 depends_on = None
 
