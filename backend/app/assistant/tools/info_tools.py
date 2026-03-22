@@ -73,21 +73,25 @@ class SearchPublicDocumentsTool(BaseTool):
     }
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+        from sqlalchemy import or_
+
         from app.models import UserRole, document_company_assignments
 
         q = params["query"].strip()
         limit = min(params.get("limit", 10), 50)
 
-        # Split query into words so "API documentation" matches "API Reference Index"
+        # Build OR conditions: any word matching any field is a hit
         words = q.split()
-        query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
+        conditions = []
         for word in words:
             pat = f"%{word}%"
-            query = query.filter(
-                (Document.title.ilike(pat))
-                | (Document.description.ilike(pat))
-                | (Document.tags.ilike(pat))
-            )
+            conditions.append(Document.title.ilike(pat))
+            conditions.append(Document.description.ilike(pat))
+            conditions.append(Document.tags.ilike(pat))
+        query = db.query(Document).filter(
+            Document.status == DocumentStatus.ACTIVE,
+            or_(*conditions),
+        )
 
         try:
             role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
