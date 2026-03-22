@@ -30,5 +30,5 @@ def get_chat_db():
         db.close()
 
 
-# Backward compatibility
+# Backward compatibility — use get_core_db() for new code
 get_db = get_core_db

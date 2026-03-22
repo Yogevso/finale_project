@@ -30,6 +30,7 @@ FastAPI backend for the Intel Documentation Platform.
 ## Important Paths
 
 - `app/api/`: FastAPI route modules (management, portal, public, viewer, bff)
+- `app/db/`: Multi-database engine module (core, analytics, chat)
 - `app/application/`: command/query handlers, bus/pipeline orchestration
 - `app/domain/`: aggregates, value objects, specifications, workflows
 - `app/infrastructure/`: adapters and persistence-facing components
@@ -62,12 +63,45 @@ API docs: http://localhost:8000/api/v1/docs | http://localhost:8000/api/v1/redoc
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `SECRET_KEY` | **Yes** | — | Signing key for JWT and sessions |
-| `DATABASE_URL` | No | `sqlite:///./data/portal.db` | Database connection string |
+| `DATABASE_URL` | No | `sqlite:///./data/portal.db` | Core database connection string |
+| `ANALYTICS_DATABASE_URL` | No | *(falls back to `DATABASE_URL`)* | Analytics database (audit logs, security events, NPS) |
+| `CHAT_DATABASE_URL` | No | *(falls back to `DATABASE_URL`)* | Chat database (notifications, assistant, collaboration) |
 | `OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama LLM service URL |
 | `ASSISTANT_MODEL` | No | `llama3.1:8b` | Ollama model name |
 | `REDIS_URL` | No | `redis://redis:6379/0` | Redis for rate limiting and pub/sub |
 
 Feature flags: see `../docs/feature-rollout-flags.md`.
+
+## Multi-Database Architecture
+
+The backend uses a 3-database split to isolate workloads and reduce lock contention:
+
+| Database | Engine | Tables | Purpose |
+| --- | --- | --- | --- |
+| **Core** | `DATABASE_URL` | 45 (users, documents, versions, etc.) | Primary business entities |
+| **Analytics** | `ANALYTICS_DATABASE_URL` | 7 (audit_logs, security_events, nps_surveys, etc.) | Write-heavy analytics and audit trail |
+| **Chat** | `CHAT_DATABASE_URL` | 10 (notifications, chats, assistant_conversations, etc.) | Real-time messaging and AI assistant |
+
+When `ANALYTICS_DATABASE_URL` or `CHAT_DATABASE_URL` are not set, they automatically fall back to `DATABASE_URL` (single-DB mode). This ensures backward compatibility.
+
+**Key files:**
+- `app/db/bases.py` — `CoreBase`, `AnalyticsBase`, `ChatBase` declarative bases
+- `app/db/engines.py` — 3 independent engine instances
+- `app/db/sessions.py` — 3 session factories
+- `app/db/dependencies.py` — `get_db()`, `get_analytics_db()`, `get_chat_db()` FastAPI deps
+
+**Data migration:** To split an existing single database into 3:
+```bash
+python scripts/split_databases.py          # Dry run (default)
+python scripts/split_databases.py --execute   # Copy data to analytics.db and chat.db
+```
+
+**Alembic migrations** run independently per database:
+```bash
+alembic upgrade head                       # Core
+alembic -n analytics upgrade head          # Analytics
+alembic -n chat upgrade head               # Chat
+```
 
 ## AI Assistant
 

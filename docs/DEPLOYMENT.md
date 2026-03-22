@@ -109,7 +109,9 @@ cp .env.example .env
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `DATABASE_URL` | `sqlite:///./data/portal.db` | **Yes (prod)** | Database connection URL |
+| `DATABASE_URL` | `sqlite:///./data/portal.db` | **Yes (prod)** | Core database connection URL |
+| `ANALYTICS_DATABASE_URL` | *(falls back to `DATABASE_URL`)* | No | Analytics database (audit logs, security events, NPS) |
+| `CHAT_DATABASE_URL` | *(falls back to `DATABASE_URL`)* | No | Chat database (notifications, assistant, collaboration) |
 | `SQL_ECHO` | `False` | No | Log SQL queries (debug only) |
 
 ### Storage Settings
@@ -171,6 +173,8 @@ Create a `.env.prod` file with production settings:
 # Required
 SECRET_KEY=your-64-char-secret-key-here
 DATABASE_URL=postgresql://portal:password@db:5432/portal
+ANALYTICS_DATABASE_URL=postgresql://portal:password@db:5432/portal_analytics
+CHAT_DATABASE_URL=postgresql://portal:password@db:5432/portal_chat
 APP_ENV=production
 DEBUG=False
 
@@ -191,27 +195,57 @@ SMTP_PASSWORD=smtp-password
 
 ## Database Migrations
 
+The platform uses 3 independent database migration chains via Alembic named sections.
+
 ### Running Migrations
 
 ```bash
-# Inside backend container
-docker-compose exec backend alembic upgrade head
+# Inside backend container — all 3 databases
+docker-compose exec backend alembic upgrade head                # Core
+docker-compose exec backend alembic -n analytics upgrade head   # Analytics
+docker-compose exec backend alembic -n chat upgrade head        # Chat
 
-# Check current revision
+# Check current revision per database
 docker-compose exec backend alembic current
+docker-compose exec backend alembic -n analytics current
+docker-compose exec backend alembic -n chat current
 
-# Create new migration
+# Create new migration (specify target with -n)
 docker-compose exec backend alembic revision --autogenerate -m "description"
+docker-compose exec backend alembic -n analytics revision --autogenerate -m "description"
 ```
+
+> **Note:** The Docker entrypoint automatically runs `alembic upgrade head` for all 3 databases on container startup.
+
+### Data Migration (Single DB → 3 DBs)
+
+To split an existing single-database deployment into 3 separate databases:
+
+```bash
+# 1. Dry run — preview what will be copied (default, no data written)
+python scripts/split_databases.py
+
+# 2. Execute — copy analytics/chat rows to their new databases
+python scripts/split_databases.py --execute
+
+# 3. Cleanup — delete migrated rows from the source (after verification)
+python scripts/split_databases.py --execute --cleanup
+```
+
+The migration script is idempotent — running it multiple times skips already-migrated rows.
 
 ### Backup Before Migration
 
 ```bash
-# PostgreSQL backup
-pg_dump -U portal -h localhost portal > backup_$(date +%Y%m%d).sql
+# PostgreSQL backup (all 3 databases)
+pg_dump -U portal -h localhost portal > backup_core_$(date +%Y%m%d).sql
+pg_dump -U portal -h localhost portal_analytics > backup_analytics_$(date +%Y%m%d).sql
+pg_dump -U portal -h localhost portal_chat > backup_chat_$(date +%Y%m%d).sql
 
 # SQLite backup
 cp data/portal.db data/portal_$(date +%Y%m%d).db
+cp data/analytics.db data/analytics_$(date +%Y%m%d).db
+cp data/chat.db data/chat_$(date +%Y%m%d).db
 ```
 
 ---
@@ -275,6 +309,8 @@ Before going to production:
 - [ ] `DEBUG` is set to `False`
 - [ ] `APP_ENV` is set to `production`
 - [ ] Database uses PostgreSQL (not SQLite)
+- [ ] Analytics and chat databases are configured (separate or same instance)
+- [ ] Data migration script has been run if upgrading from single-DB
 - [ ] S3 storage is enabled for file uploads
 - [ ] HTTPS is configured (via reverse proxy)
 - [ ] CORS origins are properly restricted
