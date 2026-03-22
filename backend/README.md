@@ -1,18 +1,21 @@
 # Backend
 
-FastAPI backend for the Documentation Platform.
+FastAPI backend for the Intel Documentation Platform.
 
 ## Highlights
 
 - Multi-tenant API surface (`management`, `portal`, `public`, `bff`, `viewer` routes)
 - Layered architecture (`domain`, `application`, `infrastructure`, `web`)
-- CQRS-lite handlers, command/query bus middleware, and process managers
-- Durable outbox, idempotency, optimistic concurrency, projection cache
-- Policy decision point and policy explanation model
-- Observability primitives (use-case telemetry, SLOs, burn-rate checks)
-- Selective event-sourcing pilot for review workflow (feature-flagged)
-- AI assistant with Ollama LLM, RAG pipeline (ChromaDB), and tool-augmented generation
+- 6-tier RBAC with centralized policy decision point and tenant isolation
+- JWT + httpOnly cookie auth with session management, account lockout, concurrent session limits
+- HMAC-signed tamper-evident audit logging
+- Optimistic concurrency (`row_version` / ETag) on documents and versions
+- Review workflow with audience snapshots, drift detection, and version locking
+- AI assistant with Ollama LLM, RAG pipeline (ChromaDB), and 29 tool-augmented responses
 - DOCX/PPTX content extraction and ingestion pipeline
+- Global exception handler (safe 500s — no internal leak)
+- Non-root Docker container via gosu privilege drop
+- Required `SECRET_KEY` — no hardcoded fallbacks
 
 ## API Domains
 
@@ -52,37 +55,31 @@ Run server:
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-API docs:
+API docs: http://localhost:8000/api/v1/docs | http://localhost:8000/api/v1/redoc
 
-- `http://localhost:8000/api/v1/docs`
-- `http://localhost:8000/api/v1/redoc`
+## Environment Variables
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `SECRET_KEY` | **Yes** | — | Signing key for JWT and sessions |
+| `DATABASE_URL` | No | `sqlite:///./data/portal.db` | Database connection string |
+| `OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama LLM service URL |
+| `ASSISTANT_MODEL` | No | `llama3.1:8b` | Ollama model name |
+| `REDIS_URL` | No | `redis://redis:6379/0` | Redis for rate limiting and pub/sub |
+
+Feature flags: see `../docs/feature-rollout-flags.md`.
 
 ## AI Assistant
 
-The backend includes a self-hosted AI assistant powered by Ollama:
+Self-hosted AI assistant powered by Ollama:
 
 - **LLM**: llama3.1:8b (served via Ollama on port 11434)
 - **Vector Store**: ChromaDB for document embeddings and RAG retrieval
-- **Tools**: document search, analytics queries, content extraction
+- **Tools**: 29 tools — document search, analytics queries, content extraction
+- **Security**: All RAG tools enforce `DocumentAccessPolicy.can_view_document()` before loading content
 - **Architecture**: `app/assistant/` — engine, conversation manager, tool router, prompts, RAG modules
 
-Requires the Ollama service running (included in Docker Compose).
-
-## Key Environment Flags
-
-Architecture rollout and rollback flags:
-
-- `FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE`
-- `FEATURE_FLAG_PROJECTION_CACHE`
-- `FEATURE_FLAG_EVENT_SOURCING_REVIEW_PILOT`
-
-AI/Assistant:
-
-- `OLLAMA_BASE_URL` (default: `http://ollama:11434`)
-- `OLLAMA_MODEL` (default: `llama3.1:8b`)
-- `OLLAMA_MAX_TOKENS` (default: `2048`)
-
-See full guidance: `../docs/feature-rollout-flags.md`.
+Requires the Ollama service running (included in Docker Compose with `--profile ai`).
 
 ## Quality Gates
 

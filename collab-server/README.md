@@ -7,6 +7,8 @@ Hocuspocus/Yjs server for real-time collaborative editing.
 - JWT-authenticated WebSocket collaboration sessions
 - Yjs CRDT conflict resolution for simultaneous editing
 - Live cursor presence (see where others are editing)
+- Required `JWT_SECRET` environment variable — no hardcoded fallbacks
+- Regex-validated document IDs (`/^\d+$/`) to prevent injection
 - Adapter boundaries for backend token/state contracts
 - Persistence integration with backend APIs
 - Connection/session orchestration services
@@ -32,7 +34,7 @@ npm start
 | --- | --- | --- |
 | `PORT` | `8002` | WebSocket server port |
 | `HOST` | `0.0.0.0` | Bind address |
-| `JWT_SECRET` | — | Must match backend secret |
+| `JWT_SECRET` | — | **Required.** Must match backend `SECRET_KEY` |
 | `BACKEND_URL` | `http://localhost:8000` | Backend API base URL |
 | `BACKEND_API_PREFIX` | `/api/v1` | Backend API prefix |
 | `LOG_LEVEL` | `info` | Logging verbosity |

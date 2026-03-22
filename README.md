@@ -1,153 +1,52 @@
-# Documentation Platform
+# Intel Documentation Platform
 
-[![CI/CD](https://github.com/Yogevso/finale_project/actions/workflows/test.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/test.yml)
+[![CI](https://github.com/Yogevso/finale_project/actions/workflows/ci.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/ci.yml)
+[![Security](https://github.com/Yogevso/finale_project/actions/workflows/security.yml/badge.svg)](https://github.com/Yogevso/finale_project/actions/workflows/security.yml)
 
-A modern, multi-tenant Document Management System built with FastAPI, React, and SQLite. Features rich text editing, version control, file attachments, real-time collaboration, AI-powered assistant with RAG, customer portal with company-based access, and a public viewer portal.
+A multi-tenant document management platform built for Intel. Internal staff create, review, and publish documentation while external customers (Dell, Lenovo, HP, etc.) access company-scoped content through a dedicated portal.
+
+**Stack:** FastAPI + React 18 + TypeScript + Hocuspocus (Yjs CRDT) + Ollama AI + ChromaDB + SQLite/PostgreSQL
 
 ---
 
-## 🚀 Features
+## Features
 
 ### Management Portal (Internal Users)
 
-- **🔐 Authentication & Authorization**
-  - JWT-based authentication with refresh tokens
-  - Role-based access control (System Admin, Admin, Manager, Editor, Viewer, Customer)
-  - Password reset with email verification
-  - Multi-tenancy support with tenant isolation
+- **Authentication & Authorization** — JWT + httpOnly cookie sessions, 6-tier RBAC (System Admin → Customer), bcrypt, account lockout, concurrent session limits, timing-safe comparisons
+- **Document Management** — CRUD, rich text editor (TipTap), categorization/tagging, Draft → Active → Archived workflow, bulk upload (PDF/Word), DOCX/PPTX content extraction
+- **Version Control** — Immutable version history, publish to viewer portal, version comparison, rollback
+- **Review Workflow** — Submit/approve/reject pipeline, audience snapshots with drift detection, stale-company checks at publish time, audience version locking
+- **File Attachments** — Upload PDF, Word, images; S3-compatible storage (AWS S3, MinIO, Azure Blob, local); magic-byte validation; 10 MB default limit
+- **Real-Time Collaboration** — Google Docs-style simultaneous editing, live cursor presence, Yjs CRDT conflict resolution, offline support, snapshots
+- **Comments & Collaboration** — Threaded comments with replies, private comments, inline text anchoring, resolution workflow, @mentions
+- **AI Assistant** — Self-hosted LLM (Ollama llama3.1:8b), RAG pipeline with ChromaDB, 29 tool-augmented responses, document access policy enforcement on all tools
+- **Chat & Messaging** — Real-time direct and group messaging, reactions, threading, online presence, tenant-scoped
+- **Analytics Dashboard** — Engagement, user, content production, feedback metrics, tenant comparison (System Admin), CSV/PDF export with row limits
+- **Support Desk** — Ticket management with tenant isolation, agent assignment with boundary checks, canned responses
+- **Notifications** — Real-time bell with unread count, email notifications, per-user preferences
+- **Search** — Full-text search (FTS5), autocomplete, faceted filtering, saved searches
+- **User & Company Management** — CRUD, role assignment, tenant-scoped, invitation workflow
+- **RBAC & System Setup** — Policy decision point, publish-to-ACL flow, system admin console, HMAC-signed audit logs
+- **Multi-Tenancy** — Complete tenant isolation enforced at service layer, middleware-level context propagation
 
-- **📄 Document Management**
-  - Create, edit, and delete documents
-  - Rich text editor with TipTap (headings, lists, tables, links)
-  - Document categorization and tagging
-  - Draft → Active → Archived workflow
-  - Bulk document upload (PDF/Word)
+### Customer Portal
 
-- **📝 Version Control**
-  - Immutable version history
-  - Publish specific versions to viewer portal
-  - Version comparison and change summaries
-  - Rollback capability
+- **Company-Based Access** — Customers see documents assigned to their company, public documents visible
+- **Engagement** — Submit feedback, view versions, download attachments, search within accessible documents
+- **Support Tickets** — Create and track tickets, reply to agents
+- **AI Assistant** — Portal-scoped assistant with document access policy enforcement
+- **NPS Surveys** — Tenant-scoped with rate limiting
 
-- **📎 File Attachments**
-  - Upload files to documents (PDF, Word, images, etc.)
-  - S3-compatible storage (AWS S3, MinIO, Azure Blob)
-  - Secure download URLs with expiration
-  - File size limits (10MB default)
+### Public Viewer Portal
 
-- **💬 Comments & Collaboration**
-  - Threaded comments with replies
-  - Private comments (admin/editor only)
-  - Inline comments anchored to text
-  - Comment resolution workflow
-  - @mentions and notifications
-
-- **🤝 Real-Time Collaboration**
-  - Google Docs-style simultaneous editing
-  - Live cursor presence (see where others are editing)
-  - Yjs CRDT conflict resolution
-  - Automatic sync with offline support
-  - Collaboration snapshots and history
-
-- **🔔 Notifications**
-  - Real-time notification bell with unread count
-  - Email notifications (document published, comments, replies)
-  - Notification preferences per user
-  - Mark as read / mark all as read
-
-- **📊 Engagement & Analytics**
-  - Document view tracking
-  - Reading progress indicators
-  - Helpful/Not helpful feedback
-  - User bookmarks
-  - Saved searches
-
-- **📈 Analytics Dashboard**
-  - Overview statistics with trend analysis
-  - Engagement analytics (views, downloads, reading progress)
-  - User analytics (role distribution, activity) - Admin+
-  - Content production metrics (documents, versions, reviews)
-  - Feedback analytics with response times
-  - Tenant comparison (System Admin only)
-  - Export reports (CSV/PDF)
-  - Interactive charts with Recharts
-
-- **🤖 AI Assistant**
-  - Self-hosted LLM via Ollama (llama3.1:8b)
-  - RAG pipeline with ChromaDB vector storage
-  - Tool-augmented responses (document search, analytics queries)
-  - Document content extraction and understanding
-  - Conversation history with context management
-
-- **💬 Chat & Messaging**
-  - Real-time direct and group messaging
-  - Group creation and management
-  - Message reactions and threading
-  - Online presence indicators
-
-- **🔍 Search & Filtering**
-  - Full-text search across documents
-  - Filter by category, status, date range
-  - Save and reuse search filters
-  - Recent documents quick access
-
-- **👥 User Management**
-  - CRUD operations for users
-  - Assign roles and permissions
-  - Tenant-scoped user management
-  - Activity audit logs
-
-- **🛠️ System Setup (Phase 1)**
-  - System Admin console for global settings
-  - RBAC policy management with publish-to-ACL flow
-  - System actions logged to audit logs
-
-- **🏢 Multi-Tenancy**
-  - Complete tenant isolation
-  - Super Admin can manage all tenants
-  - Tenant-specific settings and branding
-  - Cross-tenant document sharing (future)
-
-### Customer Portal (Authenticated Customers)
-
-- **🏢 Company-Based Access**
-  - Customers see documents assigned to their company
-  - Company visibility (COMPANY level) for targeted content
-  - Public documents also visible
-  - Secure authenticated access
-
-- **📝 Customer Engagement**
-  - Submit feedback on documents
-  - View document versions
-  - Download attachments
-  - Search within accessible documents
-
-- **👤 Customer Management**
-  - Admin assigns customers to companies
-  - Companies assigned to documents via visibility
-  - Self-service password reset
-
-### Viewer Portal (Public)
-
-- **📖 Document Viewing**
-  - Clean, distraction-free reading experience
-  - Published version access only (PUBLIC visibility)
-  - Table of contents navigation
-  - Print-friendly layout
-
-- **🔍 Discovery**
-  - Browse all public documents
-  - Search and filter
-  - Category-based navigation
-  - Recent and popular documents
-
-- **📥 Downloads**
-  - Download attachments from public documents
-  - Download tracking and analytics
+- **Document Viewing** — Distraction-free reading, published versions only (PUBLIC visibility), table of contents, print-friendly
+- **Discovery** — Browse, search, filter, category/platform navigation
+- **Changelog & Help** — Public-facing change history and help center
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -163,94 +62,57 @@ A modern, multi-tenant Document Management System built with FastAPI, React, and
                     ┌────────────┼─────└─────────────────┘
                     ▼            ▼            ▼
               ┌──────────┐ ┌──────────┐ ┌──────────┐
-              │  SQLite  │ │ ChromaDB │ │ S3/MinIO │
-              │ Database │ │ Vectors  │ │ Storage  │
+              │  SQLite / │ │ ChromaDB │ │  Redis   │
+              │ PostgreSQL│ │ Vectors  │ │  Cache   │
               └──────────┘ └──────────┘ └──────────┘
 ```
 
 ### Technology Stack
 
-| Layer             | Technology                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| **Frontend**      | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor, Recharts              |
-| **Design System** | Zip B (Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette), Dark Mode     |
-| **Real-time**     | Hocuspocus (Yjs CRDT), WebSocket collaboration                                       |
-| **Backend**       | FastAPI 0.115, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0                            |
-| **AI / RAG**      | Ollama (llama3.1:8b), ChromaDB vector store, tool-augmented generation               |
-| **Database**      | SQLite (development), PostgreSQL (production ready)                                  |
-| **Storage**       | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem)                          |
-| **Email**         | aiosmtplib (SMTP), HTML templates                                                    |
-| **Testing**       | Pytest (backend), Vitest (frontend), Playwright E2E, Lighthouse CI                   |
-| **CI/CD**         | GitHub Actions (8 workflows: CI, CD, PR checks, security, architecture, SLO, chaos)  |
-| **Deployment**    | Docker Compose (4 services)                                                          |
+| Layer | Technology |
+| --- | --- |
+| **Frontend** | React 18, TypeScript 5, Vite 5, TailwindCSS 3, TipTap Editor, Recharts |
+| **Design System** | Space Grotesk + IBM Plex Sans, Slate/Sky/Emerald/Rose palette, Dark Mode |
+| **Real-time** | Hocuspocus (Yjs CRDT), WebSocket collaboration |
+| **Backend** | FastAPI 0.115, Python 3.11+, SQLAlchemy 2.0, Pydantic 2.0 |
+| **AI / RAG** | Ollama (llama3.1:8b), ChromaDB vector store, tool-augmented generation |
+| **Database** | SQLite (development), PostgreSQL (production) |
+| **Storage** | S3-compatible (AWS S3, MinIO, Azure Blob, local filesystem) |
+| **Cache** | Redis 7 (rate limiting, collab pub/sub) |
+| **Testing** | Pytest (backend), Vitest (frontend), Playwright E2E, Lighthouse CI |
+| **CI/CD** | GitHub Actions (ci, cd, pr-checks, security, architecture, SLO, chaos) |
+| **Deployment** | Docker Compose (5 services) |
+
+### Repository Layout
+
+```
+backend/          FastAPI app — domain, application, infrastructure layers, AI assistant, tests
+frontend/         React + TypeScript SPA — pages, features, components, e2e tests
+collab-server/    Hocuspocus real-time editing server (Yjs CRDT)
+docs/             ADRs, migration playbooks, architecture docs, SLO/chaos evidence
+scripts/          Migration safety, chaos, observability, scaffolding tools
+data/             Runtime data (SQLite DB, ChromaDB vectors, uploads) — gitignored
+```
 
 ---
 
-## 📦 Project Structure
+## Security
 
-As of 2026-03-20:
+The platform has undergone a comprehensive security audit with all critical and high-priority issues remediated:
 
-- Refactor waves `E` through `Y` are complete.
-- Architecture governance, migration safety, contract testing, and resilience/chaos checks are in place.
-- Wave O observability: use-case telemetry, SLO evaluation, burn-rate alerts.
-- Selective event-sourcing pilot (review workflow) behind a feature flag.
-- Wave X: AI assistant with Ollama + RAG + tool-augmented chat.
-- Wave Y: DOCX/PPTX ingestion pipeline.
-- Audit wave: accessibility, dark mode, skeleton loading, e2e test suites (a11y, performance, responsive, visual, UX).
-
-## Repository Layout
-
-- `backend/`: FastAPI app, domain/application layers, AI assistant, persistence, tests
-- `frontend/`: React + TypeScript SPA (pages, features, components, e2e tests)
-- `collab-server/`: Hocuspocus real-time editing server (Yjs CRDT)
-- `docs/`: ADRs, migration playbooks, architecture docs, SLO and chaos evidence
-- `scripts/`: migration safety, chaos, observability, scaffolding tools
-- `data/`: ChromaDB vector store, uploaded files
-- `plan`: active execution plan and wave progress log
-
-### Typography
-
-- **Display Font**: Space Grotesk (headings)
-- **Body Font**: IBM Plex Sans (text, UI)
-
-### Color Palette
-
-| Color       | Usage                         |
-| ----------- | ----------------------------- |
-| `slate-*`   | Backgrounds, text, borders    |
-| `sky-*`     | Primary actions, links, focus |
-| `emerald-*` | Success, published, positive  |
-| `amber-*`   | Warning, draft, pending       |
-| `rose-*`    | Error, delete, destructive    |
-
-### Component Classes
-
-| Class           | Description               |
-| --------------- | ------------------------- |
-| `surface-card`  | Card with border & shadow |
-| `btn-primary`   | Primary action button     |
-| `btn-secondary` | Secondary outline button  |
-| `btn-ghost`     | Transparent hover button  |
-| `input-field`   | Styled text input         |
-| `select-field`  | Styled dropdown           |
-| `pill`          | Rounded badge/tag         |
-
-Endpoints:
-
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
-- API docs: `http://localhost:8000/api/v1/docs`
-- Collab WS: `ws://localhost:8002`
-
-This project supports three execution modes:
-
-1. Local Development (manual services)
-2. Docker Compose (Development stack)
-3. Docker Compose (Production stack)
+- **Tenant Isolation** — Enforced at service layer; NULL tenant_id rejected (except SYSTEM_ADMIN); cross-tenant operations blocked on NPS, support, chat, agent assignment, and document queries
+- **Non-Root Container** — Backend runs as a non-root user via gosu privilege drop in the entrypoint
+- **No Hardcoded Secrets** — `SECRET_KEY` and `JWT_SECRET` are required environment variables (docker-compose fails if missing)
+- **Input Validation** — Magic-byte file validation (including WebP RIFF+WEBP check), DOMPurify on frontend HTML, regex validation on collab-server document IDs
+- **Review Integrity** — Audience version lock prevents publish to unintended companies after approval
+- **Rate Limiting** — Per-IP rate limiting on auth and API paths via Redis-backed middleware
+- **Audit Logging** — HMAC-signed tamper-evident audit trail; 403 DomainErrors logged with user context
+- **Global Error Handling** — Unhandled exceptions return safe 500 responses without leaking internals
+- **CI Security Gates** — `security.yml` workflow fails on vulnerabilities (no `continue-on-error`); `ci.yml` enforces `--cov-fail-under=70`
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.11+
 - Node.js 20+
@@ -258,86 +120,30 @@ This project supports three execution modes:
 
 ---
 
-# 🧪 Option 1: Local Development (Manual Services)
-
-### Backend (FastAPI)
+## Quick Start (Docker Compose)
 
 ```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate
+# 1. Create .env from template
+cp .env.example .env
+# Edit .env — set SECRET_KEY and JWT_SECRET (required)
 
-# macOS / Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Backend:
-
-- http://localhost:8000
-- Swagger: http://localhost:8000/api/v1/docs
-
----
-
-### Frontend (React + Vite)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-- Frontend: http://localhost:3000
-
----
-
-### Real-time Collaboration Server (Hocuspocus + Yjs)
-
-```bash
-cd collab-server
-npm install
-npm run dev
-```
-
-- WebSocket: ws://localhost:8002
-- Health (dev): http://localhost:8003/health
-
----
-
-### Local Access Summary
-
-| Service     | URL                               |
-| ----------- | --------------------------------- |
-| Frontend    | http://localhost:3000             |
-| Backend API | http://localhost:8000             |
-| API Docs    | http://localhost:8000/api/v1/docs |
-| Collab WS   | ws://localhost:8002               |
-
----
-
-# 🐳 Option 2: Docker Compose (Development)
-
-```bash
+# 2. Start all services
 docker compose up -d --build
+
+# 3. (Optional) Start with AI assistant
+docker compose --profile ai up -d --build
 ```
 
-Services started:
+Services:
 
-- Backend (8000)
-- Frontend (3000)
-- Collab Server (8002 + 8003)
-- Ollama LLM (11434)
-
-Access:
-
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8000
-- Swagger: http://localhost:8000/api/v1/docs
-- Collab WS: ws://localhost:8002
-- Ollama API: http://localhost:11434
+| Service | URL | Port |
+| --- | --- | --- |
+| Frontend | http://localhost:3000 | 3000 |
+| Backend API | http://localhost:8000 | 8000 |
+| Swagger UI | http://localhost:8000/api/v1/docs | 8000 |
+| Collab WS | ws://localhost:8002 | 8002 |
+| Redis | — | 6379 |
+| Ollama (optional) | http://localhost:11434 | 11434 |
 
 Stop:
 
@@ -345,7 +151,7 @@ Stop:
 docker compose down
 ```
 
-Reset database (⚠ deletes all data):
+Reset database (deletes all data):
 
 ```bash
 docker compose down -v
@@ -353,216 +159,98 @@ docker compose down -v
 
 ---
 
-# 🚀 Option 3: Docker Compose (Production)
+## Local Development
 
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-Services started:
-
-- Backend (container 8000 → exposed as 8001)
-- Frontend (80 / 443)
-- Collab Server (8002)
-- Optional Redis (profile: with-redis)
-
-Production access:
-
-| Service     | URL                |
-| ----------- | ------------------ |
-| Frontend    | http://<host>      |
-| Backend API | http://<host>:8001 |
-| Collab WS   | ws://<host>:8002   |
-
-Enable Redis scaling:
-
-```bash
-docker compose -f docker-compose.prod.yml --profile with-redis up -d
-```
-
-Stop production:
-
-```bash
-docker compose -f docker-compose.prod.yml down
-```
-
----
-
-# 🧪 Running Tests
-
-Backend:
+### Backend
 
 ```bash
 cd backend
-pytest -v
+python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS / Linux
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Frontend:
+### Frontend
 
 ```bash
 cd frontend
-npm test
-npm run test:e2e
+npm install
+npm run dev
+```
+
+### Collaboration Server
+
+```bash
+cd collab-server
+npm install
+npm run dev
 ```
 
 ---
 
-# 🩺 Health Endpoints
-
-Backend:
-
-- `/health` (development)
-- `/ready` (production)
-
-Collab Server:
-
-- `/health` (port 8003 in development)
-
----
-
-# 📦 Persistent Docker Volumes
-
-- backend-data
-- backend-uploads
-- redis-data (if enabled)
-
-⚠ Use `docker compose down -v` only if you want to wipe all stored data.
-
-## 🔑 Default Users
-
-| Username  | Password    | Role         | Description                           |
-| --------- | ----------- | ------------ | ------------------------------------- |
-| sysadmin  | sysadmin123 | System Admin | Full system access, manage all admins |
-| admin     | admin123    | Admin        | Manage users, companies, settings     |
-| manager   | manager123  | Manager      | Publish, delete, approve reviews      |
-| editor    | editor123   | Editor       | Create, edit documents, comments      |
-| viewer    | viewer123   | Viewer       | Read-only internal access             |
-| customer1 | customer123 | Customer     | Customer portal access (Company A)    |
-| customer2 | customer123 | Customer     | Customer portal access (Company B)    |
-
----
+## Testing
 
 ```bash
+# Backend
+cd backend
+pytest tests/ -v                    # 262+ tests
+ruff check app/ tests/              # Lint
+ruff format app/ tests/ --check     # Format check
+
+# Frontend
 cd frontend
-npm run lint
-npm run build
-npm run test -- --run
-```
+npm test -- --run                   # Unit tests (Vitest)
+npm run test:e2e                    # E2E tests (Playwright) — 278 tests
 
-Collab server:
-
-```bash
+# Collab server
 cd collab-server
 npm run typecheck
 npm run test
 ```
 
-Wave O SLO evaluation:
+---
 
-### Backend Tests (262+ tests)
+## Environment Variables
 
-```bash
-python scripts/observability/evaluate_slo_burn_rate.py \
-  --telemetry-file docs/slo/samples/sample-telemetry.json \
-  --slo-file docs/slo/use-case-slos.json \
-  --report-file docs/slo/evidence/latest-slo-burn-rate-report.json \
-  --fail-on-critical
-```
+Copy `.env.example` to `.env` before running. Required variables:
 
-### Frontend E2E Tests (278 tests - 100% pass rate)
-
-```bash
-cd frontend
-npm test           # Unit tests (Vitest)
-npm run test:e2e   # E2E tests (Playwright)
-
-Primary workflows in `.github/workflows/`:
-
-### Linting
-
-```bash
-# Backend
-cd backend
-ruff check app/
-ruff format app/
-
-## Key Documentation
-
-- [Execution plan](./plan)
-- [Migration playbooks](./docs/migrations/README.md)
-- [ADRs](./docs/adr/README.md)
-- [Feature rollout flags](./docs/feature-rollout-flags.md)
-- [SLO docs](./docs/slo/README.md)
-- [Chaos suite docs](./scripts/chaos/README.md)
-
-## License
+| Variable | Required | Description |
+| --- | --- | --- |
+| `SECRET_KEY` | **Yes** | Backend signing key (`openssl rand -hex 32`) |
+| `JWT_SECRET` | **Yes** | Collab server JWT validation secret (must match backend) |
+| `DATABASE_URL` | No | Default: `sqlite:///./data/portal.db` |
+| `OLLAMA_BASE_URL` | No | Default: `http://ollama:11434` |
+| `REDIS_URL` | No | Default: `redis://redis:6379/0` |
 
 ---
 
-## 📋 API Documentation
+## Default Users (Development)
 
-### Authentication
-
-| Method | Endpoint                           | Description               |
-| ------ | ---------------------------------- | ------------------------- |
-| POST   | `/api/auth/login`                  | Login and get tokens      |
-| POST   | `/api/auth/logout`                 | Logout current session    |
-| POST   | `/api/auth/refresh`                | Refresh access token      |
-| POST   | `/api/auth/password-reset/request` | Request password reset    |
-| POST   | `/api/auth/password-reset/reset`   | Reset password with token |
-
-### Documents
-
-| Method | Endpoint                | Description          |
-| ------ | ----------------------- | -------------------- |
-| GET    | `/api/documents`        | List documents       |
-| POST   | `/api/documents`        | Create document      |
-| GET    | `/api/documents/{id}`   | Get document         |
-| PUT    | `/api/documents/{id}`   | Update document      |
-| DELETE | `/api/documents/{id}`   | Delete document      |
-| POST   | `/api/documents/upload` | Upload PDF/Word file |
-
-### Versions
-
-| Method | Endpoint                       | Description     |
-| ------ | ------------------------------ | --------------- |
-| GET    | `/api/documents/{id}/versions` | List versions   |
-| POST   | `/api/documents/{id}/versions` | Create version  |
-| POST   | `/api/versions/{id}/publish`   | Publish version |
-
-### Comments
-
-| Method | Endpoint                       | Description    |
-| ------ | ------------------------------ | -------------- |
-| GET    | `/api/documents/{id}/comments` | List comments  |
-| POST   | `/api/documents/{id}/comments` | Add comment    |
-| PUT    | `/api/comments/{id}`           | Update comment |
-| DELETE | `/api/comments/{id}`           | Delete comment |
-| PUT    | `/api/comments/{id}/resolve`   | Resolve thread |
-
-### Notifications
-
-| Method | Endpoint                          | Description          |
-| ------ | --------------------------------- | -------------------- |
-| GET    | `/api/notifications`              | List notifications   |
-| GET    | `/api/notifications/unread-count` | Get unread count     |
-| POST   | `/api/notifications/mark-read`    | Mark as read         |
-| DELETE | `/api/notifications`              | Delete notifications |
-
-### Full API documentation available at `/api/v1/docs` (Swagger UI) or `/api/v1/redoc` (ReDoc).
+| Username | Password | Role | Description |
+| --- | --- | --- | --- |
+| sysadmin | sysadmin123 | System Admin | Full system access |
+| admin | admin123 | Admin | Manage users, companies, settings |
+| manager | manager123 | Manager | Publish, approve reviews |
+| editor | editor123 | Editor | Create, edit documents |
+| viewer | viewer123 | Viewer | Read-only internal access |
+| customer1 | customer123 | Customer | Customer portal (Company A) |
+| customer2 | customer123 | Customer | Customer portal (Company B) |
 
 ---
 
-## 🔄 CI/CD Pipeline
+## CI/CD
 
 GitHub Actions workflows in `.github/workflows/`:
 
 | Workflow | Purpose |
 | --- | --- |
-| `ci.yml` | Lint, test, build (backend + frontend) |
+| `ci.yml` | Lint, test (70% coverage gate), build |
 | `cd.yml` | Continuous deployment |
-| `pr-checks.yml` | Pull request validation gates |
-| `security.yml` | Security scanning |
+| `pr-checks.yml` | Pull request validation |
+| `security.yml` | Dependency vulnerability scanning (fails on findings) |
 | `architecture-fitness.yml` | Architecture compliance checks |
 | `architecture-governance.yml` | Governance rules enforcement |
 | `slo-burn-rate.yml` | SLO burn-rate monitoring |
@@ -570,53 +258,61 @@ GitHub Actions workflows in `.github/workflows/`:
 
 ---
 
-## 📈 Roadmap
+## Key Documentation
 
-### Completed ✅
-
-- [x] User authentication & authorization (JWT, RBAC, multi-tenancy)
-- [x] Document CRUD with rich text (TipTap)
-- [x] Version control with publishing
-- [x] File attachments (S3-compatible)
-- [x] Threaded & inline comments
-- [x] Notifications (in-app + email)
-- [x] Multi-tenancy with tenant isolation
-- [x] Public viewer portal
-- [x] Search & saved searches
-- [x] Engagement tracking & bookmarks
-- [x] Customer Portal (company-based document access, feedback, NPS)
-- [x] Advanced analytics dashboard (Overview, Engagement, Users, Content, Feedback, Tenant)
-- [x] Real-time collaboration (TipTap + Yjs + Hocuspocus, presence, offline, snapshots)
-- [x] AI-powered assistant (Ollama + RAG + ChromaDB + tool-augmented chat)
-- [x] Real-time chat & messaging (direct, groups, reactions)
-- [x] DOCX/PPTX content ingestion pipeline
-- [x] Dark mode support
-- [x] Accessibility audit & improvements (WCAG compliance)
-- [x] Skeleton loading states & performance optimizations
-- [x] E2E test suites (a11y, performance, responsive, visual, UX)
-- [x] Architecture governance & SLO monitoring
-- [x] GDPR compliance endpoints
-
-### Planned 🔜
-
-- [ ] Document templates
-- [ ] Workflow approvals
-- [ ] Mobile app (React Native)
+- [App Feature Map](./APP_FEATURE_MAP.md) — UI areas, roles, routes, and review walkthroughs
+- [Architecture](./docs/ARCHITECTURE.md) — System design and component relationships
+- [ADRs](./docs/adr/) — Architecture decision records
+- [Migration Playbooks](./docs/migrations/) — Database migration guides
+- [Feature Rollout Flags](./docs/feature-rollout-flags.md) — Feature flag reference
+- [SLO Docs](./docs/slo/) — Service level objectives
+- [Authorization Matrix](./docs/AUTHORIZATION_MATRIX.md) — Role/route permission mapping
+- [API Examples](./docs/API_EXAMPLES.md) — API usage examples
 
 ---
 
-## 📄 License
+## API Documentation
 
-MIT License - See [LICENSE](LICENSE) for details.
+Interactive API docs are available when the backend is running:
+
+- **Swagger UI:** http://localhost:8000/api/v1/docs
+- **ReDoc:** http://localhost:8000/api/v1/redoc
 
 ---
 
-## 🤝 Contributing
+## Roadmap
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Completed
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+- User authentication & authorization (JWT, RBAC, multi-tenancy)
+- Document CRUD with rich text (TipTap)
+- Version control with publishing and review workflow
+- File attachments (S3-compatible)
+- Threaded & inline comments
+- Notifications (in-app + email)
+- Multi-tenancy with tenant isolation
+- Public viewer portal
+- Search & saved searches
+- Customer Portal (company-based access, feedback, NPS, support)
+- Analytics dashboard (engagement, users, content, feedback, tenant)
+- Real-time collaboration (TipTap + Yjs + Hocuspocus)
+- AI assistant (Ollama + RAG + ChromaDB + tool-augmented chat)
+- Real-time chat & messaging (direct, groups, reactions)
+- DOCX/PPTX content ingestion pipeline
+- Dark mode, accessibility audit (WCAG), skeleton loading
+- E2E test suites (a11y, performance, responsive, visual, UX)
+- Architecture governance & SLO monitoring
+- GDPR compliance endpoints
+- Full security audit and remediation
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
