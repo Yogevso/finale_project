@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.domain.ports import CollaborationStatePort
 from app.models import Document
+
+logger = logging.getLogger(__name__)
 
 
 class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
@@ -33,6 +36,7 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
             self._db.commit()
             return True
         except Exception:
+            logger.warning("Failed to save collaboration state for document %s", document_id, exc_info=True)
             self._db.rollback()
             return False
 
@@ -46,5 +50,6 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
             self._db.commit()
             return True
         except Exception:
+            logger.warning("Failed to clear collaboration state for document %s", document_id, exc_info=True)
             self._db.rollback()
             return False

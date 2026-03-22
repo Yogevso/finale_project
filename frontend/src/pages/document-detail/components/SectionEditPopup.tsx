@@ -8,6 +8,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
+import DOMPurify from 'dompurify'
 import DraftRecoveryNotice from '@/components/DraftRecoveryNotice'
 import VersionDiffView from '@/components/VersionDiffView'
 import { useFocusTrap } from '@/hooks/useAccessibility'
@@ -73,7 +74,7 @@ function createWrapperSerializer(root: HTMLElement): (editorHtml: string) => str
     attributes.forEach((attribute) => {
       wrapper.setAttribute(attribute.name, attribute.value)
     })
-    wrapper.innerHTML = editorHtml
+    wrapper.innerHTML = DOMPurify.sanitize(editorHtml)
     doc.body.appendChild(wrapper)
     return doc.body.innerHTML
   }
@@ -81,7 +82,7 @@ function createWrapperSerializer(root: HTMLElement): (editorHtml: string) => str
 
 function createEditingFrame(html: string): EditingFrame {
   const parser = getDomParser()
-  const doc = parser.parseFromString(html || '', 'text/html')
+  const doc = parser.parseFromString(DOMPurify.sanitize(html || ''), 'text/html')
   const structuralRoot =
     doc.body.children.length === 1 && isStructuralEditingRoot(doc.body.firstElementChild)
       ? (doc.body.firstElementChild as HTMLElement)

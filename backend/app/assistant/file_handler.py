@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -60,9 +61,9 @@ class AssistantFileHandler:
         safe_name = f"{uid}{ext}"
 
         # Ensure upload directory exists
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(UPLOAD_DIR.mkdir, parents=True, exist_ok=True)
         dest = UPLOAD_DIR / safe_name
-        dest.write_bytes(data)
+        await asyncio.to_thread(dest.write_bytes, data)
 
         # Extract text
         extracted = self._extract_text(data, ext, str(dest))

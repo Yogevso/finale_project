@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Optional
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -117,7 +120,7 @@ class ConnectionManager:
             if ws.client_state == WebSocketState.CONNECTED:
                 await ws.send_text(payload)
         except Exception:  # policy: LOSSY — connection already closed; cleanup via disconnect
-            pass  # Connection already closed; cleanup happens on disconnect
+            logger.debug("Failed to send WS payload — connection already closed")
 
     # ------------------------------------------------------------------
     # Introspection

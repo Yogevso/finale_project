@@ -1,5 +1,6 @@
 """Viewer Portal - Public Document API (No Auth Required)"""
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +21,7 @@ from app.services.attachment_service import AttachmentService
 from app.utils.http_headers import build_content_disposition
 
 router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
+logger = logging.getLogger(__name__)
 
 
 def _audience_policy_headers(visibility: DocumentVisibility) -> dict[str, str]:
@@ -257,7 +259,7 @@ def _stream_public_attachment(
                 },
             )
         except Exception:
-            pass  # Fall through to original download
+            logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
 
     attachment, content_stream = AttachmentService.open_original_stream(
         db,

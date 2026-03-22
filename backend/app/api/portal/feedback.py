@@ -65,9 +65,9 @@ async def submit_feedback(
         raise HTTPException(status_code=403, detail="You don't have access to this document")
 
     if document.visibility == DocumentVisibility.COMPANY:
-        # Check if document is assigned to customer's company
-        company_ids = [c.id for c in document.assigned_companies]
-        if current_user.tenant_id not in company_ids:
+        # assigned_companies are Tenant objects — tenant_id matches company.id
+        assigned_tenant_ids = [c.id for c in document.assigned_companies]
+        if current_user.tenant_id not in assigned_tenant_ids:
             raise HTTPException(status_code=403, detail="You don't have access to this document")
 
     # Create feedback

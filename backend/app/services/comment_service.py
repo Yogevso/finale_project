@@ -180,10 +180,14 @@ class CommentService(SessionService):
         )
 
     @staticmethod
-    def _comment_depth(comment: Comment | None) -> int:
+    def _comment_depth(comment: Comment | None, *, max_depth: int = 100) -> int:
         depth = 0
         current = comment
+        seen: set[int] = set()
         while current and current.parent_id is not None:
+            if depth >= max_depth or current.id in seen:
+                break
+            seen.add(current.id)
             depth += 1
             current = current.parent
         return depth
@@ -433,6 +437,7 @@ class CommentService(SessionService):
             return chat.id
         except Exception:
             # Chat bridging is best-effort — never block comment creation
+            logger.debug("Chat bridging failed for comment", exc_info=True)
             return None
 
     def _publish_comment_created_event(

@@ -60,7 +60,7 @@ async def support_websocket(
             if msg.get("event") == "authenticate":
                 token = msg.get("data", {}).get("token")
         except Exception:
-            pass
+            pass  # Auth parse failed; token stays None and connection will be closed below
 
     if not token:
         await websocket.close(code=4001, reason="Authentication failed")

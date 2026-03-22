@@ -47,5 +47,9 @@ export function extractDocumentId(documentName: string): string {
   // The documentName in Hocuspocus is the path after the base URL
   // e.g., "document/123" -> "123"
   const parts = documentName.split('/');
-  return parts[parts.length - 1];
+  const id = parts[parts.length - 1];
+  if (!/^\d+$/.test(id)) {
+    throw new Error(`Invalid document ID: ${id}`);
+  }
+  return id;
 }

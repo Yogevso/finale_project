@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -231,9 +232,9 @@ async def upload_chat_file(
     ext = Path(file.filename or "file").suffix
     storage_name = f"{uuid.uuid4().hex}{ext}"
     chat_dir = CHAT_UPLOAD_DIR / str(chat_id)
-    chat_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(chat_dir.mkdir, parents=True, exist_ok=True)
     file_path = chat_dir / storage_name
-    file_path.write_bytes(data)
+    await asyncio.to_thread(file_path.write_bytes, data)
 
     file_url = f"/api/v1/chats/{chat_id}/files/{storage_name}"
     msg = svc.send_file_message(

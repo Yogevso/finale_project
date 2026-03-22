@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +26,7 @@ from app.utils.http_headers import build_content_disposition
 from app.web.controllers.portal import PortalDocumentsController
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
+logger = logging.getLogger(__name__)
 portal_documents_controller = PortalDocumentsController()
 
 
@@ -48,9 +50,9 @@ def _customer_can_still_access(
     if doc_visibility == DocumentVisibility.INTERNAL:
         return False  # Customers can't access internal docs
     if doc_visibility == DocumentVisibility.COMPANY:
-        # Conservative: allow if the user's tenant matches. Full access
-        # checks are done when the user actually opens the document.
-        return user.tenant_id is not None
+        # Conservative: allow if the user's tenant matches the doc's tenant.
+        # Full access checks are done when the user actually opens the document.
+        return user.tenant_id is not None and doc_tenant_id is not None and user.tenant_id == doc_tenant_id
     return False
 
 
@@ -186,7 +188,7 @@ async def download_customer_attachment(
                 },
             )
         except Exception:
-            pass  # Fall through to original download
+            logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
 
     attachment, content_stream = AttachmentService.open_original_stream(
         db, document_id, attachment_id, current_user=current_user,

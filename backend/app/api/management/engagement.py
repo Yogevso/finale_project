@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -83,7 +83,7 @@ class BookmarkResponse(BaseModel):
 
 class FeedbackCreate(BaseModel):
     is_helpful: bool
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(None, max_length=5000)
 
 
 class FeedbackResponse(BaseModel):

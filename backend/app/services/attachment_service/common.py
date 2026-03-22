@@ -95,7 +95,7 @@ class AttachmentServiceCommonMixin:
         ".jpg": [b"\xff\xd8\xff"],
         ".jpeg": [b"\xff\xd8\xff"],
         ".gif": [b"GIF87a", b"GIF89a"],
-        ".webp": [b"RIFF"],  # RIFF....WEBP (first 4 bytes)
+        ".webp": [b"RIFF"],  # RIFF....WEBP — additional WEBP check at offset 8 below
         # Office Open XML / ZIP-based formats share the ZIP header
         ".docx": [b"PK\x03\x04"],
         ".xlsx": [b"PK\x03\x04"],
@@ -129,6 +129,13 @@ class AttachmentServiceCommonMixin:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File content does not match extension {file_ext}: {original_filename}",
             )
+        # WebP: RIFF header is shared with AVI/WAV, verify "WEBP" at offset 8
+        if file_ext == ".webp":
+            if len(content) < 12 or content[8:12] != b"WEBP":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File content does not match extension {file_ext}: {original_filename}",
+                )
 
     @classmethod
     def get_upload_dir(cls) -> Path:

@@ -51,7 +51,7 @@ type UserUpdateFormData = {
 type UserFormSubmission = UserCreateFormData | UserUpdateFormData
 
 export default function UsersPage() {
-  const { isAdmin, user: currentUser } = useAuth()
+  const { isAdmin, isManager, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const toast = useToast()
@@ -74,13 +74,13 @@ export default function UsersPage() {
       is_active: statusFilter === '' ? undefined : statusFilter,
       search: debouncedSearch || undefined,
     }),
-    enabled: isAdmin,
+    enabled: isManager,
   })
 
   const { data: companiesData } = useQuery({
     queryKey: ['companies'],
     queryFn: () => api.getCompanies(),
-    enabled: isAdmin,
+    enabled: isManager,
   })
 
   const companies = companiesData?.items || []
@@ -89,7 +89,7 @@ export default function UsersPage() {
   const { data: invitationsData, isLoading: isInvitationsLoading } = useQuery({
     queryKey: ['invitations', 'pending'],
     queryFn: () => api.getInvitations({ status: 'pending' as InvitationStatus, per_page: 50 }),
-    enabled: isAdmin,
+    enabled: isManager,
   })
 
   const pendingInvitations = invitationsData?.items || []

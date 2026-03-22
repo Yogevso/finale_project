@@ -3,6 +3,12 @@ set -e
 
 echo "Starting Documentation Platform Backend..."
 
+# Fix volume permissions (runs as root, then drops to appuser)
+if [ "$(id -u)" = "0" ]; then
+    chown -R appuser:appuser /app/data
+    exec gosu appuser "$0" "$@"
+fi
+
 # Ensure data directory exists
 mkdir -p /app/data /app/data/chromadb /app/data/uploads
 

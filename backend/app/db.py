@@ -55,6 +55,7 @@ else:
     # Production-grade pool for PostgreSQL / other RDBMS
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
+    _engine_kwargs["pool_recycle"] = 1800  # Recycle connections after 30 minutes
 
 engine = create_engine(settings.DATABASE_URL, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

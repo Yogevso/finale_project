@@ -313,6 +313,11 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             ):
                 return
 
+            # Guard against concurrent generation: only proceed if status is not already PROCESSING
+            if reader_artifact.status == cls.READER_STATUS_PROCESSING and not force:
+                logger.info("Reader artifact already processing for attachment %s, skipping", attachment_id)
+                return
+
             reader_artifact.status = cls.READER_STATUS_PROCESSING
             reader_artifact.error = None
             reader_artifact.generated_at = None
