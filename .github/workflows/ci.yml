@@ -155,6 +155,7 @@ jobs:
             --cov=app \
             --cov-report=xml \
             --cov-report=term-missing \
+            --cov-fail-under=70 \
             --junitxml=test-results.xml \
             -v
 

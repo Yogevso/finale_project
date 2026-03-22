@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -76,28 +77,33 @@ class _CompanyLookupLRU:
     def __init__(self, *, max_entries: int, ttl_seconds: int):
         self._max_entries = max_entries
         self._ttl_seconds = ttl_seconds
-        self._entries: OrderedDict[int, _CompanyLookupCacheEntry] = OrderedDict()
+        self._entries: OrderedDict[tuple[int | None, int], _CompanyLookupCacheEntry] = OrderedDict()
+        self._lock = threading.RLock()
 
-    def get(self, company_id: int) -> CompanyLookupSnapshot | None:
+    def get(self, company_id: int, tenant_id: int | None = None) -> CompanyLookupSnapshot | None:
+        key = (tenant_id, company_id)
         now = monotonic()
-        entry = self._entries.get(company_id)
-        if entry is None:
-            return None
-        if entry.expires_at <= now:
-            self._entries.pop(company_id, None)
-            return None
-        self._entries.move_to_end(company_id)
-        return entry.snapshot
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                return None
+            if entry.expires_at <= now:
+                self._entries.pop(key, None)
+                return None
+            self._entries.move_to_end(key)
+            return entry.snapshot
 
-    def set(self, snapshot: CompanyLookupSnapshot) -> None:
+    def set(self, snapshot: CompanyLookupSnapshot, tenant_id: int | None = None) -> None:
+        key = (tenant_id, snapshot.id)
         now = monotonic()
-        self._entries[snapshot.id] = _CompanyLookupCacheEntry(
-            snapshot=snapshot,
-            expires_at=now + self._ttl_seconds,
-        )
-        self._entries.move_to_end(snapshot.id)
-        while len(self._entries) > self._max_entries:
-            self._entries.popitem(last=False)
+        with self._lock:
+            self._entries[key] = _CompanyLookupCacheEntry(
+                snapshot=snapshot,
+                expires_at=now + self._ttl_seconds,
+            )
+            self._entries.move_to_end(key)
+            while len(self._entries) > self._max_entries:
+                self._entries.popitem(last=False)
 
 
 class DocumentService(TenantAwareService[Document]):
@@ -133,6 +139,14 @@ class DocumentService(TenantAwareService[Document]):
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             if document.tenant_id != self.tenant_ctx.tenant_id:
                 raise NotFoundError("Document not found")
+
+    _WRITE_ROLES = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR}
+
+    def _verify_write_access(self, document: Document, user: User) -> None:
+        """Verify user can modify this document (tenant + role check)."""
+        self._verify_access(document)
+        if user.role not in self._WRITE_ROLES:
+            raise PermissionDeniedError("Insufficient permissions to modify documents")
 
     def _discover_max_existing_suffix(self, prefix: str) -> int:
         existing = (
@@ -312,11 +326,12 @@ class DocumentService(TenantAwareService[Document]):
 
     def _lookup_company_snapshots(self, company_ids: List[int]) -> dict[int, CompanyLookupSnapshot]:
         """Resolve minimal company metadata with a short-lived LRU cache."""
+        tenant_id = self.tenant_ctx.tenant_id if self.tenant_ctx else None
         snapshots: dict[int, CompanyLookupSnapshot] = {}
         missing_ids: list[int] = []
 
         for company_id in company_ids:
-            cached = self._company_lookup_cache.get(company_id)
+            cached = self._company_lookup_cache.get(company_id, tenant_id=tenant_id)
             if cached is None:
                 missing_ids.append(company_id)
             else:
@@ -336,7 +351,7 @@ class DocumentService(TenantAwareService[Document]):
                     is_active=bool(row.is_active),
                 )
                 snapshots[snapshot.id] = snapshot
-                self._company_lookup_cache.set(snapshot)
+                self._company_lookup_cache.set(snapshot, tenant_id=tenant_id)
 
         return snapshots
 
@@ -810,7 +825,7 @@ class DocumentService(TenantAwareService[Document]):
     ) -> Document:
         """Update document with tenant verification"""
         document = self.get_document(document_id)
-        self._verify_access(document)
+        self._verify_write_access(document, user)
         ensure_if_match_matches(
             if_match=if_match,
             resource_type="document",
@@ -1051,7 +1066,7 @@ class DocumentService(TenantAwareService[Document]):
     def delete_document(self, document_id: int, user: User) -> None:
         """Delete document with tenant verification"""
         document = self.get_document(document_id)
-        self._verify_access(document)
+        self._verify_write_access(document, user)
 
         with UnitOfWork(self.db):
             # Keep audit + delete in one transaction to avoid partial writes.

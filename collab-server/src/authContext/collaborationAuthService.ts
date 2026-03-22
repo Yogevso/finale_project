@@ -4,9 +4,6 @@ import { CollaborationTokenContractAdapter } from '../adapters/collaborationToke
 import type { UserContext } from '../types.js';
 import type { CollaborationPermission } from './contracts.js';
 
-// For development only - production must set JWT_SECRET env var
-const INSECURE_DEV_SECRET = 'your-secret-key-change-in-production';
-
 export interface AuthResult {
   success: boolean;
   user?: UserContext;
@@ -16,29 +13,18 @@ export interface AuthResult {
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  const isProduction = nodeEnv === 'production';
 
   if (!secret) {
-    if (isProduction) {
-      console.error('FATAL: JWT_SECRET environment variable is required in production');
-      process.exit(1);
-    }
-    console.warn('WARNING: JWT_SECRET not set, using insecure default. Set JWT_SECRET for production.');
-    return INSECURE_DEV_SECRET;
-  }
-
-  if (secret === INSECURE_DEV_SECRET && isProduction) {
-    console.error('FATAL: JWT_SECRET is set to insecure default value in production');
+    console.error('FATAL: JWT_SECRET environment variable is required');
     process.exit(1);
   }
 
   if (secret.length < 32) {
-    if (isProduction) {
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    if (nodeEnv === 'production') {
       console.error('FATAL: JWT_SECRET is too short. Use at least 32 characters.');
       process.exit(1);
     }
-    // H-16: Enforce minimum 16 chars even in development
     if (secret.length < 16) {
       console.error('FATAL: JWT_SECRET must be at least 16 characters, even in development.');
       process.exit(1);

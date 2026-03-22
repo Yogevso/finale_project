@@ -119,7 +119,6 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        continue-on-error: true  # Continue if upload fails (code scanning not enabled)
         with:
           category: "/language:${{ matrix.language }}"
 

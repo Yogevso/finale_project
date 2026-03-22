@@ -206,8 +206,13 @@ def _ocr_page(page, page_idx: int, warnings: list[str]) -> str:
         import pytesseract
         from PIL import Image
 
-        # Render page at 300 DPI for OCR quality
-        pix = page.get_pixmap(dpi=300)
+        _OCR_DPI = 150
+        _OCR_MAX_PIXELS = 25_000_000  # ~5000x5000
+
+        pix = page.get_pixmap(dpi=_OCR_DPI)
+        if pix.width * pix.height > _OCR_MAX_PIXELS:
+            warnings.append(f"Page {page_idx + 1}: OCR skipped, page image too large ({pix.width}x{pix.height})")
+            return ""
         img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         text = pytesseract.image_to_string(img).strip()
         if text:

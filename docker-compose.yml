@@ -12,7 +12,7 @@ services:
       - ./data/chromadb:/app/data/chromadb
     environment:
       - APP_ENV=development
-      - SECRET_KEY=${SECRET_KEY:-}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY environment variable is required}
       - DEBUG=true
       - SQL_ECHO=false
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
@@ -65,7 +65,7 @@ services:
     environment:
       - PORT=8002
       - HOST=0.0.0.0
-      - JWT_SECRET=${JWT_SECRET:-dev-only-insecure-key-do-not-use-in-prod}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
       - BACKEND_URL=http://backend:8000
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=debug

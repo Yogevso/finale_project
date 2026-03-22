@@ -9,13 +9,12 @@ env/
 ENV/
 .venv
 
-# SQLite
+# SQLite / Data
 *.db
 *.db.bak.*
 *.sqlite
 *.sqlite3
-data/*.db
-data/*.sqlite
+data/
 
 # IDEs
 .vscode/
@@ -33,7 +32,10 @@ htmlcov/
 .tox/
 backend/tmp_pytest/
 backend/test-output.txt
+backend/test-out2.txt
+backend/test-results.txt
 frontend/test-results/
+frontend/test-output.txt
 
 # Node
 node_modules/
@@ -66,11 +68,15 @@ secrets/
 *.pem
 *.key
 
-# Uploads (development)
+# Uploads & temp files
 uploads/
 temp/
+backend/temp/
 
-# Local manual API payload scratch files (Wave R)
+# Ruff cache
+.ruff_cache/
+
+# Local manual API payload scratch files
 /accept_test.json
 /activate.json
 /activate_user.json
@@ -80,6 +86,14 @@ temp/
 /invite_test.json
 /reactivate.json
 /role_test.json
+
+# Audit & remediation docs (scratch)
+PROJECT_FULL_AUDIT.md
+PROJECT_FULL_AUDIT2.md
+PROJECT_FULL_AUDIT3.md
+AUDIT_REMEDIATION_PLAN.md
+REMEDIATION_PLAN.md
+APP_FEATURE_MAP.md
 
 # Codex / Ralph Loop / Skills
 .agents/

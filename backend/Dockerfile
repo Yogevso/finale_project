@@ -23,6 +23,12 @@ RUN chmod +x /app/docker-entrypoint.sh
 # Create data directory
 RUN mkdir -p /app/data /app/data/chromadb /app/data/uploads
 
+# Create non-root user and give ownership of app directory
+RUN useradd -r -u 1000 -s /bin/false appuser && chown -R appuser:appuser /app
+
+# Install gosu for stepping down from root after fixing volume permissions
+RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+
 # Expose port
 EXPOSE 8000
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from html import escape as html_escape
 from typing import Optional
 
 from fastapi import HTTPException
@@ -135,7 +136,11 @@ class SupportTicketService:
             query = query.filter(SupportTicket.customer_id == current_user.id)
         elif current_user.role != UserRole.SYSTEM_ADMIN:
             # Internal staff see only tickets within their tenant
-            query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
+            if current_user.tenant_id is None:
+                # Staff without a tenant should see nothing (not all unscoped tickets)
+                query = query.filter(SupportTicket.id == -1)  # yields empty result
+            else:
+                query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
 
         if status_filter:
             query = query.filter(SupportTicket.status == status_filter)
@@ -224,7 +229,7 @@ class SupportTicketService:
             ticket_id=ticket_id,
             sender_id=sender.id,
             sender_type=sender_type,
-            content=content.strip(),
+            content=html_escape(content.strip()),
             is_internal_note=is_internal_note,
         )
         self.db.add(msg)
@@ -280,6 +285,10 @@ class SupportTicketService:
             raise HTTPException(status_code=404, detail="Agent not found")
         if agent.role in (UserRole.CUSTOMER, UserRole.VIEWER):
             raise HTTPException(status_code=400, detail="User does not have agent permissions")
+        # Tenant isolation: agent must belong to the same tenant as the ticket
+        if agent.role != UserRole.SYSTEM_ADMIN and ticket.tenant_id is not None:
+            if agent.tenant_id != ticket.tenant_id:
+                raise HTTPException(status_code=403, detail="Agent does not belong to the same tenant as the ticket")
 
         existing = (
             self.db.query(SupportTicketAssignment)
@@ -341,6 +350,10 @@ class SupportTicketService:
             raise HTTPException(status_code=404, detail="Target agent not found")
         if target.role in (UserRole.CUSTOMER, UserRole.VIEWER):
             raise HTTPException(status_code=400, detail="Target user is not an agent")
+        # Tenant isolation: target agent must belong to the same tenant as the ticket
+        if target.role != UserRole.SYSTEM_ADMIN and ticket.tenant_id is not None:
+            if target.tenant_id != ticket.tenant_id:
+                raise HTTPException(status_code=403, detail="Target agent does not belong to the same tenant as the ticket")
 
         # Demote all existing primaries
         self.db.query(SupportTicketAssignment).filter_by(
@@ -448,8 +461,11 @@ class SupportTicketService:
         """Enforce role-based and tenant-scoped access."""
         if user.role == UserRole.SYSTEM_ADMIN:
             return
-        # Tenant isolation for all non-system-admin users
-        if ticket.tenant_id is not None and user.tenant_id is not None and ticket.tenant_id != user.tenant_id:
+        # Tenant isolation: if user has no tenant, deny access to any tenant's tickets
+        if user.tenant_id is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Tenant isolation: user's tenant must match ticket's tenant
+        if ticket.tenant_id is not None and ticket.tenant_id != user.tenant_id:
             raise HTTPException(status_code=403, detail="Access denied")
         if user.role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
             return
@@ -465,7 +481,10 @@ class SupportTicketService:
         if user.role == UserRole.SYSTEM_ADMIN:
             return ticket
         if user.role in (UserRole.ADMIN, UserRole.MANAGER):
-            if ticket.tenant_id is not None and user.tenant_id is not None and ticket.tenant_id != user.tenant_id:
+            # Deny access if user has no tenant
+            if user.tenant_id is None:
+                raise HTTPException(status_code=403, detail="Access denied")
+            if ticket.tenant_id is not None and ticket.tenant_id != user.tenant_id:
                 raise HTTPException(status_code=403, detail="Access denied")
             return ticket
         raise HTTPException(status_code=403, detail="Agent-level access required")

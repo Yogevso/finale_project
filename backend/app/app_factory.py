@@ -105,11 +105,28 @@ class FastAPIAppFactory:
     @staticmethod
     def _configure_exception_handlers(app: FastAPI) -> None:
         @app.exception_handler(DomainError)
-        async def handle_domain_error(_request: Request, exc: DomainError) -> JSONResponse:
+        async def handle_domain_error(request: Request, exc: DomainError) -> JSONResponse:
             """Map domain/application errors to transport-level HTTP responses."""
+            if exc.status_code == 403:
+                logger.warning(
+                    "Access denied: %s %s — %s (error_code=%s)",
+                    request.method,
+                    request.url.path,
+                    exc.message,
+                    exc.error_code,
+                )
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.message, "error_code": exc.error_code},
+            )
+
+        @app.exception_handler(Exception)
+        async def handle_unhandled_exception(_request: Request, exc: Exception) -> JSONResponse:
+            """Catch-all handler to prevent stack trace leakage."""
+            logger.exception("Unhandled exception: %s", exc)
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error"},
             )
 
     @staticmethod
