@@ -194,8 +194,8 @@ def _add_image_block(
 def _is_ocr_enabled() -> bool:
     """Check if OCR is enabled via feature flag."""
     try:
-        from app.config import settings
-        return getattr(settings, "FEATURE_FLAG_PDF_OCR", False)
+        from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
+        return is_backend_feature_enabled(BackendFeatureFlag.PDF_OCR)
     except Exception:
         return False
 

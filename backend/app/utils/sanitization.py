@@ -6,49 +6,55 @@ import html
 import re
 from typing import Optional
 
-# Patterns for dangerous HTML content
-SCRIPT_PATTERN = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
-EVENT_HANDLER_PATTERN = re.compile(r"\s+on\w+\s*=", re.IGNORECASE)
-JAVASCRIPT_URI_PATTERN = re.compile(r"javascript\s*:", re.IGNORECASE)
-DATA_URI_PATTERN = re.compile(r"data\s*:[^,]*;base64", re.IGNORECASE)
+import bleach
+
+# Allowed tags for rich-text content (matches frontend htmlSanitizer.ts allowlist)
+ALLOWED_TAGS = [
+    "a", "article", "b", "blockquote", "br", "caption", "code",
+    "col", "colgroup", "del", "details", "div", "em", "figure",
+    "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "hr",
+    "i", "img", "li", "ol", "p", "pre", "s", "section", "span",
+    "strong", "sub", "summary", "sup", "table", "tbody", "td",
+    "tfoot", "th", "thead", "tr", "u", "ul",
+]
+
+ALLOWED_ATTRIBUTES = {
+    "*": ["class", "id", "role", "aria-label", "aria-expanded"],
+    "a": ["href", "title", "target", "rel"],
+    "img": ["src", "alt", "title", "width", "height"],
+    "table": ["summary"],
+    "th": ["colspan", "rowspan", "scope"],
+    "td": ["colspan", "rowspan"],
+    "col": ["span", "width"],
+    "colgroup": ["span", "width"],
+}
+
+ALLOWED_PROTOCOLS = ["http", "https", "mailto", "tel"]
 
 
 def strip_dangerous_html_patterns(content: str) -> str:
     """
-    Remove dangerous HTML patterns from content.
-    
-    This is a lightweight sanitizer for defense-in-depth. The frontend
-    uses DOMPurify for comprehensive sanitization, but this catches
-    obvious attack vectors at the backend layer.
-    
-    For full HTML sanitization, consider using the 'bleach' library.
+    Sanitize HTML content using bleach with an explicit allowlist.
+
+    Strips all tags/attributes/protocols not in the allowlists.
     """
     if not content:
         return content
-    
-    # Remove <script> tags and their content
-    content = SCRIPT_PATTERN.sub("", content)
-    
-    # Remove event handlers (onclick, onerror, etc.)
-    content = EVENT_HANDLER_PATTERN.sub(" ", content)
-    
-    # Remove javascript: URIs
-    content = JAVASCRIPT_URI_PATTERN.sub("blocked:", content)
-    
-    return content
+
+    return bleach.clean(
+        content,
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRIBUTES,
+        protocols=ALLOWED_PROTOCOLS,
+        strip=True,
+    )
 
 
 def sanitize_html_content(content: Optional[str]) -> Optional[str]:
-    """
-    Sanitize HTML content before storage.
-    
-    This provides a basic security layer. Rich HTML editing should
-    use a proper HTML sanitization library like bleach for comprehensive
-    protection while preserving legitimate formatting.
-    """
+    """Sanitize HTML content before storage using bleach."""
     if content is None:
         return None
-    
+
     return strip_dangerous_html_patterns(content)
 
 

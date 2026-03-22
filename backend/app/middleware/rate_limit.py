@@ -72,8 +72,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     }
     AUTH_PATHS = {
         f"{settings.API_PREFIX}/auth/login",
+        f"{settings.API_PREFIX}/auth/register",
         f"{settings.API_PREFIX}/auth/forgot-password",
     }
+    PUBLIC_PATH_PREFIXES = (
+        f"{settings.API_PREFIX}/public/",
+        f"{settings.API_PREFIX}/viewer/",
+    )
+    INVITATION_PATH = f"{settings.API_PREFIX}/invitations"
     ASSIGNMENT_PATH_PATTERNS = (
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies$"),
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies/\d+$"),
@@ -111,6 +117,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Auth endpoints get a strict limit (10 req/min) to prevent brute-force
         if request_path in self.AUTH_PATHS:
             return 10, 60, "auth"
+        # Public/viewer paths get 30 req/min per IP
+        if any(request_path.startswith(prefix) for prefix in self.PUBLIC_PATH_PREFIXES):
+            return 30, 60, "public"
+        # Invitation creation: 20 per hour
+        if request_path == self.INVITATION_PATH and method == "POST":
+            return 20, 3600, "invitation"
         # Z-017: Admin endpoints get a higher limit (500 req/min)
         if request_path.startswith(self.ADMIN_PATH_PREFIX):
             return 500, 60, "admin"

@@ -109,16 +109,25 @@ class AttachmentServiceCommonMixin:
     }
 
     @classmethod
-    def _validate_magic_bytes(cls, content: bytes, file_ext: str, filename: str) -> None:
-        """Reject uploads whose magic bytes contradict the file extension."""
+    def _validate_magic_bytes(cls, content: bytes, original_filename: str, content_type: str) -> None:
+        """Reject uploads whose magic bytes contradict the file extension.
+
+        Files with a known extension must have matching magic bytes.
+        Text-ish formats (.txt, .md, .csv, .json, .html) have no signature check.
+        """
+        file_ext = Path(original_filename).suffix.lower()
         sigs = cls._MAGIC_SIGNATURES.get(file_ext)
         if sigs is None:
-            # No signature check for text-ish formats (.txt, .md, .csv, .json, .html)
             return
+        if len(content) < 4:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File too small to be a valid {file_ext} file: {original_filename}",
+            )
         if not any(content[:len(sig)] == sig for sig in sigs):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content does not match extension {file_ext}: {filename}",
+                detail=f"File content does not match extension {file_ext}: {original_filename}",
             )
 
     @classmethod

@@ -154,6 +154,13 @@ async def get_current_active_user(current_user=Depends(get_current_user), db: Se
         tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
         if tenant and not tenant.is_active:
             raise HTTPException(status_code=403, detail="Company is inactive")
+    elif not is_system_admin and current_user.tenant_id is None:
+        # Non-SYSTEM_ADMIN users must be bound to a tenant
+        raise HTTPException(
+            status_code=403,
+            detail="User must be assigned to a company",
+            headers={"X-Error-Code": "tenant_binding_required"},
+        )
 
     # Inject tenant context for request-scoped tenant isolation
     from app.middleware.tenant_context import inject_tenant_context

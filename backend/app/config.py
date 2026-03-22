@@ -144,14 +144,15 @@ class Settings(BaseSettings):
         is_production = self.APP_ENV not in ("development", "test", "testing")
         
         # SECRET_KEY validation
-        if self.SECRET_KEY == _INSECURE_SECRET_KEY:
+        _insecure_patterns = ("insecure", "dev-only", "change-in-production")
+        if self.SECRET_KEY == _INSECURE_SECRET_KEY or (
+            is_production and any(p in self.SECRET_KEY.lower() for p in _insecure_patterns)
+        ):
             if is_production:
-                print(
-                    "FATAL: SECRET_KEY is set to the insecure default value. "
-                    "Set SECRET_KEY environment variable to a secure random value.",
-                    file=sys.stderr,
+                raise RuntimeError(
+                    "Insecure SECRET_KEY rejected in production. "
+                    "Set SECRET_KEY environment variable to a secure random value."
                 )
-                sys.exit(1)
             else:
                 # Log warning for development
                 logging.warning(
