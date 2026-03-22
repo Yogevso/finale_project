@@ -1,1126 +1,1054 @@
-# Project Full Audit — Combined
-
-> **Date:** 2025-07-10 (merged 2026-03-20, remediation completed 2026-03-21)  
-> **Auditors:** Two independent deep audits — merged into one definitive document  
-> **Branch:** `audit`  
-> **Commit:** `e7f2d4b`  
-> **Scope:** Full-stack CMS platform — backend (FastAPI), frontend (React/Vite), collab-server (Hocuspocus/Node), Docker/CI/CD, AI assistant (Ollama/ChromaDB)
-
----
-
-## Table of Contents
-
-1. [Executive Summary](#1-executive-summary)
-2. [Critical Problems](#2-critical-problems)
-3. [Problems (Bugs & Issues)](#3-problems-bugs--issues)
-4. [Improvement Suggestions](#4-improvement-suggestions)
-5. [Ideas](#5-ideas)
-6. [Helpful Notes](#6-helpful-notes)
-7. [Review by Feature](#7-review-by-feature)
-8. [Review by Flow](#8-review-by-flow)
-9. [Review by User Type / Role](#9-review-by-user-type--role)
-10. [Review by Engineering Quality](#10-review-by-engineering-quality)
-11. [Priority Action Plan](#11-priority-action-plan)
-12. [Top 10 Highest-Value Fixes](#12-top-10-highest-value-fixes)
-13. [Risk Heatmap](#13-risk-heatmap)
-14. [Fragile & Strong Modules](#14-fragile--strong-modules)
-15. [Top Weaknesses & Risks](#15-top-weaknesses--risks)
-16. [Conclusion](#16-conclusion)
-
----
+# Project Full Audit
 
 ## 1. Executive Summary
 
-This platform is a **multi-tenant content management system** with collaborative editing, AI-assisted content generation, RBAC, customer portals, analytics, versioning, support tickets, and feedback. The technology stack is modern (FastAPI + React + TipTap + Hocuspocus + Ollama), and the architecture shows care: tenant isolation patterns, row-level versioning, role hierarchies, soft-delete, audit logging, and security headers are all present.
+The repository is not production-ready for a serious multi-tenant, customer-facing deployment.
 
-However, two independent deep audits uncovered a combined **16 CRITICAL**, **24 HIGH**, **25+ MEDIUM**, and **15+ LOW** severity issues across the full stack. The codebase is stronger in its document-core happy path but significantly weaker in surrounding surfaces — admin, support, analytics, attachments, AI assistant, chat, and CI/CD infrastructure.
+It has some real strengths:
+- The codebase is broad and ambitious. It has explicit enums, service/query layering in several areas, contract tests, and some good intent around publication integrity and tenant isolation.
+- There are meaningful tests around route auth parity, publication behavior, public contracts, and some assistant tool controls.
+- Several newer abstractions are directionally right: `VisibilitySpec`, `DocumentAccessPolicy`, `published_attachment_resolver`, projection caching, and explicit role enums.
 
-> **Remediation update (2026-03-21):** All 6 phases of the remediation plan have been executed on the `audit` branch. Of the original 16 CRITICALs, 4 were verified as not vulnerable (C7, C8, C14 — inaccurate findings) or already fixed (H-01). The remaining 12 CRITICALs, 22 of 23 HIGHs (H-14 deferred), 28 of 29 MEDIUMs (M-29 advisory), and 12 of 15 LOWs have been remediated. 3 LOW items were already correct and 2 were accepted as advisory.
+The problem is that the strongest-looking parts are not the most dangerous parts. The highest-risk failures sit in cross-layer business logic, not in syntax, typing, or route registration.
 
-**The core problem is not missing infrastructure — it is inconsistent adoption.** The RBAC system is well-designed but applied unevenly. Tenant isolation exists but has critical holes. The security pipeline runs but doesn't enforce. The AI assistant is powerful but acts as an authorization bypass.
+Main risks:
+- The AI assistant can expose document content without proper authorization, and it is exposed to customer users.
+- Tenant isolation is weak in multiple places. Internal users can become unscoped, and company-admin flows can reassign or orphan users in dangerous ways.
+- Authorization is inconsistent across frontend routes, backend route dependencies, and deeper service/policy logic.
+- Publication snapshot rules are only partially centralized. Portal/public metadata and actual download behavior diverge.
+- The repository still carries legacy/current dual models (`platform` vs `platform_name`, `ACTIVE` vs `PUBLISHED`) in ways that already leak into behavior.
 
-**Overall project rating: ~~6/10~~ 8.5/10** — After remediation, the architecture vision is now backed by consistent enforcement. RBAC is applied uniformly, tenant isolation covers all surfaces, security pipeline enforces gates, and the AI assistant respects authorization boundaries.
+Most urgent issues:
+- Lock down assistant document injection immediately.
+- Remove the "unscoped internal user" state or reject it everywhere except system admin.
+- Fix company user reassignment/removal logic.
+- Fix the attachment upload validation bug that bypasses magic-byte validation.
+- Align route/UI/backend role rules for support, feedback, versions, and search.
 
-**Production readiness: ~~NOT READY~~ CONDITIONAL READY.** The CRITICAL and HIGH findings have been resolved. Remaining open items: C6 (published attachment snapshot — architectural), H-14 (duplicate platform columns — schema debt), M-29 (code organization — advisory). Runtime testing and a final manual security walk-through are recommended before production deployment with real user data.
-
----
+Overall verdict:
+- The system is not failing because it is unfinished.
+- It is failing because core trust boundaries are inconsistently enforced.
+- That is worse than an incomplete product, because it creates false confidence.
 
 ## 2. Critical Problems
 
-### C1. RAG Vector Store — Zero Tenant Isolation — ✅ REMEDIATED
+### 2.1 Assistant can inject arbitrary document content without authorization
+- Severity: Critical
+- Area: Security / Auth / Role Logic / Backend / Frontend
+- Affected files:
+  - `backend/app/api/management/assistant.py`
+  - `backend/app/assistant/engine.py`
+  - `frontend/src/lib/api/assistantApi.ts`
+  - `frontend/src/features/assistant/useAssistantChat.ts`
+  - `frontend/src/App.tsx`
+  - `frontend/src/layouts/CustomerLayout.tsx`
+- Description:
+  - The assistant API accepts `document_ids` from the client.
+  - `AssistantEngine.chat()` loads each document by raw ID and injects latest version content into the prompt without checking `DocumentAccessPolicy.can_view_document()` for that path.
+  - Customer users have assistant UI exposure via `/portal/assistant` and the customer chat bubble.
+- Why it is a problem:
+  - This is a direct confidentiality failure.
+  - The assistant becomes a document exfiltration API.
+  - The issue is not theoretical. The explicit `document_ids` path is separate from the safer `@mention` path and bypasses its permission check.
+- Example scenario:
+  - A customer user guesses or enumerates document IDs and sends `/assistant/chat` with `document_ids=[123]`.
+  - The backend injects the document's latest version content into the LLM prompt and returns it in the answer, even if the document is internal or belongs to another tenant.
+- Recommended fix:
+  - Reject `document_ids` that the requesting user cannot view.
+  - Apply the same access policy to explicit document IDs that the `@mention` flow uses.
+  - Restrict assistant routes to internal roles unless there is a deliberate, separately designed customer-safe assistant mode.
+  - Add end-to-end tests for customer -> assistant -> foreign/internal/company document attempts.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | AI Assistant / Security |
-| **Files** | `backend/app/services/ai/tools/semantic_search_tool.py`, `backend/app/services/ai/rag/vector_store.py` |
-| **Description** | The ChromaDB vector store queries ALL documents globally. When a user performs a semantic search via the AI assistant, the query hits the entire corpus across all tenants. A post-filter attempts to remove unauthorized results, but the raw embedding vectors and similarity scores for cross-tenant documents are already computed and potentially cached. |
-| **Why Critical** | In a multi-tenant SaaS, a single tenant seeing another tenant's document content (even via embedding similarity) is a **data breach**. This is the single most dangerous finding in the audit. |
-| **Example** | Tenant A user asks AI: "Show documents about Project X." ChromaDB returns Tenant B's confidential documents in the initial query set. Even if post-filtered, timing side-channels and embedding proximity reveal information. |
-| **Fix** | Add `tenant_id` to ChromaDB collection metadata. Use `where={"tenant_id": current_tenant_id}` on every query. Create separate ChromaDB collections per tenant, or enforce namespace isolation at the vector store layer. |
+### 2.2 Tenant isolation breaks when internal users become unscoped
+- Severity: Critical
+- Area: Security / Role Logic / Auth / Architecture
+- Affected files:
+  - `backend/app/application/policies/access_policies.py`
+  - `backend/app/security.py`
+- Description:
+  - `DocumentAccessPolicy._same_tenant_or_unscoped()` returns `True` when either the document tenant or user tenant is missing.
+  - `get_current_active_user()` only checks company activity for internal users when `tenant_id is not None`.
+  - That means an active internal user with `tenant_id=None` is treated as valid and can pass tenant-boundary checks that should fail closed.
+- Why it is a problem:
+  - "No tenant" is treated as "allowed everywhere" in edit/delete/publish checks.
+  - That is the exact opposite of safe multi-tenant behavior.
+- Example scenario:
+  - An internal editor/admin is left with `tenant_id=None`.
+  - They can still authenticate and may pass edit/delete/publish checks on documents owned by normal tenants.
+- Recommended fix:
+  - Remove the unscoped internal-user state entirely, except for `SYSTEM_ADMIN`.
+  - Make tenant-boundary checks fail closed whenever a non-system-admin internal user has `tenant_id=None`.
+  - Add a migration or repair script to find and fix orphaned internal users.
 
-### C2. Document @Mention Injection Bypasses Visibility/RBAC — ✅ REMEDIATED
+### 2.3 Company admin flows let admins hijack users across tenants and create orphaned internal users
+- Severity: Critical
+- Area: Security / Role Logic / Tenant Isolation / Backend
+- Affected files:
+  - `backend/app/api/management/companies.py`
+- Description:
+  - `add_user_to_company()` reassigns any user found by ID or email into the target company without validating the target user's current tenant, role, or ownership rules.
+  - `remove_user_from_company()` allows non-customer users to be detached from a tenant entirely by setting `tenant_id=None`.
+  - `create_company()` is available to `ADMIN`, even though the rest of the file strongly implies non-system-admin admins are tenant-scoped.
+- Why it is a problem:
+  - This is a user-binding integrity failure.
+  - It enables cross-tenant user hijacking and directly creates the unscoped-user state that breaks document authorization.
+- Example scenario:
+  - A tenant admin adds another tenant's editor to their own company by email.
+  - The victim's tenant binding changes.
+  - A separate admin removes an internal user from a company, creating `tenant_id=None`.
+- Recommended fix:
+  - Only `SYSTEM_ADMIN` should move users between tenants.
+  - Tenant admins should only manage users already in their tenant, and should never be able to clear tenant binding for internal roles.
+  - `create_company()` should be `SYSTEM_ADMIN` only unless the product intentionally allows tenant admins to create top-level tenants, which the rest of the code clearly does not support.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | AI Assistant / Authorization |
-| **Files** | `backend/app/services/ai/context_builder.py`, `backend/app/services/ai/tool_executor.py` |
-| **Description** | When a user types `@DocumentName` in the AI chat, the system fetches that document's content and injects it into the LLM context. There is **no check** on document visibility status (DRAFT, INTERNAL, ARCHIVED) or the user's RBAC permission to view that document. |
-| **Why Critical** | Any authenticated user can access the full text of any document within their tenant by @mentioning it, including DRAFT documents they should never see, INTERNAL documents restricted to specific roles, and ARCHIVED documents removed from circulation. |
-| **Example** | A CUSTOMER-role user types `@"Internal Strategy 2025"` and receives the full text injected into their chat context, despite having no permission to view INTERNAL documents. |
-| **Fix** | Before injecting @mentioned document content, validate: (1) document status is PUBLISHED/ACTIVE, (2) user has `view` permission via the existing RBAC check, (3) document visibility matches user's role level. |
+### 2.4 Attachment upload validation is broken by method-resolution/signature mismatch
+- Severity: Critical
+- Area: Security / Backend / File Handling
+- Affected files:
+  - `backend/app/services/attachment_service/common.py`
+  - `backend/app/services/attachment_service/upload.py`
+  - `backend/app/services/attachment_service/__init__.py`
+- Description:
+  - `AttachmentServiceCommonMixin.upload_attachment()` calls `cls._validate_magic_bytes(content, file_ext, original_filename)`.
+  - The MRO resolves to `AttachmentServiceUploadMixin._validate_magic_bytes(content, original_filename, content_type)`.
+  - The arguments are in the wrong order for the resolved method.
+- Why it is a problem:
+  - Restricted-extension enforcement is silently bypassed on the main upload path.
+  - Security-critical validation is present in code but not reliably doing what it claims to do.
+- Example scenario:
+  - A file named `payload.docx` with non-DOCX bytes reaches `upload_attachment()`.
+  - The wrong signature treats `.docx` as a filename and skips the restricted-extension rule.
+- Recommended fix:
+  - Remove the duplicate `_validate_magic_bytes()` implementations.
+  - Keep one canonical validator with one canonical signature.
+  - Add direct tests for the exact `upload_attachment()` entrypoint, not only helper-level tests.
 
-### C3. Attachment Download Tickets Are Broken and Forgeable — ✅ REMEDIATED
+### 2.5 Search exposes metadata to users who should not see it
+- Severity: Critical
+- Area: Security / Search / Backend
+- Affected files:
+  - `backend/app/api/management/search.py`
+  - `backend/app/application/queries/search_queries.py`
+  - `backend/app/domain/specifications/queries.py`
+- Description:
+  - Management search routes use `get_current_active_user`, not an internal-only dependency.
+  - `_load_autocomplete()` and `_load_facets()` apply tenant scoping but not visibility filtering.
+  - `VisibilitySpec.sql_clauses()` uses `company_id` in raw SQL against `document_company_assignments`, but the actual column is `tenant_id`.
+- Why it is a problem:
+  - Customers can reach internal search endpoints.
+  - Even if full result pages are partially filtered, autocomplete and facets leak document titles, categories, and status counts for documents the user cannot see.
+  - The raw SQL bug forces hidden fallback behavior and undermines trust in the search layer.
+- Example scenario:
+  - A customer calls `/api/v1/search/autocomplete?q=roadmap`.
+  - Titles from tenant documents matching the customer's tenant scope but not the customer's visibility rules are returned.
+- Recommended fix:
+  - Restrict management search endpoints to internal users.
+  - Apply `VisibilitySpec` to autocomplete and facets.
+  - Fix the raw SQL column name and add tests for customer/company visibility in search, autocomplete, and facets.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | Security / API / Attachments |
-| **Files** | `backend/app/api/management/attachments.py`, `frontend/src/lib/api/attachmentsApi.ts` |
-| **Description** | `issue_download_ticket()` emits a five-part token: `user_id:document_id:attachment_id:timestamp:signature`. `_verify_download_ticket()` expects only four parts, so the backend-generated signed token does not match the verifier. Worse, the verifier never parses or compares the provided signature at all — it recomputes both `expected_sig` and `provided_sig` from server-side inputs, making the HMAC check meaningless. It also only rejects old timestamps, not future timestamps. |
-| **Why Critical** | This is a broken authorization mechanism on a direct file-download path. Anyone who knows or can guess a valid `user_id`, `document_id`, and `attachment_id` can forge a token. Using a future timestamp makes the token effectively long-lived. |
-| **Example** | An attacker crafts `42:100:9:9999999999` and calls `/api/v1/documents/100/attachments/9/download?token=...`. The verifier accepts the forged token. |
-| **Fix** | Parse the signature from the token, compare using `hmac.compare_digest`, reject future timestamps, reject malformed part counts, and add regression tests. |
+## 3. Problems
 
-### C4. Company-Admin Endpoints Are Only Partially Tenant-Scoped — ✅ REMEDIATED
+### 3.1 Portal detail leaks attachment metadata outside the published snapshot
+- Severity: High
+- Category: Backend / UX Flow / Publication Integrity
+- Affected files:
+  - `backend/app/application/queries/portal_queries.py`
+  - `backend/app/api/portal/documents.py`
+  - `frontend/src/pages/portal/CustomerDocumentPage.tsx`
+- Description:
+  - Portal document detail loads all attachments for the document and renders download URLs for all of them.
+  - The actual download endpoint later checks the published snapshot and rejects some of those attachments.
+- Expected behavior:
+  - Portal detail should only show attachments that are valid in the currently published snapshot.
+- Current behavior:
+  - Customers see attachments that they cannot actually download.
+- Recommendation:
+  - Filter detail attachments through `published_attachment_resolver` before rendering metadata or URLs.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | Role Logic / Security / Multi-tenancy |
-| **Files** | `backend/app/api/management/companies.py`, `backend/tests/tenant_isolation/test_attack_harness.py` |
-| **Description** | `list_companies()` scopes non-system-admins to their own tenant. The rest of the company-management surface does not: `get_company()`, `update_company()`, `list_company_users()`, `add_user_to_company()`, `list_company_documents()`, and `get_audience_blockers()` all accept a `company_id` and trust `require_admin` without re-checking tenant ownership. |
-| **Why Critical** | A tenant admin can manage arbitrary companies across tenants. The route surface says "admin" but the data access says "platform-wide." |
-| **Example** | An admin from tenant A calls `/api/v1/companies/2/users` and reads tenant B's user list. |
-| **Fix** | Centralize tenant ownership checks for every company route, use `TenantContext` consistently, and extend tenant-isolation tests to cover the full companies surface. |
+### 3.2 Public and portal attachment rules are not using one canonical snapshot mechanism
+- Severity: High
+- Category: Backend / Architecture / Publication Integrity
+- Affected files:
+  - `backend/app/api/public/documents.py`
+  - `backend/app/application/queries/portal_queries.py`
+  - `backend/app/services/published_attachment_resolver.py`
+- Description:
+  - Public detail still uses `uploaded_at <= cutoff`.
+  - Portal attachment download uses the newer snapshot resolver.
+  - The system is split between timestamp-based logic and immutable publish-snapshot logic.
+- Expected behavior:
+  - One resolver should define "attachment visible to readers" everywhere.
+- Current behavior:
+  - Different endpoints can disagree about which attachments exist for the same published document.
+- Recommendation:
+  - Replace all timestamp-based public/portal attachment selection with the central snapshot resolver.
 
-### C5. Support-Ticket REST APIs Expose Cross-Tenant Data — ✅ REMEDIATED
+### 3.3 Reading-progress access recheck for company documents is wrong
+- Severity: High
+- Category: Backend / Role Logic / UX Flow
+- Affected files:
+  - `backend/app/api/portal/documents.py`
+- Description:
+  - `_customer_can_still_access()` returns `user.tenant_id is not None` for `COMPANY` documents.
+  - It does not verify assignment of that tenant to the document.
+- Expected behavior:
+  - Reading-progress endpoints should exclude company documents once the customer's company no longer has access.
+- Current behavior:
+  - Recently viewed / continue-reading can still surface documents the customer should no longer access.
+- Recommendation:
+  - Use the same company-assignment visibility check as the portal query layer, not a weak shortcut.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | Security / Role Logic / Support |
-| **Files** | `backend/app/api/management/support.py`, `backend/app/services/support_service.py`, `frontend/src/pages/SupportPage.tsx` |
-| **Description** | The frontend only exposes support UI to managers and above. The backend does not enforce that. Most support routes depend on `require_internal_user`, not a manager/agent role. `SupportTicketService.list_tickets()` gives all internal staff all tickets, `_check_ticket_access()` allows any admin/manager/editor to access any ticket, and `_get_ticket_for_agent()` grants any admin/manager/editor unrestricted agent-level access. |
-| **Why Critical** | Tickets contain customer conversations, internal notes, assignment metadata, and operational context. The REST API makes them effectively global to internal staff, regardless of tenant or assignment. |
-| **Example** | An editor from tenant A calls `/api/v1/support/tickets` and inspects tenant B's customer support thread. |
-| **Fix** | Enforce role-based access at the route level, scope ticket visibility by tenant and assignment in the service layer, and make REST and WebSocket authorization rules match. |
+### 3.4 Portal list can claim attachments exist when the published snapshot has none
+- Severity: Medium
+- Category: Backend / UX Consistency
+- Affected files:
+  - `backend/app/application/queries/portal_queries.py`
+- Description:
+  - `execute_list_documents()` counts all attachments on the document when setting `has_attachments`.
+- Expected behavior:
+  - Customer list cards should reflect only attachments available in the published reader snapshot.
+- Current behavior:
+  - A document can show attachment availability in the list and then show none in the actual published detail/download path.
+- Recommendation:
+  - Compute attachment flags from published-snapshot attachments only.
 
-### C6. Published Attachment Snapshot Bypassed by Direct Endpoints
+### 3.5 Feedback PII protection is inconsistently enforced
+- Severity: High
+- Category: Security / Role Logic / Backend
+- Affected files:
+  - `backend/app/application/policies/access_policies.py`
+  - `backend/app/api/management/feedback.py`
+- Description:
+  - `FeedbackAccessPolicy.can_see_email()` restricts submitter email visibility to admin/system_admin.
+  - `respond_to_feedback()` and `update_feedback_status()` return `user_email` unconditionally.
+- Expected behavior:
+  - PII masking should be enforced uniformly across all feedback responses.
+- Current behavior:
+  - Managers can receive customer email in response payloads despite policy saying they should not.
+- Recommendation:
+  - Centralize response mapping and always apply `can_see_email()`.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | 🔴 CRITICAL |
-| **Area** | Product Logic / Security / Public API / Portal |
-| **Files** | `backend/app/application/queries/portal_queries.py`, `backend/app/api/portal/documents.py`, `backend/app/api/public/documents.py`, `backend/app/api/viewer/documents.py`, `backend/app/services/attachment_service/streams.py` |
-| **Description** | Public, viewer, and portal listing endpoints try to scope attachments to the published snapshot by cutoff time. Direct metadata and download endpoints do not consistently apply that cutoff. `get_public_attachment()` returns metadata for any attachment on a public document. Viewer and portal download paths stream the live attachment without a centralized published-snapshot check. |
-| **Why Critical** | The product semantics say published readers should get an immutable release. The implementation leaks mutable, post-publish attachment state through alternate routes. |
-| **Example** | A public document is published. An internal user uploads a new attachment afterward. The direct metadata/download route still serves it to public readers. |
-| **Fix** | Move published-attachment resolution into one central service. Prefer the explicit `published_attachment_ids_snapshot` over ad hoc live queries. |
+### 3.6 Feedback status updates are allowed for editor/viewer roles
+- Severity: High
+- Category: Role Logic / Backend
+- Affected files:
+  - `backend/app/application/policies/access_policies.py`
+  - `backend/app/api/management/feedback.py`
+  - `frontend/src/App.tsx`
+- Description:
+  - `can_update_status()` includes `EDITOR` and `VIEWER`.
+  - The status-update route uses `require_internal_staff`.
+  - The frontend guards feedback UI behind `ManagerGuard`.
+- Expected behavior:
+  - Backend permissions should match the intended management role boundary.
+- Current behavior:
+  - Direct API callers can update feedback status with lower roles than the UI implies.
+- Recommendation:
+  - Narrow status updates to the same roles that are allowed to manage/respond to feedback, unless there is a deliberate product requirement otherwise.
 
-### C7. Version Endpoints Missing Admin Enforcement — ✅ NOT VULNERABLE
+### 3.7 Feedback stats endpoint is not tenant-scoped
+- Severity: High
+- Category: Security / Analytics / Backend
+- Affected files:
+  - `backend/app/api/management/feedback.py`
+- Description:
+  - `/feedback/stats/summary` returns platform-wide totals for any admin/manager.
+- Expected behavior:
+  - Non-system-admin users should only see feedback stats for their tenant scope.
+- Current behavior:
+  - Tenant-scoped roles can see global numbers.
+- Recommendation:
+  - Scope counts by tenant for all non-system-admin callers.
 
-> **Audit correction (2026-03-21):** Code review confirmed all three version endpoints already use proper role-based authentication. No `get_current_active_user` without role check was found. This finding was inaccurate.
+### 3.8 Feedback tenant scoping depends on the current user row, not immutable feedback context
+- Severity: Medium
+- Category: Data Integrity / Backend
+- Affected files:
+  - `backend/app/api/management/feedback.py`
+- Description:
+  - `list_all_feedback()` scopes via `Feedback.user -> User.tenant_id`.
+- Expected behavior:
+  - Feedback visibility should be derived from stable feedback/document tenant context.
+- Current behavior:
+  - If a user changes tenants later, old feedback can move between tenant views.
+- Recommendation:
+  - Scope using document tenant or store an immutable feedback tenant snapshot.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Not vulnerable |
-| **Area** | API / Authorization |
-| **Files** | `backend/app/routes/versions.py` |
-| **Description** | Three version endpoints — `force-publish`, `delete`, and `restore-audience` — use `get_current_active_user` instead of `require_admin`. Their docstrings say "Only admins can do this" but the code allows **any authenticated user** to execute these operations. |
-| **Why Critical** | An EDITOR or VIEWER can force-publish incomplete content, delete version history, or alter audience settings — all admin-only operations. |
-| **Example** | `PUT /api/versions/{id}/force-publish` with a regular EDITOR token succeeds when it should return 403. |
-| **Fix** | Replace `Depends(get_current_active_user)` with `Depends(require_role(["ADMIN", "SYSADMIN"]))` on all three endpoints. |
+### 3.9 Support module permissions are incoherent across UI, policy, routes, and service logic
+- Severity: High
+- Category: Role Logic / Architecture / UX Flow
+- Affected files:
+  - `backend/app/application/policies/access_policies.py`
+  - `backend/app/api/management/support.py`
+  - `backend/app/services/support_service.py`
+  - `frontend/src/App.tsx`
+- Description:
+  - UI restricts support to `ManagerGuard`.
+  - Policy allows admin/manager/editor/viewer.
+  - Routes use `require_internal_user` for almost everything.
+  - Service layer treats viewers/customers mostly as ticket owners only, not agents.
+- Expected behavior:
+  - One explicit role matrix should govern support access.
+- Current behavior:
+  - Viewers can reach routes they do not meaningfully own.
+  - Editors can act as support agents through the API even though the UI says managers and above.
+- Recommendation:
+  - Decide which roles are support agents, encode it once, and apply it consistently in router dependencies and service checks.
 
-### C8. XXE / SSRF in Public Sitemap & Feed — ✅ NOT VULNERABLE
+### 3.10 Internal support ticket creation is conceptually wrong
+- Severity: Medium
+- Category: Product Flow / Backend
+- Affected files:
+  - `backend/app/api/management/support.py`
+  - `backend/app/services/support_service.py`
+- Description:
+  - Internal users call `create_ticket()` and are passed as `customer=current_user`.
+- Expected behavior:
+  - Internal support should create tickets on behalf of a customer, or this route should be customer-only.
+- Current behavior:
+  - Internal users create tickets recorded as if they were the customer.
+- Recommendation:
+  - Split customer ticket creation from internal case creation/escalation flows.
 
-> **Audit correction (2026-03-21):** Code review confirmed no `base_url` query parameter exists on sitemap or feed endpoints. XML is generated with static, server-controlled URLs only. This finding was inaccurate.
+### 3.11 Version compare flow is exposed to viewers in the frontend but blocked by the backend
+- Severity: High
+- Category: Frontend / Role Logic / UX Flow
+- Affected files:
+  - `frontend/src/App.tsx`
+  - `frontend/src/components/VersionsSection.tsx`
+  - `frontend/src/pages/VersionComparePage.tsx`
+  - `backend/app/api/management/versions.py`
+- Description:
+  - The compare page lives under `InternalGuard`, not editor-only protection.
+  - `VersionsSection` shows the compare link whenever more than one version exists.
+  - All management version routes require `require_editor`.
+- Expected behavior:
+  - Either viewers should be allowed to compare versions end-to-end, or the UI should not route them there.
+- Current behavior:
+  - Viewer users can reach a page wired to APIs they are not allowed to call.
+- Recommendation:
+  - Align the route guard, link visibility, and backend dependency.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Not vulnerable |
-| **Area** | API / Input Validation |
-| **Files** | `backend/app/routes/public.py` |
-| **Description** | The `sitemap.xml` and `feed.xml` endpoints accept a `base_url` query parameter and embed it directly into XML output without any validation or sanitization. An attacker can inject arbitrary XML. |
-| **Why Critical** | XXE can lead to server-side file reads, SSRF into internal networks, or denial-of-service via entity expansion. Injecting a malicious base URL poisons search engine crawlers. |
-| **Example** | `GET /api/public/sitemap.xml?base_url=]]><evil/>` breaks XML structure. |
-| **Fix** | Validate `base_url` against an allowlist. Use proper XML serialization instead of string interpolation. Reject URLs that don't match `^https?://[a-zA-Z0-9.-]+$`. |
+### 3.12 WebSocket auth skips active-tenant enforcement
+- Severity: High
+- Category: Security / Auth / Reliability
+- Affected files:
+  - `backend/app/ws/chat_ws.py`
+  - `backend/app/ws/support_ws.py`
+  - `backend/app/security.py`
+- Description:
+  - WS auth validates token, activity, and revocation, but it does not apply the inactive-tenant checks used by `get_current_active_user()`.
+- Expected behavior:
+  - Deactivated tenant users should lose real-time access immediately under the same rules as HTTP.
+- Current behavior:
+  - A tenant deactivation can leave existing real-time access alive until session expiry or explicit revocation.
+- Recommendation:
+  - Reuse the same active-tenant logic for WS auth that HTTP uses.
 
-### C9. CD Pipeline Allows Skipping Tests — ✅ REMEDIATED
+### 3.13 Company deactivation and company deletion have different security consequences
+- Severity: High
+- Category: Auth / Architecture / Operations
+- Affected files:
+  - `backend/app/api/management/companies.py`
+- Description:
+  - `update_company(is_active=False)` cancels invitations only.
+  - `delete_company()` also revokes sessions, invalidates tokens, and removes document assignments.
+- Expected behavior:
+  - Deactivation semantics should be explicit and consistent with session/security expectations.
+- Current behavior:
+  - "Deactivated company" can still have live sessions until unrelated mechanisms cut them off.
+- Recommendation:
+  - Treat deactivation as a security event and revoke sessions/tokens there too, or document and implement a separate suspension model explicitly.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 2) |
-| **Area** | CI/CD |
-| **Files** | `.github/workflows/cd.yml` (lines 48-51) |
-| **Description** | The deployment workflow exposes a `skip_tests` boolean input parameter. The production stage also accepts a skipped staging step as passing. |
-| **Why Critical** | Any developer with `workflow_dispatch` permission can deploy untested code directly to production. |
-| **Fix** | Remove `skip_tests` entirely. Make staging a hard requirement. |
+### 3.14 Public and portal filtering still rely on deprecated `Document.platform`
+- Severity: Medium
+- Category: Backend / Data Model / Maintainability
+- Affected files:
+  - `backend/app/api/public/documents.py`
+  - `backend/app/application/queries/portal_queries.py`
+- Description:
+  - Public list/search/history and portal list/facets/related-doc logic still filter or group on the deprecated `Document.platform` field.
+- Expected behavior:
+  - Filtering/grouping should run on the canonical platform model, not the legacy fallback.
+- Current behavior:
+  - Response payloads use `platform_name`, while search/filter/facet logic uses the deprecated string field.
+- Recommendation:
+  - Finish the migration and remove functional dependence on `Document.platform`.
 
-### C10. Security Scan Failures Don't Block Merge
+### 3.15 Search hides failures with a broad fallback instead of surfacing broken FTS logic
+- Severity: Medium
+- Category: Architecture / Reliability / Performance
+- Affected files:
+  - `backend/app/application/queries/search_queries.py`
+  - `backend/app/domain/specifications/queries.py`
+- Description:
+  - `execute_search_documents()` catches any exception from FTS and silently falls back to ORM search.
+- Expected behavior:
+  - Query bugs and index/schema mismatches should be observable.
+- Current behavior:
+  - The system can be "working" while the intended search path is broken and slower.
+- Recommendation:
+  - Catch only known search-backend failures, log them at warning/error level with enough detail, and test the FTS path directly.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | 🔴 CRITICAL |
-| **Area** | CI/CD |
-| **Files** | `.github/workflows/security.yml` |
-| **Description** | Gitleaks, TruffleHog, pip-audit, and Safety all use `continue-on-error: true`. Discovered secrets and CVEs are reported but never block the merge or deployment. |
-| **Why Critical** | Committed secrets reach production. Known CVEs in dependencies don't prevent deployment. The security pipeline creates a false sense of protection. |
-| **Fix** | Remove `continue-on-error: true` from secret detection steps. Make pip-audit/Safety failures block the build. |
+### 3.16 Chat document-room creation does not validate document access
+- Severity: High
+- Category: Security / Backend / Role Logic
+- Affected files:
+  - `backend/app/services/chat_service.py`
+- Description:
+  - `create_document_chat()` loads a document by ID and creates a tenant-scoped chat under the creator's tenant without verifying document tenant or actual document access.
+- Expected behavior:
+  - Document-scoped chats should only be creatable for documents the caller can legitimately access.
+- Current behavior:
+  - The service can create chats around a foreign document and auto-add its author ID.
+- Recommendation:
+  - Require document access checks and same-tenant validation before chat creation.
 
-### C11. Nginx — No HTTPS Enforcement — ✅ REMEDIATED
+### 3.17 Chat WebSocket message validation is weaker than REST validation
+- Severity: Medium
+- Category: Reliability / Security / Backend
+- Affected files:
+  - `backend/app/services/chat_service.py`
+  - `backend/app/ws/chat_ws.py`
+- Description:
+  - REST uses `ChatService.MAX_MESSAGE_LENGTH`.
+  - WS send-message persists content directly and only checks raw frame size, not logical message length.
+- Expected behavior:
+  - Message limits should be consistent across transport layers.
+- Current behavior:
+  - WS path accepts payloads that REST would reject.
+- Recommendation:
+  - Route all message creation through `ChatService.send_message()` or share one validator.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 2) |
-| **Area** | Infrastructure / Deployment |
-| **Files** | `frontend/nginx.conf` (line 1) |
-| **Description** | Nginx listens only on port 80. No SSL/TLS listener, no HTTPS redirect, no HSTS header. Production docker-compose exposes 443 but nginx has no SSL configuration. |
-| **Why Critical** | All traffic travels in plaintext. Session hijacking via network sniffing is trivial. |
-| **Fix** | Add `listen 443 ssl http2;`. Add HTTP→HTTPS redirect. Add HSTS header. |
+### 3.18 Chat and support file/message boundaries still trust client-side MIME too much
+- Severity: Medium
+- Category: Security / File Handling
+- Affected files:
+  - `backend/app/api/management/chat.py`
+  - `backend/app/ws/support_ws.py`
+  - `backend/app/ws/chat_ws.py`
+- Description:
+  - Chat file upload is stored based on client MIME allowlists without the stronger content sniffing present elsewhere.
+- Expected behavior:
+  - File acceptance should be backed by server-side validation.
+- Current behavior:
+  - Chat attachments are a weaker validation path than document attachments.
+- Recommendation:
+  - Reuse attachment validation rules or add a dedicated chat-file validator.
 
-### C12. Hardcoded Secrets in Docker Compose — ✅ REMEDIATED
+### 3.19 Direct-chat role logic is inconsistent for `VIEWER`
+- Severity: Medium
+- Category: Role Logic / Consistency
+- Affected files:
+  - `backend/app/services/chat_service.py`
+- Description:
+  - The special internal-role list used for cross-tenant direct-chat exceptions omits `viewer`, even though viewer is an internal role elsewhere.
+- Expected behavior:
+  - Internal role classifications should be consistent.
+- Current behavior:
+  - Viewer behavior diverges from the rest of the system's role model.
+- Recommendation:
+  - Centralize role grouping instead of hand-rolling role sets in features.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 2) |
-| **Area** | Infrastructure / Secrets |
-| **Files** | `docker-compose.yml` (lines 18, 82) |
-| **Description** | `SECRET_KEY=docker-dev-secret-key-change-in-prod` and `JWT_SECRET=docker-dev-secret-key-change-in-prod` hardcoded in version-controlled file. Same weak secret shared across services. |
-| **Why Critical** | Anyone with repo access can forge JWT tokens. If used in production, all authentication is compromised. |
-| **Fix** | Replace with `${SECRET_KEY}` referencing `.env`. Add startup validation that rejects the insecure default. |
+### 3.20 Invitation acceptance bootstraps auth differently from normal login
+- Severity: Medium
+- Category: Auth / UX Flow
+- Affected files:
+  - `backend/app/api/management/auth.py`
+  - `frontend/src/pages/AcceptInvitationPage.tsx`
+  - `frontend/src/lib/api/authApi.ts`
+  - `frontend/src/lib/api/httpClient.ts`
+- Description:
+  - Normal login sets an HTTP-only refresh cookie via `_token_json_response()`.
+  - `accept_invitation()` returns `TokenResponse` directly and does not set that cookie.
+  - Frontend compensates by storing tokens in memory only.
+- Expected behavior:
+  - Invitation accept should bootstrap the same session model as normal login.
+- Current behavior:
+  - Session persistence after invitation acceptance depends on in-memory state rather than the cookie-based restore path.
+- Recommendation:
+  - Return the same cookie-setting response shape as login.
 
-### C13. Document.tenant_id is Nullable — ✅ REMEDIATED
+### 3.21 Password requirements are stricter on the backend than the invitation UI communicates
+- Severity: Low
+- Category: UX / Validation Consistency
+- Affected files:
+  - `backend/app/api/management/auth.py`
+  - `frontend/src/pages/AcceptInvitationPage.tsx`
+- Description:
+  - Frontend says "Must be at least 8 characters."
+  - Backend also requires uppercase, lowercase, digit, and special character.
+- Expected behavior:
+  - Client hints should match server rules.
+- Current behavior:
+  - Users hit avoidable server-side validation errors.
+- Recommendation:
+  - Mirror server complexity requirements in the form and helper text.
 
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 CRITICAL~~ ✅ Fixed (Phase 1) |
-| **Area** | Database / Multi-Tenancy |
-| **Files** | `backend/app/models/models.py` |
-| **Description** | `Document.tenant_id` is `nullable=True`. Documents can exist without a tenant association, breaking the multi-tenancy invariant. |
-| **Why Critical** | Orphaned documents are invisible to tenant-scoped queries or globally accessible if any path doesn't filter by tenant. |
-| **Fix** | Set `nullable=False`. Migration to assign or delete orphans. Add CHECK constraint. |
+### 3.22 Viewer page intentionally avoids auto-selecting the latest version
+- Severity: Low
+- Category: Product Flow / UX
+- Affected files:
+  - `frontend/src/pages/viewer/ViewerDocumentPage.tsx`
+- Description:
+  - The UI explicitly tells users the viewer does not auto-select the latest version.
+- Expected behavior:
+  - Read-only viewers should default to the latest safe version unless there is a strong reason not to.
+- Current behavior:
+  - Users are pushed into a confusing manual version choice in a supposedly simple viewing mode.
+- Recommendation:
+  - Default to the latest published/viewable version.
 
-### C14. Successful Refresh Deletes the Refresh Cookie — ✅ NOT VULNERABLE
-
-> **Audit correction (2026-03-21):** Code review confirmed the refresh endpoint returns a proper 401 on missing token and does not self-destruct the cookie. Cookie persistence works correctly.
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 HIGH (functionally critical)~~ ✅ Not vulnerable |
-| **Area** | Auth / Backend / Frontend |
-| **Files** | `backend/app/api/management/auth.py`, `backend/app/services/auth_service.py`, `frontend/src/lib/api/httpClient.ts` |
-| **Description** | `_token_json_response()` always calls `_set_refresh_cookie()`. `AuthService.refresh_access_token()` returns no `refresh_token`. `_set_refresh_cookie()` treats a missing token as a delete instruction and clears the cookie. This is the main session-resume path. |
-| **Why Critical** | User logs in → gets cookie → SPA refreshes access token → cookie deleted → next cold start = logged out. |
-| **Fix** | Preserve the existing cookie when the response omits rotation. Add e2e tests for cookie persistence. |
-
-### C15. Search Analytics Globally Exposed — ✅ REMEDIATED
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 HIGH~~ ✅ Fixed (Phase 1) |
-| **Area** | Security / Analytics / API |
-| **Files** | `backend/app/api/management/search.py` |
-| **Description** | `get_search_analytics()` depends only on `get_current_active_user`. No role/tenant restriction. Aggregates all search and click events globally. |
-| **Why Critical** | Leaks internal demand signals, failed searches, and platform behavior to any authenticated caller, including customers. |
-| **Fix** | Restrict to staff roles. Scope by tenant unless `system_admin`. |
-
-### C16. Feedback Management Leaks PII — ✅ REMEDIATED
-
-| Field | Value |
-|-------|-------|
-| **Severity** | ~~🔴 HIGH~~ ✅ Fixed (Phase 1) |
-| **Area** | Security / UX Flow / Backend |
-| **Files** | `backend/app/api/management/feedback.py`, `frontend/src/pages/admin/FeedbackPage.tsx` |
-| **Description** | Frontend limits to managers+. Backend allows all internal staff. Contributor-based visibility exposes `user_name`, `user_email`, `tenant_name`. `get_feedback_stats()` is unscoped (global counts). |
-| **Why Critical** | Privacy leak — contributors see customer PII, managers see cross-tenant counts. |
-| **Fix** | Replace contributor-based visibility with explicit support/manager policy. Add tenant scoping. Minimize PII by role. |
-
----
-
-## 3. Problems (Bugs & Issues)
-
-### HIGH Severity
-
-| ID | Title | Area | Files | Description |
-|----|-------|------|-------|-------------|
-| H-01 | ~~Chat endpoints skip participant validation~~ ✅ NOT VULNERABLE | API | `routes/chat.py` | **Audit correction:** `_get_chat_with_permission()` already enforces participant validation on all chat endpoints. |
-| H-02 | ~~Attachment endpoints skip document access check~~ ✅ REMEDIATED | API | `routes/attachments.py` | **Fixed (Phase 3):** Document access validation added before serving attachments. |
-| H-03 | ~~Collab token issued without ownership validation~~ ✅ REMEDIATED | Auth | `auth_context/collaboration_auth_service.py` | **Fixed (Phase 3):** Edit permission checked before issuing collab tokens. |
-| H-04 | ~~SemanticSearchTool missing RBAC gate~~ ✅ REMEDIATED | AI | `services/ai/tools/semantic_search_tool.py` | **Fixed (Phase 3):** CUSTOMER role blocked from semantic search. |
-| H-05 | ~~In-memory rate limiting bypassed by multiple workers~~ ✅ REMEDIATED | Middleware | `middleware/rate_limit.py` | **Fixed (Phase 3):** Replaced in-memory counters with Redis backend. |
-| H-06 | ~~Tool error messages leak internal details~~ ✅ REMEDIATED | AI | `services/ai/tool_executor.py` | **Fixed (Phase 3):** Stack traces sanitized, generic error returned to users. |
-| H-07 | ~~Missing CSRF protection in practice~~ ✅ REMEDIATED | Middleware | `middleware/csrf.py` | **Fixed (Phase 3):** Missing Origin/Referer rejected in production. |
-| H-08 | ~~Timing attack on user enumeration~~ ✅ REMEDIATED | Auth | `routes/auth.py` | **Fixed (Phase 3):** Constant-time response for password reset. |
-| H-09 | ~~Demo credentials displayed on login page~~ ✅ REMEDIATED | Frontend | `pages/LoginPage.tsx` | **Fixed (Phase 2):** Demo creds gated behind `VITE_APP_ENV !== 'production'`. |
-| H-10 | ~~Path traversal in chat file upload~~ ✅ REMEDIATED | API | `routes/chat.py` | **Fixed (Phase 3):** Directory components stripped from uploaded filenames. |
-| H-11 | ~~Auth endpoints excluded from rate limiting~~ ✅ REMEDIATED | Middleware | `middleware/rate_limit.py` | **Fixed (Phase 2):** Auth paths removed from EXCLUDED_PATHS, 10/min limit added. |
-| H-12 | ~~Collab-server — no timeout on backend requests~~ ✅ REMEDIATED | Collab | `adapters/backendDocumentStateTransportAdapter.ts` | **Fixed (Phase 3):** 10s timeout added to backend HTTP requests. |
-| H-13 | ~~Missing 12+ database indexes~~ ✅ REMEDIATED | Database | `models/models.py` | **Fixed (Phase 3):** Alembic migration adding indexes for frequent query columns. |
-| H-14 | Duplicate platform columns (string + FK) | Database | `models/models.py` | `Document.platform` (string) and `Document.platform_id` (FK) — two conflicting sources of truth. |
-| H-15 | ~~Publish tool missing confirmation gate~~ ✅ REMEDIATED | AI | `services/ai/tools/` | **Fixed (Phase 3):** `requires_confirmation = True` added. |
-| H-16 | ~~Insecure dev JWT secret in collab-server~~ ✅ REMEDIATED | Collab | `collab-server/src/authContext/collaborationAuthService.ts` | **Fixed (Phase 3):** Minimum key length enforced. |
-| H-17 | ~~Version endpoints too permissive for viewers~~ ✅ REMEDIATED | API | `routes/versions.py` | **Fixed (Phase 3):** Restricted to EDITOR+. |
-| H-18 | ~~No HTML sanitization in generate-word endpoint~~ ✅ REMEDIATED | API | document generation | **Fixed (Phase 3):** HTML sanitized before word generation. |
-| H-19 | ~~SPA auth-restore skips on public-route entry~~ ✅ REMEDIATED | Frontend | `frontend/src/lib/auth.tsx`, `httpClient.ts` | **Fixed (Phase 3):** `tryRestoreSession()` called unconditionally. |
-| H-20 | ~~Portal reading-progress check logically wrong for company docs~~ ✅ REMEDIATED | Portal | `backend/app/api/portal/documents.py` | **Fixed (Phase 3):** Actual company assignment checked. |
-| H-21 | ~~WebSocket auth leaks bearer tokens in query strings~~ ✅ REMEDIATED | Security | `useChatSocket.ts`, `chat_ws.py`, `support_ws.py` | **Fixed (Phase 3):** Token moved from query string to first WS message. |
-| H-22 | ~~Collaboration URL handling — contract drift~~ ✅ REMEDIATED | Frontend/Backend | `auth.py`, `useCollaboration.ts`, `useChatSocket.ts`, collab-server | **Fixed (Phase 3):** Single source of truth for WS URL. |
-| H-23 | ~~Test suite stale in critical auth and portal areas~~ ✅ REMEDIATED | Testing | `test_auth.py`, `test_portal_api.py`, `test_route_auth_parity.py` | **Fixed (Phase 3):** Auth failures fixed, tenant harness extended, RBAC matrix added. |
-
-### MEDIUM Severity
-
-| ID | Title | Area | Files |
-|----|-------|------|-------|
-| M-01 | ~~`sort_by` parameter not validated against column whitelist~~ ✅ REMEDIATED | API | Multiple route files |
-| M-02 | ~~Chat allows cross-tenant user addition~~ ✅ REMEDIATED | API | `routes/chat.py` |
-| M-03 | ~~Public `/categories` filters PUBLISHED but docs use ACTIVE status~~ ✅ REMEDIATED | API | `routes/public.py` |
-| M-04 | ~~Bulk metadata update skips per-document permission check~~ ✅ REMEDIATED | API | `routes/documents.py` |
-| M-05 | ~~No pagination on chat list endpoint~~ ✅ REMEDIATED | API | `routes/chat.py` |
-| M-06 | ~~Refresh token accepts both cookie AND body (no precedence)~~ ✅ REMEDIATED | Auth | token handling |
-| M-07 | ~~Account lockout uses different HTTP status codes (info leak)~~ ✅ REMEDIATED | Auth | `routes/auth.py` |
-| M-08 | ~~Password complexity validator used inconsistently~~ ✅ REMEDIATED | Auth | registration vs profile |
-| M-09 | ~~Avatar upload no size validation~~ ✅ REMEDIATED | API | `routes/users.py` |
-| M-10 | ~~Refresh token rotation never occurs~~ ✅ REMEDIATED | Auth | token service |
-| M-11 | ~~Session revocation race condition on password change~~ ✅ REMEDIATED | Auth | session management |
-| M-12 | ~~Missing security headers (X-Frame-Options) in API responses~~ ✅ REMEDIATED | Backend | middleware |
-| M-13 | ~~Session inactivity timeout 30 days — too long~~ ✅ REMEDIATED | Config | `config.py` |
-| M-14 | ~~CORS origins hardcoded for development~~ ✅ REMEDIATED | Config | `config.py` |
-| M-15 | ~~Insufficient parameter validation in AI tools (no max length)~~ ✅ REMEDIATED | AI | tool definitions |
-| M-16 | ~~Audit logging truncates tool results to 200 chars~~ ✅ REMEDIATED | AI | tool executor |
-| M-17 | ~~Conversation summary doesn't validate LLM response quality~~ ✅ REMEDIATED | AI | assistant service |
-| M-18 | ~~Frontend permission check missing for visibility change dialog~~ ✅ REMEDIATED | Frontend | `VisibilityDialog.tsx` |
-| M-19 | ~~Company assignment permission check missing in UI~~ ✅ REMEDIATED | Frontend | document detail |
-| M-20 | ~~Prop drilling in DocumentDetailPage (>15 props)~~ ✅ REMEDIATED | Frontend | `DocumentDetailPage.tsx` |
-| M-21 | ~~Collab token refresh missing for long edit sessions~~ ✅ REMEDIATED | Frontend | collaboration hooks |
-| M-22 | ~~CSP missing `upgrade-insecure-requests` directive~~ ✅ REMEDIATED | Nginx | `nginx.conf` |
-| M-23 | ~~Collab-server health endpoint exposes document IDs unauthenticated~~ ✅ REMEDIATED | Collab | `healthServer.ts` |
-| M-24 | ~~Docker production backend port exposed to all interfaces~~ ✅ REMEDIATED | Docker | `docker-compose.prod.yml` |
-| M-25 | ~~E2E test bypass header active in development~~ ✅ REMEDIATED | Middleware | `rate_limit.py` |
-| M-26 | ~~Public search claims content search but only does metadata~~ ✅ REMEDIATED | API | `backend/app/api/public/documents.py` |
-| M-27 | ~~RSS feed links to `/docs/{id}` instead of `/doc/{id}`~~ ✅ REMEDIATED | API | `backend/app/api/public/documents.py` |
-| M-28 | ~~Frontend registration types out of sync with backend~~ ✅ REMEDIATED | Frontend | `auth.tsx`, `authApi.ts` |
-| M-29 | Codebase mixes strong abstractions with ad hoc shortcuts (advisory — accepted) | Architecture | multiple |
-
-### LOW Severity
-
-| ID | Title | Area |
-|----|-------|------|
-| L-01 | ~~Multiple race conditions in document operations (slug, company assignment)~~ ✅ REMEDIATED | API |
-| L-02 | ~~Session identifier validation allows empty/whitespace strings~~ ✅ REMEDIATED | Auth |
-| L-03 | No token versioning for mass revocation (advisory — existing session revocation sufficient) | Auth |
-| L-04 | ~~Missing `jti` claim in collaboration tokens~~ ✅ REMEDIATED | Auth |
-| L-05 | ~~axios timeout not configured in frontend~~ ✅ REMEDIATED | Frontend |
-| L-06 | Public route prefixes hardcoded/duplicated (advisory — refactoring risk outweighs benefit) | Frontend |
-| L-07 | ~~Error boundary lacks monitoring integration~~ ✅ REMEDIATED | Frontend |
-| L-08 | ~~Breadcrumb missing `aria-current="page"`~~ ✅ REMEDIATED | Frontend |
-| L-09 | ~~Frontend Dockerfile base image not pinned~~ ✅ REMEDIATED | Docker |
-| L-10 | ~~Backend Dockerfile copies all files (no .dockerignore)~~ ✅ Already had .dockerignore | Docker |
-| L-11 | ~~Collab-server document cache has no eviction policy~~ ✅ REMEDIATED | Collab |
-| L-12 | ~~Collab-server auth store has no token TTL~~ ✅ REMEDIATED | Collab |
-| L-13 | ~~Token expiry uses naive datetime (no timezone)~~ ✅ REMEDIATED | Backend |
-| L-14 | ~~CI migration safety runs before dependency install~~ ✅ Already correct ordering | CI |
-| L-15 | ~~`.gitignore` missing `.env.*.local` specific pattern~~ ✅ Already present in .gitignore | Config |
-
-### Potential Issues
-
-#### Potential Issue A. Assistant tool exposure is only as safe as every individual `user_can_execute()` implementation
-
-- Status: Suspected, not fully exhaustively proven across every tool.
-- Why it matters: The assistant endpoints are open to all authenticated users, and the tool registry can expose a wide operational surface instantly if one tool's permission check is wrong.
-- What should happen next: Audit every assistant tool class end-to-end instead of trusting the registry abstraction.
-
-#### Potential Issue B. Contributor-based visibility rules for comments and feedback are a brittle substitute for explicit ownership and RBAC
-
-- Status: Partially proven.
-- Why it matters: The access model depends on who has "touched" a document, not who operationally owns the workflow.
-- What should happen next: Replace contributor-derived visibility with explicit support, reviewer, and moderator policies.
-
----
+### 3.23 Potential Issue: comment visibility and chat-bridging rules are product-fragile
+- Severity: Medium
+- Category: Product Flow / Architecture / Potential Issue
+- Affected files:
+  - `backend/app/services/comment_service.py`
+- Description:
+  - Comment visibility is contributor-centric, not purely document-visibility-centric.
+  - Comment creation can trigger chat side effects.
+- Expected behavior:
+  - Comment visibility and collaboration side effects should be explicit product decisions, not surprising coupling.
+- Current behavior:
+  - The rules are unusual enough that future developers are likely to misread them.
+- Recommendation:
+  - Document the intended model clearly or simplify it. If the product intent is "any document viewer can see non-private comments," the implementation is currently misleading.
 
 ## 4. Improvement Suggestions
 
-### Architecture
+### 4.1 Build one canonical authorization matrix
+- Area: Architecture / Security
+- Why it would help:
+  - The same role concept is currently redefined in guards, route dependencies, policy objects, and service methods.
+- Suggested implementation direction:
+  - Create a central capability matrix by role and feature, and make frontend guards consume the same capability model the backend uses.
+- Priority: High
 
-1. **Build one explicit authorization matrix and enforce it centrally** — The main failures are inconsistent role and tenant rules, not missing auth entirely. Define feature-level policies for companies, support, feedback, search analytics, attachments, and assistant tools. Make routes call those policies instead of hand-rolling checks. *(Immediate)*
+### 4.2 Collapse duplicate validation logic in attachment handling
+- Area: Backend / Maintainability
+- Why it would help:
+  - Duplicated validators already caused a security regression.
+- Suggested implementation direction:
+  - One validation module, one signature, one test suite, one upload entrypoint.
+- Priority: High
 
-2. **Centralize published-release resolution** — Published content is semi-immutable. One service should resolve published version + attachments + audience snapshot, and every public/viewer/portal consumer should use it. *(Immediate)*
+### 4.3 Finish the platform-field migration
+- Area: Data Model / Backend
+- Why it would help:
+  - The current `platform` vs `platform_name` split guarantees more drift.
+- Suggested implementation direction:
+  - Migrate all filters/facets/history queries to the canonical platform relation, backfill, then delete the deprecated field from active logic.
+- Priority: High
 
-3. **Replace SQLite with PostgreSQL for production** — SQLite lacks concurrent write support and row-level locking. Add a startup check that fails hard if `DATABASE_URL` contains `sqlite` when `APP_ENV=production`. *(Immediate)*
+### 4.4 Make publication snapshot rules a single subsystem
+- Area: Backend / Product Integrity
+- Why it would help:
+  - Public, portal, viewer, and download surfaces should never disagree on what was published.
+- Suggested implementation direction:
+  - Replace every "uploaded before publish timestamp" shortcut with the snapshot resolver.
+- Priority: High
 
-4. **Move rate limiting to Redis** — In-memory rate limiting breaks with multiple Gunicorn workers. Use Redis (already optional in prod compose) as a shared backend. *(Short-term)*
+### 4.5 Add service-level and cross-layer auth tests, not only route-dependency tests
+- Area: Testability / Security
+- Why it would help:
+  - Route auth parity tests currently pass while deeper business logic still leaks.
+- Suggested implementation direction:
+  - Add tests for: assistant doc injection, company user reassignment, unscoped internal users, portal attachment listing vs download, feedback email visibility, support role parity.
+- Priority: High
 
-5. **Add ChromaDB namespace isolation** — Create per-tenant collections or enforce `where` filters at the vector store layer. *(Immediate)*
+### 4.6 Introduce explicit tenant-lifecycle semantics
+- Area: Operations / Auth / Architecture
+- Why it would help:
+  - "Inactive company" currently means different things in different channels.
+- Suggested implementation direction:
+  - Define suspend, deactivate, delete, and reactivate as explicit lifecycle states with guaranteed session/token/WS behavior.
+- Priority: Medium
 
-6. **Add database connection pooling config** — SQLAlchemy defaults are too small for production. Configure `pool_size`, `max_overflow`, `pool_timeout`. *(Short-term)*
+### 4.7 Remove broad `except Exception` paths from core query flows
+- Area: Reliability / Maintainability
+- Why it would help:
+  - The code is currently able to hide broken primary logic.
+- Suggested implementation direction:
+  - Catch targeted exceptions and emit structured logs/metrics.
+- Priority: Medium
 
-7. **Implement proper secret management** — Replace environment variable secrets with Docker secrets, HashiCorp Vault, or AWS Secrets Manager for production. *(Short-term)*
-
-### Security
-
-8. **Stop treating frontend route guards as security boundaries** — The backend is repeatedly weaker than the UI. For every manager/admin-only screen, create matching backend role tests and route enforcement. *(Immediate)*
-
-9. **Add per-endpoint rate limiting** — Auth endpoints: 10/min. File upload: separate limits. AI chat: token-based limits. *(Short-term)*
-
-10. **Implement RBAC unit test matrix** — Create a permission matrix test validating every endpoint × every role to prevent regression. *(Immediate)*
-
-11. **Re-evaluate privacy boundaries around customer identity data** — Feedback and support expose customer details too broadly. Minimize PII by role and feature. *(Short-term)*
-
-12. **Add request/response audit logging for sensitive endpoints** — Password changes, role assignments, document deletions should log sanitized request payloads. *(Short-term)*
-
-### Frontend
-
-13. **Extract DocumentDetailPage into sub-components with context** — Replace 15+ prop drilling with React Context or a dedicated state container. *(Medium-term)*
-
-14. **Add Sentry or similar error monitoring** — Error boundaries exist but don't send errors to a monitoring service. *(Short-term)*
-
-15. **Implement token refresh for collaboration sessions** — Long editing sessions (>1hr) will fail silently. Add proactive token refresh. *(Short-term)*
-
-16. **Fix session restore to be route-independent** — Restore session on app boot regardless of route, solve log noise at the monitoring layer. *(Immediate)*
-
-### DevOps
-
-17. **Pin all Docker base images to specific tags** — `python:3.11-slim` → `python:3.11.8-slim`, `node:20-alpine` → `node:20.11-alpine`, etc. *(Short-term)*
-
-18. **Add `.dockerignore`** — Prevent `.env`, `.git`, `node_modules`, test files in images. *(Short-term)*
-
-19. **Enforce HTTPS in production nginx** — SSL listener, HSTS header, HTTP→HTTPS redirect. *(Immediate)*
-
-20. **Make WebSocket endpoint discovery a real runtime contract** — Choose one source of truth for WS URLs and remove the rest. *(Short-term)*
-
-### Testing
-
-21. **Replace stale "shape-only" tests with behavior tests** — Add integration tests for auth cookie persistence, tenant-scoped support/feedback/company access, published attachment immutability, and public feed/search contracts. *(Immediate)*
-
-22. **Split monolithic modules** — Files like `companies.py`, `support_service.py`, `feedback.py`, and `models/__init__.py` have too much blast radius. Extract policy, query, serialization, and lifecycle concerns. *(Medium-term)*
-
----
+### 4.8 Move sensitive response mapping into dedicated presenters
+- Area: Backend / Maintainability
+- Why it would help:
+  - Repeated inline response mapping is already causing inconsistent PII masking.
+- Suggested implementation direction:
+  - Use a presenter/serializer layer for feedback, support, assistant, and portal DTOs.
+- Priority: Medium
 
 ## 5. Ideas
 
-1. **Platform-level authorization-contract test suite** — Exercise every role against every sensitive endpoint with real tenant fixtures.
-2. **Publish artifact manifest** — Record exactly which version, attachments, and audience state were released. Make all reader channels consume it.
-3. **Internal admin/debug page** showing effective backend policy for a route or resource.
-4. **Structured audit events for support-ticket reads**, not just writes.
-5. **Consistent projection layer** for public search, sitemap, and feed generation.
-6. **Treat support and feedback as first-class bounded contexts** with explicit ownership, not side-effects of documents.
-7. **Tenant-scoped AI models** — Let tenants configure their own AI parameters (temperature, system prompt, allowed tools).
-8. **Webhook system for document lifecycle events** (publish, archive, review request).
-9. **Document comparison / diff view** — Side-by-side version comparison with TipTap content diff.
-10. **Bulk operations API** — Batch endpoints for publish, archive, status change.
-11. **API key authentication** for external integrations / CI/CD pipelines.
-12. **Offline-capable editor** — Service workers + IndexedDB with sync-on-reconnect via Hocuspocus.
-13. **Content workflow templates** — Custom review/approval workflows with configurable gates.
-14. **Usage-based AI rate limiting** — Per-tenant AI token budgets to control LLM costs.
-15. **Automated accessibility scanning in CI** — axe-core or pa11y with failure thresholds.
-
----
+- Add a "security assertions" test suite that crawls feature capabilities by role and tenant relationship, not just endpoint dependencies.
+- Add a tenant-scope invariant checker that runs in CI and rejects non-system-admin internal users with `tenant_id=None`.
+- Add an audit event whenever a user's tenant binding changes, including actor, old tenant, new tenant, and reason.
+- Add explicit feature flags or separate products for customer-safe assistant vs internal authoring assistant. Right now they are mixed.
+- Add a release-integrity dashboard that shows the published version, published attachment snapshot, and visibility snapshot together. That would make drift obvious.
+- Add a route/UI parity linter that flags frontend routes linked for roles that backend dependencies reject.
 
 ## 6. Helpful Notes
 
-### What's Working Well
-
-- **Row-level versioning with optimistic locking** — `version_number` on models prevents lost update conflicts.
-- **Audit logging** — Most mutations log to `audit_logs` with user, action, and context.
-- **Soft-delete pattern** — Documents use `is_active` / `deleted_at` instead of hard deletes.
-- **Token refresh queue pattern** — Frontend correctly serializes concurrent token refresh calls to prevent race conditions.
-- **HTML sanitization in frontend** — DOMPurify integration for rendering user content prevents stored XSS.
-- **Security headers middleware** — Comprehensive headers (CSP, X-Content-Type-Options, Referrer-Policy, Permissions-Policy).
-- **RBAC role hierarchy** — SYSADMIN > ADMIN > MANAGER > EDITOR > VIEWER > CUSTOMER enforced in hierarchy check utility.
-- **Session management** — IP tracking, device fingerprinting, concurrent session limits, inactivity timeouts.
-- **CI pipeline breadth** — Tests, linting, type checking, security scanning, dependency review, migration safety, e2e tests.
-- **Docker healthchecks** — All four services have health check configurations.
-- **Access-policy abstractions** — `VisibilitySpec`, `DocumentAccessPolicy` and query specification objects are well-structured.
-- **Self-registration privilege escalation is fixed** — Backend correctly ignores client-provided role/tenant fields.
-- **Public changelog/search XSS sinks are hardened** — No longer a concern.
-
-### Architecture Patterns
-
-- **Tenant isolation via TenantContext** — Context variable for automatic tenant filtering in SQLAlchemy queries. Elegant but fragile if any code path forgets to set it.
-- **Tool-augmented AI generation** — AI assistant executes registered tools with parameter validation and confirmation gates.
-- **Hocuspocus integration** — Real-time collaborative editing via WebSocket with backend persistence adapter.
-
-### Testing Notes
-
-- `pytest backend/tests/test_auth.py -q` yields 5 failures and 16 passes. Failures are contract drift around registration and password validation.
-- The existing tenant-isolation harness covers documents, reviews, and collaboration — but NOT companies, support, feedback, or search analytics (exactly where the worst issues are).
-- Route-auth parity tests only verify "some auth dependency exists," not that the correct role or tenant restriction is enforced.
-- `PasswordReset` doubles as the refresh-token store. Not wrong per se, but misleading name.
-
-### Known Technical Debt (by design)
-
-- SQLite used in development (PostgreSQL support ready)
-- Ollama local LLM instead of cloud API (intentional for privacy/cost)
-- In-memory caching (no Redis in dev)
-
----
+- Assumption: `ADMIN` is intended to be tenant-scoped except for `SYSTEM_ADMIN`. This is strongly implied by `_enforce_tenant_scope()`, route guards, and comments in `companies.py`.
+- The repository contains both older and newer patterns. Newer abstractions are usually better, but they are not fully adopted.
+- Passing tests do not contradict the audit. The targeted run below passed, but it mostly verifies route-level auth and a narrower slice of publication/security behavior:
+  - `pytest -n 0 --basetemp .pytest_tmp tests/test_wave_af_publication.py tests/test_wave_ae_security.py tests/test_route_auth_parity.py tests/test_dependencies_permissions.py -q`
+  - Result: `97 passed`
+- Several issues are not "missing code." They are contradictions between code that already exists.
+- The project has useful architecture docs and debt notes, but some of the most dangerous gaps are lower-level and more concrete than those docs suggest.
 
 ## 7. Review by Feature
 
-### F1. Authentication and Session Management
+### 7.1 Authentication, session, and invitation flow
+- Supposed to do:
+  - Authenticate users, enforce tenant activity, bootstrap stable sessions, and let invitation acceptance behave like first-class login.
+- What is good:
+  - Login/refresh flow has cookie support and some session revocation logic.
+  - Password complexity is enforced server-side.
+- What is problematic:
+  - Invitation acceptance bypasses the normal refresh-cookie bootstrap.
+  - WS auth does not enforce active-tenant rules consistently with HTTP.
+  - Internal users without a tenant are still accepted unless they are customers.
+- What is missing:
+  - One consistent auth bootstrap path.
+  - One consistent tenant-active check across HTTP and WS.
+- Production readiness:
+  - Superficially functional, not safely coherent.
 
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Login / registration | ⭐⭐⭐⭐ | Proper password hashing, registration no longer trusts client role/tenant |
-| JWT tokens | ⭐⭐⭐ | Short-lived access tokens, refresh flow exists; no rotation (M-10) |
-| Session management | ⭐⭐⭐ | IP tracking, concurrent limits, inactivity timeout; timeout too long (M-13) |
-| Refresh flow | ⭐ | **Cookie deleted on refresh** (C14), **public routes skip restore** (H-19) |
-| Password security | ⭐⭐⭐ | Bcrypt, complexity validator; inconsistently applied (M-08) |
+### 7.2 Company and tenant management
+- Supposed to do:
+  - Let privileged users manage companies, users, and lifecycle safely within tenant boundaries.
+- What is good:
+  - There is some explicit scoping logic and delete-company cleanup for sessions/assignments.
+- What is problematic:
+  - Regular admins can create companies.
+  - Tenant admins can rebind arbitrary users into their company.
+  - Internal users can be orphaned from tenants.
+  - Deactivation and deletion have different security outcomes.
+- What is missing:
+  - A hard rule for who can move users across tenants.
+  - A prohibition on unscoped internal users.
+- Production readiness:
+  - Unsafe for multi-tenant administration.
 
-**Verdict:** Not production-ready. The session lifecycle is unreliable.
+### 7.3 Document lifecycle, versioning, and compare flow
+- Supposed to do:
+  - Let internal staff create, review, compare, and publish versions with role-aware controls.
+- What is good:
+  - Version routes are at least protected on the backend by `require_editor`.
+  - There are tests around publication integrity and assistant tool limits.
+- What is problematic:
+  - Compare UI is exposed to viewers while backend requires editor.
+  - Some service methods rely too heavily on route dependencies for real enforcement.
+- What is missing:
+  - Full route-to-service-to-UI consistency.
+- Production readiness:
+  - Core mechanics exist, but role-flow integrity is sloppy.
 
-### F2. Document Authoring, Review, and Publish
+### 7.4 Attachments and published releases
+- Supposed to do:
+  - Validate uploads strongly and show/download only attachments in the published snapshot.
+- What is good:
+  - A central `published_attachment_resolver` exists.
+  - Public attachment download checks the snapshot.
+- What is problematic:
+  - Main upload validation is broken.
+  - Portal detail still shows all attachments.
+  - Public/portal metadata and actual download behavior do not fully agree.
+- What is missing:
+  - One source of truth for reader-visible attachments.
+- Production readiness:
+  - Not safe enough.
 
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| CRUD operations | ⭐⭐⭐⭐ | Solid with soft-delete, versioning |
-| Review workflow | ⭐⭐⭐ | Reviews, approval, status transitions work |
-| Versioning | ⭐⭐ | Admin enforcement missing (C7), viewers too permissive (H-17) |
-| Publishing | ⭐⭐ | Force-publish bypass, AI publish lacks confirmation (H-15) |
-| Published immutability | ⭐ | **Attachments leak through direct routes** (C6) |
-| Bulk operations | ⭐⭐ | Per-document permissions skipped (M-04) |
+### 7.5 Search
+- Supposed to do:
+  - Provide scoped search, autocomplete, facets, analytics, and saved searches.
+- What is good:
+  - There is a visibility-spec abstraction and FTS path with ORM fallback.
+- What is problematic:
+  - Management search is not internal-only.
+  - Autocomplete/facets ignore visibility.
+  - FTS company-visibility SQL is wrong and hidden by broad fallback.
+- What is missing:
+  - Tests for metadata leakage by role/visibility.
+- Production readiness:
+  - Search exists, but trust boundaries are weak.
 
-**Verdict:** The lifecycle model exists but published content is not truly immutable.
+### 7.6 AI assistant
+- Supposed to do:
+  - Provide contextual assistant answers and controlled tool execution with auditability.
+- What is good:
+  - Tool routing, conversation history, and audit-aware tool design show real effort.
+  - Cross-tenant version tool tests exist.
+- What is problematic:
+  - Explicit document context injection bypasses authorization.
+  - Customer-facing assistant surface exists on top of that.
+  - Confirmation-required tool flow is not truly resumable or enforceable.
+- What is missing:
+  - One explicit trust model for customer-safe assistant access.
+  - A persistent confirmation state machine.
+- Production readiness:
+  - The feature is high-risk in its current form.
 
-### F3. Public Documentation Experience
+### 7.7 Feedback management
+- Supposed to do:
+  - Let customers submit feedback and authorized internal staff triage/respond safely.
+- What is good:
+  - There is at least an extracted feedback access policy and contributor-based intent.
+- What is problematic:
+  - Email PII masking is inconsistent.
+  - Status update permissions are wider than management permissions.
+  - Stats are not tenant-scoped.
+  - Tenant scoping depends on mutable user records.
+- What is missing:
+  - A stable feedback visibility/ownership model.
+- Production readiness:
+  - Not acceptable for sensitive customer communication data.
 
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Rendering | ⭐⭐⭐⭐ | Clean, sanitized, no XSS fallback to drafts |
-| Search | ⭐⭐ | Metadata-only despite claiming content search (M-26) |
-| RSS/Sitemap | ⭐ | XXE injection (C8), wrong route in feed (M-27) |
-| Attachment integrity | ⭐ | Published boundary bypassed (C6) |
+### 7.8 Support
+- Supposed to do:
+  - Let customers and support staff create and manage support tickets with clear role boundaries.
+- What is good:
+  - There is a service layer with access helpers and internal-note handling.
+- What is problematic:
+  - The role model is inconsistent across policy, routes, service, and UI.
+  - Internal ticket creation models internal users as customers.
+  - WS and HTTP role/lifecycle behavior are not aligned.
+- What is missing:
+  - A clean distinction between customer flows and agent flows.
+- Production readiness:
+  - Operationally confusing and likely to create support debt.
 
-**Verdict:** Close for basic browsing, not for trustworthy content publishing.
+### 7.9 Chat and real-time collaboration
+- Supposed to do:
+  - Provide internal messaging and document-linked discussions safely.
+- What is good:
+  - There is a reasonably complete service and WS stack.
+- What is problematic:
+  - Document chat creation skips document access validation.
+  - WS validation is weaker than REST.
+  - Role grouping is inconsistent.
+- What is missing:
+  - Unified permission checks and shared validators between transports.
+- Production readiness:
+  - Functional, but security boundaries are not trustworthy enough.
 
-### F4. Customer Portal
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Document access | ⭐⭐⭐ | Company-scoped filtering works |
-| Reading progress | ⭐⭐ | Access recheck wrong for company docs (H-20) |
-| Feedback | ⭐⭐⭐ | Ratings/comments work |
-| Categories | ⭐⭐ | Status mismatch (M-03) |
-| Attachment download | ⭐ | **Ticket auth broken** (C3) |
-
-**Verdict:** High risk. Functional on happy path, not reliable under permission changes or adversarial use.
-
-### F5. Company and User Administration
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Listing | ⭐⭐⭐ | Scoped for non-system-admins |
-| Detail/mutations | ⭐ | **Cross-tenant access** (C4) |
-| Assignment workflows | ⭐⭐⭐ | Domain model expects tenant ownership |
-
-**Verdict:** Not production-ready for multi-tenant administration.
-
-### F6. Search and Analytics
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Search queries | ⭐⭐⭐⭐ | Good filtering, visibility, tenant scope |
-| Analytics | ⭐ | **Globally exposed** (C15), no tenant/role restriction |
-
-**Verdict:** Unsafe until analytics are scoped.
-
-### F7. Feedback
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Customer submission | ⭐⭐⭐ | Works with statuses |
-| Staff visibility | ⭐ | **PII leak, wrong access model** (C16) |
-| Stats | ⭐ | Unscoped global counts |
-
-**Verdict:** Not acceptable for customer trust or privacy-sensitive environments.
-
-### F8. Support
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Customer flows | ⭐⭐⭐ | Submission, canned responses, service methods exist |
-| Staff access | ⭐ | **Global cross-tenant access** (C5) — worst confidentiality issue |
-| WS/REST parity | ⭐⭐ | WebSocket is slightly narrower than REST |
-
-**Verdict:** Not safe for production.
-
-### F9. Collaboration and Chat
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Real-time sync | ⭐⭐⭐⭐ | Hocuspocus CRDT-based, works well |
-| Chat participant enforcement | ⭐ | **No validation** (H-01), cross-tenant addition (M-02) |
-| Token management | ⭐⭐ | Issued without ownership check (H-03), no timeout (H-12) |
-| URL contracts | ⭐ | Three competing assumptions (H-22), WS tokens in querystring (H-21) |
-
-**Verdict:** Not ready without security and deployment cleanup.
-
-### F10. AI Assistant
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Chat interface | ⭐⭐⭐ | Functional, tool-augmented |
-| RAG / semantic search | ⭐ | **Zero tenant isolation** (C1) — unusable in multi-tenant |
-| @mention references | ⭐ | **Authorization bypass** (C2) |
-| Tool execution | ⭐⭐⭐ | Confirmation gates, parameter validation; error leak (H-06) |
-| Rate limiting | ⭐⭐ | Exists but per-process only (H-05) |
-
-**Verdict:** Potentially acceptable only after dedicated tool audit and tenant isolation fix.
-
-### F11. Analytics & Dashboard
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| View tracking | ⭐⭐⭐ | Page/document views tracked |
-| Charts | ⭐⭐⭐ | Recharts integration |
-| Data accuracy | ⭐⭐⭐ | Tenant-scoped queries |
-
-**Verdict:** Functional.
-
----
+### 7.10 Portal/public/viewer experiences
+- Supposed to do:
+  - Give customers, anonymous users, and viewers a stable read path that reflects published state.
+- What is good:
+  - Public detail does require a published version.
+  - Viewer/public/portal are clearly separated conceptually.
+- What is problematic:
+  - Portal detail attachment metadata is wrong.
+  - Reading-progress filtering is too weak for company docs.
+  - Viewer UX intentionally avoids selecting the latest version.
+  - Public filtering still uses deprecated fields.
+- What is missing:
+  - Strong published-state consistency across all read surfaces.
+- Production readiness:
+  - The happy path mostly works; the edges do not.
 
 ## 8. Review by Flow
 
-### Flow 1. Login → Refresh → Restore → Logout
+### 8.1 Invitation accept -> logged-in session
+- Entry points:
+  - `/auth/invitation/accept`, `AcceptInvitationPage`
+- Breaks:
+  - Backend returns tokens directly instead of cookie-setting login response.
+  - Frontend stores session only in memory after accept.
+- Result:
+  - Session bootstrap differs from normal login and is easier to lose.
 
-```
-Login → JWT + refresh cookie issued → Session created → SPA refreshes access token → Cookie deleted (!) → Public routes skip restore (!) → Logout
-```
+### 8.2 Internal authoring -> version compare -> publish
+- Entry points:
+  - `/documents/:id`, `/documents/:id/compare`, version APIs
+- Breaks:
+  - Frontend allows viewer navigation to compare.
+  - Backend requires editor.
+- Result:
+  - Flow works only for some roles and fails late.
 
-| Step | Status | Issues |
-|------|--------|--------|
-| Login | ✅ | ~~No rate limiting (H-11)~~, ~~user enumeration timing (H-08)~~ — both fixed |
-| JWT issuance | ✅ | Short-lived access tokens, jti claim added |
-| Session creation | ✅ | IP + device tracked |
-| Refresh | ✅ | ~~Cookie deleted (C14)~~ not vulnerable, rotation added (M-10) |
-| Session restore | ✅ | ~~Skipped on public routes (H-19)~~ — fixed, runs unconditionally |
-| Logout | ✅ | Session revoked |
+### 8.3 Customer portal browse -> open doc -> download attachment
+- Entry points:
+  - `/portal/documents`, `/portal/documents/:id`, attachment routes
+- Breaks:
+  - Detail page lists all attachments.
+  - Download route correctly rejects unpublished-snapshot attachments.
+- Result:
+  - User sees broken actions because listing and download disagree.
 
-**Risk:** ~~Random-seeming logout behavior, support churn, confusion about which session state is authoritative.~~ Session lifecycle now works correctly end-to-end.
+### 8.4 Customer reading progress -> lost access
+- Entry points:
+  - `/portal/reading-progress/recent`, `/continue`
+- Breaks:
+  - Company visibility recheck is too weak.
+- Result:
+  - Users can keep seeing stale progress entries for documents they should no longer have.
 
-### Flow 2. Draft → Review → Publish → Public/Viewer/Portal Read
+### 8.5 Customer feedback -> internal triage -> response
+- Entry points:
+  - Feedback submission and management routes
+- Breaks:
+  - PII masking is inconsistent.
+  - Status changes are allowed for lower roles than the UI implies.
+  - Stats are global for tenant-scoped roles.
+- Result:
+  - Operational and privacy boundaries are not trustworthy.
 
-```
-Create draft → Collaborative edit → Request review → Approve → Publish → Version
-```
+### 8.6 Internal/customer support ticket flow
+- Entry points:
+  - Support pages, support API, support WS
+- Breaks:
+  - Role model is fragmented.
+  - Internal "create ticket" acts as customer creation.
+  - WS auth misses tenant-active enforcement.
+- Result:
+  - Support behavior is functional but policy-incoherent.
 
-| Step | Status | Issues |
-|------|--------|--------|
-| Create draft | ✅ | Proper tenant assignment |
-| Collaborative edit | ⚠️ | Token issued without access check (H-03) |
-| Request review | ✅ | Notification to reviewers |
-| Approval | ✅ | Status transitions correct |
-| Publish | ❌ | Force-publish lacks admin check (C7), AI publish lacks confirmation (H-15) |
-| Published reading | ❌ | **Attachment snapshot bypassed** (C6), direct routes serve live attachments |
-| Version access | ⚠️ | Viewers can list versions (H-17) |
-
-**Risk:** Document appears published and stable while still leaking post-publish changes.
-
-### Flow 3. Company Admin → Company Detail → Users → Documents
-
-```
-Admin lists companies → Selects company → Views users → Manages documents → Audience decisions
-```
-
-| Step | Status | Issues |
-|------|--------|--------|
-| List companies | ✅ | Scoped for non-system-admin |
-| Company detail | ❌ | **Cross-tenant access** (C4) |
-| Company users | ❌ | **Cross-tenant access** (C4) |
-| Company documents | ❌ | **Cross-tenant access** (C4) |
-
-**Risk:** Direct cross-tenant data exposure and unauthorized mutations.
-
-### Flow 4. Customer Read → Download → Progress → Feedback → Support
-
-```
-Customer logs in → Views company content → Downloads attachment → Feedback → Support ticket
-```
-
-| Step | Status | Issues |
-|------|--------|--------|
-| Login | ✅ | Company validation enforced |
-| Company content | ✅ | Scoped correctly |
-| Attachment download | ❌ | **Ticket auth broken** (C3) |
-| Reading progress | ⚠️ | Recheck wrong for company docs (H-20) |
-| Feedback | ✅ | Works, but staff side leaks PII (C16) |
-| Support | ✅ | Works, but staff side globally exposed (C5) |
-
-**Risk:** Trust-breaking privacy incidents across customer-facing and staff-facing sides.
-
-### Flow 5. AI Assistant Interaction
-
-```
-User sends message → Context built (@mentions) → Tools selected → Tool executed → Response
-```
-
-| Step | Status | Issues |
-|------|--------|--------|
-| Message received | ✅ | Validated, tenant context set |
-| @mention resolution | ❌ | **No authorization check** (C2) |
-| Tool selection | ✅ | Registry-based with role filtering |
-| Semantic search | ❌ | **No tenant isolation** (C1) |
-| Tool execution | ⚠️ | Error messages leak internals (H-06) |
-| Response generation | ⚠️ | No quality validation of LLM output (M-17) |
-
-### Flow 6. Search → Analytics
-
-| Step | Status | Issues |
-|------|--------|--------|
-| Search results | ✅ | Good filtering, visibility, tenant scope |
-| Search analytics | ❌ | **Globally exposed** (C15) |
-
-### Flow 7. Collaboration Token → WS Connect → Session
-
-| Step | Status | Issues |
-|------|--------|--------|
-| Token issuance | ⚠️ | No ownership check (H-03) |
-| WS connect | ⚠️ | Bearer in query string (H-21), URL contract drift (H-22) |
-| Session activity | ✅ | Tracked |
-| Reconnect | ⚠️ | Token refresh missing (M-21) |
-
-### Flow 8. CI/CD Pipeline
-
-```
-PR → Lint + Tests → Security Scans → Merge → Staging → Production
-```
-
-| Step | Status | Issues |
-|------|--------|--------|
-| PR checks | ✅ | Comprehensive |
-| Security scans | ❌ | **Failures don't block** (C10) |
-| Merge | ⚠️ | Can merge with scan failures |
-| Staging | ⚠️ | Can be skipped |
-| Production | ❌ | **Can skip tests** (C9) |
-
----
+### 8.7 Assistant ask with document context
+- Entry points:
+  - `/assistant/chat`, portal assistant UI, internal assistant UI
+- Breaks:
+  - Explicit `document_ids` bypass doc-visibility checks.
+  - Confirm-required tool flow is not end-to-end real.
+- Result:
+  - The feature crosses the line from "rough UX" into "security bug."
 
 ## 9. Review by User Type / Role
 
-### System Admin
+### 9.1 Anonymous user
+- Should be able to:
+  - Access public document surfaces only.
+- Currently can:
+  - Mostly that.
+- Main gaps:
+  - Public/public-download consistency is weaker than it should be, but this is not the most dangerous role.
 
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Platform management | ✅ | Working correctly |
-| Tenant management | ✅ | Proper isolation |
-| **Risk** | ⚠️ | Lower roles are often treated too similarly in sensitive services |
+### 9.2 Customer
+- Should be able to:
+  - View only public and assigned company documents in their tenant, use portal features safely, submit feedback/support.
+- Currently can:
+  - Reach assistant routes and customer assistant UI.
+  - Reach management search endpoints because they only require authenticated users.
+  - See portal attachment entries that later fail to download.
+  - Potentially use assistant `document_ids` to read unauthorized content.
+- Main risks:
+  - Biggest exposure surface in the system right now.
 
-### Admin
+### 9.3 Viewer
+- Should be able to:
+  - Read internal content, not mutate management workflows.
+- Currently can:
+  - Reach compare UI that depends on editor-only APIs.
+  - Update feedback status through the backend.
+  - Reach support routes guarded only as internal-user routes.
+- Main risks:
+  - UI and backend disagree on what "viewer" means.
 
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Document management | ⚠️ | Force-publish accessible to non-admins (C7) |
-| Company management | ❌ | **Cross-tenant access** (C4) |
-| Support access | ❌ | Backend grants near-global access (C5) |
-| Version management | ⚠️ | Admin actions not admin-restricted |
+### 9.4 Editor
+- Should be able to:
+  - Author content, participate in collaboration, not perform management-only actions.
+- Currently can:
+  - Update feedback status.
+  - Act as support agent via service logic in places where the UI says manager-only.
+- Main risks:
+  - "Internal staff" is used as a shortcut where actual capability should be narrower.
 
-### Manager
+### 9.5 Manager
+- Should be able to:
+  - Publish/manage feedback/support within tenant scope.
+- Currently can:
+  - Receive customer email in some feedback responses despite policy saying otherwise.
+  - See global feedback stats rather than tenant-scoped data.
+- Main risks:
+  - Overexposure of PII and data beyond tenant scope.
 
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Reviews/publishing | ✅ | Review flow works |
-| Team oversight | ✅ | Can view team activity |
-| Support | ⚠️ | Gets near-agent-level access to all tickets |
-| Feedback | ⚠️ | Sees customer PII from contributor-based rule (C16) |
+### 9.6 Admin
+- Should be able to:
+  - Manage their tenant, users, and operations consistent with tenant scope.
+- Currently can:
+  - Create companies globally.
+  - Reassign arbitrary users to their company.
+  - Remove internal users from tenant binding entirely.
+- Main risks:
+  - This role is underconstrained in the exact places where tenant isolation matters most.
 
-### Editor
-
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Document editing | ✅ | Core workflow solid |
-| Collaboration | ⚠️ | Token without proper access check |
-| Publishing | ❌ | Can force-publish via API (C7) |
-| Support tickets | ❌ | Inherits global access via `require_internal_user` (C5) |
-| AI assistant | ⚠️ | @mention exposes unauthorized docs (C2) |
-
-### Viewer
-
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Read documents | ✅ | Works |
-| Version access | ⚠️ | Can list versions (H-17) |
-| Attachments | ⚠️ | Can read without doc access (H-02) |
-| Search analytics | ❌ | Can see global analytics (C15) |
-
-### Customer
-
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Company content | ✅ | Scoped correctly |
-| Attachment download | ❌ | Ticket auth broken (C3) |
-| Reading progress | ⚠️ | Access recheck wrong (H-20) |
-| Feedback | ✅ | Works |
-| AI assistant | ⚠️ | Can invoke semantic search (H-04) |
-| Chat | ⚠️ | Can read any chat (H-01) |
-
-### Anonymous / Public
-
-| Capability | Status | Risk |
-|-----------|--------|------|
-| Public documents | ✅ | Filtered by visibility |
-| Sitemap/RSS | ❌ | XXE injection vector (C8), wrong route (M-27) |
-| Collab health | ⚠️ | Exposes document IDs (M-23) |
-
-### Role-System Verdict
-
-The role set is not inherently bad. The enforcement model is bad because it is inconsistent by feature. UI guards are frequently stronger than backend guards. Tenant scope is treated as optional where it should be mandatory. Ownership is often inferred indirectly instead of modeled explicitly.
-
----
+### 9.7 System admin
+- Should be able to:
+  - Cross tenant boundaries intentionally and safely.
+- Currently can:
+  - Do that, but the system also accidentally grants some cross-tenant-like behavior to non-system-admin states.
+- Main risks:
+  - The distinction between "true global admin" and "broken unscoped internal user" is not enforced hard enough.
 
 ## 10. Review by Engineering Quality
 
-### Code Quality and Maintainability
+### 10.1 Logic correctness
+- Strongest issue:
+  - Authorization logic is not consistently fail-closed.
+- Pattern:
+  - The repository often has the right abstraction and then bypasses it in one critical path.
 
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Code organization | ⭐⭐⭐⭐ | Clean separation: routes, services, models, middleware |
-| Naming conventions | ⭐⭐⭐⭐ | Consistent Python/TypeScript naming |
-| DRY principle | ⭐⭐⭐ | Some duplication in route permission checks |
-| Type safety | ⭐⭐⭐ | TypeScript strict mode, Python type hints; mypy not enforced |
-| Error handling | ⭐⭐⭐ | Custom exceptions, error boundaries; AI tool errors leak (H-06) |
+### 10.2 Architecture quality
+- Good:
+  - There are emerging policy/query/service layers.
+- Weak:
+  - Legacy and canonical data models coexist in active behavior.
+  - Authorization is spread across router dependencies, ad hoc role checks, policy objects, and service methods.
+  - Different transports implement different rules.
 
-**Weakness:** The repository is in a half-migrated state. Some areas use strong abstractions (query specs, access policies) while others bypass them. Mixed architecture increases cognitive load and hides risk.
+### 10.3 Code quality and maintainability
+- Good:
+  - Naming is usually readable.
+  - The project is not raw spaghetti.
+- Weak:
+  - Duplicate logic exists in security-sensitive areas.
+  - Broad fallbacks hide failures.
+  - Inline response mapping repeatedly reimplements sensitive masking logic.
+  - Role groups are hand-written repeatedly instead of centralized.
 
-### Separation of Concerns
+### 10.4 Testability
+- Good:
+  - There is visible investment in tests.
+- Weak:
+  - Too many tests validate route dependency shape or intended behavior while missing deeper business-logic bypasses.
+  - The assistant, company-user binding, and UI/backend role parity gaps should already have dedicated regression tests and do not.
 
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Domain separation | ⭐⭐⭐ | Several domains attempt API/service/policy separation |
-| Module blast radius | ⭐⭐ | Large modules combine transport, authorization, business rules, query assembly |
+### 10.5 Scalability and performance
+- Good:
+  - Projection caching and FTS show awareness of scale.
+- Weak:
+  - Broken FTS visibility SQL silently falls back to ORM search.
+  - Manual feedback filtering and pagination after loading all matching rows will age badly.
 
-**Weakness:** Small feature changes have large blast radii because policy, data access, and serialization aren't separated.
+### 10.6 Defensive programming
+- Weak:
+  - Several critical areas fail open instead of closed.
+  - "Missing tenant" is treated as permissive in the wrong places.
+  - WS transport bypasses service-level validation used by REST.
 
-### Authorization and Security Engineering
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Auth infrastructure | ⭐⭐⭐⭐ | Permission helpers, tenant concepts, policy objects exist |
-| Auth enforcement | ⭐⭐ | Critical features ignore shared primitives and hand-roll checks |
-| Transport security | ⭐ | No HTTPS enforcement (C11) |
-| Secret management | ⭐⭐ | Validation exists but defaults insecure (C12) |
-
-**Verdict:** The biggest security failures are not from missing infrastructure but from uneven adoption and local shortcuts.
-
-### Testing
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Unit test coverage | ⭐⭐⭐ | Core services tested |
-| Integration tests | ⭐⭐⭐ | API routes have coverage |
-| E2E tests | ⭐⭐⭐ | Cypress/Playwright exist |
-| RBAC test matrix | ⭐ | No systematic endpoint × role test |
-| Security tests | ⭐⭐ | Some auth tests; no injection/tenant isolation tests |
-| Test currency | ⭐⭐ | 5 auth test failures, stale portal expectations (H-23) |
-
-**Verdict:** The test suite gives too much false confidence and too little actual protection.
-
-### Database Design
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Schema | ⭐⭐⭐ | Reasonable normalization, soft-delete, versioning |
-| Indexes | ⭐⭐ | Missing 12+ critical indexes (H-13) |
-| Constraints | ⭐⭐ | Missing unique constraints, nullable tenant_id (C13) |
-| Migrations | ⭐⭐⭐⭐ | Alembic managed, CI safety check |
-
-### API Design
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| RESTful conventions | ⭐⭐⭐⭐ | Proper HTTP methods, status codes |
-| Input validation | ⭐⭐ | Pydantic used but gaps (sort_by, base_url) |
-| Response consistency | ⭐⭐⭐ | Standard envelope pattern |
-| Pagination | ⭐⭐⭐ | Present on most list endpoints; missing on chat (M-05) |
-| Frontend/Backend contract | ⭐⭐ | Several contracts drift (registration types, RSS routes, collaboration URLs) |
-
-### DevOps & CI/CD
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| CI breadth | ⭐⭐⭐⭐ | Tests, lint, types, security, migration safety |
-| CI enforcement | ⭐ | Security failures don't block (C10), tests skippable (C9) |
-| Docker security | ⭐⭐⭐ | Non-root users, multi-stage builds |
-| Monitoring | ⭐⭐ | Health checks present; no APM or error tracking |
-
-### Frontend Quality
-
-| Metric | Rating | Notes |
-|--------|--------|-------|
-| Component architecture | ⭐⭐⭐ | Reasonable; some prop drilling (M-20) |
-| State management | ⭐⭐⭐ | Context + hooks |
-| Accessibility | ⭐⭐⭐ | Skip nav, ARIA roles, focus management; gaps (L-08) |
-| Performance | ⭐⭐⭐ | Memoization, lazy loading, code splitting |
-| Error resilience | ⭐⭐⭐ | Error boundaries, loading states; no monitoring (L-07) |
-
-### Engineering Verdict
-
-~~This is not a bad codebase in the sense of random spaghetti. It is worse in a more subtle way: it contains enough good structure to look safer than it is. The core problem is **false confidence** created by partial architecture, partial policy reuse, and stale tests. Reviewers cannot trust patterns to hold across modules.~~
-
-**Post-remediation:** After Phases 1–5, the architecture is now consistently enforced. RBAC applies uniformly, tenant isolation covers all surfaces, tests validate real security boundaries, and the CI/CD pipeline enforces quality gates. The codebase has moved from "looks safe but isn't" to "is safe and provably so."
-
----
+### 10.7 Separation of concerns
+- Weak:
+  - Some route files still own too much business logic.
+  - Support and feedback responses combine permission logic with data mapping too late.
+  - Comment creation causing chat side effects is hidden coupling.
 
 ## 11. Priority Action Plan
 
-### 🔴 IMMEDIATE (Block Production Deployment)
+### Immediate fixes
+- Lock down assistant `document_ids` with real document authorization checks.
+- Restrict assistant access to intended roles only, or split customer-safe assistant into a separate capability set.
+- Eliminate non-system-admin internal users with `tenant_id=None`.
+- Block tenant admins from reassigning arbitrary users across tenants or removing tenant binding from internal users.
+- Fix attachment magic-byte validation in the actual upload entrypoint.
 
-| # | Action | Issues Addressed | Effort |
-|---|--------|-----------------|--------|
-| 1 | Fix RAG tenant isolation in ChromaDB | C1 | Medium |
-| 2 | Add authorization check to @mention resolution | C2 | Small |
-| 3 | Fix attachment download-ticket HMAC verification | C3 | Small |
-| 4 | Apply tenant-scope to all company-management endpoints | C4 | Medium |
-| 5 | Lock support REST/service access to correct roles + tenants | C5 | Medium |
-| 6 | Centralize published-attachment resolution | C6 | Medium |
-| 7 | Replace `get_current_active_user` → `require_role` on 3 version endpoints | C7 | Small |
-| 8 | Validate/sanitize `base_url` in sitemap.xml and feed.xml | C8 | Small |
-| 9 | Remove `skip_tests` from CD workflow | C9 | Small |
-| 10 | Remove `continue-on-error` from secret detection CI steps | C10 | Small |
-| 11 | Set `Document.tenant_id` to `nullable=False` + migration | C13 | Medium |
-| 12 | Fix refresh-cookie persistence | C14 | Small |
-| 13 | Restrict search analytics by role and tenant | C15 | Small |
-| 14 | Fix feedback PII exposure and access model | C16 | Medium |
-| 15 | Add chat participant validation to all chat endpoints | H-01 | Medium |
-| 16 | Add document access validation to attachment endpoints | H-02 | Small |
+### Short-term improvements
+- Align support, feedback, version compare, and search roles across frontend guards, router dependencies, policies, and service methods.
+- Scope feedback stats by tenant and enforce email masking everywhere.
+- Make portal/public attachment listing use the published snapshot resolver only.
+- Apply visibility filtering to search autocomplete and facets.
 
-### 🟠 HIGH (Pre-Production)
+### Medium-term refactors
+- Centralize role capabilities and make all feature modules consume them.
+- Remove deprecated `Document.platform` behavior from queries and responses.
+- Route WS message creation through shared service validators.
+- Replace mutable-user-based feedback scoping with stable tenant/document context.
 
-| # | Action | Issues Addressed | Effort |
-|---|--------|-----------------|--------|
-| 1 | Configure HTTPS in nginx | C11 | Medium |
-| 2 | Move secrets to env vars / Docker secrets | C12 | Medium |
-| 3 | Add collab token ownership validation | H-03 | Small |
-| 4 | Add RBAC gate to SemanticSearchTool | H-04 | Small |
-| 5 | Move rate limiting to Redis | H-05 | Medium |
-| 6 | Sanitize tool error messages | H-06 | Small |
-| 7 | Apply rate limits to auth endpoints (10/min) | H-11 | Small |
-| 8 | Gate demo credentials behind `APP_ENV` | H-09 | Small |
-| 9 | Fix path traversal in chat file upload | H-10 | Small |
-| 10 | Add confirmation gate to publish tool | H-15 | Small |
-| 11 | Add missing database indexes (12+) | H-13 | Medium |
-| 12 | Fix SPA session restore on public routes | H-19 | Small |
-| 13 | Fix portal reading-progress entitlement check | H-20 | Small |
-| 14 | Replace WS query-token auth with safer mechanism | H-21 | Medium |
-| 15 | Unify WebSocket endpoint contract | H-22 | Small |
-| 16 | Rewrite stale auth/portal/tenant-scope tests | H-23 | Large |
-
-### 🟡 MEDIUM (Post-Launch Sprint)
-
-| # | Action | Issues Addressed | Effort |
-|---|--------|-----------------|--------|
-| 1 | Add `sort_by` column whitelist | M-01 | Small |
-| 2 | Fix cross-tenant user addition in chat | M-02 | Small |
-| 3 | Fix public categories status mismatch | M-03 | Small |
-| 4 | Add per-document permission to bulk update | M-04 | Medium |
-| 5 | Implement refresh token rotation | M-10 | Medium |
-| 6 | Reduce session inactivity to 7 days | M-13 | Small |
-| 7 | Add timing-safe comparison for password reset | H-08 | Small |
-| 8 | Fix CSRF middleware production bypass | H-07 | Small |
-| 9 | Build RBAC unit test matrix | — | Large |
-| 10 | Add pagination to chat list | M-05 | Small |
-| 11 | Fix RSS feed route | M-27 | Small |
-| 12 | Fix public search claims vs behavior | M-26 | Medium |
-| 13 | Align frontend registration types | M-28 | Small |
-| 14 | Minimize PII in feedback/support by role | M-09, C16 | Small |
-
-### 🟢 LOW (Backlog)
-
-| # | Action | Issues Addressed | Effort |
-|---|--------|-----------------|--------|
-| 1 | Pin Docker base image tags | L-09 | Small |
-| 2 | Add `.dockerignore` | L-10 | Small |
-| 3 | Collab-server cache eviction | L-11 | Medium |
-| 4 | Add `jti` claim to collaboration tokens | L-04 | Small |
-| 5 | Configure axios timeout | L-05 | Small |
-| 6 | Add error monitoring (Sentry) | L-07 | Medium |
-| 7 | Fix breadcrumb `aria-current` | L-08 | Small |
-| 8 | Resolve duplicate platform columns | H-14 | Large |
-| 9 | Policy-debug tooling for devs | — | Medium |
-| 10 | Split monolithic modules | M-29 | Large |
-
----
+### Long-term ideas
+- Introduce explicit tenant lifecycle states with clear auth/session semantics.
+- Build a security regression suite for multi-tenant invariants and feature-by-role behavior.
+- Simplify product models where contributor-only comment visibility and support-role ambiguity are likely to confuse both users and developers.
 
 ## 12. Top 10 Highest-Value Fixes
 
-These deliver **maximum security and stability improvement per unit of effort**:
+1. Authorize assistant document context injection before any content enters the prompt.
+2. Forbid unscoped non-system-admin internal users and repair existing records.
+3. Restrict company user reassignment/removal flows so tenant admins cannot hijack or orphan users.
+4. Fix attachment upload validation and add entrypoint-level tests for malicious file content.
+5. Apply visibility rules to search autocomplete/facets and restrict management search to internal users.
+6. Unify portal/public attachment metadata and download behavior behind one published-snapshot resolver.
+7. Fix feedback PII masking and reduce feedback status updates to management roles only.
+8. Align support permissions across UI, router dependencies, and service methods.
+9. Fix the viewer/version-compare route mismatch.
+10. Finish the platform-field migration and stop using deprecated `Document.platform` in active query logic.
 
-| Rank | Fix | Severity | Effort | Impact |
-|------|-----|----------|--------|--------|
-| **1** | Add tenant filter to ChromaDB vector queries | CRITICAL | 2-4 hrs | Eliminates cross-tenant data leakage via AI |
-| **2** | Fix attachment ticket HMAC verification | CRITICAL | 1-2 hrs | Closes direct download-path forgery |
-| **3** | Replace `get_current_active_user` → `require_role` on 3 version endpoints | CRITICAL | 30 min | Closes privilege escalation |
-| **4** | Validate `base_url` in sitemap.xml / feed.xml | CRITICAL | 30 min | Eliminates XXE/SSRF |
-| **5** | Apply tenant-scope to company-management endpoints | CRITICAL | 2-3 hrs | Removes cross-tenant admin access |
-| **6** | Lock support authorization to correct roles + tenants | CRITICAL | 3-4 hrs | Closes broadest confidentiality breach |
-| **7** | Add authorization check to @mention resolution | CRITICAL | 1-2 hrs | Prevents AI-mediated doc access bypass |
-| **8** | Remove `skip_tests` from CD + `continue-on-error` from security scans | CRITICAL | 15 min | Enforces quality and secret gates |
-| **9** | Fix refresh-cookie persistence + session restore on public routes | HIGH | 2-3 hrs | Stabilizes user session lifecycle |
-| **10** | Gate demo credentials behind environment check + restrict search analytics by role | HIGH | 30 min | Prevents credential and analytics exposure |
+## Risk Heatmap Summary by Area
 
-**Total estimated effort for top 10: ~14-20 hours of focused work, eliminating 13 CRITICAL and 4 HIGH issues.**
+| Area | Risk | Notes |
+| --- | --- | --- |
+| Assistant | Critical | Direct document-content exposure path |
+| Tenant isolation | Critical | Unscoped users + company reassignment/orphaning |
+| Auth/session | High | HTTP/WS divergence, invitation bootstrap inconsistency |
+| Search | High | Metadata leakage + hidden FTS bug |
+| Attachments/publication | High | Broken upload validation, snapshot inconsistencies |
+| Feedback | High | PII leakage and role drift |
+| Support | High | Cross-layer role incoherence |
+| Chat/WS | High | Weak transport validation and access checks |
+| Portal/public UX | Medium | Broken states, stale progress, inconsistent visibility |
+| Maintainability | Medium | Duplicate logic, legacy/current field drift |
 
----
+## Files/Modules That Appear Most Fragile
 
-## 13. Risk Heatmap
+- `backend/app/api/management/companies.py`
+- `backend/app/assistant/engine.py`
+- `backend/app/application/policies/access_policies.py`
+- `backend/app/application/queries/search_queries.py`
+- `backend/app/domain/specifications/queries.py`
+- `backend/app/application/queries/portal_queries.py`
+- `backend/app/api/management/feedback.py`
+- `backend/app/api/management/support.py`
+- `backend/app/services/attachment_service/common.py`
+- `backend/app/services/attachment_service/upload.py`
+- `backend/app/services/chat_service.py`
+- `backend/app/ws/chat_ws.py`
+- `backend/app/ws/support_ws.py`
+- `frontend/src/App.tsx`
 
-```
-                    LOW IMPACT          MEDIUM IMPACT        HIGH IMPACT
-                ┌─────────────────┬──────────────────┬──────────────────┐
-   HIGH         │                 │ • Auth rate limit │ • RAG tenant     │
-   LIKELIHOOD   │                 │   bypass (H-11)  │   leak (C1)      │
-                │                 │ • Worker bypass  │ • @mention inject│
-                │                 │   (H-05)         │   (C2)           │
-                │                 │ • Demo creds     │ • Skip tests CD  │
-                │                 │   (H-09)         │   (C9)           │
-                │                 │ • Cookie deleted │ • Scan !block    │
-                │                 │   (C14)          │   (C10)          │
-                ├─────────────────┼──────────────────┼──────────────────┤
-   MEDIUM       │ • No pagination │ • Chat no partic │ • Attachment     │
-   LIKELIHOOD   │   (M-05)        │   check (H-01)   │   ticket (C3)    │
-                │ • Sort_by       │ • Attachment no  │ • Company cross- │
-                │   (M-01)        │   access (H-02)  │   tenant (C4)    │
-                │ • Session 30d   │ • CSRF bypass    │ • Support cross- │
-                │   (M-13)        │   (H-07)         │   tenant (C5)    │
-                │                 │ • Token no rotate│ • Version admin  │
-                │                 │   (M-10)         │   bypass (C7)    │
-                │                 │ • WS tokens in   │ • XXE sitemap    │
-                │                 │   query (H-21)   │   (C8)           │
-                │                 │                  │ • No HTTPS (C11) │
-                │                 │                  │ • Publish attach  │
-                │                 │                  │   bypass (C6)    │
-                ├─────────────────┼──────────────────┼──────────────────┤
-   LOW          │ • aria-current  │ • Error info leak│ • Hardcoded      │
-   LIKELIHOOD   │   (L-08)        │   (H-06)         │   secrets (C12)  │
-                │ • Docker pin    │ • Path traversal │ • tenant_id null │
-                │   (L-09)        │   (H-10)         │   (C13)          │
-                │ • Cache evict   │ • Cross-tenant   │ • Feedback PII   │
-                │   (L-11)        │   chat (M-02)    │   (C16)          │
-                │                 │ • Stale tests    │ • Search analytics│
-                │                 │   (H-23)         │   (C15)          │
-                └─────────────────┴──────────────────┴──────────────────┘
-```
+## Files/Modules That Appear Strongest
 
-### By Area
+- `backend/tests/test_wave_af_publication.py`
+- `backend/tests/test_wave_ae_security.py`
+- `backend/tests/test_route_auth_parity.py`
+- `backend/tests/contracts/*`
+- `backend/app/services/published_attachment_resolver.py`
+- `backend/app/api/management/tenants.py`
+- `backend/app/models/__init__.py` as a schema map, despite domain sprawl
 
-| Area | Risk | Key Issues |
-|------|------|------------|
-| AI Assistant | ~~🔴 Critical~~ 🟢 Remediated | ~~C1, C2, H-04, H-05, H-06, H-15~~ all fixed |
-| Attachments | ~~🔴 Critical~~ 🟢 Remediated | ~~C3, H-02~~ fixed; C6 partially mitigated |
-| Company Management | ~~🔴 Critical~~ 🟢 Remediated | ~~C4~~ fixed |
-| Support | ~~🔴 Critical~~ 🟢 Remediated | ~~C5~~ fixed |
-| CI/CD Pipeline | ~~🔴 Critical~~ 🟢 Remediated | ~~C9, C10~~ fixed |
-| Infrastructure | ~~🔴 Critical~~ 🟢 Remediated | ~~C11, C12, C13~~ fixed |
-| Version Management | ~~🔴 Critical~~ 🟢 Remediated | C7 not vulnerable, ~~H-17~~ fixed |
-| Public Surface | ~~🔴 Critical~~ 🟢 Remediated | C8 not vulnerable, ~~M-26, M-27~~ fixed |
-| Authentication | ~~🟠 High~~ 🟢 Remediated | C14 not vulnerable, ~~H-08, H-11, H-19~~ fixed |
-| Search/Analytics | ~~🟠 High~~ 🟢 Remediated | ~~C15~~ fixed |
-| Feedback | ~~🟠 High~~ 🟢 Remediated | ~~C16~~ fixed |
-| Customer Portal | ~~🟠 High~~ 🟢 Remediated | ~~H-20, M-03~~ fixed |
-| Collaboration / Chat | ~~🟠 High~~ 🟢 Remediated | H-01 not vulnerable, ~~H-03, H-21, H-22, M-02~~ fixed |
-| Testing | ~~🟠 High~~ 🟢 Remediated | ~~H-23~~ fixed |
-| Frontend | ~~🟡 Medium~~ 🟢 Remediated | ~~H-09, M-18, M-19, M-20~~ fixed |
-| Database | 🟡 Medium | ~~H-13~~ fixed; H-14 deferred (schema debt) |
+## Top Architectural Weaknesses
 
----
+- Authorization is not centralized enough to be trustworthy.
+- Legacy and canonical data models coexist in active production logic.
+- Transport layers implement different business rules.
+- Sensitive response shaping is duplicated instead of centralized.
+- Tenant lifecycle semantics are not explicit across the platform.
 
-## 14. Fragile & Strong Modules
+## Top Logic Risks
 
-### 🔴 Fragile Modules (High Risk, Need Attention)
+- "Missing tenant" is treated as permissive.
+- Attachment visibility depends on endpoint, not one release model.
+- Search metadata visibility is weaker than search-result visibility.
+- Role meaning changes between UI, router, policy, and service layers.
+- Mutable user state is used as a proxy for historical tenant ownership.
 
-| Module | Why Fragile |
-|--------|-------------|
-| `backend/app/services/ai/` (entire subsystem) | Zero tenant isolation in vector store, @mention injection, error leakage. The AI subsystem is the single most dangerous component. |
-| `backend/app/api/management/attachments.py` | Broken HMAC ticket verification and publish-boundary leakage |
-| `backend/app/api/management/companies.py` | Cross-tenant detail and mutation exposure |
-| `backend/app/api/management/support.py` + `support_service.py` | REST/service authorization far too broad, global cross-tenant access |
-| `backend/app/api/management/feedback.py` | Over-broad staff access and excessive PII exposure |
-| `backend/app/api/management/search.py` | Analytics globally exposed without role/tenant restriction |
-| `backend/app/routes/versions.py` | Admin enforcement missing, viewers too permissive |
-| `backend/app/routes/chat.py` | No participant validation, cross-tenant addition, path traversal, no pagination |
-| `backend/app/routes/public.py` | XXE vector in sitemap/feed, status mismatch in categories |
-| `backend/app/middleware/rate_limit.py` | Per-process counters, auth exemption, e2e bypass header |
-| `backend/app/api/portal/documents.py` + `portal_queries.py` | Wrong entitlement recheck, attachment snapshot bypass |
-| `frontend/src/lib/auth.tsx` + `httpClient.ts` | Refresh cookie deleted, public route skip, contract drift |
-| `frontend/src/lib/useCollaboration.ts` + `useChatSocket.ts` | URL contract drift, bearer in query string |
-| `.github/workflows/cd.yml` | `skip_tests`, skippable staging |
-| `.github/workflows/security.yml` | All scans `continue-on-error` |
-| `backend/tests/test_auth.py` + `test_route_auth_parity.py` | Stale, shallow — defend old behavior not current |
+## Top Security/Permission Risks
 
-### 🟢 Strong Modules (Well-Built, Low Risk)
+- Assistant document exfiltration via explicit `document_ids`.
+- Cross-tenant user reassignment through company admin flows.
+- Orphaned internal users bypassing tenant checks.
+- Customer email exposure in feedback management responses.
+- Customer access to management search metadata.
+- Deactivated-tenant real-time access persisting longer than intended.
 
-| Module | Why Strong |
-|--------|------------|
-| `backend/app/security.py` | Central auth gate, session checking, tenant injection |
-| `backend/app/dependencies/permissions.py` | Permission helpers, role hierarchy |
-| `backend/app/application/policies/access_policies.py` | Clean access-policy abstractions |
-| `backend/app/domain/specifications/queries.py` | Well-structured query specifications |
-| `backend/app/middleware/security_headers.py` | Comprehensive headers with proper prod/dev differentiation |
-| `backend/app/auth_context/token_service.py` | Clean JWT generation with proper claims |
-| `backend/app/models/models.py` (except tenant_id nullable) | Good schema with versioning, soft-delete, audit trails, row locking |
-| `backend/alembic/` | Clean migration history, CI safety checks |
-| `frontend/src/hooks/` | Well-structured custom hooks with cleanup and memoization |
-| `frontend/src/components/ErrorBoundary/` | Proper error boundaries with fallback UI |
-| `frontend/nginx.conf` (except HTTPS) | Good headers, gzip, caching, SPA fallback |
-| `frontend/src/pages/public/PublicChangelogPage.tsx` | Clean, sanitized public rendering |
-| `frontend/src/pages/public/PublicSearchPage.tsx` | Well-structured search UI |
-| `collab-server/src/server/collabServerApp.ts` | Well-structured Hocuspocus integration |
+## Short Conclusion
 
----
+If I were improving this project next, I would start with the trust boundary failures, not the UI polish and not the refactors:
 
-## 15. Top Weaknesses & Risks
+1. Fix assistant authorization.
+2. Fix tenant/user binding and eliminate unscoped internal users.
+3. Fix attachment validation and publication snapshot consistency.
+4. Align role enforcement across frontend, backend routes, and services.
 
-> **Note (2026-03-21):** The weaknesses below were identified in the original audit. All have been addressed in the Phase 1–5 remediation. They are preserved here for historical context.
-
-### 1. ~~Authorization Enforcement is Inconsistent~~ ✅ REMEDIATED
-The RBAC system is well-designed ~~but applied unevenly~~. After remediation, all endpoints use `require_role()` or `require_permission()`. Semantic search and @mention respect RBAC. An automated RBAC test matrix now covers endpoint × role combinations.
-
-### 2. ~~Multi-Tenancy Has Gaps~~ ✅ REMEDIATED
-Tenant isolation ~~depends on TenantContext being correctly set on every request~~ now enforced consistently. `Document.tenant_id` is NOT NULL. ChromaDB filters by tenant. Company, support, feedback, analytics, and chat are all tenant-scoped.
-
-### 3. ~~AI Subsystem is a Backdoor~~ ✅ REMEDIATED
-The AI assistant ~~bypasses normal authorization~~ now respects RBAC. @mention checks `DocumentAccessPolicy`. Semantic search blocks CUSTOMER role. Tool errors return sanitized messages.
-
-### 4. ~~Security Pipeline is Decorative~~ ✅ REMEDIATED
-CI ~~runs security scans but none block merges~~ now enforces security gates. `continue-on-error` removed from secret detection. `skip_tests` removed from CD.
-
-### 5. ~~No HTTPS Enforcement~~ ✅ REMEDIATED
-Nginx now configured with SSL listener, HTTP→HTTPS redirect, and HSTS header.
-
-### 6. Published Content is Semi-Immutable
-The publish model partially works — some paths use cutoff timestamps while others serve live attachment state. *(C6 — partially mitigated, architectural improvement deferred.)*
-
-### 7. ~~Session Lifecycle is Broken~~ ✅ REMEDIATED
-Session restore works on all routes. Token rotation implemented. Session timeout reduced to 7 days.
-
-### 8. ~~Tests Create False Confidence~~ ✅ REMEDIATED
-Auth test failures fixed. Tenant harness extended to cover companies, support, feedback, analytics. RBAC test matrix added.
-
----
-
-## 16. Conclusion
-
-This platform demonstrates **solid architectural thinking** — the separation of concerns, multi-tenancy patterns, RBAC design, versioning, audit logging, and collaboration integration all reflect thoughtful planning. The technology choices are appropriate for the problem domain.
-
-~~However, the implementation has significant gaps between **design intent and actual enforcement**.~~ The original audit identified significant gaps. **All critical and high-severity gaps have been remediated** on the `audit` branch (Phases 1–5).
-
-The original 16 CRITICAL issues spanned four themes — all now addressed:
-1. **Tenant isolation failures** — ✅ ChromaDB queries scoped by tenant_id, company/support/feedback/analytics endpoints tenant-scoped, Document.tenant_id set to NOT NULL
-2. **Authorization bypass** — ✅ @mention checks DocumentAccessPolicy, version endpoints role-restricted, attachment HMAC properly verified with timing-safe comparison
-3. **Infrastructure gaps** — ✅ HTTPS configured in nginx, secrets externalized to env vars with startup validation, security pipeline enforces (no continue-on-error), CD skip_tests removed
-4. **Data integrity** — ✅ Published attachment snapshot centralized, token rotation implemented, session restore works on all routes
-
-**Remaining open items (non-blocking):**
-- **C6** — Published attachment snapshot bypass (architectural debt, partially mitigated)
-- **H-14** — Duplicate platform columns (schema debt, no security impact)
-- **M-29** — Code organization (advisory, accepted)
-- **L-03** — Token versioning (advisory, existing session revocation sufficient)
-- **L-06** — Route prefix duplication (advisory, refactoring risk)
-
-**Production readiness: CONDITIONAL READY.** Runtime testing and final manual security walk-through recommended.
-
-**Post-remediation rating: 8.5/10.** The platform now has consistent RBAC enforcement, tenant isolation across all surfaces, hardened CI/CD pipeline, proper transport security, and comprehensive test coverage.
-
----
-
-*End of combined audit. Original findings based on static code analysis across two independent deep reviews. Remediation status updated 2026-03-21 after Phases 1–5 completion on the `audit` branch.*
+Until those are fixed, the rest of the system is building on unstable ground.
