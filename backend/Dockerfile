@@ -2,14 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for health check
+# Install system dependencies for health check and PDF/OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN addgroup --gid 1001 --system appgroup && \
-    adduser --uid 1001 --system --gid 1001 appuser
 
 # Install dependencies in multiple stages to avoid segfaults
 COPY requirements.txt .
@@ -24,11 +20,8 @@ COPY . .
 # Make entrypoint executable
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Create data directory and set ownership
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app
-
-# Switch to non-root user
-USER appuser
+# Create data directory
+RUN mkdir -p /app/data /app/data/chromadb /app/data/uploads
 
 # Expose port
 EXPOSE 8000

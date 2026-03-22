@@ -37,8 +37,8 @@ COPY --from=builder /app/dist ./dist
 # Switch to non-root user
 USER hocuspocus
 
-# Expose WebSocket port
-EXPOSE 8002
+# Expose WebSocket port and health port
+EXPOSE 8002 8003
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
