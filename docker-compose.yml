@@ -16,6 +16,8 @@ services:
       - DEBUG=true
       - SQL_ECHO=false
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL:-sqlite:///./data/analytics.db}
+      - CHAT_DATABASE_URL=${CHAT_DATABASE_URL:-sqlite:///./data/chat.db}
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:80"]
       - OLLAMA_BASE_URL=http://ollama:11434
       - ASSISTANT_MODEL=llama3.1:8b
