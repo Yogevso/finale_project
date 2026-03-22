@@ -1,0 +1,51 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-8.3.4, pluggy-1.6.0 -- C:\Users\yogev\AppData\Local\Python\pythoncore-3.14-64\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\yogev\finale_project\backend
+configfile: pyproject.toml
+plugins: anyio-4.12.1, Faker-22.0.0, asyncio-0.24.0, cov-6.0.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 20 items
+
+tests/test_chat_service.py::TestDirectChatDeduplication::test_same_chat_returned_for_reverse_pair PASSED [  5%]
+tests/test_chat_service.py::TestDirectChatDeduplication::test_direct_chat_has_two_participants PASSED [ 10%]
+tests/test_chat_service.py::TestDirectChatDeduplication::test_cannot_create_chat_with_self PASSED [ 15%]
+tests/test_chat_service.py::TestDirectChatDeduplication::test_different_pairs_get_different_chats PASSED [ 20%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_owner_can_delete_group PASSED [ 25%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_member_cannot_delete_group PASSED [ 30%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_owner_can_add_participant PASSED [ 35%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_member_cannot_add_participant PASSED [ 40%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_cannot_remove_owner PASSED [ 45%]
+tests/test_chat_service.py::TestGroupChatPermissions::test_owner_can_remove_member PASSED [ 50%]
+tests/test_chat_service.py::TestChatTenantIsolation::test_cross_tenant_customer_blocked PASSED [ 55%]
+tests/test_chat_service.py::TestChatTenantIsolation::test_cannot_access_other_tenant_chat PASSED [ 60%]
+tests/test_chat_service.py::TestChatTenantIsolation::test_internal_staff_cannot_chat_cross_tenant PASSED [ 65%]
+tests/test_chat_service.py::TestMessagePagination::test_pagination_default_limit PASSED [ 70%]
+tests/test_chat_service.py::TestMessagePagination::test_pagination_with_before_id PASSED [ 75%]
+tests/test_chat_service.py::TestMessagePagination::test_pagination_no_overlap PASSED [ 80%]
+tests/test_chat_service.py::TestMessagePagination::test_small_limit PASSED [ 85%]
+tests/test_chat_service.py::TestReadReceipts::test_mark_as_read_updates_timestamp PASSED [ 90%]
+tests/test_chat_service.py::TestReadReceipts::test_unread_count_decreases_after_read PASSED [ 95%]
+tests/test_chat_service.py::TestReadReceipts::test_mark_read_idempotent PASSED [100%]
+
+============================== warnings summary ===============================
+app\app_factory.py:152
+  C:\Users\yogev\finale_project\backend\app\app_factory.py:152: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+..\..\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py:4599
+  C:\Users\yogev\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\fastapi\applications.py:4599: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 20 passed, 2 warnings in 10.19s =======================

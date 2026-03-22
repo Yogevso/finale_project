@@ -12,14 +12,29 @@ fi
 # Ensure data directory exists
 mkdir -p /app/data /app/data/chromadb /app/data/uploads
 
-# Run database migrations
+# Run database migrations (core, analytics, chat)
 echo "Running database migrations..."
+# Core database (default alembic section)
 if python -m alembic upgrade head; then
-    echo "Migrations completed successfully."
+    echo "Core migrations completed successfully."
 else
-    echo "Migrations failed, attempting schema bootstrap..."
+    echo "Core migrations failed, attempting schema bootstrap..."
     python -c "from app.db import init_db; init_db()"
     echo "Schema bootstrap completed."
+fi
+
+# Analytics database
+if python -m alembic -n analytics upgrade head 2>/dev/null; then
+    echo "Analytics migrations completed successfully."
+else
+    echo "Analytics migrations skipped (no separate DB configured or first run)."
+fi
+
+# Chat database
+if python -m alembic -n chat upgrade head 2>/dev/null; then
+    echo "Chat migrations completed successfully."
+else
+    echo "Chat migrations skipped (no separate DB configured or first run)."
 fi
 
 # Check if seed data is needed (no users exist)

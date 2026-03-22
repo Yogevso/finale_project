@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.container import AppContainer, build_container, get_container
 from app.conversion.contracts import DocumentConversionService
-from app.db import get_db
+from app.db import get_analytics_db, get_chat_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.services.auth_service import AuthService
@@ -27,44 +27,48 @@ def get_auth_service(
 
 def get_analytics_service(
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     container: AppContainer = Depends(get_container),
 ) -> AnalyticsServiceStranglerWrapper:
     """Resolve tenant-scoped analytics service from the shared container."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    return container.analytics_service(db, tenant_ctx)
+    return container.analytics_service(db, tenant_ctx, analytics_db=analytics_db)
 
 
 def get_comment_service(
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     container: AppContainer = Depends(get_container),
 ) -> CommentService:
     """Resolve comment service from the shared container."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    return container.comment_service(db)
+    return container.comment_service(db, chat_db=chat_db)
 
 
 def get_document_service(
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     container: AppContainer = Depends(get_container),
 ) -> DocumentService:
     """Resolve tenant-scoped document service from the shared container."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    return container.document_service(db, tenant_ctx)
+    return container.document_service(db, tenant_ctx, chat_db=chat_db)
 
 
 def get_version_service(
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     container: AppContainer = Depends(get_container),
 ) -> VersionService:
     """Resolve version service from the shared container."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    return container.version_service(db)
+    return container.version_service(db, chat_db=chat_db)
 
 
 def get_collaboration_service(

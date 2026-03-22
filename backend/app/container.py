@@ -91,24 +91,26 @@ class AppContainer:
         self,
         db: Session,
         tenant_ctx: TenantContext | None = None,
+        analytics_db: Session | None = None,
     ) -> AnalyticsServiceStranglerWrapper:
-        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx))
+        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx, analytics_db=analytics_db))
 
     def auth_service(self, db: Session) -> AuthService:
         return AuthService(db)
 
-    def comment_service(self, db: Session) -> CommentService:
-        return CommentService(db)
+    def comment_service(self, db: Session, chat_db: Session | None = None) -> CommentService:
+        return CommentService(db, chat_db=chat_db)
 
     def document_service(
         self,
         db: Session,
         tenant_ctx: TenantContext | None = None,
+        chat_db: Session | None = None,
     ) -> DocumentService:
-        return DocumentService(db, tenant_ctx)
+        return DocumentService(db, tenant_ctx, chat_db=chat_db)
 
-    def version_service(self, db: Session) -> VersionService:
-        return VersionService(db)
+    def version_service(self, db: Session, chat_db: Session | None = None) -> VersionService:
+        return VersionService(db, chat_db=chat_db)
 
     def collaboration_service(self, db: Session | None = None) -> CollaborationService:
         state_port = self.collaboration_state_port(db) if db else None
@@ -192,11 +194,12 @@ class AppContainer:
         self,
         db: Session,
         tenant_ctx: TenantContext,
+        analytics_db: Session | None = None,
     ) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx))
+        return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx, analytics_db=analytics_db))
 
-    def system_analytics_query_handler(self, db: Session) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, None))
+    def system_analytics_query_handler(self, db: Session, analytics_db: Session | None = None) -> AnalyticsQueryHandler:
+        return AnalyticsQueryHandler(self.analytics_service(db, None, analytics_db=analytics_db))
 
     def search_query_handler(self, db: Session) -> SearchQueryHandler:
         return SearchQueryHandler(db)

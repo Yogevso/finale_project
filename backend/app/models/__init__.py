@@ -23,6 +23,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 
 from app.db import Base
+from app.db.bases import AnalyticsBase, ChatBase
 from app.utils.concurrency import build_resource_etag
 
 
@@ -313,10 +314,7 @@ class User(Base):
     tenant = relationship("Tenant", back_populates="users")
     documents = relationship("Document", back_populates="created_by_user")
     comments = relationship("Comment", back_populates="user")
-    audit_logs = relationship("AuditLog", back_populates="user")
-    security_events = relationship("SecurityEvent", back_populates="user")
     user_sessions = relationship("UserSession", back_populates="user")
-    notifications = relationship("Notification", back_populates="user")
     password_resets = relationship("PasswordReset", back_populates="user")
     saved_searches = relationship(
         "SavedSearch", back_populates="user", cascade="all, delete-orphan"
@@ -392,7 +390,6 @@ class Document(Base):
         "Attachment", back_populates="document", cascade="all, delete-orphan"
     )
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="document")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
 
     @property
@@ -557,8 +554,8 @@ class AttachmentConversionJob(Base):
     attachment = relationship("Attachment", back_populates="conversion_jobs")
 
 
-class DomainEventOutbox(Base):
-    """Persisted domain events for reliable side-effect delivery."""
+class DomainEventOutbox(AnalyticsBase):
+    """Persisted domain events for reliable side-effect delivery. (Analytics DB)"""
 
     __tablename__ = "domain_event_outbox"
 
@@ -635,14 +632,14 @@ class Comment(Base):
     parent = relationship("Comment", remote_side=[id], backref="replies")
 
 
-class AuditLog(Base):
-    """Audit log model"""
+class AuditLog(AnalyticsBase):
+    """Audit log model (Analytics DB)"""
 
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)  # Cross-DB ref to users.id
+    document_id = Column(Integer, nullable=True, index=True)  # Cross-DB ref to documents.id
     action = Column(SQLEnum(ActionType), nullable=False, index=True)
     audience_event_type = Column(SQLEnum(AudienceEventType), nullable=True, index=True)
     details = Column(Text, nullable=True)
@@ -652,25 +649,18 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
-    # Relationships
-    user = relationship("User", back_populates="audit_logs")
-    document = relationship("Document", back_populates="audit_logs")
 
-
-class SecurityEvent(Base):
-    """Security event log for user account anomalies and security actions."""
+class SecurityEvent(AnalyticsBase):
+    """Security event log for user account anomalies and security actions. (Analytics DB)"""
 
     __tablename__ = "security_events"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to users.id
     event_type = Column(String(64), nullable=False, index=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-
-    # Relationships
-    user = relationship("User", back_populates="security_events")
 
 
 class UserSession(Base):
@@ -708,13 +698,13 @@ class Section(Base):
     version = relationship("Version", back_populates="sections")
 
 
-class Notification(Base):
-    """User notification model"""
+class Notification(ChatBase):
+    """User notification model (Chat DB)"""
 
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to users.id
     type = Column(SQLEnum(NotificationType), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=True)
@@ -722,9 +712,6 @@ class Notification(Base):
     is_read = Column(Boolean, default=False, nullable=False)
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    # Relationships
-    user = relationship("User", back_populates="notifications")
 
 
 class PasswordReset(Base):
@@ -900,14 +887,14 @@ class Invitation(Base):
     created_user = relationship("User", foreign_keys=[created_user_id])
 
 
-class CollaborationSession(Base):
+class CollaborationSession(ChatBase):
     """Tracks collaboration sessions for activity feed and analytics"""
 
     __tablename__ = "collaboration_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    document_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to documents.id
+    user_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to users.id
     session_id = Column(String(100), nullable=False, index=True)  # Unique session identifier
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     ended_at = Column(DateTime, nullable=True)
@@ -915,36 +902,28 @@ class CollaborationSession(Base):
     edits_count = Column(Integer, default=0, nullable=False)  # Number of edits made
     last_activity_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
-    document = relationship("Document")
-    user = relationship("User")
 
-
-class CollaborationActivity(Base):
+class CollaborationActivity(ChatBase):
     """Individual collaboration activities for the activity feed"""
 
     __tablename__ = "collaboration_activities"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    document_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to documents.id
+    user_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to users.id
     session_id = Column(String(100), nullable=True, index=True)
     activity_type = Column(SQLEnum(CollaborationActivityType), nullable=False, index=True)
     details = Column(Text, nullable=True)  # JSON string with activity details
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
-    # Relationships
-    document = relationship("Document")
-    user = relationship("User")
 
-
-class CollaborationSnapshot(Base):
+class CollaborationSnapshot(ChatBase):
     """Point-in-time snapshot of collaborative document state (NOT a Version/release)"""
 
     __tablename__ = "collaboration_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to documents.id
 
     # Snapshot metadata
     snapshot_type = Column(SQLEnum(SnapshotType), nullable=False, index=True)
@@ -957,7 +936,7 @@ class CollaborationSnapshot(Base):
     state_size = Column(Integer, nullable=False)  # Size in bytes
 
     # Context
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null for auto-saves
+    created_by = Column(Integer, nullable=True)  # cross-DB ref to users.id; Null for auto-saves
     session_id = Column(String(100), nullable=True, index=True)  # Link to CollaborationSession
 
     # Timestamps
@@ -966,10 +945,6 @@ class CollaborationSnapshot(Base):
     # Retention
     is_pinned = Column(Boolean, default=False, nullable=False)  # Pinned = won't auto-delete
     expires_at = Column(DateTime, nullable=True)  # Auto-cleanup after this date
-
-    # Relationships
-    document = relationship("Document")
-    created_by_user = relationship("User")
 
 
 # ========== Chat & Support Models (Wave X.1) ==========
@@ -1016,7 +991,7 @@ class SupportTicketPriority(str, enum.Enum):
     URGENT = "urgent"
 
 
-class Chat(Base):
+class Chat(ChatBase):
     """Internal chat — direct messages or group conversations"""
 
     __tablename__ = "chats"
@@ -1024,22 +999,19 @@ class Chat(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(SQLEnum(ChatType), nullable=False)
     name = Column(String(255), nullable=True)  # Nullable for direct chats
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)  # AH-008: document-scoped chats
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, nullable=True, index=True)  # AH-008: document-scoped chats (cross-DB ref)
+    created_by = Column(Integer, nullable=False, index=True)  # cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to tenants.id
     last_message_at = Column(DateTime, nullable=True, index=True)  # For sorting by activity
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
-    creator = relationship("User", foreign_keys=[created_by])
-    tenant = relationship("Tenant")
-    document = relationship("Document", foreign_keys=[document_id])
+    # Relationships (intra-DB only)
     participants = relationship("ChatParticipant", back_populates="chat", cascade="all, delete-orphan")
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
 
 
-class ChatParticipant(Base):
+class ChatParticipant(ChatBase):
     """Participant in a chat"""
 
     __tablename__ = "chat_participants"
@@ -1049,25 +1021,24 @@ class ChatParticipant(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to users.id
     role = Column(SQLEnum(ChatParticipantRole), default=ChatParticipantRole.MEMBER, nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_read_at = Column(DateTime, nullable=True)
     is_muted = Column(Boolean, default=False, nullable=False)
 
-    # Relationships
+    # Relationships (intra-DB only)
     chat = relationship("Chat", back_populates="participants")
-    user = relationship("User")
 
 
-class ChatMessage(Base):
+class ChatMessage(ChatBase):
     """Message in a chat"""
 
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
     chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    sender_id = Column(Integer, nullable=False, index=True)  # cross-DB ref to users.id
     content = Column(Text, nullable=False)
     message_type = Column(SQLEnum(ChatMessageType), default=ChatMessageType.TEXT, nullable=False)
     context_json = Column(Text, nullable=True)  # AH-009: context card metadata (document title, section, anchor, comment type)
@@ -1084,9 +1055,8 @@ class ChatMessage(Base):
         Index("ix_chat_messages_chat_created", "chat_id", "created_at"),
     )
 
-    # Relationships
+    # Relationships (intra-DB only)
     chat = relationship("Chat", back_populates="messages")
-    sender = relationship("User")
 
 
 class SupportTicket(Base):
@@ -1179,23 +1149,18 @@ class CannedResponse(Base):
     tenant = relationship("Tenant")
 
 
-class SearchAnalytics(Base):
-    """Search analytics — tracks queries, results, and clicks (Y2-005)"""
+class SearchAnalytics(AnalyticsBase):
+    """Search analytics — tracks queries, results, and clicks (Analytics DB)"""
 
     __tablename__ = "search_analytics"
 
     id = Column(Integer, primary_key=True, index=True)
     query = Column(String(500), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    user_id = Column(Integer, nullable=True, index=True)  # Cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=True, index=True)  # Cross-DB ref to tenants.id
     results_count = Column(Integer, nullable=False, default=0)
-    clicked_document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    clicked_document_id = Column(Integer, nullable=True)  # Cross-DB ref to documents.id
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    # Relationships
-    user = relationship("User")
-    tenant = relationship("Tenant")
-    clicked_document = relationship("Document")
 
 
 class BrokenLinkReport(Base):
@@ -1249,20 +1214,17 @@ class Announcement(Base):
     author = relationship("User")
 
 
-class NpsSurvey(Base):
-    """Net Promoter Score survey responses."""
+class NpsSurvey(AnalyticsBase):
+    """Net Promoter Score survey responses. (Analytics DB)"""
 
     __tablename__ = "nps_surveys"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=True)  # Cross-DB ref to tenants.id
     score = Column(Integer, nullable=False)  # 0-10
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    user = relationship("User")
-    tenant = relationship("Tenant")
 
 
 # ========== Admin Operations Models (Wave Z) ==========
@@ -1484,14 +1446,14 @@ class DataRequest(Base):
 # AI Assistant (conversations & messages)
 # ---------------------------------------------------------------------------
 
-class AssistantConversation(Base):
+class AssistantConversation(ChatBase):
     """A conversation between a user and the AI assistant."""
 
     __tablename__ = "assistant_conversations"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)  # null for SYSTEM_ADMIN
+    user_id = Column(Integer, nullable=False)  # cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=True)  # cross-DB ref to tenants.id; null for SYSTEM_ADMIN
     title = Column(String(255), default="New Chat", nullable=False)
     summary = Column(Text, nullable=True)  # Auto-generated summary for long conversations
     context_document_ids = Column(Text, nullable=True)  # JSON list of document IDs for context injection
@@ -1499,9 +1461,7 @@ class AssistantConversation(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # Relationships
-    user = relationship("User")
-    tenant = relationship("Tenant")
+    # Relationships (intra-DB only)
     messages = relationship(
         "AssistantMessage",
         back_populates="conversation",
@@ -1514,7 +1474,7 @@ class AssistantConversation(Base):
     )
 
 
-class AssistantMessage(Base):
+class AssistantMessage(ChatBase):
     """A single message within an assistant conversation."""
 
     __tablename__ = "assistant_messages"
@@ -1533,7 +1493,7 @@ class AssistantMessage(Base):
     token_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
+    # Relationships (intra-DB only)
     conversation = relationship("AssistantConversation", back_populates="messages")
 
     __table_args__ = (
@@ -1541,13 +1501,13 @@ class AssistantMessage(Base):
     )
 
 
-class AssistantUploadedFile(Base):
+class AssistantUploadedFile(ChatBase):
     """A file uploaded by a user in the assistant chat."""
 
     __tablename__ = "assistant_uploaded_files"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, nullable=False)  # cross-DB ref to users.id
     conversation_id = Column(
         Integer,
         ForeignKey("assistant_conversations.id", ondelete="SET NULL"),
@@ -1561,8 +1521,7 @@ class AssistantUploadedFile(Base):
     extracted_text = Column(Text, nullable=True)           # extracted content
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
-    user = relationship("User")
+    # Relationships (intra-DB only)
     conversation = relationship("AssistantConversation")
 
     __table_args__ = (
@@ -1645,8 +1604,8 @@ class ExperimentMetricSnapshot(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
-class OnboardingEvent(Base):
-    """Funnel event for onboarding analytics (AB-005)."""
+class OnboardingEvent(AnalyticsBase):
+    """Funnel event for onboarding analytics (Analytics DB)."""
 
     __tablename__ = "onboarding_events"
     __table_args__ = (
@@ -1654,17 +1613,14 @@ class OnboardingEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to tenants.id
     step = Column(String(50), nullable=False)  # invitation_sent, accepted, first_login, first_view, first_action
     occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    user = relationship("User")
-    tenant = relationship("Tenant")
 
-
-class ActivationMilestone(Base):
-    """Per-user milestone tracking (AB-006)."""
+class ActivationMilestone(AnalyticsBase):
+    """Per-user milestone tracking (Analytics DB)."""
 
     __tablename__ = "activation_milestones"
     __table_args__ = (
@@ -1672,13 +1628,10 @@ class ActivationMilestone(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to users.id
+    tenant_id = Column(Integer, nullable=False, index=True)  # Cross-DB ref to tenants.id
     milestone = Column(String(50), nullable=False)  # viewed_5_docs, created_1_doc, completed_profile, etc.
     achieved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-    user = relationship("User")
-    tenant = relationship("Tenant")
 
 
 class WebhookRegistration(Base):

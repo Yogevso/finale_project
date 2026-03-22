@@ -18,6 +18,7 @@ class TestViewerDocuments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         # Create draft document (should not appear)
         draft_doc = Document(
@@ -25,6 +26,7 @@ class TestViewerDocuments:
             document_number=f"DOC-DRF-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.DRAFT,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add_all([active_doc, draft_doc])
         db.commit()
@@ -48,6 +50,7 @@ class TestViewerDocuments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -66,6 +69,7 @@ class TestViewerDocuments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -86,6 +90,7 @@ class TestViewerDocuments:
                 status=DocumentStatus.ACTIVE,
                 visibility=DocumentVisibility.PUBLIC,
                 created_by=test_user.id,
+                tenant_id=test_user.tenant_id,
             )
             db.add(doc)
         db.commit()
@@ -106,6 +111,7 @@ class TestViewerDocuments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -128,6 +134,7 @@ class TestViewerDocuments:
             document_number=f"DOC-DRN-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.DRAFT,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -149,6 +156,7 @@ class TestViewerVersions:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -182,6 +190,7 @@ class TestViewerAttachments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -204,6 +213,7 @@ class TestViewerComments:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -235,6 +245,7 @@ class TestViewerCategories:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         doc2 = Document(
             title="HR Document",
@@ -243,6 +254,7 @@ class TestViewerCategories:
             status=DocumentStatus.ACTIVE,
             visibility=DocumentVisibility.PUBLIC,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add_all([doc1, doc2])
         db.commit()

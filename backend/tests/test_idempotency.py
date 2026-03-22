@@ -57,8 +57,8 @@ def test_reused_key_with_different_comment_payload_returns_conflict(
     assert db.query(Comment).filter(Comment.document_id == sample_document["id"]).count() == 1
 
 
-def test_duplicate_invitation_create_replays_response(client, db, admin_headers):
-    headers = dict(admin_headers)
+def test_duplicate_invitation_create_replays_response(client, db, system_admin_headers):
+    headers = dict(system_admin_headers)
     headers["Idempotency-Key"] = _new_idempotency_key()
 
     email = f"idem-invite-{uuid.uuid4().hex[:10]}@example.com"
@@ -132,7 +132,7 @@ def test_duplicate_publish_replays_response_and_avoids_duplicate_side_effects(
 def test_duplicate_bulk_company_assignment_replays_response(
     client,
     db,
-    admin_headers,
+    system_admin_headers,
     test_admin,
     test_tenant,
 ):
@@ -149,7 +149,7 @@ def test_duplicate_bulk_company_assignment_replays_response(
     db.commit()
     db.refresh(document)
 
-    headers = dict(admin_headers)
+    headers = dict(system_admin_headers)
     headers["Idempotency-Key"] = _new_idempotency_key()
     headers["If-Match"] = document.etag
     path = f"/api/v1/documents/{document.id}/companies/batch"

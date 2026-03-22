@@ -14,7 +14,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import ActionType, AuditLog, Document, DocumentStatus, DocumentVisibility, Topic, User
+from app.models import ActionType, Document, DocumentStatus, DocumentVisibility, Topic, User
+from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
 from datetime import datetime, timedelta
@@ -150,11 +151,11 @@ class CreateDocumentTool(BaseTool):
         )
         db.add(doc)
         # AE-005: Audit trail for AI-initiated document creation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.CREATE,
             details=f"Created document '{params['title']}' via AI assistant",
-        ))
+        )
         db.commit()
         db.refresh(doc)
         return {"success": True, "result": f"Document created — ID: {doc.id}, title: '{doc.title}'."}
@@ -202,12 +203,12 @@ class EditDocumentTool(BaseTool):
             return {"success": True, "result": "No changes specified."}
 
         # AE-005: Audit trail for AI-initiated document edits
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             document_id=doc.id,
             action=ActionType.UPDATE,
             details=f"Edited document via AI assistant: {', '.join(changes)}",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"Document {doc.id} updated: {', '.join(changes)}."}
 
@@ -234,12 +235,12 @@ class DeleteDocumentTool(BaseTool):
 
         title = doc.title
         # AE-005: Audit trail for AI-initiated document deletion
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             document_id=doc.id,
             action=ActionType.DELETE,
             details=f"Deleted document '{title}' via AI assistant",
-        ))
+        )
         db.delete(doc)
         db.commit()
         return {"success": True, "result": f"Document '{title}' (ID: {params['document_id']}) deleted."}

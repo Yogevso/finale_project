@@ -8,13 +8,13 @@ from app.models import AudienceEventType, AuditLog
 def test_audience_audit_paths_emit_valid_taxonomy_values(
     client,
     db,
-    admin_headers,
+    system_admin_headers,
     test_tenant,
     test_tenant_2,
 ):
     create_response = client.post(
         "/api/v1/documents",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={
             "title": "Audience taxonomy coverage",
             "visibility": "company",
@@ -30,7 +30,7 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     assign_response = client.post(
         f"/api/v1/documents/{document_id}/assign-companies",
-        headers={**admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert assign_response.status_code == 200
@@ -38,14 +38,14 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     remove_response = client.delete(
         f"/api/v1/documents/{document_id}/assign-companies/{test_tenant_2.id}",
-        headers={**admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
     )
     assert remove_response.status_code == 200
     etag = remove_response.headers["ETag"].strip('"')
 
     visibility_response = client.put(
         f"/api/v1/documents/{document_id}",
-        headers={**admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
         json={
             "visibility": "internal",
             "reason": "Reduce external audience after review",
@@ -55,13 +55,13 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     archive_response = client.post(
         f"/api/v1/documents/{document_id}/archive",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert archive_response.status_code == 200
 
     restore_response = client.post(
         f"/api/v1/documents/{document_id}/restore",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert restore_response.status_code == 200
 

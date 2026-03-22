@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.session import object_session
 
 from app.config import settings
-from app.db import SessionLocal
+from app.db import AnalyticsSessionLocal
 from app.domain.events import (
     CommentCreated,
     CompanyAssignmentsUpdated,
@@ -266,7 +266,7 @@ def process_pending_outbox_events_batch(
     """Process one outbox batch and return detailed worker counters."""
 
     owns_session = db is None
-    session = db or SessionLocal()
+    session = db or AnalyticsSessionLocal()
     report = AsyncJobBatchReport(worker_name=OUTBOX_WORKER_NAME)
     policy = retry_policy or RetryPolicy(
         base_delay_seconds=max(0, int(retry_delay_seconds)),
@@ -356,7 +356,7 @@ def list_dead_letter_outbox_entries(
 ) -> list[DomainEventOutbox]:
     """List outbox rows currently parked in DLQ/failed state."""
     owns_session = db is None
-    session = db or SessionLocal()
+    session = db or AnalyticsSessionLocal()
     try:
         return (
             session.query(DomainEventOutbox)
@@ -378,7 +378,7 @@ def requeue_dead_letter_outbox_entry(
 ) -> bool:
     """Requeue one DLQ outbox record for operator-driven recovery."""
     owns_session = db is None
-    session = db or SessionLocal()
+    session = db or AnalyticsSessionLocal()
     try:
         row = (
             session.query(DomainEventOutbox)

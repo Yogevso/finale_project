@@ -30,27 +30,14 @@ from app.security import create_access_token, get_password_hash
 class TestJWTSecretValidation:
     """Y15-031: Application should fail/warn to start without proper JWT secret."""
 
-    def test_insecure_secret_exits_in_production(self, monkeypatch):
-        """Insecure SECRET_KEY should cause exit in production mode."""
-        monkeypatch.setenv("APP_ENV", "production")
-        
-        # The Settings validator calls sys.exit(1) for production with insecure secret
-        # We need to catch that
-        import sys
-        from unittest.mock import patch
-        
-        with patch.object(sys, 'exit') as mock_exit:
-            from importlib import reload
-            import app.config as config_module
-            
-            # Force reload to trigger validation
-            try:
-                reload(config_module)
-            except SystemExit:
-                pass  # Expected
-                
-            # Either sys.exit was called or SystemExit was raised
-            # Both are acceptable outcomes
+    def test_insecure_secret_exits_in_production(self):
+        """Insecure SECRET_KEY should raise RuntimeError in production mode."""
+        with pytest.raises(RuntimeError, match="Insecure SECRET_KEY rejected"):
+            Settings(
+                SECRET_KEY="your-secret-key-change-in-production",
+                DATABASE_URL="sqlite:///test.db",
+                APP_ENV="production",
+            )
             
     def test_short_secret_warns_in_dev(self, monkeypatch, caplog):
         """Short SECRET_KEY should emit warning in development."""

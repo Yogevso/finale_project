@@ -103,7 +103,7 @@ class TestAD019SelfRegistration:
 class TestAD020RevokedSession:
     """AD-003 invariant: revoked sessions must not be accepted."""
 
-    def test_revoked_session_rejected(self, client, db):
+    def test_revoked_session_rejected(self, client, db, default_tenant):
         """After logout (session revocation), the old token must fail."""
         user = create_user(
             db,
@@ -112,6 +112,7 @@ class TestAD020RevokedSession:
             plain_password="revokepass1",
             role=UserRole.EDITOR,
             is_active=True,
+            tenant_id=default_tenant.id,
         )
         # Login
         code, data = _login(client, "revoke_user", "revokepass1")
@@ -374,7 +375,7 @@ class TestAD024PasswordComplexity:
 class TestAD025ConcurrentSessions:
     """AD-013 invariant: oldest sessions are revoked when limit exceeded."""
 
-    def test_session_limit_revokes_oldest(self, client, db):
+    def test_session_limit_revokes_oldest(self, client, db, default_tenant):
         from app.config import settings
 
         max_sessions = settings.MAX_CONCURRENT_SESSIONS  # default 5
@@ -386,6 +387,7 @@ class TestAD025ConcurrentSessions:
             plain_password="sesspass1",
             role=UserRole.EDITOR,
             is_active=True,
+            tenant_id=default_tenant.id,
         )
 
         tokens = []

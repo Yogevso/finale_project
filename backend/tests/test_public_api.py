@@ -179,6 +179,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic=raw_topic,
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 )
             )
         db.commit()
@@ -206,6 +207,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="design-systems",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
                 Document(
                     title="Design Name",
@@ -214,6 +216,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="Design Systems",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
                 Document(
                     title="Design Slugified Name",
@@ -222,6 +225,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="design-systems",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
             ]
         )
@@ -250,6 +254,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="sdk-tools",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
                 Document(
                     title="Alias Match Name",
@@ -258,6 +263,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="SDKs & Tools",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
                 Document(
                     title="Alias Match Slugified Name",
@@ -266,6 +272,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="sdks-tools",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
                 Document(
                     title="Other Topic",
@@ -274,6 +281,7 @@ class TestPublicTopicsEndpoint:
                     visibility=DocumentVisibility.PUBLIC,
                     topic="platform",
                     created_by=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
                 ),
             ]
         )
@@ -321,6 +329,7 @@ class TestPublicPlatformsEndpoints:
             platform=platform.name,
             platform_id=platform.id,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add(doc)
         db.flush()
@@ -374,6 +383,7 @@ class TestPublicPlatformsEndpoints:
             platform=platform_a.name,
             platform_id=platform_a.id,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         doc_b = Document(
             title="Core Platform Guide",
@@ -385,6 +395,7 @@ class TestPublicPlatformsEndpoints:
             platform=platform_b.name,
             platform_id=platform_b.id,
             created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
         )
         db.add_all([doc_a, doc_b])
         db.flush()

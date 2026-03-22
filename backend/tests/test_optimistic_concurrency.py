@@ -98,6 +98,7 @@ def test_visibility_update_rejects_stale_if_match_between_two_admins(
     client,
     db,
     sample_document,
+    default_tenant,
 ):
     second_admin = User(
         email="second-admin@example.com",
@@ -107,6 +108,7 @@ def test_visibility_update_rejects_stale_if_match_between_two_admins(
         role=UserRole.ADMIN,
         is_active=True,
         is_email_verified=True,
+        tenant_id=default_tenant.id,
     )
     db.add(second_admin)
     db.commit()

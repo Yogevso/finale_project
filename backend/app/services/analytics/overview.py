@@ -27,13 +27,14 @@ class AnalyticsOverviewMixin:
     """Overview and activity feed analytics."""
 
     def _tenant_scoped_audit_query(self, *, start_dt: datetime, end_dt: datetime):
-        query = self.db.query(AuditLog).filter(AuditLog.created_at.between(start_dt, end_dt))
+        query = self.analytics_db.query(AuditLog).filter(AuditLog.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_ids = (
-                self.db.query(Document.id)
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
                 .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-                .subquery()
-            )
+                .all()
+            ]
             query = query.filter(
                 or_(AuditLog.document_id.in_(tenant_doc_ids), AuditLog.document_id.is_(None))
             )
@@ -116,17 +117,19 @@ class AnalyticsOverviewMixin:
             )
         pending_reviews = review_query.count()
 
-        views_today_query = self.db.query(AuditLog).filter(
+        views_today_query = self.analytics_db.query(AuditLog).filter(
             AuditLog.action == ActionType.VIEW, AuditLog.created_at >= today_start
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
+            _tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .all()
+            ]
             views_today_query = views_today_query.filter(
                 or_(
-                    AuditLog.document_id.in_(
-                        self.db.query(Document.id).filter(
-                            Document.tenant_id == self.tenant_ctx.tenant_id
-                        )
-                    ),
+                    AuditLog.document_id.in_(_tenant_doc_ids),
                     AuditLog.document_id.is_(None),
                 )
             )
@@ -184,14 +187,15 @@ class AnalyticsOverviewMixin:
         }
 
     def get_recent_activity(self, limit: int = 10) -> List[RecentActivity]:
-        query = self.db.query(AuditLog).join(User, AuditLog.user_id == User.id)
+        query = self.analytics_db.query(AuditLog)
 
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_ids = (
-                self.db.query(Document.id)
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
                 .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-                .subquery()
-            )
+                .all()
+            ]
             query = query.filter(
                 or_(AuditLog.document_id.in_(tenant_doc_ids), AuditLog.document_id.is_(None))
             )
@@ -252,7 +256,7 @@ class AnalyticsOverviewMixin:
 
         if assigned_doc_ids:
             view_count_30d = (
-                self.db.query(AuditLog)
+                self.analytics_db.query(AuditLog)
                 .filter(
                     AuditLog.action == ActionType.VIEW,
                     AuditLog.created_at.between(thirty_days_ago, now),
@@ -261,7 +265,7 @@ class AnalyticsOverviewMixin:
                 .count()
             )
             download_count_30d = (
-                self.db.query(AuditLog)
+                self.analytics_db.query(AuditLog)
                 .filter(
                     AuditLog.action == ActionType.DOWNLOAD,
                     AuditLog.created_at.between(thirty_days_ago, now),
@@ -274,16 +278,19 @@ class AnalyticsOverviewMixin:
             download_count_30d = 0
 
         churn_logs = (
-            self.db.query(AuditLog)
+            self.analytics_db.query(AuditLog)
             .filter(
                 AuditLog.assignment_diff.isnot(None),
                 AuditLog.created_at.between(ninety_days_ago, now),
             )
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            tenant_doc_ids = (
-                self.db.query(Document.id).filter(Document.tenant_id == self.tenant_ctx.tenant_id)
-            )
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
+                .filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+                .all()
+            ]
             churn_logs = churn_logs.filter(AuditLog.document_id.in_(tenant_doc_ids))
         churn_logs = churn_logs.all()
         assignment_churn_90d = 0

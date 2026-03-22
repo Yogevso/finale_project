@@ -158,11 +158,11 @@ def test_upload_rejects_invalid_status_value(client, auth_headers):
 
 
 def test_upload_company_visibility_with_assignment_succeeds(
-    client, auth_headers, test_tenant
+    client, system_admin_headers, test_tenant
 ):
     response = client.post(
         "/api/v1/documents/upload",
-        headers=auth_headers,
+        headers=system_admin_headers,
         data=_upload_data(visibility="company", company_ids=[str(test_tenant.id)]),
         files={"file": ("company-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
     )

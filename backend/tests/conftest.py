@@ -68,7 +68,18 @@ from app.config import settings
 # generation on Windows/Python 3.14.
 settings.APP_ENV = "testing"
 
-from app.db import Base, get_db
+# ---------------------------------------------------------------------------
+# Use fast bcrypt rounds during tests.  Default rounds=12 costs ~200-300 ms per
+# hash/verify.  With rounds=4 each call drops to <1 ms, saving minutes across
+# the full 1400+ test suite (every create_user + login fixture benefits).
+# ---------------------------------------------------------------------------
+from passlib.context import CryptContext as _CryptContext
+import app.auth_context.passwords as _pwd_mod
+
+_pwd_mod.pwd_context = _CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
+
+from app.db import Base, get_db, get_analytics_db, get_chat_db
+from app.db.bases import AnalyticsBase, ChatBase
 from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole, Version
 from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
@@ -105,6 +116,8 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 # engines share the underlying SQLite connection, and if the app engine is
 # created first the test create_all hits a "disk I/O error".
 Base.metadata.create_all(bind=engine)
+AnalyticsBase.metadata.create_all(bind=engine)
+ChatBase.metadata.create_all(bind=engine)
 
 # Now it is safe to import the FastAPI application.
 from app.main import app  # noqa: E402
@@ -168,6 +181,8 @@ def db():
     transaction that is rolled back on teardown, so every test starts
     with a clean database.
     """
+    from app.services.audit_helper import set_session_factory
+
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
@@ -182,9 +197,14 @@ def db():
         if trans.nested and not trans._parent.nested:
             nested = connection.begin_nested()
 
+    # Override audit helper to use the same test connection so AuditLog
+    # writes are visible within the test and rolled back on teardown.
+    set_session_factory(lambda: TestingSessionLocal(bind=connection))
+
     try:
         yield session
     finally:
+        set_session_factory(None)
         session.close()
         transaction.rollback()
         connection.close()
@@ -212,6 +232,8 @@ def client(db):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_analytics_db] = override_get_db
+    app.dependency_overrides[get_chat_db] = override_get_db
     try:
         yield _shared_test_client
     finally:
@@ -516,6 +538,8 @@ def internal_document(db, test_admin):
 @pytest.fixture
 def company_document(db, test_admin, test_tenant):
     """Create a company-specific document assigned to test_tenant"""
+    from datetime import datetime
+
     doc = create_document(
         db,
         title="Company Document",
@@ -527,6 +551,16 @@ def company_document(db, test_admin, test_tenant):
     )
     # Assign to tenant
     doc.assigned_companies.append(test_tenant)
+    version = Version(
+        document_id=doc.id,
+        version_number=1,
+        content="Published company content",
+        is_published=True,
+        published_at=datetime.utcnow(),
+        created_by=test_admin.id,
+        published_by=test_admin.id,
+    )
+    db.add(version)
     db.commit()
     db.refresh(doc)
     return doc

@@ -46,6 +46,7 @@ from app.services.base_service import TenantAwareService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
+from app.services.audit_helper import write_audit_log
 from app.utils.audience_audit_signing import sign_payload
 from app.utils.concurrency import ensure_if_match_matches
 from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
@@ -117,11 +118,12 @@ class DocumentService(TenantAwareService[Document]):
         db: Session,
         tenant_ctx: Optional[TenantContext] = None,
         *,
+        chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self._company_lookup_cache = _CompanyLookupLRU(
             max_entries=COMPANY_LOOKUP_CACHE_MAX_ENTRIES,
             ttl_seconds=COMPANY_LOOKUP_CACHE_TTL_SECONDS,
@@ -1138,21 +1140,19 @@ class DocumentService(TenantAwareService[Document]):
                     if added_company_ids
                     else AudienceEventType.ASSIGNMENT_REMOVED
                 )
-                self.db.add(
-                    AuditLog(
-                        user_id=actor_user_id,
-                        document_id=document.id,
-                        action=ActionType.UPDATE,
-                        audience_event_type=event_type,
-                        details=json.dumps(
-                            {
-                                "event": "assignment_set_replaced",
-                                "assigned_count": len(new_company_ids),
-                            },
-                            sort_keys=True,
-                        ),
-                        assignment_diff=json.dumps(assignment_diff, sort_keys=True),
-                    )
+                write_audit_log(
+                    user_id=actor_user_id,
+                    document_id=document.id,
+                    action=ActionType.UPDATE,
+                    audience_event_type=event_type,
+                    details=json.dumps(
+                        {
+                            "event": "assignment_set_replaced",
+                            "assigned_count": len(new_company_ids),
+                        },
+                        sort_keys=True,
+                    ),
+                    assignment_diff=json.dumps(assignment_diff, sort_keys=True),
                 )
                 self.db.flush()
                 self.event_dispatcher.dispatch(
@@ -1203,7 +1203,7 @@ class DocumentService(TenantAwareService[Document]):
             document.status = DocumentStatus.ARCHIVED
             document.updated_at = datetime.utcnow()
 
-            audit = AuditLog(
+            write_audit_log(
                 user_id=user.id,
                 document_id=document.id,
                 action=ActionType.UPDATE,
@@ -1214,7 +1214,6 @@ class DocumentService(TenantAwareService[Document]):
                     f"Audience preserved: visibility={visibility_snapshot}, companies={company_ids_snapshot}"
                 ),
             )
-            self.db.add(audit)
 
         logger.info(
             "Document %d archived by user %d. Audience preserved: visibility=%s companies=%s",
@@ -1310,7 +1309,7 @@ class DocumentService(TenantAwareService[Document]):
             document.assigned_companies = active_companies
             document.updated_at = datetime.utcnow()
 
-            audit = AuditLog(
+            write_audit_log(
                 user_id=user.id,
                 document_id=document.id,
                 action=ActionType.UPDATE,
@@ -1321,7 +1320,6 @@ class DocumentService(TenantAwareService[Document]):
                     f"Audience reconciliation: {audience_changes}"
                 ),
             )
-            self.db.add(audit)
 
         logger.info(
             "Document %d restored by user %d. Audience reconciliation: %s",

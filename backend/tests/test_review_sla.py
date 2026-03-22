@@ -12,6 +12,7 @@ def test_review_sla_reminder_generates_notification(
     auth_headers,
     manager_headers,
     test_document,
+    default_tenant,
 ):
     reviewer = create_user(
         db,
@@ -19,6 +20,7 @@ def test_review_sla_reminder_generates_notification(
         username="reviewer_sla",
         full_name="Reviewer SLA",
         role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
     )
 
     submit_response = client.post(
@@ -64,6 +66,7 @@ def test_review_sla_escalation_only_runs_once(
     auth_headers,
     manager_headers,
     test_document,
+    default_tenant,
 ):
     secondary_manager = create_user(
         db,
@@ -71,6 +74,7 @@ def test_review_sla_escalation_only_runs_once(
         username="manager_sla",
         full_name="Manager SLA",
         role=UserRole.MANAGER,
+        tenant_id=default_tenant.id,
     )
 
     submit_response = client.post(

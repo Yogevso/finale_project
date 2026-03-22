@@ -94,17 +94,14 @@ class TestCollabToken:
         assert "write" in data["permissions"]
 
     def test_collab_token_permissions_viewer(self, client, viewer_auth_headers, test_document):
-        """Test that viewers only get read permissions"""
+        """Test that viewers are denied collab tokens (H-03: write permission required)"""
         response = client.post(
             "/api/v1/auth/collab-token",
             headers=viewer_auth_headers,
             json={"document_id": test_document.id},
         )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "read" in data["permissions"]
-        assert "write" not in data["permissions"]
+        assert response.status_code == 403
 
     def test_editor_receives_write_permission_when_standard_edit_policy_allows(
         self, client, db
@@ -180,14 +177,14 @@ class TestCollabToken:
 class TestDocumentState:
     """Tests for Yjs document state persistence"""
 
-    def test_put_document_state(self, client, admin_headers, test_document):
+    def test_put_document_state(self, client, system_admin_headers, test_document):
         """Test saving Yjs state to a document"""
         # Binary Yjs state (mock data)
         yjs_state = b"\x01\x02\x03\x04\x05"
 
         response = client.put(
             f"/api/v1/collaboration/documents/{test_document.id}/state",
-            headers={**admin_headers, "Content-Type": "application/octet-stream"},
+            headers={**system_admin_headers, "Content-Type": "application/octet-stream"},
             content=yjs_state,
         )
 
@@ -195,7 +192,7 @@ class TestDocumentState:
         data = response.json()
         assert "message" in data or "size" in data  # API returns message and size
 
-    def test_get_document_state(self, client, admin_headers, test_document, db):
+    def test_get_document_state(self, client, system_admin_headers, test_document, db):
         """Test retrieving Yjs state from a document"""
         # First, save some state
         yjs_state = b"\x01\x02\x03\x04\x05"
@@ -204,23 +201,23 @@ class TestDocumentState:
 
         response = client.get(
             f"/api/v1/collaboration/documents/{test_document.id}/state",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         assert response.status_code == 200
         assert response.content == yjs_state
 
-    def test_get_document_state_empty(self, client, admin_headers, test_document):
+    def test_get_document_state_empty(self, client, system_admin_headers, test_document):
         """Test retrieving state from document with no Yjs state"""
         response = client.get(
             f"/api/v1/collaboration/documents/{test_document.id}/state",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         # No state returns 404 (not found)
         assert response.status_code == 404
 
-    def test_delete_document_state(self, client, admin_headers, test_document, db):
+    def test_delete_document_state(self, client, system_admin_headers, test_document, db):
         """Test clearing Yjs state from a document"""
         # First, save some state
         test_document.yjs_state = b"\x01\x02\x03"
@@ -228,7 +225,7 @@ class TestDocumentState:
 
         response = client.delete(
             f"/api/v1/collaboration/documents/{test_document.id}/state",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         assert response.status_code == 200
@@ -379,7 +376,7 @@ class TestCollaborationActivity:
         assert response.status_code == 403
 
     def test_log_activity_rejects_other_users_session(
-        self, client, auth_headers, admin_headers, test_document
+        self, client, auth_headers, system_admin_headers, test_document
     ):
         """User cannot submit activity to another user's active session."""
         start_response = client.post(
@@ -391,7 +388,7 @@ class TestCollaborationActivity:
 
         response = client.post(
             "/api/v1/collaboration/activity",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={
                 "document_id": test_document.id,
                 "session_id": session_id,
@@ -430,7 +427,7 @@ class TestCollaborationActivity:
 class TestSnapshots:
     """Tests for collaboration snapshot system"""
 
-    def test_create_manual_snapshot(self, client, admin_headers, test_document, db):
+    def test_create_manual_snapshot(self, client, system_admin_headers, test_document, db):
         """Test creating a manual snapshot"""
         # First add some Yjs state
         test_document.yjs_state = b"\x01\x02\x03\x04\x05"
@@ -438,7 +435,7 @@ class TestSnapshots:
 
         response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"name": "Test Snapshot", "description": "A test snapshot"},
         )
 
@@ -447,14 +444,14 @@ class TestSnapshots:
         assert data["name"] == "Test Snapshot"
         assert data["snapshot_type"] == "manual_save"
 
-    def test_create_auto_snapshot(self, client, admin_headers, test_document, db):
+    def test_create_auto_snapshot(self, client, system_admin_headers, test_document, db):
         """Test creating an auto-save snapshot (API endpoint creates manual_save)"""
         test_document.yjs_state = b"\x01\x02\x03"
         db.commit()
 
         response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"name": "Auto-triggered snapshot"},
         )
 
@@ -463,7 +460,7 @@ class TestSnapshots:
         # API endpoint always creates manual_save type
         assert data["snapshot_type"] == "manual_save"
 
-    def test_list_snapshots(self, client, admin_headers, test_document, db):
+    def test_list_snapshots(self, client, system_admin_headers, test_document, db):
         """Test listing snapshots for a document"""
         test_document.yjs_state = b"\x01\x02\x03"
         db.commit()
@@ -472,13 +469,13 @@ class TestSnapshots:
         for i in range(3):
             client.post(
                 f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-                headers=admin_headers,
+                headers=system_admin_headers,
                 json={"name": f"Snapshot {i}"},
             )
 
         response = client.get(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         assert response.status_code == 200
@@ -486,7 +483,7 @@ class TestSnapshots:
         assert len(data["snapshots"]) >= 3
         assert all(snapshot["created_by_username"] for snapshot in data["snapshots"])
 
-    def test_get_snapshot(self, client, admin_headers, test_document, db):
+    def test_get_snapshot(self, client, system_admin_headers, test_document, db):
         """Test getting a specific snapshot"""
         test_document.yjs_state = b"\x01\x02\x03\x04\x05"
         db.commit()
@@ -494,7 +491,7 @@ class TestSnapshots:
         # Create a snapshot
         create_response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"name": "Specific Snapshot"},
         )
         snapshot_id = create_response.json()["id"]
@@ -502,14 +499,14 @@ class TestSnapshots:
         # Get the snapshot
         response = client.get(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots/{snapshot_id}",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "Specific Snapshot"
 
-    def test_restore_snapshot(self, client, admin_headers, test_document, db):
+    def test_restore_snapshot(self, client, system_admin_headers, test_document, db):
         """Test restoring a snapshot"""
         # Set initial state
         original_state = b"\x01\x02\x03"
@@ -519,7 +516,7 @@ class TestSnapshots:
         # Create a snapshot
         create_response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"name": "Restore Point"},
         )
         snapshot_id = create_response.json()["id"]
@@ -531,7 +528,7 @@ class TestSnapshots:
         # Restore the snapshot
         response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots/{snapshot_id}/restore",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={},  # Empty body, session_id is optional
         )
 
@@ -541,7 +538,7 @@ class TestSnapshots:
         db.refresh(test_document)
         assert test_document.yjs_state == original_state
 
-    def test_delete_snapshot(self, client, admin_headers, test_document, db):
+    def test_delete_snapshot(self, client, system_admin_headers, test_document, db):
         """Test deleting a snapshot"""
         test_document.yjs_state = b"\x01\x02\x03"
         db.commit()
@@ -549,7 +546,7 @@ class TestSnapshots:
         # Create a snapshot
         create_response = client.post(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots",
-            headers=admin_headers,
+            headers=system_admin_headers,
             json={"name": "To Delete"},
         )
         snapshot_id = create_response.json()["id"]
@@ -557,7 +554,7 @@ class TestSnapshots:
         # Delete the snapshot
         response = client.delete(
             f"/api/v1/collaboration/documents/{test_document.id}/snapshots/{snapshot_id}",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
 
         assert response.status_code == 200

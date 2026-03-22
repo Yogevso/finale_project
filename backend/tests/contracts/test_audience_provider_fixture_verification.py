@@ -170,7 +170,7 @@ def _send_request(*, client, method: str, path: str, headers: dict[str, str], bo
 def _run_fixture_sequence(
     *,
     client,
-    admin_headers: dict[str, str],
+    system_admin_headers: dict[str, str],
     contract: dict[str, Any],
     current_if_match: str,
 ) -> None:
@@ -180,7 +180,7 @@ def _run_fixture_sequence(
         method = str(fixture["endpoint"]["method"]).upper()
         path = _render_path(fixture["endpoint"]["path"], request_data.get("path_params", {}))
 
-        headers = dict(admin_headers)
+        headers = dict(system_admin_headers)
         if "If-Match" in request_data.get("headers", {}):
             headers["If-Match"] = current_if_match
 
@@ -210,7 +210,7 @@ def _run_fixture_sequence(
 
 
 def test_company_assignment_provider_fixtures_remain_backend_compatible(
-    client, db, admin_headers, test_admin
+    client, db, system_admin_headers, test_admin
 ):
     contract = _load_contract(COMPANY_ASSIGNMENT_FIXTURES_PATH)
     _assert_contract_metadata(contract, resource="company_assignment")
@@ -225,14 +225,14 @@ def test_company_assignment_provider_fixtures_remain_backend_compatible(
 
     _run_fixture_sequence(
         client=client,
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         contract=contract,
         current_if_match=document.etag,
     )
 
 
 def test_visibility_provider_fixtures_remain_backend_compatible(
-    client, db, admin_headers, test_admin
+    client, db, system_admin_headers, test_admin
 ):
     contract = _load_contract(VISIBILITY_FIXTURES_PATH)
     _assert_contract_metadata(contract, resource="visibility")
@@ -247,7 +247,7 @@ def test_visibility_provider_fixtures_remain_backend_compatible(
 
     _run_fixture_sequence(
         client=client,
-        admin_headers=admin_headers,
+        system_admin_headers=system_admin_headers,
         contract=contract,
         current_if_match=document.etag,
     )

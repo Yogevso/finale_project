@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
-from app.db import get_db
+from app.db import get_analytics_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context, require_system_admin
 from app.models import (
     ActionType,
@@ -77,13 +77,14 @@ def generate_export(
     request_id: int,
     tenant_ctx: TenantContext = Depends(require_system_admin),
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Admin triggers export generation for a pending request."""
     req = db.query(DataRequest).filter(DataRequest.id == request_id).first()
     if not req or req.request_type != DataRequestType.EXPORT:
         raise HTTPException(status_code=404, detail="Export request not found")
 
-    execute_data_export(db, request_id)
+    execute_data_export(db, request_id, analytics_db=analytics_db)
     db.refresh(req)
     return DataExportResponse(
         id=req.id,
@@ -101,6 +102,7 @@ def download_export(
     request_id: int,
     token: str,
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Download a completed data export ZIP.  Requires the one-time download token."""
     from datetime import datetime
@@ -116,7 +118,7 @@ def download_export(
         raise HTTPException(status_code=410, detail="Download link expired")
 
     # Re-generate export (in production, this would be fetched from storage)
-    zip_bytes = execute_data_export(db, request_id)
+    zip_bytes = execute_data_export(db, request_id, analytics_db=analytics_db)
     return Response(
         content=zip_bytes,
         media_type="application/zip",
@@ -178,9 +180,10 @@ def run_deletion(
     request_id: int,
     tenant_ctx: TenantContext = Depends(require_system_admin),
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Execute an approved data deletion — anonymizes user data."""
-    result = execute_data_deletion(db, request_id)
+    result = execute_data_deletion(db, request_id, analytics_db=analytics_db)
     req = db.query(DataRequest).filter(DataRequest.id == request_id).first()
     return DataDeletionResponse(
         id=req.id,
@@ -238,9 +241,10 @@ def list_data_requests(
 def verify_audit_integrity(
     tenant_ctx: TenantContext = Depends(require_system_admin),
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Verify HMAC signatures on all signed audit log entries."""
-    result = check_audit_integrity(db)
+    result = check_audit_integrity(db, analytics_db=analytics_db)
     return AuditIntegrityResult(**result)
 
 
@@ -248,15 +252,15 @@ def verify_audit_integrity(
 def enable_audit_immutability(
     tenant_ctx: TenantContext = Depends(require_system_admin),
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Install DB triggers preventing UPDATE/DELETE on audit_logs."""
-    install_audit_immutability_trigger(db)
-    db.add(
-        AuditLog(
-            user_id=tenant_ctx.user_id,
-            action=ActionType.SYSTEM,
-            details=json.dumps({"event": "audit_immutability_enabled"}),
-        )
+    install_audit_immutability_trigger(db, analytics_db=analytics_db)
+    from app.services.audit_helper import write_audit_log
+
+    write_audit_log(
+        user_id=tenant_ctx.user_id,
+        action=ActionType.SYSTEM,
+        details=json.dumps({"event": "audit_immutability_enabled"}),
     )
-    db.commit()
     return {"status": "immutability_triggers_installed"}

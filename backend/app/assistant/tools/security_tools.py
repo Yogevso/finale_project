@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.assistant.tools.base import BaseTool
 from app.models import (
     ActionType,
-    AuditLog,
     Invitation,
     InvitationStatus,
     SecurityEvent,
@@ -18,6 +17,7 @@ from app.models import (
     UserRole,
     UserSession,
 )
+from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
 
@@ -76,11 +76,11 @@ class RevokeSessionTool(BaseTool):
             return {"success": True, "result": "Session is already revoked."}
         s.revoked_at = dt.utcnow()
         # AE-005: Audit trail for AI-initiated session revocation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.UPDATE,
             details=f"Revoked session #{s.id} via AI assistant",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"Session #{s.id} revoked. That device will need to log in again."}
 
@@ -216,10 +216,10 @@ class CancelInvitationTool(BaseTool):
             return {"success": False, "result": f"Cannot cancel — invitation is already '{inv.status.value}'."}
         inv.status = InvitationStatus.CANCELLED
         # AE-005: Audit trail for AI-initiated invitation cancellation
-        db.add(AuditLog(
+        write_audit_log(
             user_id=user.id,
             action=ActionType.UPDATE,
             details=f"Cancelled invitation to {inv.email} via AI assistant",
-        ))
+        )
         db.commit()
         return {"success": True, "result": f"Invitation to {inv.email} cancelled."}

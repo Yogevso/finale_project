@@ -30,7 +30,8 @@ def test_refresh_token_service_issues_and_finds_record(db, test_user):
     assert record is not None
     assert record.user_id == test_user.id
     assert record.used_at is None
-    assert record.expires_at == expires_at
+    # Compare without timezone info — SQLite stores naive datetimes
+    assert record.expires_at.replace(tzinfo=None) == expires_at.replace(tzinfo=None)
 
 
 def test_refresh_token_service_invalidates_user_tokens(db, test_user):

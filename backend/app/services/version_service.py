@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.domain.aggregates import DocumentAggregate
@@ -23,7 +23,6 @@ from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
     ActionType,
     AudienceEventType,
-    AuditLog,
     Document,
     NotificationType,
     ReviewRequest,
@@ -35,6 +34,7 @@ from app.models import (
 )
 from app.repositories import DocumentRepository, VersionRepository
 from app.schemas import VersionCreate, VersionUpdate
+from app.services.audit_helper import write_audit_log
 from app.services.base_service import SessionService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
@@ -51,12 +51,13 @@ class VersionService(SessionService):
         self,
         db,
         *,
+        chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
     ):
         super().__init__(db)
         self.document_repository = DocumentRepository(db)
         self.version_repository = VersionRepository(db)
-        self.notification_service = NotificationService(db)
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
 
     @staticmethod
@@ -577,20 +578,18 @@ class VersionService(SessionService):
                     )
                 )
                 if audience_warnings:
-                    self.db.add(
-                        AuditLog(
-                            user_id=current_user.id,
-                            document_id=document.id,
-                            action=ActionType.PUBLISH,
-                            audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
-                            details=json.dumps(
-                                {
-                                    "event": "publish_with_advisory_audience_warnings",
-                                    "warnings": audience_warnings,
-                                },
-                                sort_keys=True,
-                            ),
-                        )
+                    write_audit_log(
+                        user_id=current_user.id,
+                        document_id=document.id,
+                        action=ActionType.PUBLISH,
+                        audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
+                        details=json.dumps(
+                            {
+                                "event": "publish_with_advisory_audience_warnings",
+                                "warnings": audience_warnings,
+                            },
+                            sort_keys=True,
+                        ),
                     )
         except Exception as e:  # policy: FAIL_FAST — publish must succeed or abort
             # Log failed publish attempt with audience state for audit trail
@@ -805,7 +804,7 @@ class VersionService(SessionService):
         - All company IDs in the snapshot must still exist
         - Visibility value must be valid
         """
-        from app.models import ActionType, AudienceEventType, AuditLog, DocumentVisibility, Tenant
+        from app.models import ActionType, AudienceEventType, DocumentVisibility, Tenant
 
         if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
             raise PermissionDeniedError("Only admins can restore audience state")
@@ -856,36 +855,34 @@ class VersionService(SessionService):
             for company in valid_companies:
                 document.assigned_companies.append(company)
 
-            self.db.add(
-                AuditLog(
-                    user_id=current_user.id,
-                    document_id=document_id,
-                    action=ActionType.UPDATE,
-                    audience_event_type=AudienceEventType.AUDIENCE_ROLLBACK,
-                    details=json.dumps(
-                        {
-                            "event": "restore_audience_from_version",
-                            "version_id": version_id,
-                            "previous_visibility": old_visibility,
-                            "restored_visibility": visibility.value,
-                            "missing_company_ids": missing_company_ids,
-                        },
-                        sort_keys=True,
-                    ),
-                    assignment_diff=json.dumps(
-                        {
-                            "old_company_ids": old_company_ids,
-                            "new_company_ids": [c.id for c in valid_companies],
-                            "added_company_ids": [
-                                cid for cid in [c.id for c in valid_companies] if cid not in old_company_ids
-                            ],
-                            "removed_company_ids": [
-                                cid for cid in old_company_ids if cid not in [c.id for c in valid_companies]
-                            ],
-                        },
-                        sort_keys=True,
-                    ),
-                )
+            write_audit_log(
+                user_id=current_user.id,
+                document_id=document_id,
+                action=ActionType.UPDATE,
+                audience_event_type=AudienceEventType.AUDIENCE_ROLLBACK,
+                details=json.dumps(
+                    {
+                        "event": "restore_audience_from_version",
+                        "version_id": version_id,
+                        "previous_visibility": old_visibility,
+                        "restored_visibility": visibility.value,
+                        "missing_company_ids": missing_company_ids,
+                    },
+                    sort_keys=True,
+                ),
+                assignment_diff=json.dumps(
+                    {
+                        "old_company_ids": old_company_ids,
+                        "new_company_ids": [c.id for c in valid_companies],
+                        "added_company_ids": [
+                            cid for cid in [c.id for c in valid_companies] if cid not in old_company_ids
+                        ],
+                        "removed_company_ids": [
+                            cid for cid in old_company_ids if cid not in [c.id for c in valid_companies]
+                        ],
+                    },
+                    sort_keys=True,
+                ),
             )
 
         # Log warning if some companies were missing
@@ -935,7 +932,7 @@ class VersionService(SessionService):
 
         Creates an enhanced audit trail for compliance.
         """
-        from app.models import ActionType, AudienceEventType, AuditLog
+        from app.models import ActionType, AudienceEventType
 
         # Only system_admin can force publish
         if current_user.role != UserRole.SYSTEM_ADMIN:
@@ -997,22 +994,20 @@ class VersionService(SessionService):
             DocumentAggregate(document).transition_to_active()
 
             # Enhanced audit trail for forced publish
-            self.db.add(
-                AuditLog(
-                    user_id=current_user.id,
-                    document_id=document_id,
-                    action=ActionType.UPDATE,
-                    audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
-                    details=json.dumps(
-                        {
-                            "event": "forced_publish",
-                            "version_number": version.version_number,
-                            "reason": reason,
-                            "warnings_overridden": warnings_overridden,
-                        },
-                        sort_keys=True,
-                    ),
-                )
+            write_audit_log(
+                user_id=current_user.id,
+                document_id=document_id,
+                action=ActionType.UPDATE,
+                audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
+                details=json.dumps(
+                    {
+                        "event": "forced_publish",
+                        "version_number": version.version_number,
+                        "reason": reason,
+                        "warnings_overridden": warnings_overridden,
+                    },
+                    sort_keys=True,
+                ),
             )
 
             self.event_dispatcher.dispatch(
@@ -1067,7 +1062,7 @@ class VersionService(SessionService):
         Schedule a version to be published at a specific time.
         Audience validation happens at schedule time and again at publish time.
         """
-        from app.models import ActionType, AuditLog
+        from app.models import ActionType
 
         document = self._get_document_for_user(document_id, current_user)
 
@@ -1105,17 +1100,15 @@ class VersionService(SessionService):
             version.audience_visibility_snapshot = scheduled_visibility_snapshot
             version.audience_company_ids_snapshot = scheduled_company_ids_snapshot
 
-            self.db.add(
-                AuditLog(
-                    user_id=current_user.id,
-                    document_id=document_id,
-                    action=ActionType.UPDATE,
-                    details=(
-                        f"Scheduled publish for version {version.version_number} "
-                        f"at {scheduled_at.isoformat()}. "
-                        f"Audience validated and snapshot captured at schedule time."
-                    ),
-                )
+            write_audit_log(
+                user_id=current_user.id,
+                document_id=document_id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Scheduled publish for version {version.version_number} "
+                    f"at {scheduled_at.isoformat()}. "
+                    f"Audience validated and snapshot captured at schedule time."
+                ),
             )
 
         logger.info(
@@ -1140,7 +1133,7 @@ class VersionService(SessionService):
         current_user: User,
     ) -> dict:
         """Cancel a scheduled publish."""
-        from app.models import ActionType, AuditLog
+        from app.models import ActionType
 
         _ = self._get_document_for_user(document_id, current_user)
 
@@ -1164,16 +1157,14 @@ class VersionService(SessionService):
             version.audience_visibility_snapshot = None
             version.audience_company_ids_snapshot = None
 
-            self.db.add(
-                AuditLog(
-                    user_id=current_user.id,
-                    document_id=document_id,
-                    action=ActionType.UPDATE,
-                    details=(
-                        f"Cancelled scheduled publish for version {version.version_number}. "
-                        f"Was scheduled for {old_scheduled_at.isoformat()}."
-                    ),
-                )
+            write_audit_log(
+                user_id=current_user.id,
+                document_id=document_id,
+                action=ActionType.UPDATE,
+                details=(
+                    f"Cancelled scheduled publish for version {version.version_number}. "
+                    f"Was scheduled for {old_scheduled_at.isoformat()}."
+                ),
             )
 
         return {
@@ -1188,7 +1179,7 @@ class VersionService(SessionService):
         Re-validates audience before publishing.
         Returns a report of processed items.
         """
-        from app.models import ActionType, AuditLog, Tenant
+        from app.models import ActionType, Tenant
 
         now = datetime.utcnow()
         due_versions = (
@@ -1315,16 +1306,14 @@ class VersionService(SessionService):
 
                     DocumentAggregate(document).transition_to_active()
 
-                    self.db.add(
-                        AuditLog(
-                            user_id=None,  # System action
-                            document_id=document.id,
-                            action=ActionType.UPDATE,
-                            details=(
-                                f"SCHEDULED PUBLISH completed - Version {version.version_number}. "
-                                f"Audience revalidated at publish time."
-                            ),
-                        )
+                    write_audit_log(
+                        user_id=None,  # System action
+                        document_id=document.id,
+                        action=ActionType.UPDATE,
+                        details=(
+                            f"SCHEDULED PUBLISH completed - Version {version.version_number}. "
+                            f"Audience revalidated at publish time."
+                        ),
                     )
 
                     self.event_dispatcher.dispatch(

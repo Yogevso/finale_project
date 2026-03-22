@@ -26,26 +26,38 @@ class AnalyticsTenantsMixin:
             doc_count = self.db.query(Document).filter(Document.tenant_id == tenant.id).count()
             user_count = self.db.query(User).filter(User.tenant_id == tenant.id).count()
 
-            active_user_ids = (
-                self.db.query(func.distinct(AuditLog.user_id))
-                .join(User)
-                .filter(User.tenant_id == tenant.id, AuditLog.created_at >= thirty_days_ago)
+            # Get user IDs for this tenant from core DB, then query AuditLog from analytics DB
+            tenant_user_ids = [
+                row[0]
+                for row in self.db.query(User.id)
+                .filter(User.tenant_id == tenant.id)
                 .all()
-            )
+            ]
+            active_user_ids = (
+                self.analytics_db.query(func.distinct(AuditLog.user_id))
+                .filter(
+                    AuditLog.user_id.in_(tenant_user_ids),
+                    AuditLog.created_at >= thirty_days_ago,
+                )
+                .all()
+            ) if tenant_user_ids else []
             active_users_30d = len(active_user_ids)
 
-            tenant_doc_ids = (
-                self.db.query(Document.id).filter(Document.tenant_id == tenant.id).subquery()
-            )
+            tenant_doc_ids = [
+                row[0]
+                for row in self.db.query(Document.id)
+                .filter(Document.tenant_id == tenant.id)
+                .all()
+            ]
             views_30d = (
-                self.db.query(AuditLog)
+                self.analytics_db.query(AuditLog)
                 .filter(
                     AuditLog.action == ActionType.VIEW,
                     AuditLog.created_at >= thirty_days_ago,
                     AuditLog.document_id.in_(tenant_doc_ids),
                 )
                 .count()
-            )
+            ) if tenant_doc_ids else 0
 
             health_score = min(
                 100,

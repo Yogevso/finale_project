@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.container import AppContainer
-from app.models import AuditLog, ActionType, Document, ReviewRequest, ReviewStatus, User
+from app.models import ActionType, Document, ReviewRequest, ReviewStatus, User
+from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
@@ -110,12 +111,12 @@ class SubmitReviewTool(BaseTool):
                 review.review_comments = params["comments"][:2000]
 
             # AE-005: Audit log for reject decision
-            db.add(AuditLog(
+            write_audit_log(
                 user_id=user.id,
                 document_id=review.document_id,
                 action=ActionType.UPDATE,
                 details=f"Rejected review #{review.id} via AI assistant",
-            ))
+            )
             db.commit()
 
             return {

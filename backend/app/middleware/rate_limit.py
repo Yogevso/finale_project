@@ -86,6 +86,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/companies/batch$"),
     )
     ADMIN_PATH_PREFIX = f"{settings.API_PREFIX}/admin/"
+    # Paths that serve admin UI panels but aren't under /admin/
+    ADMIN_CONTEXT_PREFIXES = (
+        f"{settings.API_PREFIX}/rbac/",
+        f"{settings.API_PREFIX}/announcements",
+        f"{settings.API_PREFIX}/chats",
+        f"{settings.API_PREFIX}/alert-rules",
+        f"{settings.API_PREFIX}/settings",
+    )
 
     def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
         super().__init__(app)
@@ -125,6 +133,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return 20, 3600, "invitation"
         # Z-017: Admin endpoints get a higher limit (500 req/min)
         if request_path.startswith(self.ADMIN_PATH_PREFIX):
+            return 500, 60, "admin"
+        # Admin-context paths (System Setup, RBAC, etc.) also get the admin limit
+        if any(request_path.startswith(prefix) for prefix in self.ADMIN_CONTEXT_PREFIXES):
             return 500, 60, "admin"
         if method in {"POST", "PUT", "PATCH", "DELETE"} and any(
             pattern.match(request_path) for pattern in self.ASSIGNMENT_PATH_PATTERNS

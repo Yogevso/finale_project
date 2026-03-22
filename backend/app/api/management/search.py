@@ -18,7 +18,7 @@ from app.application.queries.search_queries import (
     SearchFacetsQuery,
     SearchQueryHandler,
 )
-from app.db import get_db
+from app.db import get_analytics_db, get_db
 from app.models import SavedSearch, SearchAnalytics, User, UserRole
 from app.dependencies.permissions import require_any_role, require_internal_user
 from app.application.policies.access_policies import AnalyticsAccessPolicy
@@ -84,7 +84,7 @@ def search_documents(
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_internal_user),
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
-    db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
 ):
     """Full-text search using SQLite FTS5"""
     result = search_query_handler.execute_search_documents(
@@ -101,13 +101,13 @@ def search_documents(
 
     # Log search analytics (fire-and-forget)
     try:
-        db.add(SearchAnalytics(
+        analytics_db.add(SearchAnalytics(
             query=q[:500],
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
             results_count=result.total,
         ))
-        db.commit()
+        analytics_db.commit()
     except Exception:
         logger.debug("Failed to log search analytics", exc_info=True)
 
@@ -207,7 +207,7 @@ class SearchClickBody(BaseModel):
 @router.post("/click")
 def record_search_click(
     body: SearchClickBody,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
     current_user: User = Depends(require_internal_user),
 ):
     """Record that a user clicked a search result."""
@@ -225,7 +225,7 @@ def record_search_click(
 @router.get("/analytics")
 def get_search_analytics(
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
     current_user: User = Depends(require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])),
 ):
     """Get search analytics — top queries, zero-result queries, click-through."""

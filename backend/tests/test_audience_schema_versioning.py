@@ -12,13 +12,13 @@ SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 
 def test_assignment_endpoints_emit_schema_version_header(
     client,
-    admin_headers,
+    system_admin_headers,
     test_tenant,
     test_tenant_2,
 ):
     create_response = client.post(
         "/api/v1/documents",
-        headers=admin_headers,
+        headers=system_admin_headers,
         json={
             "title": "Schema header coverage",
             "visibility": "company",
@@ -34,14 +34,14 @@ def test_assignment_endpoints_emit_schema_version_header(
 
     get_response = client.get(
         f"/api/v1/documents/{document_id}/assigned-companies",
-        headers=admin_headers,
+        headers=system_admin_headers,
     )
     assert get_response.status_code == 200
     assert get_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     assign_response = client.post(
         f"/api/v1/documents/{document_id}/assign-companies",
-        headers={**admin_headers, "If-Match": etag},
+        headers={**system_admin_headers, "If-Match": etag},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert assign_response.status_code == 200
@@ -51,7 +51,7 @@ def test_assignment_endpoints_emit_schema_version_header(
     bulk_response = client.put(
         f"/api/v1/documents/{document_id}/companies/batch",
         headers={
-            **admin_headers,
+            **system_admin_headers,
             "If-Match": next_etag,
             "Idempotency-Key": f"schema-version-bulk-{uuid4().hex}",
         },
@@ -63,7 +63,7 @@ def test_assignment_endpoints_emit_schema_version_header(
     next_etag = bulk_response.headers["ETag"]
     remove_response = client.delete(
         f"/api/v1/documents/{document_id}/assign-companies/{test_tenant_2.id}",
-        headers={**admin_headers, "If-Match": next_etag},
+        headers={**system_admin_headers, "If-Match": next_etag},
     )
     assert remove_response.status_code == 200
     assert remove_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION

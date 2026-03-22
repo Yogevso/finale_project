@@ -66,16 +66,23 @@
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                   Data Layer                              │   │
 │  │  ┌──────────────────────┐  ┌─────────────────────────┐   │   │
-│  │  │  SQLAlchemy Models   │  │     Database Session    │   │   │
+│  │  │  SQLAlchemy Models   │  │   Multi-DB Sessions     │   │   │
+│  │  │  CoreBase (45)       │  │   get_db()              │   │   │
+│  │  │  AnalyticsBase (7)   │  │   get_analytics_db()    │   │   │
+│  │  │  ChatBase (10)       │  │   get_chat_db()         │   │   │
 │  │  └──────────────────────┘  └─────────────────────────┘   │   │
 │  └──────────────────────────────────────────────────────────┘   │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      SQLite Database                             │
-│                     data/portal.db                               │
-└─────────────────────────────────────────────────────────────────┘
+└──────────┬──────────────────────┬───────────────────┬───────────┘
+           │                      │                   │
+           ▼                      ▼                   ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│  Core Database   │  │ Analytics Database│  │  Chat Database   │
+│  data/portal.db  │  │ data/analytics.db │  │  data/chat.db    │
+│  (45 tables)     │  │ (7 tables)        │  │  (10 tables)     │
+│  Users, Docs,    │  │ AuditLogs,        │  │  Notifications,  │
+│  Versions, etc.  │  │ SecurityEvents,   │  │  Chats, AI       │
+│                  │  │ NPS, Onboarding   │  │  Assistant, etc.  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
 
 ## Database Schema
@@ -139,6 +146,11 @@
 
 ### Tables Summary
 
+The platform uses a 3-database architecture. When `ANALYTICS_DATABASE_URL` and
+`CHAT_DATABASE_URL` are not set, all tables fall back to the core database.
+
+**Core Database** (45 tables — `DATABASE_URL`):
+
 | Table | Purpose | Key Fields |
 |-------|---------|------------|
 | `users` | User accounts | username, email, role, password_hash |
@@ -147,9 +159,34 @@
 | `sections` | Version sections | version_id, order, title, content |
 | `attachments` | File uploads | document_id, filename, storage_key |
 | `comments` | Document comments | document_id, user_id, content, parent_id |
-| `notifications` | User notifications | user_id, type, title, message, is_read |
 | `password_resets` | Password reset tokens | user_id, token_hash, expires_at |
-| `audit_logs` | Audit trail | user_id, action, entity_type, details |
+
+**Analytics Database** (7 tables — `ANALYTICS_DATABASE_URL`):
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `audit_logs` | Tamper-evident audit trail | user_id, action, details, signature |
+| `security_events` | Security incident log | user_id, event_type, ip_address |
+| `nps_surveys` | NPS survey responses | user_id, score, feedback |
+| `search_analytics` | Search query analytics | user_id, query, results_count |
+| `onboarding_events` | User onboarding tracking | user_id, step, completed |
+| `activation_milestones` | User activation metrics | user_id, milestone_type |
+| `domain_event_outbox` | Outbox for event publishing | event_type, payload, published |
+
+**Chat Database** (10 tables — `CHAT_DATABASE_URL`):
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `notifications` | User notifications | user_id, type, title, message, is_read |
+| `chats` | Chat rooms | name, type, created_by |
+| `chat_participants` | Chat membership | chat_id, user_id, role |
+| `chat_messages` | Chat messages | chat_id, sender_id, content |
+| `assistant_conversations` | AI assistant sessions | user_id, title |
+| `assistant_messages` | AI assistant messages | conversation_id, role, content |
+| `assistant_uploaded_files` | AI assistant file uploads | conversation_id, filename |
+| `collaboration_sessions` | Real-time collaboration | document_id, session_type |
+| `collaboration_activities` | Collaboration activity log | session_id, user_id, action |
+| `collaboration_snapshots` | Collaboration state snapshots | session_id, data |
 
 ## API Patterns
 

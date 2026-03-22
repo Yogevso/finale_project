@@ -24,8 +24,9 @@ from app.models import (
 
 
 class ChatService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, core_db: Session | None = None):
         self.db = db
+        self.core_db = core_db or db
         self._access_policy = DocumentAccessPolicy()
 
     # ------------------------------------------------------------------
@@ -37,7 +38,7 @@ class ChatService:
         if user_a.id == user_b_id:
             raise HTTPException(status_code=400, detail="Cannot create chat with yourself")
 
-        user_b = self.db.query(User).filter(User.id == user_b_id).first()
+        user_b = self.core_db.query(User).filter(User.id == user_b_id).first()
         if not user_b:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -99,7 +100,7 @@ class ChatService:
 
         # Validate all participants exist and are in the same tenant
         participants = (
-            self.db.query(User)
+            self.core_db.query(User)
             .filter(User.id.in_(participant_ids), User.tenant_id == creator.tenant_id, User.is_active.is_(True))
             .all()
         )
@@ -141,7 +142,7 @@ class ChatService:
         Automatically adds the document's author as a participant.
         If a document-scoped chat already exists, returns it.
         """
-        doc = self.db.query(Document).filter(Document.id == document_id).first()
+        doc = self.core_db.query(Document).filter(Document.id == document_id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
@@ -210,7 +211,7 @@ class ChatService:
         if chat.type != ChatType.GROUP:
             raise HTTPException(status_code=400, detail="Cannot add participants to direct chats")
 
-        target = self.db.query(User).filter(User.id == user_id, User.tenant_id == chat.tenant_id).first()
+        target = self.core_db.query(User).filter(User.id == user_id, User.tenant_id == chat.tenant_id).first()
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -246,7 +247,7 @@ class ChatService:
         if participant.role == ChatParticipantRole.OWNER:
             raise HTTPException(status_code=400, detail="Cannot remove the chat owner")
 
-        target = self.db.query(User).filter(User.id == user_id).first()
+        target = self.core_db.query(User).filter(User.id == user_id).first()
         self.db.delete(participant)
 
         self.db.add(ChatMessage(
@@ -329,7 +330,6 @@ class ChatService:
         query = (
             self.db.query(ChatMessage)
             .filter(ChatMessage.chat_id == chat_id, ChatMessage.deleted_at.is_(None))
-            .options(joinedload(ChatMessage.sender))
         )
         if before_id:
             query = query.filter(ChatMessage.id < before_id)
@@ -391,11 +391,14 @@ class ChatService:
             if chat.type == ChatType.DIRECT:
                 other = (
                     self.db.query(ChatParticipant)
-                    .options(joinedload(ChatParticipant.user))
                     .filter(ChatParticipant.chat_id == chat.id, ChatParticipant.user_id != user.id)
                     .first()
                 )
-                display_name = other.user.full_name if other and other.user else "Unknown"
+                if other:
+                    other_user = self.db.query(User).filter(User.id == other.user_id).first()
+                    display_name = other_user.full_name if other_user else "Unknown"
+                else:
+                    display_name = "Unknown"
 
             results.append({
                 "chat": chat,
@@ -449,7 +452,6 @@ class ChatService:
                 ChatMessage.deleted_at.is_(None),
                 ChatMessage.content.ilike(pattern),
             )
-            .options(joinedload(ChatMessage.sender))
             .order_by(ChatMessage.created_at.desc())
             .limit(min(limit, 100))
             .all()
@@ -476,7 +478,6 @@ class ChatService:
                 ChatMessage.deleted_at.is_(None),
                 ChatMessage.content.ilike(pattern),
             )
-            .options(joinedload(ChatMessage.sender))
             .order_by(ChatMessage.created_at.desc())
             .limit(min(limit, 100))
             .all()
@@ -551,7 +552,7 @@ class ChatService:
         """Validate chat access with tenant isolation (X1-009)."""
         query = self.db.query(Chat).filter(Chat.id == chat_id)
         if load_participants:
-            query = query.options(joinedload(Chat.participants).joinedload(ChatParticipant.user))
+            query = query.options(joinedload(Chat.participants))
         chat = query.first()
 
         if not chat:

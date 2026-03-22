@@ -1,6 +1,6 @@
 """Regression tests for company document semantics in management APIs."""
 
-from app.models import Document, DocumentStatus, DocumentVisibility
+from app.models import Document, DocumentStatus, DocumentVisibility, Version
 
 
 def _create_document(
@@ -30,7 +30,7 @@ def _create_document(
 
 class TestCompanyDocumentSemantics:
     def test_company_detail_exposes_owned_assigned_and_customer_visible_counts(
-        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+        self, client, db, system_admin_headers, test_admin, test_tenant, test_tenant_2
     ):
         _create_document(
             db,
@@ -73,7 +73,7 @@ class TestCompanyDocumentSemantics:
         assigned_draft_doc.assigned_companies.append(test_tenant)
         db.commit()
 
-        response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=admin_headers)
+        response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=system_admin_headers)
         assert response.status_code == 200
         payload = response.json()
 
@@ -85,7 +85,7 @@ class TestCompanyDocumentSemantics:
         assert payload["document_count"] == payload["assigned_document_count"] == 2
 
     def test_company_documents_default_scope_returns_assigned_documents(
-        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+        self, client, db, system_admin_headers, test_admin, test_tenant, test_tenant_2
     ):
         _create_document(
             db,
@@ -108,7 +108,7 @@ class TestCompanyDocumentSemantics:
         assigned_doc.assigned_companies.append(test_tenant)
         db.commit()
 
-        response = client.get(f"/api/v1/companies/{test_tenant.id}/documents", headers=admin_headers)
+        response = client.get(f"/api/v1/companies/{test_tenant.id}/documents", headers=system_admin_headers)
         assert response.status_code == 200
         payload = response.json()
         titles = [item["title"] for item in payload["items"]]
@@ -121,13 +121,13 @@ class TestCompanyDocumentSemantics:
         self,
         client,
         db,
-        admin_headers,
+        system_admin_headers,
         customer_headers,
         test_admin,
         test_tenant,
         test_tenant_2,
     ):
-        _create_document(
+        public_doc = _create_document(
             db,
             title="Portal Public Doc",
             document_number="DOC-PUB-100",
@@ -164,6 +164,19 @@ class TestCompanyDocumentSemantics:
             tenant_id=test_tenant_2.id,
         )
 
+        # H-23: Portal filter requires at least one published version
+        for doc in [public_doc, assigned_active_doc]:
+            db.add(Version(
+                document_id=doc.id,
+                version_number=1,
+                content="published content",
+                changes_summary="Initial",
+                created_by=test_admin.id,
+                is_published=True,
+                semantic_version="1.0.0",
+                bump_type="MAJOR",
+            ))
+
         assigned_active_doc.assigned_companies.append(test_tenant)
         assigned_draft_doc.assigned_companies.append(test_tenant)
         other_company_assigned_doc.assigned_companies.append(test_tenant_2)
@@ -173,7 +186,7 @@ class TestCompanyDocumentSemantics:
         assert portal_response.status_code == 200
         portal_total = portal_response.json()["total"]
 
-        company_response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=admin_headers)
+        company_response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=system_admin_headers)
         assert company_response.status_code == 200
         company_payload = company_response.json()
 
@@ -181,7 +194,7 @@ class TestCompanyDocumentSemantics:
         assert company_payload["customer_visible_document_count"] == portal_total
 
     def test_company_documents_supports_keyset_cursor_pagination(
-        self, client, db, admin_headers, test_admin, test_tenant, test_tenant_2
+        self, client, db, system_admin_headers, test_admin, test_tenant, test_tenant_2
     ):
         for index in range(5):
             doc = _create_document(
@@ -198,7 +211,7 @@ class TestCompanyDocumentSemantics:
 
         first_page = client.get(
             f"/api/v1/companies/{test_tenant.id}/documents?per_page=2",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert first_page.status_code == 200
         first_payload = first_page.json()
@@ -208,7 +221,7 @@ class TestCompanyDocumentSemantics:
 
         second_page = client.get(
             f"/api/v1/companies/{test_tenant.id}/documents?per_page=2&cursor={first_payload['next_cursor']}",
-            headers=admin_headers,
+            headers=system_admin_headers,
         )
         assert second_page.status_code == 200
         second_payload = second_page.json()

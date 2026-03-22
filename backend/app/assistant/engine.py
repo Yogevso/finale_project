@@ -17,7 +17,8 @@ from app.assistant.prompts import build_system_prompt, build_tool_call_prompt
 from app.assistant.schemas import ToolCall, ToolResult
 from app.assistant.tools.registry import ToolRegistry
 from app.config import settings
-from app.models import ActionType, AuditLog, User, UserRole
+from app.models import ActionType, User, UserRole
+from app.services.audit_helper import write_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -779,7 +780,7 @@ class AssistantEngine:
     ) -> None:
         """Write an audit-log entry for every tool invocation."""
         try:
-            entry = AuditLog(
+            write_audit_log(
                 user_id=user.id,
                 action=ActionType.SYSTEM,
                 details=json.dumps({
@@ -790,8 +791,6 @@ class AssistantEngine:
                     "result_preview": (result.result or "")[:1000],
                 }),
             )
-            db.add(entry)
-            db.commit()
         except Exception:
             logger.warning("Failed to write audit log for tool %s", tc.name, exc_info=True)
 

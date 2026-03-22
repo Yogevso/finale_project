@@ -13,6 +13,8 @@ services:
       - DEBUG=false
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL:-sqlite:///./data/analytics.db}
+      - CHAT_DATABASE_URL=${CHAT_DATABASE_URL:-sqlite:///./data/chat.db}
       - CORS_ORIGINS=["https://portal.example.com"]
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json

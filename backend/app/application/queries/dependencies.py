@@ -26,6 +26,7 @@ from app.application.queries.portal_queries import (
     GetPortalDocumentQuery,
     ListPortalCategoriesQuery,
     ListPortalDocumentsQuery,
+    ListPortalFacetsQuery,
     PortalDashboardStatsQuery,
     PortalDocumentsQueryHandler,
     SearchPortalDocumentsQuery,
@@ -38,7 +39,7 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.container import AppContainer, build_container, get_container
-from app.db import get_db
+from app.db import get_analytics_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 
 
@@ -72,13 +73,14 @@ def get_list_documents_query_handler(
 
 def get_analytics_query_handler(
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     container: AppContainer = Depends(get_container),
 ) -> AnalyticsQueryHandler:
     """Resolve tenant-scoped analytics query handler."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    handler = container.analytics_query_handler(db, tenant_ctx)
+    handler = container.analytics_query_handler(db, tenant_ctx, analytics_db=analytics_db)
     bus = container.query_bus()
     bus.register(AnalyticsOverviewQuery, handler.execute_overview)
     bus.register(RecentActivityQuery, handler.execute_recent_activity)
@@ -93,12 +95,13 @@ def get_analytics_query_handler(
 
 def get_system_analytics_query_handler(
     db: Session = Depends(get_db),
+    analytics_db: Session = Depends(get_analytics_db),
     container: AppContainer = Depends(get_container),
 ) -> AnalyticsQueryHandler:
     """Resolve system-scope analytics query handler (no tenant filter)."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    handler = container.system_analytics_query_handler(db)
+    handler = container.system_analytics_query_handler(db, analytics_db=analytics_db)
     bus = container.query_bus()
     bus.register(AnalyticsOverviewQuery, handler.execute_overview)
     bus.register(RecentActivityQuery, handler.execute_recent_activity)
@@ -142,4 +145,5 @@ def get_portal_documents_query_handler(
     bus.register(ListPortalCategoriesQuery, handler.execute_categories)
     bus.register(PortalDashboardStatsQuery, handler.execute_dashboard_stats)
     bus.register(SearchPortalDocumentsQuery, handler.execute_search_documents)
+    bus.register(ListPortalFacetsQuery, handler.execute_facets)
     return QueryBusHandlerAdapter(bus)

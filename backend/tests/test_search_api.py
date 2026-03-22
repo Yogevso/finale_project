@@ -18,6 +18,7 @@ class TestSearch:
             description="A comprehensive guide to Python programming",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         doc2 = Document(
             title="Java Development Manual",
@@ -25,6 +26,7 @@ class TestSearch:
             description="Java development best practices",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add_all([doc1, doc2])
         db.commit()
@@ -47,6 +49,7 @@ class TestSearch:
             category="security",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         other_doc = Document(
             title="Engineering Policy Document",
@@ -55,6 +58,7 @@ class TestSearch:
             category="engineering",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add_all([doc, other_doc])
         db.commit()
@@ -73,6 +77,7 @@ class TestSearch:
             description="release-notes filter target",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
             created_at=datetime.utcnow() - timedelta(days=10),
         )
         recent_doc = Document(
@@ -81,6 +86,7 @@ class TestSearch:
             description="release-notes filter target",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
             created_at=datetime.utcnow(),
         )
         db.add_all([old_doc, recent_doc])
@@ -153,6 +159,7 @@ class TestSearch:
                 description="Searchable test content",
                 status=DocumentStatus.ACTIVE,
                 created_by=test_user.id,
+                tenant_id=test_user.tenant_id,
             )
             db.add(doc)
         db.commit()
@@ -230,6 +237,7 @@ class TestSavedSearches:
             description="Document for saved search testing",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()
@@ -258,6 +266,7 @@ class TestSearchSuggestions:
             document_number=f"DOC-SUG-{uuid.uuid4().hex[:6].upper()}",
             status=DocumentStatus.ACTIVE,
             created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
         )
         db.add(doc)
         db.commit()

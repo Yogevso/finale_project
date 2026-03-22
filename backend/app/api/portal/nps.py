@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import get_analytics_db
 from app.models import NpsSurvey, User, UserRole
 from app.security import get_current_active_user
 
@@ -24,7 +24,7 @@ class NpsSubmitRequest(BaseModel):
 @router.get("/status")
 async def nps_status(
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     """Check if the user should see the NPS survey (not submitted in last 90 days)."""
     cutoff = datetime.utcnow() - timedelta(days=90)
@@ -43,7 +43,7 @@ async def nps_status(
 async def submit_nps(
     body: NpsSubmitRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     """Submit an NPS survey response."""
     # Enforce 90-day cooldown server-side (not just advisory via /status)
@@ -74,7 +74,7 @@ async def submit_nps(
 async def nps_results(
     days: int = Query(90, ge=1, le=365),
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_analytics_db),
 ):
     """Get NPS results summary (for managers/admins)."""
     allowed_roles = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER}

@@ -20,7 +20,6 @@ from app.domain.aggregates import DocumentAggregate, ReviewAggregate
 from app.errors import ConflictError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
-    AuditLog,
     Document,
     Notification,
     NotificationType,
@@ -30,6 +29,7 @@ from app.models import (
     UserRole,
     Version,
 )
+from app.services.audit_helper import write_audit_log
 from app.schemas import (
     ApprovalPolicyCheck,
     AudienceDiff,
@@ -216,13 +216,11 @@ async def submit_for_review(
     document_aggregate.transition_to_pending_review()
 
     # Audit event
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            document_id=document_id,
-            action=ActionType.UPDATE,
-            details=f"Submitted review request #{review.id} for version {version_id or 'latest'}",
-        )
+    write_audit_log(
+        user_id=current_user.id,
+        document_id=document_id,
+        action=ActionType.UPDATE,
+        details=f"Submitted review request #{review.id} for version {version_id or 'latest'}",
     )
 
     # Create notifications for reviewers (editors, managers, admins)
@@ -634,13 +632,11 @@ async def reject_review(
         link=f"/documents/{review.document_id}",
     )
     db.add(notification)
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            document_id=review.document_id,
-            action=ActionType.UPDATE,
-            details=f"Rejected review #{review.id} for version {review.version_id or 'n/a'}",
-        )
+    write_audit_log(
+        user_id=current_user.id,
+        document_id=review.document_id,
+        action=ActionType.UPDATE,
+        details=f"Rejected review #{review.id} for version {review.version_id or 'n/a'}",
     )
 
     db.commit()
@@ -713,13 +709,11 @@ async def cancel_review(
             f"companies added={audience_diff.companies_added}, "
             f"companies removed={audience_diff.companies_removed}"
         )
-    db.add(
-        AuditLog(
-            user_id=current_user.id,
-            document_id=review.document_id,
-            action=ActionType.UPDATE,
-            details=f"Cancelled review #{review.id} for version {review.version_id or 'n/a'}.{diff_info}",
-        )
+    write_audit_log(
+        user_id=current_user.id,
+        document_id=review.document_id,
+        action=ActionType.UPDATE,
+        details=f"Cancelled review #{review.id} for version {review.version_id or 'n/a'}.{diff_info}",
     )
 
     db.commit()

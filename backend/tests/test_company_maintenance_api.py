@@ -72,6 +72,7 @@ def test_deactivate_impact_report_counts_dependencies(
     assigned = _create_document(
         db,
         created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
     )
@@ -131,6 +132,7 @@ def test_merge_plan_reports_conflicting_assignments(
     overlap = _create_document(
         db,
         created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
     )
@@ -267,6 +269,7 @@ def test_archive_validation_counts_assigned_documents_via_tenant_column(
     assigned = _create_document(
         db,
         created_by=test_system_admin.id,
+        tenant_id=test_system_admin.tenant_id,
         status=DocumentStatus.ACTIVE,
         visibility=DocumentVisibility.COMPANY,
     )

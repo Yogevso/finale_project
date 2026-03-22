@@ -1,18 +1,19 @@
 # Frontend
 
-React + TypeScript SPA for the Documentation Platform.
+React + TypeScript SPA for the Intel Documentation Platform.
 
 ## Highlights
 
 - Feature-module structure with controller/use-case boundaries
 - Typed DTO mapper boundary + generated OpenAPI contracts
-- Explicit workflow state machines for high-risk UI flows
+- In-memory token storage (not localStorage) for auth security
+- DOMPurify-based HTML sanitization on all user-generated content
 - BFF-backed document detail orchestration
-- Contract tests for backend compatibility
 - Dark mode support with theme toggle
 - Skeleton loading states for all major views
 - Accessibility (WCAG) audit and improvements
 - Comprehensive E2E test suites (a11y, performance, responsive, visual, UX)
+- Contract tests for backend compatibility
 
 ## Important Paths
 

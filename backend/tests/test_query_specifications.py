@@ -53,6 +53,9 @@ def test_tenant_scope_spec_applies_non_system_admin_filter(db, test_user):
 
 
 def test_tenant_scope_spec_sql_clause_variants(test_user, test_system_admin):
+    # Test user with no tenant
+    original_tenant_id = test_user.tenant_id
+    test_user.tenant_id = None
     tenant_clause, tenant_params = TenantScopeSpec.for_user(test_user).sql_clause(column_expr="d.tenant_id")
     assert tenant_clause == "d.tenant_id IS NULL"
     assert tenant_params == {}
@@ -76,6 +79,7 @@ def test_date_range_spec_filters_orm_and_sql_clauses(db, test_user):
         description="date range test",
         status=DocumentStatus.ACTIVE,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
         created_at=datetime.utcnow() - timedelta(days=5),
     )
     fresh_doc = Document(
@@ -84,6 +88,7 @@ def test_date_range_spec_filters_orm_and_sql_clauses(db, test_user):
         description="date range test",
         status=DocumentStatus.ACTIVE,
         created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
         created_at=datetime.utcnow(),
     )
     db.add_all([old_doc, fresh_doc])

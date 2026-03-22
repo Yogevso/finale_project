@@ -48,7 +48,7 @@ def customer_b(db):
 def agent(db, tenant):
     return create_user(
         db, username="agent1", full_name="Agent One",
-        role=UserRole.EDITOR, tenant_id=tenant.id,
+        role=UserRole.MANAGER, tenant_id=tenant.id,
     )
 
 
@@ -56,7 +56,7 @@ def agent(db, tenant):
 def agent_b(db, tenant):
     return create_user(
         db, username="agent2", full_name="Agent Two",
-        role=UserRole.EDITOR, tenant_id=tenant.id,
+        role=UserRole.MANAGER, tenant_id=tenant.id,
     )
 
 
@@ -278,9 +278,13 @@ class TestCustomerIsolation:
         assert tickets_a[0].customer_id == customer.id
         assert tickets_b[0].customer_id == customer_b.id
 
-    def test_agent_can_see_all_tickets(self, svc, customer, customer_b, agent):
+    def test_agent_can_see_all_tickets(self, db, svc, customer, customer_b):
         svc.create_ticket(customer, "Ticket A", "A")
         svc.create_ticket(customer_b, "Ticket B", "B")
 
-        tickets, total = svc.list_tickets(agent)
+        sys_admin = create_user(
+            db, username="sys_agent", full_name="Sys Agent",
+            role=UserRole.SYSTEM_ADMIN,
+        )
+        tickets, total = svc.list_tickets(sys_admin)
         assert total == 2

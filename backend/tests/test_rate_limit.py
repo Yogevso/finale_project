@@ -112,8 +112,10 @@ class TestRateLimitMiddleware:
         assert is_limited is True
         assert remaining == 0
 
-    def test_window_reset(self):
+    def test_window_reset(self, monkeypatch):
         """Rate limit should reset after window expires"""
+        fake_time = [1000.0]
+        monkeypatch.setattr(time, "time", lambda: fake_time[0])
         middleware = RateLimitMiddleware(app=MagicMock(), max_requests=2, window_seconds=1)
 
         # Exhaust limit
@@ -122,16 +124,18 @@ class TestRateLimitMiddleware:
         is_limited, _, _ = middleware._is_rate_limited("192.168.1.1")
         assert is_limited is True
 
-        # Wait for window to expire
-        time.sleep(1.1)
+        # Advance time past the 1-second window
+        fake_time[0] += 1.1
 
         # Should be allowed again
         is_limited, remaining, _ = middleware._is_rate_limited("192.168.1.1")
         assert is_limited is False
         assert remaining == 1
 
-    def test_cleanup_old_entries(self):
+    def test_cleanup_old_entries(self, monkeypatch):
         """Old entries should be cleaned up"""
+        fake_time = [1000.0]
+        monkeypatch.setattr(time, "time", lambda: fake_time[0])
         middleware = RateLimitMiddleware(app=MagicMock(), max_requests=100, window_seconds=1)
 
         # Add some entries
@@ -139,8 +143,8 @@ class TestRateLimitMiddleware:
         middleware._is_rate_limited("192.168.1.2")
         assert len(middleware.clients) == 2
 
-        # Wait for entries to expire
-        time.sleep(1.1)
+        # Advance time past the 1-second window
+        fake_time[0] += 1.1
 
         # Trigger cleanup (requires 100 requests normally, but we can force it)
         middleware._cleanup_counter = 99

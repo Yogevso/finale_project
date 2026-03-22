@@ -134,7 +134,7 @@ class TestCreateUserTool:
             "email": "new@example.com",
             "full_name": "New User",
             "role": "editor",
-            "password": "password123",
+            "password": "Password123!",
         }, db=db))
         assert result["success"] is True
         assert "newuser" in result["result"]
@@ -149,7 +149,7 @@ class TestCreateUserTool:
             "email": "new2@example.com",
             "full_name": "Duplicate",
             "role": "editor",
-            "password": "password123",
+            "password": "Password123!",
         }, db=db))
         assert result["success"] is False
         assert "already exists" in result["error"]
@@ -164,7 +164,7 @@ class TestCreateUserTool:
             "email": "hack@example.com",
             "full_name": "Hacker",
             "role": "admin",
-            "password": "password123",
+            "password": "Password123!",
         }, db=db))
         assert result["success"] is False
         assert "higher role" in result["error"].lower()

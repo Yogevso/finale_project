@@ -39,6 +39,7 @@ from app.models import (
     User,
     UserSession,
 )
+from app.services.audit_helper import write_audit_log
 from app.utils.audience_audit_signing import verify_payload_signature
 
 logger = logging.getLogger(__name__)
@@ -58,19 +59,17 @@ def request_data_export(db: Session, *, user_id: int, reason: str) -> DataReques
         requested_at=datetime.utcnow(),
     )
     db.add(req)
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            action=ActionType.SYSTEM,
-            details=json.dumps({"event": "data_export_requested"}),
-        )
+    write_audit_log(
+        user_id=user_id,
+        action=ActionType.SYSTEM,
+        details=json.dumps({"event": "data_export_requested"}),
     )
     db.commit()
     db.refresh(req)
     return req
 
 
-def execute_data_export(db: Session, request_id: int) -> bytes:
+def execute_data_export(db: Session, request_id: int, *, analytics_db: Session | None = None) -> bytes:
     """Build a ZIP archive containing all user data for a given export request.
 
     Returns the raw ZIP bytes.
@@ -78,6 +77,8 @@ def execute_data_export(db: Session, request_id: int) -> bytes:
     req = db.query(DataRequest).filter(DataRequest.id == request_id).first()
     if not req or req.request_type != DataRequestType.EXPORT:
         raise ValueError("Invalid export request")
+
+    _analytics = analytics_db or db
 
     req.status = DataRequestStatus.PROCESSING
     db.commit()
@@ -151,7 +152,7 @@ def execute_data_export(db: Session, request_id: int) -> bytes:
         zf.writestr("feedback.json", json.dumps(feedback_list, indent=2))
 
         # 6. Audit logs for this user
-        audit_logs = db.query(AuditLog).filter(AuditLog.user_id == user.id).all()
+        audit_logs = _analytics.query(AuditLog).filter(AuditLog.user_id == user.id).all()
         audit_list = [
             {
                 "id": a.id,
@@ -201,7 +202,7 @@ def execute_data_export(db: Session, request_id: int) -> bytes:
             zf.writestr("attachments.json", json.dumps(att_list, indent=2))
 
         # 10. Security events (AG-015)
-        sec_events = db.query(SecurityEvent).filter(SecurityEvent.user_id == user.id).all()
+        sec_events = _analytics.query(SecurityEvent).filter(SecurityEvent.user_id == user.id).all()
         sec_list = [
             {
                 "id": e.id,
@@ -266,12 +267,10 @@ def execute_data_export(db: Session, request_id: int) -> bytes:
     req.download_expires_at = datetime.utcnow() + timedelta(hours=48)
     req.status = DataRequestStatus.COMPLETED
     req.completed_at = datetime.utcnow()
-    db.add(
-        AuditLog(
-            user_id=req.user_id,
-            action=ActionType.SYSTEM,
-            details=json.dumps({"event": "data_export_completed", "request_id": req.id}),
-        )
+    write_audit_log(
+        user_id=req.user_id,
+        action=ActionType.SYSTEM,
+        details=json.dumps({"event": "data_export_completed", "request_id": req.id}),
     )
     db.commit()
 
@@ -294,12 +293,10 @@ def request_data_deletion(db: Session, *, user_id: int, reason: str) -> DataRequ
         requested_at=datetime.utcnow(),
     )
     db.add(req)
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            action=ActionType.SYSTEM,
-            details=json.dumps({"event": "data_deletion_requested"}),
-        )
+    write_audit_log(
+        user_id=user_id,
+        action=ActionType.SYSTEM,
+        details=json.dumps({"event": "data_deletion_requested"}),
     )
     db.commit()
     db.refresh(req)
@@ -324,26 +321,24 @@ def approve_data_deletion(
     else:
         req.status = DataRequestStatus.REJECTED
 
-    db.add(
-        AuditLog(
-            user_id=admin_id,
-            action=ActionType.SYSTEM,
-            details=json.dumps(
-                {
-                    "event": "data_deletion_reviewed",
-                    "request_id": req.id,
-                    "approved": approved,
-                    "target_user_id": req.user_id,
-                }
-            ),
-        )
+    write_audit_log(
+        user_id=admin_id,
+        action=ActionType.SYSTEM,
+        details=json.dumps(
+            {
+                "event": "data_deletion_reviewed",
+                "request_id": req.id,
+                "approved": approved,
+                "target_user_id": req.user_id,
+            }
+        ),
     )
     db.commit()
     db.refresh(req)
     return req
 
 
-def execute_data_deletion(db: Session, request_id: int) -> dict[str, Any]:
+def execute_data_deletion(db: Session, request_id: int, *, analytics_db: Session | None = None) -> dict[str, Any]:
     """Anonymize user data while preserving audit trail integrity.
 
     - Replaces PII with 'Deleted User' placeholder
@@ -373,7 +368,10 @@ def execute_data_deletion(db: Session, request_id: int) -> dict[str, Any]:
     db.query(Feedback).filter(Feedback.user_id == user.id).delete()
     db.query(ReadingProgress).filter(ReadingProgress.user_id == user.id).delete()
     db.query(Notification).filter(Notification.user_id == user.id).delete()
-    db.query(SecurityEvent).filter(SecurityEvent.user_id == user.id).delete()
+    _analytics = analytics_db or db
+    _analytics.query(SecurityEvent).filter(SecurityEvent.user_id == user.id).delete()
+    if _analytics is not db:
+        _analytics.commit()
     db.query(UserSession).filter(UserSession.user_id == user.id).delete()
 
     # 2. Anonymize user record (preserve for FK integrity in audit_logs)
@@ -397,19 +395,17 @@ def execute_data_deletion(db: Session, request_id: int) -> dict[str, Any]:
     req.executed_at = datetime.utcnow()
     req.completed_at = datetime.utcnow()
 
-    db.add(
-        AuditLog(
-            user_id=req.reviewed_by,  # Use admin's ID since user is being deleted
-            action=ActionType.SYSTEM,
-            details=json.dumps(
-                {
-                    "event": "data_deletion_executed",
-                    "request_id": req.id,
-                    "target_user_id": user.id,
-                    "anonymized_email": anonymized_email,
-                }
-            ),
-        )
+    write_audit_log(
+        user_id=req.reviewed_by,  # Use admin's ID since user is being deleted
+        action=ActionType.SYSTEM,
+        details=json.dumps(
+            {
+                "event": "data_deletion_executed",
+                "request_id": req.id,
+                "target_user_id": user.id,
+                "anonymized_email": anonymized_email,
+            }
+        ),
     )
     db.commit()
 
@@ -427,14 +423,15 @@ def execute_data_deletion(db: Session, request_id: int) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def install_audit_immutability_trigger(db: Session) -> None:
+def install_audit_immutability_trigger(db: Session, *, analytics_db: Session | None = None) -> None:
     """Install a SQLite trigger that prevents UPDATE and DELETE on audit_logs.
 
     This makes audit_logs append-only at the database level.
     For PostgreSQL, a similar trigger using RAISE would be used.
     """
+    _analytics = analytics_db or db
     # SQLite: BEFORE DELETE trigger — raises an error by selecting from a table that doesn't exist
-    db.execute(
+    _analytics.execute(
         text(
             """
             CREATE TRIGGER IF NOT EXISTS prevent_audit_log_delete
@@ -445,7 +442,7 @@ def install_audit_immutability_trigger(db: Session) -> None:
             """
         )
     )
-    db.execute(
+    _analytics.execute(
         text(
             """
             CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update
@@ -456,17 +453,18 @@ def install_audit_immutability_trigger(db: Session) -> None:
             """
         )
     )
-    db.commit()
+    _analytics.commit()
     logger.info("Audit log immutability triggers installed")
 
 
-def check_audit_integrity(db: Session) -> dict[str, Any]:
+def check_audit_integrity(db: Session, *, analytics_db: Session | None = None) -> dict[str, Any]:
     """Verify HMAC signatures on all signed audit log entries.
 
     Returns a summary with counts of valid, invalid, and unsigned entries.
     """
+    _analytics = analytics_db or db
     signed_logs = (
-        db.query(AuditLog)
+        _analytics.query(AuditLog)
         .filter(AuditLog.signature.isnot(None), AuditLog.signature_key_id.isnot(None))
         .all()
     )
@@ -495,7 +493,7 @@ def check_audit_integrity(db: Session) -> dict[str, Any]:
             invalid += 1
             logger.warning("Audit log %d has invalid signature", log_entry.id)
 
-    unsigned = db.query(AuditLog).filter(AuditLog.signature.is_(None)).count()
+    unsigned = _analytics.query(AuditLog).filter(AuditLog.signature.is_(None)).count()
 
     return {
         "total_signed": total_signed,

@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models import Document, DocumentStatus, DocumentVisibility
+from app.models import Document, DocumentStatus, DocumentVisibility, Version
 
 
 class FrontendDocumentDto(BaseModel):
@@ -169,6 +169,17 @@ def test_portal_documents_list_matches_frontend_dto_shape(
         tenant_id=test_admin.tenant_id,
     )
     db.add(doc)
+    db.flush()
+
+    published_version = Version(
+        document_id=doc.id,
+        version_number=1,
+        content="Published content",
+        changes_summary="Initial release",
+        created_by=test_admin.id,
+        is_published=True,
+    )
+    db.add(published_version)
     db.commit()
     db.refresh(doc)
 
