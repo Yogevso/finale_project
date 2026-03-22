@@ -65,7 +65,11 @@ def upgrade():
             batch_op.add_column(sa.Column("locked_until", sa.DateTime(), nullable=True))
 
     # Preserve access for existing accounts after rollout.
-    op.execute(sa.text("UPDATE users SET is_email_verified = 1 WHERE is_email_verified = 0"))
+    dialect = op.get_bind().dialect.name
+    if dialect == "sqlite":
+        op.execute(sa.text("UPDATE users SET is_email_verified = 1 WHERE is_email_verified = 0"))
+    else:
+        op.execute(sa.text("UPDATE users SET is_email_verified = true WHERE is_email_verified = false"))
 
 
 def downgrade():

@@ -50,7 +50,7 @@ def upgrade() -> None:
             sa.Column("role", sa.String(20), nullable=False, server_default="member"),
             sa.Column("joined_at", sa.DateTime(), nullable=False),
             sa.Column("last_read_at", sa.DateTime(), nullable=True),
-            sa.Column("is_muted", sa.Boolean(), nullable=False, server_default="0"),
+            sa.Column("is_muted", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.UniqueConstraint("chat_id", "user_id", name="uq_chat_participant"),
         )
         op.create_index("ix_chat_participants_id", "chat_participants", ["id"])
@@ -107,7 +107,7 @@ def upgrade() -> None:
             sa.Column("sender_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
             sa.Column("sender_type", sa.String(20), nullable=False),
             sa.Column("content", sa.Text(), nullable=False),
-            sa.Column("is_internal_note", sa.Boolean(), nullable=False, server_default="0"),
+            sa.Column("is_internal_note", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
         op.create_index("ix_support_ticket_messages_id", "support_ticket_messages", ["id"])
@@ -123,7 +123,7 @@ def upgrade() -> None:
             sa.Column("ticket_id", sa.Integer(), sa.ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False),
             sa.Column("agent_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
             sa.Column("assigned_at", sa.DateTime(), nullable=False),
-            sa.Column("is_primary", sa.Boolean(), nullable=False, server_default="0"),
+            sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.UniqueConstraint("ticket_id", "agent_id", name="uq_ticket_assignment"),
         )
         op.create_index("ix_support_ticket_assignments_id", "support_ticket_assignments", ["id"])

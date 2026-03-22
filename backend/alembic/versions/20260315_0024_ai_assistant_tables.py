@@ -26,7 +26,7 @@ def upgrade() -> None:
             sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
             sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id"), nullable=True),
             sa.Column("title", sa.String(255), nullable=False, server_default="New Chat"),
-            sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            sa.Column("is_archived", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         )

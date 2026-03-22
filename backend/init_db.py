@@ -64,20 +64,23 @@ def main():
     init_db()
     print("✅ Database tables created")
 
-    # Create FTS5 virtual table for full-text search
+    # Create FTS5 virtual table for full-text search (SQLite only)
     db = SessionLocal()
     try:
-        # Create FTS5 table for document search
-        db.execute(text("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
-                title,
-                description,
-                category,
-                tags
-            )
-        """))
-        db.commit()
-        print("✅ FTS5 search index created")
+        if db.bind.dialect.name == "sqlite":
+            # Create FTS5 table for document search
+            db.execute(text("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+                    title,
+                    description,
+                    category,
+                    tags
+                )
+            """))
+            db.commit()
+            print("✅ FTS5 search index created")
+        else:
+            print("ℹ️  Skipping FTS5 (PostgreSQL uses tsvector/GIN indexes instead)")
 
         create_initial_users(db)
     finally:

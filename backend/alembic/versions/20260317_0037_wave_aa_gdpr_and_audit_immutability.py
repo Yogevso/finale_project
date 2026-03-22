@@ -16,17 +16,25 @@ depends_on = None
 
 def _table_exists(table_name: str) -> bool:
     conn = op.get_bind()
-    result = conn.execute(
-        sa.text("SELECT name FROM sqlite_master WHERE type='table' AND name=:t"),
-        {"t": table_name},
-    )
-    return result.scalar() is not None
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
 
 
 def _trigger_exists(trigger_name: str) -> bool:
     conn = op.get_bind()
+    dialect = conn.dialect.name
+    if dialect == "sqlite":
+        result = conn.execute(
+            sa.text("SELECT name FROM sqlite_master WHERE type='trigger' AND name=:t"),
+            {"t": trigger_name},
+        )
+        return result.scalar() is not None
+    # PostgreSQL: check pg_trigger joined with pg_class
     result = conn.execute(
-        sa.text("SELECT name FROM sqlite_master WHERE type='trigger' AND name=:t"),
+        sa.text(
+            "SELECT 1 FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid "
+            "WHERE t.tgname = :t LIMIT 1"
+        ),
         {"t": trigger_name},
     )
     return result.scalar() is not None
@@ -52,30 +60,63 @@ def upgrade() -> None:
         )
 
     # AA-004: Audit log immutability triggers
+    dialect = op.get_bind().dialect.name
+
     if _table_exists("audit_logs") and not _trigger_exists("prevent_audit_log_delete"):
-        op.execute(
-            """
-            CREATE TRIGGER prevent_audit_log_delete
-            BEFORE DELETE ON audit_logs
-            BEGIN
-                SELECT RAISE(ABORT, 'Audit logs are immutable — DELETE not allowed');
-            END
-            """
-        )
+        if dialect == "sqlite":
+            op.execute(
+                """
+                CREATE TRIGGER prevent_audit_log_delete
+                BEFORE DELETE ON audit_logs
+                BEGIN
+                    SELECT RAISE(ABORT, 'Audit logs are immutable — DELETE not allowed');
+                END
+                """
+            )
+        else:
+            op.execute(sa.text(
+                "CREATE OR REPLACE FUNCTION prevent_audit_log_delete_fn() RETURNS trigger AS $$ "
+                "BEGIN RAISE EXCEPTION 'Audit logs are immutable — DELETE not allowed'; END; "
+                "$$ LANGUAGE plpgsql"
+            ))
+            op.execute(sa.text(
+                "CREATE TRIGGER prevent_audit_log_delete "
+                "BEFORE DELETE ON audit_logs "
+                "FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_delete_fn()"
+            ))
 
     if _table_exists("audit_logs") and not _trigger_exists("prevent_audit_log_update"):
-        op.execute(
-            """
-            CREATE TRIGGER prevent_audit_log_update
-            BEFORE UPDATE ON audit_logs
-            BEGIN
-                SELECT RAISE(ABORT, 'Audit logs are immutable — UPDATE not allowed');
-            END
-            """
-        )
+        if dialect == "sqlite":
+            op.execute(
+                """
+                CREATE TRIGGER prevent_audit_log_update
+                BEFORE UPDATE ON audit_logs
+                BEGIN
+                    SELECT RAISE(ABORT, 'Audit logs are immutable — UPDATE not allowed');
+                END
+                """
+            )
+        else:
+            op.execute(sa.text(
+                "CREATE OR REPLACE FUNCTION prevent_audit_log_update_fn() RETURNS trigger AS $$ "
+                "BEGIN RAISE EXCEPTION 'Audit logs are immutable — UPDATE not allowed'; END; "
+                "$$ LANGUAGE plpgsql"
+            ))
+            op.execute(sa.text(
+                "CREATE TRIGGER prevent_audit_log_update "
+                "BEFORE UPDATE ON audit_logs "
+                "FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_update_fn()"
+            ))
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER IF EXISTS prevent_audit_log_update")
-    op.execute("DROP TRIGGER IF EXISTS prevent_audit_log_delete")
+    dialect = op.get_bind().dialect.name
+    if dialect == "sqlite":
+        op.execute("DROP TRIGGER IF EXISTS prevent_audit_log_update")
+        op.execute("DROP TRIGGER IF EXISTS prevent_audit_log_delete")
+    else:
+        op.execute(sa.text("DROP TRIGGER IF EXISTS prevent_audit_log_update ON audit_logs"))
+        op.execute(sa.text("DROP TRIGGER IF EXISTS prevent_audit_log_delete ON audit_logs"))
+        op.execute(sa.text("DROP FUNCTION IF EXISTS prevent_audit_log_update_fn()"))
+        op.execute(sa.text("DROP FUNCTION IF EXISTS prevent_audit_log_delete_fn()"))
     op.drop_table("data_requests")

@@ -22,6 +22,8 @@ def run_lightweight_migrations(
     skip_versions_semantic_migration: bool = False,
 ) -> None:
     """Apply lightweight startup migrations for SQLite deployments."""
+    if engine.dialect.name != "sqlite":
+        return  # Alembic handles migrations for PostgreSQL
     with engine.connect() as conn:
         _ensure_platforms_table(conn)
         _ensure_document_columns(conn)
