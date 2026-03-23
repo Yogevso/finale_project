@@ -185,7 +185,7 @@ class TestAD021PrivateComments:
         cust_headers = _headers_for(client, "comment_cust", "custpass1")
         r = client.get(f"/api/v1/documents/{doc.id}/comments", headers=cust_headers)
         assert r.status_code == 200
-        comments = r.json()
+        comments = r.json()["items"]
 
         # Customer should NOT see the private comment
         contents = [c["content"] for c in comments]

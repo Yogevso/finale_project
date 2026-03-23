@@ -133,9 +133,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=portal
-      - POSTGRES_PASSWORD=portal
-      - POSTGRES_DB=portal
+      - POSTGRES_USER=${POSTGRES_USER:-portal}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-portal}
+      - POSTGRES_DB=${POSTGRES_DB:-portal}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

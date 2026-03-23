@@ -155,6 +155,15 @@ def projection_cache_isolation():
 
 
 @pytest.fixture(autouse=True)
+def company_cache_isolation():
+    """Clear the module-level company lookup cache between tests."""
+    from app.services.document_service import _company_cache
+    _company_cache.clear()
+    yield
+    _company_cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def auth_rate_limit_isolation():
     """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
     from app.services.auth_rate_limit_service import AuthRateLimitService

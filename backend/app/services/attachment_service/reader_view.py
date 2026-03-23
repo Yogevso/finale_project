@@ -313,14 +313,28 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             ):
                 return
 
-            # Guard against concurrent generation: only proceed if status is not already PROCESSING
-            if reader_artifact.status == cls.READER_STATUS_PROCESSING and not force:
+            # Atomic claim: UPDATE ... WHERE status != 'processing' prevents TOCTOU races.
+            # If another process already set status to PROCESSING, updated == 0 and we skip.
+            claim_filter = db.query(AttachmentArtifact).filter(
+                AttachmentArtifact.id == reader_artifact.id,
+            )
+            if not force:
+                claim_filter = claim_filter.filter(
+                    AttachmentArtifact.status != cls.READER_STATUS_PROCESSING,
+                )
+            claimed = claim_filter.update(
+                {
+                    AttachmentArtifact.status: cls.READER_STATUS_PROCESSING,
+                    AttachmentArtifact.error: None,
+                    AttachmentArtifact.generated_at: None,
+                },
+                synchronize_session="fetch",
+            )
+            if not claimed and not force:
                 logger.info("Reader artifact already processing for attachment %s, skipping", attachment_id)
                 return
 
-            reader_artifact.status = cls.READER_STATUS_PROCESSING
-            reader_artifact.error = None
-            reader_artifact.generated_at = None
+            db.refresh(reader_artifact)
             cls._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
 

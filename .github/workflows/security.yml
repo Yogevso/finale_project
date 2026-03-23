@@ -97,7 +97,7 @@ jobs:
   codeql-analysis:
     name: CodeQL Security Analysis
     runs-on: ubuntu-latest
-    continue-on-error: true  # Don't fail if code scanning not enabled
+    continue-on-error: false  # Fail build on CodeQL findings
 
     strategy:
       fail-fast: false

@@ -119,22 +119,15 @@ class TestAG017CollabUrlSingleSource:
 class TestAG018EmailRetry:
     """Email sends should retry on transient SMTP failures."""
 
-    @pytest.mark.asyncio
-    async def test_email_retries_on_smtp_connect_error(self):
-        """Mock aiosmtplib and verify 3 attempts on SMTPConnectError."""
-        from app.services.email_service import EmailService
+    def test_email_retries_on_smtp_connect_error(self):
+        """Verify email service is configured for 3 retry attempts."""
+        from app.services.email_service import EmailService, EMAIL_MAX_ATTEMPTS
 
         svc = EmailService()
         svc.enabled = True
         svc.host = "smtp.test"
 
-        mock_smtp = MagicMock()
-        mock_smtp.__aenter__ = AsyncMock(side_effect=Exception("always fail"))
-        mock_smtp.__aexit__ = AsyncMock(return_value=False)
-
         # The service should try EMAIL_MAX_ATTEMPTS times
-        from app.services.email_service import EMAIL_MAX_ATTEMPTS
-
         assert EMAIL_MAX_ATTEMPTS == 3
 
     def test_retry_delays_are_exponential(self):

@@ -4,7 +4,6 @@ import json
 import logging
 import re
 import threading
-from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from time import monotonic
@@ -41,6 +40,7 @@ from app.models import (
     UserRole,
     Version,
 )
+from app.application.policies.access_policies import DocumentAccessPolicy
 from app.schemas import DocumentCreate, DocumentUpdate
 from app.services.base_service import TenantAwareService
 from app.services.notification_service import NotificationService
@@ -72,39 +72,37 @@ class _CompanyLookupCacheEntry:
     expires_at: float
 
 
-class _CompanyLookupLRU:
-    """Small in-memory LRU cache with TTL for company ID/name lookups."""
+# Module-level TTL cache shared across requests (thread-safe).
+_company_cache_lock = threading.Lock()
+_company_cache: dict[tuple[int | None, int], _CompanyLookupCacheEntry] = {}
 
-    def __init__(self, *, max_entries: int, ttl_seconds: int):
-        self._max_entries = max_entries
-        self._ttl_seconds = ttl_seconds
-        self._entries: OrderedDict[tuple[int | None, int], _CompanyLookupCacheEntry] = OrderedDict()
-        self._lock = threading.RLock()
 
-    def get(self, company_id: int, tenant_id: int | None = None) -> CompanyLookupSnapshot | None:
-        key = (tenant_id, company_id)
-        now = monotonic()
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is None:
-                return None
-            if entry.expires_at <= now:
-                self._entries.pop(key, None)
-                return None
-            self._entries.move_to_end(key)
-            return entry.snapshot
+def _cache_get(company_id: int, tenant_id: int | None = None) -> CompanyLookupSnapshot | None:
+    key = (tenant_id, company_id)
+    now = monotonic()
+    with _company_cache_lock:
+        entry = _company_cache.get(key)
+        if entry is None:
+            return None
+        if entry.expires_at <= now:
+            _company_cache.pop(key, None)
+            return None
+        return entry.snapshot
 
-    def set(self, snapshot: CompanyLookupSnapshot, tenant_id: int | None = None) -> None:
-        key = (tenant_id, snapshot.id)
-        now = monotonic()
-        with self._lock:
-            self._entries[key] = _CompanyLookupCacheEntry(
-                snapshot=snapshot,
-                expires_at=now + self._ttl_seconds,
-            )
-            self._entries.move_to_end(key)
-            while len(self._entries) > self._max_entries:
-                self._entries.popitem(last=False)
+
+def _cache_set(snapshot: CompanyLookupSnapshot, tenant_id: int | None = None) -> None:
+    key = (tenant_id, snapshot.id)
+    now = monotonic()
+    with _company_cache_lock:
+        _company_cache[key] = _CompanyLookupCacheEntry(
+            snapshot=snapshot,
+            expires_at=now + COMPANY_LOOKUP_CACHE_TTL_SECONDS,
+        )
+        # Evict oldest entries when over capacity
+        if len(_company_cache) > COMPANY_LOOKUP_CACHE_MAX_ENTRIES:
+            excess = len(_company_cache) - COMPANY_LOOKUP_CACHE_MAX_ENTRIES
+            for k in list(_company_cache)[:excess]:
+                _company_cache.pop(k, None)
 
 
 class DocumentService(TenantAwareService[Document]):
@@ -124,10 +122,6 @@ class DocumentService(TenantAwareService[Document]):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
         self.notification_service = NotificationService(db, chat_db=chat_db)
-        self._company_lookup_cache = _CompanyLookupLRU(
-            max_entries=COMPANY_LOOKUP_CACHE_MAX_ENTRIES,
-            ttl_seconds=COMPANY_LOOKUP_CACHE_TTL_SECONDS,
-        )
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
@@ -142,13 +136,28 @@ class DocumentService(TenantAwareService[Document]):
             if document.tenant_id != self.tenant_ctx.tenant_id:
                 raise NotFoundError("Document not found")
 
+    _access_policy = DocumentAccessPolicy()
     _WRITE_ROLES = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR}
+    # Route layer enforces MANAGER+ for delete endpoints; service layer
+    # allows EDITOR+ so internal callers (e.g. upload-workflow compensation)
+    # can clean up documents the user just created.
+    _DELETE_ROLES = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR}
 
     def _verify_write_access(self, document: Document, user: User) -> None:
-        """Verify user can modify this document (tenant + role check)."""
+        """Verify user can modify this document (tenant + role + policy check)."""
         self._verify_access(document)
         if user.role not in self._WRITE_ROLES:
             raise PermissionDeniedError("Insufficient permissions to modify documents")
+        if not self._access_policy.can_edit_document(user, document, has_edit_permission=True):
+            raise PermissionDeniedError("Document access denied by policy")
+
+    def _verify_delete_access(self, document: Document, user: User) -> None:
+        """Verify user can delete this document (requires MANAGER+)."""
+        self._verify_access(document)
+        if user.role not in self._DELETE_ROLES:
+            raise PermissionDeniedError("Insufficient permissions to delete documents")
+        if not self._access_policy.can_delete_document(user, document, has_delete_permission=True):
+            raise PermissionDeniedError("Document access denied by policy")
 
     def _discover_max_existing_suffix(self, prefix: str) -> int:
         existing = (
@@ -333,7 +342,7 @@ class DocumentService(TenantAwareService[Document]):
         missing_ids: list[int] = []
 
         for company_id in company_ids:
-            cached = self._company_lookup_cache.get(company_id, tenant_id=tenant_id)
+            cached = _cache_get(company_id, tenant_id=tenant_id)
             if cached is None:
                 missing_ids.append(company_id)
             else:
@@ -353,7 +362,7 @@ class DocumentService(TenantAwareService[Document]):
                     is_active=bool(row.is_active),
                 )
                 snapshots[snapshot.id] = snapshot
-                self._company_lookup_cache.set(snapshot, tenant_id=tenant_id)
+                _cache_set(snapshot, tenant_id=tenant_id)
 
         return snapshots
 
@@ -403,7 +412,9 @@ class DocumentService(TenantAwareService[Document]):
         )
 
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
-        """Create a new document"""
+        """Create a new document (requires EDITOR role or above)."""
+        if user.role not in self._WRITE_ROLES:
+            raise PermissionDeniedError("Insufficient permissions to create documents")
         normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
         self._validate_company_visibility_assignment(
             visibility=document_data.visibility,
@@ -1068,7 +1079,7 @@ class DocumentService(TenantAwareService[Document]):
     def delete_document(self, document_id: int, user: User) -> None:
         """Delete document with tenant verification"""
         document = self.get_document(document_id)
-        self._verify_write_access(document, user)
+        self._verify_delete_access(document, user)
 
         with UnitOfWork(self.db):
             # Keep audit + delete in one transaction to avoid partial writes.

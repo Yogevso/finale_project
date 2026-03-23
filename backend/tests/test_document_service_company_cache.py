@@ -1,6 +1,6 @@
 """Tests for document-service company lookup caching."""
 
-from app.services.document_service import DocumentService, _CompanyLookupLRU
+from app.services.document_service import DocumentService, _company_cache
 from tests.factories import create_tenant
 
 
@@ -19,8 +19,10 @@ def test_company_lookup_cache_hits_and_ttl_expiry(db, monkeypatch):
 
     monkeypatch.setattr("app.services.document_service.monotonic", fake_monotonic)
 
+    # Clear module-level cache to isolate this test
+    _company_cache.clear()
+
     service = DocumentService(db)
-    service._company_lookup_cache = _CompanyLookupLRU(max_entries=32, ttl_seconds=1)
 
     query_calls = {"count": 0}
     original_query = db.query
@@ -34,10 +36,13 @@ def test_company_lookup_cache_hits_and_ttl_expiry(db, monkeypatch):
 
     first = service._lookup_company_snapshots([tenant.id])
     second = service._lookup_company_snapshots([tenant.id])
-    ticks["value"] += 2.0
+    ticks["value"] += 31.0  # Exceed TTL of 30s
     third = service._lookup_company_snapshots([tenant.id])
 
     assert first[tenant.id].name == tenant.name
     assert second[tenant.id].slug == tenant.slug
     assert third[tenant.id].id == tenant.id
     assert query_calls["count"] == 2
+
+    # Clean up module-level cache
+    _company_cache.clear()

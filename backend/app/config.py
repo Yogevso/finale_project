@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24
-    AUDIENCE_AUDIT_HMAC_KEYS: str = "v1:dev-audience-audit-signing-key"
+    AUDIENCE_AUDIT_HMAC_KEYS: str = "v1:dev-audience-audit-signing-key"  # Override in production
     AUDIENCE_AUDIT_ACTIVE_KEY_ID: str = "v1"
     AUDIENCE_ASSIGNMENT_SCHEMA_VERSION: str = "1.0.0"
     ACCOUNT_LOCKOUT_MAX_ATTEMPTS: int = 5
@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     SQL_ECHO: bool = False
     ANALYTICS_SQL_ECHO: bool | None = None  # Defaults to SQL_ECHO when None
     CHAT_SQL_ECHO: bool | None = None  # Defaults to SQL_ECHO when None
+
+    # GDPR Data Retention (days, 0 = keep forever)
+    RETENTION_SECURITY_EVENTS_DAYS: int = 365
+    RETENTION_SEARCH_ANALYTICS_DAYS: int = 180
+    RETENTION_NPS_SURVEYS_DAYS: int = 730       # 2 years
+    RETENTION_NOTIFICATIONS_DAYS: int = 90
+    RETENTION_RESOLVED_TICKETS_DAYS: int = 730  # 2 years after resolution
+    RETENTION_CHAT_MESSAGES_DAYS: int = 365
+    RETENTION_ASSISTANT_CONVERSATIONS_DAYS: int = 180
+    RETENTION_COLLAB_SNAPSHOTS_DAYS: int = 90   # Non-pinned only
 
     # CORS — M-14: override via CORS_ORIGINS env var (comma-separated or JSON array)
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
@@ -165,14 +175,19 @@ class Settings(BaseSettings):
                 )
         elif len(self.SECRET_KEY) < 32:
             if is_production:
-                print(
-                    "FATAL: SECRET_KEY is too short. Use at least 32 characters.",
-                    file=sys.stderr,
+                raise RuntimeError(
+                    "SECRET_KEY is too short. Use at least 32 characters."
                 )
-                sys.exit(1)
             else:
                 logging.warning("SECRET_KEY is shorter than recommended (32+ chars).")
-        
+
+        # HMAC key validation
+        if is_production and "dev-audience-audit-signing-key" in self.AUDIENCE_AUDIT_HMAC_KEYS:
+            raise RuntimeError(
+                "Insecure AUDIENCE_AUDIT_HMAC_KEYS rejected in production. "
+                "Set AUDIENCE_AUDIT_HMAC_KEYS to a secure random value."
+            )
+
         return self
 
     class Config:

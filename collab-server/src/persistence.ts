@@ -4,6 +4,7 @@
  */
 
 import * as Y from 'yjs';
+import { Redis } from 'ioredis';
 import { DocumentStateContractAdapter } from './adapters/documentStateContractAdapter.js';
 import {
   BackendDocumentStateTransportAdapter,
@@ -16,6 +17,52 @@ export { buildDocumentStateUrl };
 // In-memory cache for document states (for quick access)
 const documentCache = new Map<string, Uint8Array>();
 const MAX_CACHE_SIZE = 200;
+
+// Cache invalidation via Redis pub/sub for horizontal scaling.
+// When a document is saved on one instance, all other instances evict
+// their local cache entry so the next load fetches fresh state.
+const CACHE_INVALIDATION_CHANNEL = 'collab:cache:invalidate';
+let redisPub: Redis | null = null;
+let redisSub: Redis | null = null;
+
+export async function initCacheInvalidation(redisUrl: string): Promise<void> {
+  if (!redisUrl) return;
+
+  redisPub = new Redis(redisUrl);
+  redisSub = new Redis(redisUrl);
+
+  await redisSub.subscribe(CACHE_INVALIDATION_CHANNEL);
+
+  redisSub.on('message', (_channel: string, message: string) => {
+    const documentId = message;
+    if (documentCache.has(documentId)) {
+      documentCache.delete(documentId);
+      console.log(`[CacheInval] Evicted cache for document ${documentId} (remote save)`);
+    }
+  });
+
+  console.log('[CacheInval] Redis cache invalidation active');
+}
+
+export async function stopCacheInvalidation(): Promise<void> {
+  if (redisSub) {
+    await redisSub.unsubscribe(CACHE_INVALIDATION_CHANNEL);
+    redisSub.disconnect();
+    redisSub = null;
+  }
+  if (redisPub) {
+    redisPub.disconnect();
+    redisPub = null;
+  }
+}
+
+function publishCacheInvalidation(documentId: string): void {
+  if (redisPub) {
+    redisPub.publish(CACHE_INVALIDATION_CHANNEL, documentId).catch((err: unknown) => {
+      console.error(`[CacheInval] Failed to publish invalidation for ${documentId}:`, err);
+    });
+  }
+}
 
 function cacheSet(documentId: string, state: Uint8Array): void {
   // Delete first so re-insertion moves key to end (most recent)
@@ -86,6 +133,7 @@ export async function saveDocument(
 
   try {
     await transport.saveDocumentState(documentId, state, token);
+    publishCacheInvalidation(documentId);
 
     console.log(`[Persistence] Saved document ${documentId} to backend (${state.length} bytes)`);
     return { success: true };

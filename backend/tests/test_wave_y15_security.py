@@ -450,21 +450,12 @@ class TestEnvVarValidation:
 
     def test_settings_validates_secret_length_in_production(self, monkeypatch):
         """Settings should validate SECRET_KEY length in production."""
-        import sys
-        from unittest.mock import patch
-        
-        with patch.object(sys, 'exit') as mock_exit:
-            try:
-                test_settings = Settings(
-                    SECRET_KEY="short",
-                    DATABASE_URL="sqlite:///test.db",
-                    APP_ENV="production",
-                )
-            except SystemExit:
-                pass  # Expected
-            
-            # sys.exit should have been called
-            mock_exit.assert_called_once_with(1)
+        with pytest.raises(RuntimeError, match="SECRET_KEY is too short"):
+            Settings(
+                SECRET_KEY="short",
+                DATABASE_URL="sqlite:///test.db",
+                APP_ENV="production",
+            )
 
     def test_database_url_has_default(self):
         """DATABASE_URL should have a reasonable default."""
