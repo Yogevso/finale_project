@@ -14,7 +14,7 @@ import {
   registerDocumentConnectionAuth,
   unregisterDocumentConnectionAuth,
 } from '../documentAuthStore.js';
-import { clearDocumentCache, loadDocument, saveDocument } from '../persistence.js';
+import { clearDocumentCache, initCacheInvalidation, loadDocument, saveDocument, stopCacheInvalidation } from '../persistence.js';
 import type { AwarenessUser, ConnectionContext } from '../types.js';
 import { getUserColor } from '../types.js';
 import { ConnectionRegistry } from './connectionRegistry.js';
@@ -113,6 +113,10 @@ export class CollabServerApp {
       return;
     }
 
+    if (this.config.redisUrl) {
+      await initCacheInvalidation(this.config.redisUrl);
+    }
+
     await this.healthServer.start();
     console.log(
       `[Health] HTTP health check available at http://${this.config.host}:${this.healthServer.port}/health`,
@@ -132,6 +136,7 @@ export class CollabServerApp {
     }
 
     await this.server.destroy();
+    await stopCacheInvalidation();
     await this.healthServer.stop();
     this.started = false;
   }

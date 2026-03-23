@@ -163,7 +163,7 @@ export default function UsersPage() {
     },
   })
 
-  if (!isAdmin) {
+  if (!isManager) {
     return (
       <div className="surface-card rounded-2xl bg-amber-50 p-6 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
         You don't have permission to view this page.

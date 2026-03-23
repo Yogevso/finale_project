@@ -1,9 +1,12 @@
-"""Cleanup worker for expired sessions, tokens, and stale records.
+"""Cleanup worker for expired sessions, tokens, stale records, and GDPR data retention.
 
 Purges:
   - UserSession rows that have been revoked OR inactive > SESSION_INACTIVITY_DAYS
   - PasswordReset tokens that are expired AND used (or just expired > 7 days)
   - IdempotencyKeyRecord entries older than 7 days
+  - Data retention: SecurityEvent, SearchAnalytics, NpsSurvey, Notification,
+    resolved SupportTicket, ChatMessage (soft-deleted), AssistantConversation,
+    CollaborationSnapshot (non-pinned / expired)
 
 Run:
   python -m app.workers.cleanup_worker          # one-shot
@@ -18,8 +21,25 @@ import time
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.db import SessionLocal
-from app.models import IdempotencyKeyRecord, PasswordReset, UserSession
+from app.db import (
+    AnalyticsSessionLocal,
+    ChatSessionLocal,
+    SessionLocal,
+)
+from app.models import (
+    AssistantConversation,
+    ChatMessage,
+    CollaborationSnapshot,
+    IdempotencyKeyRecord,
+    Notification,
+    NpsSurvey,
+    PasswordReset,
+    SearchAnalytics,
+    SecurityEvent,
+    SupportTicket,
+    SupportTicketStatus,
+    UserSession,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,17 +104,166 @@ def purge_stale_idempotency_records(cutoff: datetime, *, dry_run: bool = False) 
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# GDPR Data Retention Purges
+# ---------------------------------------------------------------------------
+
+
+def _purge_analytics(model, cutoff: datetime, *, dry_run: bool = False, label: str = "") -> int:
+    """Purge rows from an Analytics DB table older than cutoff."""
+    db = AnalyticsSessionLocal()
+    try:
+        query = db.query(model).filter(model.created_at < cutoff)
+        count = query.count()
+        if not dry_run and count:
+            query.delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d %s records (dry_run=%s)", count, label or model.__tablename__, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def purge_old_notifications(cutoff: datetime, *, dry_run: bool = False) -> int:
+    """Delete read notifications older than cutoff."""
+    db = ChatSessionLocal()
+    try:
+        query = db.query(Notification).filter(
+            Notification.created_at < cutoff,
+            Notification.is_read.is_(True),
+        )
+        count = query.count()
+        if not dry_run and count:
+            query.delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d old notifications (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def purge_resolved_support_tickets(cutoff: datetime, *, dry_run: bool = False) -> int:
+    """Delete support tickets resolved before cutoff (cascade deletes messages)."""
+    db = SessionLocal()
+    try:
+        query = db.query(SupportTicket).filter(
+            SupportTicket.status == SupportTicketStatus.CLOSED,
+            SupportTicket.resolved_at.isnot(None),
+            SupportTicket.resolved_at < cutoff,
+        )
+        count = query.count()
+        if not dry_run and count:
+            query.delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d resolved support tickets (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def purge_soft_deleted_chat_messages(cutoff: datetime, *, dry_run: bool = False) -> int:
+    """Hard-delete soft-deleted chat messages older than cutoff."""
+    db = ChatSessionLocal()
+    try:
+        query = db.query(ChatMessage.id).filter(
+            ChatMessage.deleted_at.isnot(None),
+            ChatMessage.deleted_at < cutoff,
+        )
+        count = query.count()
+        if not dry_run and count:
+            db.query(ChatMessage).filter(
+                ChatMessage.deleted_at.isnot(None),
+                ChatMessage.deleted_at < cutoff,
+            ).delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d soft-deleted chat messages (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def purge_old_assistant_conversations(cutoff: datetime, *, dry_run: bool = False) -> int:
+    """Delete archived assistant conversations older than cutoff (cascade deletes messages)."""
+    db = ChatSessionLocal()
+    try:
+        query = db.query(AssistantConversation).filter(
+            AssistantConversation.updated_at < cutoff,
+            AssistantConversation.is_archived.is_(True),
+        )
+        count = query.count()
+        if not dry_run and count:
+            query.delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d old assistant conversations (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def purge_expired_collab_snapshots(now: datetime, *, dry_run: bool = False) -> int:
+    """Delete non-pinned collaboration snapshots past their expires_at or older than retention."""
+    db = ChatSessionLocal()
+    try:
+        cutoff = now - timedelta(days=settings.RETENTION_COLLAB_SNAPSHOTS_DAYS)
+        query = db.query(CollaborationSnapshot).filter(
+            CollaborationSnapshot.is_pinned.is_(False),
+            (
+                (CollaborationSnapshot.expires_at.isnot(None) & (CollaborationSnapshot.expires_at < now))
+                | (CollaborationSnapshot.created_at < cutoff)
+            ),
+        )
+        count = query.count()
+        if not dry_run and count:
+            query.delete(synchronize_session=False)
+            db.commit()
+        logger.info("Purged %d expired collab snapshots (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
 def run_cleanup(*, dry_run: bool = False) -> dict[str, int]:
     """Execute all cleanup tasks. Returns counts of purged records."""
     now = datetime.utcnow()
     session_cutoff = now - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
     idempotency_cutoff = now - timedelta(days=IDEMPOTENCY_TTL_DAYS)
 
-    return {
+    result: dict[str, int] = {
         "sessions": purge_expired_sessions(session_cutoff, dry_run=dry_run),
         "password_resets": purge_expired_password_resets(now, dry_run=dry_run),
         "idempotency_records": purge_stale_idempotency_records(idempotency_cutoff, dry_run=dry_run),
     }
+
+    # GDPR data retention purges
+    retention_tasks: list[tuple[str, int, object]] = [
+        ("security_events", settings.RETENTION_SECURITY_EVENTS_DAYS, SecurityEvent),
+        ("search_analytics", settings.RETENTION_SEARCH_ANALYTICS_DAYS, SearchAnalytics),
+        ("nps_surveys", settings.RETENTION_NPS_SURVEYS_DAYS, NpsSurvey),
+    ]
+    for key, days, model in retention_tasks:
+        if days > 0:
+            cutoff = now - timedelta(days=days)
+            result[key] = _purge_analytics(model, cutoff, dry_run=dry_run, label=key)
+
+    if settings.RETENTION_NOTIFICATIONS_DAYS > 0:
+        cutoff = now - timedelta(days=settings.RETENTION_NOTIFICATIONS_DAYS)
+        result["notifications"] = purge_old_notifications(cutoff, dry_run=dry_run)
+
+    if settings.RETENTION_RESOLVED_TICKETS_DAYS > 0:
+        cutoff = now - timedelta(days=settings.RETENTION_RESOLVED_TICKETS_DAYS)
+        result["resolved_tickets"] = purge_resolved_support_tickets(cutoff, dry_run=dry_run)
+
+    if settings.RETENTION_CHAT_MESSAGES_DAYS > 0:
+        cutoff = now - timedelta(days=settings.RETENTION_CHAT_MESSAGES_DAYS)
+        result["chat_messages_deleted"] = purge_soft_deleted_chat_messages(cutoff, dry_run=dry_run)
+
+    if settings.RETENTION_ASSISTANT_CONVERSATIONS_DAYS > 0:
+        cutoff = now - timedelta(days=settings.RETENTION_ASSISTANT_CONVERSATIONS_DAYS)
+        result["assistant_conversations"] = purge_old_assistant_conversations(cutoff, dry_run=dry_run)
+
+    result["collab_snapshots"] = purge_expired_collab_snapshots(now, dry_run=dry_run)
+
+    return result
 
 
 def main() -> None:

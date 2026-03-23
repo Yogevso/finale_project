@@ -11,8 +11,8 @@ services:
     environment:
       - APP_ENV=production
       - DEBUG=false
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/portal.db}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required for production}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required for production}
       - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL:-sqlite:///./data/analytics.db}
       - CHAT_DATABASE_URL=${CHAT_DATABASE_URL:-sqlite:///./data/chat.db}
       - CORS_ORIGINS=["https://portal.example.com"]
@@ -96,7 +96,7 @@ services:
     environment:
       - PORT=8002
       - HOST=0.0.0.0
-      - JWT_SECRET=${SECRET_KEY}
+      - JWT_SECRET=${SECRET_KEY:?SECRET_KEY is required for production}
       - BACKEND_URL=http://backend:8000
       - LOG_LEVEL=info
       # Redis for horizontal scaling (optional)

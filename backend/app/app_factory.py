@@ -28,6 +28,7 @@ from app.middleware import (
     SecurityHeadersMiddleware,
     TenantContextMiddleware,
 )
+from app.middleware.access_denial_audit import AccessDenialAuditMiddleware
 from app.projections import get_projection_cache, register_projection_invalidation_listeners
 from app.sunset_middleware import SunsetMiddleware
 from app.web.router_registry import FastAPIRouterRegistry, build_default_router_registry
@@ -87,6 +88,7 @@ class FastAPIAppFactory:
             window_seconds=settings.RATE_LIMIT_WINDOW,
         )
         app.add_middleware(LoggingMiddleware)
+        app.add_middleware(AccessDenialAuditMiddleware)
         # TenantContextMiddleware propagates tenant_id from auth layer to request context
         app.add_middleware(TenantContextMiddleware)
         if is_backend_feature_enabled(BackendFeatureFlag.CSRF_PROTECTION):

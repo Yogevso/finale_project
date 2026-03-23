@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from html import escape as html_escape
 from typing import Optional
 
 from fastapi import HTTPException
@@ -23,6 +22,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.utils.sanitization import sanitize_html_content
 
 MENTION_RE = re.compile(r"(?<!\w)@(\w[\w.-]{0,99})")
 
@@ -69,7 +69,7 @@ class SupportTicketService:
             ticket_id=ticket.id,
             sender_id=customer.id,
             sender_type="customer",
-            content=content.strip(),
+            content=sanitize_html_content(content.strip()) or content.strip(),
             is_internal_note=False,
         ))
 
@@ -229,7 +229,7 @@ class SupportTicketService:
             ticket_id=ticket_id,
             sender_id=sender.id,
             sender_type=sender_type,
-            content=html_escape(content.strip()),
+            content=sanitize_html_content(content.strip()) or content.strip(),
             is_internal_note=is_internal_note,
         )
         self.db.add(msg)

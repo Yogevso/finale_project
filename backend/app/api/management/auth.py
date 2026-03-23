@@ -33,6 +33,7 @@ from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.email_service import email_service
 from app.services.permissions import get_user_permissions
+from app.services.permissions import ROLE_PERMISSIONS as _STATIC_ROLE_PERMISSIONS
 from app.utils.request_ip import get_client_ip
 
 router = APIRouter()
@@ -370,6 +371,15 @@ def get_current_user_info(current_user: User = Depends(get_current_active_user))
     """Get current user information"""
     permissions = sorted((permission.value for permission in get_user_permissions(current_user)))
     return UserResponse.model_validate(current_user).model_copy(update={"permissions": permissions})
+
+
+@router.get("/auth/permissions-matrix")
+def get_permissions_matrix(current_user: User = Depends(get_current_active_user)):
+    """Return the role→permissions matrix so the frontend can align UI guards."""
+    return {
+        role.value: sorted(p.value for p in perms)
+        for role, perms in _STATIC_ROLE_PERMISSIONS.items()
+    }
 
 
 @router.post("/auth/change-password", response_model=MessageResponse)

@@ -1,5 +1,6 @@
 """Comment Service - Business logic for document comments with visibility and threading"""
 
+from dataclasses import dataclass
 from typing import List, Optional, Set
 
 from fastapi import HTTPException, status
@@ -18,6 +19,16 @@ from app.services.base_service import SessionService
 from app.services.chat_service import ChatService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
+
+
+@dataclass
+class PaginatedComments:
+    """Paginated wrapper for comments list."""
+    items: List[CommentResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 from app.services.uow import UnitOfWork
 
 
@@ -211,7 +222,9 @@ class CommentService(SessionService):
                 synchronize_session=False
             )
 
-    def get_comments(self, document_id: int, current_user: User) -> List[CommentResponse]:
+    def get_comments(
+        self, document_id: int, current_user: User, *, page: int = 1, page_size: int = 50
+    ) -> PaginatedComments:
         """
         Get comments for a document with contributor-based visibility filtering.
 
@@ -249,7 +262,18 @@ class CommentService(SessionService):
                     )
                 )
 
-        return visible_comments
+        total = len(visible_comments)
+        pages = max(1, (total + page_size - 1) // page_size)
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        return PaginatedComments(
+            items=visible_comments[start:end],
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=pages,
+        )
 
     def get_comment(
         self, document_id: int, comment_id: int, current_user: User

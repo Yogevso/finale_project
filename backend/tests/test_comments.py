@@ -16,8 +16,11 @@ class TestCommentsAPI:
             f"/api/v1/documents/{sample_document['id']}/comments", headers=headers
         )
         assert response.status_code == 200
-        # Could be empty list or list with existing comments
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert "total" in data
+        assert "page" in data
 
     def test_create_comment(self, client: TestClient, admin_token: str, sample_document: dict):
         """Test creating a comment"""
@@ -161,10 +164,10 @@ class TestCommentsAPI:
         monkeypatch.setattr(CommentService, "can_view_comment", staticmethod(fake_can_view))
 
         comments = CommentService(db).get_comments(sample_document["id"], current_user)
-        assert len(comments) == 1
-        assert comments[0].id == parent.id
-        assert comments[0].reply_count == 0
-        assert comments[0].replies == []
+        assert comments.total == 1
+        assert comments.items[0].id == parent.id
+        assert comments.items[0].reply_count == 0
+        assert comments.items[0].replies == []
 
         persisted_reply = db.query(Comment).filter(Comment.id == reply.id).first()
         assert persisted_reply is not None

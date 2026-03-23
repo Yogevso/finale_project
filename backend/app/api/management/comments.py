@@ -1,8 +1,8 @@
 """Comments API Routes"""
 
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies.services import get_comment_service
 from app.models import User
@@ -13,24 +13,26 @@ from app.schemas import (
     MessageResponse,
 )
 from app.security import get_current_active_user
-from app.services.comment_service import CommentService
+from app.services.comment_service import CommentService, PaginatedComments
 
 router = APIRouter()
 
 
-@router.get("/documents/{document_id}/comments", response_model=List[CommentResponse])
+@router.get("/documents/{document_id}/comments")
 def list_comments(
     document_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Comments per page"),
     comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(get_current_active_user),
-):
+) -> PaginatedComments:
     """
     List comments for a document.
 
-    Returns top-level comments with their replies.
+    Returns top-level comments with their replies, paginated.
     Private comments are only visible to admins/editors or the comment author.
     """
-    return comment_service.get_comments(document_id, current_user)
+    return comment_service.get_comments(document_id, current_user, page=page, page_size=page_size)
 
 
 @router.get("/documents/{document_id}/comments/stats")
