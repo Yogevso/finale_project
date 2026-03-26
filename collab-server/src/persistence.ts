@@ -3,8 +3,11 @@
  * Saves Yjs state to FastAPI backend
  */
 
+import { createHmac, timingSafeEqual } from 'crypto';
+
 import * as Y from 'yjs';
 import { Redis } from 'ioredis';
+import jwt from 'jsonwebtoken';
 import { DocumentStateContractAdapter } from './adapters/documentStateContractAdapter.js';
 import {
   BackendDocumentStateTransportAdapter,
@@ -22,11 +25,86 @@ const MAX_CACHE_SIZE = 200;
 // When a document is saved on one instance, all other instances evict
 // their local cache entry so the next load fetches fresh state.
 const CACHE_INVALIDATION_CHANNEL = 'collab:cache:invalidate';
+const CACHE_INVALIDATION_MAX_AGE_MS = 5 * 60 * 1000;
 let redisPub: Redis | null = null;
 let redisSub: Redis | null = null;
+let cacheInvalidationSecret = '';
 
-export async function initCacheInvalidation(redisUrl: string): Promise<void> {
+type CacheInvalidationEnvelope = {
+  documentId: string;
+  issuedAt: number;
+  signature: string;
+};
+
+export function resolveCacheInvalidationSecret(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return env.CACHE_INVALIDATION_SECRET || env.SECRET_KEY || env.JWT_SECRET || '';
+}
+
+export function signCacheInvalidationMessage(
+  documentId: string,
+  issuedAt: number,
+  secret: string,
+): string {
+  return createHmac('sha256', secret).update(`${documentId}:${issuedAt}`).digest('hex');
+}
+
+export function encodeCacheInvalidationMessage(
+  documentId: string,
+  secret: string,
+  issuedAt: number = Date.now(),
+): string {
+  return JSON.stringify({
+    documentId,
+    issuedAt,
+    signature: signCacheInvalidationMessage(documentId, issuedAt, secret),
+  } satisfies CacheInvalidationEnvelope);
+}
+
+export function decodeCacheInvalidationMessage(
+  payload: string,
+  secret: string,
+  now: number = Date.now(),
+): string | null {
+  try {
+    const parsed = JSON.parse(payload) as Partial<CacheInvalidationEnvelope>;
+    if (
+      typeof parsed.documentId !== 'string'
+      || !parsed.documentId
+      || typeof parsed.issuedAt !== 'number'
+      || typeof parsed.signature !== 'string'
+    ) {
+      return null;
+    }
+
+    if (Math.abs(now - parsed.issuedAt) > CACHE_INVALIDATION_MAX_AGE_MS) {
+      return null;
+    }
+
+    const expected = signCacheInvalidationMessage(parsed.documentId, parsed.issuedAt, secret);
+    const actualBuffer = Buffer.from(parsed.signature, 'hex');
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    if (
+      actualBuffer.length !== expectedBuffer.length
+      || !timingSafeEqual(actualBuffer, expectedBuffer)
+    ) {
+      return null;
+    }
+
+    return parsed.documentId;
+  } catch {
+    return null;
+  }
+}
+
+export async function initCacheInvalidation(redisUrl: string, secret: string): Promise<void> {
   if (!redisUrl) return;
+  if (!secret) {
+    throw new Error('Cache invalidation secret is required when Redis invalidation is enabled');
+  }
+
+  cacheInvalidationSecret = secret;
 
   redisPub = new Redis(redisUrl);
   redisSub = new Redis(redisUrl);
@@ -34,7 +112,12 @@ export async function initCacheInvalidation(redisUrl: string): Promise<void> {
   await redisSub.subscribe(CACHE_INVALIDATION_CHANNEL);
 
   redisSub.on('message', (_channel: string, message: string) => {
-    const documentId = message;
+    const documentId = decodeCacheInvalidationMessage(message, cacheInvalidationSecret);
+    if (!documentId) {
+      console.warn('[CacheInval] Ignored unsigned or invalid invalidation payload');
+      return;
+    }
+
     if (documentCache.has(documentId)) {
       documentCache.delete(documentId);
       console.log(`[CacheInval] Evicted cache for document ${documentId} (remote save)`);
@@ -57,8 +140,11 @@ export async function stopCacheInvalidation(): Promise<void> {
 }
 
 function publishCacheInvalidation(documentId: string): void {
-  if (redisPub) {
-    redisPub.publish(CACHE_INVALIDATION_CHANNEL, documentId).catch((err: unknown) => {
+  if (redisPub && cacheInvalidationSecret) {
+    redisPub.publish(
+      CACHE_INVALIDATION_CHANNEL,
+      encodeCacheInvalidationMessage(documentId, cacheInvalidationSecret),
+    ).catch((err: unknown) => {
       console.error(`[CacheInval] Failed to publish invalidation for ${documentId}:`, err);
     });
   }
@@ -95,6 +181,13 @@ export async function loadDocument(
   token: string,
   transport: DocumentStateTransportPort = defaultTransport,
 ): Promise<Uint8Array | null> {
+  // H-21: Verify the token is actually meant for this document
+  const decoded = jwt.decode(token) as Record<string, unknown> | null;
+  if (!decoded || String(decoded.document_id) !== String(documentId)) {
+    console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
+    return null;
+  }
+
   // Check cache first
   const cached = documentCache.get(documentId);
   if (cached) {
@@ -128,6 +221,13 @@ export async function saveDocument(
   token: string,
   transport: DocumentStateTransportPort = defaultTransport,
 ): Promise<PersistenceResult> {
+  // H-21: Verify the token is actually meant for this document
+  const decoded = jwt.decode(token) as Record<string, unknown> | null;
+  if (!decoded || String(decoded.document_id) !== String(documentId)) {
+    console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
+    return { success: false, error: 'Token is not valid for this document' };
+  }
+
   // Update cache
   cacheSet(documentId, state);
 

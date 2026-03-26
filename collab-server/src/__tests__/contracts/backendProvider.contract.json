@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.0.0",
+  "contract_version": "1.1.0",
   "consumer": "collab-server",
   "provider": "backend",
   "collaboration_token": {
@@ -10,6 +10,7 @@
       "username",
       "email",
       "role",
+      "tenant_id",
       "document_id",
       "permissions"
     ],
@@ -18,10 +19,10 @@
       "username": "editor",
       "email": "editor@example.com",
       "role": "editor",
+      "tenant_id": 9,
       "document_id": "42",
       "permissions": ["read", "write"],
       "type": "collaboration"
     }
   }
 }
-

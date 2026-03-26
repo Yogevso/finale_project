@@ -9,14 +9,35 @@ import {
   extractToken,
   extractDocumentId,
 } from '../auth.js';
+import { resolveCollaborationJwtSecret } from '../authContext/collaborationAuthService.js';
 import { signCollaborationToken } from './factories/collaborationFixtures.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const SHARED_SECRET = process.env.SECRET_KEY || process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+process.env.SECRET_KEY = process.env.SECRET_KEY || SHARED_SECRET;
 
 describe('Authentication', () => {
+  describe('resolveCollaborationJwtSecret', () => {
+    it('prefers SECRET_KEY over JWT_SECRET when both are present', () => {
+      expect(
+        resolveCollaborationJwtSecret({
+          SECRET_KEY: 'shared-secret-material-1234567890',
+          JWT_SECRET: 'legacy-secret-material-1234567890',
+        }),
+      ).toBe('shared-secret-material-1234567890');
+    });
+
+    it('falls back to JWT_SECRET for legacy environments', () => {
+      expect(
+        resolveCollaborationJwtSecret({
+          JWT_SECRET: 'legacy-secret-material-1234567890',
+        }),
+      ).toBe('legacy-secret-material-1234567890');
+    });
+  });
+
   describe('verifyCollabToken', () => {
     it('should verify a valid token', () => {
-      const token = signCollaborationToken({}, JWT_SECRET);
+      const token = signCollaborationToken({}, SHARED_SECRET);
 
       const result = verifyCollabToken(token, '123');
 
@@ -28,7 +49,7 @@ describe('Authentication', () => {
     });
 
     it('should reject token for wrong document', () => {
-      const token = signCollaborationToken({}, JWT_SECRET);
+      const token = signCollaborationToken({}, SHARED_SECRET);
 
       const result = verifyCollabToken(token, '456');
 
@@ -43,7 +64,7 @@ describe('Authentication', () => {
           exp: nowSeconds - 3600,
           iat: nowSeconds - 7200,
         },
-        JWT_SECRET,
+        SHARED_SECRET,
       );
 
       const result = verifyCollabToken(token, '123');
@@ -69,7 +90,7 @@ describe('Authentication', () => {
     });
 
     it('should reject token with non-collaboration type', () => {
-      const token = signCollaborationToken({ type: 'access' }, JWT_SECRET);
+      const token = signCollaborationToken({ type: 'access' }, SHARED_SECRET);
 
       const result = verifyCollabToken(token, '123');
 
@@ -85,7 +106,7 @@ describe('Authentication', () => {
           email: 'color@example.com',
           permissions: ['read'],
         },
-        JWT_SECRET,
+        SHARED_SECRET,
       );
 
       const result1 = verifyCollabToken(token, '123');

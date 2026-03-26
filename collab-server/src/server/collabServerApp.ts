@@ -3,9 +3,10 @@ import { randomUUID } from 'crypto';
 import { Database } from '@hocuspocus/extension-database';
 import { Logger } from '@hocuspocus/extension-logger';
 import { Redis } from '@hocuspocus/extension-redis';
-import { Extension, Server } from '@hocuspocus/server';
+import { Extension, Server, type storePayload } from '@hocuspocus/server';
 import * as Y from 'yjs';
 
+import { verifyCollaborationAccess } from '../adapters/backendCollaborationAuthAdapter.js';
 import { canWrite, extractDocumentId, extractToken, verifyCollabToken } from '../auth.js';
 import {
   clearDocumentAuth,
@@ -26,6 +27,7 @@ export interface CollabServerConfig {
   port: number;
   host: string;
   redisUrl: string;
+  cacheInvalidationSecret: string;
   debounceMs: number;
   maxDebounceMs: number;
   healthPort: number;
@@ -33,6 +35,7 @@ export interface CollabServerConfig {
 
 export type CollabRuntimeDependencies = {
   verifyCollabToken: typeof verifyCollabToken;
+  verifyCollaborationAccess: typeof verifyCollaborationAccess;
   extractToken: typeof extractToken;
   extractDocumentId: typeof extractDocumentId;
   canWrite: typeof canWrite;
@@ -46,6 +49,24 @@ export type CollabRuntimeDependencies = {
   unregisterDocumentConnectionAuth: typeof unregisterDocumentConnectionAuth;
 };
 
+export const PERSISTENCE_FAILURE_MESSAGE =
+  'Changes are no longer being saved to the server. Keep this tab open and reconnect before closing it.';
+
+export type CollabServerStatelessMessage =
+  | {
+      type: 'persistence_failed';
+      message: string;
+    }
+  | {
+      type: 'persistence_restored';
+    };
+
+export function encodeCollabServerStatelessMessage(
+  message: CollabServerStatelessMessage,
+): string {
+  return JSON.stringify(message);
+}
+
 export function resolveCollabServerConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): CollabServerConfig {
@@ -54,6 +75,7 @@ export function resolveCollabServerConfigFromEnv(
     port,
     host: env.HOST || '0.0.0.0',
     redisUrl: env.REDIS_URL || '',
+    cacheInvalidationSecret: env.CACHE_INVALIDATION_SECRET || env.SECRET_KEY || env.JWT_SECRET || '',
     debounceMs: parseInt(env.DEBOUNCE_MS || '2000', 10),
     maxDebounceMs: parseInt(env.MAX_DEBOUNCE_MS || '10000', 10),
     healthPort: port + 1,
@@ -65,6 +87,7 @@ export function createRuntimeDependencies(
 ): CollabRuntimeDependencies {
   return {
     verifyCollabToken,
+    verifyCollaborationAccess,
     extractToken,
     extractDocumentId,
     canWrite,
@@ -86,6 +109,7 @@ export class CollabServerApp {
   private readonly connectionRegistry: ConnectionRegistry;
   private readonly healthServer: HealthServer;
   private readonly server: HocuspocusServer;
+  private readonly documentsWithPersistenceFailures = new Set<string>();
   private started = false;
 
   constructor(params?: {
@@ -114,7 +138,10 @@ export class CollabServerApp {
     }
 
     if (this.config.redisUrl) {
-      await initCacheInvalidation(this.config.redisUrl);
+      await initCacheInvalidation(
+        this.config.redisUrl,
+        this.config.cacheInvalidationSecret,
+      );
     }
 
     await this.healthServer.start();
@@ -153,6 +180,110 @@ export class CollabServerApp {
     );
     console.log('============================================');
   }
+
+  private broadcastPersistenceFailure(documentId: string, payload: storePayload): void {
+    if (this.documentsWithPersistenceFailures.has(documentId)) {
+      return;
+    }
+
+    this.documentsWithPersistenceFailures.add(documentId);
+    payload.document.broadcastStateless(
+      encodeCollabServerStatelessMessage({
+        type: 'persistence_failed',
+        message: PERSISTENCE_FAILURE_MESSAGE,
+      }),
+    );
+  }
+
+  private clearPersistenceFailure(documentId: string, payload: storePayload): void {
+    if (!this.documentsWithPersistenceFailures.delete(documentId)) {
+      return;
+    }
+
+    payload.document.broadcastStateless(
+      encodeCollabServerStatelessMessage({
+        type: 'persistence_restored',
+      }),
+    );
+  }
+
+  private readonly handleStoreDocument = async (payload: storePayload): Promise<void> => {
+    const documentId = this.runtime.extractDocumentId(payload.documentName);
+    const token = this.runtime.getDocumentTokenForStore(documentId);
+
+    if (!token) {
+      console.error(
+        `[Database] No write-capable token available to save document ${documentId}`,
+      );
+      this.broadcastPersistenceFailure(documentId, payload);
+      return;
+    }
+
+    const saveResult = await this.runtime.saveDocument(documentId, payload.state, token);
+    if (!saveResult.success) {
+      this.broadcastPersistenceFailure(documentId, payload);
+      return;
+    }
+
+    this.clearPersistenceFailure(documentId, payload);
+  };
+
+  private readonly authenticateConnection = async ({
+    documentName,
+    token: rawToken,
+    connection,
+  }: {
+    documentName: string;
+    token?: string;
+    connection: { readOnly?: boolean };
+  }) => {
+    const documentId = this.runtime.extractDocumentId(documentName);
+    // H-21: Only accept token from the WebSocket protocol message (first message),
+    // not from URL query string, to avoid token leakage in server logs.
+    const token = rawToken;
+    if (!token) {
+      throw new Error('No authentication token provided');
+    }
+
+    const authResult = this.runtime.verifyCollabToken(token, documentId);
+    if (!authResult.success || !authResult.user) {
+      throw new Error(authResult.error || 'Authentication failed');
+    }
+
+    const backendAuthResult = await this.runtime.verifyCollaborationAccess(documentId, token);
+    if (!backendAuthResult.success) {
+      throw new Error(backendAuthResult.error || 'Authentication failed');
+    }
+
+    const effectivePermissions = backendAuthResult.permissions || authResult.permissions || [];
+    const writeCapable = this.runtime.canWrite(effectivePermissions);
+    const connectionContext: ConnectionContext = {
+      ...authResult.user,
+      documentId,
+      connectionId: randomUUID(),
+      canWrite: writeCapable,
+      connectedAt: new Date(),
+    };
+
+    if (!writeCapable) {
+      connection.readOnly = true;
+    }
+
+    this.connectionRegistry.register({
+      connection: connectionContext,
+      token,
+      writeCapable,
+    });
+    console.log(
+      `[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`,
+    );
+
+    return {
+      user: authResult.user,
+      permissions: effectivePermissions,
+      connectionId: connectionContext.connectionId,
+    };
+  };
 
   private buildExtensions(): Extension[] {
     const extensions: Extension[] = [
@@ -203,63 +334,10 @@ export class CollabServerApp {
 
             return this.runtime.loadDocument(documentId, token);
           },
-          store: async ({ documentName, state }) => {
-            const documentId = this.runtime.extractDocumentId(documentName);
-            const token = this.runtime.getDocumentTokenForStore(documentId);
-
-            if (!token) {
-              console.error(
-                `[Database] No write-capable token available to save document ${documentId}`,
-              );
-              return;
-            }
-
-            await this.runtime.saveDocument(documentId, state, token);
-          },
+          store: this.handleStoreDocument,
         }),
       ],
-      onAuthenticate: async ({ documentName, token: rawToken, connection }) => {
-        const documentId = this.runtime.extractDocumentId(documentName);
-        // H-21: Only accept token from the WebSocket protocol message (first message),
-        // not from URL query string, to avoid token leakage in server logs.
-        const token = rawToken;
-        if (!token) {
-          throw new Error('No authentication token provided');
-        }
-
-        const authResult = this.runtime.verifyCollabToken(token, documentId);
-        if (!authResult.success || !authResult.user) {
-          throw new Error(authResult.error || 'Authentication failed');
-        }
-
-        const writeCapable = this.runtime.canWrite(authResult.permissions || []);
-        const connectionContext: ConnectionContext = {
-          ...authResult.user,
-          documentId,
-          connectionId: randomUUID(),
-          canWrite: writeCapable,
-          connectedAt: new Date(),
-        };
-
-        if (!writeCapable) {
-          connection.readOnly = true;
-        }
-
-        this.connectionRegistry.register({
-          connection: connectionContext,
-          token,
-          writeCapable,
-        });
-        console.log(
-          `[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`,
-        );
-
-        return {
-          user: authResult.user,
-          permissions: authResult.permissions,
-          connectionId: connectionContext.connectionId,
-        };
-      },
+      onAuthenticate: this.authenticateConnection,
       onLoadDocument: async ({ documentName }) => {
         const documentId = this.runtime.extractDocumentId(documentName);
         console.log(`[Document] Loading document ${documentId}`);
@@ -300,6 +378,10 @@ export class CollabServerApp {
         const documentId = this.runtime.extractDocumentId(documentName);
         const state = Y.encodeStateAsUpdate(document);
         console.log(`[Store] Final save for document ${documentId} (${state.length} bytes)`);
+      },
+      afterUnloadDocument: async ({ documentName }) => {
+        const documentId = this.runtime.extractDocumentId(documentName);
+        this.documentsWithPersistenceFailures.delete(documentId);
       },
     });
   }

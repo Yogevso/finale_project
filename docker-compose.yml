@@ -67,7 +67,7 @@ services:
     environment:
       - PORT=8002
       - HOST=0.0.0.0
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET environment variable is required}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY environment variable is required}
       - BACKEND_URL=http://backend:8000
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=debug

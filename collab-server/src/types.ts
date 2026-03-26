@@ -31,6 +31,7 @@ export interface JWTPayload {
 }
 
 export interface CollabTokenPayload extends JWTPayload {
+  tenant_id: number | null;
   document_id: string;
   permissions: ('read' | 'write')[];
 }

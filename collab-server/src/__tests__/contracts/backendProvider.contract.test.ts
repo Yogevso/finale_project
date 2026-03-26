@@ -15,15 +15,16 @@ const contract = JSON.parse(
     token_type: string;
     allowed_permissions: string[];
     required_claims: string[];
-    fixture: {
-      sub: string;
-      username: string;
-      email: string;
-      role: string;
-      document_id: string;
-      permissions: string[];
-      type: string;
-    };
+      fixture: {
+        sub: string;
+        username: string;
+        email: string;
+        role: string;
+        tenant_id: number;
+        document_id: string;
+        permissions: string[];
+        type: string;
+      };
   };
 };
 

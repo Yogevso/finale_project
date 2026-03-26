@@ -12,6 +12,7 @@ export function buildCollaborationTokenPayload(
     username: 'testuser',
     email: 'test@example.com',
     role: 'editor',
+    tenant_id: 1,
     document_id: '123',
     permissions: ['read', 'write'],
     exp: nowSeconds + 3600,

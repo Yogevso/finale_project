@@ -2,6 +2,10 @@
  * Tracks per-document auth tokens by connection, preserving write-capable tokens.
  */
 
+import jwt from 'jsonwebtoken';
+
+import { isCollaborationTokenContract } from './authContext/contracts.js';
+
 interface DocumentAuthState {
   tokensByConnection: Map<string, string>;
   writeConnectionIds: Set<string>;
@@ -61,6 +65,11 @@ function getWriteToken(state: DocumentAuthState): string | null {
   return null;
 }
 
+function tokenMatchesDocument(token: string, documentId: string): boolean {
+  const decoded = jwt.decode(token);
+  return isCollaborationTokenContract(decoded) && decoded.document_id === documentId;
+}
+
 export function registerDocumentConnectionAuth(params: {
   documentId: string;
   connectionId: string;
@@ -68,6 +77,9 @@ export function registerDocumentConnectionAuth(params: {
   writeCapable: boolean;
 }): void {
   const { documentId, connectionId, token, writeCapable } = params;
+  if (!tokenMatchesDocument(token, documentId)) {
+    throw new Error('Token is not valid for this document');
+  }
   const state = getOrCreateState(documentId);
 
   state.tokensByConnection.set(connectionId, token);

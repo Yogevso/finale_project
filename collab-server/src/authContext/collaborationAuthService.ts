@@ -11,25 +11,25 @@ export interface AuthResult {
   error?: string;
 }
 
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+export function resolveCollaborationJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const secret = env.SECRET_KEY || env.JWT_SECRET;
 
   if (!secret) {
-    console.error('FATAL: JWT_SECRET environment variable is required');
+    console.error('FATAL: SECRET_KEY environment variable is required (JWT_SECRET is a legacy fallback)');
     process.exit(1);
   }
 
   if (secret.length < 32) {
-    const nodeEnv = process.env.NODE_ENV || 'development';
+    const nodeEnv = env.NODE_ENV || 'development';
     if (nodeEnv === 'production') {
-      console.error('FATAL: JWT_SECRET is too short. Use at least 32 characters.');
+      console.error('FATAL: collaboration signing secret is too short. Use at least 32 characters.');
       process.exit(1);
     }
     if (secret.length < 16) {
-      console.error('FATAL: JWT_SECRET must be at least 16 characters, even in development.');
+      console.error('FATAL: collaboration signing secret must be at least 16 characters, even in development.');
       process.exit(1);
     }
-    console.warn('WARNING: JWT_SECRET is shorter than recommended (32+ chars)');
+    console.warn('WARNING: collaboration signing secret is shorter than recommended (32+ chars)');
   }
 
   return secret;
@@ -40,7 +40,7 @@ export class CollaborationAuthService {
   private readonly contractAdapter: CollaborationTokenContractAdapter;
 
   constructor(
-    jwtSecret: string = getJwtSecret(),
+    jwtSecret: string = resolveCollaborationJwtSecret(),
     contractAdapter: CollaborationTokenContractAdapter = new CollaborationTokenContractAdapter(),
   ) {
     this.jwtSecret = jwtSecret;

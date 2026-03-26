@@ -96,7 +96,7 @@ services:
     environment:
       - PORT=8002
       - HOST=0.0.0.0
-      - JWT_SECRET=${SECRET_KEY:?SECRET_KEY is required for production}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required for production}
       - BACKEND_URL=http://backend:8000
       - LOG_LEVEL=info
       # Redis for horizontal scaling (optional)

@@ -69,4 +69,35 @@ describe('ConnectionRegistry', () => {
     expect(hooks.clearDocumentAuth).toHaveBeenCalledWith('doc-1');
     expect(hooks.clearDocumentCache).toHaveBeenCalledWith('doc-1');
   });
+
+  it('keeps the per-user connection index in sync for repeated fallback disconnects', () => {
+    const hooks: ConnectionRegistryHooks = {
+      registerDocumentConnectionAuth: jest.fn(),
+      unregisterDocumentConnectionAuth: jest.fn(() => 0),
+      clearDocumentAuth: jest.fn(),
+      clearDocumentCache: jest.fn(),
+    };
+    const registry = new ConnectionRegistry(hooks);
+    const scenario = buildConnectionSetScenario('doc-1');
+
+    registry.register({
+      connection: scenario.writeConnection,
+      token: 'token-1',
+      writeCapable: true,
+    });
+    registry.register({
+      connection: {
+        ...scenario.writeConnection,
+        connectionId: 'conn-3',
+      },
+      token: 'token-3',
+      writeCapable: true,
+    });
+
+    expect(registry.unregister({ documentId: 'doc-1', userId: 'user-1' })).toBe(true);
+    expect(hooks.clearDocumentAuth).not.toHaveBeenCalled();
+    expect(registry.unregister({ documentId: 'doc-1', userId: 'user-1' })).toBe(true);
+    expect(hooks.clearDocumentAuth).toHaveBeenCalledWith('doc-1');
+    expect(hooks.clearDocumentCache).toHaveBeenCalledWith('doc-1');
+  });
 });

@@ -13,6 +13,10 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+function isNullableInteger(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isInteger(value));
+}
+
 export function isPermissionList(value: unknown): value is CollaborationPermission[] {
   if (!Array.isArray(value)) {
     return false;
@@ -38,6 +42,7 @@ export function isCollaborationTokenContract(
     !isString(candidate.username) ||
     !isString(candidate.email) ||
     !isString(candidate.role) ||
+    !isNullableInteger(candidate.tenant_id) ||
     !isString(candidate.document_id) ||
     !isPermissionList(candidate.permissions)
   ) {
