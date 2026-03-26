@@ -21,7 +21,7 @@ import { useEffect } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { CollaborationStatus } from './CollaborationStatus'
 import { ReadOnlyBanner, PermissionIndicator } from './ReadOnlyBanner'
-import type { CollaboratorInfo } from '@/lib/useCollaboration'
+import type { CollaboratorInfo } from '@/lib/collaboration/types'
 import type { HocuspocusProvider } from '@hocuspocus/provider'
 
 interface CollaborativeEditorProps {

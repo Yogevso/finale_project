@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from 'react'
 import { Users, Circle, Eye, Edit3 } from 'lucide-react'
-import { CollaboratorInfo } from '@/lib/useCollaboration'
+import type { CollaboratorInfo } from '@/lib/collaboration/types'
 
 interface PresenceIndicatorProps {
   collaborators: CollaboratorInfo[]
