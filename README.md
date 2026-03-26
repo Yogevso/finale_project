@@ -102,7 +102,7 @@ The platform has undergone a comprehensive security audit with all critical and 
 
 - **Tenant Isolation** — Enforced at service layer; NULL tenant_id rejected (except SYSTEM_ADMIN); cross-tenant operations blocked on NPS, support, chat, agent assignment, and document queries
 - **Non-Root Container** — Backend runs as a non-root user via gosu privilege drop in the entrypoint
-- **No Hardcoded Secrets** — `SECRET_KEY` and `JWT_SECRET` are required environment variables (docker-compose fails if missing)
+- **No Hardcoded Secrets** — `SECRET_KEY` is required across backend and collab-server; `JWT_SECRET` is legacy fallback only
 - **Input Validation** — Magic-byte file validation (including WebP RIFF+WEBP check), DOMPurify on frontend HTML, regex validation on collab-server document IDs
 - **Review Integrity** — Audience version lock prevents publish to unintended companies after approval
 - **Rate Limiting** — Per-IP rate limiting on auth and API paths via Redis-backed middleware
@@ -125,7 +125,7 @@ The platform has undergone a comprehensive security audit with all critical and 
 ```bash
 # 1. Create .env from template
 cp .env.example .env
-# Edit .env — set SECRET_KEY and JWT_SECRET (required)
+# Edit .env — set SECRET_KEY (required)
 
 # 2. Start all services
 docker compose up -d --build
@@ -168,7 +168,6 @@ cd backend
 python -m venv venv
 venv\Scripts\activate          # Windows
 source venv/bin/activate       # macOS / Linux
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -219,15 +218,18 @@ Copy `.env.example` to `.env` before running. Required variables:
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `SECRET_KEY` | **Yes** | Backend signing key (`openssl rand -hex 32`) |
-| `JWT_SECRET` | **Yes** | Collab server JWT validation secret (must match backend) |
+| `SECRET_KEY` | **Yes** | Shared backend/collab signing key (`openssl rand -hex 32`) |
+| `VITE_COLLAB_SERVER_URL` | No | Frontend collaboration server URL |
 | `DATABASE_URL` | No | Default: `sqlite:///./data/portal.db` |
 | `OLLAMA_BASE_URL` | No | Default: `http://ollama:11434` |
 | `REDIS_URL` | No | Default: `redis://redis:6379/0` |
 
 ---
 
-## Default Users (Development)
+## Default Users (Development or Explicit Demo Seed Only)
+
+These accounts are created automatically only in development/test environments.
+Production and staging require an explicit `SEED_DEMO_DATA=true` opt-in.
 
 | Username | Password | Role | Description |
 | --- | --- | --- | --- |

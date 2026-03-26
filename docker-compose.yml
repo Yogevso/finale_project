@@ -24,6 +24,7 @@ services:
       - ASSISTANT_MAX_TOKENS=2048
       - ASSISTANT_TEMPERATURE=0.7
       - REDIS_URL=redis://redis:6379/0
+      - SEARCH_BACKEND_MODE=${SEARCH_BACKEND_MODE:-auto}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 5 http://127.0.0.1:8000/health >/dev/null || exit 1"]
       interval: 10s
@@ -86,7 +87,7 @@ services:
 
   # Redis — shared rate-limiting and collab pub/sub
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065
     container_name: v2-redis
     ports:
       - "6379:6379"
@@ -102,7 +103,7 @@ services:
   # Self-hosted LLM inference (AI Assistant) — optional profile
   # Start with: docker-compose --profile ai up
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6
     container_name: v2-ollama
     profiles:
       - ai
@@ -126,7 +127,7 @@ services:
   # Start with: docker-compose --profile postgres up
   # Set DATABASE_URL=postgresql://portal:portal@postgres:5432/portal
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
     container_name: v2-postgres
     profiles:
       - postgres

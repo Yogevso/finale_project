@@ -20,33 +20,77 @@ from datetime import datetime
 from pathlib import Path
 
 REPORT_DIR = Path("data/security_reports")
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = REPO_ROOT / "backend"
+PY_RUNTIME_MANIFEST = BACKEND_DIR / "requirements.txt"
+PY_DEV_MANIFEST = BACKEND_DIR / "requirements-dev.txt"
+PY_IGNORE_FILE = BACKEND_DIR / "pip-audit.ignore"
+
+
+def _pip_audit_ignore_args() -> list[str]:
+    args: list[str] = []
+    if not PY_IGNORE_FILE.exists():
+        return args
+
+    for line in PY_IGNORE_FILE.read_text(encoding="utf-8").splitlines():
+        advisory_id = line.strip()
+        if not advisory_id or advisory_id.startswith("#"):
+            continue
+        args.extend(["--ignore-vuln", advisory_id])
+    return args
 
 
 def run_pip_audit() -> dict:
-    """Run pip-audit to scan Python dependencies."""
+    """Run pip-audit against the checked-in backend lockfiles."""
     try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip_audit", "--format", "json", "--strict"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode == 0:
-            return {"status": "pass", "vulnerabilities": [], "tool": "pip-audit"}
+        manifests = {
+            "runtime": PY_RUNTIME_MANIFEST,
+            "dev": PY_DEV_MANIFEST,
+        }
+        results: dict[str, dict] = {}
+        critical_high_count = 0
 
-        try:
-            vulns = json.loads(result.stdout) if result.stdout else []
-        except json.JSONDecodeError:
-            vulns = []
+        for label, manifest in manifests.items():
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip_audit",
+                    "-r",
+                    str(manifest),
+                    "--format",
+                    "json",
+                    "--strict",
+                    *_pip_audit_ignore_args(),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                results[label] = {"status": "pass", "vulnerabilities": []}
+                continue
 
-        critical_high = [
-            v for v in vulns
-            if isinstance(v, dict) and v.get("fix_versions")
-        ]
+            try:
+                vulns = json.loads(result.stdout) if result.stdout else []
+            except json.JSONDecodeError:
+                vulns = []
+
+            critical_high = [
+                v for v in vulns
+                if isinstance(v, dict) and v.get("fix_versions")
+            ]
+            critical_high_count += len(critical_high)
+            results[label] = {
+                "status": "fail" if critical_high else "warn",
+                "vulnerabilities": vulns,
+            }
+
         return {
-            "status": "fail" if critical_high else "warn",
-            "vulnerabilities": vulns,
-            "critical_high_count": len(critical_high),
+            "status": "fail" if critical_high_count else "pass",
+            "manifests": results,
+            "vulnerabilities": results["runtime"]["vulnerabilities"],
+            "critical_high_count": critical_high_count,
             "tool": "pip-audit",
         }
     except FileNotFoundError:
@@ -108,6 +152,9 @@ def generate_issue_body(report: dict) -> str:
         lines.append(f"Status: **{check['status']}**")
         if check.get("critical_high_count"):
             lines.append(f"Critical/High: **{check['critical_high_count']}**")
+        if check.get("manifests"):
+            for manifest_name, manifest_report in check["manifests"].items():
+                lines.append(f"- {manifest_name}: **{manifest_report['status']}**")
         if check.get("critical"):
             lines.append(f"Critical: {check['critical']}, High: {check['high']}")
         if check.get("vulnerabilities"):

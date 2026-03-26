@@ -3,6 +3,7 @@
 
 services:
   backend:
+    image: ${BACKEND_IMAGE:-portal-backend:local}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -19,6 +20,8 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
       - RATE_LIMIT_ENABLED=true
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - SEARCH_BACKEND_MODE=${SEARCH_BACKEND_MODE:?SEARCH_BACKEND_MODE must be explicit in production}
       - RATE_LIMIT_REQUESTS=100
       - RATE_LIMIT_WINDOW=60
       # Email (optional)
@@ -52,6 +55,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - portal-network
     logging:
@@ -61,6 +67,7 @@ services:
         max-file: "3"
 
   frontend:
+    image: ${FRONTEND_IMAGE:-portal-frontend:local}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -70,14 +77,11 @@ services:
     container_name: portal-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      # Mount SSL certificates if using HTTPS
-      - ./certs:/etc/nginx/certs:ro
+      - "127.0.0.1:8080:8080"
     depends_on:
       backend:
         condition: service_healthy
+    # TLS is expected to terminate at an upstream reverse proxy / load balancer.
     networks:
       - portal-network
     logging:
@@ -88,6 +92,7 @@ services:
 
   # Real-time Collaboration Server (Hocuspocus)
   collab-server:
+    image: ${COLLAB_SERVER_IMAGE:-portal-collab-server:local}
     build:
       context: ./collab-server
       dockerfile: Dockerfile
@@ -99,12 +104,15 @@ services:
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required for production}
       - BACKEND_URL=http://backend:8000
       - LOG_LEVEL=info
-      # Redis for horizontal scaling (optional)
-      - REDIS_URL=${REDIS_URL:-}
+      # Shared Redis for rate limiting and collaboration coordination
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "127.0.0.1:8002:8002"
+      - "127.0.0.1:8003:8003"
     depends_on:
       backend:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8003/health"]
@@ -120,9 +128,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Redis for collaboration scaling (optional)
+  # Redis for production rate limiting and collaboration coordination
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065
     container_name: portal-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
@@ -137,8 +145,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-    profiles:
-      - with-redis
     logging:
       driver: "json-file"
       options:
@@ -147,7 +153,7 @@ services:
 
   # Self-hosted LLM inference (AI Assistant)
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6
     container_name: portal-ollama
     restart: unless-stopped
     volumes:
@@ -177,7 +183,7 @@ services:
   # PostgreSQL — production database
   # Set DATABASE_URL=postgresql://portal:${POSTGRES_PASSWORD}@postgres:5432/portal
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416
     container_name: portal-postgres
     restart: unless-stopped
     environment:

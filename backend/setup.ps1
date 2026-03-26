@@ -17,7 +17,7 @@ Write-Host "Activating virtual environment..." -ForegroundColor Yellow
 
 # Install dependencies
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Create .env file if it doesn't exist
 if (!(Test-Path ".env")) {

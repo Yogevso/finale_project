@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:0b23cfb7425d065008b778022a17b1551c82f8b4866ee5a7a200084b7e2eafbf
 
 WORKDIR /app
 
@@ -7,11 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies in multiple stages to avoid segfaults
+# Install runtime dependencies from the authoritative lockfile
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir uvicorn[standard] fastapi && \
-    pip install --no-cache-dir sqlalchemy alembic && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application

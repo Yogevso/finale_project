@@ -1,0 +1,3 @@
+# Temporary pip-audit ignores for vulnerabilities with no published fix version.
+# Revisit on dependency refresh and remove entries as soon as a fixed version exists.
+CVE-2026-4539

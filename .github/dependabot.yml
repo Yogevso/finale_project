@@ -78,6 +78,41 @@ updates:
           - "postcss"
           - "autoprefixer"
 
+  # Collaboration server npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/collab-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "collaboration"
+      - "automated"
+    reviewers:
+      - "Yogevso"
+    registries:
+      - npm-registry
+    groups:
+      collaboration-runtime:
+        patterns:
+          - "@hocuspocus/*"
+          - "axios"
+          - "ioredis"
+          - "jsonwebtoken"
+          - "yjs"
+      collaboration-tooling:
+        patterns:
+          - "typescript"
+          - "jest"
+          - "ts-jest"
+          - "@types/*"
+          - "tsx"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -107,6 +142,16 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "infrastructure"
+
+  - package-ecosystem: "docker"
+    directory: "/collab-server"
     schedule:
       interval: "weekly"
     commit-message:
