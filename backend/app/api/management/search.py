@@ -1,4 +1,4 @@
-"""Search API with FTS5 and saved searches"""
+"""Search API with configurable backend search and saved searches."""
 
 import hashlib
 import logging
@@ -94,7 +94,7 @@ def search_documents(
     search_query_handler: SearchQueryHandler = Depends(get_search_query_handler),
     analytics_db: Session = Depends(get_analytics_db),
 ):
-    """Full-text search using SQLite FTS5"""
+    """Search documents using the configured runtime search backend."""
     result = search_query_handler.execute_search_documents(
         SearchDocumentsQuery(
             q=q,

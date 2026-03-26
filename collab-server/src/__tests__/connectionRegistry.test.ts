@@ -25,10 +25,18 @@ describe('ConnectionRegistry', () => {
       writeCapable: false,
     });
 
-    const info = registry.getServerInfo(8002, 12.5);
-    expect(info.activeDocuments).toBe(1);
-    expect(info.totalConnections).toBe(2);
-    expect(info).not.toHaveProperty('documents');
+    const snapshot = registry.getSnapshot();
+    expect(snapshot.activeDocuments).toBe(1);
+    expect(snapshot.totalConnections).toBe(2);
+    expect(snapshot.maxConnectionsOnSingleDocument).toBe(2);
+    expect(snapshot.documents).toEqual([
+      {
+        documentId: 'doc-1',
+        totalConnections: 2,
+        writeConnections: 1,
+        readConnections: 1,
+      },
+    ]);
     expect(hooks.registerDocumentConnectionAuth).toHaveBeenCalledTimes(2);
   });
 

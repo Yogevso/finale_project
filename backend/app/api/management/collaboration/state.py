@@ -13,9 +13,11 @@ from app.collaboration.state_manager import CollabStateManager
 from app.db import get_db
 from app.dependencies.services import get_collaboration_auth_service, get_collaboration_service
 from app.models import Document, User
+from app.observability import UseCaseTimer
 from app.services.collaboration_service import CollaborationService
 from app.security import get_current_active_user
 from app.auth_context import CollaborationAuthService
+from .telemetry import record_collaboration_telemetry
 
 router = APIRouter()
 collaboration_bearer = HTTPBearer(auto_error=False)
@@ -81,15 +83,29 @@ async def get_document_state(
     This endpoint is called by the Hocuspocus server to load document state.
     Returns binary data (application/octet-stream).
     """
-    state = state_manager.get_document_state(
-        document_id=document_id,
-        current_user=current_user,
-    )
-
-    return Response(
-        content=state,
-        media_type="application/octet-stream",
-    )
+    timer = UseCaseTimer.start()
+    outcome = "failure"
+    error_type: str | None = None
+    try:
+        state = state_manager.get_document_state(
+            document_id=document_id,
+            current_user=current_user,
+        )
+        outcome = "success"
+        return Response(
+            content=state,
+            media_type="application/octet-stream",
+        )
+    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+        error_type = type(exc).__name__
+        raise
+    finally:
+        record_collaboration_telemetry(
+            use_case_name="get_document_state",
+            timer=timer,
+            outcome=outcome,
+            error_type=error_type,
+        )
 
 
 @router.put("/collaboration/documents/{document_id}/state")
@@ -105,12 +121,28 @@ async def save_document_state(
     This endpoint is called by the Hocuspocus server to persist document state.
     Expects binary data (application/octet-stream).
     """
-    state = await request.body()
-    return state_manager.save_document_state(
-        document_id=document_id,
-        current_user=current_user,
-        state=state,
-    )
+    timer = UseCaseTimer.start()
+    outcome = "failure"
+    error_type: str | None = None
+    try:
+        state = await request.body()
+        payload = state_manager.save_document_state(
+            document_id=document_id,
+            current_user=current_user,
+            state=state,
+        )
+        outcome = "success"
+        return payload
+    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+        error_type = type(exc).__name__
+        raise
+    finally:
+        record_collaboration_telemetry(
+            use_case_name="save_document_state",
+            timer=timer,
+            outcome=outcome,
+            error_type=error_type,
+        )
 
 
 @router.delete("/collaboration/documents/{document_id}/state")
@@ -166,66 +198,81 @@ async def verify_collaboration_access(
     collab_service: CollaborationService = Depends(get_collaboration_service),
 ):
     """Re-validate a collaboration token against current backend tenant rules."""
-    raw_user_id = token_payload.get("sub")
+    timer = UseCaseTimer.start()
+    outcome = "failure"
+    error_type: str | None = None
     try:
-        user_id = int(raw_user_id)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid collaboration token",
-        ) from exc
+        raw_user_id = token_payload.get("sub")
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid collaboration token",
+            ) from exc
 
-    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid collaboration token",
-        )
+        user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid collaboration token",
+            )
 
-    document = db.query(Document).filter(Document.id == document_id).first()
-    if document is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found",
-        )
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
 
-    token_tenant_id = token_payload.get("tenant_id")
-    if not isinstance(token_tenant_id, int) or user.tenant_id != token_tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Collaboration token tenant mismatch",
-        )
+        token_tenant_id = token_payload.get("tenant_id")
+        if not isinstance(token_tenant_id, int) or user.tenant_id != token_tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Collaboration token tenant mismatch",
+            )
 
-    if document.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cross-tenant collaboration is not allowed",
-        )
+        if document.tenant_id != user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-tenant collaboration is not allowed",
+            )
 
-    permissions = collab_service.get_user_permissions_for_document(user, document)
-    if not permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to access this document",
-        )
+        permissions = collab_service.get_user_permissions_for_document(user, document)
+        if not permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to access this document",
+            )
 
-    requested_permissions = CollaborationContractAdapter().normalize_permissions(
-        token_payload.get("permissions", [])
-    )
-    if not requested_permissions:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid collaboration token",
+        requested_permissions = CollaborationContractAdapter().normalize_permissions(
+            token_payload.get("permissions", [])
         )
-    if any(permission not in permissions for permission in requested_permissions):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Collaboration token permissions are no longer valid",
-        )
+        if not requested_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid collaboration token",
+            )
+        if any(permission not in permissions for permission in requested_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Collaboration token permissions are no longer valid",
+            )
 
-    return CollaborationAuthorizationResponse(
-        document_id=document_id,
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        permissions=permissions,
-    )
+        outcome = "success"
+        return CollaborationAuthorizationResponse(
+            document_id=document_id,
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            permissions=permissions,
+        )
+    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+        error_type = type(exc).__name__
+        raise
+    finally:
+        record_collaboration_telemetry(
+            use_case_name="verify_collaboration_access",
+            timer=timer,
+            outcome=outcome,
+            error_type=error_type,
+        )

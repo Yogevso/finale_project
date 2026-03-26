@@ -615,6 +615,7 @@ def get_system_status(
 
     # Collab-server check
     try:
+        import json
         import urllib.request
         from app.config import settings as _cfg
         collab_url = _cfg.COLLAB_SERVER_URL
@@ -622,10 +623,26 @@ def get_system_status(
         req = urllib.request.Request(f"{collab_url}/health", method="GET")
         with urllib.request.urlopen(req, timeout=3) as resp:
             collab_ms = round((time.perf_counter() - t0) * 1000, 1)
+            collab_payload = json.loads(resp.read().decode("utf-8"))
+            active_docs = collab_payload.get("activeDocuments")
+            total_connections = collab_payload.get("totalConnections")
+            saturation = collab_payload.get("saturation")
+            hot_documents = collab_payload.get("documents", {}).get("topDocuments", [])
+            top_document = hot_documents[0] if hot_documents else None
+            detail_parts = [f"WebSocket server responding ({collab_ms}ms)"]
+            if active_docs is not None and total_connections is not None:
+                detail_parts.append(f"{active_docs} docs / {total_connections} conns")
+            if saturation:
+                detail_parts.append(f"saturation={saturation}")
+            if isinstance(top_document, dict) and top_document.get("documentId") is not None:
+                detail_parts.append(
+                    f"hot={top_document['documentId']}:{top_document.get('totalConnections', 0)}"
+                )
             services.append(ServiceStatus(
-                name="collab-server", status="healthy",
+                name="collab-server",
+                status="healthy" if collab_payload.get("status") == "healthy" else "degraded",
                 latency_ms=collab_ms,
-                details=f"WebSocket server responding ({collab_ms}ms)",
+                details=", ".join(detail_parts),
             ))
     except Exception:  # policy: LOSSY — collab is optional; report degraded
         services.append(ServiceStatus(

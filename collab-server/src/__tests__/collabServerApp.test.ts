@@ -39,6 +39,21 @@ describe('CollabServerApp config and runtime composition', () => {
     expect(config.debounceMs).toBe(1500);
     expect(config.maxDebounceMs).toBe(7000);
     expect(config.healthPort).toBe(9001);
+    expect(config.maxTotalConnections).toBe(200);
+    expect(config.maxConnectionsPerDocument).toBe(25);
+    expect(config.reconnectWindowSeconds).toBe(60);
+  });
+
+  it('resolves explicit collaboration guardrails from the environment', () => {
+    const config = resolveCollabServerConfigFromEnv({
+      COLLAB_MAX_TOTAL_CONNECTIONS: '80',
+      COLLAB_MAX_CONNECTIONS_PER_DOCUMENT: '6',
+      COLLAB_RECONNECT_WINDOW_SECONDS: '45',
+    });
+
+    expect(config.maxTotalConnections).toBe(80);
+    expect(config.maxConnectionsPerDocument).toBe(6);
+    expect(config.reconnectWindowSeconds).toBe(45);
   });
 
   it('uses SECRET_KEY for cache invalidation fallback before JWT_SECRET', () => {
@@ -210,5 +225,80 @@ describe('CollabServerApp config and runtime composition', () => {
         writeCapable: false,
       }),
     );
+  });
+
+  it('rejects connections when a document reaches the configured capacity and exposes guardrail telemetry', async () => {
+    const registerDocumentConnectionAuth = jest.fn();
+    const unregisterDocumentConnectionAuth = jest.fn(() => 0);
+    const app = new CollabServerApp({
+      config: {
+        port: 8002,
+        host: '127.0.0.1',
+        redisUrl: '',
+        cacheInvalidationSecret: '',
+        debounceMs: 2000,
+        maxDebounceMs: 10000,
+        healthPort: 8003,
+        maxTotalConnections: 10,
+        maxConnectionsPerDocument: 1,
+        reconnectWindowSeconds: 60,
+      },
+      runtimeOverrides: {
+        extractDocumentId: jest.fn(() => '123'),
+        verifyCollabToken: jest
+          .fn()
+          .mockImplementation((token: string) => ({
+            success: true,
+            user: {
+              userId: token === 'token-1' ? '1' : '2',
+              username: token === 'token-1' ? 'editor-1' : 'editor-2',
+              email: 'editor@example.com',
+              role: 'editor',
+              color: '#123456',
+              traceId: `trace-${token}`,
+            },
+            permissions: ['read', 'write'],
+          })),
+        verifyCollaborationAccess: jest.fn(async () => ({
+          success: true,
+          permissions: ['read', 'write'],
+        })),
+        registerDocumentConnectionAuth,
+        unregisterDocumentConnectionAuth,
+        clearDocumentAuth: jest.fn(),
+        clearDocumentCache: jest.fn(),
+      },
+    });
+
+    await (app as any).authenticateConnection({
+      documentName: 'document/123',
+      token: 'token-1',
+      connection: {},
+    });
+
+    await expect(
+      (app as any).authenticateConnection({
+        documentName: 'document/123',
+        token: 'token-2',
+        connection: {},
+      }),
+    ).rejects.toThrow('This document collaboration session is at capacity');
+
+    const snapshot = (app as any).getServerInfo();
+    expect(snapshot.status).toBe('degraded');
+    expect(snapshot.saturation).toBe('saturated');
+    expect(snapshot.totalConnections).toBe(1);
+    expect(snapshot.guardrails.maxConnectionsPerDocument).toBe(1);
+    expect(snapshot.guardrails.totalRejectedConnections).toBe(1);
+    expect(snapshot.guardrails.rejectionsByReason.document_limit).toBe(1);
+    expect(snapshot.documents.topDocuments).toEqual([
+      {
+        documentId: '123',
+        totalConnections: 1,
+        writeConnections: 1,
+        readConnections: 0,
+      },
+    ]);
+    expect(registerDocumentConnectionAuth).toHaveBeenCalledTimes(1);
   });
 });

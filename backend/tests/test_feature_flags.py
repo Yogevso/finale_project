@@ -130,6 +130,7 @@ def test_production_accepts_explicit_enabled_default_feature_flags():
         FEATURE_FLAG_PROJECTION_CACHE=True,
         FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
         ASSISTANT_ENABLED=True,
+        SEARCH_BACKEND_MODE="portable_like",
     )
 
     assert resolved.FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE is True
@@ -149,6 +150,7 @@ def test_production_rejects_rate_limiting_without_redis():
             FEATURE_FLAG_PROJECTION_CACHE=True,
             FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
             ASSISTANT_ENABLED=True,
+            SEARCH_BACKEND_MODE="portable_like",
         )
 
 
@@ -163,6 +165,67 @@ def test_production_allows_rate_limiting_with_redis():
         FEATURE_FLAG_PROJECTION_CACHE=True,
         FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
         ASSISTANT_ENABLED=True,
+        SEARCH_BACKEND_MODE="portable_like",
     )
 
     assert resolved.REDIS_URL == "redis://localhost:6379/0"
+
+
+def test_production_rejects_auto_search_backend_mode():
+    with pytest.raises(RuntimeError, match="Production requires explicit SEARCH_BACKEND_MODE"):
+        Settings(
+            _env_file=None,
+            APP_ENV="production",
+            SECRET_KEY="s" * 32,
+            AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+            REDIS_URL="redis://localhost:6379/0",
+            FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+            FEATURE_FLAG_PROJECTION_CACHE=True,
+            FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+            ASSISTANT_ENABLED=True,
+            SEARCH_BACKEND_MODE="auto",
+        )
+
+
+def test_production_rejects_sqlite_search_mode_for_postgres_database():
+    with pytest.raises(RuntimeError, match="SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL"):
+        Settings(
+            _env_file=None,
+            APP_ENV="production",
+            DATABASE_URL="postgresql://portal:secret@db:5432/portal",
+            SECRET_KEY="s" * 32,
+            AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+            REDIS_URL="redis://localhost:6379/0",
+            FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+            FEATURE_FLAG_PROJECTION_CACHE=True,
+            FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+            ASSISTANT_ENABLED=True,
+            SEARCH_BACKEND_MODE="sqlite_fts5",
+        )
+
+
+def test_production_accepts_postgres_search_mode_for_postgres_database():
+    resolved = Settings(
+        _env_file=None,
+        APP_ENV="production",
+        DATABASE_URL="postgresql://portal:secret@db:5432/portal",
+        SECRET_KEY="s" * 32,
+        AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+        REDIS_URL="redis://localhost:6379/0",
+        FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+        FEATURE_FLAG_PROJECTION_CACHE=True,
+        FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+        ASSISTANT_ENABLED=True,
+        SEARCH_BACKEND_MODE="postgres_tsv",
+    )
+
+    assert resolved.SEARCH_BACKEND_MODE == "postgres_tsv"
+
+
+def test_assistant_capacity_settings_reject_negative_values():
+    with pytest.raises(RuntimeError, match="Assistant capacity settings must be zero or positive"):
+        Settings(
+            _env_file=None,
+            APP_ENV="development",
+            ASSISTANT_CHAT_MAX_QUEUE=-1,
+        )

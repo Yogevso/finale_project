@@ -164,6 +164,36 @@ def company_cache_isolation():
 
 
 @pytest.fixture(autouse=True)
+def search_runtime_isolation():
+    """Reset search runtime counters between tests."""
+    from app.observability.search_runtime import reset_search_runtime_metrics
+
+    reset_search_runtime_metrics()
+    yield
+    reset_search_runtime_metrics()
+
+
+@pytest.fixture(autouse=True)
+def assistant_capacity_isolation():
+    """Reset assistant capacity counters between tests."""
+    from app.services.assistant_capacity_service import reset_assistant_capacity_service
+
+    reset_assistant_capacity_service()
+    yield
+    reset_assistant_capacity_service()
+
+
+@pytest.fixture(autouse=True)
+def degradation_runtime_isolation():
+    """Reset degradation counters between tests."""
+    from app.infrastructure.degradation import reset_degradation_metrics
+
+    reset_degradation_metrics()
+    yield
+    reset_degradation_metrics()
+
+
+@pytest.fixture(autouse=True)
 def auth_rate_limit_isolation():
     """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
     from app.services.auth_rate_limit_service import AuthRateLimitService

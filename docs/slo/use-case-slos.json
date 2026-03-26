@@ -20,6 +20,27 @@
       "target_success_ratio": 0.995,
       "target_p95_latency_ms": 450,
       "owner": "analytics"
+    },
+    {
+      "use_case_id": "collab.start_collaboration_session",
+      "window_minutes": 60,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 300,
+      "owner": "collaboration"
+    },
+    {
+      "use_case_id": "collab.save_document_state",
+      "window_minutes": 60,
+      "target_success_ratio": 0.99,
+      "target_p95_latency_ms": 500,
+      "owner": "collaboration"
+    },
+    {
+      "use_case_id": "collab.verify_collaboration_access",
+      "window_minutes": 60,
+      "target_success_ratio": 0.995,
+      "target_p95_latency_ms": 250,
+      "owner": "collaboration"
     }
   ],
   "burn_rate_thresholds": [

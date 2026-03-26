@@ -3,6 +3,10 @@
 import uuid
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import OperationalError
+
+from app.config import settings
+from app.application.queries.search_queries import SearchQueryHandler
 from app.models import Document, DocumentStatus, SearchAnalytics, Tenant
 
 
@@ -212,6 +216,49 @@ class TestSearch:
         titles = [item["title"] for item in response.json()["items"]]
         assert "Operator Safe Guide" in titles
         assert "Totally Unrelated" not in titles
+
+    def test_search_fallback_is_visible_in_health_metrics(
+        self,
+        client,
+        auth_headers,
+        db,
+        test_user,
+        monkeypatch,
+    ):
+        doc = Document(
+            title="Fallback Search Visible",
+            document_number=f"DOC-FBK-{uuid.uuid4().hex[:6].upper()}",
+            description="fallback-search-health",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add(doc)
+        db.commit()
+
+        monkeypatch.setattr(settings, "SEARCH_BACKEND_MODE", "sqlite_fts5")
+
+        def fail_fts(*_args, **_kwargs):
+            raise OperationalError("SELECT", {}, RuntimeError("fts unavailable"))
+
+        monkeypatch.setattr(SearchQueryHandler, "_execute_sqlite_fts_search", fail_fts)
+
+        response = client.get("/api/v1/search/?q=fallback-search-health", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["total"] >= 1
+
+        health_response = client.get("/health/detailed")
+        assert health_response.status_code == 200
+        search_runtime = health_response.json()["runtime"]["search"]
+        assert search_runtime["configured_mode"] == "sqlite_fts5"
+        assert search_runtime["effective_mode"] == "sqlite_fts5"
+        assert search_runtime["degraded_fallbacks"] == 1
+        assert search_runtime["last_requested_mode"] == "sqlite_fts5"
+        assert search_runtime["last_fallback_mode"] == "portable_like"
+        assert search_runtime["last_error_type"] == "OperationalError"
+
+        degradation = health_response.json()["runtime"]["degradation"]
+        assert degradation["by_key"]["compensating:search.documents"] == 1
 
 
 class TestSavedSearches:

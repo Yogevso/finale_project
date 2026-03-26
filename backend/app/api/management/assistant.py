@@ -28,6 +28,11 @@ from app.db import get_chat_db, get_db
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import User, UserRole
 from app.security import get_current_active_user
+from app.services.assistant_capacity_service import (
+    AssistantCapacityExceeded,
+    acquire_assistant_chat_slot,
+    get_assistant_capacity_service,
+)
 from app.services.distributed_rate_limit_service import DistributedRateLimitService
 
 logger = logging.getLogger(__name__)
@@ -63,6 +68,52 @@ def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
     )
     conv_mgr = ConversationManager(chat_db)
     return AssistantEngine(ollama, registry, conv_mgr)
+
+
+def _assistant_capacity_payload() -> dict[str, Any]:
+    snapshot = get_assistant_capacity_service().snapshot()
+    return {
+        "status": snapshot.status,
+        "recorded_at": snapshot.recorded_at,
+        "total_rejections": snapshot.total_rejections,
+        "total_timeouts": snapshot.total_timeouts,
+        "chat": {
+            "status": snapshot.chat.status,
+            "active": snapshot.chat.active,
+            "queued": snapshot.chat.queued,
+            "max_concurrent": snapshot.chat.max_concurrent,
+            "max_queue": snapshot.chat.max_queue,
+            "queue_timeout_seconds": snapshot.chat.queue_timeout_seconds,
+            "total_admitted": snapshot.chat.total_admitted,
+            "total_completed": snapshot.chat.total_completed,
+            "total_rejected": snapshot.chat.total_rejected,
+            "total_timed_out": snapshot.chat.total_timed_out,
+            "p50_duration_ms": snapshot.chat.p50_duration_ms,
+            "p95_duration_ms": snapshot.chat.p95_duration_ms,
+            "p50_queue_wait_ms": snapshot.chat.p50_queue_wait_ms,
+            "p95_queue_wait_ms": snapshot.chat.p95_queue_wait_ms,
+            "last_rejected_at": snapshot.chat.last_rejected_at,
+            "last_rejection_reason": snapshot.chat.last_rejection_reason,
+        },
+        "embedding": {
+            "status": snapshot.embedding.status,
+            "active": snapshot.embedding.active,
+            "queued": snapshot.embedding.queued,
+            "max_concurrent": snapshot.embedding.max_concurrent,
+            "max_queue": snapshot.embedding.max_queue,
+            "queue_timeout_seconds": snapshot.embedding.queue_timeout_seconds,
+            "total_admitted": snapshot.embedding.total_admitted,
+            "total_completed": snapshot.embedding.total_completed,
+            "total_rejected": snapshot.embedding.total_rejected,
+            "total_timed_out": snapshot.embedding.total_timed_out,
+            "p50_duration_ms": snapshot.embedding.p50_duration_ms,
+            "p95_duration_ms": snapshot.embedding.p95_duration_ms,
+            "p50_queue_wait_ms": snapshot.embedding.p50_queue_wait_ms,
+            "p95_queue_wait_ms": snapshot.embedding.p95_queue_wait_ms,
+            "last_rejected_at": snapshot.embedding.last_rejected_at,
+            "last_rejection_reason": snapshot.embedding.last_rejection_reason,
+        },
+    }
 
 
 async def _stream_assistant_events(
@@ -122,6 +173,14 @@ async def chat(
     """Send a message and receive a streamed SSE response."""
     _require_enabled()
     _check_rate_limit(user.id)
+    try:
+        permit = await acquire_assistant_chat_slot()
+    except AssistantCapacityExceeded as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="AI assistant is currently busy. Please try again shortly.",
+            headers={"Retry-After": str(max(exc.retry_after_seconds, 1))},
+        )
 
     engine = _build_engine(chat_db, user)
     tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
@@ -156,14 +215,17 @@ async def chat(
         prod_task = asyncio.create_task(_producer())
         hb_task = asyncio.create_task(_heartbeat())
 
-        async for chunk in _stream_assistant_events(
-            request=request,
-            queue=queue,
-            done=done,
-            prod_task=prod_task,
-            hb_task=hb_task,
-        ):
-            yield chunk
+        try:
+            async for chunk in _stream_assistant_events(
+                request=request,
+                queue=queue,
+                done=done,
+                prod_task=prod_task,
+                hb_task=hb_task,
+            ):
+                yield chunk
+        finally:
+            await permit.release()
 
     return StreamingResponse(
         event_stream(),
@@ -318,8 +380,14 @@ def list_tools(user: User = Depends(get_current_active_user)):
 @router.get("/health")
 async def assistant_health(user: User = Depends(get_current_active_user)):
     """Check if the AI assistant is ready."""
+    capacity = _assistant_capacity_payload()
     if not is_backend_feature_enabled(BackendFeatureFlag.ASSISTANT):
-        return {"status": "disabled", "model": settings.ASSISTANT_MODEL, "ollama_healthy": False}
+        return {
+            "status": "disabled",
+            "model": settings.ASSISTANT_MODEL,
+            "ollama_healthy": False,
+            "capacity": capacity,
+        }
 
     client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
@@ -327,10 +395,14 @@ async def assistant_health(user: User = Depends(get_current_active_user)):
         timeout=10,
     )
     healthy = await client.is_healthy()
+    status = "ready" if healthy else "unavailable"
+    if healthy and capacity["status"] != "ready":
+        status = "degraded"
     return {
-        "status": "ready" if healthy else "unavailable",
+        "status": status,
         "model": settings.ASSISTANT_MODEL,
         "ollama_healthy": healthy,
+        "capacity": capacity,
     }
 
 

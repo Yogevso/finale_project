@@ -10,6 +10,7 @@ import httpx
 
 from app.config import settings
 from app.observability import REQUEST_ID_HEADER, TRACE_ID_HEADER, current_request_id, current_trace_id
+from app.services.assistant_capacity_service import assistant_embedding_slot
 
 logger = logging.getLogger(__name__)
 
@@ -58,59 +59,60 @@ class OllamaEmbeddings:
         """Embed multiple texts. Ollama /api/embed supports batch input."""
         if not texts:
             return []
-        client = self._get_client()
-        payload: dict[str, Any] = {"model": self._model, "input": texts}
-        headers = _trace_headers()
+        async with assistant_embedding_slot():
+            client = self._get_client()
+            payload: dict[str, Any] = {"model": self._model, "input": texts}
+            headers = _trace_headers()
 
-        last_exc: Exception | None = None
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                resp = await client.post(
-                    f"{self._base_url}/api/embed", json=payload, headers=headers,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                # Ollama returns {"embeddings": [[...], [...]]}
-                return data.get("embeddings", [])
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
-                last_exc = exc
-                if attempt < _MAX_RETRIES:
-                    wait = _RETRY_BACKOFF * (2 ** attempt)
-                    logger.warning(
-                        "Ollama embed batch attempt %d failed (%s), retrying in %.1fs",
-                        attempt + 1, exc, wait,
+            last_exc: Exception | None = None
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    resp = await client.post(
+                        f"{self._base_url}/api/embed", json=payload, headers=headers,
                     )
-                    await asyncio.sleep(wait)
-        raise last_exc  # type: ignore[misc]
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return data.get("embeddings", [])
+                except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                    last_exc = exc
+                    if attempt < _MAX_RETRIES:
+                        wait = _RETRY_BACKOFF * (2 ** attempt)
+                        logger.warning(
+                            "Ollama embed batch attempt %d failed (%s), retrying in %.1fs",
+                            attempt + 1, exc, wait,
+                        )
+                        await asyncio.sleep(wait)
+            raise last_exc  # type: ignore[misc]
 
     async def _request(self, text: str) -> list[float]:
         """Send a single embed request with retry logic."""
-        client = self._get_client()
-        payload: dict[str, Any] = {"model": self._model, "input": text}
-        headers = _trace_headers()
+        async with assistant_embedding_slot():
+            client = self._get_client()
+            payload: dict[str, Any] = {"model": self._model, "input": text}
+            headers = _trace_headers()
 
-        last_exc: Exception | None = None
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                resp = await client.post(
-                    f"{self._base_url}/api/embed", json=payload, headers=headers,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                embeddings = data.get("embeddings", [])
-                if embeddings:
-                    return embeddings[0]
-                raise ValueError("Empty embeddings response from Ollama")
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
-                last_exc = exc
-                if attempt < _MAX_RETRIES:
-                    wait = _RETRY_BACKOFF * (2 ** attempt)
-                    logger.warning(
-                        "Ollama embed attempt %d failed (%s), retrying in %.1fs",
-                        attempt + 1, exc, wait,
+            last_exc: Exception | None = None
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    resp = await client.post(
+                        f"{self._base_url}/api/embed", json=payload, headers=headers,
                     )
-                    await asyncio.sleep(wait)
-        raise last_exc  # type: ignore[misc]
+                    resp.raise_for_status()
+                    data = resp.json()
+                    embeddings = data.get("embeddings", [])
+                    if embeddings:
+                        return embeddings[0]
+                    raise ValueError("Empty embeddings response from Ollama")
+                except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                    last_exc = exc
+                    if attempt < _MAX_RETRIES:
+                        wait = _RETRY_BACKOFF * (2 ** attempt)
+                        logger.warning(
+                            "Ollama embed attempt %d failed (%s), retrying in %.1fs",
+                            attempt + 1, exc, wait,
+                        )
+                        await asyncio.sleep(wait)
+            raise last_exc  # type: ignore[misc]
 
     async def ensure_model(self) -> bool:
         """Check if the embedding model is available, pull if not."""

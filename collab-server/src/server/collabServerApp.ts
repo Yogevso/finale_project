@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { performance } from 'node:perf_hooks';
 
 import { Database } from '@hocuspocus/extension-database';
 import { Logger } from '@hocuspocus/extension-logger';
@@ -20,6 +21,7 @@ import { clearDocumentCache, initCacheInvalidation, loadDocument, saveDocument, 
 import type { AwarenessUser, ConnectionContext } from '../types.js';
 import { getUserColor } from '../types.js';
 import { ConnectionRegistry } from './connectionRegistry.js';
+import { CollabRuntimeMetrics } from './collabRuntimeMetrics.js';
 import { HealthServer } from './healthServer.js';
 
 type HocuspocusServer = ReturnType<typeof Server.configure>;
@@ -32,6 +34,9 @@ export interface CollabServerConfig {
   debounceMs: number;
   maxDebounceMs: number;
   healthPort: number;
+  maxTotalConnections: number;
+  maxConnectionsPerDocument: number;
+  reconnectWindowSeconds: number;
 }
 
 export type CollabRuntimeDependencies = {
@@ -82,6 +87,9 @@ export function resolveCollabServerConfigFromEnv(
     debounceMs: parseInt(env.DEBOUNCE_MS || '2000', 10),
     maxDebounceMs: parseInt(env.MAX_DEBOUNCE_MS || '10000', 10),
     healthPort: port + 1,
+    maxTotalConnections: parseInt(env.COLLAB_MAX_TOTAL_CONNECTIONS || '200', 10),
+    maxConnectionsPerDocument: parseInt(env.COLLAB_MAX_CONNECTIONS_PER_DOCUMENT || '25', 10),
+    reconnectWindowSeconds: parseInt(env.COLLAB_RECONNECT_WINDOW_SECONDS || '60', 10),
   };
 }
 
@@ -112,6 +120,7 @@ export class CollabServerApp {
   private readonly connectionRegistry: ConnectionRegistry;
   private readonly healthServer: HealthServer;
   private readonly server: HocuspocusServer;
+  private readonly runtimeMetrics: CollabRuntimeMetrics;
   private readonly documentsWithPersistenceFailures = new Set<string>();
   private started = false;
 
@@ -131,6 +140,11 @@ export class CollabServerApp {
       host: this.config.host,
       port: this.config.healthPort,
       infoProvider: () => this.getServerInfo(),
+    });
+    this.runtimeMetrics = new CollabRuntimeMetrics({
+      maxTotalConnections: this.config.maxTotalConnections,
+      maxConnectionsPerDocument: this.config.maxConnectionsPerDocument,
+      reconnectWindowSeconds: this.config.reconnectWindowSeconds,
     });
     this.server = this.configureServer();
   }
@@ -184,6 +198,9 @@ export class CollabServerApp {
       healthPort: this.config.healthPort,
       redisEnabled: Boolean(this.config.redisUrl),
       redisUrl: this.config.redisUrl || null,
+      maxTotalConnections: this.config.maxTotalConnections,
+      maxConnectionsPerDocument: this.config.maxConnectionsPerDocument,
+      reconnectWindowSeconds: this.config.reconnectWindowSeconds,
     });
   }
 
@@ -193,6 +210,7 @@ export class CollabServerApp {
     }
 
     this.documentsWithPersistenceFailures.add(documentId);
+    this.runtimeMetrics.recordPersistenceFailure(documentId);
     payload.document.broadcastStateless(
       encodeCollabServerStatelessMessage({
         type: 'persistence_failed',
@@ -206,6 +224,7 @@ export class CollabServerApp {
       return;
     }
 
+    this.runtimeMetrics.recordPersistenceRestored(documentId);
     payload.document.broadcastStateless(
       encodeCollabServerStatelessMessage({
         type: 'persistence_restored',
@@ -216,19 +235,34 @@ export class CollabServerApp {
   private readonly handleStoreDocument = async (payload: storePayload): Promise<void> => {
     const documentId = this.runtime.extractDocumentId(payload.documentName);
     const token = this.runtime.getDocumentTokenForStore(documentId);
+    const startedAt = performance.now();
 
     if (!token) {
       logger.error('No write-capable token available to save document', { documentId });
+      this.runtimeMetrics.recordDocumentSave({
+        durationMs: performance.now() - startedAt,
+        success: false,
+        error: 'No write-capable token available to save document',
+      });
       this.broadcastPersistenceFailure(documentId, payload);
       return;
     }
 
     const saveResult = await this.runtime.saveDocument(documentId, payload.state, token);
     if (!saveResult.success) {
+      this.runtimeMetrics.recordDocumentSave({
+        durationMs: performance.now() - startedAt,
+        success: false,
+        error: saveResult.error ?? 'Document save failed',
+      });
       this.broadcastPersistenceFailure(documentId, payload);
       return;
     }
 
+    this.runtimeMetrics.recordDocumentSave({
+      durationMs: performance.now() - startedAt,
+      success: true,
+    });
     this.clearPersistenceFailure(documentId, payload);
   };
 
@@ -246,11 +280,13 @@ export class CollabServerApp {
     // not from URL query string, to avoid token leakage in server logs.
     const token = rawToken;
     if (!token) {
+      this.runtimeMetrics.recordAuthenticationFailure();
       throw new Error('No authentication token provided');
     }
 
     const authResult = this.runtime.verifyCollabToken(token, documentId);
     if (!authResult.success || !authResult.user) {
+      this.runtimeMetrics.recordAuthenticationFailure();
       throw new Error(authResult.error || 'Authentication failed');
     }
 
@@ -260,11 +296,36 @@ export class CollabServerApp {
       authResult.user.traceId,
     );
     if (!backendAuthResult.success) {
+      this.runtimeMetrics.recordAuthenticationFailure();
       throw new Error(backendAuthResult.error || 'Authentication failed');
     }
 
     const effectivePermissions = backendAuthResult.permissions || authResult.permissions || [];
     const writeCapable = this.runtime.canWrite(effectivePermissions);
+    const currentTotalConnections = this.connectionRegistry.getTotalConnections();
+    if (currentTotalConnections >= this.config.maxTotalConnections) {
+      this.runtimeMetrics.recordConnectionRejected('total_limit');
+      logger.warn('Rejected collaboration connection because the server is at capacity', {
+        documentId,
+        userId: authResult.user.userId,
+        maxTotalConnections: this.config.maxTotalConnections,
+        currentTotalConnections,
+      });
+      throw new Error('Collaboration server is at capacity');
+    }
+
+    const currentDocumentConnections = this.connectionRegistry.getDocumentConnectionCount(documentId);
+    if (currentDocumentConnections >= this.config.maxConnectionsPerDocument) {
+      this.runtimeMetrics.recordConnectionRejected('document_limit');
+      logger.warn('Rejected collaboration connection because the document is at capacity', {
+        documentId,
+        userId: authResult.user.userId,
+        maxConnectionsPerDocument: this.config.maxConnectionsPerDocument,
+        currentDocumentConnections,
+      });
+      throw new Error('This document collaboration session is at capacity');
+    }
+
     const connectionContext: ConnectionContext = {
       ...authResult.user,
       documentId,
@@ -281,6 +342,10 @@ export class CollabServerApp {
       connection: connectionContext,
       token,
       writeCapable,
+    });
+    this.runtimeMetrics.recordConnectionAccepted({
+      documentId,
+      userId: authResult.user.userId,
     });
     logger.info('User authenticated for collaboration document', {
       traceId: authResult.user.traceId,
@@ -337,13 +402,33 @@ export class CollabServerApp {
           fetch: async ({ documentName }) => {
             const documentId = this.runtime.extractDocumentId(documentName);
             const token = this.runtime.getDocumentTokenForLoad(documentId);
+            const startedAt = performance.now();
 
             if (!token) {
               logger.warn('No token available to load document', { documentId });
+              this.runtimeMetrics.recordDocumentLoad({
+                durationMs: performance.now() - startedAt,
+                success: false,
+                error: 'No token available to load document',
+              });
               return null;
             }
 
-            return this.runtime.loadDocument(documentId, token);
+            try {
+              const state = await this.runtime.loadDocument(documentId, token);
+              this.runtimeMetrics.recordDocumentLoad({
+                durationMs: performance.now() - startedAt,
+                success: true,
+              });
+              return state;
+            } catch (error) {
+              this.runtimeMetrics.recordDocumentLoad({
+                durationMs: performance.now() - startedAt,
+                success: false,
+                error,
+              });
+              throw error;
+            }
           },
           store: this.handleStoreDocument,
         }),
@@ -380,6 +465,10 @@ export class CollabServerApp {
           connectionId,
           userId: user?.userId,
         });
+        this.runtimeMetrics.recordConnectionDisconnected({
+          documentId,
+          userId: user?.userId,
+        });
 
         if (user) {
           logger.info('User disconnected from collaboration document', {
@@ -405,6 +494,10 @@ export class CollabServerApp {
   }
 
   private getServerInfo() {
-    return this.connectionRegistry.getServerInfo(this.config.port, process.uptime());
+    return this.runtimeMetrics.snapshot({
+      port: this.config.port,
+      uptime: process.uptime(),
+      registry: this.connectionRegistry.getSnapshot(),
+    });
   }
 }

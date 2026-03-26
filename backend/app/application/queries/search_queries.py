@@ -13,11 +13,18 @@ from sqlalchemy import and_, or_, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.domain.specifications import DateRangeSpec, TenantScopeSpec, VisibilitySpec
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
+from app.infrastructure.degradation import DegradationPolicy, record_degradation
 from app.models import Document, SavedSearch, SystemSetting, User, UserRole
+from app.observability.search_runtime import (
+    record_search_degraded_fallback,
+    record_search_execution,
+)
 from app.projections import ProjectionCache, execute_cached_projection, get_projection_cache
 from app.repositories import DocumentRepository
+from app.search_backend import SearchBackendMode, database_dialect_name, resolve_search_backend_mode
 
 # Default BM25 weights for FTS5 columns: title, description, category, tags
 DEFAULT_RELEVANCE_WEIGHTS = {"title": 3.0, "description": 1.0, "category": 1.0, "tags": 2.0}
@@ -25,6 +32,13 @@ FTS_RESERVED_OPERATOR_TOKENS = {"AND", "OR", "NOT", "NEAR"}
 FTS_TERM_PATTERN = re.compile(r"[\w]+", re.UNICODE)
 
 logger = logging.getLogger(__name__)
+
+POSTGRES_SEARCH_VECTOR = (
+    "setweight(to_tsvector('simple', COALESCE(d.title, '')), 'A') || "
+    "setweight(to_tsvector('simple', COALESCE(d.description, '')), 'B') || "
+    "setweight(to_tsvector('simple', COALESCE(d.category, '')), 'C') || "
+    "setweight(to_tsvector('simple', COALESCE(d.tags, '')), 'B')"
+)
 
 
 def escape_sql_wildcards(value: str) -> str:
@@ -53,6 +67,14 @@ def build_safe_fts_query(raw_query: str) -> str | None:
         return None
     escaped_terms = ['"' + term.replace('"', '""') + '"' for term in terms]
     return " AND ".join(escaped_terms)
+
+
+def build_safe_plain_search_query(raw_query: str) -> str | None:
+    """Convert free-form user input into a backend-safe plain-text search query."""
+    terms = _extract_search_terms(raw_query)
+    if not terms:
+        return None
+    return " ".join(terms)
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,6 +259,180 @@ class SearchQueryHandler:
             relevance_score=float(getattr(row, "score", 0.0)),
         )
 
+    def _execute_sqlite_fts_search(
+        self,
+        *,
+        query: SearchDocumentsQuery,
+        tenant_scope_spec: TenantScopeSpec,
+        date_range_spec: DateRangeSpec,
+        visibility_spec: VisibilitySpec | None,
+        offset: int,
+        safe_search_query: str,
+    ) -> tuple[list[object], int]:
+        filters = ["documents_fts MATCH :search_query"]
+        params: dict[str, object] = {
+            "search_query": safe_search_query,
+            "limit": query.page_size,
+            "offset": offset,
+        }
+
+        if query.category:
+            filters.append("d.category = :category")
+            params["category"] = query.category
+        date_clauses, date_params = date_range_spec.sql_clauses(column_expr="d.created_at")
+        filters.extend(date_clauses)
+        params.update(date_params)
+        tenant_clause, tenant_params = tenant_scope_spec.sql_clause(column_expr="d.tenant_id")
+        if tenant_clause:
+            filters.append(tenant_clause)
+            params.update(tenant_params)
+        if query.current_user.role != UserRole.SYSTEM_ADMIN and query.current_user.tenant_id is not None:
+            filters.append("documents_fts.tenant_id = :fts_tenant_id")
+            params["fts_tenant_id"] = str(query.current_user.tenant_id)
+
+        if visibility_spec is not None:
+            vis_clauses, vis_params = visibility_spec.sql_clauses(
+                visibility_col="d.visibility",
+                status_col="d.status",
+                company_subquery_col="d.id",
+            )
+            filters.extend(vis_clauses)
+            params.update(vis_params)
+
+        where_clause = " AND ".join(filters)
+        bm25_expr = self._bm25_expression()
+        docs_query = text(
+            f"""
+            SELECT d.*, {bm25_expr} as score
+            FROM documents d
+            JOIN documents_fts ON d.id = documents_fts.rowid
+            WHERE {where_clause}
+            ORDER BY score
+            LIMIT :limit OFFSET :offset
+            """
+        )
+        docs = self.db.execute(docs_query, params).fetchall()
+
+        count_query = text(
+            f"""
+            SELECT COUNT(*) FROM documents d
+            JOIN documents_fts ON d.id = documents_fts.rowid
+            WHERE {where_clause}
+            """
+        )
+        count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
+        total = self.db.execute(count_query, count_params).scalar() or 0
+        return docs, int(total)
+
+    def _execute_postgres_tsv_search(
+        self,
+        *,
+        query: SearchDocumentsQuery,
+        tenant_scope_spec: TenantScopeSpec,
+        date_range_spec: DateRangeSpec,
+        visibility_spec: VisibilitySpec | None,
+        offset: int,
+        plain_search_query: str,
+    ) -> tuple[list[object], int]:
+        tsquery_expr = "websearch_to_tsquery('simple', :search_query)"
+        filters = [f"{POSTGRES_SEARCH_VECTOR} @@ {tsquery_expr}"]
+        params: dict[str, object] = {
+            "search_query": plain_search_query,
+            "limit": query.page_size,
+            "offset": offset,
+        }
+
+        if query.category:
+            filters.append("d.category = :category")
+            params["category"] = query.category
+        date_clauses, date_params = date_range_spec.sql_clauses(column_expr="d.created_at")
+        filters.extend(date_clauses)
+        params.update(date_params)
+        tenant_clause, tenant_params = tenant_scope_spec.sql_clause(column_expr="d.tenant_id")
+        if tenant_clause:
+            filters.append(tenant_clause)
+            params.update(tenant_params)
+        if visibility_spec is not None:
+            vis_clauses, vis_params = visibility_spec.sql_clauses(
+                visibility_col="d.visibility",
+                status_col="d.status",
+                company_subquery_col="d.id",
+            )
+            filters.extend(vis_clauses)
+            params.update(vis_params)
+
+        where_clause = " AND ".join(filters)
+        rank_expr = f"ts_rank_cd({POSTGRES_SEARCH_VECTOR}, {tsquery_expr})"
+        docs_query = text(
+            f"""
+            SELECT d.*, {rank_expr} as score
+            FROM documents d
+            WHERE {where_clause}
+            ORDER BY score DESC, d.updated_at DESC
+            LIMIT :limit OFFSET :offset
+            """
+        )
+        docs = self.db.execute(docs_query, params).fetchall()
+
+        count_query = text(
+            f"""
+            SELECT COUNT(*) FROM documents d
+            WHERE {where_clause}
+            """
+        )
+        count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
+        total = self.db.execute(count_query, count_params).scalar() or 0
+        return docs, int(total)
+
+    def _execute_like_search(
+        self,
+        *,
+        query: SearchDocumentsQuery,
+        document_repository: DocumentRepository,
+        tenant_scope_spec: TenantScopeSpec,
+        date_range_spec: DateRangeSpec,
+        visibility_spec: VisibilitySpec | None,
+        offset: int,
+        search_terms: list[str],
+    ) -> tuple[list[object], int]:
+        fallback_query = document_repository.query()
+        if search_terms:
+            per_term_clauses = []
+            for term in search_terms:
+                escaped_term = escape_sql_wildcards(term)
+                per_term_clauses.append(
+                    or_(
+                        Document.title.ilike(f"%{escaped_term}%", escape="\\"),
+                        Document.description.ilike(f"%{escaped_term}%", escape="\\"),
+                        Document.document_number.ilike(f"%{escaped_term}%", escape="\\"),
+                        Document.tags.ilike(f"%{escaped_term}%", escape="\\"),
+                    )
+                )
+            fallback_query = fallback_query.filter(and_(*per_term_clauses))
+        else:
+            escaped_q = escape_sql_wildcards(query.q)
+            fallback_query = fallback_query.filter(
+                or_(
+                    Document.title.ilike(f"%{escaped_q}%", escape="\\"),
+                    Document.description.ilike(f"%{escaped_q}%", escape="\\"),
+                )
+            )
+        fallback_query = tenant_scope_spec.apply(fallback_query, Document)
+        if visibility_spec is not None:
+            fallback_query = visibility_spec.apply(fallback_query, Document)
+        if query.category:
+            fallback_query = fallback_query.filter(Document.category == query.category)
+        fallback_query = date_range_spec.apply(fallback_query, Document.created_at)
+
+        total = fallback_query.count()
+        docs = (
+            fallback_query.order_by(Document.updated_at.desc())
+            .offset(offset)
+            .limit(query.page_size)
+            .all()
+        )
+        return docs, int(total)
+
     def execute_search_documents(self, query: SearchDocumentsQuery) -> SearchDocumentsQueryResult:
         def load_projection() -> SearchDocumentsQueryResult:
             document_repository = DocumentRepository(self.db)
@@ -245,103 +441,84 @@ class SearchQueryHandler:
             visibility_spec = self._visibility_spec_for_user(query.current_user)
             offset = (query.page - 1) * query.page_size
             safe_search_query = build_safe_fts_query(query.q)
+            plain_search_query = build_safe_plain_search_query(query.q)
             search_terms = _extract_search_terms(query.q)
+            dialect_name = database_dialect_name(self.db)
+            configured_mode = settings.SEARCH_BACKEND_MODE
+            effective_mode = resolve_search_backend_mode(
+                configured_mode,
+                dialect_name=dialect_name,
+            )
 
-            try:
-                if not safe_search_query:
-                    raise ValueError("No searchable FTS terms")
-                filters = ["documents_fts MATCH :search_query"]
-                params: dict[str, object] = {
-                    "search_query": safe_search_query,
-                    "limit": query.page_size,
-                    "offset": offset,
-                }
-
-                if query.category:
-                    filters.append("d.category = :category")
-                    params["category"] = query.category
-                date_clauses, date_params = date_range_spec.sql_clauses(column_expr="d.created_at")
-                filters.extend(date_clauses)
-                params.update(date_params)
-                tenant_clause, tenant_params = tenant_scope_spec.sql_clause(column_expr="d.tenant_id")
-                if tenant_clause:
-                    filters.append(tenant_clause)
-                    params.update(tenant_params)
-                if query.current_user.role != UserRole.SYSTEM_ADMIN and query.current_user.tenant_id is not None:
-                    filters.append("documents_fts.tenant_id = :fts_tenant_id")
-                    params["fts_tenant_id"] = str(query.current_user.tenant_id)
-
-                # Audience / visibility filtering
-                if visibility_spec is not None:
-                    vis_clauses, vis_params = visibility_spec.sql_clauses(
-                        visibility_col="d.visibility",
-                        status_col="d.status",
-                        company_subquery_col="d.id",
-                    )
-                    filters.extend(vis_clauses)
-                    params.update(vis_params)
-
-                where_clause = " AND ".join(filters)
-                bm25_expr = self._bm25_expression()
-                fts_query = text(
-                    f"""
-                    SELECT d.*, {bm25_expr} as score
-                    FROM documents d
-                    JOIN documents_fts ON d.id = documents_fts.rowid
-                    WHERE {where_clause}
-                    ORDER BY score
-                    LIMIT :limit OFFSET :offset
-                    """
+            if not search_terms:
+                docs, total = self._execute_like_search(
+                    query=query,
+                    document_repository=document_repository,
+                    tenant_scope_spec=tenant_scope_spec,
+                    date_range_spec=date_range_spec,
+                    visibility_spec=visibility_spec,
+                    offset=offset,
+                    search_terms=search_terms,
                 )
-                docs = self.db.execute(fts_query, params).fetchall()
-
-                count_query = text(
-                    f"""
-                    SELECT COUNT(*) FROM documents d
-                    JOIN documents_fts ON d.id = documents_fts.rowid
-                    WHERE {where_clause}
-                    """
-                )
-                count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
-                total = self.db.execute(count_query, count_params).scalar() or 0
-            except (OperationalError, ProgrammingError, ValueError):
-                logger.warning("FTS5 query failed, falling back to LIKE search", exc_info=True)
-                fallback_query = document_repository.query()
-                if search_terms:
-                    per_term_clauses = []
-                    for term in search_terms:
-                        escaped_term = escape_sql_wildcards(term)
-                        per_term_clauses.append(
-                            or_(
-                                Document.title.ilike(f"%{escaped_term}%", escape="\\"),
-                                Document.description.ilike(f"%{escaped_term}%", escape="\\"),
-                                Document.document_number.ilike(f"%{escaped_term}%", escape="\\"),
-                                Document.tags.ilike(f"%{escaped_term}%", escape="\\"),
-                            )
+                record_search_execution(effective_mode=SearchBackendMode.PORTABLE_LIKE.value)
+            else:
+                try:
+                    if effective_mode == SearchBackendMode.SQLITE_FTS5:
+                        docs, total = self._execute_sqlite_fts_search(
+                            query=query,
+                            tenant_scope_spec=tenant_scope_spec,
+                            date_range_spec=date_range_spec,
+                            visibility_spec=visibility_spec,
+                            offset=offset,
+                            safe_search_query=safe_search_query or plain_search_query or query.q,
                         )
-                    fallback_query = fallback_query.filter(and_(*per_term_clauses))
-                else:
-                    escaped_q = escape_sql_wildcards(query.q)
-                    fallback_query = fallback_query.filter(
-                        or_(
-                            Document.title.ilike(f"%{escaped_q}%", escape="\\"),
-                            Document.description.ilike(f"%{escaped_q}%", escape="\\"),
+                    elif effective_mode == SearchBackendMode.POSTGRES_TSV:
+                        docs, total = self._execute_postgres_tsv_search(
+                            query=query,
+                            tenant_scope_spec=tenant_scope_spec,
+                            date_range_spec=date_range_spec,
+                            visibility_spec=visibility_spec,
+                            offset=offset,
+                            plain_search_query=plain_search_query or query.q,
                         )
+                    else:
+                        docs, total = self._execute_like_search(
+                            query=query,
+                            document_repository=document_repository,
+                            tenant_scope_spec=tenant_scope_spec,
+                            date_range_spec=date_range_spec,
+                            visibility_spec=visibility_spec,
+                            offset=offset,
+                            search_terms=search_terms,
+                        )
+                    record_search_execution(effective_mode=effective_mode.value)
+                except (OperationalError, ProgrammingError) as exc:
+                    logger.warning(
+                        "Search backend %s failed on %s; falling back to LIKE search",
+                        effective_mode.value,
+                        dialect_name,
+                        exc_info=True,
                     )
-                fallback_query = tenant_scope_spec.apply(fallback_query, Document)
-                if visibility_spec is not None:
-                    fallback_query = visibility_spec.apply(fallback_query, Document)
-                if query.category:
-                    fallback_query = fallback_query.filter(Document.category == query.category)
-                fallback_query = date_range_spec.apply(fallback_query, Document.created_at)
-
-                total = fallback_query.count()
-                docs = (
-                    fallback_query.order_by(Document.updated_at.desc())
-                    .offset(offset)
-                    .limit(query.page_size)
-                    .all()
-                )
+                    record_degradation(
+                        DegradationPolicy.COMPENSATING,
+                        "search.documents",
+                        exc,
+                    )
+                    record_search_degraded_fallback(
+                        requested_mode=effective_mode.value,
+                        fallback_mode=SearchBackendMode.PORTABLE_LIKE.value,
+                        error=exc,
+                    )
+                    docs, total = self._execute_like_search(
+                        query=query,
+                        document_repository=document_repository,
+                        tenant_scope_spec=tenant_scope_spec,
+                        date_range_spec=date_range_spec,
+                        visibility_spec=visibility_spec,
+                        offset=offset,
+                        search_terms=search_terms,
+                    )
+                    record_search_execution(effective_mode=SearchBackendMode.PORTABLE_LIKE.value)
 
             suggestions = self.execute_autocomplete(
                 SearchAutocompleteQuery(q=query.q, limit=5, current_user=query.current_user)

@@ -18,13 +18,18 @@ export interface ConnectionRegistryHooks {
   clearDocumentCache: ClearDocumentCache;
 }
 
-export interface CollabServerInfo {
-  name: 'collab-server';
-  status: 'healthy';
-  port: number;
+export interface DocumentConnectionSnapshot {
+  documentId: string;
+  totalConnections: number;
+  writeConnections: number;
+  readConnections: number;
+}
+
+export interface ConnectionRegistrySnapshot {
   activeDocuments: number;
   totalConnections: number;
-  uptime: number;
+  maxConnectionsOnSingleDocument: number;
+  documents: DocumentConnectionSnapshot[];
 }
 
 export class ConnectionRegistry {
@@ -114,19 +119,55 @@ export class ConnectionRegistry {
     }
   }
 
-  getServerInfo(port: number, uptime: number): CollabServerInfo {
+  getTotalConnections(): number {
     let totalConnections = 0;
     for (const connections of this.activeConnections.values()) {
       totalConnections += connections.size;
     }
+    return totalConnections;
+  }
+
+  getDocumentConnectionCount(documentId: string): number {
+    return this.activeConnections.get(documentId)?.size ?? 0;
+  }
+
+  getSnapshot(limit = 5): ConnectionRegistrySnapshot {
+    const documents: DocumentConnectionSnapshot[] = [];
+    let maxConnectionsOnSingleDocument = 0;
+
+    for (const [documentId, connections] of this.activeConnections.entries()) {
+      let writeConnections = 0;
+      let readConnections = 0;
+      for (const connection of connections.values()) {
+        if (connection.canWrite) {
+          writeConnections += 1;
+        } else {
+          readConnections += 1;
+        }
+      }
+
+      const totalConnections = connections.size;
+      maxConnectionsOnSingleDocument = Math.max(maxConnectionsOnSingleDocument, totalConnections);
+      documents.push({
+        documentId,
+        totalConnections,
+        writeConnections,
+        readConnections,
+      });
+    }
+
+    documents.sort((left, right) => {
+      if (right.totalConnections !== left.totalConnections) {
+        return right.totalConnections - left.totalConnections;
+      }
+      return left.documentId.localeCompare(right.documentId);
+    });
 
     return {
-      name: 'collab-server',
-      status: 'healthy',
-      port,
       activeDocuments: this.activeConnections.size,
-      totalConnections,
-      uptime,
+      totalConnections: this.getTotalConnections(),
+      maxConnectionsOnSingleDocument,
+      documents: documents.slice(0, Math.max(1, limit)),
     };
   }
 }

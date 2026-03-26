@@ -14,6 +14,7 @@ from app.api.management.assistant import _stream_assistant_events
 from app.assistant.ollama_client import OllamaClient
 from app.config import settings
 from app.models import UserRole
+from app.services.assistant_capacity_service import AssistantCapacityExceeded
 from app.services.distributed_rate_limit_service import DistributedRateLimitService
 from tests.factories import create_user
 
@@ -79,6 +80,8 @@ class TestAssistantHealth:
         data = resp.json()
         assert data["status"] == "ready"
         assert data["ollama_healthy"] is True
+        assert data["capacity"]["chat"]["active"] == 0
+        assert data["capacity"]["embedding"]["active"] == 0
 
     def test_health_when_ollama_down(self, client, sysadmin_headers):
         with patch.object(OllamaClient, 'is_healthy', return_value=False):
@@ -317,6 +320,26 @@ class TestAssistantChat:
         assert first.status_code == 200
         assert second.status_code == 429
         assert second.headers["Retry-After"] == "60"
+
+    def test_chat_returns_503_when_capacity_is_exhausted(self, client, sysadmin_headers, monkeypatch):
+        async def reject_chat_slot():
+            raise AssistantCapacityExceeded(
+                lane="chat",
+                reason="queue_full",
+                retry_after_seconds=7,
+            )
+
+        monkeypatch.setattr("app.api.management.assistant.acquire_assistant_chat_slot", reject_chat_slot)
+
+        response = client.post(
+            "/api/v1/assistant/chat",
+            json={"message": "Hello"},
+            headers=sysadmin_headers,
+        )
+
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "7"
+        assert "busy" in response.json()["detail"].lower()
 
     def test_stream_helper_cancels_producer_when_client_disconnects(self):
         class DisconnectingRequest:

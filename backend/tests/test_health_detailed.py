@@ -101,6 +101,32 @@ class TestHealthEndpoints:
         assert "writes" in cache
         assert "evictions" in cache
 
+    def test_detailed_health_includes_search_runtime_metrics(self, client: TestClient):
+        response = client.get("/health/detailed")
+
+        assert response.status_code == 200
+        data = response.json()
+        search_runtime = data["runtime"]["search"]
+        assert search_runtime["configured_mode"] == "auto"
+        assert search_runtime["effective_mode"] == "sqlite_fts5"
+        assert search_runtime["dialect"] == "sqlite"
+        assert search_runtime["degraded_fallbacks"] == 0
+        assert search_runtime["total_search_requests"] == 0
+        assert data["configuration"]["search_backend_mode"] == "auto"
+
+    def test_detailed_health_includes_assistant_runtime_metrics(self, client: TestClient):
+        response = client.get("/health/detailed")
+
+        assert response.status_code == 200
+        data = response.json()
+        assistant_runtime = data["runtime"]["assistant"]
+        assert assistant_runtime["status"] == "ready"
+        assert assistant_runtime["chat"]["active"] == 0
+        assert assistant_runtime["chat"]["queued"] == 0
+        assert assistant_runtime["embedding"]["active"] == 0
+        assert "assistant_chat_max_concurrent" in data["configuration"]
+        assert "assistant_embedding_max_concurrent" in data["configuration"]
+
     def test_detailed_health_includes_runtime_degradation_metrics(self, client: TestClient):
         record_degradation(
             DegradationPolicy.LOSSY,

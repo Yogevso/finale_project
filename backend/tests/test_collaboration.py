@@ -22,6 +22,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.observability import get_use_case_telemetry_sink, reset_use_case_telemetry_sink
 from app.security import get_password_hash
 from app.services.collaboration_service import CollaborationService
 from tests.scenarios import create_collaboration_access_scenario
@@ -241,6 +242,24 @@ class TestDocumentState:
         data = response.json()
         assert "message" in data or "size" in data  # API returns message and size
 
+    def test_put_document_state_emits_collaboration_telemetry(
+        self, client, system_admin_headers, test_document
+    ):
+        reset_use_case_telemetry_sink()
+
+        response = client.put(
+            f"/api/v1/collaboration/documents/{test_document.id}/state",
+            headers={**system_admin_headers, "Content-Type": "application/octet-stream"},
+            content=b"\x01\x02\x03",
+        )
+
+        assert response.status_code == 200
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.save_document_state" and event.outcome == "success"
+            for event in events
+        )
+
     def test_get_document_state(self, client, system_admin_headers, test_document, db):
         """Test retrieving Yjs state from a document"""
         # First, save some state
@@ -286,6 +305,7 @@ class TestDocumentState:
     def test_verify_collaboration_access_accepts_valid_same_tenant_token(
         self, client, auth_headers, test_document
     ):
+        reset_use_case_telemetry_sink()
         token_response = client.post(
             "/api/v1/auth/collab-token",
             headers=auth_headers,
@@ -305,6 +325,12 @@ class TestDocumentState:
         assert data["user_id"] > 0
         assert data["tenant_id"] == test_document.tenant_id
         assert "write" in data["permissions"]
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.verify_collaboration_access"
+            and event.outcome == "success"
+            for event in events
+        )
 
     def test_verify_collaboration_access_accepts_read_only_viewer_token(
         self, client, viewer_auth_headers, test_document
@@ -365,6 +391,7 @@ class TestCollaborationSessions:
 
     def test_start_session(self, client, auth_headers, test_document):
         """Test starting a collaboration session"""
+        reset_use_case_telemetry_sink()
         response = client.post(
             "/api/v1/collaboration/sessions/start",
             headers=auth_headers,
@@ -375,6 +402,12 @@ class TestCollaborationSessions:
         data = response.json()
         assert "session_id" in data
         assert data["document_id"] == test_document.id
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.start_collaboration_session"
+            and event.outcome == "success"
+            for event in events
+        )
 
     def test_end_session(self, client, auth_headers, test_document, db):
         """Test ending a collaboration session"""
