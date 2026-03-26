@@ -29,6 +29,7 @@ import type {
   MessageResponse,
   NotificationCountResponse,
   NotificationListResponse,
+  PreApprovePolicy,
   ReviewAction,
   ReviewListResponse,
   ReviewRequest,
@@ -91,6 +92,7 @@ import type {
   MyFeedbackDto,
   NotificationCountResponseDto,
   NotificationListResponseDto,
+  PreApprovePolicyDto,
   RecentActivityDto,
   ReadingProgressDto,
   ReviewActionDto,
@@ -508,6 +510,14 @@ export function mapReviewListResponseDto(dto: ReviewListResponseDto): ReviewList
   return {
     ...dto,
     items: dto.items.map(mapReviewRequestDto),
+  }
+}
+
+export function mapPreApprovePolicyDto(dto: PreApprovePolicyDto): PreApprovePolicy {
+  return {
+    ...dto,
+    checks: dto.checks.map((item) => ({ ...item })),
+    warnings: [...(dto.warnings || [])],
   }
 }
 

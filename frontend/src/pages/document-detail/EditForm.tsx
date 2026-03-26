@@ -44,7 +44,6 @@ export function EditForm({
   const [formData, setFormData] = useState<DocumentUpdate>({
     title: document.title,
     description: document.description || '',
-    status: document.status as DocumentStatus,
     visibility: document.visibility as DocumentVisibility,
     category: document.category || '',
     release_branch: document.release_branch || '',
@@ -59,7 +58,6 @@ export function EditForm({
     const isDirty =
       formData.title !== document.title ||
       (formData.description || '') !== (document.description || '') ||
-      formData.status !== document.status ||
       formData.visibility !== document.visibility ||
       (formData.category || '') !== (document.category || '') ||
       (formData.release_branch || '') !== (document.release_branch || '') ||
@@ -90,6 +88,16 @@ export function EditForm({
     formData.visibility ?? document.visibility,
     'edit',
   )
+  const workflowStatusLabel =
+    document.status === 'active'
+      ? 'Published'
+      : document.status === 'pending_review'
+        ? 'Pending Review'
+        : document.status === 'approved'
+          ? 'Approved'
+          : document.status === 'archived'
+            ? 'Archived'
+            : 'Draft'
 
   const submitChanges = (reason?: string, companyIds?: number[]) => {
     const saveData = { ...formData }
@@ -155,22 +163,15 @@ export function EditForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="document-edit-status" className="helper-copy mb-1 block font-medium uppercase tracking-wide">
-              Status
+            <label className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+              Workflow Status
             </label>
-            <select
-              id="document-edit-status"
-              name="status"
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as DocumentStatus })}
-              className="select-field"
-            >
-              <option value="draft">Draft</option>
-              <option value="pending_review">Pending Review</option>
-              <option value="approved">Approved</option>
-              <option value="active">Published</option>
-              <option value="archived">Archived</option>
-            </select>
+            <div className="input-field flex min-h-11 items-center bg-slate-50 text-slate-700">
+              {workflowStatusLabel}
+            </div>
+            <p className="helper-copy mt-1">
+              Status changes are controlled by review, publish, archive, and restore actions.
+            </p>
           </div>
           <div>
             <label htmlFor="document-edit-visibility" className="helper-copy mb-1 block font-medium uppercase tracking-wide">

@@ -159,14 +159,14 @@ export function DocumentHeaderCard({
 
           {isEditor ? (
             <>
-              {documentStatus === 'draft' ? (
+              {documentStatus === 'draft' || documentStatus === 'active' ? (
                 <button
                   type="button"
                   onClick={onOpenSubmitReview}
                   className="btn-secondary table-action-btn border-white/60 bg-white text-sky-900 hover:border-white hover:bg-slate-100"
                 >
                   <Send className="w-4 h-4" />
-                  Submit for Review
+                  {documentStatus === 'active' ? 'Submit Draft for Review' : 'Submit for Review'}
                 </button>
               ) : null}
               {documentStatus === 'pending_review' ? (

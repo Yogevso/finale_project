@@ -48,20 +48,14 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Ba
 
     /**
      * Get a download URL with a short-lived signed ticket (AD-002).
-     * Falls back to Authorization-header based download if ticket fetch fails.
      */
     async getAttachmentDownloadUrl(documentId: number, attachmentId: number): Promise<string> {
       const base = `${API_BASE_URL}/documents/${documentId}/attachments/${attachmentId}/download`
-      try {
-        const { data } = await this.client.post<{ ticket: string; expires_in: number }>(
-          '/attachments/download-ticket',
-          { document_id: documentId, attachment_id: attachmentId },
-        )
-        return `${base}?token=${encodeURIComponent(data.ticket)}`
-      } catch {
-        // Fallback: the download endpoint also accepts Authorization header via fetch
-        return base
-      }
+      const { data } = await this.client.post<{ ticket: string; expires_in: number }>(
+        '/attachments/download-ticket',
+        { document_id: documentId, attachment_id: attachmentId },
+      )
+      return `${base}?token=${encodeURIComponent(data.ticket)}`
     }
 
     async getAttachmentReaderView(

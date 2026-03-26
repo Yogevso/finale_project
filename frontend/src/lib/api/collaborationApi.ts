@@ -1,4 +1,4 @@
-import type { ApiHttpClient, Constructor } from './httpClient'
+import { API_BASE_URL, type ApiHttpClient, type Constructor } from './httpClient'
 import {
   type CollaborationActiveSessionsResponseDto,
   type CollaborationActivityFeedResponseDto,
@@ -55,6 +55,28 @@ export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(
     }
 
     async endCollaborationSession(sessionId: string, editsCount: number = 0): Promise<void> {
+      const accessToken = this.getToken()
+      if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+        const response = await window.fetch(`${API_BASE_URL}/collaboration/sessions/end`, {
+          method: 'POST',
+          keepalive: true,
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            session_id: sessionId,
+            edits_count: editsCount,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to end collaboration session (${response.status})`)
+        }
+        return
+      }
+
       await this.client.post('/collaboration/sessions/end', {
         session_id: sessionId,
         edits_count: editsCount,

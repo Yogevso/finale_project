@@ -30,6 +30,7 @@ import type {
   MessageResponse,
   NotificationCountResponse,
   NotificationListResponse,
+  PreApprovePolicy,
   RbacPoliciesResponse,
   RbacPoliciesUpdate,
   ReviewAction,
@@ -127,6 +128,7 @@ export type RbacPoliciesUpdateDto = Contract<'RbacPoliciesUpdate', RbacPoliciesU
 
 export type ReviewRequestDto = ReviewRequest
 export type ReviewListResponseDto = ReviewListResponse
+export type PreApprovePolicyDto = Contract<'PreApprovePolicy', PreApprovePolicy>
 export type ReviewSubmitDto = Contract<'ReviewSubmit', ReviewSubmit>
 export type ReviewActionDto = Contract<'ReviewAction', ReviewAction>
 export type FeedbackDetailResponseDto = Contract<'FeedbackDetailResponse', FeedbackDetailResponse>

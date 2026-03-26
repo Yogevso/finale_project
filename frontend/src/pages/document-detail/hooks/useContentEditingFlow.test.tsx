@@ -361,7 +361,6 @@ describe('useContentEditingFlow', () => {
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
-    mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
     mockedApi.getVersions.mockResolvedValue({
       items: [
         {
@@ -373,7 +372,6 @@ describe('useContentEditingFlow', () => {
         },
       ],
     } as never)
-    mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -411,7 +409,6 @@ describe('useContentEditingFlow', () => {
         content: '<h2>Introduction</h2><p>New content</p>',
       }),
     )
-    expect(mockedApi.updateDocument).toHaveBeenCalledWith(42, { status: 'draft' }, 'doc-42-v2')
     expect(mockedApi.submitForReview).toHaveBeenCalledWith(42, {
       version_id: 77,
       message: 'Edited section: "Introduction"',
@@ -436,7 +433,6 @@ describe('useContentEditingFlow', () => {
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
-    mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
     mockedApi.getVersions.mockResolvedValue({
       items: [
         {
@@ -449,7 +445,6 @@ describe('useContentEditingFlow', () => {
         },
       ],
     } as never)
-    mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -531,7 +526,6 @@ describe('useContentEditingFlow', () => {
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
-    mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
     mockedApi.getVersions.mockResolvedValue({
       items: [
         {
@@ -544,7 +538,6 @@ describe('useContentEditingFlow', () => {
         },
       ],
     } as never)
-    mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 
     const wrapper = ({ children }: PropsWithChildren) => (
@@ -633,7 +626,6 @@ describe('useContentEditingFlow', () => {
     const applyProcessedHtml = vi.fn()
 
     mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
-    mockedApi.getDocument.mockResolvedValue({ id: 42, etag: 'doc-42-v2' } as never)
     mockedApi.getVersions.mockResolvedValue({
       items: [
         {
@@ -645,7 +637,6 @@ describe('useContentEditingFlow', () => {
         },
       ],
     } as never)
-    mockedApi.updateDocument.mockResolvedValue({ id: 42, status: 'draft' } as never)
     mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
 
     const wrapper = ({ children }: PropsWithChildren) => (

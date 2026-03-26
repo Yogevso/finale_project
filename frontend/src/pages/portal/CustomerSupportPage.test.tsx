@@ -2,7 +2,7 @@
  * CustomerSupportPage test — X1-116: Customer ticket view and conversation
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -26,6 +26,7 @@ const mockGetMyTicket = vi.fn()
 const mockCreateMyTicket = vi.fn()
 const mockSendMyTicketMessage = vi.fn()
 const mockCloseMyTicket = vi.fn()
+const mockGetToken = vi.fn()
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -34,8 +35,42 @@ vi.mock('@/lib/api', () => ({
     createMyTicket: (...args: unknown[]) => mockCreateMyTicket(...args),
     sendMyTicketMessage: (...args: unknown[]) => mockSendMyTicketMessage(...args),
     closeMyTicket: (...args: unknown[]) => mockCloseMyTicket(...args),
+    getToken: () => mockGetToken(),
   },
 }))
+
+class MockWebSocket {
+  static instances: MockWebSocket[] = []
+
+  url: string
+  readyState = 0
+  onopen: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent) => void) | null = null
+  onclose: ((event: Event) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  send = vi.fn()
+
+  constructor(url: string) {
+    this.url = url
+    MockWebSocket.instances.push(this)
+  }
+
+  emitOpen() {
+    this.readyState = 1
+    this.onopen?.(new Event('open'))
+  }
+
+  emitMessage(payload: unknown) {
+    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent)
+  }
+
+  close() {
+    this.readyState = 3
+    this.onclose?.(new Event('close'))
+  }
+}
+
+vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
 
 function buildTicket(overrides: Partial<SupportTicket> = {}): SupportTicket {
   return {
@@ -66,6 +101,10 @@ function buildTicketDetail(overrides: Partial<SupportTicketDetail> = {}): Suppor
         sender_type: 'customer',
         content: 'I have a problem uploading',
         is_internal_note: false,
+        file_url: null,
+        file_name: null,
+        file_size: null,
+        file_mime_type: null,
         created_at: '2026-01-01T12:00:00Z',
         sender_full_name: 'Jane Doe',
       },
@@ -76,6 +115,10 @@ function buildTicketDetail(overrides: Partial<SupportTicketDetail> = {}): Suppor
         sender_type: 'agent',
         content: 'We are looking into it',
         is_internal_note: false,
+        file_url: null,
+        file_name: null,
+        file_size: null,
+        file_mime_type: null,
         created_at: '2026-01-01T12:05:00Z',
         sender_full_name: 'Agent Smith',
       },
@@ -86,6 +129,10 @@ function buildTicketDetail(overrides: Partial<SupportTicketDetail> = {}): Suppor
         sender_type: 'agent',
         content: 'Internal: check logs',
         is_internal_note: true,
+        file_url: null,
+        file_name: null,
+        file_size: null,
+        file_mime_type: null,
         created_at: '2026-01-01T12:06:00Z',
         sender_full_name: 'Agent Smith',
       },
@@ -114,6 +161,8 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  MockWebSocket.instances = []
+  mockGetToken.mockReturnValue('test-token')
   mockGetMyTickets.mockResolvedValue(buildList([]))
 })
 
@@ -219,6 +268,69 @@ describe('CustomerSupportPage — ticket detail', () => {
     })
   })
 
+  it('refreshes the active ticket when a websocket message arrives', async () => {
+    const updatedDetail = buildTicketDetail({
+      messages: [
+        ...buildTicketDetail().messages,
+        {
+          id: 4,
+          ticket_id: 1,
+          sender_id: 10,
+          sender_type: 'agent',
+          content: 'Here is an update from support',
+          is_internal_note: false,
+          file_url: null,
+          file_name: null,
+          file_size: null,
+          file_mime_type: null,
+          created_at: '2026-01-01T12:07:00Z',
+          sender_full_name: 'Agent Smith',
+        },
+      ],
+    })
+    mockGetMyTicket
+      .mockResolvedValueOnce(buildTicketDetail())
+      .mockResolvedValue(updatedDetail)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot upload file')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Cannot upload file'))
+
+    await waitFor(() => {
+      expect(screen.getByText('We are looking into it')).toBeInTheDocument()
+    })
+
+    const socket = MockWebSocket.instances[0]
+    await act(async () => {
+      socket.emitOpen()
+      socket.emitMessage({
+        event: 'new_message',
+        data: {
+          ticket_id: 1,
+          id: 4,
+          sender_id: 10,
+          sender_type: 'agent',
+          content: 'Here is an update from support',
+          is_internal_note: false,
+          file_url: null,
+          file_name: null,
+          file_size: null,
+          file_mime_type: null,
+          created_at: '2026-01-01T12:07:00Z',
+          sender_full_name: 'Agent Smith',
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(mockGetMyTicket).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('Here is an update from support')).toBeInTheDocument()
+    })
+  })
+
   it('hides reply input when ticket is closed', async () => {
     mockGetMyTicket.mockResolvedValue(buildTicketDetail({ status: 'closed' }))
     renderPage()
@@ -232,5 +344,91 @@ describe('CustomerSupportPage — ticket detail', () => {
       expect(screen.getByText('I have a problem uploading')).toBeInTheDocument()
     })
     expect(screen.queryByPlaceholderText(/type your reply/i)).not.toBeInTheDocument()
+  })
+
+  it('renders attachment links on ticket messages', async () => {
+    mockGetMyTicket.mockResolvedValue(
+      buildTicketDetail({
+        messages: [
+          ...buildTicketDetail().messages,
+          {
+            id: 4,
+            ticket_id: 1,
+            sender_id: 10,
+            sender_type: 'agent',
+            content: 'See attached log',
+            is_internal_note: false,
+            file_url: '/api/v1/support/tickets/1/messages/4/attachment',
+            file_name: 'error-log.txt',
+            file_size: 2048,
+            file_mime_type: 'text/plain',
+            created_at: '2026-01-01T12:07:00Z',
+            sender_full_name: 'Agent Smith',
+          },
+        ],
+      }),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot upload file')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Cannot upload file'))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /error-log\.txt/i })).toHaveAttribute(
+        'href',
+        '/api/v1/support/tickets/1/messages/4/attachment',
+      )
+    })
+  })
+
+  it('sends a reply with an attachment', async () => {
+    mockSendMyTicketMessage.mockResolvedValue({
+      id: 4,
+      ticket_id: 1,
+      sender_id: 5,
+      sender_type: 'customer',
+      content: 'Please see screenshot',
+      is_internal_note: false,
+      file_url: '/api/v1/support/tickets/1/messages/4/attachment',
+      file_name: 'screenshot.png',
+      file_size: 4,
+      file_mime_type: 'image/png',
+      created_at: '2026-01-01T12:08:00Z',
+      sender_full_name: 'Jane Doe',
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Cannot upload file')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Cannot upload file'))
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/type your reply/i)).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/type your reply/i), {
+      target: { value: 'Please see screenshot' },
+    })
+    fireEvent.change(screen.getByLabelText(/attach a file/i, { selector: 'input' }), {
+      target: {
+        files: [new File(['png!'], 'screenshot.png', { type: 'image/png' })],
+      },
+    })
+    fireEvent.click(screen.getByLabelText(/send reply/i))
+
+    await waitFor(() => {
+      expect(mockSendMyTicketMessage).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          content: 'Please see screenshot',
+          file: expect.objectContaining({ name: 'screenshot.png' }),
+        }),
+      )
+    })
   })
 })

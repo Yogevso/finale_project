@@ -1,12 +1,17 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
-import type { UserRole } from '@/types'
+import { buildLoginRedirect } from '@/lib/authRedirect'
+import type { Permission, UserRole } from '@/types'
 
 interface RoleGuardProps {
   children: React.ReactNode
   /** Roles allowed to access this route */
   allowedRoles?: UserRole[]
+  /** Backend-driven permissions required to access this route */
+  requiredPermissions?: Permission[]
+  /** Require every permission instead of any matching permission */
+  requireAllPermissions?: boolean
   /** If true, only internal users can access */
   internalOnly?: boolean
   /** Redirect path if access denied (defaults to role's home) */
@@ -22,10 +27,13 @@ interface RoleGuardProps {
 export default function RoleGuard({
   children,
   allowedRoles,
+  requiredPermissions,
+  requireAllPermissions = false,
   internalOnly = false,
   redirectTo,
 }: RoleGuardProps) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, hasPermission } = useAuth()
+  const location = useLocation()
 
   // Show loading spinner while checking auth
   if (isLoading) {
@@ -38,13 +46,24 @@ export default function RoleGuard({
 
   // Not logged in - redirect to login
   if (!user) {
-    return <Navigate to="/login" replace />
+    return <Navigate to={buildLoginRedirect(location)} state={{ from: location }} replace />
   }
 
   // Check if internal only
   if (internalOnly && user.role === 'customer') {
     const home = redirectTo || getHomeRouteForRole(user.role)
     return <Navigate to={home} replace />
+  }
+
+  if (requiredPermissions && requiredPermissions.length > 0) {
+    const hasRequiredPermissions = requireAllPermissions
+      ? requiredPermissions.every((permission) => hasPermission(permission))
+      : requiredPermissions.some((permission) => hasPermission(permission))
+
+    if (!hasRequiredPermissions) {
+      const home = redirectTo || getHomeRouteForRole(user.role)
+      return <Navigate to={home} replace />
+    }
   }
 
   // Check if specific roles are required
@@ -97,6 +116,17 @@ export function InternalGuard({ children }: { children: React.ReactNode }) {
 export function EditorGuard({ children }: { children: React.ReactNode }) {
   return (
     <RoleGuard allowedRoles={['system_admin', 'admin', 'manager', 'editor']}>
+      {children}
+    </RoleGuard>
+  )
+}
+
+/**
+ * Guard for customer portal routes only.
+ */
+export function CustomerGuard({ children }: { children: React.ReactNode }) {
+  return (
+    <RoleGuard allowedRoles={['customer']} redirectTo="/dashboard">
       {children}
     </RoleGuard>
   )

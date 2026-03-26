@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import SupportPage from '@/pages/SupportPage'
-import type { SupportTicket, SupportTicketListResponse } from '@/types/chat'
+import type { SupportTicket, SupportTicketDetail, SupportTicketListResponse } from '@/types/chat'
 
 // Mock auth
 vi.mock('@/lib/auth', () => ({
@@ -21,6 +21,7 @@ const mockGetSupportTickets = vi.fn()
 const mockGetSupportTicket = vi.fn()
 const mockGetTicketViewers = vi.fn()
 const mockGetUsers = vi.fn()
+const mockSendSupportTicketMessage = vi.fn()
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -28,7 +29,7 @@ vi.mock('@/lib/api', () => ({
     getSupportTicket: (...args: unknown[]) => mockGetSupportTicket(...args),
     getTicketViewers: (...args: unknown[]) => mockGetTicketViewers(...args),
     getUsers: (...args: unknown[]) => mockGetUsers(...args),
-    sendSupportTicketMessage: vi.fn(),
+    sendSupportTicketMessage: (...args: unknown[]) => mockSendSupportTicketMessage(...args),
     updateSupportTicket: vi.fn(),
     assignSupportAgent: vi.fn(),
     unassignSupportAgent: vi.fn(),
@@ -59,6 +60,44 @@ function buildTicketList(tickets: SupportTicket[]): SupportTicketListResponse {
   return { items: tickets, total: tickets.length, page: 1, page_size: 50 }
 }
 
+function buildTicketDetail(overrides: Partial<SupportTicketDetail> = {}): SupportTicketDetail {
+  return {
+    ...buildTicket(),
+    messages: [
+      {
+        id: 1,
+        ticket_id: 1,
+        sender_id: 5,
+        sender_type: 'customer',
+        content: 'Need help with upload',
+        is_internal_note: false,
+        file_url: null,
+        file_name: null,
+        file_size: null,
+        file_mime_type: null,
+        created_at: '2026-01-01T12:00:00Z',
+        sender_full_name: 'Jane Doe',
+      },
+      {
+        id: 2,
+        ticket_id: 1,
+        sender_id: 10,
+        sender_type: 'agent',
+        content: 'Checking this now',
+        is_internal_note: false,
+        file_url: null,
+        file_name: null,
+        file_size: null,
+        file_mime_type: null,
+        created_at: '2026-01-01T12:05:00Z',
+        sender_full_name: 'Agent Smith',
+      },
+    ],
+    assignments: [],
+    ...overrides,
+  }
+}
+
 function renderPage() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -75,6 +114,8 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetSupportTickets.mockResolvedValue(buildTicketList([]))
+  mockGetTicketViewers.mockResolvedValue({ ticket_id: 1, viewer_ids: [10] })
+  mockGetUsers.mockResolvedValue([])
 })
 
 describe('SupportPage — ticket list', () => {
@@ -144,6 +185,95 @@ describe('SupportPage — ticket list', () => {
     await waitFor(() => {
       expect(mockGetSupportTickets).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'open' }),
+      )
+    })
+  })
+
+  it('renders attachment links in ticket detail', async () => {
+    mockGetSupportTickets.mockResolvedValue(buildTicketList([buildTicket()]))
+    mockGetSupportTicket.mockResolvedValue(
+      buildTicketDetail({
+        messages: [
+          ...buildTicketDetail().messages,
+          {
+            id: 3,
+            ticket_id: 1,
+            sender_id: 10,
+            sender_type: 'agent',
+            content: 'See attached log',
+            is_internal_note: false,
+            file_url: '/api/v1/support/tickets/1/messages/3/attachment',
+            file_name: 'error-log.txt',
+            file_size: 2048,
+            file_mime_type: 'text/plain',
+            created_at: '2026-01-01T12:06:00Z',
+            sender_full_name: 'Agent Smith',
+          },
+        ],
+      }),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Need help with upload')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Need help with upload'))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /error-log\.txt/i })).toHaveAttribute(
+        'href',
+        '/api/v1/support/tickets/1/messages/3/attachment',
+      )
+    })
+  })
+
+  it('sends an agent reply with an attachment', async () => {
+    mockGetSupportTickets.mockResolvedValue(buildTicketList([buildTicket()]))
+    mockGetSupportTicket.mockResolvedValue(buildTicketDetail())
+    mockSendSupportTicketMessage.mockResolvedValue({
+      id: 3,
+      ticket_id: 1,
+      sender_id: 10,
+      sender_type: 'agent',
+      content: 'Please review the log',
+      is_internal_note: false,
+      file_url: '/api/v1/support/tickets/1/messages/3/attachment',
+      file_name: 'support-log.txt',
+      file_size: 4,
+      file_mime_type: 'text/plain',
+      created_at: '2026-01-01T12:06:00Z',
+      sender_full_name: 'Agent Smith',
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Need help with upload')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Need help with upload'))
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/reply to customer/i)).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/reply to customer/i), {
+      target: { value: 'Please review the log' },
+    })
+    fireEvent.change(screen.getByLabelText(/attach a file/i), {
+      target: {
+        files: [new File(['log!'], 'support-log.txt', { type: 'text/plain' })],
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /send reply/i }))
+
+    await waitFor(() => {
+      expect(mockSendSupportTicketMessage).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          content: 'Please review the log',
+          file: expect.objectContaining({ name: 'support-log.txt' }),
+        }),
       )
     })
   })

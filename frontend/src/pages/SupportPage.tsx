@@ -2,7 +2,7 @@
  * SupportPage â€” agent/manager support ticket dashboard (X1-093 to X1-098)
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import {
@@ -11,6 +11,7 @@ import {
   Eye,
   Filter,
   MessageSquareText,
+  Paperclip,
   Search,
   Send,
   UserPlus,
@@ -24,6 +25,7 @@ import { VirtualizedTable } from '@/components/VirtualizedTable'
 import { SubmitButton, TextArea } from '@/components/form'
 import { CardSkeleton, ListSkeleton, TableSkeleton } from '@/components/skeletons'
 import { useFocusTrap } from '@/hooks/useAccessibility'
+import { ATTACHMENT_INPUT_ACCEPT, validateAttachmentFile } from '@/lib/attachmentUpload'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
@@ -46,6 +48,16 @@ const PRIORITY_BADGE: Record<string, string> = {
   normal: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200',
   high: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-200',
   urgent: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-200',
+}
+
+function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes < 1024) {
+    return `${bytes ?? 0} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export default function SupportPage() {
@@ -211,10 +223,13 @@ function TicketDetailView({
   const [message, setMessage] = useState('')
   const [messageError, setMessageError] = useState('')
   const [isInternal, setIsInternal] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [showAssign, setShowAssign] = useState(false)
   const [showHandoff, setShowHandoff] = useState(false)
   const [showCanned, setShowCanned] = useState(false)
   const [cannedSearch, setCannedSearch] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const canSend = Boolean(message.trim() || selectedFile)
 
   const viewersQuery = useQuery({
     queryKey: ['ticketViewers', ticket.id],
@@ -225,12 +240,17 @@ function TicketDetailView({
   const otherViewers = viewerIds.filter((id) => id !== user?.id)
 
   const sendMutation = useMutation({
-    mutationFn: (data: { content: string; is_internal_note: boolean }) =>
+    mutationFn: (data: { content: string; is_internal_note: boolean; file: File | null }) =>
       api.sendSupportTicketMessage(ticket.id, data),
     onSuccess: () => {
       setMessage('')
       setMessageError('')
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
       queryClient.invalidateQueries({ queryKey: ['supportTicket', ticket.id] })
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
     },
     onError: (error: unknown) => {
       toast.error('Failed to send message', extractApiErrorMessage(error, 'Please try again.'))
@@ -260,11 +280,15 @@ function TicketDetailView({
   })
 
   const handleSend = () => {
-    if (!message.trim()) {
-      setMessageError('A reply message is required.')
+    if (!canSend) {
+      setMessageError('A reply message or attachment is required.')
       return
     }
-    sendMutation.mutate({ content: message.trim(), is_internal_note: isInternal })
+    sendMutation.mutate({
+      content: message.trim(),
+      is_internal_note: isInternal,
+      file: selectedFile,
+    })
   }
 
   const cannedQuery = useQuery({
@@ -282,6 +306,25 @@ function TicketDetailView({
     setMessageError('')
     setShowCanned(false)
     setCannedSearch('')
+  }
+
+  const handleSelectedFile = (file: File | null) => {
+    if (!file) {
+      setSelectedFile(null)
+      return
+    }
+    const validationError = validateAttachmentFile(file)
+    if (validationError) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      toast.error('Attachment rejected', validationError)
+      return
+    }
+    setSelectedFile(file)
+    if (messageError) {
+      setMessageError('')
+    }
   }
 
   return (
@@ -406,7 +449,39 @@ function TicketDetailView({
                   <span className="font-medium">{msg.sender_full_name || 'Unknown'}</span>
                   {msg.is_internal_note ? <span className="italic">(internal note)</span> : null}
                 </div>
-                <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                {msg.content ? <p className="whitespace-pre-wrap text-sm">{msg.content}</p> : null}
+                {msg.file_name ? (
+                  msg.file_url ? (
+                    <a
+                      href={msg.file_url}
+                      className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                        msg.is_internal_note
+                          ? 'border-amber-300 bg-amber-100/70 text-amber-950 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100'
+                          : msg.sender_id === user?.id
+                            ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                            : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
+                      }`}
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{msg.file_name}</span>
+                      <span className="shrink-0 text-xs opacity-75">{formatFileSize(msg.file_size)}</span>
+                    </a>
+                  ) : (
+                    <div
+                      className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                        msg.is_internal_note
+                          ? 'border-amber-300 bg-amber-100/70 text-amber-950 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100'
+                          : msg.sender_id === user?.id
+                            ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                            : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
+                      }`}
+                    >
+                      <Paperclip className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{msg.file_name}</span>
+                      <span className="shrink-0 text-xs opacity-75">Uploading...</span>
+                    </div>
+                  )
+                ) : null}
                 <p className="mt-1 text-[10px] opacity-60">
                   {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
                 </p>
@@ -488,6 +563,28 @@ function TicketDetailView({
               ) : null}
             </div>
           </div>
+          {selectedFile ? (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+              <Paperclip className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-300" />
+              <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {formatFileSize(selectedFile.size)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedFile(null)
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = ''
+                  }
+                }}
+                className="btn-icon h-7 w-7"
+                aria-label="Remove attachment"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-3 md:flex-row md:items-end">
             <div className="flex-1">
               <TextArea
@@ -513,13 +610,25 @@ function TicketDetailView({
                 rows={2}
                 maxLength={2000}
                 error={messageError}
-                required
+                required={!selectedFile}
               />
             </div>
+            <label className="btn-secondary flex h-10 cursor-pointer items-center justify-center gap-2 px-3 md:h-11">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ATTACHMENT_INPUT_ACCEPT}
+                aria-label="Attach a file"
+                className="sr-only"
+                onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
+              />
+              <Paperclip className="h-4 w-4" />
+              Attach file
+            </label>
             <SubmitButton
               type="button"
               onClick={handleSend}
-              disabled={sendMutation.isPending || !message.trim()}
+              disabled={sendMutation.isPending || !canSend}
               isLoading={sendMutation.isPending}
               loadingText="Sending..."
               className="min-w-[9rem]"

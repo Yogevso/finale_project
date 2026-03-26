@@ -112,6 +112,22 @@ export interface DashboardStats {
   responded_feedback: number
 }
 
+export interface PortalReadingProgressItem {
+  id: number
+  document_id: number
+  document_title: string
+  progress_percent: number
+  last_read_at: string
+  completed_at: string | null
+}
+
+export interface PortalDocumentProgress {
+  has_progress: boolean
+  progress_percent: number
+  is_completed: boolean
+  last_read_at?: string | null
+}
+
 export interface CategoryCount {
   category: string
   count: number
@@ -214,6 +230,26 @@ export const portalApi = {
   }>> {
     const response = await portalClient.get('/portal/reading-progress/continue', {
       params: { limit },
+    })
+    return response.data
+  },
+
+  async getReadingProgress(): Promise<PortalReadingProgressItem[]> {
+    const response = await portalClient.get('/portal/reading-progress')
+    return response.data
+  },
+
+  async getDocumentProgress(documentId: number): Promise<PortalDocumentProgress> {
+    const response = await portalClient.get(`/portal/reading-progress/${documentId}`)
+    return response.data
+  },
+
+  async updateReadingProgress(
+    documentId: number,
+    progressPercent: number,
+  ): Promise<PortalReadingProgressItem> {
+    const response = await portalClient.put(`/portal/reading-progress/${documentId}`, {
+      progress_percent: progressPercent,
     })
     return response.data
   },

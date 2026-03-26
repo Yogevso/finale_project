@@ -9,18 +9,30 @@ export function useAttachmentDownload(documentId: number) {
   const downloadAttachment = useCallback(
     async (attachment: Attachment) => {
       setDownloadingAttachmentId(attachment.id)
+      let objectUrl: string | null = null
 
       try {
-        const blob = await api.getAttachmentBlob(documentId, attachment.id)
-        const objectUrl = createObjectUrl(blob)
+        let url: string
+        try {
+          // H-23: Use HMAC-signed download ticket instead of direct blob fetch
+          url = await api.getAttachmentDownloadUrl(documentId, attachment.id)
+        } catch {
+          // Fallback to authenticated blob fetch when ticket issuance is unavailable.
+          const blob = await api.getAttachmentBlob(documentId, attachment.id)
+          objectUrl = createObjectUrl(blob)
+          url = objectUrl
+        }
+
         const anchor = getDocument().createElement('a')
-        anchor.href = objectUrl
+        anchor.href = url
         anchor.download = attachment.original_filename || attachment.filename
         getDocument().body.appendChild(anchor)
         anchor.click()
         anchor.remove()
-        revokeObjectUrl(objectUrl)
       } finally {
+        if (objectUrl) {
+          revokeObjectUrl(objectUrl)
+        }
         setDownloadingAttachmentId((currentId) =>
           currentId === attachment.id ? null : currentId,
         )

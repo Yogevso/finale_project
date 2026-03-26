@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { api } from '@/lib/api'
+import { resetPasswordSchema } from '@/lib/validation/schemas'
 import { PasswordInput, SubmitButton } from '@/components/form'
 
 export default function ResetPasswordPage() {
@@ -29,13 +30,24 @@ export default function ResetPasswordPage() {
     setConfirmPasswordError('')
     setFormError('')
 
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters long.')
-      hasValidationError = true
-    }
-    if (newPassword !== confirmPassword) {
-      setConfirmPasswordError('Passwords must match.')
-      hasValidationError = true
+    const result = resetPasswordSchema.safeParse({ newPassword, confirmPassword })
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        if (issue.path[0] === 'newPassword') {
+          setPasswordError(issue.message)
+          hasValidationError = true
+          break
+        }
+        if (issue.path[0] === 'confirmPassword') {
+          setConfirmPasswordError(issue.message)
+          hasValidationError = true
+          break
+        }
+      }
+      if (!hasValidationError) {
+        setFormError(result.error.issues[0]?.message ?? 'Invalid input')
+        hasValidationError = true
+      }
     }
 
     if (hasValidationError) {

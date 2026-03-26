@@ -26,6 +26,21 @@ export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
       super(...args)
     }
 
+    private buildSupportTicketMessagePayload(request: SendTicketMessageRequest): SendTicketMessageRequest | FormData {
+      if (!request.file) {
+        return {
+          content: request.content,
+          is_internal_note: request.is_internal_note,
+        }
+      }
+
+      const formData = new FormData()
+      formData.append('content', request.content)
+      formData.append('is_internal_note', String(Boolean(request.is_internal_note)))
+      formData.append('file', request.file)
+      return formData
+    }
+
     // ---- Management endpoints (agents/admins) ----
 
     async getSupportTickets(params?: {
@@ -58,7 +73,8 @@ export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     }
 
     async sendSupportTicketMessage(ticketId: number, request: SendTicketMessageRequest): Promise<SupportTicketMessage> {
-      const { data } = await this.client.post<SupportTicketMessage>(`/support/tickets/${ticketId}/messages`, request)
+      const payload = this.buildSupportTicketMessagePayload(request)
+      const { data } = await this.client.post<SupportTicketMessage>(`/support/tickets/${ticketId}/messages`, payload)
       return data
     }
 
@@ -108,7 +124,8 @@ export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     }
 
     async sendMyTicketMessage(ticketId: number, request: SendTicketMessageRequest): Promise<SupportTicketMessage> {
-      const { data } = await this.client.post<SupportTicketMessage>(`/portal/support/tickets/${ticketId}/messages`, request)
+      const payload = this.buildSupportTicketMessagePayload(request)
+      const { data } = await this.client.post<SupportTicketMessage>(`/portal/support/tickets/${ticketId}/messages`, payload)
       return data
     }
 

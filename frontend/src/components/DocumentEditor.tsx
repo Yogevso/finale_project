@@ -41,7 +41,7 @@ export default function DocumentEditor({
     documentId,
     username: user?.username || 'Anonymous',
     userId: user?.id || 0,
-    enabled: collaborationEnabled && isEditing && isEditor,
+    enabled: collaborationEnabled && Boolean(user),
     onError: (err) => console.error('Collaboration error:', err),
   })
 
@@ -273,7 +273,7 @@ export default function DocumentEditor({
           </div>
         )}
 
-        {collaborationEnabled && isEditing && user ? (
+        {collaborationEnabled && user ? (
           <Suspense fallback={<CollaborativeEditorFallback className={isEditing ? 'ring-2 ring-sky-500' : ''} />}>
             <CollaborativeEditor
               ydoc={collaboration.ydoc}
@@ -282,17 +282,21 @@ export default function DocumentEditor({
               isConnecting={collaboration.isConnecting}
               isSynced={collaboration.isSynced}
               error={collaboration.error}
+              persistenceWarning={collaboration.persistenceWarning}
               collaborators={collaboration.collaborators}
               currentUser={{
                 userId: user.id,
                 username: user.username,
                 color: userColor.color,
               }}
+              isReadOnly={collaboration.isReadOnly}
+              permissions={collaboration.permissions}
+              onRefreshPermissions={() => void collaboration.refreshPermissions()}
               content={content}
               onChange={handleContentChange}
               editable={isEditing}
               className={isEditing ? 'ring-2 ring-sky-500' : ''}
-              onRetry={collaboration.connect}
+              onRetry={collaboration.reconnect}
             />
           </Suspense>
         ) : (
