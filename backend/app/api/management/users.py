@@ -16,6 +16,7 @@ from app.api.management.auth import (
     _send_email_verification_task,
     _send_password_reset_email_task,
 )
+from app.application.contexts.users.api import UsersContextAPI
 from app.config import settings
 from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_admin, require_manager
@@ -25,12 +26,9 @@ from app.models import ActionType, SecurityEvent, User, UserRole, UserSession
 from app.schemas import MessageResponse, UserCreate, UserUpdate, UserWithCompanyResponse
 from app.security import get_current_active_user
 from app.services.audit_helper import write_audit_log
-from app.services.auth_service import AuthService
 from app.services.storage_service import get_storage_backend
-from app.web.controllers.management import UsersController
 
 router = APIRouter()
-users_controller = UsersController()
 storage_backend = get_storage_backend()
 AVATAR_SIZE = (200, 200)
 MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024  # 2 MB
@@ -103,6 +101,10 @@ class SecurityEventListResponse(BaseModel):
     total_pages: int
 
 
+def _users_context_api() -> UsersContextAPI:
+    return UsersContextAPI()
+
+
 @router.get("/users", response_model=list[UserWithCompanyResponse])
 def list_users(
     role: Optional[UserRole] = Query(None, description="Filter by role"),
@@ -113,7 +115,7 @@ def list_users(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    return users_controller.list_users(
+    return _users_context_api().list_users(
         role=role,
         company_id=company_id,
         is_active=is_active,
@@ -131,9 +133,9 @@ def create_user(
     current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service=Depends(get_auth_service),
 ):
-    payload = users_controller.create_user(
+    payload = _users_context_api().create_user(
         user_data=user_data,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -199,7 +201,7 @@ def update_my_profile(
         details=f"Self-profile update: {', '.join(changed)}",
     )
 
-    return users_controller._serialize_user(current_user, db)
+    return _users_context_api().serialize_user(current_user, db)
 
 
 @router.patch(
@@ -263,7 +265,7 @@ def upload_my_avatar(
             output_stream = io.BytesIO()
             resized.save(output_stream, format="JPEG", quality=90)
             output_stream.seek(0)
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — translate admin side-effects into stable API errors
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid avatar image",
@@ -426,7 +428,7 @@ def get_user(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    return users_controller.get_user(
+    return _users_context_api().get_user(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -443,7 +445,7 @@ def update_user(
     db: Session = Depends(get_db),
     chat_db: Session = Depends(get_chat_db),
 ):
-    return users_controller.update_user(
+    return _users_context_api().update_user(
         user_id=user_id,
         user_data=user_data,
         current_user=current_user,
@@ -460,7 +462,7 @@ def delete_user(
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    users_controller.delete_user(
+    _users_context_api().delete_user(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -481,7 +483,7 @@ def check_company_binding(
     Returns validation info about the user-company relationship.
     Admin+ or self access required.
     """
-    return users_controller.check_company_binding(
+    return _users_context_api().check_company_binding(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -493,7 +495,7 @@ def check_company_binding(
 def unlock_user_account(
     user_id: int,
     current_user: User = Depends(require_admin),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service=Depends(get_auth_service),
 ):
     """Admin unlock endpoint for account lockout recovery."""
     _ = current_user
@@ -510,7 +512,7 @@ def force_password_reset(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_admin),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service=Depends(get_auth_service),
     db: Session = Depends(get_db),
 ):
     target_user = db.query(User).filter(User.id == user_id).first()
@@ -518,7 +520,7 @@ def force_password_reset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if not tenant_ctx.is_system_admin and target_user.tenant_id != tenant_ctx.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if not users_controller._can_manage_role(current_user.role, target_user.role):
+    if not _users_context_api().can_manage_role(current_user.role, target_user.role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot reset passwords for users with higher roles",

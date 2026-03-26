@@ -13,6 +13,7 @@
 ## Notes
 
 - Cross-context writes should go through owner service contracts only.
+- Route and websocket entrypoints should call owner context APIs in `app.application.contexts.*.api`, not `app.web.controllers.*`.
 - For architecture-level dependency changes, update:
 - ADR in `docs/adr/`
 - ownership map in `docs/context-ownership.md`

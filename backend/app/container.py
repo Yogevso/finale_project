@@ -29,6 +29,7 @@ from app.application.queries.document_queries import (
 )
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.application.queries.search_queries import SearchQueryHandler
+from app.auth_context import CollaborationAuthService
 from app.conversion.contracts import DocumentConversionService
 from app.conversion.document_pipeline import get_document_conversion_pipeline
 from app.dependencies.tenant import TenantContext
@@ -45,6 +46,7 @@ from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.comment_service import CommentService
 from app.services.document_service import DocumentService
+from app.services.support_service import SupportTicketService
 from app.services.version_service import VersionService
 
 
@@ -87,6 +89,10 @@ class AppContainer:
     def collaboration_state_port(self, db: Session) -> CollaborationStatePort:
         return get_collaboration_state_port(db)
 
+    @staticmethod
+    def collaboration_auth_service() -> CollaborationAuthService:
+        return CollaborationAuthService()
+
     # -------- Services --------
     def analytics_service(
         self,
@@ -124,6 +130,9 @@ class AppContainer:
 
     def version_service(self, db: Session, chat_db: Session | None = None) -> VersionService:
         return VersionService(db, chat_db=chat_db)
+
+    def support_ticket_service(self, db: Session) -> SupportTicketService:
+        return SupportTicketService(db)
 
     def collaboration_service(self, db: Session | None = None) -> CollaborationService:
         state_port = self.collaboration_state_port(db) if db else None

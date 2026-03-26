@@ -3,6 +3,7 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.auth_context import CollaborationAuthService
 from app.container import AppContainer, build_container, get_container
 from app.conversion.contracts import DocumentConversionService
 from app.db import get_analytics_db, get_chat_db, get_db
@@ -12,6 +13,7 @@ from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.comment_service import CommentService
 from app.services.document_service import DocumentService
+from app.services.support_service import SupportTicketService
 from app.services.version_service import VersionService
 
 
@@ -88,3 +90,22 @@ def get_document_conversion_service(
     if not isinstance(container, AppContainer):
         container = build_container()
     return container.document_conversion_service()
+
+
+def get_support_ticket_service(
+    db: Session = Depends(get_db),
+    container: AppContainer = Depends(get_container),
+) -> SupportTicketService:
+    """Resolve support ticket service from the shared container."""
+    if not isinstance(container, AppContainer):
+        container = build_container()
+    return container.support_ticket_service(db)
+
+
+def get_collaboration_auth_service(
+    container: AppContainer = Depends(get_container),
+) -> CollaborationAuthService:
+    """Resolve collaboration token auth service from the shared container."""
+    if not isinstance(container, AppContainer):
+        container = build_container()
+    return container.collaboration_auth_service()

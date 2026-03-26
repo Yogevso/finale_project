@@ -11,25 +11,25 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.application.contexts.portal.api import PortalContextAPI
 from app.application.queries.dependencies import get_portal_documents_query_handler
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
+from app.dependencies.permissions import require_customer
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.db import get_db
-from app.models import Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
+from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
     PortalDocumentListResponse,
     PortalFacetsResponse,
 )
-from app.security import get_current_active_user
 from app.services.attachment_service import AttachmentService
 from app.utils.http_headers import build_content_disposition
-from app.web.controllers.portal import PortalDocumentsController
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
 logger = logging.getLogger(__name__)
-portal_documents_controller = PortalDocumentsController()
+portal_context_api = PortalContextAPI()
 
 
 class PortalReadingProgressUpdate(BaseModel):
@@ -104,11 +104,6 @@ def _get_customer_progress_document_or_404(
 
     raise HTTPException(status_code=404, detail="Document not found")
 
-
-def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
-    return portal_documents_controller.require_customer(current_user=current_user)
-
-
 @router.get("/documents", response_model=PortalDocumentListResponse)
 async def list_customer_documents(
     page: int = Query(1, ge=1),
@@ -124,7 +119,7 @@ async def list_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.list_customer_documents(
+    return portal_context_api.list_customer_documents(
         page=page,
         per_page=per_page,
         category=category,
@@ -146,7 +141,7 @@ async def get_customer_document(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_document(
+    return portal_context_api.get_customer_document(
         document_id=document_id,
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
@@ -162,7 +157,7 @@ async def get_related_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_related_documents(
+    return portal_context_api.get_related_documents(
         document_id=document_id,
         limit=limit,
         current_user=current_user,
@@ -179,7 +174,7 @@ async def get_customer_attachment(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_attachment(
+    return portal_context_api.get_customer_attachment(
         document_id=document_id,
         attachment_id=attachment_id,
         current_user=current_user,
@@ -236,7 +231,7 @@ async def download_customer_attachment(
                     "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=False),
                 },
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — PDF preview is optional; serve original attachment instead
             logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
 
     attachment, content_stream = AttachmentService.open_original_stream(
@@ -270,7 +265,7 @@ async def get_customer_categories(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_categories(
+    return portal_context_api.get_customer_categories(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -283,7 +278,7 @@ async def get_customer_facets(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_facets(
+    return portal_context_api.get_customer_facets(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -296,7 +291,7 @@ async def get_customer_dashboard_stats(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_dashboard_stats(
+    return portal_context_api.get_customer_dashboard_stats(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -313,7 +308,7 @@ async def search_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.search_customer_documents(
+    return portal_context_api.search_customer_documents(
         q=q,
         category=category,
         page=page,

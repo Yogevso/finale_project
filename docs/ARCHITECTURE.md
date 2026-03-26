@@ -21,6 +21,7 @@
 ## Architecture Governance Artifacts
 
 - ADR workflow: `docs/adr/README.md`
+- Backend context-first boundary: `docs/adr/ADR-0003-backend-context-first-architecture.md`
 - Deprecation lifecycle policy: `docs/deprecation-policy.md`
 - Active deprecations register: `docs/deprecations.md`
 - Refactor wave playbooks: `docs/migrations/README.md`
@@ -28,6 +29,24 @@
 - Data ownership map: `docs/context-ownership.md`
 - Context map artifacts: `docs/context-map/README.md`
 - Architecture debt register: `docs/architecture-debt.md`
+
+## Backend Orchestration Boundary
+
+The backend follows a context-first modular monolith pattern.
+
+- `app.api/**` and websocket modules are transport adapters.
+- `app.application.contexts.<context>.api` is the public orchestration surface for new backend work.
+- DDD aggregates, command/query handlers, repositories, and services are internal implementation techniques inside a context.
+- `app.web.controllers/**` remains as a compatibility layer and must not be imported by route modules.
+
+## Repository Boundary
+
+The repository layer is aggregate-scoped, not universal.
+
+- Aggregate-heavy write domains should use repositories as their persistence boundary.
+- Projection/reporting/admin read paths may query directly when they are not modeling aggregate mutation.
+- The current repository-backed domains are users, invitations, comments, versions, documents, and support tickets.
+- See `docs/adr/ADR-0004-aggregate-repository-boundaries.md` for the policy.
 
 ## System Architecture
 
