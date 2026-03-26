@@ -41,12 +41,17 @@ from app.infrastructure.composition import (
 )
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.models import UserRole
+from app.repositories import DocumentRepository, VersionRepository
 from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.comment_service import CommentService
 from app.services.document_service import DocumentService
+from app.services.notification_service import NotificationService
+from app.services.outbox import build_outbox_event_dispatcher
 from app.services.support_service import SupportTicketService
+from app.services.version_publication_service import VersionPublicationService
+from app.services.version_scheduling_service import VersionSchedulingService
 from app.services.version_service import VersionService
 
 
@@ -129,7 +134,40 @@ class AppContainer:
         return DocumentService(db, tenant_ctx, chat_db=chat_db)
 
     def version_service(self, db: Session, chat_db: Session | None = None) -> VersionService:
-        return VersionService(db, chat_db=chat_db)
+        document_repository = DocumentRepository(db)
+        version_repository = VersionRepository(db)
+        notification_service = NotificationService(db, chat_db=chat_db)
+        event_dispatcher = build_outbox_event_dispatcher(db)
+        service = VersionService(
+            db,
+            chat_db=chat_db,
+            event_dispatcher=event_dispatcher,
+            document_repository=document_repository,
+            version_repository=version_repository,
+            notification_service=notification_service,
+        )
+        service.publication_service = VersionPublicationService(
+            db,
+            version_repository=version_repository,
+            notification_service=notification_service,
+            event_dispatcher=event_dispatcher,
+            get_document_for_user=service._get_document_for_user,
+            latest_review_for_version=service._latest_review_for_version,
+            actor_display_name=service._actor_display_name,
+            notify_version_watchers=service._notify_version_watchers,
+            schedule_pdf_export_generation=service._schedule_pdf_export_generation,
+            run_publish_audience_validation_gate=service._run_publish_audience_validation_gate,
+            is_company_audience_enforcement_enabled=service._is_company_audience_enforcement_enabled,
+            serialize_version=service._serialize_version,
+        )
+        service.scheduling_service = VersionSchedulingService(
+            db,
+            version_repository=version_repository,
+            event_dispatcher=event_dispatcher,
+            get_document_for_user=service._get_document_for_user,
+            latest_review_for_version=service._latest_review_for_version,
+        )
+        return service
 
     def support_ticket_service(self, db: Session) -> SupportTicketService:
         return SupportTicketService(db)

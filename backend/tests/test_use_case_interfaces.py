@@ -1,5 +1,7 @@
 """Tests for explicit application use-case service interfaces."""
 
+from datetime import datetime, timedelta
+
 import pytest
 
 from app.application.interfaces.dependencies import (
@@ -39,6 +41,51 @@ def test_version_service_publish_use_case_alias_delegates(db, test_user, monkeyp
     assert result == expected
     assert calls["document_id"] == 12
     assert calls["version_id"] == 34
+    assert calls["current_user"] == test_user
+
+
+def test_version_service_publish_delegates_to_publication_service(db, test_user, monkeypatch):
+    service = VersionService(db)
+    expected = {"published": True}
+    calls: dict[str, object] = {}
+
+    def fake_publish(document_id: int, version_id: int, current_user):
+        calls["document_id"] = document_id
+        calls["version_id"] = version_id
+        calls["current_user"] = current_user
+        return expected
+
+    monkeypatch.setattr(service.publication_service, "publish_version", fake_publish)
+
+    result = service.publish_version(77, 88, test_user)
+
+    assert result == expected
+    assert calls["document_id"] == 77
+    assert calls["version_id"] == 88
+    assert calls["current_user"] == test_user
+
+
+def test_version_service_schedule_delegates_to_scheduling_service(db, test_user, monkeypatch):
+    service = VersionService(db)
+    expected = {"scheduled": True}
+    calls: dict[str, object] = {}
+    scheduled_at = datetime.utcnow() + timedelta(hours=1)
+
+    def fake_schedule(document_id: int, version_id: int, when: datetime, current_user):
+        calls["document_id"] = document_id
+        calls["version_id"] = version_id
+        calls["scheduled_at"] = when
+        calls["current_user"] = current_user
+        return expected
+
+    monkeypatch.setattr(service.scheduling_service, "schedule_publish", fake_schedule)
+
+    result = service.schedule_publish(55, 66, scheduled_at, test_user)
+
+    assert result == expected
+    assert calls["document_id"] == 55
+    assert calls["version_id"] == 66
+    assert calls["scheduled_at"] == scheduled_at
     assert calls["current_user"] == test_user
 
 
