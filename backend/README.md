@@ -46,9 +46,25 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 source venv/bin/activate       # macOS / Linux
 
-pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
+
+Dependency manifest contract:
+
+- `requirements.in`: runtime source dependencies
+- `requirements.txt`: generated runtime lockfile used by Docker/CI
+- `requirements-dev.in`: dev/audit source dependencies
+- `requirements-dev.txt`: generated dev lockfile for local development
+
+Regenerate the lockfiles with:
+
+```bash
+python -m piptools compile --resolver=backtracking --output-file requirements.txt requirements.in
+python -m piptools compile --resolver=backtracking --output-file requirements-dev.txt requirements-dev.in
+```
+
+Known pip-audit exceptions live in `pip-audit.ignore` and must only be used for
+advisories that currently have no published fix version.
 
 Run server:
 

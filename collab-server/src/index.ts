@@ -4,9 +4,11 @@
 
 import 'dotenv/config';
 
+import { createStructuredLogger } from './logger.js';
 import { CollabServerApp } from './server/index.js';
 
 const app = new CollabServerApp();
+const logger = createStructuredLogger('collab.bootstrap');
 
 async function bootstrap(): Promise<void> {
   app.printStartupBanner();
@@ -14,18 +16,18 @@ async function bootstrap(): Promise<void> {
 }
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
-  console.log(`[Server] Received ${signal}, shutting down...`);
+  logger.info('Received shutdown signal', { signal });
   try {
     await app.stop();
     process.exit(0);
   } catch (error) {
-    console.error('[Server] Shutdown failed:', error);
+    logger.error('Shutdown failed', { signal, error });
     process.exit(1);
   }
 }
 
 void bootstrap().catch((error) => {
-  console.error('[Server] Startup failed:', error);
+  logger.error('Startup failed', { error });
   process.exit(1);
 });
 

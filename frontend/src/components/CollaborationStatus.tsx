@@ -5,7 +5,7 @@
  * for real-time document editing.
  */
 
-import { CollaboratorInfo } from '@/lib/useCollaboration'
+import type { CollaboratorInfo } from '@/lib/collaboration/types'
 
 interface CollaborationStatusProps {
   isConnected: boolean

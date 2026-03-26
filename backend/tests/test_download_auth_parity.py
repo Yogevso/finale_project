@@ -8,8 +8,8 @@ Verifies:
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
 
+from app.errors import DomainError
 from app.models import DocumentVisibility
 
 # ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ class TestEnforceAttachmentAccessAnonymous:
         from app.services.attachment_service.common import AttachmentServiceCommonMixin
 
         doc = self._make_document(DocumentVisibility.INTERNAL)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(DomainError) as exc_info:
             AttachmentServiceCommonMixin._enforce_attachment_access(doc, current_user=None)
         assert exc_info.value.status_code == 403
 
@@ -44,7 +44,7 @@ class TestEnforceAttachmentAccessAnonymous:
         from app.services.attachment_service.common import AttachmentServiceCommonMixin
 
         doc = self._make_document(DocumentVisibility.COMPANY)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(DomainError) as exc_info:
             AttachmentServiceCommonMixin._enforce_attachment_access(doc, current_user=None)
         assert exc_info.value.status_code == 403
 

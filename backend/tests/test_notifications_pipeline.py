@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from app.notifications import (
     DocumentPublishedTemplate,
     EmailNotificationChannel,
+    InvitationTemplate,
     NotificationDispatcher,
     NotificationMessage,
 )
@@ -74,6 +75,22 @@ def test_document_published_template_renders_expected_message():
     assert message.subject == "Document Published: Release Notes"
     assert "DOC-100" in message.html_content
     assert "http://localhost/docs/100" in message.text_content
+
+
+def test_invitation_template_sanitizes_html_fields():
+    template = InvitationTemplate(
+        accept_url="http://localhost/invite?token=test",
+        inviter_name='<b>Alice</b>',
+        message='<script>alert("x")</script><b>Hello</b> team',
+    )
+
+    message = template.render(to_email="invitee@example.com")
+
+    assert "script" not in message.html_content.lower()
+    assert "&lt;b&gt;" not in message.html_content
+    assert "Alice has invited you" in message.html_content
+    assert "Hello team" in message.html_content
+    assert "Hello team" in message.text_content
 
 
 def test_email_notification_channel_delegates_to_email_port():

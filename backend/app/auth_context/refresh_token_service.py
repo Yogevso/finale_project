@@ -55,6 +55,7 @@ class RefreshTokenService:
         user_id: int,
         *,
         session_identifier: str | None = None,
+        commit: bool = True,
     ) -> tuple[str, datetime]:
         refresh_token, expires_at = self.build_refresh_token(
             refresh_token_expire_days=self.refresh_token_expire_days,
@@ -69,7 +70,8 @@ class RefreshTokenService:
             expires_at=expires_at,
         )
         self.db.add(refresh_record)
-        self.db.commit()
+        if commit:
+            self.db.commit()
         return refresh_token, expires_at
 
     def find_valid_record(self, refresh_token: str) -> PasswordReset | None:

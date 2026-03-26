@@ -11,10 +11,11 @@ import {
   AlertTriangle,
   GitBranch
 } from 'lucide-react'
-import type { ReviewRequest, Version } from '@/types'
+import type { PreApprovePolicy, ReviewRequest, Version } from '@/types'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import { useFocusTrap } from '@/hooks/useAccessibility'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 
 interface ReviewDialogProps {
   review: ReviewRequest
@@ -36,6 +37,9 @@ export default function ReviewDialog({
   const [showConfirm, setShowConfirm] = useState(false)
   const [version, setVersion] = useState<Version | null>(null)
   const [loadingVersion, setLoadingVersion] = useState(false)
+  const [preApprovePolicy, setPreApprovePolicy] = useState<PreApprovePolicy | null>(null)
+  const [loadingPolicy, setLoadingPolicy] = useState(false)
+  const [policyError, setPolicyError] = useState<string | null>(null)
   const titleId = useId()
   const commentsErrorId = useId()
   const commentsRef = useRef<HTMLTextAreaElement>(null)
@@ -49,10 +53,57 @@ export default function ReviewDialog({
       setLoadingVersion(true)
       api.getVersion(review.document_id, review.version_id)
         .then(setVersion)
-        .catch(console.error)
+        .catch((error) => {
+          reportRuntimeError({
+            scope: 'review.dialog',
+            message: 'Failed to load review version details',
+            error,
+          })
+        })
         .finally(() => setLoadingVersion(false))
     }
   }, [review.version_id, review.document_id])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    setLoadingPolicy(true)
+    setPolicyError(null)
+    api.getPreApprovePolicy(review.id)
+      .then((policy) => {
+        if (!isCancelled) {
+          setPreApprovePolicy(policy)
+        }
+      })
+      .catch((error) => {
+        reportRuntimeError({
+          scope: 'review.dialog',
+          message: 'Failed to load pre-approve policy',
+          error,
+        })
+        if (!isCancelled) {
+          setPreApprovePolicy(null)
+          setPolicyError('Approval checks could not be loaded. Approval is temporarily disabled.')
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setLoadingPolicy(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [review.id])
+
+  useEffect(() => {
+    setAction(null)
+    setShowConfirm(false)
+    setComments('')
+  }, [review.id])
+
+  const canApprove = !loadingPolicy && !policyError && preApprovePolicy?.can_approve === true
 
   const handleAction = (selectedAction: 'approve' | 'reject') => {
     setAction(selectedAction)
@@ -184,6 +235,62 @@ export default function ReviewDialog({
             </div>
           )}
 
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="mt-0.5 h-4 w-4 text-sky-600" />
+              <div className="flex-1 space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Approval Policy
+                  </p>
+                  {loadingPolicy ? (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-sky-600"></div>
+                      Loading approval checks...
+                    </div>
+                  ) : policyError ? (
+                    <p className="mt-2 text-sm text-rose-700">{policyError}</p>
+                  ) : (
+                    <>
+                      {preApprovePolicy?.audience_summary && (
+                        <p className="mt-2 text-sm text-slate-700">{preApprovePolicy.audience_summary}</p>
+                      )}
+                      <ul className="mt-3 space-y-2 text-sm">
+                        {preApprovePolicy?.checks.map((check) => (
+                          <li key={check.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                            <div className="flex items-start gap-2">
+                              {check.passed ? (
+                                <CheckCircle className="mt-0.5 h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <XCircle className="mt-0.5 h-4 w-4 text-rose-600" />
+                              )}
+                              <div>
+                                <p className="font-medium text-slate-800">{check.label}</p>
+                                {check.message && (
+                                  <p className="mt-1 text-slate-600">{check.message}</p>
+                                )}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      {preApprovePolicy?.warnings.length ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                          <p className="font-medium">Warnings</p>
+                          <ul className="mt-2 space-y-1">
+                            {preApprovePolicy.warnings.map((warning, index) => (
+                              <li key={`${warning}-${index}`}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* View Document Link */}
           <div className="text-center">
             <Link
@@ -256,7 +363,9 @@ export default function ReviewDialog({
                     }`}
                   >
                     {action === 'approve'
-                      ? 'This will mark the document as approved (not published yet) and notify the submitter.'
+                      ? canApprove
+                        ? 'This will mark the document as approved (not published yet) and notify the submitter.'
+                        : 'Approval is blocked until every policy check passes.'
                       : 'This will return the document to draft status and notify the submitter.'}
                   </p>
                 </div>
@@ -291,7 +400,7 @@ export default function ReviewDialog({
                 <button
                   type="button"
                   onClick={() => handleAction('approve')}
-                  disabled={isLoading}
+                  disabled={isLoading || !canApprove}
                   className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-full hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -311,7 +420,11 @@ export default function ReviewDialog({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={isLoading || (action === 'reject' && !comments.trim())}
+                  disabled={
+                    isLoading ||
+                    (action === 'reject' && !comments.trim()) ||
+                    (action === 'approve' && !canApprove)
+                  }
                   className={`flex items-center gap-2 px-4 py-2 rounded-full disabled:opacity-50 disabled:cursor-not-allowed font-medium transition ${
                     action === 'approve'
                       ? 'bg-emerald-600 text-white hover:bg-emerald-700'

@@ -11,8 +11,11 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
+from defusedxml.ElementTree import ParseError as _XMLParseError
+from xml.etree.ElementTree import Element as _Element  # type-only; no parsing
 
+from app.conversion.archive_safety import UnsafeArchiveError, validate_ooxml_zip_archive
 from app.conversion.html_generator import ir_to_html
 from app.conversion.ir import IRNode
 
@@ -203,13 +206,21 @@ class PptxExtractor:
 
         try:
             with zipfile.ZipFile(BytesIO(content)) as archive:
+                validate_ooxml_zip_archive(
+                    archive,
+                    archive_label="PPTX",
+                    compressed_size_bytes=len(content),
+                )
                 if PPT_PRESENTATION_PATH not in archive.namelist():
                     raise ValueError("PPTX is missing ppt/presentation.xml")
                 parsed_presentation = self._parse_archive(archive)
         except zipfile.BadZipFile as exc:
             logger.exception("PPTX extraction failed for %s: invalid ZIP archive", source_name)
             return self._failed_result("Invalid PPTX archive", exc)
-        except Exception as exc:
+        except UnsafeArchiveError as exc:
+            logger.warning("PPTX extraction rejected for %s: %s", source_name, exc)
+            return self._failed_result("Unsafe PPTX archive", exc)
+        except Exception as exc:  # policy: FAIL_FAST — extraction returns a stable failure result for unexpected parse errors
             logger.exception("PPTX extraction failed for %s", source_name)
             return self._failed_result("PPTX extraction failed", exc)
 
@@ -398,7 +409,7 @@ class PptxExtractor:
             notes_paragraphs=notes_paragraphs,
         )
 
-    def _parse_shape_paragraphs(self, shape_element: ET.Element) -> list[SlideParagraph]:
+    def _parse_shape_paragraphs(self, shape_element: _Element) -> list[SlideParagraph]:
         text_body = shape_element.find("p:txBody", XML_NAMESPACES)
         if text_body is None:
             return []
@@ -410,7 +421,7 @@ class PptxExtractor:
                 paragraphs.append(paragraph)
         return paragraphs
 
-    def _parse_paragraph(self, paragraph_element: ET.Element) -> SlideParagraph:
+    def _parse_paragraph(self, paragraph_element: _Element) -> SlideParagraph:
         paragraph_properties = paragraph_element.find("a:pPr", XML_NAMESPACES)
         list_type: str | None = None
         level = 0
@@ -447,7 +458,7 @@ class PptxExtractor:
 
     def _parse_image_block(
         self,
-        node: ET.Element,
+        node: _Element,
         *,
         archive: zipfile.ZipFile,
         relationships: PartRelationships,
@@ -827,7 +838,7 @@ class PptxExtractor:
         archive_path: str,
         *,
         required: bool,
-    ) -> ET.Element | None:
+    ) -> _Element | None:
         try:
             xml_bytes = archive.read(archive_path)
         except KeyError:
@@ -836,21 +847,21 @@ class PptxExtractor:
             return None
 
         try:
-            return ET.fromstring(xml_bytes)
-        except ET.ParseError:
+            return _safe_xml_fromstring(xml_bytes)
+        except _XMLParseError:
             if required:
                 raise ValueError(f"PPTX XML at {archive_path} could not be parsed") from None
             logger.warning("Skipping unreadable optional PPTX XML: %s", archive_path)
             return None
 
-    def _find_text(self, root: ET.Element, path: str) -> str | None:
+    def _find_text(self, root: _Element, path: str) -> str | None:
         element = root.find(path, XML_NAMESPACES)
         if element is None or element.text is None:
             return None
         text = element.text.strip()
         return text or None
 
-    def _run_flag_is_enabled(self, run_properties: ET.Element | None, attribute_name: str) -> bool:
+    def _run_flag_is_enabled(self, run_properties: _Element | None, attribute_name: str) -> bool:
         if run_properties is None:
             return False
         value = (run_properties.get(attribute_name) or "").strip().lower()
@@ -873,13 +884,13 @@ class PptxExtractor:
     def _display_title(self, slide: ParsedSlide) -> str:
         return slide.summary.title or f"Slide {slide.summary.number}"
 
-    def _shape_placeholder_type(self, shape_element: ET.Element) -> str | None:
+    def _shape_placeholder_type(self, shape_element: _Element) -> str | None:
         placeholder = shape_element.find("p:nvSpPr/p:nvPr/p:ph", XML_NAMESPACES)
         if placeholder is None:
             return None
         return (placeholder.get("type") or "body").strip() or "body"
 
-    def _image_alt_text(self, node: ET.Element, *, slide_number: int, image_number: int) -> str:
+    def _image_alt_text(self, node: _Element, *, slide_number: int, image_number: int) -> str:
         for candidate in node.iter():
             if self._local_name(candidate.tag) != "cNvPr":
                 continue
@@ -896,7 +907,7 @@ class PptxExtractor:
         source_name = posixpath.basename(source_part)
         return posixpath.join(source_dir, "_rels", f"{source_name}.rels")
 
-    def _iter_content_nodes(self, container: ET.Element):
+    def _iter_content_nodes(self, container: _Element):
         for child in container:
             local_name = self._local_name(child.tag)
             if local_name == "grpSp":

@@ -50,9 +50,16 @@ finally:
     db.close()
 " 2>/dev/null || echo "yes")
 
-if [ "$NEED_SEED" = "yes" ]; then
+ALLOW_DEMO_SEED=$(python -c "
+from seed_data import should_seed_demo_data
+print('yes' if should_seed_demo_data() else 'no')
+" 2>/dev/null || echo "no")
+
+if [ "$NEED_SEED" = "yes" ] && [ "$ALLOW_DEMO_SEED" = "yes" ]; then
     echo "Running seed data script..."
     python seed_data.py || echo "Seed data script failed (non-fatal), continuing..."
+elif [ "$NEED_SEED" = "yes" ]; then
+    echo "Skipping demo seed data. Set SEED_DEMO_DATA=true for an explicit one-time opt-in."
 else
     echo "Seed data already exists, skipping."
 fi

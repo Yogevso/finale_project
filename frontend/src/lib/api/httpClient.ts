@@ -1,5 +1,6 @@
-import axios, { AxiosError, AxiosInstance } from 'axios'
+import axios, { AxiosError, AxiosHeaders, AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { TokenResponse } from '@/types'
+import { withTraceHeader } from '@/lib/requestTrace'
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -9,14 +10,23 @@ type RefreshSubscriber = {
 }
 
 type MutableRequestConfig = {
-  headers?: unknown
+  headers?: InternalAxiosRequestConfig['headers']
   url?: string
 }
 
 export type Constructor<T = object> = new (...args: any[]) => T
 
+export interface ApiClientBase {
+  client: AxiosInstance
+  getToken(): string | null
+  setToken(token: string, refresh?: string | null): void
+  clearTokens(): void
+  hasToken(): boolean
+  tryRestoreSession(): Promise<boolean>
+}
+
 export class ApiHttpClient {
-  protected client: AxiosInstance
+  client: AxiosInstance
   private token: string | null = null
   private refreshToken: string | null = null
   private isRefreshing = false
@@ -48,8 +58,10 @@ export class ApiHttpClient {
 
     // Add auth header to requests
     this.client.interceptors.request.use((config) => {
+      const headers = this.withTrackedHeaders(config.headers)
+      config.headers = headers
       if (this.token) {
-        config.headers.Authorization = `Bearer ${this.token}`
+        headers.set('Authorization', `Bearer ${this.token}`)
       }
       return config
     })
@@ -117,12 +129,19 @@ export class ApiHttpClient {
     return null
   }
 
+  private withTrackedHeaders(headers?: InternalAxiosRequestConfig['headers']): AxiosHeaders {
+    const resolved = AxiosHeaders.from(headers ?? {})
+    const traced = withTraceHeader(resolved.toJSON() as Record<string, string>)
+    Object.entries(traced).forEach(([name, value]) => {
+      resolved.set(name, value)
+    })
+    return resolved
+  }
+
   private setAuthHeader(request: MutableRequestConfig, token: string) {
-    if (!request.headers || typeof request.headers !== 'object') {
-      request.headers = {}
-    }
-    const headers = request.headers as Record<string, string>
-    headers.Authorization = `Bearer ${token}`
+    const headers = this.withTrackedHeaders(request.headers)
+    request.headers = headers
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   private subscribeTokenRefresh(

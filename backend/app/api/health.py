@@ -11,6 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.infrastructure.degradation import get_degradation_metrics
+from app.observability.search_runtime import get_search_runtime_metrics
+from app.search_backend import database_dialect_name, resolve_search_backend_mode
+from app.services.assistant_capacity_service import get_assistant_capacity_service
+from app.services.document_audience_service import get_company_lookup_cache_metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,7 +31,7 @@ def _check_database(db: Session) -> dict[str, Any]:
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:
+    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -58,7 +63,7 @@ def _check_storage() -> dict[str, Any]:
             "bucket": settings.S3_BUCKET,
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:
+    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Storage health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -139,6 +144,19 @@ async def detailed_health_check(db: Session = Depends(get_db)):
     db_status = _check_database(db)
     storage_status = _check_storage()
     system_info = _get_system_info()
+    cache_metrics = get_company_lookup_cache_metrics()
+    degradation_metrics = get_degradation_metrics()
+    assistant_capacity = get_assistant_capacity_service().snapshot()
+    search_dialect = database_dialect_name(db)
+    search_effective_mode = resolve_search_backend_mode(
+        settings.SEARCH_BACKEND_MODE,
+        dialect_name=search_dialect,
+    )
+    search_runtime = get_search_runtime_metrics(
+        configured_mode=settings.SEARCH_BACKEND_MODE,
+        effective_mode=search_effective_mode.value,
+        dialect=search_dialect,
+    )
 
     all_healthy = all(s.get("status") == "healthy" for s in [db_status, storage_status])
 
@@ -161,5 +179,96 @@ async def detailed_health_check(db: Session = Depends(get_db)):
             "s3_enabled": settings.S3_ENABLED,
             "debug_mode": settings.DEBUG,
             "log_level": settings.LOG_LEVEL,
+            "search_backend_mode": settings.SEARCH_BACKEND_MODE,
+            "assistant_chat_max_concurrent": settings.ASSISTANT_CHAT_MAX_CONCURRENT,
+            "assistant_chat_max_queue": settings.ASSISTANT_CHAT_MAX_QUEUE,
+            "assistant_embedding_max_concurrent": settings.ASSISTANT_EMBEDDING_MAX_CONCURRENT,
+            "assistant_embedding_max_queue": settings.ASSISTANT_EMBEDDING_MAX_QUEUE,
+        },
+        "caches": {
+            "document_company_lookup": {
+                "entry_count": cache_metrics.entry_count,
+                "max_entries": cache_metrics.max_entries,
+                "ttl_seconds": cache_metrics.ttl_seconds,
+                "hits": cache_metrics.hits,
+                "misses": cache_metrics.misses,
+                "expired": cache_metrics.expired,
+                "writes": cache_metrics.writes,
+                "evictions": cache_metrics.evictions,
+                "clears": cache_metrics.clears,
+            }
+        },
+        "runtime": {
+            "assistant": {
+                "status": assistant_capacity.status,
+                "recorded_at": assistant_capacity.recorded_at,
+                "total_rejections": assistant_capacity.total_rejections,
+                "total_timeouts": assistant_capacity.total_timeouts,
+                "chat": {
+                    "status": assistant_capacity.chat.status,
+                    "active": assistant_capacity.chat.active,
+                    "queued": assistant_capacity.chat.queued,
+                    "max_concurrent": assistant_capacity.chat.max_concurrent,
+                    "max_queue": assistant_capacity.chat.max_queue,
+                    "queue_timeout_seconds": assistant_capacity.chat.queue_timeout_seconds,
+                    "total_admitted": assistant_capacity.chat.total_admitted,
+                    "total_completed": assistant_capacity.chat.total_completed,
+                    "total_rejected": assistant_capacity.chat.total_rejected,
+                    "total_timed_out": assistant_capacity.chat.total_timed_out,
+                    "p50_duration_ms": assistant_capacity.chat.p50_duration_ms,
+                    "p95_duration_ms": assistant_capacity.chat.p95_duration_ms,
+                    "p50_queue_wait_ms": assistant_capacity.chat.p50_queue_wait_ms,
+                    "p95_queue_wait_ms": assistant_capacity.chat.p95_queue_wait_ms,
+                    "last_rejected_at": assistant_capacity.chat.last_rejected_at,
+                    "last_rejection_reason": assistant_capacity.chat.last_rejection_reason,
+                },
+                "embedding": {
+                    "status": assistant_capacity.embedding.status,
+                    "active": assistant_capacity.embedding.active,
+                    "queued": assistant_capacity.embedding.queued,
+                    "max_concurrent": assistant_capacity.embedding.max_concurrent,
+                    "max_queue": assistant_capacity.embedding.max_queue,
+                    "queue_timeout_seconds": assistant_capacity.embedding.queue_timeout_seconds,
+                    "total_admitted": assistant_capacity.embedding.total_admitted,
+                    "total_completed": assistant_capacity.embedding.total_completed,
+                    "total_rejected": assistant_capacity.embedding.total_rejected,
+                    "total_timed_out": assistant_capacity.embedding.total_timed_out,
+                    "p50_duration_ms": assistant_capacity.embedding.p50_duration_ms,
+                    "p95_duration_ms": assistant_capacity.embedding.p95_duration_ms,
+                    "p50_queue_wait_ms": assistant_capacity.embedding.p50_queue_wait_ms,
+                    "p95_queue_wait_ms": assistant_capacity.embedding.p95_queue_wait_ms,
+                    "last_rejected_at": assistant_capacity.embedding.last_rejected_at,
+                    "last_rejection_reason": assistant_capacity.embedding.last_rejection_reason,
+                },
+            },
+            "search": {
+                "configured_mode": search_runtime.configured_mode,
+                "effective_mode": search_runtime.effective_mode,
+                "dialect": search_runtime.dialect,
+                "total_search_requests": search_runtime.total_search_requests,
+                "executions_by_mode": dict(search_runtime.executions_by_mode),
+                "degraded_fallbacks": search_runtime.degraded_fallbacks,
+                "last_degraded_at": search_runtime.last_degraded_at,
+                "last_requested_mode": search_runtime.last_requested_mode,
+                "last_fallback_mode": search_runtime.last_fallback_mode,
+                "last_error_type": search_runtime.last_error_type,
+                "last_error_message": search_runtime.last_error_message,
+            },
+            "degradation": {
+                "total_events": degradation_metrics.total_events,
+                "by_policy": dict(degradation_metrics.by_policy),
+                "by_key": dict(degradation_metrics.by_key),
+                "last_recorded_at": degradation_metrics.last_recorded_at,
+                "components": {
+                    component: {
+                        "total_events": metrics.total_events,
+                        "by_policy": dict(metrics.by_policy),
+                        "last_recorded_at": metrics.last_recorded_at,
+                        "last_error_type": metrics.last_error_type,
+                        "last_error_message": metrics.last_error_message,
+                    }
+                    for component, metrics in degradation_metrics.components.items()
+                },
+            }
         },
     }

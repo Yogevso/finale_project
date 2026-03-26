@@ -64,7 +64,7 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
     result = PdfConversionResult()
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as exc:
+    except Exception as exc:  # policy: FAIL_FAST — invalid PDF input returns a stable conversion error
         result.error = f"Failed to open PDF: {exc}"
         return result
 
@@ -130,7 +130,7 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
                             image_ext=base_image.get("ext", "png"),
                         )
                     )
-            except Exception as exc:
+            except Exception as exc:  # policy: LOSSY — image extraction failure should not abort page conversion
                 result.warnings.append(f"Page {page_idx + 1}: image extraction failed: {exc}")
 
         blocks_by_page.append(page_blocks)
@@ -183,7 +183,7 @@ def _add_image_block(
         para = docx_doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         para.add_run().add_picture(stream, width=Inches(_MAX_IMG_WIDTH_IN))
-    except Exception as exc:
+    except Exception as exc:  # policy: LOSSY — image embedding failure should not abort page conversion
         warnings.append(f"Page {page_idx + 1}: failed to embed image: {exc}")
 
 
@@ -196,7 +196,7 @@ def _is_ocr_enabled() -> bool:
     try:
         from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
         return is_backend_feature_enabled(BackendFeatureFlag.PDF_OCR)
-    except Exception:
+    except Exception:  # policy: DEGRADED — OCR feature-flag lookup failure disables OCR safely
         return False
 
 
@@ -221,6 +221,6 @@ def _ocr_page(page, page_idx: int, warnings: list[str]) -> str:
     except ImportError:
         warnings.append(f"Page {page_idx + 1}: pytesseract not installed, OCR skipped")
         return ""
-    except Exception as exc:
+    except Exception as exc:  # policy: LOSSY — OCR failure should not abort the core PDF conversion
         warnings.append(f"Page {page_idx + 1}: OCR failed: {exc}")
         return ""

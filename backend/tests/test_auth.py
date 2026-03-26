@@ -1,10 +1,20 @@
 """Authentication Tests"""
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlparse
 
+from app.auth_context.invitation_tokens import hash_invitation_token
 from app.config import settings
-from app.models import SecurityEvent
+from app.models import (
+    ActionType,
+    AuditLog,
+    Invitation,
+    InvitationStatus,
+    SecurityEvent,
+    UserRole,
+    UserSession,
+)
 from app.services.auth_rate_limit_service import AuthRateLimitService
 
 
@@ -142,6 +152,21 @@ def test_update_my_profile_timezone_and_locale(client, auth_headers, db, test_us
     assert test_user.locale == "he"
 
 
+def test_update_my_profile_rejects_inactive_company(client, auth_headers, db, default_tenant):
+    """Users cannot patch /users/me after their tenant is suspended."""
+    default_tenant.is_active = False
+    db.commit()
+
+    response = client.patch(
+        "/api/v1/users/me",
+        headers=auth_headers,
+        json={"full_name": "Blocked User"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Company is inactive"
+
+
 def test_login_returns_refresh_token(client, test_user):
     """Test that login returns a refresh token"""
     response = client.post(
@@ -172,6 +197,31 @@ def test_refresh_token(client, test_user):
     assert data["token_type"] == "bearer"
 
 
+def test_refresh_token_rejects_inactive_session_and_revokes_it(client, test_user, db):
+    """Refresh should not rotate tokens for sessions that already exceeded inactivity."""
+    login_response = client.post(
+        "/api/v1/auth/login", json={"username": "testuser", "password": "testpass123"}
+    )
+    refresh_token = login_response.json()["refresh_token"]
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == test_user.id, UserSession.revoked_at.is_(None))
+        .first()
+    )
+    assert session is not None
+
+    session.last_active_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        days=settings.SESSION_INACTIVITY_DAYS + 1
+    )
+    db.commit()
+
+    response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+
+    assert response.status_code == 401
+    db.refresh(session)
+    assert session.revoked_at is not None
+
+
 def test_refresh_token_invalid(client):
     """Test refreshing with invalid token"""
     response = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid_token"})
@@ -197,6 +247,51 @@ def test_logout(client, auth_headers, test_user):
     # Try to use refresh token - should fail
     response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert response.status_code == 401
+
+
+def test_logout_revokes_only_current_session(client, test_user):
+    """Standard logout should not revoke unrelated active sessions."""
+    first_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers={"user-agent": "Browser/one"},
+    )
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "testuser", "password": "testpass123"},
+        headers={"user-agent": "Browser/two"},
+    )
+
+    assert first_login.status_code == 200
+    assert second_login.status_code == 200
+
+    first_access_token = first_login.json()["access_token"]
+    second_access_token = second_login.json()["access_token"]
+    second_refresh_token = second_login.json()["refresh_token"]
+
+    logout_response = client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {second_access_token}"},
+    )
+    assert logout_response.status_code == 200
+
+    current_session_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {second_access_token}"},
+    )
+    assert current_session_response.status_code == 401
+
+    other_session_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {first_access_token}"},
+    )
+    assert other_session_response.status_code == 200
+
+    refresh_response = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": second_refresh_token},
+    )
+    assert refresh_response.status_code == 401
 
 
 def test_login_rate_limited_by_ip_and_username(client, test_user, monkeypatch):
@@ -290,6 +385,320 @@ def test_forgot_password_lock_expires_cleanly(client, monkeypatch):
         json={"identifier": "test@example.com"},
     )
     assert first_after_lock.status_code == 200
+
+
+def test_forgot_password_email_uses_reset_password_route(client, test_user, monkeypatch):
+    """Forgot-password emails must deep-link to the reset-password page."""
+    captured_reset_url: dict[str, str] = {}
+
+    def _capture_password_reset_email(
+        _to_email: str,
+        reset_url: str,
+        _expires_minutes: int,
+    ) -> None:
+        captured_reset_url["url"] = reset_url
+
+    monkeypatch.setattr(settings, "BASE_URL", "http://frontend.test")
+    monkeypatch.setattr(
+        "app.api.management.auth._send_password_reset_email_task",
+        _capture_password_reset_email,
+    )
+
+    response = client.post(
+        "/api/v1/auth/forgot-password",
+        json={"identifier": test_user.email},
+    )
+
+    assert response.status_code == 200
+    assert captured_reset_url["url"].startswith("http://frontend.test/reset-password?token=")
+    parsed = urlparse(captured_reset_url["url"])
+    assert parsed.path == "/reset-password"
+    token = parse_qs(parsed.query)["token"][0]
+    assert token
+
+
+def test_reset_password_rate_limited(client, monkeypatch):
+    """Reset-password completion attempts should be rate-limited by client IP."""
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+    monkeypatch.setattr(AuthRateLimitService, "RESET_PASSWORD_MAX_ATTEMPTS", 3)
+    monkeypatch.setattr(AuthRateLimitService, "RESET_PASSWORD_WINDOW_SECONDS", 60)
+    monkeypatch.setattr(AuthRateLimitService, "RESET_PASSWORD_LOCK_SECONDS", 5)
+    AuthRateLimitService.reset()
+
+    headers = {"x-forwarded-for": "127.0.0.12"}
+    payload = {"token": "invalid-reset-token", "new_password": "ResetPass1!"}
+
+    for _ in range(AuthRateLimitService.RESET_PASSWORD_MAX_ATTEMPTS - 1):
+        response = client.post(
+            "/api/v1/auth/reset-password",
+            json=payload,
+            headers=headers,
+        )
+        assert response.status_code == 400
+
+    limited_response = client.post(
+        "/api/v1/auth/reset-password",
+        json=payload,
+        headers=headers,
+    )
+    assert limited_response.status_code == 429
+    assert limited_response.json()["error_code"] == "RATE_LIMITED"
+    assert int(limited_response.headers.get("Retry-After", "0")) >= 1
+
+
+def test_register_duplicate_email_and_username_share_generic_error(client, test_user):
+    """Public registration should not reveal whether email or username was duplicated."""
+    duplicate_username = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "another-register@example.com",
+            "username": test_user.username,
+            "full_name": "Duplicate Username",
+            "password": "Register1!",
+        },
+    )
+    duplicate_email = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": test_user.email,
+            "username": "another_register_user",
+            "full_name": "Duplicate Email",
+            "password": "Register1!",
+        },
+    )
+
+    assert duplicate_username.status_code == 400
+    assert duplicate_email.status_code == 400
+    assert duplicate_username.json()["detail"] == duplicate_email.json()["detail"]
+
+
+def test_admin_create_user_duplicate_email_and_username_share_generic_error(
+    client,
+    admin_headers,
+    test_user,
+):
+    """Admin user creation should not reveal which unique field collided."""
+    duplicate_email = client.post(
+        "/api/v1/users",
+        headers=admin_headers,
+        json={
+            "email": test_user.email,
+            "username": "brand_new_username",
+            "full_name": "Duplicate Email User",
+            "password": "Password1!",
+            "role": "viewer",
+        },
+    )
+    duplicate_username = client.post(
+        "/api/v1/users",
+        headers=admin_headers,
+        json={
+            "email": "brand-new-email@example.com",
+            "username": test_user.username,
+            "full_name": "Duplicate Username User",
+            "password": "Password1!",
+            "role": "viewer",
+        },
+    )
+
+    assert duplicate_email.status_code == 400
+    assert duplicate_username.status_code == 400
+    assert duplicate_email.json()["detail"] == duplicate_username.json()["detail"]
+
+
+def test_accept_invitation_uses_locked_lookup(
+    client,
+    db,
+    test_admin,
+    default_tenant,
+    monkeypatch,
+):
+    """Invitation acceptance must use the row-locking lookup path."""
+    invitation = Invitation(
+        email="invitee-locked@example.com",
+        token="locked-invitation-token",
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        invited_by=test_admin.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=1),
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    locked_lookup_calls: list[str] = []
+
+    def _locked_lookup(self, token: str):
+        locked_lookup_calls.append(token)
+        return self.db.query(Invitation).filter(Invitation.token == token).first()
+
+    def _unexpected_unlocked_lookup(self, _token: str):
+        raise AssertionError("accept_invitation should not use the unlocked invitation lookup")
+
+    monkeypatch.setattr(
+        "app.api.management.auth.InvitationRepository.get_by_token_for_update",
+        _locked_lookup,
+    )
+    monkeypatch.setattr(
+        "app.api.management.auth.InvitationRepository.get_by_token",
+        _unexpected_unlocked_lookup,
+    )
+
+    response = client.post(
+        "/api/v1/auth/invitation/accept",
+        json={
+            "token": invitation.token,
+            "username": "locked_invitee",
+            "full_name": "Locked Invitee",
+            "password": "Password1!",
+        },
+    )
+
+    assert response.status_code == 200
+    assert locked_lookup_calls == [invitation.token]
+
+    db.refresh(invitation)
+    assert invitation.status == InvitationStatus.ACCEPTED
+    assert invitation.created_user_id is not None
+
+
+def test_accept_invitation_supports_hashed_token_storage(
+    client,
+    db,
+    test_admin,
+    default_tenant,
+):
+    """Invitation acceptance should work when the DB stores only the token hash."""
+    raw_token = "hashed-accept-token"
+    invitation = Invitation(
+        email="invitee-hashed@example.com",
+        token=hash_invitation_token(raw_token),
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        invited_by=test_admin.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=1),
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    response = client.post(
+        "/api/v1/auth/invitation/accept",
+        json={
+            "token": raw_token,
+            "username": "hashed_invitee",
+            "full_name": "Hashed Invitee",
+            "password": "Password1!",
+        },
+    )
+
+    assert response.status_code == 200
+    db.refresh(invitation)
+    assert invitation.status == InvitationStatus.ACCEPTED
+    assert invitation.created_user_id is not None
+
+
+def test_accept_invitation_duplicate_email_and_username_share_generic_error(
+    client,
+    db,
+    test_admin,
+    default_tenant,
+    test_user,
+):
+    """Invitation acceptance should not disclose which account field collided."""
+    duplicate_email_invitation = Invitation(
+        email=test_user.email,
+        token=hash_invitation_token("duplicate-email-invite-token"),
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        invited_by=test_admin.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=1),
+    )
+    duplicate_username_invitation = Invitation(
+        email="different-email@example.com",
+        token=hash_invitation_token("duplicate-username-invite-token"),
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        invited_by=test_admin.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=1),
+    )
+    db.add(duplicate_email_invitation)
+    db.add(duplicate_username_invitation)
+    db.commit()
+
+    duplicate_email_response = client.post(
+        "/api/v1/auth/invitation/accept",
+        json={
+            "token": "duplicate-email-invite-token",
+            "username": "new_invitee_name",
+            "full_name": "Duplicate Email Invitee",
+            "password": "Password1!",
+        },
+    )
+    duplicate_username_response = client.post(
+        "/api/v1/auth/invitation/accept",
+        json={
+            "token": "duplicate-username-invite-token",
+            "username": test_user.username,
+            "full_name": "Duplicate Username Invitee",
+            "password": "Password1!",
+        },
+    )
+
+    assert duplicate_email_response.status_code == 400
+    assert duplicate_username_response.status_code == 400
+    assert duplicate_email_response.json()["detail"] == duplicate_username_response.json()["detail"]
+
+
+def test_accept_invitation_creates_audit_log(
+    client,
+    db,
+    test_admin,
+    default_tenant,
+):
+    """Invitation acceptance should create an immutable audit trail entry."""
+    invitation = Invitation(
+        email="invitee-audit@example.com",
+        token="audit-invitation-token",
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        invited_by=test_admin.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=1),
+    )
+    db.add(invitation)
+    db.commit()
+
+    response = client.post(
+        "/api/v1/auth/invitation/accept",
+        json={
+            "token": invitation.token,
+            "username": "audit_invitee",
+            "full_name": "Audit Invitee",
+            "password": "Password1!",
+        },
+    )
+
+    assert response.status_code == 200
+
+    audit_row = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == ActionType.CREATE)
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert audit_row is not None
+    details = json.loads(audit_row.details or "{}")
+    assert details["event"] == "invitation_accepted"
+    assert details["invitation_id"] == invitation.id
+    assert details["email"] == invitation.email
+    assert details["role"] == invitation.role.value
+    assert details["tenant_id"] == invitation.tenant_id
+    assert details["created_user_id"] == audit_row.user_id
 
 
 def test_email_verification_register_verify_allows_login(client, monkeypatch):
@@ -464,7 +873,7 @@ def test_login_anomaly_detection_records_security_event(client, test_user, db, m
 
 
 # ---------------------------------------------------------------------------
-# H-23 / H-03: Collab token endpoint requires write permission
+# H-23 / M-16: Collab token endpoint supports read-only viewers
 # ---------------------------------------------------------------------------
 
 
@@ -483,13 +892,15 @@ def test_collab_token_requires_write_permission(client, admin_headers, sample_do
 
 
 def test_collab_token_rejected_for_viewer(client, viewer_auth_headers, sample_document):
-    """Viewers must be refused a collab token (no write permission)."""
+    """Viewers receive a read-only collab token."""
     response = client.post(
         "/api/v1/auth/collab-token",
         headers=viewer_auth_headers,
         json={"document_id": sample_document["id"]},
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
+    data = response.json()
+    assert data["permissions"] == ["read"]
 
 
 def test_collab_token_requires_auth(client, sample_document):

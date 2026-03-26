@@ -19,7 +19,7 @@ describe('MessageInput', () => {
     render(<MessageInput onSend={vi.fn()} onTyping={vi.fn()} />)
 
     expect(screen.getByPlaceholderText(/type a message/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '' })).toBeTruthy() // send button
+    expect(screen.getByRole('button', { name: /send message/i })).toBeInTheDocument()
   })
 
   it('calls onSend with text and clears input on Enter', () => {

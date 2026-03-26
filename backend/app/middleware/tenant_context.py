@@ -87,22 +87,24 @@ def inject_tenant_context(user) -> None:
 def require_tenant_match(document_tenant_id: Optional[int]) -> bool:
     """Verify the document's tenant matches the current request context.
     
-    Returns True if:
-    - Current user has no tenant (system admin or unscoped)
-    - Document has no tenant (global document)
-    - Both tenant IDs match
+    Returns True ONLY if both tenant IDs are non-None and equal, or if
+    the document has no tenant (global resource).
     
-    Returns False if there's a tenant mismatch (cross-tenant access attempt).
+    Returns False if:
+    - Current user has no tenant context (system admin / unscoped) — callers
+      must handle system-admin exemption explicitly.
+    - There is a tenant mismatch (cross-tenant access attempt).
     
-    Usage in services:
-        if not require_tenant_match(document.tenant_id):
+    Usage in services::
+    
+        if not (is_system_admin_context() or require_tenant_match(doc.tenant_id)):
             raise HTTPException(status_code=403, detail="Cross-tenant access denied")
     """
     current_tenant = get_current_tenant_id()
     
-    # System admins and unscoped users can access any tenant
+    # M-18: None must NOT silently bypass — force callers to handle explicitly
     if current_tenant is None:
-        return True
+        return False
     
     # Global documents (no tenant) are accessible to all
     if document_tenant_id is None:
@@ -110,3 +112,12 @@ def require_tenant_match(document_tenant_id: Optional[int]) -> bool:
     
     # Must be same tenant
     return current_tenant == document_tenant_id
+
+
+def is_system_admin_context() -> bool:
+    """Return True when the current request has no tenant scope.
+    
+    Callers that want to exempt system admins from tenant isolation
+    should check this explicitly before ``require_tenant_match``.
+    """
+    return get_current_tenant_id() is None

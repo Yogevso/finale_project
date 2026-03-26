@@ -3,13 +3,10 @@
 import json
 import logging
 import re
-import threading
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from time import monotonic
 from typing import List, Optional
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import case, func, or_, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +16,6 @@ from app.dependencies.tenant import TenantContext
 from app.domain.aggregates import DocumentAggregate
 from app.domain.events import CompanyAssignmentsUpdated, InProcessDomainEventDispatcher
 from app.domain.factories import DocumentFactory
-from app.domain.specifications import DocumentVisibilityCompanyAssignmentSpec
 from app.domain.value_objects import DocumentNumber
 from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
 from app.errors.audience_errors import AudienceErrorCode
@@ -27,21 +23,22 @@ from app.models import (
     ActionType,
     AudienceEventType,
     AuditLog,
+    CollaborationSession,
     Document,
     DocumentNumberSequence,
     DocumentStatus,
     DocumentVisibility,
     DocumentWatcher,
     NotificationType,
-    Platform,
     Tenant,
-    Topic,
     User,
     UserRole,
     Version,
 )
 from app.application.policies.access_policies import DocumentAccessPolicy
 from app.schemas import DocumentCreate, DocumentUpdate
+from app.services.document_audience_service import DocumentAudienceService, _company_cache
+from app.services.document_metadata_service import DocumentMetadataService
 from app.services.base_service import TenantAwareService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
@@ -49,67 +46,13 @@ from app.services.uow import UnitOfWork
 from app.services.audit_helper import write_audit_log
 from app.utils.audience_audit_signing import sign_payload
 from app.utils.concurrency import ensure_if_match_matches
-from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to_slug
 
 logger = logging.getLogger(__name__)
-COMPANY_LOOKUP_CACHE_TTL_SECONDS = 30
-COMPANY_LOOKUP_CACHE_MAX_ENTRIES = 1024
-
-
-@dataclass(slots=True, frozen=True)
-class CompanyLookupSnapshot:
-    """Minimal cached company lookup data used by assignment validation."""
-
-    id: int
-    name: str
-    slug: str
-    is_active: bool
-
-
-@dataclass(slots=True)
-class _CompanyLookupCacheEntry:
-    snapshot: CompanyLookupSnapshot
-    expires_at: float
-
-
-# Module-level TTL cache shared across requests (thread-safe).
-_company_cache_lock = threading.Lock()
-_company_cache: dict[tuple[int | None, int], _CompanyLookupCacheEntry] = {}
-
-
-def _cache_get(company_id: int, tenant_id: int | None = None) -> CompanyLookupSnapshot | None:
-    key = (tenant_id, company_id)
-    now = monotonic()
-    with _company_cache_lock:
-        entry = _company_cache.get(key)
-        if entry is None:
-            return None
-        if entry.expires_at <= now:
-            _company_cache.pop(key, None)
-            return None
-        return entry.snapshot
-
-
-def _cache_set(snapshot: CompanyLookupSnapshot, tenant_id: int | None = None) -> None:
-    key = (tenant_id, snapshot.id)
-    now = monotonic()
-    with _company_cache_lock:
-        _company_cache[key] = _CompanyLookupCacheEntry(
-            snapshot=snapshot,
-            expires_at=now + COMPANY_LOOKUP_CACHE_TTL_SECONDS,
-        )
-        # Evict oldest entries when over capacity
-        if len(_company_cache) > COMPANY_LOOKUP_CACHE_MAX_ENTRIES:
-            excess = len(_company_cache) - COMPANY_LOOKUP_CACHE_MAX_ENTRIES
-            for k in list(_company_cache)[:excess]:
-                _company_cache.pop(k, None)
-
 
 class DocumentService(TenantAwareService[Document]):
     """Document CRUD service with multi-tenancy support"""
 
     model = Document
-    _company_visibility_assignment_spec = DocumentVisibilityCompanyAssignmentSpec()
 
     def __init__(
         self,
@@ -121,11 +64,32 @@ class DocumentService(TenantAwareService[Document]):
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+        self._chat_db = chat_db
+        self.audience_service = DocumentAudienceService(db, tenant_ctx)
+        self.metadata_service = DocumentMetadataService(db)
         self.notification_service = NotificationService(db, chat_db=chat_db)
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
-        return super()._base_query(Document)
+        query = super()._base_query(Document)
+        if (
+            self.tenant_ctx
+            and not self.tenant_ctx.is_system_admin
+            and self.tenant_ctx.user_role == UserRole.VIEWER
+        ):
+            query = query.filter(Document.status == DocumentStatus.ACTIVE)
+        return query
+
+    def _deactivate_collab_sessions(self, document_id: int) -> None:
+        """Deactivate any active collaboration sessions for a document (M-07)."""
+        if self._chat_db is None:
+            return
+        now = datetime.utcnow()
+        self._chat_db.query(CollaborationSession).filter(
+            CollaborationSession.document_id == document_id,
+            CollaborationSession.is_active.is_(True),
+        ).update({"is_active": False, "ended_at": now})
+        self._chat_db.commit()
 
     def _verify_access(self, document: Document) -> None:
         """Verify current user can access this document"""
@@ -224,203 +188,16 @@ class DocumentService(TenantAwareService[Document]):
         next_sequence = self._reserve_document_sequence(date_key)
         return str(DocumentNumber.from_date_key(date_key, next_sequence))
 
-    @staticmethod
-    def _slugify_platform(name: str) -> str:
-        slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower())
-        slug = slug.strip("-")
-        return slug or "platform"
-
-    @staticmethod
-    def _normalize_platform_name(name: Optional[str]) -> str:
-        if not name or not name.strip():
-            return "Unspecified"
-        return name.strip()
-
-    @staticmethod
-    def _require_platform_selection(
-        *, platform_name: Optional[str] = None, platform_id: Optional[int] = None
-    ) -> None:
-        if platform_id is not None:
-            return
-        if platform_name is not None and platform_name.strip():
-            return
-        raise ValidationError("Platform is required")
-
-    def _normalize_topic(self, raw_topic: Optional[str]) -> Optional[str]:
-        normalized = normalize_topic_to_slug(raw_topic)
-        if normalized is None:
-            return None
-
-        topics = self.db.query(Topic).all()
-        if not topics:
-            return normalized
-
-        topic_lookup = build_topic_lookup(topics)
-        return normalize_topic_to_slug(raw_topic, topic_lookup) or normalized
-
-    def _get_or_create_platform(
-        self, platform_name: Optional[str] = None, platform_id: Optional[int] = None
-    ) -> Platform:
-        if platform_id is not None:
-            platform = self.db.query(Platform).filter(Platform.id == platform_id).first()
-            if not platform:
-                raise NotFoundError(f"Platform {platform_id} not found")
-            return platform
-
-        normalized_name = self._normalize_platform_name(platform_name)
-        platform = (
-            self.db.query(Platform)
-            .filter(func.lower(Platform.name) == normalized_name.lower())
-            .first()
-        )
-        if platform:
-            return platform
-
-        base_slug = self._slugify_platform(normalized_name)
-        slug = base_slug
-        suffix = 2
-        while self.db.query(Platform).filter(Platform.slug == slug).first():
-            slug = f"{base_slug}-{suffix}"
-            suffix += 1
-
-        platform = Platform(name=normalized_name, slug=slug)
-        self.db.add(platform)
-        try:
-            self.db.flush()
-        except IntegrityError:
-            self.db.rollback()
-            # Race condition: another request created this slug concurrently — retry lookup
-            existing = (
-                self.db.query(Platform)
-                .filter(func.lower(Platform.name) == normalized_name.lower())
-                .first()
-            )
-            if existing:
-                return existing
-            raise
-        return platform
-
-    @staticmethod
-    def _normalize_company_ids(company_ids: Optional[List[int]]) -> List[int]:
-        if not company_ids:
-            return []
-
-        normalized_ids = list(dict.fromkeys(company_ids))
-        if any(company_id <= 0 for company_id in normalized_ids):
-            raise ValidationError(
-                "Company IDs must be positive integers",
-                error_code=AudienceErrorCode.AUDIENCE_002.value,
-            )
-        return normalized_ids
-
-    def _enforce_assignment_tenant_scope(self, company_ids: List[int]) -> None:
-        """
-        Prevent tenant-scoped users from assigning foreign company IDs.
-
-        System admins and unscoped internal users keep existing behavior.
-        """
-        if not company_ids:
-            return
-        if not self.tenant_ctx or self.tenant_ctx.is_system_admin:
-            return
-
-        tenant_id = self.tenant_ctx.tenant_id
-        if tenant_id is None:
-            return
-
-        foreign_ids = [company_id for company_id in company_ids if company_id != tenant_id]
-        if foreign_ids:
-            raise PermissionDeniedError(
-                "Cannot assign companies outside your tenant scope",
-                error_code=AudienceErrorCode.AUDIENCE_010.value,
-            )
-
-    def _lookup_company_snapshots(self, company_ids: List[int]) -> dict[int, CompanyLookupSnapshot]:
-        """Resolve minimal company metadata with a short-lived LRU cache."""
-        tenant_id = self.tenant_ctx.tenant_id if self.tenant_ctx else None
-        snapshots: dict[int, CompanyLookupSnapshot] = {}
-        missing_ids: list[int] = []
-
-        for company_id in company_ids:
-            cached = _cache_get(company_id, tenant_id=tenant_id)
-            if cached is None:
-                missing_ids.append(company_id)
-            else:
-                snapshots[company_id] = cached
-
-        if missing_ids:
-            rows = (
-                self.db.query(Tenant.id, Tenant.name, Tenant.slug, Tenant.is_active)
-                .filter(Tenant.id.in_(missing_ids))
-                .all()
-            )
-            for row in rows:
-                snapshot = CompanyLookupSnapshot(
-                    id=int(row.id),
-                    name=str(row.name),
-                    slug=str(row.slug),
-                    is_active=bool(row.is_active),
-                )
-                snapshots[snapshot.id] = snapshot
-                _cache_set(snapshot, tenant_id=tenant_id)
-
-        return snapshots
-
-    def _resolve_assigned_companies(self, company_ids: List[int]) -> List[Tenant]:
-        if not company_ids:
-            return []
-
-        self._enforce_assignment_tenant_scope(company_ids)
-        snapshots_by_id = self._lookup_company_snapshots(company_ids)
-        missing_ids = [company_id for company_id in company_ids if company_id not in snapshots_by_id]
-        if missing_ids:
-            raise ValidationError(
-                "Some company IDs are invalid",
-                error_code=AudienceErrorCode.AUDIENCE_002.value,
-            )
-
-        inactive_ids = [
-            company_id
-            for company_id in company_ids
-            if not snapshots_by_id[company_id].is_active
-        ]
-        if inactive_ids:
-            raise ValidationError(
-                "Inactive companies cannot be assigned to documents",
-                error_code=AudienceErrorCode.AUDIENCE_008.value,
-            )
-
-        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
-        company_by_id = {company.id: company for company in companies}
-        missing_object_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
-        if missing_object_ids:
-            raise ValidationError(
-                "Some company IDs are invalid",
-                error_code=AudienceErrorCode.AUDIENCE_002.value,
-            )
-        return [company_by_id[company_id] for company_id in company_ids]
-
-    def _validate_company_visibility_assignment(
-        self,
-        *,
-        visibility: DocumentVisibility,
-        company_ids: List[int],
-    ) -> None:
-        self._company_visibility_assignment_spec.assert_satisfied(
-            visibility=visibility,
-            company_ids=company_ids,
-        )
-
     def create_document(self, document_data: DocumentCreate, user: User) -> Document:
         """Create a new document (requires EDITOR role or above)."""
         if user.role not in self._WRITE_ROLES:
             raise PermissionDeniedError("Insufficient permissions to create documents")
-        normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
-        self._validate_company_visibility_assignment(
+        normalized_company_ids = self.audience_service.normalize_company_ids(document_data.company_ids)
+        self.audience_service.validate_company_visibility_assignment(
             visibility=document_data.visibility,
             company_ids=normalized_company_ids,
         )
-        assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+        assigned_companies = self.audience_service.resolve_assigned_companies(normalized_company_ids)
 
         # Use provided document number or generate one
         if document_data.document_number:
@@ -458,19 +235,19 @@ class DocumentService(TenantAwareService[Document]):
             # Inherit company assignments if the caller didn't specify any.
             if not normalized_company_ids and parent.assigned_companies:
                 parent_company_ids = [c.id for c in parent.assigned_companies]
-                normalized_company_ids = self._normalize_company_ids(parent_company_ids)
-                assigned_companies = self._resolve_assigned_companies(normalized_company_ids)
+                normalized_company_ids = self.audience_service.normalize_company_ids(parent_company_ids)
+                assigned_companies = self.audience_service.resolve_assigned_companies(normalized_company_ids)
             if document_data.platform_id is None and not (document_data.platform and document_data.platform.strip()):
                 document_data = document_data.model_copy(
                     update={"platform": parent.platform, "platform_id": parent.platform_id}
                 )
             # Re-validate after carry-over
-            self._validate_company_visibility_assignment(
+            self.audience_service.validate_company_visibility_assignment(
                 visibility=document_data.visibility,
                 company_ids=normalized_company_ids,
             )
 
-        self._require_platform_selection(
+        self.metadata_service.require_platform_selection(
             platform_name=document_data.platform,
             platform_id=document_data.platform_id,
         )
@@ -481,7 +258,7 @@ class DocumentService(TenantAwareService[Document]):
             attempts += 1
             try:
                 with UnitOfWork(self.db) as uow:
-                    platform = self._get_or_create_platform(
+                    platform = self.metadata_service.get_or_create_platform(
                         platform_name=document_data.platform, platform_id=document_data.platform_id
                     )
                     document = DocumentFactory.create_document(
@@ -492,7 +269,7 @@ class DocumentService(TenantAwareService[Document]):
                         status=document_data.status,
                         visibility=document_data.visibility,
                         category=document_data.category,
-                        topic=self._normalize_topic(document_data.topic),
+                        topic=self.metadata_service.normalize_topic(document_data.topic),
                         platform_name=platform.name,
                         platform_id=platform.id,
                         release_branch=document_data.release_branch,
@@ -856,7 +633,7 @@ class DocumentService(TenantAwareService[Document]):
             current_company_ids = old_company_ids.copy()
             has_visibility_update = document_data.visibility is not None
             has_company_assignment_update = document_data.company_ids is not None
-            normalized_company_ids = self._normalize_company_ids(document_data.company_ids)
+            normalized_company_ids = self.audience_service.normalize_company_ids(document_data.company_ids)
 
             # Update fields
             if document_data.title is not None:
@@ -871,13 +648,6 @@ class DocumentService(TenantAwareService[Document]):
 
             if document_data.version_label is not None:
                 document.version_label = document_data.version_label
-
-            if document_data.status is not None:
-                if document.status != document_data.status:
-                    changes.append(
-                        f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
-                    )
-                document.status = document_data.status
 
             if document_data.visibility is not None:
                 if document.visibility != document_data.visibility:
@@ -903,7 +673,7 @@ class DocumentService(TenantAwareService[Document]):
                         visibility=target_visibility,
                         company_ids=target_company_ids,
                     )
-                    document.assigned_companies = self._resolve_assigned_companies(target_company_ids)
+                    document.assigned_companies = self.audience_service.resolve_assigned_companies(target_company_ids)
                 elif has_company_assignment_update and normalized_company_ids:
                     document_aggregate.ensure_visibility_assignment_invariants(
                         visibility=target_visibility,
@@ -918,16 +688,16 @@ class DocumentService(TenantAwareService[Document]):
                 document.category = document_data.category
 
             if document_data.topic is not None:
-                document.topic = self._normalize_topic(document_data.topic)
+                document.topic = self.metadata_service.normalize_topic(document_data.topic)
 
             if "platform" in document_data.model_fields_set:
-                self._require_platform_selection(
+                self.metadata_service.require_platform_selection(
                     platform_name=document_data.platform,
                     platform_id=document_data.platform_id,
                 )
 
             if document_data.platform is not None or document_data.platform_id is not None:
-                platform = self._get_or_create_platform(
+                platform = self.metadata_service.get_or_create_platform(
                     platform_name=document_data.platform, platform_id=document_data.platform_id
                 )
                 if document.platform_id != platform.id:
@@ -1076,10 +846,19 @@ class DocumentService(TenantAwareService[Document]):
 
         return document
 
-    def delete_document(self, document_id: int, user: User) -> None:
+    def delete_document(self, document_id: int, user: User, *, if_match: str | None = None) -> None:
         """Delete document with tenant verification"""
         document = self.get_document(document_id)
         self._verify_delete_access(document, user)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
+
+        # Deactivate collaboration sessions before deleting (M-07)
+        self._deactivate_collab_sessions(document_id)
 
         with UnitOfWork(self.db):
             # Keep audit + delete in one transaction to avoid partial writes.
@@ -1107,13 +886,13 @@ class DocumentService(TenantAwareService[Document]):
         old_company_ids = sorted(company.id for company in (document.assigned_companies or []))
         actor_user_id = self.tenant_ctx.user_id if self.tenant_ctx else None
 
-        requested_ids = self._normalize_company_ids(company_ids)
+        requested_ids = self.audience_service.normalize_company_ids(company_ids)
         if document.visibility == DocumentVisibility.COMPANY and not requested_ids:
             raise ValidationError(
                 "Company visibility requires at least one assigned company",
                 error_code=AudienceErrorCode.AUDIENCE_001.value,
             )
-        assigned_companies = self._resolve_assigned_companies(requested_ids)
+        assigned_companies = self.audience_service.resolve_assigned_companies(requested_ids)
 
         # API callers (tenant-scoped service instances) must provide If-Match tokens,
         # but direct internal service usage remains backwards-compatible.
@@ -1188,7 +967,7 @@ class DocumentService(TenantAwareService[Document]):
 
         return len(requested_ids)
 
-    def archive_document(self, document_id: int, user: User) -> dict:
+    def archive_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
         """
         Soft-delete a document by setting status to ARCHIVED.
 
@@ -1197,6 +976,12 @@ class DocumentService(TenantAwareService[Document]):
         """
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
 
         if document.status == DocumentStatus.ARCHIVED:
             raise InvalidStateError("Document is already archived")
@@ -1209,9 +994,10 @@ class DocumentService(TenantAwareService[Document]):
         visibility_snapshot = document.visibility.value if document.visibility else None
         company_ids_snapshot = company_ids.copy()
         previous_status = document.status.value
+        document_aggregate = DocumentAggregate(document)
 
         with UnitOfWork(self.db):
-            document.status = DocumentStatus.ARCHIVED
+            document_aggregate.transition_to_archived()
             document.updated_at = datetime.utcnow()
 
             write_audit_log(
@@ -1225,6 +1011,9 @@ class DocumentService(TenantAwareService[Document]):
                     f"Audience preserved: visibility={visibility_snapshot}, companies={company_ids_snapshot}"
                 ),
             )
+
+        # Deactivate collaboration sessions after archiving (M-07)
+        self._deactivate_collab_sessions(document_id)
 
         logger.info(
             "Document %d archived by user %d. Audience preserved: visibility=%s companies=%s",
@@ -1250,7 +1039,7 @@ class DocumentService(TenantAwareService[Document]):
             },
         }
 
-    def restore_document(self, document_id: int, user: User) -> dict:
+    def restore_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
         """
         Restore a soft-deleted (archived) document.
 
@@ -1263,6 +1052,12 @@ class DocumentService(TenantAwareService[Document]):
         """
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
 
         if document.status != DocumentStatus.ARCHIVED:
             raise InvalidStateError("Only archived documents can be restored")
@@ -1270,52 +1065,37 @@ class DocumentService(TenantAwareService[Document]):
         if user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
             raise PermissionDeniedError("Only admins and managers can restore documents")
 
-        # Reconcile audience - check for stale companies
         original_company_ids = [c.id for c in (document.assigned_companies or [])]
-
-        # Check which companies are still active
-        active_companies = []
-        stale_companies = []
-
-        if original_company_ids:
-            tenants = self.db.query(Tenant).filter(Tenant.id.in_(original_company_ids)).all()
-            tenant_map = {t.id: t for t in tenants}
-
-            for cid in original_company_ids:
-                tenant = tenant_map.get(cid)
-                if tenant is None:
-                    stale_companies.append({"id": cid, "reason": "deleted"})
-                elif not tenant.is_active:
-                    stale_companies.append({"id": cid, "name": tenant.name, "reason": "deactivated"})
-                else:
-                    active_companies.append(tenant)
+        reconciliation = self.audience_service.reconcile_active_companies(
+            document.assigned_companies,
+            document.visibility,
+        )
+        active_companies = reconciliation.active_companies
 
         # Determine appropriate status for restore
         # If document was published before, restore to ACTIVE. Otherwise DRAFT.
         has_published_version = any(v.is_published for v in document.versions)
         restore_status = DocumentStatus.ACTIVE if has_published_version else DocumentStatus.DRAFT
+        document_aggregate = DocumentAggregate(document)
 
         # Handle audience changes
         audience_changes = {
-            "removed_stale_companies": stale_companies,
+            "removed_stale_companies": reconciliation.stale_companies,
             "original_company_count": len(original_company_ids),
             "restored_company_count": len(active_companies),
         }
 
-        # Validate company visibility with remaining companies
-        if document.visibility == DocumentVisibility.COMPANY and not active_companies:
+        new_visibility = reconciliation.visibility
+        if new_visibility != document.visibility:
             # All companies were stale - need to change visibility
             audience_changes["visibility_change"] = {
                 "from": "company",
                 "to": "internal",
                 "reason": "No active companies remain after reconciliation",
             }
-            new_visibility = DocumentVisibility.INTERNAL
-        else:
-            new_visibility = document.visibility
 
         with UnitOfWork(self.db):
-            document.status = restore_status
+            document_aggregate.restore_from_archive(has_published_version=has_published_version)
             document.visibility = new_visibility
             document.assigned_companies = active_companies
             document.updated_at = datetime.utcnow()
@@ -1346,3 +1126,4 @@ class DocumentService(TenantAwareService[Document]):
             "audience_reconciliation": audience_changes,
             "active_company_ids": [c.id for c in active_companies],
         }
+

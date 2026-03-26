@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
-
 from app.collaboration.base import CollaborationManagerBase
+from app.errors import NotFoundError, OperationFailedError
 from app.models import User
 
 
@@ -17,10 +16,7 @@ class CollabStateManager(CollaborationManagerBase):
 
         state = document.yjs_state
         if state is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No collaboration state exists for this document",
-            )
+            raise NotFoundError("No collaboration state exists for this document")
         return state
 
     def save_document_state(
@@ -37,10 +33,7 @@ class CollabStateManager(CollaborationManagerBase):
             self.db, document_id, state
         )
         if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save document state",
-            )
+            raise OperationFailedError("Failed to save document state")
         return {"message": "State saved successfully", "size": len(state)}
 
     def clear_document_state(self, *, document_id: int, current_user: User) -> dict[str, str]:
@@ -53,10 +46,7 @@ class CollabStateManager(CollaborationManagerBase):
 
         success = self.collaboration_service.clear_document_state_for_document(self.db, document_id)
         if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to clear document state",
-            )
+            raise OperationFailedError("Failed to clear document state")
         return {"message": "State cleared successfully"}
 
     def get_collaboration_status(

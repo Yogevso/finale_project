@@ -1,6 +1,12 @@
 """Tests for document-service company lookup caching."""
 
-from app.services.document_service import DocumentService, _company_cache
+from app.dependencies.tenant import TenantContext
+from app.models import UserRole
+from app.services.document_audience_service import (
+    DocumentAudienceService,
+    _company_cache,
+    get_company_lookup_cache_metrics,
+)
 from tests.factories import create_tenant
 
 
@@ -17,12 +23,20 @@ def test_company_lookup_cache_hits_and_ttl_expiry(db, monkeypatch):
     def fake_monotonic() -> float:
         return ticks["value"]
 
-    monkeypatch.setattr("app.services.document_service.monotonic", fake_monotonic)
+    monkeypatch.setattr("app.services.document_audience_service.monotonic", fake_monotonic)
 
     # Clear module-level cache to isolate this test
-    _company_cache.clear()
+    _company_cache.clear(reset_metrics=True)
 
-    service = DocumentService(db)
+    service = DocumentAudienceService(
+        db,
+        TenantContext(
+            tenant_id=tenant.id,
+            user_id=1,
+            user_role=UserRole.ADMIN,
+            is_system_admin=False,
+        ),
+    )
 
     query_calls = {"count": 0}
     original_query = db.query
@@ -34,15 +48,21 @@ def test_company_lookup_cache_hits_and_ttl_expiry(db, monkeypatch):
 
     monkeypatch.setattr(db, "query", counting_query)
 
-    first = service._lookup_company_snapshots([tenant.id])
-    second = service._lookup_company_snapshots([tenant.id])
+    first = service.lookup_company_snapshots([tenant.id])
+    second = service.lookup_company_snapshots([tenant.id])
     ticks["value"] += 31.0  # Exceed TTL of 30s
-    third = service._lookup_company_snapshots([tenant.id])
+    third = service.lookup_company_snapshots([tenant.id])
 
     assert first[tenant.id].name == tenant.name
     assert second[tenant.id].slug == tenant.slug
     assert third[tenant.id].id == tenant.id
     assert query_calls["count"] == 2
+    metrics = get_company_lookup_cache_metrics()
+    assert metrics.hits == 1
+    assert metrics.misses == 2
+    assert metrics.expired == 1
+    assert metrics.writes == 2
+    assert metrics.entry_count == 1
 
     # Clean up module-level cache
-    _company_cache.clear()
+    _company_cache.clear(reset_metrics=True)

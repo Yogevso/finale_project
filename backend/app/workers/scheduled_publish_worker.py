@@ -14,8 +14,8 @@ import argparse
 import logging
 import time
 
+from app.container import build_container
 from app.db import SessionLocal
-from app.services.version_service import VersionService
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def run_scheduled_publishes(batch_size: int = DEFAULT_BATCH_SIZE) -> dict:
     """Execute pending scheduled publishes. Returns the publish report."""
     db = SessionLocal()
     try:
-        svc = VersionService(db)
+        svc = build_container().version_service(db)
         report = svc.process_scheduled_publishes(batch_size=batch_size)
         logger.info(
             "Scheduled publish run: published=%d, failed_validation=%d, errors=%d",
@@ -65,7 +65,7 @@ def main() -> None:
         while True:
             try:
                 run_scheduled_publishes(batch_size=args.batch_size)
-            except Exception:
+            except Exception:  # policy: LOSSY — worker loop records failure and continues polling
                 logger.exception("Scheduled-publish cycle failed")
             time.sleep(args.interval)
     else:

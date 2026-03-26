@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDistanceToNow, format } from 'date-fns'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 
 interface Snapshot {
   id: number
@@ -108,7 +109,11 @@ export function SnapshotManager({
       setSnapshots(response.snapshots)
       setError(null)
     } catch (err) {
-      console.error('Failed to fetch snapshots:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to fetch snapshots',
+        error: err,
+      })
       setError('Failed to load snapshots')
     } finally {
       setLoading(false)
@@ -127,7 +132,11 @@ export function SnapshotManager({
       await api.createSnapshot(documentId, { session_id: sessionId })
       await fetchSnapshots()
     } catch (err) {
-      console.error('Failed to create snapshot:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to create snapshot',
+        error: err,
+      })
       setError('Failed to create snapshot')
     } finally {
       setCreating(false)
@@ -145,7 +154,11 @@ export function SnapshotManager({
       // Show success briefly
       setTimeout(() => setRestoring(null), 1000)
     } catch (err) {
-      console.error('Failed to restore snapshot:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to restore snapshot',
+        error: err,
+      })
       setError('Failed to restore snapshot')
       setRestoring(null)
     }
@@ -158,7 +171,11 @@ export function SnapshotManager({
       await api.updateSnapshot(documentId, snapshot.id, { is_pinned: !snapshot.is_pinned })
       await fetchSnapshots()
     } catch (err) {
-      console.error('Failed to update snapshot:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to update snapshot',
+        error: err,
+      })
     }
   }
 
@@ -169,7 +186,11 @@ export function SnapshotManager({
       await api.deleteSnapshot(documentId, snapshotId)
       await fetchSnapshots()
     } catch (err) {
-      console.error('Failed to delete snapshot:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to delete snapshot',
+        error: err,
+      })
     }
   }
 
@@ -382,7 +403,11 @@ export function SnapshotButton({
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
     } catch (err) {
-      console.error('Failed to create snapshot:', err)
+      reportRuntimeError({
+        scope: 'snapshot.manager',
+        message: 'Failed to create toolbar snapshot',
+        error: err,
+      })
     } finally {
       setCreating(false)
     }

@@ -169,7 +169,7 @@ class _BaseBus:
             result = invoke(0, context)
             outcome = "success"
             return result
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — command bus wraps unexpected handler failures
             error_type = type(exc).__name__
             raise
         finally:

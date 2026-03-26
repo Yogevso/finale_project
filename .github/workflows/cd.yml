@@ -1,53 +1,56 @@
 # Continuous Deployment Workflow
-# Builds and pushes Docker images, optionally deploys to environments
-# NOTE: Only runs on version tags (v*.*.*) or manual trigger - NOT on every push
+# Builds Docker images and executes real remote deploy / rollback operations.
 
-name: CD - Build & Deploy
+name: CD - Build and Deploy
 
 on:
-  # Only deploy on version tags, not every push
   push:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Deployment environment'
+      operation:
+        description: Deployment operation
         required: true
-        default: 'staging'
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - rollback
+      environment:
+        description: Target environment
+        required: true
+        default: staging
         type: choice
         options:
           - staging
           - production
+      release_ref:
+        description: "Optional image tag/ref (for example v1.2.3 or sha-abc123). Required for rollback."
+        required: false
+        default: ""
+        type: string
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
   IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+  IMAGE_NAME_COLLAB: ${{ github.repository }}/collab-server
 
 jobs:
-  # ============================================
-  # Run Tests First (always required)
-  # ============================================
   test:
     name: Run Tests
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.operation != 'rollback'
     uses: ./.github/workflows/ci.yml
 
-  # ============================================
-  # Build Docker Images
-  # ============================================
   build-backend:
     name: Build Backend Image
     runs-on: ubuntu-latest
     needs: [test]
-    if: needs.test.result == 'success'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.operation != 'rollback'
     permissions:
       contents: read
       packages: write
-
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout code
@@ -93,8 +96,8 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}@${{ steps.build.outputs.digest }}
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
+          format: table
+          severity: CRITICAL,HIGH
           exit-code: '1'
 
       - name: Generate SBOM
@@ -107,14 +110,10 @@ jobs:
     name: Build Frontend Image
     runs-on: ubuntu-latest
     needs: [test]
-    if: needs.test.result == 'success'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.operation != 'rollback'
     permissions:
       contents: read
       packages: write
-
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout code
@@ -157,13 +156,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             VITE_API_URL=${{ vars.API_URL || 'https://api.portal.example.com' }}
+            VITE_COLLAB_SERVER_URL=${{ vars.COLLAB_SERVER_URL || 'wss://collab.portal.example.com' }}
 
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}@${{ steps.build.outputs.digest }}
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
+          format: table
+          severity: CRITICAL,HIGH
           exit-code: '1'
 
       - name: Generate SBOM
@@ -172,16 +172,83 @@ jobs:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}@${{ steps.build.outputs.digest }}
           artifact-name: sbom-frontend.spdx.json
 
-  # ============================================
-  # Deploy to Staging
-  # ============================================
+  build-collab:
+    name: Build Collaboration Image
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.operation != 'rollback'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push collab image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./collab-server
+          file: ./collab-server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}@${{ steps.build.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}@${{ steps.build.outputs.digest }}
+          artifact-name: sbom-collab.spdx.json
+
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend]
+    needs: [build-backend, build-frontend, build-collab]
     if: |
-      startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+      (
+        startsWith(github.ref, 'refs/tags/v') ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.event.inputs.operation == 'deploy' &&
+         github.event.inputs.environment == 'staging')
+      ) &&
+      needs.build-backend.result == 'success' &&
+      needs.build-frontend.result == 'success' &&
+      needs.build-collab.result == 'success'
     environment:
       name: staging
       url: https://staging.portal.example.com
@@ -193,39 +260,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to staging server
+      - name: Resolve release ref
+        id: release-ref
+        run: |
+          release_ref="${{ github.event.inputs.release_ref }}"
+          if [ -z "${release_ref}" ]; then
+            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+              release_ref="${GITHUB_REF_NAME}"
+            else
+              release_ref="sha-${GITHUB_SHA}"
+            fi
+          fi
+          echo "value=${release_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy staging release
         env:
           DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
           DEPLOY_USER: ${{ secrets.STAGING_USER }}
           DEPLOY_KEY: ${{ secrets.STAGING_SSH_KEY }}
-          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:sha-${{ github.sha }}
-          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:sha-${{ github.sha }}
-        run: |
-          echo "🚀 Deploying to staging..."
-          echo "Backend image: $BACKEND_IMAGE"
-          echo "Frontend image: $FRONTEND_IMAGE"
-          
-          # Example deployment commands (customize for your infrastructure):
-          # ssh -i "$DEPLOY_KEY" "$DEPLOY_USER@$DEPLOY_HOST" << 'EOF'
-          #   cd /opt/document-portal
-          #   docker compose pull
-          #   docker compose up -d
-          #   docker system prune -f
-          # EOF
-          
-          echo "✅ Staging deployment completed!"
-
-      - name: Health check
-        run: |
-          echo "🏥 Running health checks..."
-          # curl -f https://staging.portal.example.com/health || exit 1
-          echo "✅ Health check passed!"
-
-      - name: Notify deployment
-        if: always()
-        run: |
-          echo "📢 Deployment notification would be sent here"
-          # Integrate with Slack, Discord, or other notification services
+          DEPLOY_PATH: ${{ vars.STAGING_DEPLOY_PATH || '/opt/document-portal' }}
+          COMPOSE_ENV_FILE: ${{ vars.STAGING_COMPOSE_ENV_FILE || '.env.prod' }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.release-ref.outputs.value }}
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ steps.release-ref.outputs.value }}
+          COLLAB_SERVER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}:${{ steps.release-ref.outputs.value }}
+        run: bash scripts/release/remote_compose_rollout.sh
 
   staging-chaos:
     name: Staging Chaos Validation
@@ -234,18 +294,21 @@ jobs:
     uses: ./.github/workflows/staging-chaos.yml
     secrets: inherit
 
-  # ============================================
-  # Deploy to Production (manual approval required)
-  # ============================================
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [build-backend, build-frontend, deploy-staging, staging-chaos]
+    needs: [build-backend, build-frontend, build-collab, deploy-staging, staging-chaos]
     if: |
       always() &&
-      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')) &&
+      (
+        startsWith(github.ref, 'refs/tags/v') ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.event.inputs.operation == 'deploy' &&
+         github.event.inputs.environment == 'production')
+      ) &&
       needs.build-backend.result == 'success' &&
       needs.build-frontend.result == 'success' &&
+      needs.build-collab.result == 'success' &&
       (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped') &&
       (needs.staging-chaos.result == 'success' || needs.staging-chaos.result == 'skipped')
     environment:
@@ -259,33 +322,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to production server
+      - name: Resolve release ref
+        id: release-ref
+        run: |
+          release_ref="${{ github.event.inputs.release_ref }}"
+          if [ -z "${release_ref}" ]; then
+            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+              release_ref="${GITHUB_REF_NAME}"
+            else
+              release_ref="sha-${GITHUB_SHA}"
+            fi
+          fi
+          echo "value=${release_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Deploy production release
         env:
           DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
           DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
           DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
-          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.ref_name }}
-          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.ref_name }}
-        run: |
-          echo "🚀 Deploying to production..."
-          echo "Backend image: $BACKEND_IMAGE"
-          echo "Frontend image: $FRONTEND_IMAGE"
-          
-          # Example deployment commands:
-          # ssh -i "$DEPLOY_KEY" "$DEPLOY_USER@$DEPLOY_HOST" << 'EOF'
-          #   cd /opt/document-portal
-          #   docker compose pull
-          #   docker compose up -d --no-deps backend frontend
-          #   docker system prune -f
-          # EOF
-          
-          echo "✅ Production deployment completed!"
-
-      - name: Health check
-        run: |
-          echo "🏥 Running production health checks..."
-          # curl -f https://portal.example.com/health || exit 1
-          echo "✅ Production health check passed!"
+          DEPLOY_PATH: ${{ vars.PRODUCTION_DEPLOY_PATH || '/opt/document-portal' }}
+          COMPOSE_ENV_FILE: ${{ vars.PRODUCTION_COMPOSE_ENV_FILE || '.env.prod' }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.release-ref.outputs.value }}
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ steps.release-ref.outputs.value }}
+          COLLAB_SERVER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}:${{ steps.release-ref.outputs.value }}
+        run: bash scripts/release/remote_compose_rollout.sh
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -297,18 +359,80 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ============================================
-  # Rollback Job (manual trigger)
-  # ============================================
-  rollback:
-    name: Rollback Deployment
+  rollback-staging:
+    name: Rollback Staging
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && failure()
-    needs: [deploy-staging, deploy-production]
-    
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.operation == 'rollback' &&
+      github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.portal.example.com
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
     steps:
-      - name: Rollback to previous version
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Require rollback ref
         run: |
-          echo "⚠️ Rolling back deployment..."
-          # Add rollback logic here
-          echo "✅ Rollback completed!"
+          if [ -z "${{ github.event.inputs.release_ref }}" ]; then
+            echo "release_ref is required for rollback" >&2
+            exit 1
+          fi
+
+      - name: Roll back staging release
+        env:
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_USER }}
+          DEPLOY_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.STAGING_DEPLOY_PATH || '/opt/document-portal' }}
+          COMPOSE_ENV_FILE: ${{ vars.STAGING_COMPOSE_ENV_FILE || '.env.prod' }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.event.inputs.release_ref }}
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.event.inputs.release_ref }}
+          COLLAB_SERVER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}:${{ github.event.inputs.release_ref }}
+        run: bash scripts/release/remote_compose_rollout.sh
+
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.operation == 'rollback' &&
+      github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://portal.example.com
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Require rollback ref
+        run: |
+          if [ -z "${{ github.event.inputs.release_ref }}" ]; then
+            echo "release_ref is required for rollback" >&2
+            exit 1
+          fi
+
+      - name: Roll back production release
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          DEPLOY_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          DEPLOY_PATH: ${{ vars.PRODUCTION_DEPLOY_PATH || '/opt/document-portal' }}
+          COMPOSE_ENV_FILE: ${{ vars.PRODUCTION_COMPOSE_ENV_FILE || '.env.prod' }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ github.event.inputs.release_ref }}
+          FRONTEND_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ github.event.inputs.release_ref }}
+          COLLAB_SERVER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_COLLAB }}:${{ github.event.inputs.release_ref }}
+        run: bash scripts/release/remote_compose_rollout.sh

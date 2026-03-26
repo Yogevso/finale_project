@@ -66,8 +66,14 @@ class ConversationTurn(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: int | None = None  # None = new conversation
     message: str = Field(..., min_length=1, max_length=4000)
-    file_ids: list[int] | None = None   # IDs of uploaded files to include as context
-    document_ids: list[int] | None = None  # IDs of platform documents to inject as context
+    file_ids: list[int] | None = Field(
+        default=None,
+        max_length=3,
+    )  # IDs of uploaded files to include as context
+    document_ids: list[int] | None = Field(
+        default=None,
+        max_length=3,
+    )  # IDs of platform documents to inject as context
 
 
 class ChatResponse(BaseModel):

@@ -8,6 +8,7 @@ No authentication is required for these endpoints.
 import math
 from datetime import datetime
 from typing import Optional
+from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_
@@ -119,14 +120,16 @@ def list_public_documents(
 
     # Apply search filter
     if search:
-        search_term = f"%{search}%"
-        platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term)).subquery()
+        # M-36: Escape SQL wildcards to prevent injection
+        _escaped = search.replace("%", r"\%").replace("_", r"\_")
+        search_term = f"%{_escaped}%"
+        platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term, escape="\\")).subquery()
         query = query.filter(
             or_(
-                Document.title.ilike(search_term),
-                Document.description.ilike(search_term),
-                Document.tags.ilike(search_term),
-                Document.topic.ilike(search_term),
+                Document.title.ilike(search_term, escape="\\"),
+                Document.description.ilike(search_term, escape="\\"),
+                Document.tags.ilike(search_term, escape="\\"),
+                Document.topic.ilike(search_term, escape="\\"),
                 Document.id.in_(db.query(platform_subq)),
             )
         )
@@ -426,7 +429,9 @@ def search_public_documents(
 
     Note: This endpoint searches metadata fields only, not document body content.
     """
-    search_term = f"%{q}%"
+    # M-36: Escape SQL wildcards to prevent injection
+    _escaped_q = q.replace("%", r"\%").replace("_", r"\_")
+    search_term = f"%{_escaped_q}%"
 
     # Start with public documents query
     query = get_public_documents_query(db)
@@ -440,14 +445,14 @@ def search_public_documents(
         query = query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == platform)
 
     # Search in document fields
-    platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term)).subquery()
+    platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term, escape="\\")).subquery()
     query = query.filter(
         or_(
-            Document.title.ilike(search_term),
-            Document.description.ilike(search_term),
-            Document.tags.ilike(search_term),
-            Document.document_number.ilike(search_term),
-            Document.topic.ilike(search_term),
+            Document.title.ilike(search_term, escape="\\"),
+            Document.description.ilike(search_term, escape="\\"),
+            Document.tags.ilike(search_term, escape="\\"),
+            Document.document_number.ilike(search_term, escape="\\"),
+            Document.topic.ilike(search_term, escape="\\"),
             Document.id.in_(db.query(platform_subq)),
         )
     )
@@ -597,6 +602,7 @@ def get_public_sitemap(
 ):
     """Generate an XML sitemap that only includes PUBLIC and ACTIVE documents."""
     origin = base_url or str(request.base_url).rstrip("/")
+    escaped_origin = xml_escape(origin)
 
     docs = (
         get_public_documents_query(db)
@@ -609,7 +615,7 @@ def get_public_sitemap(
     for doc_id, updated_at in docs:
         lastmod = updated_at.strftime("%Y-%m-%d") if updated_at else ""
         lines.append("  <url>\n")
-        lines.append(f"    <loc>{origin}/doc/{doc_id}</loc>\n")
+        lines.append(f"    <loc>{escaped_origin}/doc/{doc_id}</loc>\n")
         if lastmod:
             lines.append(f"    <lastmod>{lastmod}</lastmod>\n")
         lines.append("    <changefreq>weekly</changefreq>\n")

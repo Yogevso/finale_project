@@ -86,8 +86,8 @@ describe('AcceptInvitationPage', () => {
 
     await user.type(screen.getByPlaceholderText('Choose a username'), 'customer_user')
     await user.type(screen.getByPlaceholderText('Enter your full name'), 'Customer User')
-    await user.type(screen.getByPlaceholderText('Create a password'), 'password123')
-    await user.type(screen.getByPlaceholderText('Confirm your password'), 'password123')
+    await user.type(screen.getByPlaceholderText('Create a password'), 'Password123!')
+    await user.type(screen.getByPlaceholderText('Confirm your password'), 'Password123!')
     await user.click(screen.getByRole('button', { name: /Create Account/i }))
 
     await waitFor(() => {
@@ -100,4 +100,3 @@ describe('AcceptInvitationPage', () => {
     expect(localStorage.getItem('refresh_token')).toBeNull()
   })
 })
-

@@ -1,6 +1,7 @@
 """Analytics API Endpoints"""
 
 from datetime import date, timedelta
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -27,8 +28,10 @@ from app.dependencies.permissions import (
     require_system_admin,
 )
 from app.dependencies.services import get_analytics_service
+from app.dependencies.services import get_document_service
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.models import User
+from app.services.document_service import DocumentService
 from app.plugins.exporters import get_analytics_export_plugin_registry
 from app.schemas.analytics import (
     AnalyticsOverview,
@@ -43,6 +46,7 @@ from app.schemas.analytics import (
 )
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+logger = logging.getLogger(__name__)
 
 _EXPORT_PLUGIN_REGISTRY = get_analytics_export_plugin_registry()
 CSV_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("csv").supported_reports
@@ -50,10 +54,9 @@ CSV_EXPORT_REPORTS = _EXPORT_PLUGIN_REGISTRY.resolve("csv").supported_reports
 
 def _validate_export_report(report: str, *, allowed: tuple[str, ...], format_name: str) -> None:
     if report not in allowed:
-        allowed_list = ", ".join(allowed)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported {format_name} report '{report}'. Supported reports: {allowed_list}",
+            detail="Unsupported analytics export request",
         )
 
 
@@ -61,9 +64,10 @@ def _resolve_exporter(format_name: str):
     try:
         return _EXPORT_PLUGIN_REGISTRY.resolve(format_name)
     except KeyError as exc:
+        logger.warning("Analytics export plugin missing for format %s", format_name, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc),
+            detail="Analytics export is temporarily unavailable",
         ) from exc
 
 
@@ -312,10 +316,15 @@ def get_document_audience_churn(
     document_id: int,
     current_user: User = Depends(require_manager),
     analytics_service: AnalyticsServiceStranglerWrapper = Depends(get_analytics_service),
+    document_service: DocumentService = Depends(get_document_service),
 ):
     """
     Return assignment churn count for one document over trailing 90 days.
     """
+    document = document_service.get_document(document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
     overview = analytics_service.get_overview(
         date_from=date.today() - timedelta(days=90),
         date_to=date.today(),
@@ -367,10 +376,18 @@ def export_csv(
         )
 
     _validate_export_report(report, allowed=exporter.supported_reports, format_name="CSV")
-    return exporter.export(
-        report=report,
-        date_from=date_from,
-        date_to=date_to,
-        analytics_query_handler=analytics_query_handler,
-    )
-
+    try:
+        return exporter.export(
+            report=report,
+            date_from=date_from,
+            date_to=date_to,
+            analytics_query_handler=analytics_query_handler,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # policy: BOUNDARY — translate exporter failures into stable API errors
+        logger.exception("Analytics export failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Analytics export is temporarily unavailable",
+        ) from exc

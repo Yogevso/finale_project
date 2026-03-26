@@ -365,7 +365,7 @@ def get_optional_current_user():
             if user and user.is_active:
                 return user
             return None
-        except Exception:
+        except Exception:  # policy: LOSSY — optional auth should degrade to anonymous access
             LOGGER.warning("Token validation failed for optional auth", exc_info=True)
             return None
 

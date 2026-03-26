@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.container import AppContainer, build_container
+from app.errors import NotFoundError, PermissionDeniedError
 from app.models import User
 from app.repositories import DocumentRepository
 from app.services.collaboration_service import CollaborationService
@@ -19,16 +20,18 @@ class CollaborationManagerBase:
         collaboration_service: CollaborationService | None = None,
         document_repository: DocumentRepository | None = None,
         chat_db: Session | None = None,
+        container: AppContainer | None = None,
     ) -> None:
         self.db = db
         self.chat_db = chat_db or db
-        self.collaboration_service = collaboration_service or CollaborationService()
+        self.container = container or build_container()
+        self.collaboration_service = collaboration_service or self.container.collaboration_service(db)
         self.document_repository = document_repository or DocumentRepository(db)
 
     def get_document_or_404(self, document_id: int):
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
         return document
 
     def ensure_document_read_access(
@@ -42,7 +45,7 @@ class CollaborationManagerBase:
             current_user, document
         )
         if not permissions:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=denied_detail)
+            raise PermissionDeniedError(denied_detail)
         return permissions
 
     def ensure_document_write_access(
@@ -56,5 +59,5 @@ class CollaborationManagerBase:
             current_user, document
         )
         if "write" not in permissions:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=denied_detail)
+            raise PermissionDeniedError(denied_detail)
         return permissions

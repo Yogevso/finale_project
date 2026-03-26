@@ -118,6 +118,10 @@ export interface SupportTicketMessage {
   sender_type: 'customer' | 'agent'
   content: string
   is_internal_note: boolean
+  file_url: string | null
+  file_name: string | null
+  file_size: number | null
+  file_mime_type: string | null
   created_at: string
   sender_full_name: string | null
 }
@@ -161,6 +165,7 @@ export interface SupportTicketUpdate {
 export interface SendTicketMessageRequest {
   content: string
   is_internal_note?: boolean
+  file?: File | null
 }
 
 export interface AssignAgentRequest {

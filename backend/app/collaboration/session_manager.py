@@ -6,10 +6,10 @@ import json
 import uuid
 from datetime import datetime
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.collaboration.base import CollaborationManagerBase
+from app.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     CollaborationActivity,
@@ -82,9 +82,7 @@ class SessionManager(CollaborationManagerBase):
             .first()
         )
         if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Active session not found"
-            )
+            raise NotFoundError("Active session not found")
 
         session.ended_at = datetime.utcnow()
         session.is_active = False
@@ -155,10 +153,7 @@ class SessionManager(CollaborationManagerBase):
         try:
             normalized_activity_type = CollaborationActivityType(activity_type)
         except ValueError as err:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid activity type: {activity_type}",
-            ) from err
+            raise ValidationError(f"Invalid activity type: {activity_type}") from err
 
         document = self.get_document_or_404(document_id)
         self.ensure_document_read_access(document=document, current_user=current_user)
@@ -171,20 +166,11 @@ class SessionManager(CollaborationManagerBase):
                 .first()
             )
             if not session or not session.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Active session not found",
-                )
+                raise NotFoundError("Active session not found")
             if session.user_id != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to use this session",
-                )
+                raise PermissionDeniedError("You don't have permission to use this session")
             if session.document_id != document_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Session does not belong to the specified document",
-                )
+                raise ValidationError("Session does not belong to the specified document")
 
         activity = CollaborationActivity(
             document_id=document_id,

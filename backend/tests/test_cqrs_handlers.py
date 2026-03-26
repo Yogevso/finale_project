@@ -92,15 +92,15 @@ def test_delete_document_command_handler_records_pipeline_trace(test_user):
         def __init__(self):
             self.calls = []
 
-        def delete_document(self, document_id, user):
-            self.calls.append((document_id, user.id))
+        def delete_document(self, document_id, user, *, if_match=None):
+            self.calls.append((document_id, user.id, if_match))
 
     service = StubDocumentService()
     handler = DeleteDocumentCommandHandler(service)
     result = handler.execute(DeleteDocumentCommand(document_id=9, current_user=test_user))
 
     assert result.is_ok
-    assert service.calls == [(9, test_user.id)]
+    assert service.calls == [(9, test_user.id, None)]
     assert handler.last_trace is not None
     assert handler.last_trace.command_name == "DeleteDocumentCommand"
     assert handler.last_trace.stage_order == ("validate", "authorize", "execute", "publish")

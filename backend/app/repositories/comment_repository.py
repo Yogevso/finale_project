@@ -64,6 +64,9 @@ class CommentRepository(BaseRepository):
             Comment.id == comment_id,
             Comment.document_id == document_id,
         )
+        query = query.options(
+            joinedload(Comment.parent).joinedload(Comment.parent),
+        )
         # PostgreSQL supports row-level locking; SQLite uses serializable transactions
         if dialect != "sqlite":
             query = query.with_for_update()

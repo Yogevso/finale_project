@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.dependencies.permissions import require_internal_user
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import Document, User
 from app.schemas import (
@@ -30,7 +31,7 @@ from app.schemas import (
     AttachmentUploadResponse,
     MessageResponse,
 )
-from app.security import get_current_active_user, verify_token
+from app.security import verify_token
 from app.services.attachment_service import AttachmentService
 from app.utils.http_headers import build_content_disposition
 
@@ -110,10 +111,19 @@ class DownloadTicketResponse(BaseModel):
     expires_in: int
 
 
+def _enforce_internal_user(user: User) -> User:
+    if getattr(user.role, "value", user.role) == "customer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Internal users only",
+        )
+    return user
+
+
 @router.get("/attachments/{attachment_id}/pdf-status")
 def get_pdf_export_status(
     attachment_id: int,
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_internal_user),
     db: Session = Depends(get_db),
 ):
     """Check PDF export generation status for an attachment."""
@@ -142,7 +152,7 @@ def get_pdf_export_status(
 @router.post("/attachments/download-ticket", response_model=DownloadTicketResponse)
 def issue_download_ticket(
     body: DownloadTicketRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
     db: Session = Depends(get_db),
 ):
     """Issue a short-lived signed download ticket (AD-002).
@@ -196,7 +206,7 @@ def _get_current_active_user_or_token(
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return user
+        return _enforce_internal_user(user)
 
     # 2. Signed download ticket (AD-002 — preferred for URL-based access)
     if token and ":" in token:
@@ -217,17 +227,10 @@ def _get_current_active_user_or_token(
                 except (ValueError, IndexError):
                     pass
         if doc_id is not None and att_id is not None:
-            return _verify_download_ticket(token, doc_id, att_id, db)
+            return _enforce_internal_user(_verify_download_ticket(token, doc_id, att_id, db))
 
-    # 3. Legacy JWT in query param (kept for backward compat, but discouraged)
-    if token:
-        payload = verify_token(token)
-        if payload is not None:
-            user_id = payload.get("sub")
-            if user_id is not None:
-                user = db.query(User).filter(User.id == int(user_id)).first()
-                if user and user.is_active:
-                    return user
+    # M-27: Legacy JWT-in-URL fallback removed — JWTs in query params leak
+    # via browser history, server logs, and Referer headers.
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -271,6 +274,9 @@ def _stream_original_attachment(
     if attachment.sha256:
         headers["X-Checksum-SHA256"] = attachment.sha256
 
+    # M-28: Prevent browser content-sniffing on download responses
+    headers["X-Content-Type-Options"] = "nosniff"
+
     return StreamingResponse(
         content=content_stream,
         media_type=attachment.mime_type or "application/octet-stream",
@@ -282,7 +288,7 @@ def _stream_original_attachment(
 def list_attachments(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     List all attachments for a document.
@@ -297,7 +303,7 @@ def get_attachment(
     document_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Get a specific attachment metadata.
@@ -438,7 +444,7 @@ async def upload_attachment(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Upload a new attachment.
@@ -470,7 +476,7 @@ def delete_attachment(
     document_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Delete an attachment.

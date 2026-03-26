@@ -69,7 +69,7 @@ class DocumentIndexer:
         texts = [c.text for c in chunks]
         try:
             embeddings = await self._embeddings.embed_batch(texts)
-        except Exception:
+        except Exception:  # policy: DEGRADED — indexing errors should surface as warnings without crashing callers
             logger.exception("Failed to generate embeddings for document %d", document_id)
             return 0
 
@@ -92,15 +92,22 @@ class DocumentIndexer:
         stored = self._store.add_chunks(document_id, title, chunk_dicts, embeddings, tenant_id=tenant_id)
         return stored
 
+    async def ensure_ready(self) -> None:
+        """Fail fast when the embedding backend is unavailable."""
+        if not await self._embeddings.ensure_model():
+            raise RuntimeError(
+                "Assistant embedding backend is unavailable. "
+                "Start Ollama and ensure the embedding model is installed, then retry."
+            )
+
     async def remove_document(self, document_id: int) -> int:
         """Remove all indexed chunks for a document."""
         return self._store.delete_document(document_id)
 
     async def reindex_all(self, db: Session) -> dict[str, Any]:
-        """Reindex all published documents. Returns stats."""
-        # Get all documents with published versions
+        """Reindex all assistant-searchable documents. Returns stats."""
         documents = (
-            db.query(Document)
+            db.query(Document.id, Document.title, Document.tenant_id)
             .filter(Document.status.in_([DocumentStatus.ACTIVE, DocumentStatus.DRAFT]))
             .all()
         )
@@ -109,39 +116,32 @@ class DocumentIndexer:
         total_chunks = 0
         errors: list[str] = []
 
-        for doc in documents:
-            # Get the latest published version, or latest version
+        for document_id, title, tenant_id in documents:
+            # Semantic search is internal-only, so index the latest version to match
+            # the assistant's document-read behavior for internal users.
             version = (
                 db.query(Version)
-                .filter(
-                    Version.document_id == doc.id,
-                    Version.is_published == True,  # noqa: E712
-                )
+                .filter(Version.document_id == document_id)
                 .order_by(Version.version_number.desc())
                 .first()
             )
-            if not version:
-                # Try latest version regardless of publish status
-                version = (
-                    db.query(Version)
-                    .filter(Version.document_id == doc.id)
-                    .order_by(Version.version_number.desc())
-                    .first()
-                )
             if not version or not version.content:
                 continue
 
             try:
                 count = await self.index_document(
-                    doc.id, doc.title, version.content, version.id,
-                    tenant_id=doc.tenant_id,
+                    document_id,
+                    title,
+                    version.content,
+                    version.id,
+                    tenant_id=tenant_id,
                 )
                 if count > 0:
                     indexed += 1
                     total_chunks += count
-            except Exception as exc:
-                logger.exception("Failed to index document %d", doc.id)
-                errors.append(f"Document {doc.id} ({doc.title}): {exc}")
+            except Exception as exc:  # policy: LOSSY — per-document indexing failure should not abort the batch
+                logger.exception("Failed to index document %d", document_id)
+                errors.append(f"Document {document_id} ({title}): {exc}")
 
         stats = {
             "documents_indexed": indexed,

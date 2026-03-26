@@ -16,14 +16,10 @@ import type {
   UpdateChatRequest,
   UpdateParticipantRoleRequest,
 } from '@/types/chat'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const ChatApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const ChatApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getChats(): Promise<ChatListResponse> {
       const { data } = await this.client.get<ChatListResponse>('/chats')
       return data

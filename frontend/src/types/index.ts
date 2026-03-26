@@ -181,7 +181,6 @@ export interface DocumentUpdate {
   platform_id?: number
   release_branch?: string
   due_date?: string | null
-  status?: DocumentStatus
   visibility?: DocumentVisibility
   reason?: string
   company_ids?: number[]
@@ -661,6 +660,20 @@ export interface ReviewSubmit {
 
 export interface ReviewAction {
   comments?: string
+}
+
+export interface ApprovalPolicyCheck {
+  id: string
+  label: string
+  passed: boolean
+  message?: string | null
+}
+
+export interface PreApprovePolicy {
+  can_approve: boolean
+  checks: ApprovalPolicyCheck[]
+  audience_summary?: string | null
+  warnings: string[]
 }
 
 export interface ReviewListResponse {

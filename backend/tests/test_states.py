@@ -15,6 +15,13 @@ def test_document_stage_supports_configured_transitions():
     assert pending_stage.transition_to(DocumentStatus.APPROVED) == DocumentStatus.APPROVED
 
 
+def test_document_stage_supports_archive_and_restore_transitions():
+    assert document_stage_for(DocumentStatus.DRAFT).can_transition_to(DocumentStatus.ARCHIVED)
+    assert document_stage_for(DocumentStatus.ACTIVE).can_transition_to(DocumentStatus.ARCHIVED)
+    assert document_stage_for(DocumentStatus.ARCHIVED).can_transition_to(DocumentStatus.DRAFT)
+    assert document_stage_for(DocumentStatus.ARCHIVED).can_transition_to(DocumentStatus.ACTIVE)
+
+
 def test_document_stage_blocks_invalid_transition():
     active_stage = document_stage_for(DocumentStatus.ACTIVE)
 

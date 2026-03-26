@@ -9,12 +9,18 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.errors import ServiceUnavailableError, ValidationError
 from app.legacy_wrappers import get_document_converter_wrapper
-from app.models import Attachment, User, Version, VersionBumpType
+from app.models import Attachment, Document, User, Version, VersionBumpType
+from app.services.malware_scan_service import (
+    MalwareDetectedError,
+    MalwareScannerUnavailableError,
+    scan_upload_bytes,
+)
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
 
@@ -27,6 +33,34 @@ class StorageError(Exception):
 
 class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
     """Upload and create entry points."""
+
+    @classmethod
+    def _find_reusable_attachment_blob(
+        cls,
+        db: Session,
+        *,
+        document_id: int,
+        checksum_sha256: str,
+        file_size: int,
+        content_type: str,
+    ) -> Attachment | None:
+        target_document = db.query(Document).filter(Document.id == document_id).first()
+        if target_document is None:
+            return None
+
+        return (
+            db.query(Attachment)
+            .join(Document, Document.id == Attachment.document_id)
+            .filter(
+                Document.tenant_id == target_document.tenant_id,
+                Attachment.sha256 == checksum_sha256,
+                Attachment.size_bytes == file_size,
+                Attachment.mime_type == content_type,
+                Attachment.storage_key.is_not(None),
+            )
+            .order_by(Attachment.id.asc())
+            .first()
+        )
 
     @classmethod
     def create_attachment_from_bytes(
@@ -49,42 +83,65 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         # Validate file size
         file_size = len(content)
         if file_size > cls.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB",
+            raise ValidationError(
+                f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB"
             )
 
         # AG-014: Magic-byte validation for restricted types
         cls._validate_magic_bytes(content, original_filename, content_type)
+        try:
+            scan_upload_bytes(content, original_filename, content_type)
+        except MalwareDetectedError as exc:
+            raise ValidationError(str(exc)) from exc
+        except MalwareScannerUnavailableError as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
 
         checksum_sha256 = hashlib.sha256(content).hexdigest()
+        reusable_attachment = cls._find_reusable_attachment_blob(
+            db,
+            document_id=document_id,
+            checksum_sha256=checksum_sha256,
+            file_size=file_size,
+            content_type=content_type,
+        )
 
-        # Generate unique filename
-        file_ext = Path(original_filename).suffix
-        unique_filename = f"{uuid.uuid4().hex}{file_ext}"
-
-        # Use storage backend (S3 or local)
-        try:
-            storage = get_storage_backend()
-            file_stream = io.BytesIO(content)
-            storage_key = storage.upload(
-                file_stream, f"doc_{document_id}/{unique_filename}", content_type
+        if reusable_attachment is not None:
+            unique_filename = reusable_attachment.filename
+            storage_path = reusable_attachment.storage_path
+            storage_key = reusable_attachment.storage_key or reusable_attachment.storage_path
+            logger.info(
+                "Reused existing attachment blob %s for document %s",
+                reusable_attachment.id,
+                document_id,
             )
-            storage_path = storage_key
-            logger.info(f"Uploaded attachment to storage: {storage_key}")
-        except Exception as e:
-            logger.error(f"Storage upload failed: {e}")
-            if not settings.ALLOW_LOCAL_STORAGE_FALLBACK:
-                raise StorageError(f"Storage unavailable and fallback disabled: {e}") from e
-            logger.warning("Falling back to local file storage")
-            # Fallback to local file storage
-            upload_dir = cls.get_upload_dir()
-            doc_dir = upload_dir / str(document_id)
-            doc_dir.mkdir(parents=True, exist_ok=True)
-            file_path = doc_dir / unique_filename
-            with open(file_path, "wb") as f:
-                f.write(content)
-            storage_path = str(file_path)
+        else:
+            # Generate unique filename
+            file_ext = Path(original_filename).suffix
+            unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+
+            # Use storage backend (S3 or local)
+            try:
+                storage = get_storage_backend()
+                file_stream = io.BytesIO(content)
+                storage_key = storage.upload(
+                    file_stream, f"doc_{document_id}/{unique_filename}", content_type
+                )
+                storage_path = storage_key
+                logger.info(f"Uploaded attachment to storage: {storage_key}")
+            except Exception as e:  # policy: DEGRADED — storage upload may fall back to local persistence
+                logger.error(f"Storage upload failed: {e}")
+                if not settings.ALLOW_LOCAL_STORAGE_FALLBACK:
+                    raise StorageError(f"Storage unavailable and fallback disabled: {e}") from e
+                logger.warning("Falling back to local file storage")
+                # Fallback to local file storage
+                upload_dir = cls.get_upload_dir()
+                doc_dir = upload_dir / str(document_id)
+                doc_dir.mkdir(parents=True, exist_ok=True)
+                file_path = doc_dir / unique_filename
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                storage_path = str(file_path)
+                storage_key = storage_path
 
         # Create attachment record
         supports_reader_artifact = cls._supports_structured_reader_artifact(
@@ -99,7 +156,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             size_bytes=file_size,
             mime_type=content_type,
             storage_path=storage_path,
-            storage_key=storage_path,
+            storage_key=storage_key,
             sha256=checksum_sha256,
             reader_html_status=(
                 cls.READER_STATUS_PENDING if supports_reader_artifact else None
@@ -112,21 +169,26 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             db.add(attachment)
             db.commit()
             db.refresh(attachment)
-        except Exception as db_error:
+        except Exception as db_error:  # policy: COMPENSATING — DB failure must clean up orphaned storage artifacts
             # Clean up orphaned storage file if DB commit fails
             logger.error(f"DB commit failed for attachment, cleaning up storage: {db_error}")
-            try:
-                storage = get_storage_backend()
-                storage.delete(storage_path)
-                logger.info(f"Cleaned up orphaned storage file: {storage_path}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to clean up storage file {storage_path}: {cleanup_error}")
+            if reusable_attachment is None:
+                try:
+                    storage = get_storage_backend()
+                    storage.delete(storage_path)
+                    logger.info(f"Cleaned up orphaned storage file: {storage_path}")
+                except Exception as cleanup_error:  # policy: COMPENSATING — orphan cleanup is best-effort during rollback
+                    logger.warning(f"Failed to clean up storage file {storage_path}: {cleanup_error}")
             raise
         
         cls._ensure_artifact_rows(db, attachment, persist=True)
 
         if supports_reader_artifact:
-            cls.schedule_reader_artifact_generation(attachment.id, background_tasks=background_tasks)
+            cls.schedule_reader_artifact_generation(
+                attachment.id,
+                db=db,
+                background_tasks=background_tasks,
+            )
 
         if convert_to_html:
             try:
@@ -172,7 +234,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     logger.info(
                         f"Created initial version {next_version} for document {document_id}"
                     )
-            except Exception as e:
+            except Exception as e:  # policy: LOSSY — HTML conversion failure must not discard the uploaded attachment
                 logger.error(f"Failed to convert document to HTML: {e}")
 
         return attachment
@@ -181,6 +243,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
     def enqueue_conversion(
         attachment_id: int,
         *,
+        db: Session | None = None,
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
@@ -189,6 +252,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         enqueue_conversion_job(
             attachment_id,
+            db=db,
             background_tasks=background_tasks,
             force=force,
         )

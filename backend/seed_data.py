@@ -11,6 +11,10 @@ This script populates the database with:
 Run this AFTER init_db.py:
     python init_db.py
     python seed_data.py
+
+Safety:
+    - Development/test environments seed by default unless SEED_DEMO_DATA=false
+    - Production/staging require SEED_DEMO_DATA=true explicit opt-in
 """
 import os
 import sys
@@ -32,6 +36,47 @@ from app.models import (
     VersionBumpType,
 )
 from app.security import get_password_hash
+
+
+TRUE_VALUES = {"1", "true", "yes", "on"}
+FALSE_VALUES = {"0", "false", "no", "off"}
+PRODUCTION_LIKE_ENVS = {"production", "staging"}
+AUTO_SEED_ENVS = {"development", "dev", "test", "testing", "local"}
+
+
+def _normalize_flag(value):
+    if value is None:
+        return None
+    return str(value).strip().lower()
+
+
+def should_seed_demo_data(app_env=None, explicit_flag=None):
+    """Return True when demo seed data is allowed for the current environment."""
+    resolved_env = _normalize_flag(app_env or os.getenv("APP_ENV")) or "development"
+    normalized_flag = _normalize_flag(explicit_flag or os.getenv("SEED_DEMO_DATA"))
+
+    if normalized_flag in TRUE_VALUES:
+        return True
+    if normalized_flag in FALSE_VALUES:
+        return False
+
+    if resolved_env in PRODUCTION_LIKE_ENVS:
+        return False
+    if resolved_env in AUTO_SEED_ENVS:
+        return True
+    return False
+
+
+def ensure_demo_seed_allowed():
+    """Fail fast when demo seed data is not allowed for the current environment."""
+    if should_seed_demo_data():
+        return
+
+    resolved_env = _normalize_flag(os.getenv("APP_ENV")) or "development"
+    raise RuntimeError(
+        "Refusing to seed demo data in "
+        f"{resolved_env}. Set SEED_DEMO_DATA=true for an explicit one-time opt-in."
+    )
 
 
 def create_tenants(db):
@@ -532,6 +577,8 @@ def main():
     print("🌱 SEED DATA SCRIPT")
     print("=" * 60)
     print("Creating test data for the Documentation Platform...")
+
+    ensure_demo_seed_allowed()
 
     # Ensure schema and lightweight migrations are always applied before seeding.
     init_db()

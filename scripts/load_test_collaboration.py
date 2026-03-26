@@ -1,8 +1,10 @@
 """
-Load Testing Script for Real-Time Collaboration
+Load testing entrypoint for collaboration-related runtime paths.
 
-This script simulates multiple concurrent users editing the same document
-to test the collaboration server's scalability.
+The assignment-update scenario remains Python-native in this file.
+The collaboration scenario now delegates to the protocol-faithful Yjs/Hocuspocus
+gate under ``frontend/scripts/run-collab-perf-gate.mjs`` so the repo no longer
+advertises the old synthetic JSON-websocket harness as the primary collab test.
 
 Usage:
     python load_test_collaboration.py --users 10 --duration 60
@@ -17,9 +19,11 @@ import asyncio
 import argparse
 import json
 import random
+import subprocess
 import time
 from datetime import datetime
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
@@ -560,8 +564,32 @@ async def main():
     if config.scenario == "assignments":
         await run_assignment_update_load_test(config)
     else:
-        tester = LoadTester(config)
-        await tester.run()
+        repo_root = Path(__file__).resolve().parent.parent
+        collab_gate = repo_root / "frontend" / "scripts" / "run-collab-perf-gate.mjs"
+        rounds = max(1, min(10, config.duration_seconds // 10 or 1))
+        command = [
+            "node",
+            str(collab_gate),
+            "--backend-url",
+            config.backend_url,
+            "--collab-url",
+            config.collab_server_url,
+            "--users",
+            str(config.num_users),
+            "--rounds",
+            str(rounds),
+        ]
+        if config.document_id:
+            command.extend(["--document-id", str(config.document_id)])
+        if config.verbose:
+            command.append("--verbose")
+
+        print(
+            "Delegating collaboration scenario to the protocol-faithful provider harness:"
+        )
+        print("  " + " ".join(command))
+        completed = await asyncio.to_thread(subprocess.run, command, check=False)
+        raise SystemExit(completed.returncode)
 
 
 if __name__ == "__main__":

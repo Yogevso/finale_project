@@ -19,7 +19,7 @@ operational procedures for the Documentation Platform.
 
 - **Docker** 20.10+ and **Docker Compose** v2.x
 - **PostgreSQL** 14+ (for production) or SQLite (development only)
-- **Redis** (optional, for rate limiting and caching)
+- **Redis** (required for the default production rate-limit path; also used for collaboration coordination)
 - **S3-compatible storage** (for production file storage)
 - **SMTP server** (for email notifications)
 
@@ -100,6 +100,7 @@ cp .env.example .env
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `SECRET_KEY` | *(insecure default)* | **Yes** | JWT signing key (32+ chars) |
+| `SECRET_KEY_OLD` | *(none)* | No | Optional previous signing key accepted temporarily during coordinated rotation |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | No | JWT token expiration |
 | `CSRF_PROTECTION_ENABLED` | `True` | No | Enable CSRF protection |
 | `TRUST_PROXY_HEADERS` | `False` | No | Trust X-Forwarded-* headers |
@@ -124,7 +125,7 @@ cp .env.example .env
 | `S3_ACCESS_KEY` | *(none)* | Conditional | S3 access key |
 | `S3_SECRET_KEY` | *(none)* | Conditional | S3 secret key |
 | `S3_REGION` | `us-east-1` | No | AWS region |
-| `MAX_UPLOAD_SIZE` | `10485760` | No | Max file upload size (bytes) |
+| `MAX_UPLOAD_SIZE` | `10485760` | No | Max file upload size (bytes). Current production tier intentionally treats 10MB as the large-document boundary. |
 
 ### Email Settings
 
@@ -144,6 +145,32 @@ cp .env.example .env
 | `RATE_LIMIT_ENABLED` | `True` | No | Enable rate limiting |
 | `RATE_LIMIT_REQUESTS` | `100` | No | Requests per window |
 | `RATE_LIMIT_WINDOW` | `60` | No | Window size (seconds) |
+| `REDIS_URL` | `redis://redis:6379/0` | **Yes when `RATE_LIMIT_ENABLED=True` in production** | Redis backend for rate limiting |
+
+### Search Settings
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `SEARCH_BACKEND_MODE` | `auto` | **Yes (prod)** | Explicit search path: `sqlite_fts5`, `postgres_tsv`, or `portable_like` |
+
+### Assistant Capacity Settings
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `ASSISTANT_CHAT_MAX_CONCURRENT` | `4` | No | Max concurrent assistant chat requests per backend instance |
+| `ASSISTANT_CHAT_MAX_QUEUE` | `8` | No | Max queued assistant chat requests before rejection |
+| `ASSISTANT_CHAT_QUEUE_TIMEOUT_SECONDS` | `15` | No | Max time a chat request may wait for capacity |
+| `ASSISTANT_EMBEDDING_MAX_CONCURRENT` | `4` | No | Max concurrent assistant embedding jobs per backend instance |
+| `ASSISTANT_EMBEDDING_MAX_QUEUE` | `16` | No | Max queued assistant embedding jobs before rejection |
+| `ASSISTANT_EMBEDDING_QUEUE_TIMEOUT_SECONDS` | `10` | No | Max time an embedding job may wait for capacity |
+
+### Collaboration Runtime Guardrails
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `COLLAB_MAX_TOTAL_CONNECTIONS` | `200` | No | Max concurrent websocket connections per collab-server instance |
+| `COLLAB_MAX_CONNECTIONS_PER_DOCUMENT` | `25` | No | Max concurrent connections to one document per collab-server instance |
+| `COLLAB_RECONNECT_WINDOW_SECONDS` | `60` | No | Window used to count rapid reconnect churn in collab runtime metrics |
 
 ---
 
@@ -165,6 +192,22 @@ docker-compose -f docker-compose.prod.yml logs -f
 docker-compose -f docker-compose.prod.yml up -d --scale backend=3
 ```
 
+Notes:
+
+- `docker-compose.prod.yml` now expects the frontend container to listen on `127.0.0.1:8080`.
+- TLS should terminate at an upstream reverse proxy or load balancer, not inside the unprivileged frontend container.
+- The release workflow can override `BACKEND_IMAGE`, `FRONTEND_IMAGE`, and `COLLAB_SERVER_IMAGE` to deploy prebuilt images from GHCR.
+- Docker base images and third-party runtime images are digest pinned; refresh digests intentionally and review the security workflow pins in `.github/workflows/security.yml` when updating them.
+
+### Supply-Chain Pin Refresh
+
+When refreshing release-path base images or external runtime images:
+
+1. Pull the exact tagged image and record its digest.
+2. Update the pinned `FROM ...@sha256:...` or compose `image: ...@sha256:...` reference.
+3. Run `docker compose -f docker-compose.prod.yml config` and the infrastructure regression tests.
+4. If a GitHub Action pin also needs refresh, resolve the official repo ref to a commit SHA and update the workflow to that immutable SHA, not a moving tag or branch.
+
 ### Environment File Setup
 
 Create a `.env.prod` file with production settings:
@@ -172,11 +215,25 @@ Create a `.env.prod` file with production settings:
 ```env
 # Required
 SECRET_KEY=your-64-char-secret-key-here
+SECRET_KEY_OLD=
 DATABASE_URL=postgresql://portal:password@db:5432/portal
 ANALYTICS_DATABASE_URL=postgresql://portal:password@db:5432/portal_analytics
 CHAT_DATABASE_URL=postgresql://portal:password@db:5432/portal_chat
+REDIS_URL=redis://redis:6379/0
+SEARCH_BACKEND_MODE=postgres_tsv
+ASSISTANT_CHAT_MAX_CONCURRENT=4
+ASSISTANT_CHAT_MAX_QUEUE=8
+ASSISTANT_CHAT_QUEUE_TIMEOUT_SECONDS=15
+ASSISTANT_EMBEDDING_MAX_CONCURRENT=4
+ASSISTANT_EMBEDDING_MAX_QUEUE=16
+ASSISTANT_EMBEDDING_QUEUE_TIMEOUT_SECONDS=10
+COLLAB_MAX_TOTAL_CONNECTIONS=200
+COLLAB_MAX_CONNECTIONS_PER_DOCUMENT=25
+COLLAB_RECONNECT_WINDOW_SECONDS=60
 APP_ENV=production
 DEBUG=False
+SEED_DEMO_DATA=false
+VITE_COLLAB_SERVER_URL=wss://collab.portal.example.com
 
 # Storage
 S3_ENABLED=True
@@ -237,16 +294,35 @@ The migration script is idempotent — running it multiple times skips already-m
 ### Backup Before Migration
 
 ```bash
-# PostgreSQL backup (all 3 databases)
-pg_dump -U portal -h localhost portal > backup_core_$(date +%Y%m%d).sql
-pg_dump -U portal -h localhost portal_analytics > backup_analytics_$(date +%Y%m%d).sql
-pg_dump -U portal -h localhost portal_chat > backup_chat_$(date +%Y%m%d).sql
+# PostgreSQL-first drill (recommended production path)
+python -m scripts.backup_restore_drill --database-url "$DATABASE_URL" --backup-only
+python -m scripts.backup_restore_drill --database-url "$DATABASE_URL"
 
-# SQLite backup
-cp data/portal.db data/portal_$(date +%Y%m%d).db
-cp data/analytics.db data/analytics_$(date +%Y%m%d).db
-cp data/chat.db data/chat_$(date +%Y%m%d).db
+# SQLite/local fallback drill
+python -m scripts.backup_restore_drill --db-path data/portal.db --backup-only
+python -m scripts.backup_restore_drill --db-path data/portal.db
 ```
+
+### Disaster Recovery Validation
+
+```bash
+python -m scripts.disaster_recovery_validation --database-url "$DATABASE_URL"
+```
+
+### Secret Rotation
+
+```bash
+python -m scripts.rotate_secrets --type jwt
+```
+
+JWT rotation now supports a coordinated 24-hour grace period:
+
+```bash
+SECRET_KEY=<new key>
+SECRET_KEY_OLD=<previous key>
+```
+
+Apply the same pair to both backend and collab-server during the grace window.
 
 ---
 

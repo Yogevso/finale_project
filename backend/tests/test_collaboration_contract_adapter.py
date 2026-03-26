@@ -49,5 +49,6 @@ def test_collaboration_service_issues_token_with_normalized_contract(test_user):
     )
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
+    assert payload["tenant_id"] == test_user.tenant_id
     assert payload["document_id"] == "77"
     assert payload["permissions"] == ["read", "write"]

@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type { DocumentStateTransportPort } from '../ports/documentStateTransportPort.js';
+import { buildTraceHeaders } from '../trace.js';
 
 export function normalizeApiPrefix(prefix: string): string {
   if (!prefix) {
@@ -29,11 +30,16 @@ export function buildDocumentStateUrl(
 const BACKEND_TIMEOUT_MS = 10_000;
 
 export class BackendDocumentStateTransportAdapter implements DocumentStateTransportPort {
-  async loadDocumentState(documentId: string, token: string): Promise<Uint8Array | null> {
+  async loadDocumentState(
+    documentId: string,
+    token: string,
+    traceId?: string,
+  ): Promise<Uint8Array | null> {
     try {
       const response = await axios.get(buildDocumentStateUrl(documentId), {
         headers: {
           Authorization: `Bearer ${token}`,
+          ...buildTraceHeaders(traceId),
         },
         responseType: 'arraybuffer',
         timeout: BACKEND_TIMEOUT_MS,
@@ -51,14 +57,19 @@ export class BackendDocumentStateTransportAdapter implements DocumentStateTransp
     }
   }
 
-  async saveDocumentState(documentId: string, state: Uint8Array, token: string): Promise<void> {
+  async saveDocumentState(
+    documentId: string,
+    state: Uint8Array,
+    token: string,
+    traceId?: string,
+  ): Promise<void> {
     await axios.put(buildDocumentStateUrl(documentId), state, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/octet-stream',
+        ...buildTraceHeaders(traceId),
       },
       timeout: BACKEND_TIMEOUT_MS,
     });
   }
 }
-

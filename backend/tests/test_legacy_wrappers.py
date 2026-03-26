@@ -19,7 +19,7 @@ def _status_map():
 def test_container_analytics_service_resolves_strangler_wrapper(db):
     container = build_container()
 
-    service = container.analytics_service(db, None)
+    service = container.analytics_service(db, None, system_scope=True)
 
     assert isinstance(service, AnalyticsServiceStranglerWrapper)
 

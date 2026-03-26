@@ -19,6 +19,7 @@ class RbacPoliciesUpdate(BaseModel):
     """Bulk RBAC policy update request"""
 
     policies: List[RbacPolicyInput]
+    confirm_password: str
 
 
 class RbacPolicyResponse(RbacPolicyInput):

@@ -8,6 +8,8 @@ from typing import Optional
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+from app.search_backend import SearchBackendMode, database_dialect_from_url
+
 # Insecure default that must not be used in production
 _INSECURE_SECRET_KEY = "your-secret-key-change-in-production"
 
@@ -25,6 +27,7 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str = _INSECURE_SECRET_KEY
+    SECRET_KEY_OLD: Optional[str] = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
@@ -112,6 +115,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: set[str] = {".docx", ".pptx", ".txt"}
     LIBREOFFICE_BIN: Optional[str] = None
+    MALWARE_SCAN_MODE: str = "disabled"  # disabled | log_only | enforce
+    MALWARE_SCAN_COMMAND: Optional[str] = None
+    MALWARE_SCAN_TIMEOUT_SECONDS: int = 30
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -137,12 +143,19 @@ class Settings(BaseSettings):
     ASSISTANT_REQUEST_TIMEOUT: int = 120  # seconds
     ASSISTANT_RATE_LIMIT_PER_MINUTE: int = 20
     ASSISTANT_ENABLED: bool = True  # feature flag to disable AI assistant
+    ASSISTANT_CHAT_MAX_CONCURRENT: int = 4
+    ASSISTANT_CHAT_MAX_QUEUE: int = 8
+    ASSISTANT_CHAT_QUEUE_TIMEOUT_SECONDS: float = 15.0
+    ASSISTANT_EMBEDDING_MAX_CONCURRENT: int = 4
+    ASSISTANT_EMBEDDING_MAX_QUEUE: int = 16
+    ASSISTANT_EMBEDDING_QUEUE_TIMEOUT_SECONDS: float = 10.0
 
     # Collaboration server
     COLLAB_SERVER_URL: str = "http://collab-server:8002"
 
     # Redis (optional — used for distributed rate limiting)
     REDIS_URL: Optional[str] = None
+    SEARCH_BACKEND_MODE: str = SearchBackendMode.AUTO.value  # auto | sqlite_fts5 | postgres_tsv | portable_like
 
     # RAG (Retrieval-Augmented Generation)
     ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"
@@ -181,11 +194,109 @@ class Settings(BaseSettings):
             else:
                 logging.warning("SECRET_KEY is shorter than recommended (32+ chars).")
 
+        if self.SECRET_KEY_OLD:
+            if self.SECRET_KEY_OLD == self.SECRET_KEY:
+                logging.warning(
+                    "SECRET_KEY_OLD matches SECRET_KEY. Rotation grace period is effectively disabled."
+                )
+            elif is_production and len(self.SECRET_KEY_OLD) < 32:
+                logging.warning(
+                    "SECRET_KEY_OLD is shorter than recommended (32+ chars). "
+                    "Existing tokens will still verify during rotation, but the old key should be replaced promptly."
+                )
+
         # HMAC key validation
         if is_production and "dev-audience-audit-signing-key" in self.AUDIENCE_AUDIT_HMAC_KEYS:
             raise RuntimeError(
                 "Insecure AUDIENCE_AUDIT_HMAC_KEYS rejected in production. "
                 "Set AUDIENCE_AUDIT_HMAC_KEYS to a secure random value."
+            )
+
+        enabled_default_feature_flags = (
+            "FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE",
+            "FEATURE_FLAG_PROJECTION_CACHE",
+            "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT",
+            "ASSISTANT_ENABLED",
+        )
+        if is_production:
+            implicitly_enabled_flags = [
+                flag_name
+                for flag_name in enabled_default_feature_flags
+                if getattr(self, flag_name) is True and flag_name not in self.model_fields_set
+            ]
+            if implicitly_enabled_flags:
+                raise RuntimeError(
+                    "Production requires explicit values for feature flags with enabled defaults: "
+                    + ", ".join(implicitly_enabled_flags)
+                )
+
+        if is_production and self.RATE_LIMIT_ENABLED and not self.REDIS_URL:
+            raise RuntimeError(
+                "Production requires REDIS_URL when RATE_LIMIT_ENABLED is True."
+            )
+
+        # H-11: Warn when email is disabled — password reset and invitations won't work.
+        try:
+            configured_search_mode = SearchBackendMode(self.SEARCH_BACKEND_MODE)
+        except ValueError as exc:
+            raise RuntimeError(
+                "Invalid SEARCH_BACKEND_MODE. Expected one of: "
+                "auto, sqlite_fts5, postgres_tsv, portable_like."
+            ) from exc
+
+        database_dialect = database_dialect_from_url(self.DATABASE_URL)
+        if is_production and configured_search_mode == SearchBackendMode.AUTO:
+            raise RuntimeError(
+                "Production requires explicit SEARCH_BACKEND_MODE. "
+                "Set SEARCH_BACKEND_MODE to sqlite_fts5, postgres_tsv, or portable_like."
+            )
+        if (
+            is_production
+            and configured_search_mode == SearchBackendMode.SQLITE_FTS5
+            and database_dialect != "sqlite"
+        ):
+            raise RuntimeError(
+                "SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL."
+            )
+        if (
+            is_production
+            and configured_search_mode == SearchBackendMode.POSTGRES_TSV
+            and database_dialect != "postgresql"
+        ):
+            raise RuntimeError(
+                "SEARCH_BACKEND_MODE=postgres_tsv requires a PostgreSQL DATABASE_URL."
+            )
+
+        assistant_capacity_fields = (
+            "ASSISTANT_CHAT_MAX_CONCURRENT",
+            "ASSISTANT_CHAT_MAX_QUEUE",
+            "ASSISTANT_CHAT_QUEUE_TIMEOUT_SECONDS",
+            "ASSISTANT_EMBEDDING_MAX_CONCURRENT",
+            "ASSISTANT_EMBEDDING_MAX_QUEUE",
+            "ASSISTANT_EMBEDDING_QUEUE_TIMEOUT_SECONDS",
+        )
+        invalid_capacity_fields = [
+            field_name
+            for field_name in assistant_capacity_fields
+            if float(getattr(self, field_name)) < 0
+        ]
+        if invalid_capacity_fields:
+            raise RuntimeError(
+                "Assistant capacity settings must be zero or positive: "
+                + ", ".join(invalid_capacity_fields)
+            )
+
+        if not self.EMAIL_ENABLED:
+            logging.warning(
+                "EMAIL_ENABLED is False. Password reset and invitation emails "
+                "will not be sent. Configure SMTP settings and set "
+                "EMAIL_ENABLED=True to enable email delivery."
+            )
+
+        valid_scan_modes = {"disabled", "log_only", "enforce"}
+        if self.MALWARE_SCAN_MODE not in valid_scan_modes:
+            raise RuntimeError(
+                "Invalid MALWARE_SCAN_MODE. Expected one of: disabled, log_only, enforce."
             )
 
         return self

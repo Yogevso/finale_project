@@ -50,7 +50,7 @@ const CustomerDocumentPage = lazy(() => import('./pages/portal/CustomerDocumentP
 const MyFeedbackPage = lazy(() => import('./pages/portal/MyFeedbackPage'))
 import AcceptInvitationPage from './pages/AcceptInvitationPage'
 // Route guards
-import RoleGuard, { InternalGuard, AdminGuard, ManagerGuard, EditorGuard } from './components/guards/RoleGuard'
+import RoleGuard, { InternalGuard, ManagerGuard } from './components/guards/RoleGuard'
 import { RouteAnnouncer } from './components/a11y/SkipNavLink'
 import RouteTransition from './components/RouteTransition'
 import { useTheme } from './hooks/useTheme'
@@ -278,7 +278,14 @@ function App() {
         >
           <Route index element={<DocumentsPage />} />
           <Route path=":id" element={<DocumentDetailPage />} />
-          <Route path=":id/compare" element={<EditorGuard><VersionComparePage /></EditorGuard>} />
+          <Route
+            path=":id/compare"
+            element={(
+              <RoleGuard requiredPermissions={['edit_document']}>
+                <VersionComparePage />
+              </RoleGuard>
+            )}
+          />
         </Route>
 
         {/* Fullscreen Document View - use DocumentDetailPage */}
@@ -298,7 +305,7 @@ function App() {
           path="/reviews"
           element={
             <ErrorBoundary>
-              <RoleGuard allowedRoles={['system_admin', 'admin', 'manager', 'editor']}>
+              <RoleGuard requiredPermissions={['approve_review', 'approve_peer_review']}>
                 <Layout />
               </RoleGuard>
             </ErrorBoundary>
@@ -386,9 +393,9 @@ function App() {
           path="/users"
           element={
             <ErrorBoundary>
-              <ManagerGuard>
+              <RoleGuard requiredPermissions={['manage_users', 'manage_editors']}>
                 <Layout />
-              </ManagerGuard>
+              </RoleGuard>
             </ErrorBoundary>
           }
         >
@@ -429,9 +436,9 @@ function App() {
           path="/admin/companies"
           element={
             <ErrorBoundary>
-              <AdminGuard>
+              <RoleGuard requiredPermissions={['manage_companies']}>
                 <Layout />
-              </AdminGuard>
+              </RoleGuard>
             </ErrorBoundary>
           }
         >
@@ -443,7 +450,7 @@ function App() {
           path="/admin/system-setup"
           element={
             <ErrorBoundary>
-              <RoleGuard allowedRoles={['system_admin']}>
+              <RoleGuard requiredPermissions={['system_settings']}>
                 <Layout />
               </RoleGuard>
             </ErrorBoundary>

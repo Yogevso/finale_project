@@ -1,14 +1,18 @@
 """Invitation Management API Routes"""
 
+import asyncio
 import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
+from app.auth_context.invitation_tokens import hash_invitation_token
 from app.application.policies import InvitationPolicy
+from app.config import settings
 from app.db import get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.domain.aggregates import InvitationAggregate
@@ -21,12 +25,42 @@ from app.models import (
 )
 from app.repositories import InvitationRepository, UserRepository
 from app.security import get_current_active_user
+from app.services.email_service import email_service
+from app.utils.sanitization import sanitize_plain_text
 
 router = APIRouter()
 
 # Invitation expiration in days
 INVITATION_EXPIRY_DAYS = 7
 invitation_policy = InvitationPolicy()
+_INVITATION_CREATE_CONFLICT_DETAIL = "Unable to send an invitation for that email"
+_INVITATION_RESEND_CONFLICT_DETAIL = "Unable to resend invitation for that email"
+
+
+def _run_async_email(coro):
+    """Execute async email calls from sync endpoints/background tasks."""
+    try:
+        asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+
+def _send_invitation_email_task(
+    to_email: str, accept_url: str, inviter_name: str, expires_days: int, message: str | None,
+) -> None:
+    _run_async_email(
+        email_service.send_invitation(
+            to_email=to_email,
+            accept_url=accept_url,
+            inviter_name=inviter_name,
+            expires_days=expires_days,
+            message=message,
+        )
+    )
 
 
 # ========== Schemas ==========
@@ -71,6 +105,10 @@ def generate_invitation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _sanitize_invitation_message(message: str | None) -> str | None:
+    return sanitize_plain_text(message)
+
+
 def resolve_invitation_tenant_id(
     invitation_data: InvitationCreate, tenant_ctx: TenantContext
 ) -> Optional[int]:
@@ -94,6 +132,7 @@ def resolve_invitation_tenant_id(
 @router.post("/invitations", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
 def create_invitation(
     invitation_data: InvitationCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
@@ -138,7 +177,8 @@ def create_invitation(
     # Check if email is already registered
     if user_repository.get_by_email(invitation_data.email):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVITATION_CREATE_CONFLICT_DETAIL,
         )
 
     # Check for existing pending invitation
@@ -146,21 +186,35 @@ def create_invitation(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An invitation is already pending for this email",
+            detail=_INVITATION_CREATE_CONFLICT_DETAIL,
         )
+
+    raw_token = generate_invitation_token()
+    sanitized_message = _sanitize_invitation_message(invitation_data.message)
 
     invitation = InvitationFactory.create_invitation(
         email=invitation_data.email,
-        token=generate_invitation_token(),
+        token=hash_invitation_token(raw_token),
         role=invitation_data.role,
         tenant_id=target_tenant_id,
         invited_by=current_user.id,
-        message=invitation_data.message,
+        message=sanitized_message,
         expires_at=datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS),
     )
     db.add(invitation)
     db.commit()
     db.refresh(invitation)
+
+    # H-12: Send invitation email in background
+    accept_url = f"{settings.BASE_URL}/invitation/accept?token={quote(raw_token)}"
+    background_tasks.add_task(
+        _send_invitation_email_task,
+        to_email=invitation.email,
+        accept_url=accept_url,
+        inviter_name=current_user.full_name,
+        expires_days=INVITATION_EXPIRY_DAYS,
+        message=invitation.message,
+    )
 
     # Get tenant name for response
     tenant_name = None
@@ -329,6 +383,7 @@ def cancel_invitation(
 @router.post("/invitations/{invitation_id}/resend", response_model=InvitationResponse)
 def resend_invitation(
     invitation_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
@@ -367,12 +422,14 @@ def resend_invitation(
     # Check if user already exists
     if user_repository.get_by_email(invitation.email):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVITATION_RESEND_CONFLICT_DETAIL,
         )
 
     # Generate new token and extend expiration
+    raw_token = generate_invitation_token()
     InvitationAggregate(invitation).resend(
-        new_token=generate_invitation_token(),
+        new_token=hash_invitation_token(raw_token),
         new_expires_at=datetime.utcnow() + timedelta(days=INVITATION_EXPIRY_DAYS),
     )
     db.commit()
@@ -384,6 +441,16 @@ def resend_invitation(
         tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
         if tenant:
             tenant_name = tenant.name
+
+    accept_url = f"{settings.BASE_URL}/invitation/accept?token={quote(raw_token)}"
+    background_tasks.add_task(
+        _send_invitation_email_task,
+        to_email=invitation.email,
+        accept_url=accept_url,
+        inviter_name=inviter.full_name if inviter else "Unknown",
+        expires_days=INVITATION_EXPIRY_DAYS,
+        message=invitation.message,
+    )
 
     return InvitationResponse(
         id=invitation.id,

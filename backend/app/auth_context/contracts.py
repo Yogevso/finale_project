@@ -61,8 +61,10 @@ class CollaborationTokenContract:
     username: str
     email: str
     role: str
+    tenant_id: int | None
     document_id: str
     permissions: list[str]
+    trace_id: str
 
     @classmethod
     def from_user(
@@ -71,14 +73,17 @@ class CollaborationTokenContract:
         *,
         document_id: int,
         permissions: list[str],
+        trace_id: str,
     ) -> "CollaborationTokenContract":
         return cls(
             sub=str(user.id),
             username=user.username,
             email=user.email,
             role=_serialize_role(user.role),
+            tenant_id=user.tenant_id,
             document_id=str(document_id),
             permissions=list(permissions),
+            trace_id=trace_id,
         )
 
     def to_payload(self) -> dict[str, Any]:
@@ -87,6 +92,8 @@ class CollaborationTokenContract:
             "username": self.username,
             "email": self.email,
             "role": self.role,
+            "tenant_id": self.tenant_id,
             "document_id": self.document_id,
             "permissions": list(self.permissions),
+            "trace_id": self.trace_id,
         }

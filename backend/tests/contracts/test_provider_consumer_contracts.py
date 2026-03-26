@@ -149,6 +149,7 @@ def test_collab_server_token_contract_matches_backend_token_payload_provider_sha
         hashed_password="not-used",
         role=UserRole(fixture["role"]),
         is_active=True,
+        tenant_id=fixture["tenant_id"],
     )
 
     auth_service = CollaborationAuthService(

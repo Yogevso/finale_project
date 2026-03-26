@@ -88,6 +88,7 @@ Builds Docker images and deploys to environments.
 ### Docker Images
 - Published to: `ghcr.io/yogevso/finale_project/backend`
 - Published to: `ghcr.io/yogevso/finale_project/frontend`
+- Published to: `ghcr.io/yogevso/finale_project/collab-server`
 
 ### Tags
 - `latest` - Latest from main branch
@@ -177,6 +178,11 @@ Configure in **Settings > Environments**:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `API_URL` | Backend API URL for frontend | `https://api.portal.example.com` |
+| `COLLAB_SERVER_URL` | Collaboration URL for frontend builds | `wss://collab.portal.example.com` |
+| `STAGING_DEPLOY_PATH` | Remote staging deploy directory | `/opt/document-portal` |
+| `PRODUCTION_DEPLOY_PATH` | Remote production deploy directory | `/opt/document-portal` |
+| `STAGING_COMPOSE_ENV_FILE` | Remote staging env file for compose | `.env.prod` |
+| `PRODUCTION_COMPOSE_ENV_FILE` | Remote production env file for compose | `.env.prod` |
 
 ---
 
@@ -236,8 +242,10 @@ Recommended settings for the `main` branch:
 ### Trigger CD Manually
 1. Go to **Actions > CD - Build & Deploy**
 2. Click **Run workflow**
-3. Select environment (staging/production)
-4. Optionally skip tests
+3. Select operation (`deploy` or `rollback`)
+4. Select environment (`staging` or `production`)
+5. Optional for deploy: provide `release_ref` to deploy a specific image tag
+6. Required for rollback: provide `release_ref` for the tag/sha to restore
 
 ### Create a Release
 ```bash
@@ -247,9 +255,11 @@ git push origin v1.0.0
 
 This will:
 1. Run all tests
-2. Build and push Docker images tagged with the version
+2. Build and push backend, frontend, and collab-server images tagged with the version
 3. Deploy to staging
-4. Create a GitHub Release (after production deployment)
+4. Run staging chaos validation
+5. Deploy to production after environment approval
+6. Create a GitHub Release
 
 ---
 

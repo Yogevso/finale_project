@@ -18,9 +18,10 @@ import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor'
 import * as Y from 'yjs'
 import { useEffect } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { CollaborationStatus } from './CollaborationStatus'
 import { ReadOnlyBanner, PermissionIndicator } from './ReadOnlyBanner'
-import type { CollaboratorInfo } from '@/lib/useCollaboration'
+import type { CollaboratorInfo } from '@/lib/collaboration/types'
 import type { HocuspocusProvider } from '@hocuspocus/provider'
 
 interface CollaborativeEditorProps {
@@ -31,6 +32,7 @@ interface CollaborativeEditorProps {
   isConnecting: boolean
   isSynced: boolean
   error: string | null
+  persistenceWarning: string | null
   collaborators: CollaboratorInfo[]
   currentUser: {
     userId: string | number
@@ -223,6 +225,7 @@ export function CollaborativeEditor({
   isConnecting,
   isSynced,
   error,
+  persistenceWarning,
   collaborators,
   currentUser,
   isReadOnly = false,
@@ -303,6 +306,31 @@ export function CollaborativeEditor({
         onRefreshPermissions={onRefreshPermissions}
         onRequestAccess={onRequestAccess}
       />
+
+      {persistenceWarning && (
+        <div
+          className="flex items-center justify-between gap-3 border-b border-rose-200 bg-rose-50 px-4 py-3"
+          role="alert"
+          aria-live="assertive"
+        >
+          <div className="flex items-start gap-2 text-rose-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold">Server saving failed</p>
+              <p className="text-sm">{persistenceWarning}</p>
+            </div>
+          </div>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700"
+            >
+              Reconnect
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Toolbar with collaboration status */}
       <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50">

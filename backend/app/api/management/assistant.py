@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import json
 import logging
-import time
-from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
@@ -29,24 +28,31 @@ from app.db import get_chat_db, get_db
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import User, UserRole
 from app.security import get_current_active_user
+from app.services.assistant_capacity_service import (
+    AssistantCapacityExceeded,
+    acquire_assistant_chat_slot,
+    get_assistant_capacity_service,
+)
+from app.services.distributed_rate_limit_service import DistributedRateLimitService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 
-# Simple in-memory per-user rate limiter
-_rate_buckets: dict[int, list[float]] = defaultdict(list)
-
 
 def _check_rate_limit(user_id: int) -> None:
-    now = time.time()
-    window = 60.0
-    bucket = _rate_buckets[user_id]
-    # Prune old entries
-    _rate_buckets[user_id] = [t for t in bucket if now - t < window]
-    if len(_rate_buckets[user_id]) >= settings.ASSISTANT_RATE_LIMIT_PER_MINUTE:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait before sending another message.")
-    _rate_buckets[user_id].append(now)
+    allowed, retry_after = DistributedRateLimitService.check_and_record(
+        scope="assistant-chat",
+        key=str(user_id),
+        max_requests=settings.ASSISTANT_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please wait before sending another message.",
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
 
 
 def _require_enabled() -> None:
@@ -64,6 +70,93 @@ def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
     return AssistantEngine(ollama, registry, conv_mgr)
 
 
+def _assistant_capacity_payload() -> dict[str, Any]:
+    snapshot = get_assistant_capacity_service().snapshot()
+    return {
+        "status": snapshot.status,
+        "recorded_at": snapshot.recorded_at,
+        "total_rejections": snapshot.total_rejections,
+        "total_timeouts": snapshot.total_timeouts,
+        "chat": {
+            "status": snapshot.chat.status,
+            "active": snapshot.chat.active,
+            "queued": snapshot.chat.queued,
+            "max_concurrent": snapshot.chat.max_concurrent,
+            "max_queue": snapshot.chat.max_queue,
+            "queue_timeout_seconds": snapshot.chat.queue_timeout_seconds,
+            "total_admitted": snapshot.chat.total_admitted,
+            "total_completed": snapshot.chat.total_completed,
+            "total_rejected": snapshot.chat.total_rejected,
+            "total_timed_out": snapshot.chat.total_timed_out,
+            "p50_duration_ms": snapshot.chat.p50_duration_ms,
+            "p95_duration_ms": snapshot.chat.p95_duration_ms,
+            "p50_queue_wait_ms": snapshot.chat.p50_queue_wait_ms,
+            "p95_queue_wait_ms": snapshot.chat.p95_queue_wait_ms,
+            "last_rejected_at": snapshot.chat.last_rejected_at,
+            "last_rejection_reason": snapshot.chat.last_rejection_reason,
+        },
+        "embedding": {
+            "status": snapshot.embedding.status,
+            "active": snapshot.embedding.active,
+            "queued": snapshot.embedding.queued,
+            "max_concurrent": snapshot.embedding.max_concurrent,
+            "max_queue": snapshot.embedding.max_queue,
+            "queue_timeout_seconds": snapshot.embedding.queue_timeout_seconds,
+            "total_admitted": snapshot.embedding.total_admitted,
+            "total_completed": snapshot.embedding.total_completed,
+            "total_rejected": snapshot.embedding.total_rejected,
+            "total_timed_out": snapshot.embedding.total_timed_out,
+            "p50_duration_ms": snapshot.embedding.p50_duration_ms,
+            "p95_duration_ms": snapshot.embedding.p95_duration_ms,
+            "p50_queue_wait_ms": snapshot.embedding.p50_queue_wait_ms,
+            "p95_queue_wait_ms": snapshot.embedding.p95_queue_wait_ms,
+            "last_rejected_at": snapshot.embedding.last_rejected_at,
+            "last_rejection_reason": snapshot.embedding.last_rejection_reason,
+        },
+    }
+
+
+async def _stream_assistant_events(
+    *,
+    request: Request,
+    queue: asyncio.Queue[dict[str, Any] | None],
+    done: asyncio.Event,
+    prod_task: asyncio.Task[None],
+    hb_task: asyncio.Task[None],
+):
+    idle_deadline = asyncio.get_running_loop().time() + 180
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=1)
+            except asyncio.TimeoutError:
+                if asyncio.get_running_loop().time() >= idle_deadline:
+                    yield 'event: error\ndata: {"message":"Request timed out"}\n\n'
+                    break
+                continue
+            if event is None:
+                break
+            idle_deadline = asyncio.get_running_loop().time() + 180
+            if event.get("event") == "_keepalive":
+                yield ": keepalive\n\n"
+                continue
+            evt = event.get("event", "message")
+            data = event.get("data", "")
+            if isinstance(data, dict):
+                data = json.dumps(data)
+            yield f"event: {evt}\ndata: {data}\n\n"
+    finally:
+        done.set()
+        for task in (hb_task, prod_task):
+            if not task.done():
+                task.cancel()
+        for task in (hb_task, prod_task):
+            with suppress(asyncio.CancelledError):
+                await task
+
+
 # ------------------------------------------------------------------
 # SSE Chat
 # ------------------------------------------------------------------
@@ -72,6 +165,7 @@ def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
 @router.post("/chat")
 async def chat(
     body: ChatRequest,
+    request: Request,
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
     chat_db: Session = Depends(get_chat_db),
@@ -79,12 +173,20 @@ async def chat(
     """Send a message and receive a streamed SSE response."""
     _require_enabled()
     _check_rate_limit(user.id)
+    try:
+        permit = await acquire_assistant_chat_slot()
+    except AssistantCapacityExceeded as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="AI assistant is currently busy. Please try again shortly.",
+            headers={"Retry-After": str(max(exc.retry_after_seconds, 1))},
+        )
 
     engine = _build_engine(chat_db, user)
     tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
 
     async def event_stream():
-        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         done = asyncio.Event()
 
         async def _producer():
@@ -114,26 +216,16 @@ async def chat(
         hb_task = asyncio.create_task(_heartbeat())
 
         try:
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=180)
-                except asyncio.TimeoutError:
-                    yield 'event: error\ndata: {"message":"Request timed out"}\n\n'
-                    break
-                if event is None:
-                    break
-                if event.get("event") == "_keepalive":
-                    yield ": keepalive\n\n"
-                    continue
-                evt = event.get("event", "message")
-                data = event.get("data", "")
-                if isinstance(data, dict):
-                    data = json.dumps(data)
-                yield f"event: {evt}\ndata: {data}\n\n"
+            async for chunk in _stream_assistant_events(
+                request=request,
+                queue=queue,
+                done=done,
+                prod_task=prod_task,
+                hb_task=hb_task,
+            ):
+                yield chunk
         finally:
-            hb_task.cancel()
-            if not prod_task.done():
-                prod_task.cancel()
+            await permit.release()
 
     return StreamingResponse(
         event_stream(),
@@ -245,8 +337,10 @@ def rename_conversation(
     conv = mgr.get_conversation(conversation_id, user.id)
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
-    mgr.update_title(conversation_id, title)
-    return {"id": conv.id, "title": title}
+    updated = mgr.update_title(conversation_id, title)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": updated.id, "title": updated.title}
 
 
 @router.delete("/conversations/{conversation_id}", status_code=204)
@@ -286,8 +380,14 @@ def list_tools(user: User = Depends(get_current_active_user)):
 @router.get("/health")
 async def assistant_health(user: User = Depends(get_current_active_user)):
     """Check if the AI assistant is ready."""
+    capacity = _assistant_capacity_payload()
     if not is_backend_feature_enabled(BackendFeatureFlag.ASSISTANT):
-        return {"status": "disabled", "model": settings.ASSISTANT_MODEL, "ollama_healthy": False}
+        return {
+            "status": "disabled",
+            "model": settings.ASSISTANT_MODEL,
+            "ollama_healthy": False,
+            "capacity": capacity,
+        }
 
     client = OllamaClient(
         base_url=settings.OLLAMA_BASE_URL,
@@ -295,10 +395,14 @@ async def assistant_health(user: User = Depends(get_current_active_user)):
         timeout=10,
     )
     healthy = await client.is_healthy()
+    status = "ready" if healthy else "unavailable"
+    if healthy and capacity["status"] != "ready":
+        status = "degraded"
     return {
-        "status": "ready" if healthy else "unavailable",
+        "status": status,
         "model": settings.ASSISTANT_MODEL,
         "ollama_healthy": healthy,
+        "capacity": capacity,
     }
 
 

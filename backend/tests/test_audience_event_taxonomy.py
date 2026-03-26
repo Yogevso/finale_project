@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.models import AudienceEventType, AuditLog
+from app.models import AudienceEventType, AuditLog, Document
 
 
 def test_audience_audit_paths_emit_valid_taxonomy_values(
@@ -52,16 +52,20 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
         },
     )
     assert visibility_response.status_code == 200
+    etag = visibility_response.json()["etag"]
 
     archive_response = client.post(
         f"/api/v1/documents/{document_id}/archive",
-        headers=system_admin_headers,
+        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
     )
     assert archive_response.status_code == 200
+    archived_document = db.query(Document).filter(Document.id == document_id).first()
+    assert archived_document is not None
+    etag = archived_document.etag
 
     restore_response = client.post(
         f"/api/v1/documents/{document_id}/restore",
-        headers=system_admin_headers,
+        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
     )
     assert restore_response.status_code == 200
 

@@ -18,12 +18,23 @@ import type {
   CannedResponseCreate,
   CannedResponseUpdate,
 } from '@/types/chat'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const SupportApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
+    private buildSupportTicketMessagePayload(request: SendTicketMessageRequest): SendTicketMessageRequest | FormData {
+      if (!request.file) {
+        return {
+          content: request.content,
+          is_internal_note: request.is_internal_note,
+        }
+      }
+
+      const formData = new FormData()
+      formData.append('content', request.content)
+      formData.append('is_internal_note', String(Boolean(request.is_internal_note)))
+      formData.append('file', request.file)
+      return formData
     }
 
     // ---- Management endpoints (agents/admins) ----
@@ -58,7 +69,8 @@ export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     }
 
     async sendSupportTicketMessage(ticketId: number, request: SendTicketMessageRequest): Promise<SupportTicketMessage> {
-      const { data } = await this.client.post<SupportTicketMessage>(`/support/tickets/${ticketId}/messages`, request)
+      const payload = this.buildSupportTicketMessagePayload(request)
+      const { data } = await this.client.post<SupportTicketMessage>(`/support/tickets/${ticketId}/messages`, payload)
       return data
     }
 
@@ -108,7 +120,8 @@ export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     }
 
     async sendMyTicketMessage(ticketId: number, request: SendTicketMessageRequest): Promise<SupportTicketMessage> {
-      const { data } = await this.client.post<SupportTicketMessage>(`/portal/support/tickets/${ticketId}/messages`, request)
+      const payload = this.buildSupportTicketMessagePayload(request)
+      const { data } = await this.client.post<SupportTicketMessage>(`/portal/support/tickets/${ticketId}/messages`, payload)
       return data
     }
 

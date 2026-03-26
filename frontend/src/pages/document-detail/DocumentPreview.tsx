@@ -3,6 +3,7 @@ import { getDocument, getDomParser } from '@/env/dom'
 import { api } from '@/lib/api'
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import { useAuth } from '@/lib/auth'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 import type { CSSProperties } from 'react'
 import type { ReadingWidth } from '@/lib/readingWidth'
 import type { Attachment } from '@/types'
@@ -448,7 +449,11 @@ export function DocumentPreview({
         if (cancelled) {
           return
         }
-        console.error('Preview load error:', loadError)
+        reportRuntimeError({
+          scope: 'preview.inline',
+          message: 'Preview load failed',
+          error: loadError,
+        })
         setError('Failed to load preview')
         setHtmlContent(null)
         if (!selectedAttachment) {

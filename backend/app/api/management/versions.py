@@ -16,7 +16,7 @@ from app.errors import (
     PermissionDeniedError,
     ValidationError,
 )
-from app.dependencies.permissions import require_editor
+from app.dependencies.permissions import require_editor, require_manager, require_system_admin
 from app.models import User
 from app.schemas import (
     CancelScheduledPublishResponse,
@@ -144,7 +144,7 @@ def publish_version(
     document_id: int,
     version_id: int,
     response: Response,
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_manager),
     publish_approved_version_command_handler: PublishApprovedVersionCommandHandler = Depends(
         get_publish_approved_version_command_handler
     ),
@@ -187,7 +187,7 @@ def force_publish_version(
     version_id: int,
     data: ForcePublishRequest,
     version_service: VersionService = Depends(get_version_service),
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_system_admin),
 ):
     """
     Force publish a version with admin override.

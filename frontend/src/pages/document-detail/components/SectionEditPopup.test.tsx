@@ -187,6 +187,7 @@ describe('DraftRecovery in SectionEditPopup', () => {
     )
 
     expect(await screen.findByText(/restore unsaved changes/i)).toBeInTheDocument()
+    expect(screen.getByTestId('local-autosave-status')).toHaveTextContent('Auto-saved locally at')
 
     await user.click(screen.getByRole('button', { name: /restore draft/i }))
 
@@ -194,6 +195,43 @@ describe('DraftRecovery in SectionEditPopup', () => {
       expect(document.querySelector('.ProseMirror')).toHaveTextContent('Recovered draft copy')
     })
     expect(document.querySelector('.ProseMirror')).not.toHaveTextContent('Original body')
+  })
+
+  it('warns the browser before unload when a local draft exists', async () => {
+    saveDraftRecovery(
+      {
+        documentId: 42,
+        sectionId: baseSection.id,
+        editMode: baseSection.editMode,
+      },
+      {
+        html: '<h2>Introduction</h2><p>Recovered draft copy</p>',
+        baseHtml: baseSection.html,
+        savedAt: '2026-03-09T10:00:00.000Z',
+      },
+    )
+
+    render(
+      <SectionEditPopup
+        documentId={42}
+        section={baseSection}
+        onClose={vi.fn()}
+        onSave={vi.fn(async (): Promise<SectionSaveResult> => ({ status: 'saved' }))}
+      />,
+    )
+
+    await screen.findByText(/restore unsaved changes/i)
+
+    const event = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+    Object.defineProperty(event, 'returnValue', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    })
+
+    window.dispatchEvent(event)
+
+    expect(event.returnValue).toBe('')
   })
 
   it('shows full document and table controls for complex editing', async () => {

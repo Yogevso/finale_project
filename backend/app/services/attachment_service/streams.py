@@ -6,9 +6,10 @@ import logging
 import os
 from typing import Iterator, Optional
 
-from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.errors import NotFoundError, PermissionDeniedError
 from app.models import Attachment, AttachmentArtifact, AttachmentConversionJob, User, UserRole
 
 from .common import AttachmentServiceCommonMixin, get_storage_backend
@@ -34,30 +35,45 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
         )
 
         if not attachment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
-            )
+            raise NotFoundError("Attachment not found")
 
         if current_user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can delete attachments"
+            raise PermissionDeniedError("Only admins can delete attachments")
+
+        shared_storage_refs = []
+        if attachment.storage_key:
+            shared_storage_refs.append(Attachment.storage_key == attachment.storage_key)
+        if attachment.storage_path:
+            shared_storage_refs.append(Attachment.storage_path == attachment.storage_path)
+
+        has_other_references = False
+        if shared_storage_refs:
+            has_other_references = (
+                db.query(Attachment)
+                .filter(
+                    Attachment.id != attachment.id,
+                )
+                .filter(or_(*shared_storage_refs))
+                .first()
+                is not None
             )
 
         storage_ref = attachment.storage_key or attachment.storage_path
-        try:
-            storage = get_storage_backend()
-            storage.delete(storage_ref)
-            logger.info("Deleted attachment from storage: %s", storage_ref)
-            if attachment.storage_path != storage_ref:
-                storage.delete(attachment.storage_path)
-        except Exception as exc:
-            logger.warning("Failed to delete from storage: %s", exc)
+        if not has_other_references:
             try:
-                local_path = cls._resolve_local_attachment_path(attachment, document_id)
-                if local_path and os.path.exists(local_path):
-                    os.remove(local_path)
-            except OSError:
-                pass
+                storage = get_storage_backend()
+                storage.delete(storage_ref)
+                logger.info("Deleted attachment from storage: %s", storage_ref)
+                if attachment.storage_path != storage_ref:
+                    storage.delete(attachment.storage_path)
+            except Exception as exc:  # policy: COMPENSATING — storage delete fallback may continue with local cleanup
+                logger.warning("Failed to delete from storage: %s", exc)
+                try:
+                    local_path = cls._resolve_local_attachment_path(attachment, document_id)
+                    if local_path and os.path.exists(local_path):
+                        os.remove(local_path)
+                except OSError:
+                    pass
 
         db.query(AttachmentConversionJob).filter(
             AttachmentConversionJob.attachment_id == attachment.id
@@ -85,7 +101,7 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
             attachment.storage_key,
             attachment.storage_path,
         )
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
+        raise NotFoundError("File not found on disk")
 
     @classmethod
     def open_original_stream(
@@ -110,7 +126,7 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
                 storage = get_storage_backend()
                 content = storage.download(storage_ref)
                 return attachment, cls._chunk_bytes(content)
-            except Exception as exc:
+            except Exception as exc:  # policy: DEGRADED — alternate storage refs may still recover the original file
                 logger.warning(
                     "Storage download failed for attachment %s (ref=%s): %s",
                     attachment_id,
@@ -118,7 +134,4 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
                     exc,
                 )
 
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original file not found in storage",
-        )
+        raise NotFoundError("Original file not found in storage")

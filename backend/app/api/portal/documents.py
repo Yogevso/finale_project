@@ -2,32 +2,54 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.application.contexts.portal.api import PortalContextAPI
 from app.application.queries.dependencies import get_portal_documents_query_handler
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
+from app.dependencies.permissions import require_customer
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.db import get_db
-from app.models import Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
+from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
     PortalDocumentListResponse,
     PortalFacetsResponse,
 )
-from app.security import get_current_active_user
 from app.services.attachment_service import AttachmentService
 from app.utils.http_headers import build_content_disposition
-from app.web.controllers.portal import PortalDocumentsController
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
 logger = logging.getLogger(__name__)
-portal_documents_controller = PortalDocumentsController()
+portal_context_api = PortalContextAPI()
+
+
+class PortalReadingProgressUpdate(BaseModel):
+    progress_percent: int
+
+
+class PortalReadingProgressResponse(BaseModel):
+    id: int
+    document_id: int
+    document_title: str
+    progress_percent: int
+    last_read_at: datetime
+    completed_at: datetime | None
+
+
+class PortalDocumentProgressResponse(BaseModel):
+    has_progress: bool
+    progress_percent: int
+    is_completed: bool
+    last_read_at: datetime | None = None
 
 
 def _customer_can_still_access(
@@ -56,9 +78,31 @@ def _customer_can_still_access(
     return False
 
 
-def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
-    return portal_documents_controller.require_customer(current_user=current_user)
+def _get_customer_progress_document_or_404(
+    db: Session,
+    *,
+    document_id: int,
+    current_user: User,
+) -> Document:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
 
+    if document.status != DocumentStatus.PUBLISHED:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.visibility == DocumentVisibility.PUBLIC:
+        return document
+
+    if document.visibility == DocumentVisibility.INTERNAL:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.visibility == DocumentVisibility.COMPANY:
+        assigned_ids = {company.id for company in (document.assigned_companies or [])}
+        if current_user.tenant_id in assigned_ids:
+            return document
+
+    raise HTTPException(status_code=404, detail="Document not found")
 
 @router.get("/documents", response_model=PortalDocumentListResponse)
 async def list_customer_documents(
@@ -75,7 +119,7 @@ async def list_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.list_customer_documents(
+    return portal_context_api.list_customer_documents(
         page=page,
         per_page=per_page,
         category=category,
@@ -97,7 +141,7 @@ async def get_customer_document(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_document(
+    return portal_context_api.get_customer_document(
         document_id=document_id,
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
@@ -113,7 +157,7 @@ async def get_related_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_related_documents(
+    return portal_context_api.get_related_documents(
         document_id=document_id,
         limit=limit,
         current_user=current_user,
@@ -130,7 +174,7 @@ async def get_customer_attachment(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_attachment(
+    return portal_context_api.get_customer_attachment(
         document_id=document_id,
         attachment_id=attachment_id,
         current_user=current_user,
@@ -187,7 +231,7 @@ async def download_customer_attachment(
                     "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=False),
                 },
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — PDF preview is optional; serve original attachment instead
             logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
 
     attachment, content_stream = AttachmentService.open_original_stream(
@@ -204,6 +248,9 @@ async def download_customer_attachment(
     size_bytes = attachment.size_bytes or attachment.file_size
     if size_bytes is not None:
         headers["Content-Length"] = str(size_bytes)
+    # M-28: Prevent browser content-sniffing on download responses
+    headers["X-Content-Type-Options"] = "nosniff"
+
     return StreamingResponse(
         content=content_stream,
         media_type=attachment.mime_type or "application/octet-stream",
@@ -218,7 +265,7 @@ async def get_customer_categories(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_categories(
+    return portal_context_api.get_customer_categories(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -231,7 +278,7 @@ async def get_customer_facets(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_facets(
+    return portal_context_api.get_customer_facets(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -244,7 +291,7 @@ async def get_customer_dashboard_stats(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.get_customer_dashboard_stats(
+    return portal_context_api.get_customer_dashboard_stats(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
@@ -261,7 +308,7 @@ async def search_customer_documents(
         get_portal_documents_query_handler
     ),
 ):
-    return portal_documents_controller.search_customer_documents(
+    return portal_context_api.search_customer_documents(
         q=q,
         category=category,
         page=page,
@@ -269,6 +316,44 @@ async def search_customer_documents(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
+
+
+@router.get("/reading-progress", response_model=list[PortalReadingProgressResponse])
+async def list_reading_progress(
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return the current customer's reading progress list."""
+    rows = (
+        db.query(
+            ReadingProgress,
+            Document.title,
+            Document.status,
+            Document.visibility,
+            Document.tenant_id,
+        )
+        .join(Document, ReadingProgress.document_id == Document.id)
+        .filter(ReadingProgress.user_id == current_user.id)
+        .order_by(ReadingProgress.last_read_at.desc())
+        .all()
+    )
+
+    results: list[PortalReadingProgressResponse] = []
+    for progress, title, doc_status, doc_visibility, doc_tenant_id in rows:
+        if not _customer_can_still_access(doc_status, doc_visibility, doc_tenant_id, current_user):
+            continue
+        results.append(
+            PortalReadingProgressResponse(
+                id=progress.id,
+                document_id=progress.document_id,
+                document_title=title,
+                progress_percent=progress.progress_percent,
+                last_read_at=progress.last_read_at,
+                completed_at=progress.completed_at,
+            )
+        )
+
+    return results
 
 
 @router.get("/reading-progress/recent")
@@ -337,3 +422,97 @@ async def get_continue_reading(
             "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
         })
     return results
+
+
+@router.put("/reading-progress/{document_id}", response_model=PortalReadingProgressResponse)
+async def update_reading_progress(
+    document_id: int,
+    data: PortalReadingProgressUpdate,
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Update reading progress for a portal-accessible document."""
+    if data.progress_percent < 0 or data.progress_percent > 100:
+        raise HTTPException(status_code=400, detail="Progress must be 0-100")
+
+    document = _get_customer_progress_document_or_404(
+        db,
+        document_id=document_id,
+        current_user=current_user,
+    )
+
+    progress = (
+        db.query(ReadingProgress)
+        .filter(
+            ReadingProgress.user_id == current_user.id,
+            ReadingProgress.document_id == document_id,
+        )
+        .first()
+    )
+
+    now = datetime.utcnow()
+    if progress:
+        if data.progress_percent < progress.progress_percent:
+            raise HTTPException(status_code=400, detail="Progress cannot decrease")
+        progress.progress_percent = data.progress_percent
+        progress.last_read_at = now
+        if data.progress_percent >= 100 and not progress.completed_at:
+            progress.completed_at = now
+    else:
+        progress = ReadingProgress(
+            user_id=current_user.id,
+            document_id=document_id,
+            progress_percent=data.progress_percent,
+            last_read_at=now,
+            completed_at=now if data.progress_percent >= 100 else None,
+        )
+        db.add(progress)
+
+    db.commit()
+    db.refresh(progress)
+
+    return PortalReadingProgressResponse(
+        id=progress.id,
+        document_id=progress.document_id,
+        document_title=document.title,
+        progress_percent=progress.progress_percent,
+        last_read_at=progress.last_read_at,
+        completed_at=progress.completed_at,
+    )
+
+
+@router.get("/reading-progress/{document_id}", response_model=PortalDocumentProgressResponse)
+async def get_document_progress(
+    document_id: int,
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return reading progress for a single portal-accessible document."""
+    _get_customer_progress_document_or_404(
+        db,
+        document_id=document_id,
+        current_user=current_user,
+    )
+
+    progress = (
+        db.query(ReadingProgress)
+        .filter(
+            ReadingProgress.user_id == current_user.id,
+            ReadingProgress.document_id == document_id,
+        )
+        .first()
+    )
+
+    if not progress:
+        return PortalDocumentProgressResponse(
+            has_progress=False,
+            progress_percent=0,
+            is_completed=False,
+        )
+
+    return PortalDocumentProgressResponse(
+        has_progress=True,
+        progress_percent=progress.progress_percent,
+        is_completed=progress.completed_at is not None,
+        last_read_at=progress.last_read_at,
+    )

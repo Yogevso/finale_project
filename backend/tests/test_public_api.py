@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import pytest
+
 
 class TestPublicDocumentsEndpoint:
     """Test /api/v1/public/documents endpoint"""
@@ -503,6 +505,28 @@ class TestPublicSitemap:
         assert response.status_code == 200
         cc = response.headers.get("cache-control", "")
         assert "public" in cc
+
+    def test_sitemap_escapes_base_url_xml_entities(self, client, public_document):
+        """User-provided base_url must be XML-escaped inside <loc>."""
+        response = client.get(
+            "/api/v1/public/sitemap.xml",
+            params={"base_url": "https://example.com/search?x=1&y=<tag>"},
+        )
+
+        assert response.status_code == 200
+        body = response.text
+        assert "https://example.com/search?x=1&amp;y=&lt;tag&gt;" in body
+        assert "https://example.com/search?x=1&y=<tag>" not in body
+
+    @pytest.mark.parametrize("path", ["/api/v1/public/feed.xml", "/api/v1/public/sitemap.xml"])
+    def test_xml_endpoints_set_csp_headers(self, client, public_document, path):
+        response = client.get(path)
+
+        assert response.status_code == 200
+        assert (
+            response.headers.get("content-security-policy")
+            == "default-src 'none'; frame-ancestors 'none'"
+        )
 
 
 class TestPublicCacheHeaders:

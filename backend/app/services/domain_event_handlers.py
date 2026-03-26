@@ -2,26 +2,156 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db import ChatSessionLocal, SessionLocal
 from app.domain.events import (
+    CommentChatBridgeRequested,
     CommentCreated,
     CompanyAssignmentsUpdated,
     DocumentPublished,
     InProcessDomainEventDispatcher,
 )
-from app.models import UserRole
+from app.models import ChatMessage, Comment, Document, User, UserRole
 from app.notifications import (
     NotificationDispatcher,
 )
 from app.plugins.notifications import get_notification_channel_plugin_registry
 from app.repositories import UserRepository
+from app.services.chat_service import ChatService
 from app.utils.async_tasks import run_async_task
 
 logger = logging.getLogger(__name__)
+
+
+def build_comment_chat_bridge_context_json(event: CommentChatBridgeRequested) -> str:
+    """Build a deterministic context payload for idempotent bridge messages."""
+
+    return json.dumps(
+        {
+            "bridge": "comment",
+            "comment_id": event.comment_id,
+            "document_id": event.document_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def build_comment_chat_bridge_message(document: Document, comment: Comment) -> str:
+    """Render the synthetic direct-chat message for a document comment."""
+
+    lines = [f'Comment on **{document.title}**']
+
+    if comment.anchor_text:
+        snippet = comment.anchor_text.strip()[:120]
+        if len(comment.anchor_text.strip()) > 120:
+            snippet += "..."
+        lines.append(f'On: "{snippet}"')
+
+    view_link = f"/documents/{document.id}?tab=comments&comment={comment.id}"
+    if comment.anchor_text:
+        view_link += f"&highlight={quote(comment.anchor_text[:120], safe='')}"
+
+    lines.extend(
+        [
+            "",
+            comment.content,
+            "",
+            f"[View in document]({view_link})",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def bridge_comment_to_chat(
+    event: CommentChatBridgeRequested,
+    *,
+    core_db: Session,
+    chat_db: Session,
+) -> None:
+    """Create or reuse the direct chat and post the synthetic comment message."""
+
+    if not event.document_author_id or event.document_author_id == event.commenter_user_id:
+        return
+
+    comment = core_db.query(Comment).filter(Comment.id == event.comment_id).first()
+    if not comment:
+        logger.warning("Skipping comment bridge for missing comment %s", event.comment_id)
+        return
+
+    document = core_db.query(Document).filter(Document.id == event.document_id).first()
+    if not document:
+        logger.warning("Skipping comment bridge for missing document %s", event.document_id)
+        return
+
+    commenter = core_db.query(User).filter(User.id == event.commenter_user_id).first()
+    author = core_db.query(User).filter(User.id == event.document_author_id).first()
+    if not commenter or not author:
+        logger.warning(
+            "Skipping comment bridge for comment %s due to missing user state",
+            event.comment_id,
+        )
+        return
+
+    if not commenter.tenant_id or commenter.tenant_id != author.tenant_id:
+        logger.info(
+            "Skipping comment bridge for comment %s due to tenant mismatch",
+            event.comment_id,
+        )
+        return
+
+    chat_service = ChatService(chat_db, core_db=core_db)
+    chat = chat_service.create_direct_chat(commenter, author.id)
+
+    context_json = build_comment_chat_bridge_context_json(event)
+    existing_message = (
+        chat_db.query(ChatMessage.id)
+        .filter(
+            ChatMessage.chat_id == chat.id,
+            ChatMessage.context_json == context_json,
+        )
+        .first()
+    )
+    if existing_message:
+        logger.info(
+            "Skipping duplicate comment bridge message for comment %s in chat %s",
+            event.comment_id,
+            chat.id,
+        )
+        return
+
+    message = build_comment_chat_bridge_message(document, comment)
+    chat_service.send_message(chat.id, commenter, message, context_json=context_json)
+    logger.info("Bridged comment %s into direct chat %s", event.comment_id, chat.id)
+
+
+class CommentChatBridgeEventHandlers:
+    """Reliable chat-bridge side effects for comment activity."""
+
+    def __init__(
+        self,
+        *,
+        core_session_factory=SessionLocal,
+        chat_session_factory=ChatSessionLocal,
+    ) -> None:
+        self._core_session_factory = core_session_factory
+        self._chat_session_factory = chat_session_factory
+
+    def handle_comment_chat_bridge_requested(self, event: CommentChatBridgeRequested) -> None:
+        core_db = self._core_session_factory()
+        chat_db = self._chat_session_factory()
+        try:
+            bridge_comment_to_chat(event, core_db=core_db, chat_db=chat_db)
+        finally:
+            chat_db.close()
+            if chat_db is not core_db:
+                core_db.close()
 
 
 class NotificationEmailEventHandlers:
@@ -189,8 +319,16 @@ def build_domain_event_dispatcher(
     dispatcher = InProcessDomainEventDispatcher(
         suppress_handler_exceptions=suppress_handler_exceptions
     )
-    handlers = NotificationEmailEventHandlers(db)
-    dispatcher.register(DocumentPublished, handlers.handle_document_published)
-    dispatcher.register(CommentCreated, handlers.handle_comment_created)
-    dispatcher.register(CompanyAssignmentsUpdated, handlers.handle_company_assignments_updated)
+    notification_handlers = NotificationEmailEventHandlers(db)
+    chat_bridge_handlers = CommentChatBridgeEventHandlers()
+    dispatcher.register(DocumentPublished, notification_handlers.handle_document_published)
+    dispatcher.register(CommentCreated, notification_handlers.handle_comment_created)
+    dispatcher.register(
+        CommentChatBridgeRequested,
+        chat_bridge_handlers.handle_comment_chat_bridge_requested,
+    )
+    dispatcher.register(
+        CompanyAssignmentsUpdated,
+        notification_handlers.handle_company_assignments_updated,
+    )
     return dispatcher

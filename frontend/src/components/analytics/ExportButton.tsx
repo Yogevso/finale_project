@@ -1,6 +1,7 @@
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '@/lib/api'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 
 interface ExportButtonProps {
   exportType: 'overview' | 'engagement' | 'users' | 'content' | 'feedback'
@@ -27,7 +28,14 @@ export function ExportButton({ exportType, startDate, endDate }: ExportButtonPro
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      console.error('Export failed:', error)
+      reportRuntimeError({
+        scope: 'analytics.export',
+        message: 'CSV export failed',
+        error,
+        userMessage: 'The analytics export could not be generated. Please try again.',
+        toastTitle: 'Export failed',
+        dedupeKey: `analytics-export:${exportType}:${startDate}:${endDate}`,
+      })
     } finally {
       setExporting(false)
     }

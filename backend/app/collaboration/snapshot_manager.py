@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.collaboration.base import CollaborationManagerBase
+from app.errors import NotFoundError, OperationFailedError, ValidationError
 from app.models import SnapshotType, User
 from app.repositories import UserRepository
 from app.services.snapshot_service import SnapshotService
@@ -35,10 +35,7 @@ class SnapshotManager(CollaborationManagerBase):
         )
 
         if not document.yjs_state:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Document has no collaboration state to snapshot",
-            )
+            raise ValidationError("Document has no collaboration state to snapshot")
 
         snapshot = SnapshotService.create_snapshot(
             db=self.chat_db,
@@ -94,7 +91,7 @@ class SnapshotManager(CollaborationManagerBase):
 
         snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+            raise NotFoundError("Snapshot not found")
 
         username = None
         if snapshot.created_by:
@@ -119,7 +116,7 @@ class SnapshotManager(CollaborationManagerBase):
 
         snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+            raise NotFoundError("Snapshot not found")
 
         updated_document = SnapshotService.restore_snapshot(
             db=self.chat_db,
@@ -128,10 +125,7 @@ class SnapshotManager(CollaborationManagerBase):
             session_id=session_id,
         )
         if not updated_document:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to restore snapshot",
-            )
+            raise OperationFailedError("Failed to restore snapshot")
 
         return {
             "message": "Snapshot restored successfully",
@@ -159,7 +153,7 @@ class SnapshotManager(CollaborationManagerBase):
 
         snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+            raise NotFoundError("Snapshot not found")
 
         updated_snapshot = SnapshotService.update_snapshot(
             db=self.chat_db,
@@ -169,10 +163,7 @@ class SnapshotManager(CollaborationManagerBase):
             is_pinned=is_pinned,
         )
         if not updated_snapshot:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update snapshot",
-            )
+            raise OperationFailedError("Failed to update snapshot")
 
         username = None
         if updated_snapshot.created_by:
@@ -192,14 +183,11 @@ class SnapshotManager(CollaborationManagerBase):
 
         snapshot = SnapshotService.get_snapshot(self.chat_db, snapshot_id)
         if not snapshot or snapshot.document_id != document_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found")
+            raise NotFoundError("Snapshot not found")
 
         success = SnapshotService.delete_snapshot(self.chat_db, snapshot_id)
         if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete snapshot",
-            )
+            raise OperationFailedError("Failed to delete snapshot")
         return {"message": "Snapshot deleted successfully", "snapshot_id": snapshot_id}
 
     def create_auto_snapshot(

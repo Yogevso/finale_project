@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatDistanceToNow } from 'date-fns'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 
 // Activity types from backend (for reference)
 // 'session_start' | 'session_end' | 'user_joined' | 'user_left' | 'content_edited'
@@ -156,7 +157,11 @@ export function ActivityFeed({
       setHasMore(response.has_more)
       setError(null)
     } catch (err) {
-      console.error('Failed to fetch activities:', err)
+      reportRuntimeError({
+        scope: 'activity.feed',
+        message: 'Failed to fetch activities',
+        error: err,
+      })
       setError('Failed to load activity feed')
     } finally {
       setLoading(false)
@@ -182,7 +187,11 @@ export function ActivityFeed({
       setActivities((prev) => [...prev, ...response.activities])
       setHasMore(response.has_more)
     } catch (err) {
-      console.error('Failed to load more activities:', err)
+      reportRuntimeError({
+        scope: 'activity.feed',
+        message: 'Failed to load more activities',
+        error: err,
+      })
     }
   }
 
@@ -316,7 +325,11 @@ export function ActivityFeedCompact({
         const response = await api.getActivityFeed(documentId, 5, 0)
         setActivities(response.activities)
       } catch (err) {
-        console.error('Failed to fetch recent activities:', err)
+        reportRuntimeError({
+          scope: 'activity.feed',
+          message: 'Failed to fetch recent activities',
+          error: err,
+        })
       }
     }
     fetchRecent()

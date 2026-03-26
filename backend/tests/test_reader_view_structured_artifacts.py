@@ -108,8 +108,24 @@ def test_generate_pptx_reader_artifact_uses_canonical_pptx_request(monkeypatch):
     }
 
 
-def test_schedule_reader_artifact_generation_queues_background_task():
+def test_schedule_reader_artifact_generation_queues_background_task(monkeypatch):
     tasks = BackgroundTasks()
+    enqueue_calls = []
+
+    monkeypatch.setattr(
+        AttachmentService,
+        "enqueue_conversion",
+        staticmethod(
+            lambda attachment_id, *, db=None, background_tasks=None, force=False: enqueue_calls.append(
+                {
+                    "attachment_id": attachment_id,
+                    "db": db,
+                    "background_tasks": background_tasks,
+                    "force": force,
+                }
+            )
+        )
+    )
 
     AttachmentService.schedule_reader_artifact_generation(
         99,
@@ -117,39 +133,44 @@ def test_schedule_reader_artifact_generation_queues_background_task():
         force=True,
     )
 
-    assert len(tasks.tasks) == 1
-    task = tasks.tasks[0]
-    assert task.func.__self__ is AttachmentService
-    assert task.func.__func__ is AttachmentService.generate_reader_artifact.__func__
-    assert task.args == (99, True)
+    assert enqueue_calls == [
+        {
+            "attachment_id": 99,
+            "db": None,
+            "background_tasks": tasks,
+            "force": True,
+        }
+    ]
 
 
-def test_schedule_reader_artifact_generation_uses_daemon_thread(monkeypatch):
-    thread_state = {}
-
-    class _FakeThread:
-        def __init__(self, *, target, args, daemon):
-            thread_state["target"] = target
-            thread_state["args"] = args
-            thread_state["daemon"] = daemon
-
-        def start(self):
-            thread_state["started"] = True
+def test_schedule_reader_artifact_generation_enqueues_durable_job_without_background_tasks(monkeypatch):
+    enqueue_calls = []
 
     monkeypatch.setattr(
-        "app.services.attachment_service.reader_view.threading.Thread",
-        _FakeThread,
+        AttachmentService,
+        "enqueue_conversion",
+        staticmethod(
+            lambda attachment_id, *, db=None, background_tasks=None, force=False: enqueue_calls.append(
+                {
+                    "attachment_id": attachment_id,
+                    "db": db,
+                    "background_tasks": background_tasks,
+                    "force": force,
+                }
+            )
+        ),
     )
 
     AttachmentService.schedule_reader_artifact_generation(101, force=False)
 
-    assert thread_state["target"].__self__ is AttachmentService
-    assert (
-        thread_state["target"].__func__ is AttachmentService.generate_reader_artifact.__func__
-    )
-    assert thread_state["args"] == (101, False)
-    assert thread_state["daemon"] is True
-    assert thread_state["started"] is True
+    assert enqueue_calls == [
+        {
+            "attachment_id": 101,
+            "db": None,
+            "background_tasks": None,
+            "force": False,
+        }
+    ]
 
 
 def test_reader_payload_helpers_normalize_lists_and_invalid_json(caplog):
@@ -696,9 +717,10 @@ def test_get_reader_view_schedules_pending_supported_attachments(
         AttachmentService,
         "schedule_reader_artifact_generation",
         staticmethod(
-            lambda attachment_id, *, background_tasks=None, force=False: schedule_calls.append(
+            lambda attachment_id, *, db=None, background_tasks=None, force=False: schedule_calls.append(
                 {
                     "attachment_id": attachment_id,
+                    "db": db,
                     "background_tasks": background_tasks,
                     "force": force,
                 }
@@ -717,6 +739,7 @@ def test_get_reader_view_schedules_pending_supported_attachments(
     assert schedule_calls == [
         {
             "attachment_id": attachment.id,
+            "db": db,
             "background_tasks": None,
             "force": False,
         }
@@ -744,9 +767,10 @@ def test_retry_reader_view_generation_resets_ready_payload_before_rescheduling(
         AttachmentService,
         "schedule_reader_artifact_generation",
         staticmethod(
-            lambda attachment_id, *, background_tasks=None, force=False: schedule_calls.append(
+            lambda attachment_id, *, db=None, background_tasks=None, force=False: schedule_calls.append(
                 {
                     "attachment_id": attachment_id,
+                    "db": db,
                     "background_tasks": background_tasks,
                     "force": force,
                 }
@@ -771,6 +795,7 @@ def test_retry_reader_view_generation_resets_ready_payload_before_rescheduling(
     assert schedule_calls == [
         {
             "attachment_id": attachment.id,
+            "db": db,
             "background_tasks": background_tasks,
             "force": True,
         }

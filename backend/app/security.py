@@ -17,7 +17,8 @@ from app.auth_context.refresh_token_service import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     RefreshTokenService,
 )
-from app.auth_context.session_tokens import hash_session_identifier
+from app.auth_context.session_tokens import hash_session_identifier, revoke_session_if_inactive
+from app.auth_context import ACCESS_TOKEN_TYPE
 from app.auth_context.token_service import TokenService
 from app.config import settings
 from app.db import get_db
@@ -51,9 +52,9 @@ def create_refresh_token(user_id: int) -> tuple[str, datetime]:
     )
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str, *, expected_type: str = ACCESS_TOKEN_TYPE) -> Optional[dict]:
     """Verify and decode JWT token"""
-    return _token_service.verify_token(token)
+    return _token_service.verify_token(token, expected_type=expected_type)
 
 
 async def get_current_user(
@@ -85,7 +86,6 @@ async def get_current_user(
     session_identifier = payload.get("sid")
     if isinstance(session_identifier, str) and session_identifier.strip():
         now = datetime.utcnow()
-        inactivity_cutoff = now - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
         session_hash = hash_session_identifier(session_identifier)
         user_session = (
             db.query(UserSession)
@@ -95,11 +95,10 @@ async def get_current_user(
             )
             .first()
         )
-        if (
-            user_session is None
-            or user_session.revoked_at is not None
-            or user_session.last_active_at < inactivity_cutoff
-        ):
+        if user_session is None or user_session.revoked_at is not None:
+            raise credentials_exception
+        if revoke_session_if_inactive(user_session, now=now):
+            db.commit()
             raise credentials_exception
 
         user_session.last_active_at = now

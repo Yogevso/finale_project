@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
+from app.dependencies.permissions import require_internal_user, require_manager
 from app.models import (
     Attachment,
     Comment,
@@ -132,7 +133,7 @@ class FeedbackStatusUpdate(BaseModel):
 router = APIRouter(prefix="/feedback", tags=["Feedback Management"])
 
 
-def require_admin_or_manager(current_user: User = Depends(get_current_active_user)) -> User:
+def _feedback_manage_guard(current_user: User = Depends(get_current_active_user)) -> User:
     """Require admin or manager role — delegates to FeedbackAccessPolicy (M-29)."""
     if not _feedback_policy.can_manage_feedback(current_user):
         raise HTTPException(
@@ -141,7 +142,7 @@ def require_admin_or_manager(current_user: User = Depends(get_current_active_use
     return current_user
 
 
-def require_internal_staff(current_user: User = Depends(get_current_active_user)) -> User:
+def _feedback_internal_guard(current_user: User = Depends(get_current_active_user)) -> User:
     """Require internal staff role — delegates to FeedbackAccessPolicy (M-29)."""
     if not _feedback_policy.can_update_status(current_user):
         raise HTTPException(
@@ -160,7 +161,7 @@ async def list_all_feedback(
     company_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_manager),
 ):
     """
     List feedback with contributor-based visibility filtering.
@@ -274,7 +275,7 @@ async def list_all_feedback(
 async def get_feedback(
     feedback_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_manager),
 ):
     """
     Get feedback details with contributor-based visibility.
@@ -333,7 +334,7 @@ async def respond_to_feedback(
     feedback_id: int,
     data: FeedbackRespondRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_manager),
 ):
     """
     Respond to customer feedback. Sets status to RESPONDED and notifies customer.
@@ -423,7 +424,7 @@ async def update_feedback_status(
     feedback_id: int,
     data: FeedbackStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_internal_staff),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Update feedback status (e.g., mark as closed).
@@ -485,7 +486,7 @@ async def update_feedback_status(
 @router.get("/stats/summary")
 async def get_feedback_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin_or_manager),
+    current_user: User = Depends(require_manager),
 ):
     """
     Get feedback statistics summary.

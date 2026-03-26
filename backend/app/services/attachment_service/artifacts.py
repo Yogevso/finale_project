@@ -28,7 +28,7 @@ class AttachmentServiceArtifactsMixin(AttachmentServiceCommonMixin):
             try:
                 storage = get_storage_backend()
                 return storage.download(storage_ref)
-            except Exception as exc:
+            except Exception as exc:  # policy: DEGRADED — alternate storage refs may still recover the attachment bytes
                 logger.warning(
                     "Failed loading attachment bytes from storage (attachment=%s, ref=%s): %s",
                     attachment.id,

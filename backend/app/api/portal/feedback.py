@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.dependencies.permissions import require_customer
 from app.models import (
     Document,
     DocumentStatus,
@@ -15,23 +16,15 @@ from app.models import (
     Feedback,
     FeedbackStatus,
     User,
-    UserRole,
 )
 from app.schemas.portal import (
     FeedbackCreate,
     FeedbackListResponse,
     FeedbackResponse,
 )
-from app.security import get_current_active_user
+from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/portal", tags=["Customer Feedback"])
-
-
-def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
-    """Dependency to ensure user is a customer"""
-    if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(status_code=403, detail="This endpoint is only for customer users.")
-    return current_user
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
@@ -71,11 +64,12 @@ async def submit_feedback(
             raise HTTPException(status_code=403, detail="You don't have access to this document")
 
     # Create feedback
+    # M-31: Sanitize feedback content to prevent stored XSS
     feedback = Feedback(
         document_id=feedback_data.document_id,
         user_id=current_user.id,
         feedback_type=feedback_data.feedback_type,
-        content=feedback_data.content,
+        content=sanitize_html_content(feedback_data.content),
         status=FeedbackStatus.PENDING,
     )
 

@@ -131,7 +131,7 @@ def process_assignment_reconciliation_batch(
             session.rollback()
 
         return report
-    except Exception:
+    except Exception:  # policy: COMPENSATING — reconciler must roll back partial mutations before re-raising
         session.rollback()
         raise
     finally:

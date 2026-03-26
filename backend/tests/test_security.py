@@ -27,6 +27,20 @@ class TestJWTSecurity:
         response = client.get("/api/v1/documents", headers=headers)
         assert response.status_code == 401
 
+    def test_collaboration_token_rejected_on_http_api(self, client, test_user):
+        """Collaboration-scoped JWTs must not authenticate normal HTTP APIs."""
+        from app.auth_context import CollaborationAuthService
+
+        token = CollaborationAuthService().create_collab_token(
+            user=test_user,
+            document_id=42,
+            permissions=["read", "write"],
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = client.get("/api/v1/documents", headers=headers)
+        assert response.status_code == 401
+
     def test_malformed_auth_header_rejected(self, client):
         """Malformed authorization headers should be rejected"""
         # Missing 'Bearer ' prefix
@@ -369,4 +383,3 @@ class TestAudienceEndpointSecurity:
                 json_body=payload,
             )
             assert response.status_code == 403, f"{method} {path} should reject insufficient role"
-

@@ -11,8 +11,38 @@ import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Bot, Check, Copy, Loader2, Pencil, RefreshCw, User } from 'lucide-react'
+import { getWindowLocation } from '@/env/dom'
 import type { AssistantMessage, ToolCall, ToolResult } from '@/types/assistant'
 import ToolCallCard from './ToolCallCard'
+
+const SAFE_ASSISTANT_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:'])
+const ALLOWED_ASSISTANT_MARKDOWN_ELEMENTS = [
+  'a',
+  'blockquote',
+  'br',
+  'code',
+  'del',
+  'em',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'hr',
+  'li',
+  'ol',
+  'p',
+  'pre',
+  'strong',
+  'table',
+  'tbody',
+  'td',
+  'th',
+  'thead',
+  'tr',
+  'ul',
+] as const
 
 function timeAgo(dateStr?: string): string {
   if (!dateStr) return ''
@@ -25,6 +55,28 @@ function timeAgo(dateStr?: string): string {
   const days = Math.floor(hrs / 24)
   if (days < 7) return `${days}d ago`
   return new Date(dateStr).toLocaleDateString()
+}
+
+function getSafeAssistantHref(href?: string): string | null {
+  const trimmed = href?.trim()
+  if (!trimmed) return null
+
+  if (
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./') ||
+    trimmed.startsWith('../') ||
+    trimmed.startsWith('#') ||
+    trimmed.startsWith('?')
+  ) {
+    return trimmed
+  }
+
+  try {
+    const parsed = new URL(trimmed, getWindowLocation().origin)
+    return SAFE_ASSISTANT_LINK_PROTOCOLS.has(parsed.protocol) ? trimmed : null
+  } catch {
+    return null
+  }
 }
 
 interface Props {
@@ -128,7 +180,7 @@ export default function AssistantMessageList({
             <Bot className="h-4 w-4" />
           </div>
           <div className="prose prose-sm max-w-none rounded-xl bg-white p-3 shadow-sm border border-slate-100">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
+            <AssistantMarkdown>{streamingText}</AssistantMarkdown>
             {isStreaming && <span className="inline-block h-4 w-1 animate-pulse bg-sky-500 ml-0.5" />}
           </div>
         </div>
@@ -244,22 +296,9 @@ function MessageBubble({
             >
               {copied ? <><Check className="h-3 w-3" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
             </button>
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                code({ className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || '')
-                  const codeStr = String(children).replace(/\n$/, '')
-                  return match ? (
-                    <CodeBlock language={match[1]} code={codeStr} />
-                  ) : (
-                    <code className={className} {...props}>{children}</code>
-                  )
-                },
-              }}
-            >
+            <AssistantMarkdown>
               {message.content}
-            </ReactMarkdown>
+            </AssistantMarkdown>
           </div>
           {message.created_at && (
             <span className="text-[10px] text-slate-400 mt-1 ml-1">{timeAgo(message.created_at)}</span>
@@ -298,5 +337,45 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
         {code}
       </SyntaxHighlighter>
     </div>
+  )
+}
+
+function AssistantMarkdown({ children }: { children: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      skipHtml
+      allowedElements={[...ALLOWED_ASSISTANT_MARKDOWN_ELEMENTS]}
+      components={{
+        a({ href, children, ...props }) {
+          const safeHref = getSafeAssistantHref(href)
+          if (!safeHref) {
+            return <>{children}</>
+          }
+
+          return (
+            <a
+              {...props}
+              href={safeHref}
+              rel="noopener noreferrer nofollow"
+              target="_blank"
+            >
+              {children}
+            </a>
+          )
+        },
+        code({ className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || '')
+          const codeStr = String(children).replace(/\n$/, '')
+          return match ? (
+            <CodeBlock language={match[1]} code={codeStr} />
+          ) : (
+            <code className={className} {...props}>{children}</code>
+          )
+        },
+      }}
+    >
+      {children}
+    </ReactMarkdown>
   )
 }

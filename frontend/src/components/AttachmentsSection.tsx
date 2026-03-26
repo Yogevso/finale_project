@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
+import { ATTACHMENT_INPUT_ACCEPT, validateAttachmentFile } from '@/lib/attachmentUpload'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -48,9 +49,20 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      uploadMutation.mutate(file)
+    if (!file) {
+      return
     }
+
+    const validationError = validateAttachmentFile(file)
+    if (validationError) {
+      setUploadError(validationError)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
+
+    uploadMutation.mutate(file)
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -86,6 +98,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
               ref={fileInputRef}
               type="file"
               className="hidden"
+              accept={ATTACHMENT_INPUT_ACCEPT}
               onChange={handleFileSelect}
               disabled={isUploading}
             />
@@ -105,7 +118,9 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
           <div className="text-4xl mb-2">ATT</div>
           <p className="text-slate-500 text-sm">No attachments yet</p>
           {isEditor && (
-            <p className="text-slate-400 text-xs mt-1">Upload files to attach them to this document</p>
+            <p className="text-slate-400 text-xs mt-1">
+              Upload DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF, text, or image files up to 10MB
+            </p>
           )}
         </div>
       ) : (

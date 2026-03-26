@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncIterator, Callable
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,11 +56,11 @@ class FastAPIAppFactory:
             docs_url=None if is_prod else f"{settings.API_PREFIX}/docs",
             redoc_url=None if is_prod else f"{settings.API_PREFIX}/redoc",
             openapi_url=None if is_prod else f"{settings.API_PREFIX}/openapi.json",
+            lifespan=self._build_lifespan_handler(),
         )
         self._configure_state(app)
         self._configure_middleware(app)
         self._configure_exception_handlers(app)
-        self._configure_lifecycle_events(app)
         self._register_internal_routes(app)
         self._router_registry.register(app)
         self._configure_openapi(app)
@@ -101,7 +104,14 @@ class FastAPIAppFactory:
             allow_credentials=True,
             # AD-015: explicit method and header allowlists
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-E2E-Test", "X-Idempotency-Key", "X-Request-ID"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-E2E-Test",
+                "X-Idempotency-Key",
+                "X-Request-ID",
+                "X-Trace-ID",
+            ],
         )
 
     @staticmethod
@@ -111,7 +121,7 @@ class FastAPIAppFactory:
             """Map domain/application errors to transport-level HTTP responses."""
             if exc.status_code == 403:
                 logger.warning(
-                    "Access denied: %s %s — %s (error_code=%s)",
+                    "Access denied: %s %s - %s (error_code=%s)",
                     request.method,
                     request.url.path,
                     exc.message,
@@ -120,6 +130,7 @@ class FastAPIAppFactory:
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.message, "error_code": exc.error_code},
+                headers=exc.headers,
             )
 
         @app.exception_handler(Exception)
@@ -150,10 +161,10 @@ class FastAPIAppFactory:
         app.openapi = openapi_from_snapshot
 
     @staticmethod
-    def _configure_lifecycle_events(app: FastAPI) -> None:
-        @app.on_event("startup")
-        async def startup_event():
-            """Initialize database and publish runtime RBAC policies."""
+    def _build_lifespan_handler() -> Callable[[FastAPI], AsyncIterator[None]]:
+        @asynccontextmanager
+        async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+            """Initialize database and optional integrations before serving requests."""
             logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
             logger.info("Environment: %s", settings.APP_ENV)
             logger.info(
@@ -177,21 +188,25 @@ class FastAPIAppFactory:
                     RbacService.publish_policies(db)
                 finally:
                     db.close()
-            except Exception as exc:
+            except Exception as exc:  # policy: DEGRADED - optional startup integration should not block boot
                 logger.warning("RBAC publish skipped: %s", exc)
 
             # Pre-warm the Ollama model so the first request is fast
             if settings.APP_ENV != "testing":
                 try:
                     from app.assistant.ollama_client import OllamaClient
+
                     ollama = OllamaClient(
                         base_url=settings.OLLAMA_BASE_URL,
                         model=settings.ASSISTANT_MODEL,
                     )
-                    import asyncio
-                    asyncio.ensure_future(ollama.warmup())
-                except Exception as exc:
+                    asyncio.create_task(ollama.warmup())
+                except Exception as exc:  # policy: DEGRADED - optional startup integration should not block boot
                     logger.warning("Ollama warmup skipped: %s", exc)
+
+            yield
+
+        return lifespan
 
     @staticmethod
     def _register_internal_routes(app: FastAPI) -> None:

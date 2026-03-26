@@ -9,12 +9,28 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
-from app.middleware.logging_middleware import current_request_id
+from app.observability import (
+    REQUEST_ID_HEADER,
+    TRACE_ID_HEADER,
+    current_request_id,
+    current_trace_id,
+)
 
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 2
 _RETRY_BACKOFF = 1.0  # seconds, doubles each retry
+
+
+def _trace_headers() -> dict[str, str]:
+    headers: dict[str, str] = {}
+    trace_id = current_trace_id.get(None)
+    if trace_id:
+        headers[TRACE_ID_HEADER] = trace_id
+    request_id = current_request_id.get(None)
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
+    return headers
 
 
 class OllamaClient:
@@ -75,10 +91,7 @@ class OllamaClient:
             payload["tools"] = tools
 
         client = self._get_client()
-        headers = {}
-        rid = current_request_id.get(None)
-        if rid:
-            headers["X-Request-ID"] = rid
+        headers = _trace_headers()
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
@@ -124,10 +137,7 @@ class OllamaClient:
             payload["tools"] = tools
 
         client = self._get_client()
-        headers = {}
-        rid = current_request_id.get(None)
-        if rid:
-            headers["X-Request-ID"] = rid
+        headers = _trace_headers()
         async with client.stream(
             "POST", f"{self._base_url}/api/chat", json=payload, headers=headers
         ) as resp:
@@ -150,7 +160,7 @@ class OllamaClient:
         try:
             models = await self.list_models()
             return self._model in models
-        except Exception:
+        except Exception:  # policy: DEGRADED — health probe failure reports backend as unavailable
             return False
 
     async def warmup(self) -> None:
@@ -166,7 +176,7 @@ class OllamaClient:
             }
             await client.post(f"{self._base_url}/api/chat", json=payload)
             logger.info("Model %s warmed up and loaded into memory", self._model)
-        except Exception:
+        except Exception:  # policy: LOSSY — warmup failure should not block serving requests
             logger.warning("Model warmup failed (non-fatal)", exc_info=True)
 
     async def list_models(self) -> list[str]:
@@ -189,6 +199,6 @@ class OllamaClient:
                 )
                 resp.raise_for_status()
                 return True
-        except Exception:
+        except Exception:  # policy: BOUNDARY — model pull wraps provider failures consistently
             logger.exception("Failed to pull model %s", target)
             return False

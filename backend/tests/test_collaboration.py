@@ -22,7 +22,9 @@ from app.models import (
     User,
     UserRole,
 )
+from app.observability import get_use_case_telemetry_sink, reset_use_case_telemetry_sink
 from app.security import get_password_hash
+from app.services.collaboration_service import CollaborationService
 from tests.scenarios import create_collaboration_access_scenario
 
 
@@ -60,6 +62,26 @@ class TestCollabToken:
         assert decoded["type"] == "collaboration"
         assert decoded["document_id"] == str(test_document.id)
         assert "permissions" in decoded
+        assert response.headers["X-Trace-ID"] == decoded["trace_id"]
+        assert response.headers["X-Request-ID"]
+
+    def test_get_collab_token_preserves_incoming_trace_id(
+        self, client, auth_headers, test_document
+    ):
+        response = client.post(
+            "/api/v1/auth/collab-token",
+            headers={**auth_headers, "X-Trace-ID": "trace-collab-client-123"},
+            json={"document_id": test_document.id},
+        )
+
+        assert response.status_code == 200
+        decoded = jwt.decode(
+            response.json()["token"],
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        assert response.headers["X-Trace-ID"] == "trace-collab-client-123"
+        assert decoded["trace_id"] == "trace-collab-client-123"
 
     def test_get_collab_token_document_not_found(self, client, auth_headers):
         """Test getting a token for non-existent document"""
@@ -94,19 +116,21 @@ class TestCollabToken:
         assert "write" in data["permissions"]
 
     def test_collab_token_permissions_viewer(self, client, viewer_auth_headers, test_document):
-        """Test that viewers are denied collab tokens (H-03: write permission required)"""
+        """Test that viewers receive read-only collab tokens."""
         response = client.post(
             "/api/v1/auth/collab-token",
             headers=viewer_auth_headers,
             json={"document_id": test_document.id},
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 200
+        data = response.json()
+        assert data["permissions"] == ["read"]
 
-    def test_editor_receives_write_permission_when_standard_edit_policy_allows(
+    def test_editor_receives_write_permission_for_draft_when_standard_edit_policy_allows(
         self, client, db
     ):
-        """Collaboration write permissions should match core edit policy for same-tenant editors."""
+        """Draft documents should issue read/write tokens for same-tenant editors."""
         tenant = Tenant(name="Collab Edit Tenant", slug="collab-edit-tenant")
         db.add(tenant)
         db.commit()
@@ -140,10 +164,10 @@ class TestCollabToken:
         document = Document(
             title="Collab edit parity doc",
             document_number="DOC-COLLAB-EDIT-001",
-            status=DocumentStatus.ACTIVE,
+            status=DocumentStatus.DRAFT,
             visibility=DocumentVisibility.INTERNAL,
             tenant_id=tenant.id,
-            created_by=owner.id,
+            created_by=editor.id,
         )
         db.add(document)
         db.commit()
@@ -173,6 +197,32 @@ class TestCollabToken:
         )
         assert response.status_code == 403
 
+    def test_collab_token_denied_for_cross_tenant_system_admin(self, client, db):
+        """System admins must stay within the document tenant for collaboration."""
+        scenario = create_collaboration_access_scenario(db)
+
+        system_admin = User(
+            email="collab-sysadmin-tenant-b@example.com",
+            username="collab_sysadmin_tenant_b",
+            full_name="Cross Tenant Sysadmin",
+            hashed_password=get_password_hash("sysadmin123"),
+            role=UserRole.SYSTEM_ADMIN,
+            tenant_id=scenario.outsider.tenant_id,
+            is_active=True,
+            is_email_verified=True,
+        )
+        db.add(system_admin)
+        db.commit()
+
+        system_admin_headers = _login(client, system_admin.username, "sysadmin123")
+        response = client.post(
+            "/api/v1/auth/collab-token",
+            headers=system_admin_headers,
+            json={"document_id": scenario.document.id},
+        )
+
+        assert response.status_code == 403
+
 
 class TestDocumentState:
     """Tests for Yjs document state persistence"""
@@ -191,6 +241,24 @@ class TestDocumentState:
         assert response.status_code == 200
         data = response.json()
         assert "message" in data or "size" in data  # API returns message and size
+
+    def test_put_document_state_emits_collaboration_telemetry(
+        self, client, system_admin_headers, test_document
+    ):
+        reset_use_case_telemetry_sink()
+
+        response = client.put(
+            f"/api/v1/collaboration/documents/{test_document.id}/state",
+            headers={**system_admin_headers, "Content-Type": "application/octet-stream"},
+            content=b"\x01\x02\x03",
+        )
+
+        assert response.status_code == 200
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.save_document_state" and event.outcome == "success"
+            for event in events
+        )
 
     def test_get_document_state(self, client, system_admin_headers, test_document, db):
         """Test retrieving Yjs state from a document"""
@@ -234,12 +302,96 @@ class TestDocumentState:
         db.refresh(test_document)
         assert test_document.yjs_state is None
 
+    def test_verify_collaboration_access_accepts_valid_same_tenant_token(
+        self, client, auth_headers, test_document
+    ):
+        reset_use_case_telemetry_sink()
+        token_response = client.post(
+            "/api/v1/auth/collab-token",
+            headers=auth_headers,
+            json={"document_id": test_document.id},
+        )
+        assert token_response.status_code == 200
+        token = token_response.json()["token"]
+
+        response = client.get(
+            f"/api/v1/collaboration/documents/{test_document.id}/verify-access",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["document_id"] == test_document.id
+        assert data["user_id"] > 0
+        assert data["tenant_id"] == test_document.tenant_id
+        assert "write" in data["permissions"]
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.verify_collaboration_access"
+            and event.outcome == "success"
+            for event in events
+        )
+
+    def test_verify_collaboration_access_accepts_read_only_viewer_token(
+        self, client, viewer_auth_headers, test_document
+    ):
+        token_response = client.post(
+            "/api/v1/auth/collab-token",
+            headers=viewer_auth_headers,
+            json={"document_id": test_document.id},
+        )
+        assert token_response.status_code == 200
+        token = token_response.json()["token"]
+
+        response = client.get(
+            f"/api/v1/collaboration/documents/{test_document.id}/verify-access",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["document_id"] == test_document.id
+        assert data["permissions"] == ["read"]
+
+    def test_verify_collaboration_access_rejects_cross_tenant_system_admin_token(
+        self, client, db
+    ):
+        scenario = create_collaboration_access_scenario(db)
+        foreign_system_admin = User(
+            email="collab-verify-sysadmin@example.com",
+            username="collab_verify_sysadmin",
+            full_name="Foreign Verify Sysadmin",
+            hashed_password=get_password_hash("verify123"),
+            role=UserRole.SYSTEM_ADMIN,
+            tenant_id=scenario.outsider.tenant_id,
+            is_active=True,
+            is_email_verified=True,
+        )
+        db.add(foreign_system_admin)
+        db.commit()
+        db.refresh(foreign_system_admin)
+
+        forged_token = CollaborationService().issue_collab_token(
+            user=foreign_system_admin,
+            document_id=scenario.document.id,
+            permissions=["read", "write"],
+        )
+
+        response = client.get(
+            f"/api/v1/collaboration/documents/{scenario.document.id}/verify-access",
+            headers={"Authorization": f"Bearer {forged_token}"},
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Cross-tenant collaboration is not allowed"
+
 
 class TestCollaborationSessions:
     """Tests for collaboration session tracking"""
 
     def test_start_session(self, client, auth_headers, test_document):
         """Test starting a collaboration session"""
+        reset_use_case_telemetry_sink()
         response = client.post(
             "/api/v1/collaboration/sessions/start",
             headers=auth_headers,
@@ -250,6 +402,12 @@ class TestCollaborationSessions:
         data = response.json()
         assert "session_id" in data
         assert data["document_id"] == test_document.id
+        events = get_use_case_telemetry_sink().snapshot()
+        assert any(
+            event.use_case_id == "collab.start_collaboration_session"
+            and event.outcome == "success"
+            for event in events
+        )
 
     def test_end_session(self, client, auth_headers, test_document, db):
         """Test ending a collaboration session"""

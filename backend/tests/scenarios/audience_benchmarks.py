@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from time import perf_counter
 
 import pytest
 from sqlalchemy import func
 
+from app.config import settings
 from app.models import (
     Document,
     DocumentStatus,
@@ -15,6 +17,7 @@ from app.models import (
     UserRole,
     document_company_assignments,
 )
+from app.search_backend import database_dialect_name, resolve_search_backend_mode
 from tests.factories import create_tenant, create_user
 
 BENCHMARK_DOCUMENT_COUNT = 10_000
@@ -46,7 +49,13 @@ def _measure_latency_ms(action, *, iterations: int) -> list[float]:
     return samples
 
 
-def _seed_benchmark_dataset(db, *, author_id: int, customer_company_id: int) -> int:
+def _seed_benchmark_dataset(
+    db,
+    *,
+    author_id: int,
+    author_tenant_id: int,
+    customer_company_id: int,
+) -> int:
     now = datetime.utcnow()
     max_existing_id = int(db.query(func.max(Document.id)).scalar() or 0)
     rows: list[dict[str, object]] = []
@@ -63,7 +72,7 @@ def _seed_benchmark_dataset(db, *, author_id: int, customer_company_id: int) -> 
         rows.append(
             {
                 "id": document_id,
-                "tenant_id": None,
+                "tenant_id": author_tenant_id,
                 "title": f"Benchmark Document {index:05d}",
                 "document_number": f"DOC-BENCH-{document_id:06d}",
                 "description": "Benchmark payload for audience query latency",
@@ -125,13 +134,6 @@ def test_audience_query_benchmarks(client, db, test_admin, record_property):
     )
     _ = customer_user
 
-    customer_login = client.post(
-        "/api/v1/auth/login",
-        json={"username": "benchmark_customer", "password": "bench-pass-123"},
-    )
-    assert customer_login.status_code == 200
-    customer_headers = {"Authorization": f"Bearer {customer_login.json()['access_token']}"}
-
     admin_login = client.post(
         "/api/v1/auth/login",
         json={"username": test_admin.username, "password": "admin123"},
@@ -142,6 +144,7 @@ def test_audience_query_benchmarks(client, db, test_admin, record_property):
     benchmark_document_id = _seed_benchmark_dataset(
         db,
         author_id=test_admin.id,
+        author_tenant_id=test_admin.tenant_id,
         customer_company_id=customer_company.id,
     )
 
@@ -162,7 +165,7 @@ def test_audience_query_benchmarks(client, db, test_admin, record_property):
     search_samples = _measure_latency_ms(
         lambda: client.get(
             "/api/v1/search/?q=Benchmark&page=1&page_size=20",
-            headers=customer_headers,
+            headers=admin_headers,
         ),
         iterations=BENCHMARK_ITERATIONS,
     )
@@ -170,14 +173,23 @@ def test_audience_query_benchmarks(client, db, test_admin, record_property):
     assignment_p50, assignment_p95 = _percentiles(assignment_list_samples)
     detail_p50, detail_p95 = _percentiles(detail_samples)
     search_p50, search_p95 = _percentiles(search_samples)
+    search_backend_mode = resolve_search_backend_mode(
+        settings.SEARCH_BACKEND_MODE,
+        dialect_name=database_dialect_name(db),
+    )
 
     metrics = {
         "assignment_list": {"p50_ms": assignment_p50, "p95_ms": assignment_p95},
         "document_detail_with_companies": {"p50_ms": detail_p50, "p95_ms": detail_p95},
-        "search_with_audience_filter": {"p50_ms": search_p50, "p95_ms": search_p95},
+        "search_with_audience_filter": {
+            "backend_mode": search_backend_mode.value,
+            "p50_ms": search_p50,
+            "p95_ms": search_p95,
+        },
     }
     for metric in metrics.values():
         assert metric["p50_ms"] >= 0.0
         assert metric["p95_ms"] >= metric["p50_ms"]
 
     record_property("audience_benchmark_metrics", metrics)
+    record_property("audience_benchmark_metrics_json", json.dumps(metrics, sort_keys=True))

@@ -158,16 +158,48 @@ def projection_cache_isolation():
 def company_cache_isolation():
     """Clear the module-level company lookup cache between tests."""
     from app.services.document_service import _company_cache
-    _company_cache.clear()
+    _company_cache.clear(reset_metrics=True)
     yield
-    _company_cache.clear()
+    _company_cache.clear(reset_metrics=True)
+
+
+@pytest.fixture(autouse=True)
+def search_runtime_isolation():
+    """Reset search runtime counters between tests."""
+    from app.observability.search_runtime import reset_search_runtime_metrics
+
+    reset_search_runtime_metrics()
+    yield
+    reset_search_runtime_metrics()
+
+
+@pytest.fixture(autouse=True)
+def assistant_capacity_isolation():
+    """Reset assistant capacity counters between tests."""
+    from app.services.assistant_capacity_service import reset_assistant_capacity_service
+
+    reset_assistant_capacity_service()
+    yield
+    reset_assistant_capacity_service()
+
+
+@pytest.fixture(autouse=True)
+def degradation_runtime_isolation():
+    """Reset degradation counters between tests."""
+    from app.infrastructure.degradation import reset_degradation_metrics
+
+    reset_degradation_metrics()
+    yield
+    reset_degradation_metrics()
 
 
 @pytest.fixture(autouse=True)
 def auth_rate_limit_isolation():
     """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
     from app.services.auth_rate_limit_service import AuthRateLimitService
+    from app.services.distributed_rate_limit_service import DistributedRateLimitService
     AuthRateLimitService.reset()
+    DistributedRateLimitService.reset()
     # Also clear the general middleware's per-IP buckets so auth-path limits
     # don't carry over between tests that enable RATE_LIMIT_ENABLED.
     from app.middleware.rate_limit import RateLimitMiddleware
@@ -180,6 +212,7 @@ def auth_rate_limit_isolation():
         _app = getattr(_app, "app", None)
     yield
     AuthRateLimitService.reset()
+    DistributedRateLimitService.reset()
 
 
 @pytest.fixture(scope="function")

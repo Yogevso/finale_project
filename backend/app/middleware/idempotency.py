@@ -172,7 +172,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — idempotency middleware converts storage errors into stable responses
             update_db = SessionLocal()
             try:
                 record = update_db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.id == record_id).first()

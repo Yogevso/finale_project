@@ -10,6 +10,7 @@ import {
   useDocumentDetailPageBundleQuery,
 } from '@/hooks/useDocumentQueries'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 import type { DocumentUpdate } from '@/types'
 
 export type DocumentDetailTab = 'preview' | 'details' | 'versions' | 'attachments'
@@ -178,7 +179,11 @@ export function useDocumentDetailPageState() {
       navigate('/documents')
     },
     onError: (mutationError: unknown) => {
-      console.error('Delete error:', mutationError)
+      reportRuntimeError({
+        scope: 'document.detail',
+        message: 'Delete document failed',
+        error: mutationError,
+      })
       alert(getMutationErrorMessage(mutationError, 'Failed to delete document'))
     },
   })

@@ -31,14 +31,10 @@ import {
   mapUserAnalyticsDto,
 } from './dto'
 import { API_BASE_URL } from './httpClient'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const AnalyticsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const AnalyticsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getAnalyticsOverview(params?: AnalyticsQueryParams): Promise<AnalyticsOverview> {
       const { data } = await this.client.get<AnalyticsOverviewDto>('/analytics/overview', { params })
       return mapAnalyticsOverviewDto(data)

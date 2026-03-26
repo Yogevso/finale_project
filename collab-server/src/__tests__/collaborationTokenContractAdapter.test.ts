@@ -17,6 +17,7 @@ describe('CollaborationTokenContractAdapter', () => {
 
     expect(result.success).toBe(true);
     expect(result.user?.userId).toBe('10');
+    expect(result.user?.traceId).toBe('trace-collab-123');
     expect(result.permissions).toEqual(['read', 'write']);
   });
 

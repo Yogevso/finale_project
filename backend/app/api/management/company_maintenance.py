@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.dependencies.permissions import require_system_admin
 from app.models import (
     Document,
     DocumentStatus,
@@ -20,16 +21,8 @@ from app.models import (
     UserRole,
     document_company_assignments,
 )
-from app.security import get_current_active_user
 
 router = APIRouter(prefix="/companies/maintenance", tags=["Company Maintenance"])
-
-
-def require_system_admin(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require system_admin role for maintenance operations."""
-    if current_user.role != UserRole.SYSTEM_ADMIN:
-        raise HTTPException(status_code=403, detail="System admin access required")
-    return current_user
 
 
 def _parse_settings(tenant: Tenant) -> dict:

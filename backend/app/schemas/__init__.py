@@ -198,10 +198,11 @@ class DocumentCreate(DocumentBase):
 class DocumentUpdate(BaseModel):
     """Document update schema"""
 
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = Field(None, max_length=10000)
     version_label: Optional[str] = Field(None, max_length=50)
-    status: Optional[DocumentStatus] = None
     visibility: Optional[DocumentVisibility] = None
     company_ids: Optional[List[int]] = None
     category: Optional[str] = Field(None, max_length=100)

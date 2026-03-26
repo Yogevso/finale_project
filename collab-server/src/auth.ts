@@ -9,27 +9,34 @@ import {
 } from './authContext/collaborationAuthService.js';
 import type { CollaborationPermission } from './authContext/contracts.js';
 
-const collabAuthService = new CollaborationAuthService();
+let collabAuthService: CollaborationAuthService | null = null;
+
+function getCollabAuthService(): CollaborationAuthService {
+  if (!collabAuthService) {
+    collabAuthService = new CollaborationAuthService();
+  }
+  return collabAuthService;
+}
 
 /**
  * Verify a collaboration token and extract user info
  */
 export function verifyCollabToken(token: string, documentId: string): AuthResult {
-  return collabAuthService.verifyCollabToken(token, documentId);
+  return getCollabAuthService().verifyCollabToken(token, documentId);
 }
 
 /**
  * Check if user has write permission
  */
 export function canWrite(permissions: CollaborationPermission[]): boolean {
-  return collabAuthService.canWrite(permissions);
+  return permissions.includes('write');
 }
 
 /**
  * Check if user has read permission
  */
 export function canRead(permissions: CollaborationPermission[]): boolean {
-  return collabAuthService.canRead(permissions);
+  return permissions.includes('read') || permissions.includes('write');
 }
 
 /**

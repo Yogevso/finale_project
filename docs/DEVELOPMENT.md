@@ -53,7 +53,7 @@ venv\Scripts\activate
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # Initialize database
 python -c "from app.db import init_db; init_db()"
@@ -64,6 +64,13 @@ python -c "from app.db import create_test_users; create_test_users()"
 # Start server
 uvicorn app.main:app --reload --port 8001
 ```
+
+Backend dependency files:
+
+- `requirements.in`: runtime source
+- `requirements.txt`: generated runtime lock
+- `requirements-dev.in`: dev/audit source
+- `requirements-dev.txt`: generated dev lock
 
 ### Frontend
 

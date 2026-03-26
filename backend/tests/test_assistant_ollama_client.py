@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 
 from app.assistant.ollama_client import OllamaClient
+from app.observability import current_request_id, current_trace_id
 
 
 def _run(coro):
@@ -96,6 +97,29 @@ class TestChat:
 
         payload = mock_http.post.call_args.kwargs.get("json") or mock_http.post.call_args[1].get("json")
         assert "num_ctx" not in payload["options"]
+
+    def test_chat_forwards_request_and_trace_headers(self):
+        client = OllamaClient("http://localhost:11434", "llama3.1:8b")
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"message": {"content": "Hi"}}
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_http = AsyncMock()
+        mock_http.post.return_value = mock_resp
+        mock_http.is_closed = False
+
+        request_token = current_request_id.set("request-123")
+        trace_token = current_trace_id.set("trace-123")
+        try:
+            with patch.object(OllamaClient, '_get_client', return_value=mock_http):
+                _run(client.chat(messages=[{"role": "user", "content": "Hi"}]))
+        finally:
+            current_request_id.reset(request_token)
+            current_trace_id.reset(trace_token)
+
+        headers = mock_http.post.call_args.kwargs.get("headers") or mock_http.post.call_args[1].get("headers")
+        assert headers["X-Request-ID"] == "request-123"
+        assert headers["X-Trace-ID"] == "trace-123"
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -33,24 +32,17 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         cls,
         attachment_id: int,
         *,
+        db: Session | None = None,
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
-        """Schedule asynchronous generation of a derived reader artifact."""
-        if background_tasks:
-            background_tasks.add_task(
-                cls.generate_reader_artifact,
-                attachment_id,
-                force,
-            )
-            return
-
-        worker = threading.Thread(
-            target=cls.generate_reader_artifact,
-            args=(attachment_id, force),
-            daemon=True,
+        """Schedule asynchronous generation through the durable conversion queue."""
+        cls.enqueue_conversion(
+            attachment_id,
+            db=db,
+            background_tasks=background_tasks,
+            force=force,
         )
-        worker.start()
 
     @staticmethod
     def _normalize_toc_items(raw_items: Any) -> list[dict[str, Any]]:
@@ -128,7 +120,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
 
         try:
             payload = json.loads(raw_json)
-        except Exception:
+        except Exception:  # policy: DEGRADED — invalid stored TOC payload falls back to an empty structure
             logger.warning("Invalid reader_toc_json for attachment %s", attachment.id)
             return {}
 
@@ -376,7 +368,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             reader_artifact.generated_at = datetime.utcnow()
             cls._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
-        except Exception as exc:
+        except Exception as exc:  # policy: COMPENSATING — persist a failed artifact state instead of crashing the worker
             logger.exception("Reader artifact generation failed for attachment %s", attachment_id)
             attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
             if attachment:
@@ -456,6 +448,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             db.refresh(attachment)
             cls.schedule_reader_artifact_generation(
                 attachment.id,
+                db=db,
                 background_tasks=background_tasks,
                 force=force_retry,
             )

@@ -25,10 +25,18 @@ describe('ConnectionRegistry', () => {
       writeCapable: false,
     });
 
-    const info = registry.getServerInfo(8002, 12.5);
-    expect(info.activeDocuments).toBe(1);
-    expect(info.totalConnections).toBe(2);
-    expect(info).not.toHaveProperty('documents');
+    const snapshot = registry.getSnapshot();
+    expect(snapshot.activeDocuments).toBe(1);
+    expect(snapshot.totalConnections).toBe(2);
+    expect(snapshot.maxConnectionsOnSingleDocument).toBe(2);
+    expect(snapshot.documents).toEqual([
+      {
+        documentId: 'doc-1',
+        totalConnections: 2,
+        writeConnections: 1,
+        readConnections: 1,
+      },
+    ]);
     expect(hooks.registerDocumentConnectionAuth).toHaveBeenCalledTimes(2);
   });
 
@@ -66,6 +74,37 @@ describe('ConnectionRegistry', () => {
     expect(hooks.clearDocumentCache).not.toHaveBeenCalled();
 
     expect(registry.unregister({ documentId: 'doc-1', connectionId: 'conn-1' })).toBe(true);
+    expect(hooks.clearDocumentAuth).toHaveBeenCalledWith('doc-1');
+    expect(hooks.clearDocumentCache).toHaveBeenCalledWith('doc-1');
+  });
+
+  it('keeps the per-user connection index in sync for repeated fallback disconnects', () => {
+    const hooks: ConnectionRegistryHooks = {
+      registerDocumentConnectionAuth: jest.fn(),
+      unregisterDocumentConnectionAuth: jest.fn(() => 0),
+      clearDocumentAuth: jest.fn(),
+      clearDocumentCache: jest.fn(),
+    };
+    const registry = new ConnectionRegistry(hooks);
+    const scenario = buildConnectionSetScenario('doc-1');
+
+    registry.register({
+      connection: scenario.writeConnection,
+      token: 'token-1',
+      writeCapable: true,
+    });
+    registry.register({
+      connection: {
+        ...scenario.writeConnection,
+        connectionId: 'conn-3',
+      },
+      token: 'token-3',
+      writeCapable: true,
+    });
+
+    expect(registry.unregister({ documentId: 'doc-1', userId: 'user-1' })).toBe(true);
+    expect(hooks.clearDocumentAuth).not.toHaveBeenCalled();
+    expect(registry.unregister({ documentId: 'doc-1', userId: 'user-1' })).toBe(true);
     expect(hooks.clearDocumentAuth).toHaveBeenCalledWith('doc-1');
     expect(hooks.clearDocumentCache).toHaveBeenCalledWith('doc-1');
   });

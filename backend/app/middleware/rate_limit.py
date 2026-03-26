@@ -36,7 +36,7 @@ def _get_redis_client():
             )
             _redis_client.ping()
             logger.info("Rate limiter using Redis backend")
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis unavailable — falling back to in-memory rate limiting")
             _redis_client = None
     return _redis_client
@@ -80,6 +80,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         f"{settings.API_PREFIX}/viewer/",
     )
     INVITATION_PATH = f"{settings.API_PREFIX}/invitations"
+    # M-02: Public invitation validate/accept endpoints
+    AUTH_INVITATION_PREFIX = f"{settings.API_PREFIX}/auth/invitation"
+    SEARCH_PATH_PREFIX = f"{settings.API_PREFIX}/search"
     ASSIGNMENT_PATH_PATTERNS = (
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies$"),
         re.compile(rf"^{settings.API_PREFIX}/documents/\d+/assign-companies/\d+$"),
@@ -125,6 +128,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Auth endpoints get a strict limit (10 req/min) to prevent brute-force
         if request_path in self.AUTH_PATHS:
             return 10, 60, "auth"
+        # M-02: Public invitation validate/accept — same strict limit
+        if request_path.startswith(self.AUTH_INVITATION_PREFIX):
+            return 10, 60, "auth"
+        # M-40: Search endpoints — FTS5 is expensive, restrict to 30 req/min
+        if request_path.startswith(self.SEARCH_PATH_PREFIX):
+            return 30, 60, "search"
         # Public/viewer paths get 30 req/min per IP
         if any(request_path.startswith(prefix) for prefix in self.PUBLIC_PATH_PREFIXES):
             return 30, 60, "public"
@@ -194,7 +203,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             remaining = limit - count
             return False, remaining, reset_time
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis rate-limit error — falling back to in-memory")
             return False, limit - 1, int(time.time()) + window
 

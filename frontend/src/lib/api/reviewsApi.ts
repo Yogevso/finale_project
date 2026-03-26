@@ -3,6 +3,7 @@ import type {
   FeedbackListManagementResponse,
   FeedbackStatus,
   FeedbackType,
+  PreApprovePolicy,
   ReviewAction,
   ReviewListResponse,
   ReviewRequest,
@@ -12,6 +13,7 @@ import {
   type FeedbackDetailResponseDto,
   type FeedbackListManagementResponseDto,
   type ManagementFeedbackStatsDto,
+  type PreApprovePolicyDto,
   type ReviewActionDto,
   type ReviewListResponseDto,
   type ReviewRequestDto,
@@ -19,19 +21,16 @@ import {
   mapFeedbackDetailResponseDto,
   mapFeedbackListManagementResponseDto,
   mapManagementFeedbackStatsDto,
+  mapPreApprovePolicyDto,
   mapReviewListResponseDto,
   mapReviewRequestDto,
   toReviewActionDto,
   toReviewSubmitDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async submitForReview(documentId: number, data: ReviewSubmit): Promise<ReviewRequest> {
       const payload = toReviewSubmitDto(data)
       const { data: response } = await this.client.post<ReviewRequestDto>(
@@ -60,6 +59,13 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: 
     async getReview(reviewId: number): Promise<ReviewRequest> {
       const { data } = await this.client.get<ReviewRequestDto>(`/reviews/${reviewId}`)
       return mapReviewRequestDto(data)
+    }
+
+    async getPreApprovePolicy(reviewId: number): Promise<PreApprovePolicy> {
+      const { data } = await this.client.get<PreApprovePolicyDto>(
+        `/reviews/${reviewId}/approve/preflight`,
+      )
+      return mapPreApprovePolicyDto(data)
     }
 
     async approveReview(reviewId: number, data: ReviewAction): Promise<ReviewRequest> {

@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.support_message_utils import (
+    parse_support_message_request,
+    support_message_to_response,
+)
 from app.db import get_db
-from app.dependencies.permissions import require_internal_user
-from app.application.policies.access_policies import SupportAccessPolicy
-from app.models import SupportTicketStatus, User, UserRole
+from app.dependencies.permissions import require_internal_user, require_manager
+from app.dependencies.services import get_support_ticket_service
+from app.models import SupportTicketStatus, User
 from app.schemas.chat import (
     AssignAgentRequest,
     HandoffRequest,
-    SendTicketMessageRequest,
     SupportTicketAssignmentResponse,
     SupportTicketCreate,
     SupportTicketDetailResponse,
@@ -23,24 +27,11 @@ from app.schemas.chat import (
     SupportTicketResponse,
     SupportTicketUpdate,
 )
-from app.services.support_service import SupportTicketService
+from app.security import get_current_active_user
+from app.utils.async_tasks import run_async_task
 from app.ws.manager import chat_manager
 
 router = APIRouter()
-
-_support_policy = SupportAccessPolicy()
-
-
-def _get_support_service(db: Session = Depends(get_db)) -> SupportTicketService:
-    return SupportTicketService(db)
-
-
-def require_support_agent(current_user: User = Depends(require_internal_user)) -> User:
-    """Dependency: require SYSTEM_ADMIN, ADMIN, or MANAGER for agent-level operations."""
-    if not _support_policy.can_manage_ticket(current_user):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Agent-level access required")
-    return current_user
 
 
 def _ticket_to_response(t) -> SupportTicketResponse:
@@ -61,15 +52,7 @@ def _ticket_to_response(t) -> SupportTicketResponse:
 
 
 def _msg_to_response(m) -> SupportTicketMessageResponse:
-    return SupportTicketMessageResponse(
-        id=m.id,
-        ticket_id=m.ticket_id,
-        sender_id=m.sender_id,
-        sender_type=m.sender_type,
-        content=m.content,
-        is_internal_note=m.is_internal_note,
-        created_at=m.created_at,
-    )
+    return support_message_to_response(m)
 
 
 # ---- Tickets ----
@@ -81,7 +64,7 @@ def list_tickets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """List support tickets visible to the current user."""
     tickets, total = svc.list_tickets(current_user, status_filter=status_filter, page=page, page_size=page_size)
@@ -97,7 +80,7 @@ def list_tickets(
 def create_ticket(
     body: SupportTicketCreate,
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Create a new support ticket."""
     ticket = svc.create_ticket(
@@ -115,7 +98,7 @@ def create_ticket(
 def create_from_feedback(
     feedback_id: int,
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Create a support ticket from existing feedback."""
     ticket = svc.create_ticket_from_feedback(current_user, feedback_id)
@@ -126,7 +109,7 @@ def create_from_feedback(
 def get_ticket(
     ticket_id: int,
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Get ticket details with messages and assignments."""
     ticket = svc.get_ticket(ticket_id, current_user)
@@ -162,9 +145,9 @@ def get_ticket(
 def update_ticket(
     ticket_id: int,
     body: SupportTicketUpdate,
-    current_user: User = Depends(require_support_agent),
+    current_user: User = Depends(require_manager),
     db: Session = Depends(get_db),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Update ticket status, priority, etc. Requires agent-level access."""
     old_status = None
@@ -203,7 +186,7 @@ def update_ticket(
 def get_ticket_messages(
     ticket_id: int,
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Get messages for a ticket. Internal notes hidden from customers."""
     messages = svc.get_messages(ticket_id, current_user)
@@ -215,15 +198,56 @@ def get_ticket_messages(
     response_model=SupportTicketMessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def send_ticket_message(
+async def send_ticket_message(
     ticket_id: int,
-    body: SendTicketMessageRequest,
+    request: Request,
     current_user: User = Depends(require_internal_user),
-    svc: SupportTicketService = Depends(_get_support_service),
+    svc = Depends(get_support_ticket_service),
 ):
     """Send a message on a support ticket."""
-    msg = svc.send_message(ticket_id, current_user, body.content, is_internal_note=body.is_internal_note)
+    content, is_internal_note, upload = await parse_support_message_request(
+        request,
+        allow_internal_note=True,
+    )
+    file_bytes = await upload.read() if upload else None
+    msg = svc.send_message(
+        ticket_id,
+        current_user,
+        content,
+        is_internal_note=is_internal_note,
+        file_bytes=file_bytes,
+        file_name=upload.filename if upload else None,
+        file_mime_type=upload.content_type if upload else None,
+    )
+    ticket = svc.get_ticket(ticket_id, current_user)
+    run_async_task(
+        svc.broadcast_message_event(
+            ticket=ticket,
+            msg=msg,
+            sender=current_user,
+        )
+    )
     return _msg_to_response(msg)
+
+
+@router.get("/support/tickets/{ticket_id}/messages/{message_id}/attachment")
+def download_ticket_message_attachment(
+    ticket_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_active_user),
+    svc = Depends(get_support_ticket_service),
+):
+    """Download a support ticket message attachment for any authorized ticket participant."""
+    msg, content = svc.get_message_attachment(ticket_id, message_id, current_user)
+    filename = msg.file_name or "attachment"
+    return Response(
+        content=content,
+        media_type=msg.file_mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Content-Length": str(len(content)),
+        },
+    )
 
 
 # ---- Agent Assignment ----
@@ -237,8 +261,8 @@ def send_ticket_message(
 def assign_agent(
     ticket_id: int,
     body: AssignAgentRequest,
-    current_user: User = Depends(require_support_agent),
-    svc: SupportTicketService = Depends(_get_support_service),
+    current_user: User = Depends(require_manager),
+    svc = Depends(get_support_ticket_service),
 ):
     """Assign an agent to a support ticket."""
     assignment = svc.assign_agent(ticket_id, current_user, body.agent_id, is_primary=body.is_primary)
@@ -255,8 +279,8 @@ def assign_agent(
 def unassign_agent(
     ticket_id: int,
     agent_id: int,
-    current_user: User = Depends(require_support_agent),
-    svc: SupportTicketService = Depends(_get_support_service),
+    current_user: User = Depends(require_manager),
+    svc = Depends(get_support_ticket_service),
 ):
     """Remove an agent from a support ticket."""
     svc.unassign_agent(ticket_id, current_user, agent_id)
@@ -269,8 +293,8 @@ def unassign_agent(
 def handoff_ticket(
     ticket_id: int,
     body: HandoffRequest,
-    current_user: User = Depends(require_support_agent),
-    svc: SupportTicketService = Depends(_get_support_service),
+    current_user: User = Depends(require_manager),
+    svc = Depends(get_support_ticket_service),
 ):
     """Transfer ticket ownership to another agent with optional note (X1-102)."""
     assignment = svc.handoff_ticket(

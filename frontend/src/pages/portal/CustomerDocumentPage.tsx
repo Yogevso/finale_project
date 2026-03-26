@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { portalApi, type FeedbackItem, type FeedbackListResponse } from '../../lib/portalApi'
-import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import FeedbackForm from '../../components/FeedbackForm'
@@ -138,7 +137,7 @@ export default function CustomerDocumentPage() {
   })
 
   const updateProgressMutation = useMutation({
-    mutationFn: (percent: number) => api.updateReadingProgress(Number(id), percent),
+    mutationFn: (percent: number) => portalApi.updateReadingProgress(Number(id), percent),
   })
 
   const computeAndSaveProgress = useCallback(() => {

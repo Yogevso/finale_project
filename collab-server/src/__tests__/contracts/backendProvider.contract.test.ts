@@ -15,15 +15,17 @@ const contract = JSON.parse(
     token_type: string;
     allowed_permissions: string[];
     required_claims: string[];
-    fixture: {
-      sub: string;
-      username: string;
-      email: string;
-      role: string;
-      document_id: string;
-      permissions: string[];
-      type: string;
-    };
+      fixture: {
+        sub: string;
+        username: string;
+        email: string;
+        role: string;
+        tenant_id: number;
+        document_id: string;
+        permissions: string[];
+        trace_id: string;
+        type: string;
+      };
   };
 };
 
@@ -53,6 +55,7 @@ describe('collab-server consumer contract', () => {
     expect(mapping.success).toBe(true);
     expect(mapping.permissions).toEqual(['read', 'write']);
     expect(mapping.user?.userId).toBe('7');
+    expect(mapping.user?.traceId).toBe('trace-contract-42');
   });
 
   it('rejects permissions outside the contract allow-list', () => {

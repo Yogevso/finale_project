@@ -40,14 +40,13 @@ def _get_route_auth_level(route: APIRoute) -> str | None:
     """
     PRIORITY = [
         ("require_system_admin", "system_admin"),
-        ("require_admin_or_manager", "admin_or_manager"),
+        ("require_manager", "manager"),
         ("require_admin", "admin"),
         ("require_any_role", "any_role"),
         ("require_permission", "permission"),
         ("require_any_permission", "permission"),
         ("require_editor", "editor"),
         ("require_internal_user", "internal"),
-        ("require_internal_staff", "internal"),
         ("require_customer", "customer"),
         ("current_active_user", "any_auth"),
         ("current_user", "any_auth"),
@@ -141,9 +140,9 @@ PUBLIC_ALLOWLIST = {
     "/api/v1/platforms/{platform_id}/documents",
     "/api/platforms",
     "/api/platforms/{platform_id}/documents",
-    "/api/v1/sitemap.xml",
     "/api/v1/announcements",
     "/api/v1/gdpr/export/{request_id}/download",  # token-based auth (URL token)
+    "/api/v1/collaboration/documents/{document_id}/verify-access",  # token-based auth (Bearer collab token)
     "/api/v1/api-keys/verify",  # API key auth (not user session)
     "/api/v1/developer/api-docs",  # public developer docs
     "/api/v1/health",
@@ -264,7 +263,7 @@ class TestVersionRoutesRequireEditor:
     def test_version_routes_have_editor_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"editor", "admin", "admin_or_manager", "system_admin", "permission"}
+        allowed = {"editor", "manager", "admin", "system_admin", "permission"}
         for route in routes:
             # Viewer/public version routes are intentionally unauthenticated
             if "/versions" in route.path and route.path not in PUBLIC_ALLOWLIST and "/viewer/" not in route.path and "/public/" not in route.path:
@@ -279,12 +278,12 @@ class TestVersionRoutesRequireEditor:
 
 
 class TestFeedbackRoutesRequireManager:
-    """Management feedback endpoints must require admin_or_manager or higher (C16)."""
+    """Management feedback endpoints must require manager or higher (C16)."""
 
     def test_feedback_routes_have_manager_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"admin_or_manager", "admin", "system_admin", "any_role", "permission", "internal"}
+        allowed = {"manager", "admin", "system_admin", "any_role", "permission", "internal"}
         for route in routes:
             # Engagement feedback (submit) and portal feedback are different
             # from management feedback — they allow any authenticated user.
@@ -298,7 +297,7 @@ class TestFeedbackRoutesRequireManager:
                     methods = ",".join(route.methods or [])
                     bad.append(f"{methods} {route.path} → {level}")
         assert bad == [], (
-            "Feedback routes should require admin_or_manager+:\n"
+            "Feedback routes should require manager+:\n"
             + "\n".join(f"  - {r}" for r in bad)
         )
 
@@ -308,7 +307,7 @@ class TestSearchAnalyticsRequiresAdmin:
 
     def test_search_analytics_route_has_admin_dep(self):
         routes = _get_all_routes()
-        allowed = {"any_role", "admin_or_manager", "admin", "system_admin", "permission"}
+        allowed = {"any_role", "manager", "admin", "system_admin", "permission"}
         for route in routes:
             if route.path == "/api/v1/search/analytics":
                 level = _get_route_auth_level(route)
@@ -323,7 +322,7 @@ class TestCompanyRoutesRequireAdmin:
     def test_company_routes_have_admin_dep(self):
         routes = _get_all_routes()
         bad = []
-        allowed = {"admin", "admin_or_manager", "system_admin", "any_role", "permission"}
+        allowed = {"admin", "manager", "system_admin", "any_role", "permission"}
         for route in routes:
             if "/companies" in route.path and route.path not in PUBLIC_ALLOWLIST:
                 level = _get_route_auth_level(route)

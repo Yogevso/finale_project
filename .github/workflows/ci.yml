@@ -10,6 +10,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'collab-server/**'
+      - 'scripts/**'
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main, develop]
@@ -17,6 +18,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'collab-server/**'
+      - 'scripts/**'
       - '.github/workflows/ci.yml'
   workflow_call:
 
@@ -293,6 +295,123 @@ jobs:
         run: npm run test
 
   # ============================================
+  # Performance & Load Regression Gates
+  # ============================================
+  performance-gates:
+    name: Performance Regression Gates
+    runs-on: ubuntu-latest
+    needs: [backend-tests, collab-quality, frontend-lint]
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            collab-server/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install collaboration server dependencies
+        working-directory: ./collab-server
+        run: npm ci
+
+      - name: Create backend directories
+        working-directory: ./backend
+        run: mkdir -p data uploads
+
+      - name: Run backend performance gate
+        run: |
+          python scripts/performance/run_backend_perf_gate.py \
+            --junit-file backend/perf-gate-results.xml \
+            --report-file backend/perf-gate-report.json
+
+      - name: Seed backend data for collaboration gate
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/perf-gate.db
+          COLLAB_SERVER_URL: http://127.0.0.1:8002
+          SEARCH_BACKEND_MODE: sqlite_fts5
+        run: python seed_data.py
+
+      - name: Start backend server for collaboration gate
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/perf-gate.db
+          RATE_LIMIT_ENABLED: "false"
+          CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+          COLLAB_SERVER_URL: http://127.0.0.1:8002
+          SEARCH_BACKEND_MODE: sqlite_fts5
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../perf-backend.log 2>&1 &
+          sleep 5
+          curl -f http://127.0.0.1:8000/health || exit 1
+
+      - name: Start collaboration server for protocol gate
+        working-directory: ./collab-server
+        env:
+          SECRET_KEY: test-secret-key-for-ci
+          BACKEND_URL: http://127.0.0.1:8000
+          BACKEND_API_PREFIX: /api/v1
+          HOST: 127.0.0.1
+          PORT: 8002
+          REDIS_URL: ""
+        run: |
+          npm run build
+          npm start > ../collab-perf.log 2>&1 &
+          sleep 5
+          curl -f http://127.0.0.1:8003/health || exit 1
+
+      - name: Run protocol-faithful collaboration perf gate
+        working-directory: ./frontend
+        run: |
+          npm run test:collab-perf-gate -- \
+            --backend-url http://127.0.0.1:8000 \
+            --collab-url ws://127.0.0.1:8002 \
+            --users 3 \
+            --rounds 3 \
+            --report-file collab-perf-report.json
+
+      - name: Upload performance gate evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-gate-evidence
+          path: |
+            backend/perf-gate-results.xml
+            backend/perf-gate-report.json
+            frontend/collab-perf-report.json
+            perf-backend.log
+            collab-perf.log
+          retention-days: 30
+
+  # ============================================
   # E2E Tests - Stage 1: Core Tests (Quick feedback)
   # ============================================
   e2e-core:
@@ -550,7 +669,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [migration-safety, backend-tests, frontend-tests, collab-quality, e2e-core, e2e-roles, e2e-features]
+    needs: [migration-safety, backend-tests, frontend-tests, collab-quality, performance-gates, e2e-core, e2e-roles, e2e-features]
     if: always()
 
     steps:
@@ -564,6 +683,7 @@ jobs:
           echo "| Backend Tests | ${{ needs.backend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend Unit Tests | ${{ needs.frontend-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Collab Quality | ${{ needs.collab-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Gates | ${{ needs.performance-gates.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Core | ${{ needs.e2e-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Roles | ${{ needs.e2e-roles.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Features | ${{ needs.e2e-features.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -582,6 +702,10 @@ jobs:
           fi
           if [[ "${{ needs.collab-quality.result }}" != "success" ]]; then
             echo "❌ Collaboration server checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.performance-gates.result }}" != "success" ]]; then
+            echo "Performance regression gates failed"
             exit 1
           fi
           if [[ "${{ needs.e2e-core.result }}" != "success" ]]; then

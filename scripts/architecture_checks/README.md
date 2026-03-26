@@ -8,6 +8,9 @@ Structural checks used by architecture governance and CI fitness gates.
   - validates backend layer/context package layout
   - enforces import rules across `domain/application/infrastructure/web`
   - enforces cross-context imports through context public APIs
+  - blocks route-layer imports of `app.web.controllers.*`
+  - keeps `app.application.contexts.*.api` as the public orchestration boundary
+  - enforces aggregate-repository usage in the users/support/comment/version/auth write paths
 - `check_collab_architecture.py`
   - validates collab layer/port/adapter layout
   - blocks direct transport bypass patterns
@@ -17,6 +20,10 @@ Structural checks used by architecture governance and CI fitness gates.
 - `check_route_db_access.py`
   - blocks new direct `db.query(...)` usage in routes
   - uses baseline file for accepted legacy debt
+- `check_exception_policy_annotations.py`
+  - requires every `except Exception` in `backend/app` to declare an inline `# policy: ...`
+  - keeps broad catches explicit instead of silently swallowing unexpected failures
+  - allowed policies: `BOUNDARY`, `COMPENSATING`, `DEGRADED`, `FAIL_FAST`, `LOSSY`, `RETRYABLE`
 - `check_refactor_budget.py`
   - enforces changed-lines/touched-files/per-file budgets
   - supports expiring override records

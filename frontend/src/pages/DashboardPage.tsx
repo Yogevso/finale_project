@@ -11,6 +11,7 @@ import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { portalApi } from '@/lib/portalApi'
 
 interface DashboardBookmark {
   id: number
@@ -373,8 +374,8 @@ function formatActivityAction(action: string, details?: string) {
 function ReadingProgressWidget() {
   const { isCustomer } = useAuth()
   const { data: progress = [], isLoading } = useQuery<DashboardProgressItem[]>({
-    queryKey: ['reading-progress'],
-    queryFn: () => api.getReadingProgress(),
+    queryKey: ['reading-progress', isCustomer ? 'portal' : 'engagement'],
+    queryFn: () => (isCustomer ? portalApi.getReadingProgress() : api.getReadingProgress()),
     enabled: isCustomer,
   })
 
@@ -410,7 +411,7 @@ function ReadingProgressWidget() {
             {inProgress.map((item) => (
               <Link
                 key={item.id}
-                to={`/documents/${item.document_id}/fullscreen`}
+                to={isCustomer ? `/portal/documents/${item.document_id}?fullscreen=1` : `/documents/${item.document_id}/fullscreen`}
                 role="listitem"
                 className="block p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
               >
@@ -428,7 +429,7 @@ function ReadingProgressWidget() {
             {completed.slice(0, 3).map((item) => (
               <Link
                 key={item.id}
-                to={`/documents/${item.document_id}/fullscreen`}
+                to={isCustomer ? `/portal/documents/${item.document_id}?fullscreen=1` : `/documents/${item.document_id}/fullscreen`}
                 role="listitem"
                 className="block p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
               >

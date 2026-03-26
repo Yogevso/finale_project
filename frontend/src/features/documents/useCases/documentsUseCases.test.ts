@@ -277,14 +277,14 @@ describe('documents use cases', () => {
     expect(validateDocumentUploadFile(validFile)).toBeNull()
   })
 
-  it('rejects PDF uploads in the client validation layer', () => {
+  it('accepts PDF uploads in the client validation layer', () => {
     const pdfFile = {
       name: 'legacy.pdf',
       type: 'application/pdf',
       size: 2048,
     } as File
 
-    expect(validateDocumentUploadFile(pdfFile)).toBe('Only DOCX and PPTX files are allowed')
+    expect(validateDocumentUploadFile(pdfFile)).toBeNull()
   })
 
   it('requires a platform for created drafts', async () => {

@@ -14,6 +14,7 @@ from sqlalchemy.orm.session import object_session
 from app.config import settings
 from app.db import AnalyticsSessionLocal
 from app.domain.events import (
+    CommentChatBridgeRequested,
     CommentCreated,
     CompanyAssignmentsUpdated,
     DocumentPublished,
@@ -49,6 +50,7 @@ class DomainEventSerializer:
     _event_types: dict[str, type[DomainEvent]] = {
         "DocumentPublished": DocumentPublished,
         "CommentCreated": CommentCreated,
+        "CommentChatBridgeRequested": CommentChatBridgeRequested,
         "CompanyAssignmentsUpdated": CompanyAssignmentsUpdated,
     }
 
@@ -71,6 +73,8 @@ class DomainEventSerializer:
             return f"document_published:{event.version_id}"
         if isinstance(event, CommentCreated):
             return f"comment_created:{event.comment_id}"
+        if isinstance(event, CommentChatBridgeRequested):
+            return f"comment_chat_bridge_requested:{event.comment_id}"
         if isinstance(event, CompanyAssignmentsUpdated):
             return f"company_assignments_updated:{event.document_id}:{event.document_row_version}"
         return None
@@ -304,7 +308,7 @@ def process_pending_outbox_events_batch(
                 _mark_dispatched(row, now=datetime.utcnow())
                 session.commit()
                 report.completed += 1
-            except Exception as exc:
+            except Exception as exc:  # policy: RETRYABLE — outbox dispatcher records failure and schedules retry/dead-lettering
                 resolved_policy = _retry_policy_for_row(
                     row=row,
                     default_policy=policy,

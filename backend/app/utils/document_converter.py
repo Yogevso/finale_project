@@ -24,7 +24,7 @@ def convert_word_to_html(content: bytes) -> str:
         if extracted_html:
             return extracted_html
         return "<p>No content could be extracted from this document.</p>"
-    except Exception as exc:
+    except Exception as exc:  # policy: DEGRADED — conversion falls back to simpler extraction on unexpected parser failures
         logger.error("Word conversion error: %s", exc)
         return convert_word_to_html_fallback(content)
 
@@ -57,7 +57,7 @@ def convert_word_to_html_fallback(content: bytes) -> str:
                 html_parts.append(f"<p>{escaped_text}</p>")
 
         return "\n".join(html_parts) if html_parts else "<p>No content found.</p>"
-    except Exception as exc:
+    except Exception as exc:  # policy: DEGRADED — conversion falls back to a safe HTML error fragment
         logger.error("Word fallback conversion error: %s", exc)
         return f"<p>Error converting Word document: {html.escape(str(exc))}</p>"
 

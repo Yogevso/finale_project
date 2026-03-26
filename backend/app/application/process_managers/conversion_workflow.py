@@ -108,7 +108,7 @@ class PreviewConversionProcessManager:
             )
             self._last_trace = trace
             return trace
-        except Exception as exc:
+        except Exception as exc:  # policy: COMPENSATING — workflow records and propagates conversion-step failure
             failed_step = step_order[-1] if step_order else "initialize"
             self._schedule_retry_or_fail(
                 job,

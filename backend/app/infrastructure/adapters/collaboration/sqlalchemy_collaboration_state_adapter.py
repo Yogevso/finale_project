@@ -35,7 +35,7 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
         try:
             self._db.commit()
             return True
-        except Exception:
+        except Exception:  # policy: BOUNDARY — persistence adapter converts ORM failures to transport-safe fallbacks
             logger.warning("Failed to save collaboration state for document %s", document_id, exc_info=True)
             self._db.rollback()
             return False
@@ -49,7 +49,7 @@ class SqlAlchemyCollaborationStateAdapter(CollaborationStatePort):
         try:
             self._db.commit()
             return True
-        except Exception:
+        except Exception:  # policy: BOUNDARY — persistence adapter converts ORM failures to transport-safe fallbacks
             logger.warning("Failed to clear collaboration state for document %s", document_id, exc_info=True)
             self._db.rollback()
             return False

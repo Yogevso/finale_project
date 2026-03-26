@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand'
-import { CollaboratorInfo } from '@/lib/useCollaboration'
+import type { CollaboratorInfo } from '@/lib/collaboration/types'
 
 export interface CollaborationNotification {
   id: string

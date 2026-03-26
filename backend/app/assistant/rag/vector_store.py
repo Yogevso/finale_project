@@ -109,6 +109,8 @@ class VectorStore:
         min_score: float | None = None,
         document_id: int | None = None,
         tenant_id: int | None = None,
+        *,
+        is_system_admin: bool = False,
     ) -> list[SearchResult]:
         """Query the vector store for similar chunks.
 
@@ -118,10 +120,14 @@ class VectorStore:
             min_score: Minimum similarity score (0-1)
             document_id: If set, only search within this document
             tenant_id: If set, only return chunks belonging to this tenant
+            is_system_admin: Must be True to allow tenant_id=None (cross-tenant)
 
         Returns:
             Ranked list of SearchResult
         """
+        # H-29: Enforce tenant scoping — only system admins may query cross-tenant
+        if tenant_id is None and not is_system_admin:
+            raise ValueError("tenant_id is required for non-system-admin queries")
         n = n_results or settings.ASSISTANT_RAG_TOP_K
         threshold = min_score if min_score is not None else settings.ASSISTANT_RAG_MIN_SCORE
         collection = self._get_collection()
@@ -141,7 +147,7 @@ class VectorStore:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector query failure falls back to empty semantic results
             logger.exception("ChromaDB query failed")
             return []
 
@@ -184,7 +190,7 @@ class VectorStore:
                 count = len(existing["ids"])
                 logger.info("Removed %d chunks for document %d", count, doc_id)
                 return count
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector delete failure should not crash higher-level cleanup
             logger.exception("Failed to delete chunks for document %d", doc_id)
         return 0
 
@@ -203,6 +209,6 @@ class VectorStore:
                     "status": "ready",
                 }
             return {"total_chunks": 0, "total_documents": 0, "status": "empty"}
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector stats failure should report an error status instead
             logger.exception("Failed to get vector store stats")
             return {"total_chunks": 0, "total_documents": 0, "status": "error"}

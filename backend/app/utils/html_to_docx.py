@@ -16,7 +16,7 @@ def _html2docx_document(html: str) -> Any:
 
         doc = html2docx(html)
         return doc
-    except Exception:
+    except Exception:  # policy: DEGRADED — alternate html2docx API fallback is acceptable here
         # Fallback for alternate API style
         try:
             from html2docx import HTML2Docx  # type: ignore
@@ -24,7 +24,7 @@ def _html2docx_document(html: str) -> Any:
             parser = HTML2Docx()
             doc = parser.parse_html_string(html)
             return doc
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — HTML-to-DOCX conversion exposes a stable runtime error
             raise RuntimeError("html2docx conversion failed") from exc
 
 

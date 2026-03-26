@@ -123,6 +123,8 @@ export function SectionEditPopup({
   const [baselineHtml, setBaselineHtml] = useState(initialEditingFrame.editorHtml)
   const [comparisonHtml, setComparisonHtml] = useState<string | null>(null)
   const [restorableDraftSavedAt, setRestorableDraftSavedAt] = useState<string | null>(null)
+  const [autoSavedAt, setAutoSavedAt] = useState<string | null>(null)
+  const [hasLocalDraft, setHasLocalDraft] = useState(false)
   const [conflictState, setConflictState] = useState<ConflictState | null>(null)
   const hasPendingRecoveredDraftRef = useRef(false)
 
@@ -171,11 +173,15 @@ export function SectionEditPopup({
     if (recoveredDraft && isDraftRecoveryDifferent(recoveredDraft.html, baselineHtml)) {
       hasPendingRecoveredDraftRef.current = true
       setRestorableDraftSavedAt(recoveredDraft.savedAt)
+      setAutoSavedAt(recoveredDraft.savedAt)
+      setHasLocalDraft(true)
       return
     }
 
     hasPendingRecoveredDraftRef.current = false
     setRestorableDraftSavedAt(null)
+    setAutoSavedAt(null)
+    setHasLocalDraft(false)
   }, [baselineHtml, draftRecoveryTarget, editor])
 
   useEffect(() => {
@@ -198,15 +204,20 @@ export function SectionEditPopup({
       isInitialPersist = false
 
       if (isDraftRecoveryDifferent(currentHtml, baselineHtml)) {
+        const savedAt = new Date().toISOString()
         saveDraftRecovery(draftRecoveryTarget, {
           html: currentHtml,
           baseHtml: baselineHtml,
-          savedAt: new Date().toISOString(),
+          savedAt,
         })
+        setAutoSavedAt(savedAt)
+        setHasLocalDraft(true)
         return
       }
 
       clearDraftRecovery(draftRecoveryTarget)
+      setAutoSavedAt(null)
+      setHasLocalDraft(false)
     }
 
     persistDraft()
@@ -231,6 +242,8 @@ export function SectionEditPopup({
     editor.commands.setContent(recoveredDraft.html)
     hasPendingRecoveredDraftRef.current = false
     setRestorableDraftSavedAt(null)
+    setAutoSavedAt(recoveredDraft.savedAt)
+    setHasLocalDraft(true)
     setConflictState(null)
     setSaveError(null)
   }
@@ -239,6 +252,8 @@ export function SectionEditPopup({
     hasPendingRecoveredDraftRef.current = false
     clearDraftRecovery(draftRecoveryTarget)
     setRestorableDraftSavedAt(null)
+    setAutoSavedAt(null)
+    setHasLocalDraft(false)
   }
 
   const handleSave = async () => {
@@ -257,6 +272,8 @@ export function SectionEditPopup({
 
       hasPendingRecoveredDraftRef.current = false
       clearDraftRecovery(draftRecoveryTarget)
+      setAutoSavedAt(null)
+      setHasLocalDraft(false)
       onClose()
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save section')
@@ -285,6 +302,8 @@ export function SectionEditPopup({
 
       hasPendingRecoveredDraftRef.current = false
       clearDraftRecovery(draftRecoveryTarget)
+      setAutoSavedAt(null)
+      setHasLocalDraft(false)
       onClose()
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save section')
@@ -305,10 +324,28 @@ export function SectionEditPopup({
     setComparisonHtml(conflictState.liveDocumentHtml)
     hasPendingRecoveredDraftRef.current = false
     clearDraftRecovery(draftRecoveryTarget)
+    setAutoSavedAt(null)
+    setHasLocalDraft(false)
     setConflictState(null)
     setRestorableDraftSavedAt(null)
     setSaveError(null)
   }
+
+  useEffect(() => {
+    if (!hasLocalDraft) {
+      return
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasLocalDraft])
 
   const popupTitle =
     section.editMode === 'insert'
@@ -371,6 +408,15 @@ export function SectionEditPopup({
             </div>
           </div>
         )}
+
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-3 text-sm text-slate-600">
+          <span>
+            Local autosave keeps your draft in this browser until you save or dismiss it.
+          </span>
+          <span data-testid="local-autosave-status">
+            {autoSavedAt ? `Auto-saved locally at ${new Date(autoSavedAt).toLocaleTimeString()}` : 'No local draft yet'}
+          </span>
+        </div>
 
         {editor && (
           <div className="surface-muted flex flex-wrap gap-1 rounded-none border-0 border-b border-slate-200 p-2">

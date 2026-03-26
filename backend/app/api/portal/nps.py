@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.db import get_analytics_db
 from app.models import NpsSurvey, User, UserRole
+from app.dependencies.permissions import require_customer
 from app.security import get_current_active_user
+from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/portal/nps", tags=["NPS Survey"])
 
@@ -23,7 +25,7 @@ class NpsSubmitRequest(BaseModel):
 
 @router.get("/status")
 async def nps_status(
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_customer),
     db: Session = Depends(get_analytics_db),
 ):
     """Check if the user should see the NPS survey (not submitted in last 90 days)."""
@@ -42,7 +44,7 @@ async def nps_status(
 @router.post("")
 async def submit_nps(
     body: NpsSubmitRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_customer),
     db: Session = Depends(get_analytics_db),
 ):
     """Submit an NPS survey response."""
@@ -59,11 +61,12 @@ async def submit_nps(
     if recent is not None:
         raise HTTPException(status_code=429, detail="NPS survey already submitted within the last 90 days")
 
+    # M-32: Sanitize comment to prevent stored XSS
     survey = NpsSurvey(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         score=body.score,
-        comment=body.comment,
+        comment=sanitize_html_content(body.comment),
     )
     db.add(survey)
     db.commit()

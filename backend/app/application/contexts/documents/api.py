@@ -7,9 +7,9 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.container import AppContainer, build_container
 from app.dependencies.tenant import TenantContext
 from app.models import Document, DocumentStatus, DocumentVisibility, User
-from app.services.document_service import DocumentService
 
 
 @dataclass
@@ -18,9 +18,14 @@ class DocumentsContextAPI:
 
     db: Session
     tenant_ctx: Optional[TenantContext] = None
+    container: AppContainer | None = None
+
+    def _document_service(self):
+        container = self.container or build_container()
+        return container.document_service(self.db, self.tenant_ctx)
 
     def get_document(self, document_id: int) -> Document | None:
-        return DocumentService(self.db, self.tenant_ctx).get_document(document_id)
+        return self._document_service().get_document(document_id)
 
     def list_documents(
         self,
@@ -32,7 +37,7 @@ class DocumentsContextAPI:
         category: str | None = None,
         search: str | None = None,
     ) -> tuple[list[Document], int]:
-        return DocumentService(self.db, self.tenant_ctx).get_documents(
+        return self._document_service().get_documents(
             skip=skip,
             limit=limit,
             status=status,
@@ -42,5 +47,4 @@ class DocumentsContextAPI:
         )
 
     def delete_document(self, document_id: int, user: User) -> None:
-        DocumentService(self.db, self.tenant_ctx).delete_document(document_id, user)
-
+        self._document_service().delete_document(document_id, user)

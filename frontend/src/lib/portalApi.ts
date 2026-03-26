@@ -1,8 +1,9 @@
 /**
  * Portal API - Customer authenticated API calls
  */
-import axios from 'axios'
+import axios, { AxiosHeaders } from 'axios'
 import { api } from '@/lib/api'
+import { withTraceHeader } from '@/lib/requestTrace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -16,10 +17,16 @@ const portalClient = axios.create({
 
 // Add auth header to requests
 portalClient.interceptors.request.use((config) => {
+  const headers = AxiosHeaders.from(config.headers ?? {})
+  const tracedHeaders = withTraceHeader(headers.toJSON() as Record<string, string>)
+  Object.entries(tracedHeaders).forEach(([name, value]) => {
+    headers.set(name, value)
+  })
+  config.headers = headers
   // AD-004: get token from in-memory API client, not localStorage
   const token = api.getToken()
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    headers.set('Authorization', `Bearer ${token}`)
   }
   return config
 })
@@ -110,6 +117,22 @@ export interface DashboardStats {
   company_documents: number
   pending_feedback: number
   responded_feedback: number
+}
+
+export interface PortalReadingProgressItem {
+  id: number
+  document_id: number
+  document_title: string
+  progress_percent: number
+  last_read_at: string
+  completed_at: string | null
+}
+
+export interface PortalDocumentProgress {
+  has_progress: boolean
+  progress_percent: number
+  is_completed: boolean
+  last_read_at?: string | null
 }
 
 export interface CategoryCount {
@@ -214,6 +237,26 @@ export const portalApi = {
   }>> {
     const response = await portalClient.get('/portal/reading-progress/continue', {
       params: { limit },
+    })
+    return response.data
+  },
+
+  async getReadingProgress(): Promise<PortalReadingProgressItem[]> {
+    const response = await portalClient.get('/portal/reading-progress')
+    return response.data
+  },
+
+  async getDocumentProgress(documentId: number): Promise<PortalDocumentProgress> {
+    const response = await portalClient.get(`/portal/reading-progress/${documentId}`)
+    return response.data
+  },
+
+  async updateReadingProgress(
+    documentId: number,
+    progressPercent: number,
+  ): Promise<PortalReadingProgressItem> {
+    const response = await portalClient.put(`/portal/reading-progress/${documentId}`, {
+      progress_percent: progressPercent,
     })
     return response.data
   },

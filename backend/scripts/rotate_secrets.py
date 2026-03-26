@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""AA-005: Secret key rotation script with grace period.
+"""AA-005: Secret key rotation script with runtime-backed grace period.
 
-Rotates JWT secret key and HMAC audit signing key with a 24-hour
-grace period during which the old key is still accepted for verification.
+Rotates JWT secret key and HMAC audit signing key. JWT rotation now supports a
+24-hour grace period during which the old key remains accepted for token
+verification through `SECRET_KEY_OLD`.
 
 Usage:
     python -m scripts.rotate_secrets --type jwt
@@ -48,9 +49,9 @@ def rotate_jwt_secret() -> dict:
     """Rotate JWT secret key with 24-hour grace period.
 
     Instructions:
-    1. Set SECRET_KEY env var to the new key
-    2. Set SECRET_KEY_OLD env var to the previous key (for 24h grace period)
-    3. After 24 hours, remove SECRET_KEY_OLD
+    1. Set SECRET_KEY to the new key across backend and collab-server
+    2. Set SECRET_KEY_OLD to the previous key for the grace period
+    3. After 24 hours, remove SECRET_KEY_OLD everywhere
     """
     new_key = generate_secure_key(48)
     current_key = os.environ.get("SECRET_KEY", "your-secret-key-change-in-production")
@@ -77,10 +78,10 @@ def rotate_jwt_secret() -> dict:
         "new_key_fingerprint": rotation_entry["new_key_fingerprint"],
         "grace_period_hours": 24,
         "instructions": [
-            f"1. Set SECRET_KEY={new_key}",
-            f"2. Set SECRET_KEY_OLD={current_key}",
-            "3. Restart the application",
-            "4. After 24 hours, remove SECRET_KEY_OLD",
+            f"1. Set SECRET_KEY={new_key} on backend and collab-server",
+            f"2. Set SECRET_KEY_OLD={current_key} on backend and collab-server",
+            "3. Restart backend and collab-server so both runtimes accept the grace window",
+            "4. After 24 hours, remove SECRET_KEY_OLD from both runtimes",
         ],
     }
 

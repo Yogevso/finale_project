@@ -45,6 +45,17 @@ class CommentCreated(DomainEvent):
 
 
 @dataclass(frozen=True, slots=True)
+class CommentChatBridgeRequested(DomainEvent):
+    """A comment should be bridged into the internal direct-chat channel."""
+
+    document_id: int
+    comment_id: int
+    document_author_id: Optional[int]
+    commenter_user_id: int
+    commenter_display_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class CompanyAssignmentsUpdated(DomainEvent):
     """Document company-assignment set was replaced."""
 

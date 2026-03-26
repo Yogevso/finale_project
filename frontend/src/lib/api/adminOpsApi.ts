@@ -3,7 +3,7 @@
  * System-admin only endpoints for tenant management, impersonation, etc.
  */
 
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -141,12 +141,8 @@ export interface Runbook {
 
 // ── Mixin ────────────────────────────────────────────────────────
 
-export const AdminOpsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const AdminOpsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     // Z-001: Impersonation
     async startImpersonation(targetTenantId: number): Promise<ImpersonationSession> {
       const { data } = await this.client.post('/admin/impersonate', { target_tenant_id: targetTenantId })

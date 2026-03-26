@@ -7,7 +7,7 @@ import io
 import json
 from datetime import datetime, timedelta
 
-from app.models import ActionType, AudienceEventType, AuditLog
+from app.models import ActionType, AudienceEventType, AuditLog, Document, DocumentStatus, DocumentVisibility
 from app.utils.audience_audit_signing import verify_payload_signature
 
 
@@ -185,6 +185,34 @@ def test_exposure_risk_and_assignment_churn_metrics(
     )
     assert churn_endpoint_response.status_code == 200
     assert int(churn_endpoint_response.json()["assignment_churn_90d"]) >= 2
+
+
+def test_document_audience_churn_requires_document_in_manager_scope(
+    client,
+    db,
+    manager_headers,
+    test_admin,
+    test_tenant_2,
+):
+    other_tenant_doc = Document(
+        title="Other tenant churn doc",
+        document_number="DOC-CHURN-OTHER-001",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        tenant_id=test_tenant_2.id,
+        created_by=test_admin.id,
+    )
+    db.add(other_tenant_doc)
+    db.commit()
+    db.refresh(other_tenant_doc)
+
+    response = client.get(
+        f"/api/v1/analytics/documents/{other_tenant_doc.id}/audience-churn",
+        headers=manager_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
 
 
 def test_audit_export_redacts_pii_for_non_system_admin(

@@ -5,30 +5,39 @@ from __future__ import annotations
 import io
 from datetime import datetime, timedelta
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.management.auth import (
+    _send_email_verification_task,
+    _send_password_reset_email_task,
+)
+from app.application.contexts.users.api import UsersContextAPI
 from app.config import settings
-from app.db import get_db
-from app.dependencies.permissions import require_admin
+from app.db import get_chat_db, get_db
+from app.dependencies.permissions import require_admin, require_manager
 from app.dependencies.services import get_auth_service
 from app.dependencies.tenant import TenantContext, get_tenant_context
-from app.models import SecurityEvent, User, UserRole, UserSession
+from app.models import ActionType, SecurityEvent, User, UserRole, UserSession
 from app.schemas import MessageResponse, UserCreate, UserUpdate, UserWithCompanyResponse
 from app.security import get_current_active_user
-from app.services.auth_service import AuthService
+from app.services.audit_helper import write_audit_log
 from app.services.storage_service import get_storage_backend
-from app.web.controllers.management import UsersController
 
 router = APIRouter()
-users_controller = UsersController()
 storage_backend = get_storage_backend()
 AVATAR_SIZE = (200, 200)
 MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024  # 2 MB
 ALLOWED_AVATAR_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_AVATAR_MAGIC: dict[str, list[bytes]] = {
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
+    "image/jpeg": [b"\xff\xd8\xff"],
+    "image/webp": [b"RIFF"],
+}
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -48,6 +57,13 @@ class NotificationPreferencesResponse(BaseModel):
 class AvatarUploadResponse(BaseModel):
     avatar_url: str
     message: str
+
+
+class AdminPasswordResetResponse(BaseModel):
+    message: str
+    reset_url: str
+    expires_minutes: int
+    email_sent: bool
 
 
 class UserSessionResponse(BaseModel):
@@ -85,17 +101,21 @@ class SecurityEventListResponse(BaseModel):
     total_pages: int
 
 
+def _users_context_api() -> UsersContextAPI:
+    return UsersContextAPI()
+
+
 @router.get("/users", response_model=list[UserWithCompanyResponse])
 def list_users(
     role: Optional[UserRole] = Query(None, description="Filter by role"),
     company_id: Optional[int] = Query(None, description="Filter by company"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     search: Optional[str] = Query(None, description="Search by name or email"),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    return users_controller.list_users(
+    return _users_context_api().list_users(
         role=role,
         company_id=company_id,
         is_active=is_active,
@@ -109,16 +129,31 @@ def list_users(
 @router.post("/users", response_model=UserWithCompanyResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user_data: UserCreate,
-    current_user: User = Depends(get_current_active_user),
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
+    auth_service=Depends(get_auth_service),
 ):
-    return users_controller.create_user(
+    payload = _users_context_api().create_user(
         user_data=user_data,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
         db=db,
     )
+    created_user = db.query(User).filter(User.id == payload["id"]).first()
+    if created_user is not None:
+        verification_token = auth_service.issue_email_verification_token(created_user)
+        verification_url = (
+            f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
+        )
+        background_tasks.add_task(
+            _send_email_verification_task,
+            created_user.email,
+            verification_url,
+            settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES,
+        )
+    return payload
 
 
 @router.patch("/users/me", response_model=UserWithCompanyResponse)
@@ -157,7 +192,16 @@ def update_my_profile(
 
     db.commit()
     db.refresh(current_user)
-    return users_controller._serialize_user(current_user, db)
+
+    # M-45: Audit trail for self-profile edits
+    changed = [f for f, v in [("full_name", payload.full_name), ("timezone", payload.timezone), ("locale", payload.locale)] if v is not None]
+    write_audit_log(
+        user_id=current_user.id,
+        action=ActionType.UPDATE,
+        details=f"Self-profile update: {', '.join(changed)}",
+    )
+
+    return _users_context_api().serialize_user(current_user, db)
 
 
 @router.patch(
@@ -202,6 +246,18 @@ def upload_my_avatar(
             detail=f"Avatar file too large (max {MAX_AVATAR_FILE_SIZE // 1024 // 1024} MB)",
         )
 
+    sigs = _AVATAR_MAGIC.get(file.content_type, [])
+    if not any(file_bytes[:len(s)] == s for s in sigs):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match declared image type",
+        )
+    if file.content_type == "image/webp" and (len(file_bytes) < 12 or file_bytes[8:12] != b"WEBP"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match declared image type",
+        )
+
     try:
         with Image.open(io.BytesIO(file_bytes)) as image:
             normalized = image.convert("RGB")
@@ -209,7 +265,7 @@ def upload_my_avatar(
             output_stream = io.BytesIO()
             resized.save(output_stream, format="JPEG", quality=90)
             output_stream.seek(0)
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — translate admin side-effects into stable API errors
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid avatar image",
@@ -368,11 +424,11 @@ def list_my_security_events(
 @router.get("/users/{user_id}", response_model=UserWithCompanyResponse)
 def get_user(
     user_id: int,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    return users_controller.get_user(
+    return _users_context_api().get_user(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -384,27 +440,29 @@ def get_user(
 def update_user(
     user_id: int,
     user_data: UserUpdate,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
 ):
-    return users_controller.update_user(
+    return _users_context_api().update_user(
         user_id=user_id,
         user_data=user_data,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
         db=db,
+        chat_db=chat_db,
     )
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_manager),
     tenant_ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    users_controller.delete_user(
+    _users_context_api().delete_user(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -425,7 +483,7 @@ def check_company_binding(
     Returns validation info about the user-company relationship.
     Admin+ or self access required.
     """
-    return users_controller.check_company_binding(
+    return _users_context_api().check_company_binding(
         user_id=user_id,
         current_user=current_user,
         tenant_ctx=tenant_ctx,
@@ -437,9 +495,51 @@ def check_company_binding(
 def unlock_user_account(
     user_id: int,
     current_user: User = Depends(require_admin),
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service=Depends(get_auth_service),
 ):
     """Admin unlock endpoint for account lockout recovery."""
     _ = current_user
     auth_service.unlock_user_account(user_id)
     return MessageResponse(message="User account unlocked")
+
+
+@router.post(
+    "/admin/users/{user_id}/force-password-reset",
+    response_model=AdminPasswordResetResponse,
+)
+def force_password_reset(
+    user_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_admin),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    auth_service=Depends(get_auth_service),
+    db: Session = Depends(get_db),
+):
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if target_user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not tenant_ctx.is_system_admin and target_user.tenant_id != tenant_ctx.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not _users_context_api().can_manage_role(current_user.role, target_user.role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot reset passwords for users with higher roles",
+        )
+
+    reset_token = auth_service.issue_password_reset_for_user(target_user)
+    reset_url = f"{settings.BASE_URL}/reset-password?token={quote(reset_token)}"
+    email_sent = bool(settings.EMAIL_ENABLED and target_user.email)
+    if email_sent:
+        background_tasks.add_task(
+            _send_password_reset_email_task,
+            target_user.email,
+            reset_url,
+            settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+        )
+
+    return AdminPasswordResetResponse(
+        message="Password reset link created successfully",
+        reset_url=reset_url,
+        expires_minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+        email_sent=email_sent,
+    )

@@ -1,8 +1,10 @@
+import axios from 'axios'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { getHomeRouteForRole } from '@/config/routes'
+import { resolvePostLoginRedirect } from '@/lib/authRedirect'
 import { FormField, PasswordInput, SubmitButton } from '@/components/form'
 import { loginSchema } from '@/lib/validation/schemas'
 import { validateForm } from '@/lib/validation'
@@ -13,6 +15,14 @@ interface LoginErrorResponse {
   detail?: string
   error_code?: string
   retry_after?: number
+}
+
+type LoginLocationState = {
+  from?: {
+    pathname?: string
+    search?: string
+    hash?: string
+  }
 }
 
 export default function LoginPage() {
@@ -31,13 +41,23 @@ export default function LoginPage() {
   const [isForgotLoading, setIsForgotLoading] = useState(false)
   const { login, user, isLoading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
 
   // If already logged in, redirect to appropriate home
   useEffect(() => {
     if (!authLoading && user) {
-      navigate(getHomeRouteForRole(user.role), { replace: true })
+      const state = location.state as LoginLocationState | null
+      navigate(
+        resolvePostLoginRedirect({
+          queryNext: searchParams.get('next'),
+          stateFrom: state?.from,
+          fallbackPath: getHomeRouteForRole(user.role),
+        }),
+        { replace: true },
+      )
     }
-  }, [user, authLoading, navigate])
+  }, [authLoading, location.state, navigate, searchParams, user])
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return
@@ -110,14 +130,16 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const isRateLimited = applyCooldownFromError(err)
       if (!isRateLimited) {
-        const loginError = err as { response?: { data?: LoginErrorResponse } }
-        const detail = loginError.response?.data?.detail
-        if (detail === 'email_not_verified') {
-          setError('Please verify your email before signing in. Check your inbox for a verification link.')
-        } else if (detail === 'account_locked') {
-          setError('Your account is temporarily locked after multiple failed attempts. Try again later or contact an admin.')
+        if (axios.isAxiosError(err) && !err.response) {
+          setError('A network error occurred. Please check your connection and try again.')
         } else {
-          setError(detail || 'Login failed. Please check your credentials.')
+          const loginError = err as { response?: { data?: LoginErrorResponse } }
+          const detail = loginError.response?.data?.detail
+          if (detail === 'email_not_verified') {
+            setError('Please verify your email before signing in. Check your inbox for a verification link.')
+          } else {
+            setError(detail || 'Login failed. Please check your credentials.')
+          }
         }
       }
     } finally {

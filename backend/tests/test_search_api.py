@@ -3,7 +3,11 @@
 import uuid
 from datetime import datetime, timedelta
 
-from app.models import Document, DocumentStatus, Tenant
+from sqlalchemy.exc import OperationalError
+
+from app.config import settings
+from app.application.queries.search_queries import SearchQueryHandler
+from app.models import Document, DocumentStatus, SearchAnalytics, Tenant
 
 
 class TestSearch:
@@ -184,6 +188,78 @@ class TestSearch:
         assert data["total"] == 0
         assert len(data["items"]) == 0
 
+    def test_search_ignores_advanced_fts_operator_syntax(self, client, auth_headers, db, test_user):
+        matching_doc = Document(
+            title="Operator Safe Guide",
+            document_number=f"DOC-OPS-{uuid.uuid4().hex[:6].upper()}",
+            description="operator safe search coverage",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        unrelated_doc = Document(
+            title="Totally Unrelated",
+            document_number=f"DOC-OPS-{uuid.uuid4().hex[:6].upper()}",
+            description="nothing to do with the query",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add_all([matching_doc, unrelated_doc])
+        db.commit()
+
+        response = client.get(
+            "/api/v1/search/?q=operator-safe OR *",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        titles = [item["title"] for item in response.json()["items"]]
+        assert "Operator Safe Guide" in titles
+        assert "Totally Unrelated" not in titles
+
+    def test_search_fallback_is_visible_in_health_metrics(
+        self,
+        client,
+        auth_headers,
+        db,
+        test_user,
+        monkeypatch,
+    ):
+        doc = Document(
+            title="Fallback Search Visible",
+            document_number=f"DOC-FBK-{uuid.uuid4().hex[:6].upper()}",
+            description="fallback-search-health",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add(doc)
+        db.commit()
+
+        monkeypatch.setattr(settings, "SEARCH_BACKEND_MODE", "sqlite_fts5")
+
+        def fail_fts(*_args, **_kwargs):
+            raise OperationalError("SELECT", {}, RuntimeError("fts unavailable"))
+
+        monkeypatch.setattr(SearchQueryHandler, "_execute_sqlite_fts_search", fail_fts)
+
+        response = client.get("/api/v1/search/?q=fallback-search-health", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.json()["total"] >= 1
+
+        health_response = client.get("/health/detailed")
+        assert health_response.status_code == 200
+        search_runtime = health_response.json()["runtime"]["search"]
+        assert search_runtime["configured_mode"] == "sqlite_fts5"
+        assert search_runtime["effective_mode"] == "sqlite_fts5"
+        assert search_runtime["degraded_fallbacks"] == 1
+        assert search_runtime["last_requested_mode"] == "sqlite_fts5"
+        assert search_runtime["last_fallback_mode"] == "portable_like"
+        assert search_runtime["last_error_type"] == "OperationalError"
+
+        degradation = health_response.json()["runtime"]["degradation"]
+        assert degradation["by_key"]["compensating:search.documents"] == 1
+
 
 class TestSavedSearches:
     """Tests for saved search functionality"""
@@ -274,3 +350,76 @@ class TestSearchSuggestions:
         response = client.get("/api/v1/search/suggestions?q=sug", headers=auth_headers)
         # May return 200 or 404 if not implemented
         assert response.status_code in [200, 404]
+
+
+class TestSearchAnalytics:
+    def test_search_analytics_redacts_cross_tenant_queries_for_system_admin(
+        self,
+        client,
+        db,
+        system_admin_headers,
+        test_user,
+        test_customer_2,
+    ):
+        db.add_all(
+            [
+                SearchAnalytics(
+                    query="tenant-one-secret",
+                    user_id=test_user.id,
+                    tenant_id=test_user.tenant_id,
+                    results_count=1,
+                ),
+                SearchAnalytics(
+                    query="tenant-two-secret",
+                    user_id=test_customer_2.id,
+                    tenant_id=test_customer_2.tenant_id,
+                    results_count=0,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/search/analytics", headers=system_admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        top_queries = [item["query"] for item in payload["top_queries"]]
+        zero_queries = [item["query"] for item in payload["zero_result_queries"]]
+
+        assert "tenant-one-secret" not in top_queries
+        assert "tenant-two-secret" not in top_queries
+        assert "tenant-two-secret" not in zero_queries
+        assert all(query.startswith("[redacted-query:") for query in top_queries)
+
+    def test_search_analytics_keeps_raw_queries_within_tenant_scope(
+        self,
+        client,
+        db,
+        admin_headers,
+        test_admin,
+        test_customer_2,
+    ):
+        db.add_all(
+            [
+                SearchAnalytics(
+                    query="tenant-admin-visible",
+                    user_id=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
+                    results_count=2,
+                ),
+                SearchAnalytics(
+                    query="other-tenant-hidden",
+                    user_id=test_customer_2.id,
+                    tenant_id=test_customer_2.tenant_id,
+                    results_count=0,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/search/analytics", headers=admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        top_queries = [item["query"] for item in payload["top_queries"]]
+
+        assert "tenant-admin-visible" in top_queries
+        assert "other-tenant-hidden" not in top_queries

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, Info, AlertTriangle, CheckCircle } from 'lucide-react'
 import { publicApi, type PublicAnnouncement } from '@/lib/publicApi'
+import { reportRuntimeWarning } from '@/lib/runtimeReporter'
 
 const DISMISSED_KEY = 'dismissed_announcements'
 
@@ -31,9 +32,10 @@ export default function AnnouncementBanner() {
 
   useEffect(() => {
     publicApi.getAnnouncements().then(setAnnouncements).catch(() => {
-      // Announcements are non-critical; log for debugging
-      // eslint-disable-next-line no-console
-      console.warn('Failed to load announcements')
+      reportRuntimeWarning({
+        scope: 'announcement.banner',
+        message: 'Failed to load announcements',
+      })
     })
   }, [])
 

@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { getDomParser, getWindowLocation } from '@/env/dom'
 
 const ALLOWED_TAGS = new Set([
@@ -178,15 +179,6 @@ function normalizeClassAttribute(tagName: string, value: string): string | null 
   return Array.from(new Set(nextTokens)).join(' ')
 }
 
-function unwrapElement(element: Element): void {
-  const parent = element.parentNode
-  if (!parent) return
-  while (element.firstChild) {
-    parent.insertBefore(element.firstChild, element)
-  }
-  parent.removeChild(element)
-}
-
 function sanitizeAttributes(element: Element): void {
   const tagName = element.tagName.toLowerCase()
   const allowedForTag = PER_TAG_ATTRIBUTES[tagName] || new Set<string>()
@@ -262,27 +254,25 @@ function sanitizeAttributes(element: Element): void {
   }
 }
 
-function sanitizeElement(element: Element): void {
-  const children = Array.from(element.children)
-  children.forEach((child) => sanitizeElement(child))
-
-  const tagName = element.tagName.toLowerCase()
-  if (DROP_TAGS.has(tagName)) {
-    element.remove()
-    return
-  }
-
-  if (!ALLOWED_TAGS.has(tagName)) {
-    unwrapElement(element)
-    return
-  }
-
-  sanitizeAttributes(element)
-}
-
 export function sanitizeHtmlForPreview(html: string): string {
+  // M-37: Use DOMPurify as primary sanitizer (proven against mutation XSS)
+  const clean = DOMPurify.sanitize(html || '', {
+    ALLOWED_TAGS: [...ALLOWED_TAGS],
+    ALLOWED_ATTR: [
+      'aria-expanded', 'aria-label', 'class', 'data-page', 'data-slide-count',
+      'data-slide-number', 'id', 'role',
+      'href', 'title', 'target', 'rel', 'src', 'alt', 'width', 'height',
+      'summary', 'colspan', 'rowspan', 'scope', 'span',
+    ],
+    ALLOW_DATA_ATTR: false,
+    FORBID_TAGS: [...DROP_TAGS],
+  })
+
+  // Post-process for app-specific rules (callout classes, link/image safety)
   const parser = getDomParser()
-  const doc = parser.parseFromString(html || '', 'text/html')
-  Array.from(doc.body.children).forEach((child) => sanitizeElement(child))
+  const doc = parser.parseFromString(clean, 'text/html')
+  for (const el of doc.body.querySelectorAll('*')) {
+    sanitizeAttributes(el as Element)
+  }
   return doc.body.innerHTML
 }

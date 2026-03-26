@@ -13,6 +13,7 @@ from app.config import settings
 from app.notifications import (
     CommentReplyTemplate,
     DocumentPublishedTemplate,
+    InvitationTemplate,
     NewCommentTemplate,
     NotificationMessage,
     PasswordResetTemplate,
@@ -165,6 +166,23 @@ class EmailService:
             document_url=document_url,
         ).render(to_email=to_email)
         return await self.send_message(message)
+
+    async def send_invitation(
+        self,
+        to_email: str,
+        accept_url: str,
+        inviter_name: str,
+        expires_days: int = 7,
+        message: str | None = None,
+    ) -> bool:
+        """Send invitation email to a new user."""
+        msg = InvitationTemplate(
+            accept_url=accept_url,
+            inviter_name=inviter_name,
+            expires_days=expires_days,
+            message=message,
+        ).render(to_email=to_email)
+        return await self.send_message(msg)
 
     async def send_password_reset(
         self,

@@ -8,6 +8,7 @@ export interface UserContext {
   email: string;
   role: string;
   color: string;
+  traceId?: string;
 }
 
 export interface DocumentContext {
@@ -31,8 +32,10 @@ export interface JWTPayload {
 }
 
 export interface CollabTokenPayload extends JWTPayload {
+  tenant_id: number | null;
   document_id: string;
   permissions: ('read' | 'write')[];
+  trace_id: string;
 }
 
 export interface PersistencePayload {

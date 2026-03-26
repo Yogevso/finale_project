@@ -34,7 +34,8 @@ def _ensure_fts_table(db):
     ).fetchone()
     if not existing:
         db.execute(text(
-            "CREATE VIRTUAL TABLE documents_fts USING fts5(title, description, category, tags)"
+            "CREATE VIRTUAL TABLE documents_fts USING fts5("
+            "title, description, category, tags, tenant_id UNINDEXED, visibility UNINDEXED, status UNINDEXED)"
         ))
         db.commit()
 
@@ -45,8 +46,9 @@ def _sync_fts(db, doc: Document):
     db.execute(text("DELETE FROM documents_fts WHERE rowid = :rid"), {"rid": doc.id})
     db.execute(
         text(
-            "INSERT INTO documents_fts(rowid, title, description, category, tags) "
-            "VALUES (:rid, :title, :desc, :cat, :tags)"
+            "INSERT INTO documents_fts("
+            "rowid, title, description, category, tags, tenant_id, visibility, status"
+            ") VALUES (:rid, :title, :desc, :cat, :tags, :tenant_id, :visibility, :status)"
         ),
         {
             "rid": doc.id,
@@ -54,6 +56,9 @@ def _sync_fts(db, doc: Document):
             "desc": doc.description or "",
             "cat": doc.category or "",
             "tags": doc.tags or "",
+            "tenant_id": str(doc.tenant_id or ""),
+            "visibility": doc.visibility.value if getattr(doc.visibility, "value", None) else (doc.visibility or ""),
+            "status": doc.status.value if getattr(doc.status, "value", None) else (doc.status or ""),
         },
     )
     db.commit()

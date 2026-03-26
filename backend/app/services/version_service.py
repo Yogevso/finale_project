@@ -1,4 +1,4 @@
-"""Version Service - Business logic for document versions"""
+"""Version Service - Business logic for document versions."""
 
 import json
 import logging
@@ -7,9 +7,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.config import settings
 from app.domain.aggregates import DocumentAggregate
-from app.domain.events import DocumentPublished, InProcessDomainEventDispatcher
+from app.domain.events import InProcessDomainEventDispatcher
 from app.domain.factories import VersionFactory
 from app.domain.states import version_review_stage_for
 from app.errors import (
@@ -38,6 +37,8 @@ from app.services.audit_helper import write_audit_log
 from app.services.base_service import SessionService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
+from app.services.version_publication_service import VersionPublicationService
+from app.services.version_scheduling_service import VersionSchedulingService
 from app.services.uow import UnitOfWork
 from app.utils.concurrency import ensure_if_match_matches
 
@@ -53,12 +54,38 @@ class VersionService(SessionService):
         *,
         chat_db: Session | None = None,
         event_dispatcher: InProcessDomainEventDispatcher | None = None,
+        document_repository: DocumentRepository | None = None,
+        version_repository: VersionRepository | None = None,
+        notification_service: NotificationService | None = None,
+        publication_service: VersionPublicationService | None = None,
+        scheduling_service: VersionSchedulingService | None = None,
     ):
         super().__init__(db)
-        self.document_repository = DocumentRepository(db)
-        self.version_repository = VersionRepository(db)
-        self.notification_service = NotificationService(db, chat_db=chat_db)
+        self.document_repository = document_repository or DocumentRepository(db)
+        self.version_repository = version_repository or VersionRepository(db)
+        self.notification_service = notification_service or NotificationService(db, chat_db=chat_db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+        self.publication_service = publication_service or VersionPublicationService(
+            db,
+            version_repository=self.version_repository,
+            notification_service=self.notification_service,
+            event_dispatcher=self.event_dispatcher,
+            get_document_for_user=self._get_document_for_user,
+            latest_review_for_version=self._latest_review_for_version,
+            actor_display_name=self._actor_display_name,
+            notify_version_watchers=self._notify_version_watchers,
+            schedule_pdf_export_generation=self._schedule_pdf_export_generation,
+            run_publish_audience_validation_gate=self._run_publish_audience_validation_gate,
+            is_company_audience_enforcement_enabled=self._is_company_audience_enforcement_enabled,
+            serialize_version=self._serialize_version,
+        )
+        self.scheduling_service = scheduling_service or VersionSchedulingService(
+            db,
+            version_repository=self.version_repository,
+            event_dispatcher=self.event_dispatcher,
+            get_document_for_user=self._get_document_for_user,
+            latest_review_for_version=self._latest_review_for_version,
+        )
 
     @staticmethod
     def _actor_display_name(current_user: User) -> str:
@@ -414,225 +441,7 @@ class VersionService(SessionService):
 
     def publish_version(self, document_id: int, version_id: int, current_user: User) -> dict:
         """Publish a version (requires approval and makes it immutable)."""
-        document = self._get_document_for_user(document_id, current_user)
-        actor_display_name = self._actor_display_name(current_user)
-        # Ensure assigned_companies is loaded for audience snapshot
-        self.db.refresh(document, attribute_names=["assigned_companies"])
-        audience_warnings: list[str] = []
-        enforce_company_audience = self._is_company_audience_enforcement_enabled(
-            rollout_key=document.tenant_id
-        )
-        safe_mode_enabled = is_backend_feature_enabled(BackendFeatureFlag.AUDIENCE_VALIDATION_SAFE_MODE)
-
-        version = self.version_repository.get_by_id_for_document(
-            version_id,
-            document_id,
-            include_users=True,
-        )
-
-        if not version:
-            raise NotFoundError("Version not found")
-
-        # Idempotency: If already published, verify audience snapshot matches and return success
-        if version.is_published:
-            # Check if current audience state matches the published snapshot
-            company_ids = [c.id for c in (document.assigned_companies or [])]
-            current_visibility = document.visibility.value if document.visibility else None
-            current_company_ids = json.dumps(company_ids) if company_ids else None
-
-            if (
-                version.audience_visibility_snapshot == current_visibility
-                and version.audience_company_ids_snapshot == current_company_ids
-            ):
-                # Idempotent retry - same state, return success
-                logging.getLogger(__name__).info(
-                    "Idempotent publish retry for document=%d version=%d - already published with matching audience",
-                    document_id,
-                    version_id,
-                )
-                latest_review = self._latest_review_for_version(document_id, version_id)
-                return VersionService._serialize_version(version, latest_review, warnings=[])
-            else:
-                # Audience changed since publish - not idempotent
-                raise InvalidStateError(
-                    "Version is already published with different audience state. "
-                    "Current audience does not match published snapshot."
-                )
-
-        if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
-            raise PermissionDeniedError("Only admins and managers can publish versions")
-
-        # Stale company detection - check for deactivated companies in audience
-        from app.models import Tenant
-        company_ids = [c.id for c in (document.assigned_companies or [])]
-        if company_ids:
-            stale_companies = (
-                self.db.query(Tenant)
-                .filter(
-                    Tenant.id.in_(company_ids),
-                    Tenant.is_active.is_(False),
-                )
-                .all()
-            )
-            if stale_companies:
-                stale_names = [c.name for c in stale_companies]
-                if enforce_company_audience:
-                    logger.warning(
-                        "Publish blocked: stale companies in audience for document=%d version=%d. "
-                        "Stale companies: %s",
-                        document_id,
-                        version_id,
-                        stale_names,
-                    )
-                    raise InvalidStateError(
-                        f"Cannot publish: document has deactivated companies in audience: {stale_names}. "
-                        "Please remove them before publishing."
-                    )
-                warning_message = (
-                    "Audience enforcement disabled: proceeding despite deactivated companies "
-                    f"in audience ({stale_names})."
-                )
-                audience_warnings.append(warning_message)
-                logger.warning(
-                    "Publish advisory for document=%d version=%d: %s",
-                    document_id,
-                    version_id,
-                    warning_message,
-                )
-
-        latest_review = self._latest_review_for_version(document_id, version_id)
-        version_review_stage_for(
-            latest_review.status if latest_review else None
-        ).ensure_publishable_for_version()
-
-        # Ensure audience configuration is valid before publishing.
-        # Kill-switch mode turns hard-blocks into advisory warnings.
-        try:
-            self._run_publish_audience_validation_gate(document)
-        except ValidationError as exc:
-            if enforce_company_audience:
-                raise
-            warning_message = (
-                "Audience enforcement disabled: proceeding with advisory warning - "
-                f"{exc}"
-            )
-            audience_warnings.append(warning_message)
-            logger.warning(
-                "Publish advisory for document=%d version=%d: %s",
-                document_id,
-                version_id,
-                warning_message,
-            )
-        except (ConnectionError, TimeoutError) as exc:
-            if not safe_mode_enabled:
-                raise InvalidStateError(
-                    "Audience validation service is unavailable; publish blocked."
-                ) from exc
-
-            warning_message = (
-                "Audience validation service unreachable; safe-mode fallback allowed publish."
-            )
-            audience_warnings.append(warning_message)
-            logger.warning(
-                "Publish safe-mode fallback for document=%d version=%d: %s",
-                document_id,
-                version_id,
-                warning_message,
-            )
-
-        # Capture audience state snapshot for carry-forward auditing
-        company_ids = [c.id for c in (document.assigned_companies or [])]
-        audience_visibility_snapshot = document.visibility.value if document.visibility else None
-        audience_company_ids_snapshot = json.dumps(company_ids) if company_ids else None
-
-        try:
-            with UnitOfWork(self.db):
-                version.is_published = True
-                version.published_at = datetime.utcnow()
-                version.published_by = current_user.id
-                version.audience_visibility_snapshot = audience_visibility_snapshot
-                version.audience_company_ids_snapshot = audience_company_ids_snapshot
-
-                # AF-003: Snapshot attachment IDs at publish time
-                from app.models import Attachment as AttachmentModel
-                publish_cutoff = version.published_at
-                attachment_ids = [
-                    a.id for a in self.db.query(AttachmentModel.id)
-                    .filter(
-                        AttachmentModel.document_id == document.id,
-                        AttachmentModel.uploaded_at <= publish_cutoff,
-                    ).all()
-                ]
-                version.published_attachment_ids_snapshot = json.dumps(attachment_ids) if attachment_ids else None
-
-                DocumentAggregate(document).transition_to_active()
-                self.event_dispatcher.dispatch(
-                    DocumentPublished(
-                        document_id=document.id,
-                        version_id=version.id,
-                        document_title=document.title,
-                        document_number=document.document_number,
-                        document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
-                        document_author_id=document.created_by,
-                        published_by_user_id=current_user.id,
-                    )
-                )
-                if audience_warnings:
-                    write_audit_log(
-                        user_id=current_user.id,
-                        document_id=document.id,
-                        action=ActionType.PUBLISH,
-                        audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
-                        details=json.dumps(
-                            {
-                                "event": "publish_with_advisory_audience_warnings",
-                                "warnings": audience_warnings,
-                            },
-                            sort_keys=True,
-                        ),
-                    )
-        except Exception as e:  # policy: FAIL_FAST — publish must succeed or abort
-            # Log failed publish attempt with audience state for audit trail
-            logging.getLogger(__name__).error(
-                "Publish failed for document=%d version=%d user=%d. "
-                "Audience state at failure: visibility=%s, companies=%s. Error: %s",
-                document_id,
-                version_id,
-                current_user.id,
-                audience_visibility_snapshot,
-                audience_company_ids_snapshot,
-                str(e),
-            )
-            # Re-raise to let caller handle the error
-            # Database changes auto-rollback via UnitOfWork context manager
-            raise
-
-        self.db.refresh(version)
-
-        # AH-006: regenerate PDF export artifact for portal/viewer downloads
-        if attachment_ids:
-            self._schedule_pdf_export_generation(attachment_ids)
-
-        self._notify_version_watchers(
-            document=document,
-            current_user=current_user,
-            notification_type=NotificationType.DOCUMENT_PUBLISHED,
-            title=f"{actor_display_name} published a document you follow",
-            message=document.title,
-            link=f"/documents/{document.id}",
-        )
-
-        version = self.version_repository.get_by_id_for_document(
-            version_id,
-            document_id,
-            include_users=True,
-        )
-        latest_review = self._latest_review_for_version(document_id, version_id)
-        return VersionService._serialize_version(
-            version,
-            latest_review,
-            warnings=audience_warnings,
-        )
+        return self.publication_service.publish_version(document_id, version_id, current_user)
 
     def publish_preflight_checks(
         self, document_id: int, version_id: int, current_user: User
@@ -927,129 +736,14 @@ class VersionService(SessionService):
         reason: str,
         acknowledge_risks: bool,
     ) -> dict:
-        """
-        Force publish a version with admin override, bypassing normal review requirements.
-
-        Creates an enhanced audit trail for compliance.
-        """
-        from app.models import ActionType, AudienceEventType
-
-        # Only system_admin can force publish
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            raise PermissionDeniedError("Only system admins can force publish versions")
-
-        if not acknowledge_risks:
-            raise InvalidStateError("Must acknowledge risks to force publish")
-
-        if len(reason) < 10:
-            raise InvalidStateError("Reason must be at least 10 characters")
-
-        document = self._get_document_for_user(document_id, current_user)
-        self.db.refresh(document, attribute_names=["assigned_companies"])
-
-        version = self.version_repository.get_by_id_for_document(
-            version_id, document_id, include_users=True
-        )
-
-        if not version:
-            raise NotFoundError("Version not found")
-
-        # Idempotency check
-        if version.is_published:
-            return {
-                "version_id": version.id,
-                "document_id": document_id,
-                "published_at": version.published_at.isoformat() if version.published_at else None,
-                "forced_by_user_id": current_user.id,
-                "reason": reason,
-                "warnings_overridden": ["Version was already published"],
-            }
-
-        # Collect warnings that are being overridden
-        warnings_overridden = []
-
-        # Check for review requirement
-        latest_review = self._latest_review_for_version(document_id, version_id)
-        if not latest_review or latest_review.status != ReviewStatus.APPROVED:
-            warnings_overridden.append("No approved review - bypassing review requirement")
-
-        # Check audience readiness
-        try:
-            DocumentAggregate(document).ensure_audience_ready_for_submit()
-        except Exception as e:  # policy: LOSSY — audience check is advisory during force-publish
-            warnings_overridden.append(f"Audience validation failed: {str(e)}")
-
-        # Capture audience snapshot
-        company_ids = [c.id for c in (document.assigned_companies or [])]
-        audience_visibility_snapshot = document.visibility.value if document.visibility else None
-        audience_company_ids_snapshot = json.dumps(company_ids) if company_ids else None
-
-        with UnitOfWork(self.db):
-            version.is_published = True
-            version.published_at = datetime.utcnow()
-            version.published_by = current_user.id
-            version.audience_visibility_snapshot = audience_visibility_snapshot
-            version.audience_company_ids_snapshot = audience_company_ids_snapshot
-
-            DocumentAggregate(document).transition_to_active()
-
-            # Enhanced audit trail for forced publish
-            write_audit_log(
-                user_id=current_user.id,
-                document_id=document_id,
-                action=ActionType.UPDATE,
-                audience_event_type=AudienceEventType.AUDIENCE_SNAPSHOT_TAKEN,
-                details=json.dumps(
-                    {
-                        "event": "forced_publish",
-                        "version_number": version.version_number,
-                        "reason": reason,
-                        "warnings_overridden": warnings_overridden,
-                    },
-                    sort_keys=True,
-                ),
-            )
-
-            self.event_dispatcher.dispatch(
-                DocumentPublished(
-                    document_id=document.id,
-                    version_id=version.id,
-                    document_title=document.title,
-                    document_number=document.document_number,
-                    document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
-                    document_author_id=document.created_by,
-                    published_by_user_id=current_user.id,
-                )
-            )
-
-        actor_display_name = self._actor_display_name(current_user)
-        self._notify_version_watchers(
-            document=document,
-            current_user=current_user,
-            notification_type=NotificationType.DOCUMENT_PUBLISHED,
-            title=f"{actor_display_name} force-published a document you follow",
-            message=document.title,
-            link=f"/documents/{document.id}",
-        )
-
-        logging.getLogger(__name__).warning(
-            "FORCED PUBLISH by user=%d for document=%d version=%d. "
-            "Reason: %s. Warnings overridden: %s",
-            current_user.id,
+        """Force publish a version with admin override."""
+        return self.publication_service.force_publish_version(
             document_id,
             version_id,
+            current_user,
             reason,
-            warnings_overridden,
+            acknowledge_risks,
         )
-
-        return {
-            "version_id": version.id,
-            "document_id": document_id,
-            "published_at": version.published_at.isoformat() if version.published_at else None,
-            "forced_by_user_id": current_user.id,
-            "reason": reason,
-            "warnings_overridden": warnings_overridden,
-        }
 
     def schedule_publish(
         self,
@@ -1058,73 +752,13 @@ class VersionService(SessionService):
         scheduled_at: datetime,
         current_user: User,
     ) -> dict:
-        """
-        Schedule a version to be published at a specific time.
-        Audience validation happens at schedule time and again at publish time.
-        """
-        from app.models import ActionType
-
-        document = self._get_document_for_user(document_id, current_user)
-
-        version = self.version_repository.get_by_id_for_document(
-            version_id, document_id, include_users=True
-        )
-        if not version:
-            raise NotFoundError("Version not found")
-
-        if version.is_published:
-            raise InvalidStateError("Version is already published")
-
-        if scheduled_at <= datetime.utcnow():
-            raise InvalidStateError("Scheduled time must be in the future")
-
-        # Initial audience validation at schedule time
-        try:
-            DocumentAggregate(document).ensure_audience_ready_for_submit()
-        except ValidationError as exc:
-            raise InvalidStateError(f"Audience validation failed: {exc}") from exc
-
-        # Require latest review state to be approved for this version.
-        latest_review = self._latest_review_for_version(document_id, version_id)
-        if not latest_review or latest_review.status != ReviewStatus.APPROVED:
-            raise InvalidStateError("Cannot schedule publish: latest review is not approved")
-
-        # Capture audience snapshot at schedule time to detect drift at execution time.
-        company_ids = [c.id for c in (document.assigned_companies or [])]
-        scheduled_visibility_snapshot = document.visibility.value if document.visibility else None
-        scheduled_company_ids_snapshot = json.dumps(company_ids) if company_ids else None
-
-        with UnitOfWork(self.db):
-            version.scheduled_publish_at = scheduled_at
-            version.scheduled_publish_audience_validated_at = datetime.utcnow()
-            version.audience_visibility_snapshot = scheduled_visibility_snapshot
-            version.audience_company_ids_snapshot = scheduled_company_ids_snapshot
-
-            write_audit_log(
-                user_id=current_user.id,
-                document_id=document_id,
-                action=ActionType.UPDATE,
-                details=(
-                    f"Scheduled publish for version {version.version_number} "
-                    f"at {scheduled_at.isoformat()}. "
-                    f"Audience validated and snapshot captured at schedule time."
-                ),
-            )
-
-        logger.info(
-            "Scheduled publish for document=%d version=%d at %s by user=%d",
+        """Schedule a version to be published at a specific time."""
+        return self.scheduling_service.schedule_publish(
             document_id,
             version_id,
-            scheduled_at.isoformat(),
-            current_user.id,
+            scheduled_at,
+            current_user,
         )
-
-        return {
-            "version_id": version.id,
-            "document_id": document_id,
-            "scheduled_publish_at": scheduled_at.isoformat(),
-            "audience_validated_at": version.scheduled_publish_audience_validated_at.isoformat(),
-        }
 
     def cancel_scheduled_publish(
         self,
@@ -1133,218 +767,12 @@ class VersionService(SessionService):
         current_user: User,
     ) -> dict:
         """Cancel a scheduled publish."""
-        from app.models import ActionType
-
-        _ = self._get_document_for_user(document_id, current_user)
-
-        version = self.version_repository.get_by_id_for_document(
-            version_id, document_id, include_users=True
+        return self.scheduling_service.cancel_scheduled_publish(
+            document_id,
+            version_id,
+            current_user,
         )
-        if not version:
-            raise NotFoundError("Version not found")
-
-        if not version.scheduled_publish_at:
-            raise InvalidStateError("Version is not scheduled for publish")
-
-        if version.is_published:
-            raise InvalidStateError("Version is already published")
-
-        old_scheduled_at = version.scheduled_publish_at
-
-        with UnitOfWork(self.db):
-            version.scheduled_publish_at = None
-            version.scheduled_publish_audience_validated_at = None
-            version.audience_visibility_snapshot = None
-            version.audience_company_ids_snapshot = None
-
-            write_audit_log(
-                user_id=current_user.id,
-                document_id=document_id,
-                action=ActionType.UPDATE,
-                details=(
-                    f"Cancelled scheduled publish for version {version.version_number}. "
-                    f"Was scheduled for {old_scheduled_at.isoformat()}."
-                ),
-            )
-
-        return {
-            "version_id": version.id,
-            "document_id": document_id,
-            "cancelled_scheduled_at": old_scheduled_at.isoformat(),
-        }
 
     def process_scheduled_publishes(self, batch_size: int = 10) -> dict:
-        """
-        Process scheduled publishes that are due.
-        Re-validates audience before publishing.
-        Returns a report of processed items.
-        """
-        from app.models import ActionType, Tenant
-
-        now = datetime.utcnow()
-        due_versions = (
-            self.db.query(Version)
-            .options(joinedload(Version.document))
-            .filter(
-                Version.scheduled_publish_at <= now,
-                Version.is_published.is_(False),
-            )
-            .limit(batch_size)
-            .all()
-        )
-
-        report = {
-            "processed": 0,
-            "published": 0,
-            "failed_validation": 0,
-            "failed_stale_company": 0,
-            "errors": [],
-        }
-
-        for version in due_versions:
-            report["processed"] += 1
-            document = version.document
-
-            try:
-                # Re-validate audience before publishing
-                current_company_ids = [c.id for c in (document.assigned_companies or [])]
-
-                # Check if audience has changed since scheduling
-                original_snapshot = version.audience_company_ids_snapshot
-                original_ids = json.loads(original_snapshot) if original_snapshot else []
-
-                audience_diff = {
-                    "added": [cid for cid in current_company_ids if cid not in original_ids],
-                    "removed": [cid for cid in original_ids if cid not in current_company_ids],
-                }
-
-                if audience_diff["added"] or audience_diff["removed"]:
-                    logger.warning(
-                        "Scheduled publish: audience changed for document=%d version=%d. "
-                        "Diff: added=%s removed=%s",
-                        document.id,
-                        version.id,
-                        audience_diff["added"],
-                        audience_diff["removed"],
-                    )
-                    # Still proceed but log the drift
-
-                # Check for stale companies (deactivated since scheduling)
-                stale_companies = (
-                    self.db.query(Tenant)
-                    .filter(
-                        Tenant.id.in_(current_company_ids),
-                        Tenant.is_active.is_(False),
-                    )
-                    .all()
-                )
-
-                if stale_companies:
-                    stale_ids = [c.id for c in stale_companies]
-                    report["failed_stale_company"] += 1
-                    report["errors"].append({
-                        "version_id": version.id,
-                        "document_id": document.id,
-                        "reason": f"Stale companies detected: {stale_ids}",
-                    })
-                    logger.error(
-                        "Scheduled publish FAILED: stale companies for document=%d version=%d. "
-                        "Stale IDs: %s",
-                        document.id,
-                        version.id,
-                        stale_ids,
-                    )
-                    continue
-
-                # Re-validate audience readiness
-                try:
-                    DocumentAggregate(document).ensure_audience_ready_for_submit()
-                except Exception as e:  # policy: FAIL_FAST — skip this item, continue batch
-                    report["failed_validation"] += 1
-                    report["errors"].append({
-                        "version_id": version.id,
-                        "document_id": document.id,
-                        "reason": str(e),
-                    })
-                    logger.error(
-                        "Scheduled publish FAILED: validation failed for document=%d version=%d. "
-                        "Error: %s",
-                        document.id,
-                        version.id,
-                        str(e),
-                    )
-                    continue
-
-                # Ensure review is still approved at execution time.
-                latest_review = self._latest_review_for_version(document.id, version.id)
-                if not latest_review or latest_review.status != ReviewStatus.APPROVED:
-                    report["failed_validation"] += 1
-                    report["errors"].append(
-                        {
-                            "version_id": version.id,
-                            "document_id": document.id,
-                            "reason": "Latest review is not approved at scheduled execution time",
-                        }
-                    )
-                    logger.error(
-                        "Scheduled publish FAILED: review not approved for document=%d version=%d",
-                        document.id,
-                        version.id,
-                    )
-                    continue
-
-                # Capture fresh snapshot
-                audience_visibility_snapshot = document.visibility.value if document.visibility else None
-                audience_company_ids_snapshot = json.dumps(current_company_ids) if current_company_ids else None
-
-                with UnitOfWork(self.db):
-                    version.is_published = True
-                    version.published_at = datetime.utcnow()
-                    version.scheduled_publish_at = None  # Clear schedule
-                    version.audience_visibility_snapshot = audience_visibility_snapshot
-                    version.audience_company_ids_snapshot = audience_company_ids_snapshot
-
-                    DocumentAggregate(document).transition_to_active()
-
-                    write_audit_log(
-                        user_id=None,  # System action
-                        document_id=document.id,
-                        action=ActionType.UPDATE,
-                        details=(
-                            f"SCHEDULED PUBLISH completed - Version {version.version_number}. "
-                            f"Audience revalidated at publish time."
-                        ),
-                    )
-
-                    self.event_dispatcher.dispatch(
-                        DocumentPublished(
-                            document_id=document.id,
-                            version_id=version.id,
-                            document_title=document.title,
-                            document_number=document.document_number,
-                            document_url=f"{settings.BASE_URL}/viewer/documents/{document.id}",
-                            document_author_id=document.created_by,
-                            published_by_user_id=None,  # System scheduled publish
-                        )
-                    )
-
-                report["published"] += 1
-                logger.info(
-                    "Scheduled publish SUCCESS for document=%d version=%d",
-                    document.id,
-                    version.id,
-                )
-
-            except Exception as e:  # policy: COMPENSATING — record error, skip item, continue batch
-                report["errors"].append({
-                    "version_id": version.id,
-                    "document_id": document.id if document else None,
-                    "reason": str(e),
-                })
-                logger.exception(
-                    "Scheduled publish ERROR for version=%d: %s",
-                    version.id,
-                    str(e),
-                )
-
-        return report
+        """Process scheduled publishes that are due."""
+        return self.scheduling_service.process_scheduled_publishes(batch_size=batch_size)

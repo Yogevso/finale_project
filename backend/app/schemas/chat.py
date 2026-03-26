@@ -166,6 +166,10 @@ class SupportTicketMessageResponse(BaseModel):
     sender_type: str
     content: str
     is_internal_note: bool
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    file_mime_type: Optional[str] = None
     created_at: datetime
     sender_full_name: Optional[str] = None
 

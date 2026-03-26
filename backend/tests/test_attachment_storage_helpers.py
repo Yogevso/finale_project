@@ -115,7 +115,7 @@ def test_delete_attachment_rejects_non_admin(db, test_document, test_user):
         AttachmentService.delete_attachment(db, test_document.id, attachment.id, test_user)
 
     assert exc_info.value.status_code == 403
-    assert exc_info.value.detail == "Only admins can delete attachments"
+    assert exc_info.value.message == "Only admins can delete attachments"
 
 
 def test_delete_attachment_removes_storage_refs_and_related_rows(
@@ -255,7 +255,7 @@ def test_get_file_path_raises_404_when_local_file_missing(monkeypatch):
         AttachmentService.get_file_path(None, 1, attachment.id, None)
 
     assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "File not found on disk"
+    assert exc_info.value.message == "File not found on disk"
 
 
 def test_open_original_stream_prefers_local_file(tmp_path, monkeypatch):
@@ -357,4 +357,4 @@ def test_open_original_stream_raises_404_when_storage_downloads_fail(monkeypatch
         AttachmentService.open_original_stream(None, 1, 15, None)
 
     assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Original file not found in storage"
+    assert exc_info.value.message == "Original file not found in storage"

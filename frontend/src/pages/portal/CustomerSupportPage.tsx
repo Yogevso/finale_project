@@ -9,10 +9,12 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
 import { ListSkeleton, MessageSkeleton } from '@/components/skeletons'
+import { useSupportSocket } from '@/hooks/useSupportSocket'
+import { ATTACHMENT_INPUT_ACCEPT, validateAttachmentFile } from '@/lib/attachmentUpload'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatDistanceToNow } from 'date-fns'
-import { Plus, ArrowLeft, Send, X } from 'lucide-react'
+import { ArrowLeft, Paperclip, Plus, Send, X } from 'lucide-react'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import type {
   SupportTicket,
@@ -33,6 +35,16 @@ const PRIORITY_COLORS: Record<string, string> = {
   normal: 'text-sky-600 dark:text-sky-300',
   high: 'text-orange-600 dark:text-orange-300',
   urgent: 'text-red-600 dark:text-red-300',
+}
+
+function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes < 1024) {
+    return `${bytes ?? 0} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export default function CustomerSupportPage() {
@@ -60,6 +72,22 @@ export default function CustomerSupportPage() {
     queryKey: ['myTicket', activeTicketId],
     queryFn: () => (activeTicketId ? api.getMyTicket(activeTicketId) : Promise.reject()),
     enabled: !!activeTicketId,
+  })
+
+  useSupportSocket({
+    activeTicketId,
+    onNewMessage: (message) => {
+      void queryClient.invalidateQueries({ queryKey: ['myTickets'] })
+      if (message.ticket_id === activeTicketId) {
+        void queryClient.invalidateQueries({ queryKey: ['myTicket', activeTicketId] })
+      }
+    },
+    onStatusUpdate: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['myTickets'] })
+      if (data.ticket_id === activeTicketId) {
+        void queryClient.invalidateQueries({ queryKey: ['myTicket', activeTicketId] })
+      }
+    },
   })
 
   const tickets = ticketsQuery.data?.items ?? []
@@ -191,14 +219,20 @@ function CustomerTicketView({
   const queryClient = useQueryClient()
   const { user: currentUser } = useAuth()
   const [message, setMessage] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const toast = useToast()
   const optimisticIdCounter = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const canSend = Boolean(message.trim() || selectedFile)
 
   const sendMutation = useMutation({
-    mutationFn: (content: string) => api.sendMyTicketMessage(ticket.id, { content }),
-    onMutate: async (content: string) => {
+    mutationFn: (request: { content: string; file: File | null }) =>
+      api.sendMyTicketMessage(ticket.id, request),
+    onMutate: async (request: { content: string; file: File | null }) => {
       await queryClient.cancelQueries({ queryKey: ['myTicket', ticket.id] })
       const previous = queryClient.getQueryData<SupportTicketDetail>(['myTicket', ticket.id])
+      const draftMessage = request.content
+      const draftFile = request.file
 
       if (currentUser && previous) {
         optimisticIdCounter.current -= 1
@@ -207,8 +241,12 @@ function CustomerTicketView({
           ticket_id: ticket.id,
           sender_id: currentUser.id,
           sender_type: 'customer',
-          content,
+          content: draftMessage,
           is_internal_note: false,
+          file_url: null,
+          file_name: draftFile?.name ?? null,
+          file_size: draftFile?.size ?? null,
+          file_mime_type: draftFile?.type ?? null,
           created_at: new Date().toISOString(),
           sender_full_name: currentUser.full_name,
         }
@@ -219,15 +257,22 @@ function CustomerTicketView({
       }
 
       setMessage('')
-      return { previous }
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return { previous, draftMessage, draftFile }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['myTicket', ticket.id] })
+      void queryClient.invalidateQueries({ queryKey: ['myTickets'] })
     },
-    onError: (error: unknown, _content, context) => {
+    onError: (error: unknown, _request, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['myTicket', ticket.id], context.previous)
       }
+      setMessage(context?.draftMessage ?? '')
+      setSelectedFile(context?.draftFile ?? null)
       toast.error('Failed to send reply', extractApiErrorMessage(error, 'Please try again.'))
     },
   })
@@ -245,6 +290,29 @@ function CustomerTicketView({
   })
 
   const canClose = ticket.status === 'open' || ticket.status === 'resolved'
+
+  const handleSelectedFile = (file: File | null) => {
+    if (!file) {
+      setSelectedFile(null)
+      return
+    }
+    const validationError = validateAttachmentFile(file)
+    if (validationError) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      toast.error('Attachment rejected', validationError)
+      return
+    }
+    setSelectedFile(file)
+  }
+
+  const handleSend = () => {
+    if (!canSend) {
+      return
+    }
+    sendMutation.mutate({ content: message.trim(), file: selectedFile })
+  }
 
   return (
     <div className="page-stack">
@@ -306,7 +374,35 @@ function CustomerTicketView({
                         {msg.sender_full_name || 'Support Agent'}
                       </p>
                     )}
-                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                    {msg.content ? <p className="whitespace-pre-wrap text-sm">{msg.content}</p> : null}
+                    {msg.file_name ? (
+                      msg.file_url ? (
+                        <a
+                          href={msg.file_url}
+                          className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                            msg.sender_type === 'customer'
+                              ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                              : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
+                          }`}
+                        >
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{msg.file_name}</span>
+                          <span className="shrink-0 text-xs opacity-75">{formatFileSize(msg.file_size)}</span>
+                        </a>
+                      ) : (
+                        <div
+                          className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                            msg.sender_type === 'customer'
+                              ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                              : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
+                          }`}
+                        >
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{msg.file_name}</span>
+                          <span className="shrink-0 text-xs opacity-75">Uploading...</span>
+                        </div>
+                      )
+                    ) : null}
                     <p
                       className={`mt-1 text-[10px] ${
                         msg.sender_type === 'customer'
@@ -323,29 +419,67 @@ function CustomerTicketView({
         </div>
 
         {ticket.status !== 'closed' && (
-          <div className="flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800">
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  if (message.trim()) sendMutation.mutate(message.trim())
-                }
-              }}
-              placeholder="Type your reply..."
-              rows={1}
-              className="input-field flex-1 resize-none"
-            />
-            <button
-              onClick={() => message.trim() && sendMutation.mutate(message.trim())}
-              disabled={sendMutation.isPending || !message.trim()}
-              className="btn-primary h-9 w-9 rounded-full p-0 disabled:opacity-50"
-              type="button"
-              aria-label="Send reply"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+          <div className="space-y-3 border-t border-slate-200 p-3 dark:border-slate-800">
+            {selectedFile ? (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <Paperclip className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-300" />
+                <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatFileSize(selectedFile.size)}
+                </span>
+                <button
+                  type="button"
+                  className="btn-icon h-7 w-7"
+                  aria-label="Remove attachment"
+                  onClick={() => {
+                    setSelectedFile(null)
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = ''
+                    }
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex items-end gap-2">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend()
+                  }
+                }}
+                placeholder="Type your reply..."
+                rows={1}
+                className="input-field flex-1 resize-none"
+              />
+              <label
+                className="btn-secondary flex h-9 w-9 cursor-pointer items-center justify-center rounded-full p-0"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ATTACHMENT_INPUT_ACCEPT}
+                  aria-label="Attach a file"
+                  className="sr-only"
+                  onChange={(e) => handleSelectedFile(e.target.files?.[0] ?? null)}
+                />
+                <Paperclip className="h-4 w-4" />
+              </label>
+              <button
+                onClick={handleSend}
+                disabled={sendMutation.isPending || !canSend}
+                className="btn-primary h-9 w-9 rounded-full p-0 disabled:opacity-50"
+                type="button"
+                aria-label="Send reply"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>

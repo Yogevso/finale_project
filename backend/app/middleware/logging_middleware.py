@@ -2,17 +2,20 @@
 
 import logging
 import time
-import uuid
-from contextvars import ContextVar
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-logger = logging.getLogger("app.requests")
+from app.observability import (
+    REQUEST_ID_HEADER,
+    TRACE_ID_HEADER,
+    current_request_id,
+    current_trace_id,
+    resolve_request_tracing,
+)
 
-# Task-local request ID accessible from anywhere in the async call stack
-current_request_id: ContextVar[str | None] = ContextVar("current_request_id", default=None)
+logger = logging.getLogger("app.requests")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -33,13 +36,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request with logging"""
-        # Generate request ID
-        request_id = str(uuid.uuid4())[:8]
+        tracing = resolve_request_tracing(
+            incoming_trace_id=request.headers.get(TRACE_ID_HEADER),
+            incoming_request_id=request.headers.get(REQUEST_ID_HEADER),
+        )
+        request_id = tracing.request_id
+        trace_id = tracing.trace_id
 
         # Store in request state for use in handlers
         request.state.request_id = request_id
-        # Store in ContextVar for use in downstream async calls (e.g. Ollama)
-        token = current_request_id.set(request_id)
+        request.state.trace_id = trace_id
+        request_token = current_request_id.set(request_id)
+        trace_token = current_trace_id.set(trace_id)
 
         # Get client info
         client_ip = self._get_client_ip(request)
@@ -51,13 +59,14 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Process request
         try:
             response = await call_next(request)
-        except Exception as exc:
+        except Exception as exc:  # policy: LOSSY — response tracing should not mask the original request outcome
             # Log exception with user/tenant context (Y15-027)
             duration_ms = (time.time() - start_time) * 1000
             logger.error(
                 f"Request failed: {request.method} {request.url.path}",
                 extra={
                     "request_id": request_id,
+                    "trace_id": trace_id,
                     "method": request.method,
                     "path": request.url.path,
                     "client_ip": client_ip,
@@ -69,17 +78,20 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
             raise
         finally:
-            current_request_id.reset(token)
+            current_request_id.reset(request_token)
+            current_trace_id.reset(trace_token)
 
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
 
         # Add request ID to response headers
-        response.headers["X-Request-ID"] = request_id
+        response.headers[REQUEST_ID_HEADER] = request_id
+        response.headers[TRACE_ID_HEADER] = trace_id
 
         # Log request with user/tenant context (Y15-027)
         log_data = {
             "request_id": request_id,
+            "trace_id": trace_id,
             "method": request.method,
             "path": request.url.path,
             "status_code": response.status_code,

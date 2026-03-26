@@ -7,6 +7,7 @@ import { useAttachmentDownload } from './useAttachmentDownload'
 
 vi.mock('@/lib/api', () => ({
   api: {
+    getAttachmentDownloadUrl: vi.fn(),
     getAttachmentBlob: vi.fn(),
   },
 }))
@@ -49,6 +50,9 @@ describe('useAttachmentDownload', () => {
     vi.restoreAllMocks()
     vi.clearAllMocks()
     document.body.innerHTML = ''
+    mockedApi.getAttachmentDownloadUrl.mockResolvedValue(
+      'http://api.test/documents/42/attachments/1/download?token=signed-ticket',
+    )
     mockedApi.getAttachmentBlob.mockResolvedValue(new Blob(['test']))
     mockedDomEnv.createObjectUrl.mockReturnValue('blob:test')
 
@@ -79,7 +83,7 @@ describe('useAttachmentDownload', () => {
     document.body.innerHTML = ''
   })
 
-  it('downloads an attachment and cleans up the object url', async () => {
+  it('downloads an attachment using a signed ticket URL', async () => {
     const attachment = buildAttachment()
     const { result } = renderHook(() => useAttachmentDownload(42))
 
@@ -87,23 +91,28 @@ describe('useAttachmentDownload', () => {
       await result.current.downloadAttachment(attachment)
     })
 
-    expect(mockedApi.getAttachmentBlob).toHaveBeenCalledWith(42, attachment.id)
-    expect(mockedDomEnv.createObjectUrl).toHaveBeenCalledTimes(1)
-    expect(
-      appendChildMock.mock.calls.filter(([node]) => node instanceof HTMLAnchorElement),
-    ).toHaveLength(1)
+    expect(mockedApi.getAttachmentDownloadUrl).toHaveBeenCalledWith(42, attachment.id)
+    expect(mockedApi.getAttachmentBlob).not.toHaveBeenCalled()
+    expect(mockedDomEnv.createObjectUrl).not.toHaveBeenCalled()
+    const downloadAnchors = appendChildMock.mock.calls
+      .map(([node]) => node)
+      .filter((node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement)
+    expect(downloadAnchors).toHaveLength(1)
+    expect(downloadAnchors[0].href).toBe(
+      'http://api.test/documents/42/attachments/1/download?token=signed-ticket',
+    )
     expect(anchorClickMock).toHaveBeenCalledTimes(1)
     expect(removeMock).toHaveBeenCalledTimes(1)
-    expect(mockedDomEnv.revokeObjectUrl).toHaveBeenCalledWith('blob:test')
+    expect(mockedDomEnv.revokeObjectUrl).not.toHaveBeenCalled()
     expect(result.current.downloadingAttachmentId).toBeNull()
   })
 
   it('tracks the active download while it is in flight', async () => {
-    let resolveBlob: (blob: Blob) => void = () => undefined
-    mockedApi.getAttachmentBlob.mockImplementation(
+    let resolveUrl: (url: string) => void = () => undefined
+    mockedApi.getAttachmentDownloadUrl.mockImplementation(
       () =>
-        new Promise<Blob>((resolve) => {
-          resolveBlob = resolve
+        new Promise<string>((resolve) => {
+          resolveUrl = resolve
         }),
     )
 
@@ -120,12 +129,31 @@ describe('useAttachmentDownload', () => {
     })
 
     await act(async () => {
-      resolveBlob(new Blob(['done']))
+      resolveUrl('http://api.test/documents/42/attachments/1/download?token=async-ticket')
       await pendingDownload
     })
 
     await waitFor(() => {
       expect(result.current.downloadingAttachmentId).toBeNull()
     })
+  })
+
+  it('falls back to an authenticated blob download when ticket issuance fails', async () => {
+    mockedApi.getAttachmentDownloadUrl.mockRejectedValue(new Error('ticket endpoint unavailable'))
+    mockedApi.getAttachmentBlob.mockResolvedValue(new Blob(['fallback']))
+    mockedDomEnv.createObjectUrl.mockReturnValue('blob:fallback')
+
+    const attachment = buildAttachment()
+    const { result } = renderHook(() => useAttachmentDownload(42))
+
+    await act(async () => {
+      await result.current.downloadAttachment(attachment)
+    })
+
+    expect(mockedApi.getAttachmentDownloadUrl).toHaveBeenCalledWith(42, attachment.id)
+    expect(mockedApi.getAttachmentBlob).toHaveBeenCalledWith(42, attachment.id)
+    expect(mockedDomEnv.createObjectUrl).toHaveBeenCalledTimes(1)
+    expect(mockedDomEnv.revokeObjectUrl).toHaveBeenCalledWith('blob:fallback')
+    expect(result.current.downloadingAttachmentId).toBeNull()
   })
 })

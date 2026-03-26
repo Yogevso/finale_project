@@ -11,23 +11,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.dependencies.permissions import require_admin
 from app.models import (
     Attachment,
     AttachmentArtifact,
     Document,
     User,
-    UserRole,
     Version,
 )
-from app.security import get_current_active_user
 
 router = APIRouter(prefix="/admin/snapshot-diff", tags=["Admin - Snapshot Diff"])
-
-
-def require_admin(current_user: User = Depends(get_current_active_user)) -> User:
-    if current_user.role not in (UserRole.ADMIN, UserRole.SYSTEM_ADMIN):
-        raise HTTPException(status_code=403, detail="Admin required")
-    return current_user
 
 
 @router.get("/{document_id}")
@@ -96,13 +89,13 @@ async def get_snapshot_diff(
         if current_artifact and current_artifact.data:
             try:
                 current_html = current_artifact.data.decode("utf-8", errors="replace")
-            except Exception:
+            except Exception:  # policy: LOSSY — binary preview fallback keeps diff generation usable
                 current_html = "[binary data]"
 
         if snapshot_artifact and snapshot_artifact.data:
             try:
                 snapshot_html = snapshot_artifact.data.decode("utf-8", errors="replace")
-            except Exception:
+            except Exception:  # policy: LOSSY — binary preview fallback keeps diff generation usable
                 snapshot_html = "[binary data]"
 
         # Generate unified diff

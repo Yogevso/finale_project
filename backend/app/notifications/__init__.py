@@ -6,6 +6,7 @@ from app.notifications.message import NotificationMessage
 from app.notifications.templates import (
     CommentReplyTemplate,
     DocumentPublishedTemplate,
+    InvitationTemplate,
     NewCommentTemplate,
     NotificationTemplate,
     PasswordResetTemplate,
@@ -16,6 +17,7 @@ __all__ = [
     "CommentReplyTemplate",
     "DocumentPublishedTemplate",
     "EmailNotificationChannel",
+    "InvitationTemplate",
     "NewCommentTemplate",
     "NotificationChannel",
     "NotificationDispatcher",

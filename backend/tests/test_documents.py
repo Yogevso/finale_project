@@ -350,6 +350,52 @@ def test_get_document(client, auth_headers, db, test_user):
     assert data["title"] == "Test Document"
 
 
+def test_viewer_document_list_excludes_draft_documents(client, viewer_auth_headers, db, test_viewer):
+    draft_doc = Document(
+        title="Viewer Hidden Draft",
+        document_number="DOC-VIEW-DRAFT-0001",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=test_viewer.id,
+        tenant_id=test_viewer.tenant_id,
+    )
+    active_doc = Document(
+        title="Viewer Visible Active",
+        document_number="DOC-VIEW-ACT-0001",
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=test_viewer.id,
+        tenant_id=test_viewer.tenant_id,
+    )
+    db.add_all([draft_doc, active_doc])
+    db.commit()
+
+    response = client.get("/api/v1/documents", headers=viewer_auth_headers)
+
+    assert response.status_code == 200
+    titles = [item["title"] for item in response.json()["items"]]
+    assert "Viewer Visible Active" in titles
+    assert "Viewer Hidden Draft" not in titles
+
+
+def test_viewer_cannot_get_draft_document(client, viewer_auth_headers, db, test_viewer):
+    draft_doc = Document(
+        title="Viewer Detail Draft",
+        document_number="DOC-VIEW-DRAFT-0002",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=test_viewer.id,
+        tenant_id=test_viewer.tenant_id,
+    )
+    db.add(draft_doc)
+    db.commit()
+    db.refresh(draft_doc)
+
+    response = client.get(f"/api/v1/documents/{draft_doc.id}", headers=viewer_auth_headers)
+
+    assert response.status_code == 404
+
+
 def test_document_detail_payload_budget_under_50kb(client, admin_headers, db, test_admin, test_tenant):
     """Guardrail: keep /api/v1/documents/{id} payload under the 50KB budget."""
     doc = Document(
@@ -401,13 +447,139 @@ def test_update_document(client, auth_headers, db, test_user):
     response = client.put(
         f"/api/v1/documents/{doc.id}",
         headers=headers,
-        json={"title": "Updated Title", "status": "active"},
+        json={"title": "Updated Title"},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Updated Title"
-    assert data["status"] == "active"
+    assert data["status"] == "draft"
+
+
+def test_editor_cannot_update_same_tenant_document_owned_by_another_editor(client, db, auth_headers, test_user):
+    other_editor = User(
+        email="other-owner@example.com",
+        username="other_owner",
+        full_name="Other Owner",
+        hashed_password=get_password_hash("ownerpass123"),
+        role=UserRole.EDITOR,
+        tenant_id=test_user.tenant_id,
+        is_active=True,
+        is_email_verified=True,
+    )
+    db.add(other_editor)
+    db.commit()
+    db.refresh(other_editor)
+
+    doc = Document(
+        title="Other editor document",
+        document_number="DOC-OWN-EDIT-0001",
+        status=DocumentStatus.DRAFT,
+        visibility=DocumentVisibility.INTERNAL,
+        created_by=other_editor.id,
+        tenant_id=test_user.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    response = client.put(
+        f"/api/v1/documents/{doc.id}",
+        headers={**auth_headers, "If-Match": doc.etag},
+        json={"title": "Unauthorized overwrite"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_document_rejects_status_field(client, auth_headers, db, test_user):
+    """Status transitions must not be accepted through generic document updates."""
+    doc = Document(
+        title="Original Title",
+        document_number="DOC-TEST-0002",
+        status=DocumentStatus.DRAFT,
+        created_by=test_user.id,
+        tenant_id=test_user.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    headers = {**auth_headers, "If-Match": doc.etag}
+    response = client.put(
+        f"/api/v1/documents/{doc.id}",
+        headers=headers,
+        json={"status": "active"},
+    )
+
+    assert response.status_code == 422
+    db.refresh(doc)
+    assert doc.status == DocumentStatus.DRAFT
+
+
+def test_archive_document_uses_workflow_for_active_documents(
+    client, manager_headers, db, public_document
+):
+    response = client.post(
+        f"/api/v1/documents/{public_document.id}/archive",
+        headers={**manager_headers, "If-Match": public_document.etag},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "archived"
+    assert payload["previous_status"] == "active"
+
+    db.refresh(public_document)
+    assert public_document.status == DocumentStatus.ARCHIVED
+
+
+def test_restore_document_returns_archived_published_document_to_active(
+    client, manager_headers, db, public_document
+):
+    archive_response = client.post(
+        f"/api/v1/documents/{public_document.id}/archive",
+        headers={**manager_headers, "If-Match": public_document.etag},
+    )
+    assert archive_response.status_code == 200
+
+    db.refresh(public_document)
+    restore_response = client.post(
+        f"/api/v1/documents/{public_document.id}/restore",
+        headers={**manager_headers, "If-Match": public_document.etag},
+    )
+
+    assert restore_response.status_code == 200
+    payload = restore_response.json()
+    assert payload["status"] == "active"
+    assert payload["visibility"] == "public"
+
+    db.refresh(public_document)
+    assert public_document.status == DocumentStatus.ACTIVE
+
+
+def test_restore_document_returns_archived_draft_to_draft(
+    client, manager_headers, db, test_document
+):
+    archive_response = client.post(
+        f"/api/v1/documents/{test_document.id}/archive",
+        headers={**manager_headers, "If-Match": test_document.etag},
+    )
+    assert archive_response.status_code == 200
+
+    db.refresh(test_document)
+    restore_response = client.post(
+        f"/api/v1/documents/{test_document.id}/restore",
+        headers={**manager_headers, "If-Match": test_document.etag},
+    )
+
+    assert restore_response.status_code == 200
+    payload = restore_response.json()
+    assert payload["status"] == "draft"
+    assert payload["visibility"] == "internal"
+
+    db.refresh(test_document)
+    assert test_document.status == DocumentStatus.DRAFT
 
 
 def test_delete_document(client, admin_headers, db, test_admin):
@@ -422,10 +594,14 @@ def test_delete_document(client, admin_headers, db, test_admin):
     )
     db.add(doc)
     db.commit()
+    db.refresh(doc)
     doc_id = doc.id
 
     # Delete document - requires MANAGER+ role
-    response = client.delete(f"/api/v1/documents/{doc_id}", headers=admin_headers)
+    response = client.delete(
+        f"/api/v1/documents/{doc_id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
 
     assert response.status_code == 200
 
@@ -662,7 +838,7 @@ def test_delete_document_rolls_back_audit_when_delete_fails(db, test_admin, monk
     monkeypatch.setattr(db, "delete", fail_document_delete)
 
     with pytest.raises(RuntimeError, match="forced delete failure"):
-        service.delete_document(doc.id, test_admin)
+        service.delete_document(doc.id, test_admin, if_match=doc.etag)
 
     db.expire_all()
     assert db.query(Document).filter(Document.id == doc.id).count() == 1
