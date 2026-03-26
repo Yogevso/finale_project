@@ -18,14 +18,10 @@ import type {
   CannedResponseCreate,
   CannedResponseUpdate,
 } from '@/types/chat'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const SupportApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const SupportApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     private buildSupportTicketMessagePayload(request: SendTicketMessageRequest): SendTicketMessageRequest | FormData {
       if (!request.file) {
         return {

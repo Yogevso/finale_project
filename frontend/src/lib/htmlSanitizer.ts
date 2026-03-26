@@ -179,15 +179,6 @@ function normalizeClassAttribute(tagName: string, value: string): string | null 
   return Array.from(new Set(nextTokens)).join(' ')
 }
 
-function unwrapElement(element: Element): void {
-  const parent = element.parentNode
-  if (!parent) return
-  while (element.firstChild) {
-    parent.insertBefore(element.firstChild, element)
-  }
-  parent.removeChild(element)
-}
-
 function sanitizeAttributes(element: Element): void {
   const tagName = element.tagName.toLowerCase()
   const allowedForTag = PER_TAG_ATTRIBUTES[tagName] || new Set<string>()
@@ -261,24 +252,6 @@ function sanitizeAttributes(element: Element): void {
   if (tagName === 'a' && element.getAttribute('target') === '_blank') {
     element.setAttribute('rel', 'noopener noreferrer')
   }
-}
-
-function sanitizeElement(element: Element): void {
-  const children = Array.from(element.children)
-  children.forEach((child) => sanitizeElement(child))
-
-  const tagName = element.tagName.toLowerCase()
-  if (DROP_TAGS.has(tagName)) {
-    element.remove()
-    return
-  }
-
-  if (!ALLOWED_TAGS.has(tagName)) {
-    unwrapElement(element)
-    return
-  }
-
-  sanitizeAttributes(element)
 }
 
 export function sanitizeHtmlForPreview(html: string): string {

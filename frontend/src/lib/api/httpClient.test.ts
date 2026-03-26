@@ -26,12 +26,19 @@ const mockAxiosInstance = Object.assign(
   },
 )
 
-vi.mock('axios', () => ({
-  default: {
+vi.mock('axios', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('axios')>()
+  const mockedDefault = {
+    ...actual.default,
     create: vi.fn(() => mockAxiosInstance),
     post: vi.fn(),
-  },
-}))
+  }
+
+  return {
+    ...actual,
+    default: mockedDefault,
+  }
+})
 
 const mockedAxios = vi.mocked(axios, true)
 

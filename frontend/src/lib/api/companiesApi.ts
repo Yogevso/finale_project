@@ -26,14 +26,10 @@ import {
   toCompanyUpdateDto,
   toCompanyUserAddDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const CompaniesApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const CompaniesApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getCompanies(params?: {
       page?: number
       per_page?: number

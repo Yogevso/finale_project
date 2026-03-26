@@ -1,4 +1,4 @@
-import { API_BASE_URL, type ApiHttpClient, type Constructor } from './httpClient'
+import { API_BASE_URL, type ApiClientBase, type Constructor } from './httpClient'
 import { withTraceHeader } from '@/lib/requestTrace'
 import {
   type CollaborationActiveSessionsResponseDto,
@@ -21,12 +21,8 @@ import {
   mapCollaborationTokenResponseDto,
 } from './dto'
 
-export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const CollaborationApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getCollabToken(documentId: number): Promise<CollaborationTokenResponseDto> {
       const { data } = await this.client.post<CollaborationTokenResponseDto>('/auth/collab-token', {
         document_id: documentId,

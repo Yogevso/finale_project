@@ -26,14 +26,10 @@ import {
   toRbacPoliciesUpdateDto,
   toSystemSettingsUpdateDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const AuthApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async login(credentials: LoginRequest): Promise<TokenResponse> {
       const { data } = await this.client.post<TokenResponseDto>('/auth/login', credentials)
       const payload = mapTokenResponseDto(data)
@@ -108,4 +104,3 @@ export const AuthApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBa
       return mapRbacPoliciesResponseDto(data)
     }
   }
-

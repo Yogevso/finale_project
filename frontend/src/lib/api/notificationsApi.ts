@@ -7,14 +7,10 @@ import {
   mapNotificationCountResponseDto,
   mapNotificationListResponseDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const NotificationsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const NotificationsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getNotifications(
       unreadOnly: boolean = false,
       limit: number = 50,

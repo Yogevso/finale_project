@@ -31,7 +31,7 @@ import {
   mapSearchResponseDto,
   toSavedSearchCreateDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
 export interface SearchAnalyticsDto {
   period_days: number
@@ -42,12 +42,8 @@ export interface SearchAnalyticsDto {
   zero_result_queries: Array<{ query: string; count: number }>
 }
 
-export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const SearchEngagementApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async search(
       query: string,
       options?: { category?: string; page?: number; pageSize?: number },
@@ -186,4 +182,3 @@ export const SearchEngagementApiMixin = <TBase extends Constructor<ApiHttpClient
       return mapEngagementStatsDto(data)
     }
   }
-

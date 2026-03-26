@@ -1,7 +1,7 @@
 /**
  * Portal API - Customer authenticated API calls
  */
-import axios from 'axios'
+import axios, { AxiosHeaders } from 'axios'
 import { api } from '@/lib/api'
 import { withTraceHeader } from '@/lib/requestTrace'
 
@@ -17,12 +17,16 @@ const portalClient = axios.create({
 
 // Add auth header to requests
 portalClient.interceptors.request.use((config) => {
-  const headers = withTraceHeader((config.headers ?? {}) as Record<string, string>)
+  const headers = AxiosHeaders.from(config.headers ?? {})
+  const tracedHeaders = withTraceHeader(headers.toJSON() as Record<string, string>)
+  Object.entries(tracedHeaders).forEach(([name, value]) => {
+    headers.set(name, value)
+  })
   config.headers = headers
   // AD-004: get token from in-memory API client, not localStorage
   const token = api.getToken()
   if (token) {
-    headers.Authorization = `Bearer ${token}`
+    headers.set('Authorization', `Bearer ${token}`)
   }
   return config
 })

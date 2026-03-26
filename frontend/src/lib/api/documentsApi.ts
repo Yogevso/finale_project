@@ -50,18 +50,14 @@ import {
   toVersionCreateDto,
   toVersionUpdateDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
 export type DocumentUploadApiOptions = {
   onUploadProgress?: (event: AxiosProgressEvent) => void
 }
 
-export const DocumentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getDocuments(params?: DocumentQueryParams): Promise<DocumentListResponse> {
       const { data } = await this.client.get<DocumentListResponseDto>('/documents', { params })
       return mapDocumentListResponseDto(data)

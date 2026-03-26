@@ -21,14 +21,10 @@ import {
   toAcceptInvitationRequestDto,
   toInvitationCreateDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const InvitationsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const InvitationsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getInvitations(params?: {
       page?: number
       per_page?: number

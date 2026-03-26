@@ -1,8 +1,8 @@
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export type ApiClientMixin = <TBase extends Constructor<ApiHttpClient>>(
+export type ApiClientMixin = <TBase extends Constructor<ApiClientBase>>(
   Base: TBase,
-) => Constructor<any>
+) => Constructor<InstanceType<TBase>>
 
 type UnionToIntersection<TUnion> = (
   TUnion extends unknown ? (value: TUnion) => void : never
@@ -10,23 +10,24 @@ type UnionToIntersection<TUnion> = (
   ? TIntersection
   : never
 
-type MixinMembers<TMixin extends ApiClientMixin> = TMixin extends <
-  TBase extends Constructor<ApiHttpClient>,
+type MixinMembers<TMixin> = TMixin extends <
+  TBase extends Constructor<ApiClientBase>,
 >(
   Base: TBase,
 ) => Constructor<infer TInstance>
-  ? Omit<TInstance, keyof ApiHttpClient>
+  ? Omit<TInstance, keyof ApiClientBase>
   : never
 
-export type ComposedApiClient<TMixins extends readonly ApiClientMixin[]> = ApiHttpClient &
+export type ComposedApiClient<TMixins extends readonly unknown[]> = ApiClientBase &
   UnionToIntersection<MixinMembers<TMixins[number]>>
 
-export function composeApiClient<TMixins extends readonly ApiClientMixin[]>(
-  Base: Constructor<ApiHttpClient>,
+export function composeApiClient<TMixins extends readonly unknown[]>(
+  Base: Constructor<ApiClientBase>,
   mixins: TMixins,
 ): Constructor<ComposedApiClient<TMixins>> {
-  return mixins.reduce(
-    (CurrentBase, applyMixin) => applyMixin(CurrentBase),
-    Base,
-  ) as Constructor<ComposedApiClient<TMixins>>
+  let CurrentBase: Constructor<object> = Base
+  for (const applyMixin of mixins) {
+    CurrentBase = (applyMixin as ApiClientMixin)(CurrentBase as Constructor<ApiClientBase>)
+  }
+  return CurrentBase as Constructor<ComposedApiClient<TMixins>>
 }

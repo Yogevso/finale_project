@@ -15,14 +15,10 @@ import {
   mapMessageResponseDto,
 } from './dto'
 import { API_BASE_URL } from './httpClient'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const AttachmentsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const AttachmentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: any[]) {
-      super(...args)
-    }
-
     async getAttachments(documentId: number): Promise<Attachment[]> {
       const { data } = await this.client.get<AttachmentDto[]>(`/documents/${documentId}/attachments`)
       return mapAttachmentsDto(data)

@@ -27,14 +27,10 @@ import {
   toReviewActionDto,
   toReviewSubmitDto,
 } from './dto'
-import type { ApiHttpClient, Constructor } from './httpClient'
+import type { ApiClientBase, Constructor } from './httpClient'
 
-export const ReviewsApiMixin = <TBase extends Constructor<ApiHttpClient>>(Base: TBase) =>
+export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
-    constructor(...args: ConstructorParameters<TBase>) {
-      super(...args)
-    }
-
     async submitForReview(documentId: number, data: ReviewSubmit): Promise<ReviewRequest> {
       const payload = toReviewSubmitDto(data)
       const { data: response } = await this.client.post<ReviewRequestDto>(
