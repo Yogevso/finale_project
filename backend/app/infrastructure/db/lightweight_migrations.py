@@ -29,6 +29,7 @@ def run_lightweight_migrations(
         _ensure_document_columns(conn)
         _sync_document_platform_links(conn)
         _ensure_attachment_columns(conn)
+        _ensure_support_ticket_message_columns(conn)
         _backfill_attachment_aliases(conn)
         _ensure_attachment_artifacts(conn)
         _ensure_attachment_conversion_jobs(conn)
@@ -36,6 +37,7 @@ def run_lightweight_migrations(
         _ensure_idempotency_keys(conn)
         _ensure_document_assignment_indexes(conn)
         _ensure_audit_log_columns(conn)
+        _backfill_invitation_security_fields(conn)
         if not skip_versions_semantic_migration:
             _ensure_versions_semantic_columns(conn)
         conn.commit()
@@ -235,6 +237,33 @@ def _ensure_attachment_columns(conn: Connection) -> None:
         text(
             "CREATE INDEX IF NOT EXISTS ix_attachments_reader_html_status "
             "ON attachments (reader_html_status)"
+        )
+    )
+
+
+def _ensure_support_ticket_message_columns(conn: Connection) -> None:
+    support_message_table = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='support_ticket_messages'")
+    ).fetchone()
+    if support_message_table is None:
+        return
+
+    support_message_columns = conn.execute(text("PRAGMA table_info(support_ticket_messages)")).fetchall()
+    existing_support_message_columns = {row[1] for row in support_message_columns}
+    required_support_message_columns = {
+        "file_name": "ALTER TABLE support_ticket_messages ADD COLUMN file_name VARCHAR(255)",
+        "file_size": "ALTER TABLE support_ticket_messages ADD COLUMN file_size INTEGER",
+        "file_mime_type": "ALTER TABLE support_ticket_messages ADD COLUMN file_mime_type VARCHAR(100)",
+        "file_storage_key": "ALTER TABLE support_ticket_messages ADD COLUMN file_storage_key VARCHAR(500)",
+    }
+    for column_name, ddl in required_support_message_columns.items():
+        if column_name not in existing_support_message_columns:
+            conn.execute(text(ddl))
+
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_support_ticket_messages_file_storage_key "
+            "ON support_ticket_messages (file_storage_key)"
         )
     )
 
@@ -545,6 +574,41 @@ def _ensure_audit_log_columns(conn: Connection) -> None:
             "ON audit_logs (audience_event_type)"
         )
     )
+
+
+def _backfill_invitation_security_fields(conn: Connection) -> None:
+    invitation_table = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'")
+    ).fetchone()
+    if invitation_table is None:
+        return
+
+    from app.auth_context.invitation_tokens import (
+        hash_invitation_token,
+        looks_like_invitation_token_hash,
+    )
+    from app.utils.sanitization import sanitize_plain_text
+
+    rows = conn.execute(text("SELECT id, token, message FROM invitations")).fetchall()
+    for invitation_id, token, message in rows:
+        updates: dict[str, object] = {}
+
+        if token and not looks_like_invitation_token_hash(token):
+            updates["token"] = hash_invitation_token(token)
+
+        sanitized_message = sanitize_plain_text(message)
+        if sanitized_message != message:
+            updates["message"] = sanitized_message
+
+        if not updates:
+            continue
+
+        params = {"invitation_id": invitation_id, **updates}
+        set_clause = ", ".join(f"{column} = :{column}" for column in updates)
+        conn.execute(
+            text(f"UPDATE invitations SET {set_clause} WHERE id = :invitation_id"),
+            params,
+        )
 
 
 def _ensure_versions_semantic_columns(conn: Connection) -> None:

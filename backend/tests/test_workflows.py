@@ -11,9 +11,15 @@ def test_document_workflow_can_transition_for_supported_paths():
     workflow = DocumentWorkflow()
 
     assert workflow.can_transition(DocumentStatus.DRAFT, DocumentStatus.PENDING_REVIEW)
+    assert workflow.can_transition(DocumentStatus.DRAFT, DocumentStatus.ARCHIVED)
     assert workflow.can_transition(DocumentStatus.PENDING_REVIEW, DocumentStatus.APPROVED)
     assert workflow.can_transition(DocumentStatus.PENDING_REVIEW, DocumentStatus.DRAFT)
+    assert workflow.can_transition(DocumentStatus.PENDING_REVIEW, DocumentStatus.ARCHIVED)
     assert workflow.can_transition(DocumentStatus.APPROVED, DocumentStatus.ACTIVE)
+    assert workflow.can_transition(DocumentStatus.APPROVED, DocumentStatus.ARCHIVED)
+    assert workflow.can_transition(DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED)
+    assert workflow.can_transition(DocumentStatus.ARCHIVED, DocumentStatus.DRAFT)
+    assert workflow.can_transition(DocumentStatus.ARCHIVED, DocumentStatus.ACTIVE)
 
 
 def test_document_workflow_blocks_invalid_transition():

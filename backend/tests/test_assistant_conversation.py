@@ -103,6 +103,23 @@ class TestConversationCRUD:
         conv = mgr.create_conversation(conv_user.id, None, long_title)
         assert len(conv.title) <= 100
 
+    def test_create_conversation_sanitizes_html_title(self, mgr, conv_user):
+        conv = mgr.create_conversation(
+            conv_user.id,
+            None,
+            '<img src=x onerror="alert(1)"> Hello <script>alert(2)</script>',
+        )
+        assert conv.title == "Hello"
+
+    def test_update_title_sanitizes_html(self, mgr, conv_user):
+        conv = mgr.create_conversation(conv_user.id, None, "Old Title")
+        updated = mgr.update_title(
+            conv.id,
+            '<b>Renamed</b> <script>alert(1)</script> Chat',
+        )
+        assert updated is not None
+        assert updated.title == "Renamed Chat"
+
 
 # ---------------------------------------------------------------------------
 # Messages
@@ -205,4 +222,10 @@ class TestTitleGeneration:
 
     def test_whitespace_stripped(self):
         title = ConversationManager.generate_title_from_message("  Hello  \n")
+        assert title == "Hello"
+
+    def test_html_and_script_blocks_are_removed(self):
+        title = ConversationManager.generate_title_from_message(
+            '<script>alert(1)</script><b>Hello</b> <img src="x" onerror="alert(2)">',
+        )
         assert title == "Hello"

@@ -14,12 +14,28 @@ def test_document_workflow_model_shape_and_terminals():
 
     assert model.name == "document_lifecycle"
     assert model.initial_states == (DocumentStatus.DRAFT,)
-    assert model.allowed_targets(DocumentStatus.DRAFT) == (DocumentStatus.PENDING_REVIEW,)
+    assert model.allowed_targets(DocumentStatus.DRAFT) == (
+        DocumentStatus.PENDING_REVIEW,
+        DocumentStatus.ARCHIVED,
+    )
     assert model.allowed_targets(DocumentStatus.PENDING_REVIEW) == (
         DocumentStatus.DRAFT,
         DocumentStatus.APPROVED,
+        DocumentStatus.ARCHIVED,
     )
-    assert model.terminal_states() == (DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED)
+    assert model.allowed_targets(DocumentStatus.APPROVED) == (
+        DocumentStatus.ACTIVE,
+        DocumentStatus.ARCHIVED,
+    )
+    assert model.allowed_targets(DocumentStatus.ACTIVE) == (
+        DocumentStatus.DRAFT,
+        DocumentStatus.ARCHIVED,
+    )
+    assert model.allowed_targets(DocumentStatus.ARCHIVED) == (
+        DocumentStatus.DRAFT,
+        DocumentStatus.ACTIVE,
+    )
+    assert model.terminal_states() == ()
 
 
 def test_document_workflow_model_based_transition_matrix():
@@ -46,9 +62,13 @@ def test_document_workflow_model_reachability_and_paths():
             DocumentStatus.PENDING_REVIEW,
             DocumentStatus.APPROVED,
             DocumentStatus.ACTIVE,
+            DocumentStatus.ARCHIVED,
         }
     )
-    assert (DocumentStatus.DRAFT, DocumentStatus.PENDING_REVIEW, DocumentStatus.APPROVED, DocumentStatus.ACTIVE) in model.enumerate_paths(max_steps=3)
+    assert (DocumentStatus.DRAFT, DocumentStatus.ARCHIVED) in model.enumerate_paths(max_steps=1)
+    assert (DocumentStatus.DRAFT, DocumentStatus.PENDING_REVIEW) in model.enumerate_paths(
+        max_steps=1
+    )
 
 
 def test_review_workflow_model_shape_and_terminals():

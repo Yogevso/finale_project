@@ -19,19 +19,19 @@ Protocol:
 from __future__ import annotations
 
 import json
+from time import monotonic
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import (
     SupportTicket,
     SupportTicketAssignment,
-    SupportTicketMessage,
-    SupportTicketStatus,
     User,
     UserRole,
 )
+from app.services.support_service import SupportTicketService
 from app.ws.auth import authenticate_ws
 from app.ws.manager import chat_manager
 
@@ -95,9 +95,22 @@ async def support_websocket(
 
     await chat_manager.connect_support(websocket, user.id, ticket_ids)
 
+    # H-19: periodically re-validate the JWT so revoked sessions are caught
+    _REAUTH_INTERVAL = 60  # seconds
+    last_auth_check = monotonic()
+
     try:
         while True:
             raw = await websocket.receive_text()
+
+            # H-19: periodic session re-validation
+            now = monotonic()
+            if now - last_auth_check >= _REAUTH_INTERVAL:
+                last_auth_check = now
+                if not authenticate_ws(token, db):
+                    await websocket.close(code=4001, reason="Session expired or revoked")
+                    return
+
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
@@ -132,64 +145,20 @@ async def _handle_send_message(websocket: WebSocket, user: User, data: dict, db:
         await _send_error(websocket, "ticket_id and content are required")
         return
 
-    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
-    if not ticket:
-        await _send_error(websocket, "Ticket not found")
+    svc = SupportTicketService(db)
+    try:
+        msg = svc.send_message(
+            ticket_id,
+            user,
+            content,
+            is_internal_note=bool(is_internal_note),
+        )
+        ticket = svc.get_ticket(ticket_id, user)
+    except HTTPException as exc:
+        await _send_error(websocket, str(exc.detail))
         return
 
-    # Access check
-    if user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
-        if ticket.customer_id != user.id:
-            await _send_error(websocket, "Access denied")
-            return
-        sender_type = "customer"
-        is_internal_note = False  # Customers can't add notes
-    elif ticket.tenant_id != user.tenant_id and user.role != UserRole.SYSTEM_ADMIN:
-        await _send_error(websocket, "Access denied")
-        return
-    else:
-        sender_type = "agent"
-
-    msg = SupportTicketMessage(
-        ticket_id=ticket_id,
-        sender_id=user.id,
-        sender_type=sender_type,
-        content=content,
-        is_internal_note=is_internal_note,
-    )
-    db.add(msg)
-
-    # Auto-reopen if customer replies to resolved ticket
-    if sender_type == "customer" and ticket.status == SupportTicketStatus.RESOLVED:
-        ticket.status = SupportTicketStatus.OPEN
-        ticket.resolved_at = None
-
-    db.commit()
-    db.refresh(msg)
-
-    event_data = {
-        "id": msg.id,
-        "ticket_id": msg.ticket_id,
-        "sender_id": msg.sender_id,
-        "sender_type": msg.sender_type,
-        "sender_full_name": user.full_name,
-        "content": msg.content,
-        "is_internal_note": msg.is_internal_note,
-        "created_at": msg.created_at.isoformat(),
-    }
-
-    # Broadcast: internal notes only go to agents
-    if is_internal_note:
-        # Only send to agents in the ticket room (not customers)
-        connections = chat_manager._support_connections.get(ticket_id, {})
-        for uid, ws in list(connections.items()):
-            if uid == ticket.customer_id:
-                continue  # Skip customer
-            await chat_manager._safe_send(
-                ws, json.dumps({"event": "new_message", "data": event_data})
-            )
-    else:
-        await chat_manager.broadcast_to_ticket(ticket_id, "new_message", event_data)
+    await svc.broadcast_message_event(ticket=ticket, msg=msg, sender=user)
 
 
 async def _handle_typing(user: User, data: dict) -> None:

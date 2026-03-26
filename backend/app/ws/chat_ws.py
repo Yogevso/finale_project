@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -77,6 +78,10 @@ async def chat_websocket(
 
     await chat_manager.connect_chat(websocket, user.id, chat_ids)
 
+    # H-19: periodically re-validate the JWT so revoked sessions are caught
+    _REAUTH_INTERVAL = 60  # seconds
+    last_auth_check = monotonic()
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -84,6 +89,15 @@ async def chat_websocket(
             if len(raw) > 32_768:
                 await _send_error(websocket, "Message too large")
                 continue
+
+            # H-19: periodic session re-validation
+            now = monotonic()
+            if now - last_auth_check >= _REAUTH_INTERVAL:
+                last_auth_check = now
+                if not authenticate_ws(token, db):
+                    await websocket.close(code=4001, reason="Session expired or revoked")
+                    return
+
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:

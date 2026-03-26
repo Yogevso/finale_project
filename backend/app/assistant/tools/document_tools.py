@@ -13,6 +13,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.assistant.document_access import (
+    assistant_can_view_document,
+    resolve_assistant_visible_version,
+)
 from app.assistant.tools.base import BaseTool
 from app.models import ActionType, Document, DocumentStatus, DocumentVisibility, Topic, User
 from app.services.audit_helper import write_audit_log
@@ -78,7 +82,7 @@ class GetDocumentTool(BaseTool):
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
-        if tenant_id is not None and doc.tenant_id != tenant_id:
+        if not assistant_can_view_document(user, doc, tenant_id=tenant_id):
             return {"success": False, "result": "", "error": "Document not found."}
 
         info = (
@@ -92,13 +96,11 @@ class GetDocumentTool(BaseTool):
             f"Updated: {doc.updated_at}"
         )
 
-        # Include content preview from latest version
-        from app.models import Version
-        version = (
-            db.query(Version)
-            .filter(Version.document_id == doc.id)
-            .order_by(Version.version_number.desc())
-            .first()
+        version = resolve_assistant_visible_version(
+            db,
+            user=user,
+            document=doc,
+            tenant_id=tenant_id,
         )
         if version and version.content:
             from app.assistant.rag.chunker import DocumentChunker

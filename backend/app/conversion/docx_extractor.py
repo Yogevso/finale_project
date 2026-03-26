@@ -12,11 +12,14 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
+from defusedxml.ElementTree import ParseError as _XMLParseError
+from xml.etree.ElementTree import Element as _Element  # type-only; no parsing
 
 from docx import Document
 from PIL import Image
 
+from app.conversion.archive_safety import UnsafeArchiveError, validate_ooxml_zip_archive
 from app.conversion.html_generator import ir_to_html
 from app.conversion.ir import IRNode
 
@@ -223,6 +226,11 @@ class DocxExtractor:
 
         try:
             with zipfile.ZipFile(BytesIO(content)) as archive:
+                validate_ooxml_zip_archive(
+                    archive,
+                    archive_label="DOCX",
+                    compressed_size_bytes=len(content),
+                )
                 if WORD_DOCUMENT_PATH not in archive.namelist():
                     raise ValueError("DOCX is missing word/document.xml")
 
@@ -244,6 +252,9 @@ class DocxExtractor:
         except zipfile.BadZipFile as exc:
             logger.exception("DOCX extraction failed for %s: invalid ZIP archive", source_name)
             return self._failed_result("Invalid DOCX archive", exc)
+        except UnsafeArchiveError as exc:
+            logger.warning("DOCX extraction rejected for %s: %s", source_name, exc)
+            return self._failed_result("Unsafe DOCX archive", exc)
         except Exception as exc:
             logger.exception("DOCX extraction failed for %s", source_name)
             return self._failed_result("DOCX extraction failed", exc)
@@ -490,7 +501,7 @@ class DocxExtractor:
 
     def _parse_paragraph(
         self,
-        paragraph_element: ET.Element,
+        paragraph_element: _Element,
         *,
         style_definitions: dict[str, StyleDefinition],
         numbering_definitions: dict[str, dict[int, str]],
@@ -532,7 +543,7 @@ class DocxExtractor:
             is_ordered_list=is_ordered_list,
         )
 
-    def _extract_runs(self, element: ET.Element) -> list[ParagraphRun]:
+    def _extract_runs(self, element: _Element) -> list[ParagraphRun]:
         runs: list[ParagraphRun] = []
         for child in element:
             tag_name = self._local_name(child.tag)
@@ -545,7 +556,7 @@ class DocxExtractor:
                 runs.extend(self._extract_runs(child))
         return runs
 
-    def _parse_run(self, run_element: ET.Element) -> ParagraphRun | None:
+    def _parse_run(self, run_element: _Element) -> ParagraphRun | None:
         text = self._extract_run_text(run_element)
         if not text:
             return None
@@ -553,7 +564,7 @@ class DocxExtractor:
         formatting = self._extract_run_formatting(run_element)
         return ParagraphRun(text=text, **formatting)
 
-    def _extract_run_text(self, run_element: ET.Element) -> str:
+    def _extract_run_text(self, run_element: _Element) -> str:
         parts: list[str] = []
         for node in run_element:
             tag_name = self._local_name(node.tag)
@@ -565,7 +576,7 @@ class DocxExtractor:
                 parts.append("\n")
         return "".join(parts)
 
-    def _extract_run_formatting(self, run_element: ET.Element) -> dict[str, bool]:
+    def _extract_run_formatting(self, run_element: _Element) -> dict[str, bool]:
         run_properties = run_element.find("w:rPr", XML_NAMESPACES)
         if run_properties is None:
             return {
@@ -888,7 +899,7 @@ class DocxExtractor:
 
     def _parse_table(
         self,
-        table_element: ET.Element,
+        table_element: _Element,
         *,
         archive: zipfile.ZipFile,
         style_definitions: dict[str, StyleDefinition],
@@ -924,7 +935,7 @@ class DocxExtractor:
 
     def _parse_table_cell(
         self,
-        cell_element: ET.Element,
+        cell_element: _Element,
         *,
         archive: zipfile.ZipFile,
         grid_column: int,
@@ -965,7 +976,7 @@ class DocxExtractor:
 
     def _parse_container_blocks(
         self,
-        container: ET.Element,
+        container: _Element,
         *,
         archive: zipfile.ZipFile,
         style_definitions: dict[str, StyleDefinition],
@@ -1011,7 +1022,7 @@ class DocxExtractor:
 
         return blocks, nested_table_count
 
-    def _table_has_header_row(self, table_element: ET.Element) -> bool:
+    def _table_has_header_row(self, table_element: _Element) -> bool:
         table_look = table_element.find("w:tblPr/w:tblLook", XML_NAMESPACES)
         if table_look is not None:
             first_row = (table_look.get(self._ns_attr("w", "firstRow")) or "").strip().lower()
@@ -1070,15 +1081,20 @@ class DocxExtractor:
         return warnings
 
     def _has_visible_text(self, html_content: str) -> bool:
-        if "<img" in html_content:
+        if "<img" in (html_content or ""):
             return True
-        text_only = re.sub(r"<[^>]+>", " ", html_content or "")
-        return bool(re.sub(r"\s+", " ", text_only).strip())
+        # M-30: Use proper XML parser instead of fragile regex for tag stripping
+        try:
+            root = _safe_xml_fromstring(f"<r>{html_content or ''}</r>")
+            text = " ".join(root.itertext()).strip()
+            return bool(text)
+        except _XMLParseError:
+            return bool((html_content or "").strip())
 
     def _valid_tables(self, html_content: str) -> bool:
         try:
-            root = ET.fromstring(f"<root>{html_content}</root>")
-        except ET.ParseError:
+            root = _safe_xml_fromstring(f"<root>{html_content}</root>")
+        except _XMLParseError:
             return False
 
         for table in root.findall(".//table"):
@@ -1092,7 +1108,7 @@ class DocxExtractor:
         archive_path: str,
         *,
         required: bool,
-    ) -> ET.Element | None:
+    ) -> _Element | None:
         try:
             xml_bytes = archive.read(archive_path)
         except KeyError:
@@ -1101,14 +1117,14 @@ class DocxExtractor:
             return None
 
         try:
-            return ET.fromstring(xml_bytes)
-        except ET.ParseError:
+            return _safe_xml_fromstring(xml_bytes)
+        except _XMLParseError:
             if required:
                 raise ValueError(f"DOCX XML at {archive_path} could not be parsed") from None
             logger.warning("Skipping unreadable optional DOCX XML: %s", archive_path)
             return None
 
-    def _find_text(self, root: ET.Element, path: str) -> str | None:
+    def _find_text(self, root: _Element, path: str) -> str | None:
         element = root.find(path, XML_NAMESPACES)
         if element is None or element.text is None:
             return None
@@ -1134,19 +1150,19 @@ class DocxExtractor:
     def _ns_attr(self, prefix: str, attribute: str) -> str:
         return f"{{{XML_NAMESPACES[prefix]}}}{attribute}"
 
-    def _is_toggle_enabled(self, element: ET.Element | None) -> bool:
+    def _is_toggle_enabled(self, element: _Element | None) -> bool:
         if element is None:
             return False
         value = (element.get(self._ns_attr("w", "val")) or "").strip().lower()
         return value not in {"0", "false", "off"}
 
-    def _is_underline_enabled(self, element: ET.Element | None) -> bool:
+    def _is_underline_enabled(self, element: _Element | None) -> bool:
         if element is None:
             return False
         value = (element.get(self._ns_attr("w", "val")) or "single").strip().lower()
         return value not in {"", "0", "false", "none", "off"}
 
-    def _is_monospace_run(self, run_properties: ET.Element) -> bool:
+    def _is_monospace_run(self, run_properties: _Element) -> bool:
         run_fonts = run_properties.find("w:rFonts", XML_NAMESPACES)
         if run_fonts is None:
             return False
@@ -1161,7 +1177,7 @@ class DocxExtractor:
 
     def _extract_image_blocks(
         self,
-        paragraph_element: ET.Element,
+        paragraph_element: _Element,
         *,
         archive: zipfile.ZipFile,
         image_relationships: dict[str, str],
@@ -1220,7 +1236,7 @@ class DocxExtractor:
 
     def _extract_supported_image_relationship(
         self,
-        image_element: ET.Element,
+        image_element: _Element,
     ) -> tuple[bool, str | None]:
         local_name = self._local_name(image_element.tag)
         if local_name == "drawing":
@@ -1231,7 +1247,7 @@ class DocxExtractor:
 
     def _extract_drawing_relationship_id(
         self,
-        drawing_element: ET.Element,
+        drawing_element: _Element,
     ) -> tuple[bool, str | None]:
         blip = drawing_element.find(".//a:blip", XML_NAMESPACES)
         if blip is None:
@@ -1245,7 +1261,7 @@ class DocxExtractor:
 
     def _extract_pict_relationship_id(
         self,
-        pict_element: ET.Element,
+        pict_element: _Element,
     ) -> tuple[bool, str | None]:
         image_data = pict_element.find(".//v:imagedata", XML_NAMESPACES)
         if image_data is None:
@@ -1296,7 +1312,7 @@ class DocxExtractor:
 
     def _extract_style_list_metadata(
         self,
-        style_element: ET.Element,
+        style_element: _Element,
         style_id: str,
         style_label: str,
     ) -> tuple[str | None, int]:
@@ -1335,7 +1351,7 @@ class DocxExtractor:
     def _resolve_paragraph_list_metadata(
         self,
         *,
-        num_properties: ET.Element | None,
+        num_properties: _Element | None,
         style_definition: StyleDefinition | None,
     ) -> tuple[str | None, int]:
         if num_properties is not None:

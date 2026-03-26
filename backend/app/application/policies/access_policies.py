@@ -27,6 +27,12 @@ def safe_user_role(user: Optional[User]) -> Optional[UserRole]:
 class DocumentAccessPolicy:
     """Policy object for document access and tenant-boundary checks."""
 
+    _TENANT_MANAGERS = {
+        UserRole.SYSTEM_ADMIN,
+        UserRole.ADMIN,
+        UserRole.MANAGER,
+    }
+
     @staticmethod
     def _role(user: Optional[User]) -> Optional[UserRole]:
         return safe_user_role(user)
@@ -70,10 +76,14 @@ class DocumentAccessPolicy:
             return self.is_internal_user(user)
 
         if document.visibility == DocumentVisibility.COMPANY:
+            role = self._role(user)
             if self.is_internal_user(user):
-                return True
+                if role == UserRole.SYSTEM_ADMIN:
+                    return True
+                if user.tenant_id and document.tenant_id == user.tenant_id:
+                    return True
 
-            if self._role(user) == UserRole.CUSTOMER and user.tenant_id:
+            if role == UserRole.CUSTOMER and user.tenant_id:
                 assigned_tenant_ids = [tenant.id for tenant in document.assigned_companies]
                 return user.tenant_id in assigned_tenant_ids
             return False
@@ -83,14 +93,24 @@ class DocumentAccessPolicy:
     def can_edit_document(self, user: User, document: Document, has_edit_permission: bool) -> bool:
         if not user or not user.is_active or not has_edit_permission:
             return False
-        return self._same_tenant_or_unscoped(user, document)
+        role = self._role(user)
+        if role in self._TENANT_MANAGERS:
+            return self._same_tenant_or_unscoped(user, document)
+        if role == UserRole.EDITOR:
+            return self._same_tenant_or_unscoped(user, document) and user.id == document.created_by
+        return False
 
     def can_delete_document(
         self, user: User, document: Document, has_delete_permission: bool
     ) -> bool:
         if not user or not user.is_active or not has_delete_permission:
             return False
-        return self._same_tenant_or_unscoped(user, document)
+        role = self._role(user)
+        if role in self._TENANT_MANAGERS:
+            return self._same_tenant_or_unscoped(user, document)
+        if role == UserRole.EDITOR:
+            return self._same_tenant_or_unscoped(user, document) and user.id == document.created_by
+        return False
 
     def can_publish_document(
         self, user: User, document: Document, has_publish_permission: bool
@@ -102,14 +122,12 @@ class DocumentAccessPolicy:
     def collaboration_tenant_boundary_allows(self, user: User, document: Document) -> bool:
         """Stricter tenant boundary applied for collaboration endpoints."""
         role = self._role(user)
-        if role == UserRole.SYSTEM_ADMIN:
-            return True
         if role == UserRole.CUSTOMER:
             return True
         if not self.is_internal_user(user):
             return False
-        if document.tenant_id is None:
-            return True
+        if document.tenant_id is None or user.tenant_id is None:
+            return False
         return user.tenant_id == document.tenant_id
 
 

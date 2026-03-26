@@ -59,6 +59,46 @@ def _rewrite_docx_document_xml(
                 target_archive.writestr(member, source_archive.read(member.filename))
 
 
+def _write_ratio_bomb_docx(path: Path, *, repeat_count: int = 2_000_000) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" '
+                'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Override PartName="/word/document.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.'
+                'wordprocessingml.document.main+xml"/>'
+                "</Types>"
+            ),
+        )
+        archive.writestr(
+            "_rels/.rels",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships '
+                'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+                'officeDocument" Target="word/document.xml"/>'
+                "</Relationships>"
+            ),
+        )
+        archive.writestr(
+            "word/document.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Safe text</w:t></w:r></w:p></w:body>"
+                "</w:document>"
+            ),
+        )
+        archive.writestr("word/bomb.txt", "A" * repeat_count)
+
+
 def test_extract_docx_returns_ready_result_for_simple_document(tmp_path):
     docx_path = tmp_path / "simple.docx"
     document = _write_docx(docx_path, title="Wave Y Spec", author="Codex")
@@ -361,6 +401,21 @@ def test_extract_docx_fails_for_invalid_archives(tmp_path):
     assert result.confidence == 0.0
     assert result.extraction_error is not None
     assert "Invalid DOCX archive" in result.extraction_error
+    assert [warning.code for warning in result.warnings] == ["PARSE_FAILED"]
+
+
+def test_extract_docx_rejects_unsafe_zip_bombs(tmp_path):
+    bomb_path = tmp_path / "bomb.docx"
+    _write_ratio_bomb_docx(bomb_path)
+
+    result = extract_docx(bomb_path)
+
+    assert result.status == "failed"
+    assert result.html == ""
+    assert result.confidence == 0.0
+    assert result.extraction_error is not None
+    assert "Unsafe DOCX archive" in result.extraction_error
+    assert "compression ratio limit" in result.extraction_error
     assert [warning.code for warning in result.warnings] == ["PARSE_FAILED"]
 
 

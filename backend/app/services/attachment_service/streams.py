@@ -7,6 +7,7 @@ import os
 from typing import Iterator, Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import Attachment, AttachmentArtifact, AttachmentConversionJob, User, UserRole
@@ -43,21 +44,40 @@ class AttachmentServiceStreamsMixin(AttachmentServiceCommonMixin):
                 status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can delete attachments"
             )
 
+        shared_storage_refs = []
+        if attachment.storage_key:
+            shared_storage_refs.append(Attachment.storage_key == attachment.storage_key)
+        if attachment.storage_path:
+            shared_storage_refs.append(Attachment.storage_path == attachment.storage_path)
+
+        has_other_references = False
+        if shared_storage_refs:
+            has_other_references = (
+                db.query(Attachment)
+                .filter(
+                    Attachment.id != attachment.id,
+                )
+                .filter(or_(*shared_storage_refs))
+                .first()
+                is not None
+            )
+
         storage_ref = attachment.storage_key or attachment.storage_path
-        try:
-            storage = get_storage_backend()
-            storage.delete(storage_ref)
-            logger.info("Deleted attachment from storage: %s", storage_ref)
-            if attachment.storage_path != storage_ref:
-                storage.delete(attachment.storage_path)
-        except Exception as exc:
-            logger.warning("Failed to delete from storage: %s", exc)
+        if not has_other_references:
             try:
-                local_path = cls._resolve_local_attachment_path(attachment, document_id)
-                if local_path and os.path.exists(local_path):
-                    os.remove(local_path)
-            except OSError:
-                pass
+                storage = get_storage_backend()
+                storage.delete(storage_ref)
+                logger.info("Deleted attachment from storage: %s", storage_ref)
+                if attachment.storage_path != storage_ref:
+                    storage.delete(attachment.storage_path)
+            except Exception as exc:
+                logger.warning("Failed to delete from storage: %s", exc)
+                try:
+                    local_path = cls._resolve_local_attachment_path(attachment, document_id)
+                    if local_path and os.path.exists(local_path):
+                        os.remove(local_path)
+                except OSError:
+                    pass
 
         db.query(AttachmentConversionJob).filter(
             AttachmentConversionJob.attachment_id == attachment.id

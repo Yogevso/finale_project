@@ -21,6 +21,7 @@ from app.errors import ConflictError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     Document,
+    DocumentStatus,
     Notification,
     NotificationType,
     ReviewRequest,
@@ -48,6 +49,32 @@ from app.services.review_sla_service import ReviewSlaService
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 review_policy = ReviewPolicy()
 document_access_policy = DocumentAccessPolicy()
+
+
+def _cancel_stale_pending_reviews(
+    db: Session,
+    document_id: int,
+    *,
+    exclude_review_id: int | None = None,
+) -> int:
+    """Cancel all PENDING reviews for a document (except the one being explicitly handled).
+
+    Returns the number of reviews cancelled.
+    """
+    query = db.query(ReviewRequest).filter(
+        ReviewRequest.document_id == document_id,
+        ReviewRequest.status == ReviewStatus.PENDING,
+    )
+    if exclude_review_id is not None:
+        query = query.filter(ReviewRequest.id != exclude_review_id)
+
+    now = datetime.utcnow()
+    count = 0
+    for stale_review in query.all():
+        stale_review.status = ReviewStatus.CANCELLED
+        stale_review.reviewed_at = now
+        count += 1
+    return count
 
 
 def _ensure_document_tenant_access(document: Document, user: User) -> None:
@@ -118,6 +145,49 @@ def can_approve(user: User, review: ReviewRequest) -> bool:
     )
 
 
+def _resolve_review_version_id(
+    db: Session,
+    *,
+    document_id: int,
+    requested_version_id: int | None,
+) -> int | None:
+    """Resolve which unpublished version should be attached to a review request."""
+    if requested_version_id:
+        version = (
+            db.query(Version)
+            .filter(
+                Version.id == requested_version_id,
+                Version.document_id == document_id,
+            )
+            .first()
+        )
+        if not version:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Version not found for this document",
+            )
+        if version.is_published:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot submit an already published version for review",
+            )
+        return version.id
+
+    latest_unpublished_version = (
+        db.query(Version)
+        .filter(
+            Version.document_id == document_id,
+            Version.is_published.is_(False),
+        )
+        .order_by(Version.version_number.desc())
+        .first()
+    )
+    if latest_unpublished_version:
+        return latest_unpublished_version.id
+
+    return None
+
+
 # ========== Submit for Review ==========
 @router.post("/documents/{document_id}/submit", response_model=ReviewResponse)
 async def submit_for_review(
@@ -145,7 +215,8 @@ async def submit_for_review(
     _ensure_document_tenant_access(document, current_user)
     document_aggregate = DocumentAggregate(document)
 
-    document_aggregate.ensure_submittable_for_review()
+    if document.status != DocumentStatus.ACTIVE:
+        document_aggregate.ensure_submittable_for_review()
     document_aggregate.ensure_audience_ready_for_submit()
 
     # Check for existing pending review
@@ -163,35 +234,15 @@ async def submit_for_review(
         raise ConflictError("This document already has a pending review")
 
     # Validate explicit version or attach latest version automatically
-    version_id = data.version_id
-    if version_id:
-        version = (
-            db.query(Version)
-            .filter(
-                Version.id == version_id,
-                Version.document_id == document_id,
-            )
-            .first()
+    version_id = _resolve_review_version_id(
+        db,
+        document_id=document_id,
+        requested_version_id=data.version_id,
+    )
+    if document.status == DocumentStatus.ACTIVE and version_id is None:
+        raise ConflictError(
+            "Create a new draft version before submitting an active document for review"
         )
-        if not version:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Version not found for this document",
-            )
-        if version.is_published:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot submit an already published version for review",
-            )
-    else:
-        latest_version = (
-            db.query(Version)
-            .filter(Version.document_id == document_id)
-            .order_by(Version.version_number.desc())
-            .first()
-        )
-        if latest_version:
-            version_id = latest_version.id
 
     # Capture audience state snapshot
     company_ids = [c.id for c in (document.assigned_companies or [])]
@@ -213,7 +264,7 @@ async def submit_for_review(
     db.flush()
 
     # Update document status
-    document_aggregate.transition_to_pending_review()
+    document_aggregate.enter_review_submission()
 
     # Audit event
     write_audit_log(
@@ -621,7 +672,10 @@ async def reject_review(
     )
 
     # Return document to draft
-    document_aggregate.transition_to_draft()
+    document_aggregate.revert_review_submission()
+
+    # H-16: cancel any other orphaned PENDING reviews for this document
+    _cancel_stale_pending_reviews(db, review.document_id, exclude_review_id=review.id)
 
     # Notify submitter
     notification = Notification(
@@ -698,7 +752,10 @@ async def cancel_review(
     review_aggregate.cancel(reviewed_at=datetime.utcnow())
 
     # Return document to draft
-    document_aggregate.transition_to_draft()
+    document_aggregate.revert_review_submission()
+
+    # H-16: cancel any other orphaned PENDING reviews for this document
+    _cancel_stale_pending_reviews(db, review.document_id, exclude_review_id=review.id)
 
     # Enhanced audit log with audience reconciliation info
     diff_info = ""

@@ -2,18 +2,40 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
+import re
 from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import AssistantConversation, AssistantMessage
+from app.utils.sanitization import sanitize_html_content
 
 logger = logging.getLogger(__name__)
 
 _TITLE_MAX_LEN = 100
+_SCRIPT_STYLE_BLOCKS = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_HTML_TAGS = re.compile(r"<[^>]+>")
+
+
+def _sanitize_conversation_title(title: str | None, *, fallback: str = "New Chat") -> str:
+    raw_title = title or ""
+    without_script_blocks = _SCRIPT_STYLE_BLOCKS.sub(" ", raw_title)
+    safe_html = sanitize_html_content(without_script_blocks) or ""
+    plain_text = html.unescape(_HTML_TAGS.sub(" ", safe_html))
+    normalized = " ".join(plain_text.split())
+    return normalized or fallback
+
+
+def _truncate_title(title: str, *, with_ellipsis: bool = False) -> str:
+    if len(title) <= _TITLE_MAX_LEN:
+        return title
+    if with_ellipsis and _TITLE_MAX_LEN > 1:
+        return title[: _TITLE_MAX_LEN - 1] + "…"
+    return title[:_TITLE_MAX_LEN]
 
 
 class ConversationManager:
@@ -32,10 +54,11 @@ class ConversationManager:
         tenant_id: int | None,
         title: str = "New Chat",
     ) -> AssistantConversation:
+        safe_title = _truncate_title(_sanitize_conversation_title(title))
         conv = AssistantConversation(
             user_id=user_id,
             tenant_id=tenant_id,
-            title=title[:_TITLE_MAX_LEN],
+            title=safe_title,
         )
         self._db.add(conv)
         self._db.commit()
@@ -79,15 +102,17 @@ class ConversationManager:
         self._db.commit()
         return True
 
-    def update_title(self, conversation_id: int, title: str) -> None:
+    def update_title(self, conversation_id: int, title: str) -> AssistantConversation | None:
         conv = (
             self._db.query(AssistantConversation)
             .filter(AssistantConversation.id == conversation_id)
             .first()
         )
         if conv:
-            conv.title = title[:_TITLE_MAX_LEN]
+            conv.title = _truncate_title(_sanitize_conversation_title(title))
             self._db.commit()
+            self._db.refresh(conv)
+        return conv
 
     # ------------------------------------------------------------------
     # Messages
@@ -210,10 +235,9 @@ class ConversationManager:
     @staticmethod
     def generate_title_from_message(message: str) -> str:
         """Derive a short title from the first user message."""
-        title = message.strip().split("\n")[0]
-        if len(title) > _TITLE_MAX_LEN:
-            title = title[: _TITLE_MAX_LEN - 1] + "…"
-        return title
+        first_line = message.strip().split("\n")[0] if message.strip() else "New Chat"
+        safe_title = _sanitize_conversation_title(first_line)
+        return _truncate_title(safe_title, with_ellipsis=True)
 
     async def auto_summarize_if_needed(
         self,

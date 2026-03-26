@@ -71,6 +71,37 @@ class DocumentAggregate:
             DocumentStatus.ACTIVE,
         )
 
+    def transition_to_archived(self) -> None:
+        self.document.status = self._workflow.transition(
+            self.document.status,
+            DocumentStatus.ARCHIVED,
+        )
+
+    def restore_from_archive(self, *, has_published_version: bool) -> None:
+        target_status = DocumentStatus.ACTIVE if has_published_version else DocumentStatus.DRAFT
+        self.document.status = self._workflow.transition(
+            self.document.status,
+            target_status,
+        )
+
+    def enter_review_submission(self) -> None:
+        """Keep active docs public while a new draft version moves through review."""
+        if self.document.status == DocumentStatus.ACTIVE:
+            return
+        self.transition_to_pending_review()
+
+    def finalize_review_approval(self) -> None:
+        """Active docs stay active until the approved draft version is explicitly published."""
+        if self.document.status == DocumentStatus.ACTIVE:
+            return
+        self.transition_to_approved()
+
+    def revert_review_submission(self) -> None:
+        """Rejecting/cancelling a review should not unpublish an already active document."""
+        if self.document.status == DocumentStatus.ACTIVE:
+            return
+        self.transition_to_draft()
+
     def prepare_for_new_version_candidate(self) -> None:
         """Keep already-active docs public; normalize other states back to draft."""
         self.document.status = self._workflow.normalize_for_new_version_candidate(

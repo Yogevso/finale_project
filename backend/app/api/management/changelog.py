@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies.permissions import require_manager
 from app.models import ChangelogEntry, User
+from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/changelog", tags=["Changelog"])
 
@@ -80,9 +81,10 @@ async def create_changelog(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager),
 ):
+    # M-35: Server-side sanitize changelog content
     entry = ChangelogEntry(
         title=body.title,
-        content=body.content,
+        content=sanitize_html_content(body.content),
         version_tag=body.version_tag,
         category=body.category,
         published=body.published,
@@ -103,7 +105,11 @@ async def update_changelog(
     entry = db.query(ChangelogEntry).filter(ChangelogEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Changelog entry not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    # M-35: Sanitize content on update
+    if "content" in data and data["content"]:
+        data["content"] = sanitize_html_content(data["content"])
+    for field, value in data.items():
         setattr(entry, field, value)
     entry.updated_at = datetime.utcnow()
     db.commit()

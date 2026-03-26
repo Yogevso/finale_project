@@ -1,6 +1,7 @@
 """Authentication API Routes"""
 
 import asyncio
+import json
 from datetime import datetime
 from urllib.parse import quote
 
@@ -15,7 +16,7 @@ from app.dependencies.services import (
     get_auth_service,
     get_collaboration_service,
 )
-from app.models import InvitationStatus, Tenant, User, UserRole
+from app.models import ActionType, InvitationStatus, Tenant, User, UserRole
 from app.repositories import InvitationRepository, UserRepository
 from app.schemas import (
     LoginRequest,
@@ -34,9 +35,13 @@ from app.services.collaboration_service import CollaborationService
 from app.services.email_service import email_service
 from app.services.permissions import get_user_permissions
 from app.services.permissions import ROLE_PERMISSIONS as _STATIC_ROLE_PERMISSIONS
+from app.services.audit_helper import write_audit_log
 from app.utils.request_ip import get_client_ip
 
 router = APIRouter()
+_INVITATION_ACCEPT_CONFLICT_DETAIL = (
+    "Unable to accept invitation with the provided account details"
+)
 
 
 # ========== Invitation Acceptance Schemas ==========
@@ -195,7 +200,7 @@ def login(
     username = (credentials.username or "").strip()
 
     if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
-        allowed, retry_after = AuthRateLimitService.check_login_allowed(client_ip, username)
+        allowed, retry_after = AuthRateLimitService.check_and_record_login(client_ip, username)
         if not allowed:
             return _rate_limited_response(
                 "Too many login attempts. Please try again later.",
@@ -215,7 +220,7 @@ def login(
             and not _is_e2e_bypass_request(request)
             and exc.status_code == status.HTTP_401_UNAUTHORIZED
         ):
-            retry_after = AuthRateLimitService.record_login_failure(client_ip, username)
+            retry_after = AuthRateLimitService.finalize_failed_login_attempt(client_ip, username)
             if retry_after > 0:
                 return _rate_limited_response(
                     "Too many login attempts. Please try again later.",
@@ -247,7 +252,7 @@ def forgot_password(
     identifier = payload.identifier.strip()
 
     if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
-        allowed, retry_after = AuthRateLimitService.check_forgot_password_allowed(
+        allowed, retry_after = AuthRateLimitService.check_and_record_forgot_password(
             client_ip, identifier
         )
         if not allowed:
@@ -255,20 +260,19 @@ def forgot_password(
                 "Too many password reset requests. Please try again later.",
                 retry_after,
             )
-
-        lock_retry_after = AuthRateLimitService.record_forgot_password_request(
+        retry_after = AuthRateLimitService.finalize_forgot_password_attempt(
             client_ip, identifier
         )
-        if lock_retry_after > 0:
+        if retry_after > 0:
             return _rate_limited_response(
                 "Too many password reset requests. Please try again later.",
-                lock_retry_after,
+                retry_after,
             )
 
     reset_payload = auth_service.request_password_reset(identifier)
     if reset_payload is not None:
         recipient_email, reset_token = reset_payload
-        reset_url = f"{settings.BASE_URL}/login?reset_token={quote(reset_token)}"
+        reset_url = f"{settings.BASE_URL}/reset-password?token={quote(reset_token)}"
         background_tasks.add_task(
             _send_password_reset_email_task,
             recipient_email,
@@ -284,10 +288,35 @@ def forgot_password(
 @router.post("/auth/reset-password", response_model=MessageResponse)
 def reset_password(
     payload: ResetPasswordRequest,
+    request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """Complete password reset using a one-time token."""
-    auth_service.reset_password(payload.token, payload.new_password)
+    client_ip = get_client_ip(request)
+
+    if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
+        allowed, retry_after = AuthRateLimitService.check_and_record_reset_password(client_ip)
+        if not allowed:
+            return _rate_limited_response(
+                "Too many password reset attempts. Please try again later.",
+                retry_after,
+            )
+
+    try:
+        auth_service.reset_password(payload.token, payload.new_password)
+    except HTTPException:
+        if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
+            retry_after = AuthRateLimitService.finalize_reset_password_attempt(client_ip)
+            if retry_after > 0:
+                return _rate_limited_response(
+                    "Too many password reset attempts. Please try again later.",
+                    retry_after,
+                )
+        raise
+
+    if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
+        AuthRateLimitService.record_reset_password_success(client_ip)
+
     return MessageResponse(message="Password has been reset successfully")
 
 
@@ -316,13 +345,14 @@ def refresh_token(
 
 @router.post("/auth/logout", response_model=MessageResponse)
 def logout(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """
-    Logout user and invalidate all refresh tokens.
+    Logout the current session and clear the refresh cookie.
     """
-    auth_service.logout(current_user.id)
+    auth_service.logout(current_user.id, session_id=getattr(request.state, "current_session_id", None))
     resp = JSONResponse(content={"message": "Logged out successfully"})
     # AD-004: clear httpOnly refresh cookie
     resp.delete_cookie(key="refresh_token", path="/api/v1/auth/refresh")
@@ -465,7 +495,9 @@ def accept_invitation(
     invitation_repository = InvitationRepository(db)
     user_repository = UserRepository(db)
 
-    invitation = invitation_repository.get_by_token(request.token)
+    # C-09: Lock the invitation row during acceptance so two concurrent
+    # accept requests cannot both consume the same pending invitation.
+    invitation = invitation_repository.get_by_token_for_update(request.token)
 
     if not invitation:
         raise HTTPException(
@@ -506,13 +538,15 @@ def accept_invitation(
     # Check if email is already registered
     if user_repository.get_by_email(invitation.email):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVITATION_ACCEPT_CONFLICT_DETAIL,
         )
 
     # Check if username is taken
     if user_repository.get_by_username(request.username):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="This username is already taken"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_INVITATION_ACCEPT_CONFLICT_DETAIL,
         )
 
     # Create user
@@ -536,6 +570,20 @@ def accept_invitation(
 
     db.commit()
     db.refresh(user)
+    write_audit_log(
+        user_id=user.id,
+        action=ActionType.CREATE,
+        details=json.dumps(
+            {
+                "event": "invitation_accepted",
+                "invitation_id": invitation.id,
+                "email": invitation.email,
+                "role": invitation.role.value,
+                "tenant_id": invitation.tenant_id,
+                "created_user_id": user.id,
+            }
+        ),
+    )
 
     # Generate tokens for immediate login
     # AD-004: use _token_json_response to set httpOnly refresh cookie (FIX-015)
@@ -588,13 +636,6 @@ def get_collab_token(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to access this document",
-        )
-
-    # H-03: Require write permission for collab tokens (editing)
-    if "write" not in permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have edit permission for this document",
         )
 
     # Create the collaboration token

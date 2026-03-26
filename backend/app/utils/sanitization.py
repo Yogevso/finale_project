@@ -30,6 +30,8 @@ ALLOWED_ATTRIBUTES = {
 }
 
 ALLOWED_PROTOCOLS = ["http", "https", "mailto", "tel"]
+_SCRIPT_STYLE_BLOCKS = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_HTML_TAGS = re.compile(r"<[^>]+>")
 
 
 def strip_dangerous_html_patterns(content: str) -> str:
@@ -56,6 +58,18 @@ def sanitize_html_content(content: Optional[str]) -> Optional[str]:
         return None
 
     return strip_dangerous_html_patterns(content)
+
+
+def sanitize_plain_text(content: Optional[str]) -> Optional[str]:
+    """Reduce rich or unsafe HTML input to normalized plain text."""
+    if content is None:
+        return None
+
+    without_script_blocks = _SCRIPT_STYLE_BLOCKS.sub(" ", content)
+    safe_html = sanitize_html_content(without_script_blocks) or ""
+    plain_text = html.unescape(_HTML_TAGS.sub(" ", safe_html))
+    normalized = " ".join(plain_text.split())
+    return normalized or None
 
 
 def escape_html(value: str) -> str:

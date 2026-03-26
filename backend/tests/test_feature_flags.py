@@ -2,9 +2,11 @@
 
 from datetime import date
 
+import pytest
+
 from app.app_factory import create_app
 from app.application.queries.analytics_queries import AnalyticsOverviewQuery, AnalyticsQueryHandler
-from app.config import settings
+from app.config import Settings, settings
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.projections import get_projection_cache
 
@@ -105,3 +107,62 @@ def test_new_audience_rules_rollout_can_be_forced_fully_on(monkeypatch):
         )
         is True
     )
+
+
+def test_production_rejects_implicit_enabled_default_feature_flags():
+    with pytest.raises(RuntimeError, match="Production requires explicit values for feature flags"):
+        Settings(
+            _env_file=None,
+            APP_ENV="production",
+            SECRET_KEY="s" * 32,
+            AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+        )
+
+
+def test_production_accepts_explicit_enabled_default_feature_flags():
+    resolved = Settings(
+        _env_file=None,
+        APP_ENV="production",
+        SECRET_KEY="s" * 32,
+        AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+        REDIS_URL="redis://localhost:6379/0",
+        FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+        FEATURE_FLAG_PROJECTION_CACHE=True,
+        FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+        ASSISTANT_ENABLED=True,
+    )
+
+    assert resolved.FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE is True
+    assert resolved.FEATURE_FLAG_PROJECTION_CACHE is True
+    assert resolved.FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT is True
+    assert resolved.ASSISTANT_ENABLED is True
+
+
+def test_production_rejects_rate_limiting_without_redis():
+    with pytest.raises(RuntimeError, match="Production requires REDIS_URL when RATE_LIMIT_ENABLED is True"):
+        Settings(
+            _env_file=None,
+            APP_ENV="production",
+            SECRET_KEY="s" * 32,
+            AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+            FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+            FEATURE_FLAG_PROJECTION_CACHE=True,
+            FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+            ASSISTANT_ENABLED=True,
+        )
+
+
+def test_production_allows_rate_limiting_with_redis():
+    resolved = Settings(
+        _env_file=None,
+        APP_ENV="production",
+        SECRET_KEY="s" * 32,
+        AUDIENCE_AUDIT_HMAC_KEYS="v1:secure-audit-key-material-1234567890",
+        REDIS_URL="redis://localhost:6379/0",
+        FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE=True,
+        FEATURE_FLAG_PROJECTION_CACHE=True,
+        FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT=True,
+        ASSISTANT_ENABLED=True,
+    )
+
+    assert resolved.REDIS_URL == "redis://localhost:6379/0"

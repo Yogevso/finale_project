@@ -1,5 +1,6 @@
 """Search API with FTS5 and saved searches"""
 
+import hashlib
 import logging
 from dataclasses import asdict
 from datetime import datetime, timedelta
@@ -19,7 +20,7 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.db import get_analytics_db, get_db
-from app.models import SavedSearch, SearchAnalytics, User, UserRole
+from app.models import Document, SavedSearch, SearchAnalytics, User, UserRole
 from app.dependencies.permissions import require_any_role, require_internal_user
 from app.application.policies.access_policies import AnalyticsAccessPolicy
 
@@ -28,6 +29,13 @@ _analytics_policy = AnalyticsAccessPolicy()
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/search", tags=["Search"])
+
+
+def _format_analytics_query_label(raw_query: str, *, current_user: User) -> str:
+    if not _analytics_policy.is_tenant_scoped(current_user):
+        digest = hashlib.sha256(raw_query.encode("utf-8")).hexdigest()[:12]
+        return f"[redacted-query:{digest}]"
+    return raw_query
 
 
 # Schemas
@@ -208,9 +216,24 @@ class SearchClickBody(BaseModel):
 def record_search_click(
     body: SearchClickBody,
     db: Session = Depends(get_analytics_db),
+    core_db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_user),
 ):
     """Record that a user clicked a search result."""
+    # M-39: Verify the document belongs to the caller's tenant to prevent
+    # cross-tenant analytics poisoning via arbitrary document_id.
+    doc = core_db.query(Document.id, Document.tenant_id).filter(
+        Document.id == body.document_id
+    ).first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if (
+        current_user.role != UserRole.SYSTEM_ADMIN
+        and doc.tenant_id is not None
+        and doc.tenant_id != current_user.tenant_id
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
+
     db.add(SearchAnalytics(
         query=body.query[:500],
         user_id=current_user.id,
@@ -291,11 +314,18 @@ def get_search_analytics(
         "total_clicks": total_clicks,
         "click_through_rate": round(ctr, 1),
         "top_queries": [
-            {"query": q, "count": c, "avg_results": round(float(a or 0), 1)}
+            {
+                "query": _format_analytics_query_label(q, current_user=current_user),
+                "count": c,
+                "avg_results": round(float(a or 0), 1),
+            }
             for q, c, a in top_queries
         ],
         "zero_result_queries": [
-            {"query": q, "count": c}
+            {
+                "query": _format_analytics_query_label(q, current_user=current_user),
+                "count": c,
+            }
             for q, c in zero_results
         ],
     }

@@ -110,6 +110,23 @@ class TestAG017CollabUrlSingleSource:
             content = hook_path.read_text()
             assert "VITE_COLLAB_SERVER_URL" in content
 
+    def test_collab_server_uses_backend_secret_key_name(self):
+        """Compose files should wire collab signing through SECRET_KEY, not a separate JWT secret name."""
+        root = Path(__file__).resolve().parent.parent.parent
+        for dc_file in ("docker-compose.yml", "docker-compose.prod.yml"):
+            content = (root / dc_file).read_text()
+            assert "SECRET_KEY=${SECRET_KEY" in content
+            assert "JWT_SECRET=" not in content
+
+
+class TestAG022TechDebtBudget:
+    """Tech-debt tracking should be enforced from source control."""
+
+    def test_architecture_fitness_runs_tech_debt_budget(self):
+        root = Path(__file__).resolve().parent.parent.parent
+        workflow = (root / ".github" / "workflows" / "architecture-fitness.yml").read_text()
+        assert "python backend/scripts/tech_debt_budget.py --budget 200" in workflow
+
 
 # ══════════════════════════════════════════════════════════════════
 # AG-018: Email retry on transient SMTP failure

@@ -7,13 +7,16 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.application.policies.access_policies import DocumentAccessPolicy
+from app.assistant.document_access import (
+    assistant_can_view_document,
+    resolve_assistant_visible_version,
+)
 from app.assistant.rag.chunker import DocumentChunker
 from app.assistant.rag.embeddings import OllamaEmbeddings
 from app.assistant.rag.vector_store import VectorStore
 from app.assistant.tools.base import BaseTool
 from app.config import settings
-from app.models import Document, User, Version
+from app.models import Document, User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,6 @@ logger = logging.getLogger(__name__)
 _embeddings = OllamaEmbeddings()
 _vector_store = VectorStore()
 _chunker = DocumentChunker()
-_access_policy = DocumentAccessPolicy()
 
 
 class SemanticSearchTool(BaseTool):
@@ -70,6 +72,7 @@ class SemanticSearchTool(BaseTool):
             query_embedding=query_embedding,
             n_results=limit,
             tenant_id=tenant_id,
+            is_system_admin=(user.role == UserRole.SYSTEM_ADMIN),
         )
 
         if not results:
@@ -78,7 +81,7 @@ class SemanticSearchTool(BaseTool):
         # Filter by user's accessible documents (tenant + visibility policy)
         results = [
             r for r in results
-            if _user_can_access_document(user, r.document_id, db)
+            if _user_can_access_document(user, r.document_id, db, tenant_id=tenant_id)
         ]
 
         if not results:
@@ -132,15 +135,14 @@ class SummarizeDocumentTool(BaseTool):
             return {"success": False, "error": f"Document {doc_id} not found."}
 
         # Check access via DocumentAccessPolicy (tenant + visibility + role)
-        if not _access_policy.can_view_document(user, doc):
+        if not assistant_can_view_document(user, doc, tenant_id=tenant_id):
             return {"success": False, "error": "You don't have access to this document."}
 
-        # Get latest version content
-        version = (
-            db.query(Version)
-            .filter(Version.document_id == doc_id)
-            .order_by(Version.version_number.desc())
-            .first()
+        version = resolve_assistant_visible_version(
+            db,
+            user=user,
+            document=doc,
+            tenant_id=tenant_id,
         )
         if not version or not version.content:
             return {"success": False, "error": "This document has no content to summarize."}
@@ -233,43 +235,20 @@ class AskAboutDocumentTool(BaseTool):
             return {"success": False, "error": f"Document {doc_id} not found."}
 
         # Check access via DocumentAccessPolicy (tenant + visibility + role)
-        if not _access_policy.can_view_document(user, doc):
+        if not assistant_can_view_document(user, doc, tenant_id=tenant_id):
             return {"success": False, "error": "You don't have access to this document."}
 
         # Try RAG: embed question → retrieve relevant chunks from this doc
-        try:
-            query_embedding = await _embeddings.embed_text(question)
-            results = _vector_store.query(
-                query_embedding=query_embedding,
-                n_results=5,
-                document_id=doc_id,
-                tenant_id=tenant_id,
-            )
-        except Exception:
-            logger.warning("RAG query failed, falling back to direct content")
-            results = []
-
-        # Build context from RAG results or direct content
-        if results:
-            context_parts = []
-            sources = []
-            for r in results:
-                context_parts.append(r.chunk_text)
-                if r.section and r.section not in sources:
-                    sources.append(r.section)
-            context = "\n\n".join(context_parts)
-        else:
-            # Fallback: use raw document content
-            version = (
-                db.query(Version)
-                .filter(Version.document_id == doc_id)
-                .order_by(Version.version_number.desc())
-                .first()
-            )
-            if not version or not version.content:
-                return {"success": False, "error": "This document has no content."}
-            context = _chunker.strip_html(version.content)[:4000]
-            sources = []
+        version = resolve_assistant_visible_version(
+            db,
+            user=user,
+            document=doc,
+            tenant_id=tenant_id,
+        )
+        if not version or not version.content:
+            return {"success": False, "error": "This document has no content."}
+        context = _chunker.strip_html(version.content)[:4000]
+        sources = []
 
         # Ask Ollama with context
         from app.assistant.ollama_client import OllamaClient
@@ -315,10 +294,14 @@ class AskAboutDocumentTool(BaseTool):
 
 
 def _user_can_access_document(
-    user: User, document_id: int, db: Session,
+    user: User,
+    document_id: int,
+    db: Session,
+    *,
+    tenant_id: int | None = None,
 ) -> bool:
     """Check if user can access a specific document via DocumentAccessPolicy."""
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         return False
-    return _access_policy.can_view_document(user, doc)
+    return assistant_can_view_document(user, doc, tenant_id=tenant_id)

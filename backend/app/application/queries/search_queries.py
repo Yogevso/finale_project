@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import text
+from sqlalchemy import and_, or_, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -20,12 +21,39 @@ from app.repositories import DocumentRepository
 
 # Default BM25 weights for FTS5 columns: title, description, category, tags
 DEFAULT_RELEVANCE_WEIGHTS = {"title": 3.0, "description": 1.0, "category": 1.0, "tags": 2.0}
+FTS_RESERVED_OPERATOR_TOKENS = {"AND", "OR", "NOT", "NEAR"}
+FTS_TERM_PATTERN = re.compile(r"[\w]+", re.UNICODE)
 
 logger = logging.getLogger(__name__)
+
 
 def escape_sql_wildcards(value: str) -> str:
     """Escape SQL LIKE wildcards to prevent injection."""
     return value.replace("%", r"\%").replace("_", r"\_")
+
+
+def _extract_search_terms(raw_query: str, *, max_terms: int = 8) -> list[str]:
+    terms: list[str] = []
+    for token in FTS_TERM_PATTERN.findall(raw_query or ""):
+        if token.upper() in FTS_RESERVED_OPERATOR_TOKENS:
+            continue
+        normalized = token.strip()
+        if not normalized:
+            continue
+        terms.append(normalized[:64])
+        if len(terms) >= max_terms:
+            break
+    return terms
+
+
+def build_safe_fts_query(raw_query: str) -> str | None:
+    """Convert free-form user input into a quoted FTS5 AND query."""
+    terms = _extract_search_terms(raw_query)
+    if not terms:
+        return None
+    escaped_terms = ['"' + term.replace('"', '""') + '"' for term in terms]
+    return " AND ".join(escaped_terms)
+
 
 @dataclass(frozen=True, slots=True)
 class SearchDocumentReadModel:
@@ -145,7 +173,11 @@ class SearchQueryHandler:
     def _bm25_expression(self) -> str:
         """Build bm25() call with weighted columns: title, description, category, tags."""
         w = self._get_relevance_weights()
-        return f"bm25(documents_fts, {w['title']}, {w['description']}, {w['category']}, {w['tags']})"
+        return (
+            "bm25(documents_fts, "
+            f"{w['title']}, {w['description']}, {w['category']}, {w['tags']}, "
+            "0.0, 0.0, 0.0)"
+        )
 
     def _execute_cached(
         self,
@@ -212,11 +244,15 @@ class SearchQueryHandler:
             date_range_spec = DateRangeSpec(date_from=query.date_from, date_to=query.date_to)
             visibility_spec = self._visibility_spec_for_user(query.current_user)
             offset = (query.page - 1) * query.page_size
+            safe_search_query = build_safe_fts_query(query.q)
+            search_terms = _extract_search_terms(query.q)
 
             try:
+                if not safe_search_query:
+                    raise ValueError("No searchable FTS terms")
                 filters = ["documents_fts MATCH :search_query"]
                 params: dict[str, object] = {
-                    "search_query": query.q,
+                    "search_query": safe_search_query,
                     "limit": query.page_size,
                     "offset": offset,
                 }
@@ -231,6 +267,9 @@ class SearchQueryHandler:
                 if tenant_clause:
                     filters.append(tenant_clause)
                     params.update(tenant_params)
+                if query.current_user.role != UserRole.SYSTEM_ADMIN and query.current_user.tenant_id is not None:
+                    filters.append("documents_fts.tenant_id = :fts_tenant_id")
+                    params["fts_tenant_id"] = str(query.current_user.tenant_id)
 
                 # Audience / visibility filtering
                 if visibility_spec is not None:
@@ -265,13 +304,30 @@ class SearchQueryHandler:
                 )
                 count_params = {k: v for k, v in params.items() if k not in {"limit", "offset"}}
                 total = self.db.execute(count_query, count_params).scalar() or 0
-            except (OperationalError, ProgrammingError):
+            except (OperationalError, ProgrammingError, ValueError):
                 logger.warning("FTS5 query failed, falling back to LIKE search", exc_info=True)
-                escaped_q = escape_sql_wildcards(query.q)
-                fallback_query = document_repository.query().filter(
-                    (Document.title.ilike(f"%{escaped_q}%", escape="\\"))
-                    | (Document.description.ilike(f"%{escaped_q}%", escape="\\"))
-                )
+                fallback_query = document_repository.query()
+                if search_terms:
+                    per_term_clauses = []
+                    for term in search_terms:
+                        escaped_term = escape_sql_wildcards(term)
+                        per_term_clauses.append(
+                            or_(
+                                Document.title.ilike(f"%{escaped_term}%", escape="\\"),
+                                Document.description.ilike(f"%{escaped_term}%", escape="\\"),
+                                Document.document_number.ilike(f"%{escaped_term}%", escape="\\"),
+                                Document.tags.ilike(f"%{escaped_term}%", escape="\\"),
+                            )
+                        )
+                    fallback_query = fallback_query.filter(and_(*per_term_clauses))
+                else:
+                    escaped_q = escape_sql_wildcards(query.q)
+                    fallback_query = fallback_query.filter(
+                        or_(
+                            Document.title.ilike(f"%{escaped_q}%", escape="\\"),
+                            Document.description.ilike(f"%{escaped_q}%", escape="\\"),
+                        )
+                    )
                 fallback_query = tenant_scope_spec.apply(fallback_query, Document)
                 if visibility_spec is not None:
                     fallback_query = visibility_spec.apply(fallback_query, Document)
@@ -329,9 +385,11 @@ class SearchQueryHandler:
         )
 
     def _load_autocomplete(self, query: SearchAutocompleteQuery) -> list[str]:
+        # M-38: Escape wildcards in autocomplete query
+        escaped_q = escape_sql_wildcards(query.q)
         document_repository = DocumentRepository(self.db)
         title_query = document_repository.query().with_entities(Document.title).filter(
-            Document.title.ilike(f"%{query.q}%")
+            Document.title.ilike(f"%{escaped_q}%", escape="\\")
         )
         title_query = TenantScopeSpec.for_user(query.current_user).apply(title_query, Document)
         visibility_spec = self._visibility_spec_for_user(query.current_user)

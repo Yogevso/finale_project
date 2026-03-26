@@ -1,7 +1,10 @@
 """Unit tests for Analytics API"""
 from datetime import date, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.services.analytics_service import AnalyticsService
 
 
 class TestAnalyticsOverview:
@@ -542,7 +545,38 @@ class TestExportCSV:
             params={"report": "unknown-report"},
         )
         assert response.status_code == 400
-        assert "Unsupported CSV report" in response.json()["detail"]
+        assert response.json()["detail"] == "Unsupported analytics export request"
+
+    def test_export_csv_internal_errors_are_generic(
+        self,
+        client: TestClient,
+        admin_headers,
+        monkeypatch,
+    ):
+        class BrokenExporter:
+            supported_reports = ("overview",)
+
+            def export(self, **_kwargs):
+                raise RuntimeError("database stack trace should not leak")
+
+        monkeypatch.setattr(
+            "app.api.management.analytics._EXPORT_PLUGIN_REGISTRY.resolve",
+            lambda _format_name: BrokenExporter(),
+        )
+
+        response = client.get(
+            "/api/v1/analytics/export/csv",
+            headers=admin_headers,
+            params={"report": "overview"},
+        )
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Analytics export is temporarily unavailable"
+
+
+class TestAnalyticsServiceScope:
+    def test_analytics_service_requires_explicit_scope(self, db):
+        with pytest.raises(ValueError, match="explicit scope"):
+            AnalyticsService(db)
 
 class TestAnalyticsDataIntegrity:
     """Tests for analytics data accuracy"""

@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.models import SecurityEvent, UserSession
+from app.models import Invitation, InvitationStatus, PasswordReset, SecurityEvent, UserRole, UserSession
+from app.ws.auth import authenticate_ws
+from tests.factories.domain import create_user
 
 
 def _login(
@@ -61,6 +63,46 @@ def test_authenticated_request_updates_session_last_active(client, test_user, db
 
     db.refresh(session)
     assert session.last_active_at > previous_last_active
+
+
+def test_inactive_session_is_revoked_on_authenticated_request(client, test_user, db):
+    """Expired sessions should be persisted as revoked on the first rejected request."""
+    access_token, auth_headers = _login(client)
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == test_user.id, UserSession.revoked_at.is_(None))
+        .first()
+    )
+    assert session is not None
+
+    session.last_active_at = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS + 1)
+    db.commit()
+
+    me_response = client.get("/api/v1/auth/me", headers=auth_headers)
+    assert me_response.status_code == 401
+
+    db.refresh(session)
+    assert session.revoked_at is not None
+    _ = access_token
+
+
+def test_websocket_auth_revokes_inactive_session(client, test_user, db):
+    """WebSocket auth should revoke expired sessions in the database too."""
+    access_token, _ = _login(client)
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == test_user.id, UserSession.revoked_at.is_(None))
+        .first()
+    )
+    assert session is not None
+
+    session.last_active_at = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS + 1)
+    db.commit()
+
+    assert authenticate_ws(access_token, db) is None
+
+    db.refresh(session)
+    assert session.revoked_at is not None
 
 
 def test_revoke_single_session(client, test_user, db):
@@ -167,3 +209,149 @@ def test_security_events_endpoint_paginated(client, test_user, db, monkeypatch):
         .count()
         >= 2
     )
+
+
+def test_role_change_revokes_existing_user_sessions_immediately(
+    client,
+    db,
+    admin_headers,
+    default_tenant,
+):
+    """Demoting a user should immediately kill their access and refresh tokens."""
+    target_user = create_user(
+        db,
+        email="demote-me@example.com",
+        username="demote_me",
+        full_name="Demote Me",
+        plain_password="AdminPass1!",
+        role=UserRole.ADMIN,
+        tenant_id=default_tenant.id,
+        is_active=True,
+    )
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": target_user.username, "password": "AdminPass1!"},
+    )
+    assert login_response.status_code == 200
+    payload = login_response.json()
+    access_headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    refresh_token = payload["refresh_token"]
+
+    assert client.get("/api/v1/auth/me", headers=access_headers).status_code == 200
+
+    demote_response = client.put(
+        f"/api/v1/users/{target_user.id}",
+        headers=admin_headers,
+        json={"role": "editor"},
+    )
+    assert demote_response.status_code == 200
+    assert demote_response.json()["role"] == "editor"
+
+    me_after_demote = client.get("/api/v1/auth/me", headers=access_headers)
+    assert me_after_demote.status_code == 401
+
+    refresh_after_demote = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert refresh_after_demote.status_code == 401
+
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == target_user.id)
+        .order_by(UserSession.id.desc())
+        .first()
+    )
+    assert session is not None
+    assert session.revoked_at is not None
+
+    active_refresh_tokens = (
+        db.query(PasswordReset)
+        .filter(
+            PasswordReset.user_id == target_user.id,
+            PasswordReset.used_at.is_(None),
+        )
+        .count()
+    )
+    assert active_refresh_tokens == 0
+
+
+def test_delete_user_revokes_sessions_refresh_tokens_and_pending_invitations(
+    client,
+    db,
+    admin_headers,
+    default_tenant,
+):
+    """DELETE /users/{id} should mirror deactivation cleanup, not just flip is_active."""
+    target_user = create_user(
+        db,
+        email="delete-me@example.com",
+        username="delete_me",
+        full_name="Delete Me",
+        plain_password="DeletePass1!",
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        is_active=True,
+    )
+    invitation = Invitation(
+        email="pending-delete-invite@example.com",
+        token="delete-user-pending-invite-token",
+        role=UserRole.VIEWER,
+        tenant_id=default_tenant.id,
+        invited_by=target_user.id,
+        status=InvitationStatus.PENDING,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(target_user)
+    db.refresh(invitation)
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": target_user.username, "password": "DeletePass1!"},
+    )
+    assert login_response.status_code == 200
+    payload = login_response.json()
+    access_headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    refresh_token = payload["refresh_token"]
+
+    delete_response = client.delete(
+        f"/api/v1/users/{target_user.id}",
+        headers=admin_headers,
+    )
+    assert delete_response.status_code == 204
+
+    me_after_delete = client.get("/api/v1/auth/me", headers=access_headers)
+    assert me_after_delete.status_code == 401
+
+    refresh_after_delete = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh_token},
+    )
+    assert refresh_after_delete.status_code == 401
+
+    db.refresh(target_user)
+    db.refresh(invitation)
+    assert target_user.is_active is False
+    assert invitation.status == InvitationStatus.CANCELLED
+
+    session = (
+        db.query(UserSession)
+        .filter(UserSession.user_id == target_user.id)
+        .order_by(UserSession.id.desc())
+        .first()
+    )
+    assert session is not None
+    assert session.revoked_at is not None
+
+    active_refresh_tokens = (
+        db.query(PasswordReset)
+        .filter(
+            PasswordReset.user_id == target_user.id,
+            PasswordReset.used_at.is_(None),
+        )
+        .count()
+    )
+    assert active_refresh_tokens == 0

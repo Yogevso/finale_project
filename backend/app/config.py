@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: set[str] = {".docx", ".pptx", ".txt"}
     LIBREOFFICE_BIN: Optional[str] = None
+    MALWARE_SCAN_MODE: str = "disabled"  # disabled | log_only | enforce
+    MALWARE_SCAN_COMMAND: Optional[str] = None
+    MALWARE_SCAN_TIMEOUT_SECONDS: int = 30
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -186,6 +189,43 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "Insecure AUDIENCE_AUDIT_HMAC_KEYS rejected in production. "
                 "Set AUDIENCE_AUDIT_HMAC_KEYS to a secure random value."
+            )
+
+        enabled_default_feature_flags = (
+            "FEATURE_FLAG_IDEMPOTENCY_MIDDLEWARE",
+            "FEATURE_FLAG_PROJECTION_CACHE",
+            "FEATURE_FLAG_COMPANY_AUDIENCE_ENFORCEMENT",
+            "ASSISTANT_ENABLED",
+        )
+        if is_production:
+            implicitly_enabled_flags = [
+                flag_name
+                for flag_name in enabled_default_feature_flags
+                if getattr(self, flag_name) is True and flag_name not in self.model_fields_set
+            ]
+            if implicitly_enabled_flags:
+                raise RuntimeError(
+                    "Production requires explicit values for feature flags with enabled defaults: "
+                    + ", ".join(implicitly_enabled_flags)
+                )
+
+        if is_production and self.RATE_LIMIT_ENABLED and not self.REDIS_URL:
+            raise RuntimeError(
+                "Production requires REDIS_URL when RATE_LIMIT_ENABLED is True."
+            )
+
+        # H-11: Warn when email is disabled — password reset and invitations won't work.
+        if not self.EMAIL_ENABLED:
+            logging.warning(
+                "EMAIL_ENABLED is False. Password reset and invitation emails "
+                "will not be sent. Configure SMTP settings and set "
+                "EMAIL_ENABLED=True to enable email delivery."
+            )
+
+        valid_scan_modes = {"disabled", "log_only", "enforce"}
+        if self.MALWARE_SCAN_MODE not in valid_scan_modes:
+            raise RuntimeError(
+                "Invalid MALWARE_SCAN_MODE. Expected one of: disabled, log_only, enforce."
             )
 
         return self

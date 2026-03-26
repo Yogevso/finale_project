@@ -4,12 +4,17 @@ These tests use the FastAPI test client and mock the Ollama LLM backend
 so they can run without a real Ollama service.
 """
 
+import io
 import json
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.api.management.assistant import _stream_assistant_events
 from app.assistant.ollama_client import OllamaClient
+from app.config import settings
 from app.models import UserRole
+from app.services.distributed_rate_limit_service import DistributedRateLimitService
 from tests.factories import create_user
 
 
@@ -142,6 +147,16 @@ class TestConversationsCRUD:
         assert data["message_count"] == 0
         assert "id" in data
 
+    def test_create_conversation_sanitizes_title(self, client, sysadmin_headers):
+        resp = client.post(
+            "/api/v1/assistant/conversations",
+            headers=sysadmin_headers,
+            params={"title": '<img src=x onerror="alert(1)"> <b>Safe</b>'},
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["title"] == "Safe"
+
     def test_list_conversations(self, client, sysadmin_headers):
         # Create a couple
         client.post("/api/v1/assistant/conversations?title=Chat1", headers=sysadmin_headers)
@@ -182,6 +197,22 @@ class TestConversationsCRUD:
         )
         assert resp.status_code == 200
         assert resp.json()["title"] == "New Title"
+
+    def test_rename_conversation_returns_sanitized_title(self, client, sysadmin_headers):
+        create_resp = client.post(
+            "/api/v1/assistant/conversations?title=Old",
+            headers=sysadmin_headers,
+        )
+        conv_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/assistant/conversations/{conv_id}",
+            headers=sysadmin_headers,
+            params={"title": '<script>alert(1)</script><b>Renamed</b> Chat'},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Renamed Chat"
 
     def test_delete_conversation(self, client, sysadmin_headers):
         create_resp = client.post(
@@ -233,6 +264,20 @@ class TestAssistantChat:
         )
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize("field_name", ["file_ids", "document_ids"])
+    def test_chat_rejects_more_than_three_context_ids(
+        self, client, sysadmin_headers, field_name
+    ):
+        payload = {"message": "Hello", field_name: [1, 2, 3, 4]}
+
+        resp = client.post(
+            "/api/v1/assistant/chat",
+            json=payload,
+            headers=sysadmin_headers,
+        )
+
+        assert resp.status_code == 422
+
     def test_chat_returns_sse_stream(self, client, sysadmin_headers):
         """Chat endpoint should return SSE content type."""
         async def mock_chat_stream(**kwargs):
@@ -248,3 +293,76 @@ class TestAssistantChat:
 
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
+
+    def test_chat_rate_limit_uses_shared_service(self, client, sysadmin_headers, monkeypatch):
+        class StubEngine:
+            async def chat(self, **kwargs):
+                yield {"event": "message", "data": {"content": "ok"}}
+
+        DistributedRateLimitService.reset()
+        monkeypatch.setattr(settings, "ASSISTANT_RATE_LIMIT_PER_MINUTE", 1)
+        monkeypatch.setattr("app.api.management.assistant._build_engine", lambda *_args: StubEngine())
+
+        first = client.post(
+            "/api/v1/assistant/chat",
+            json={"message": "first"},
+            headers=sysadmin_headers,
+        )
+        second = client.post(
+            "/api/v1/assistant/chat",
+            json={"message": "second"},
+            headers=sysadmin_headers,
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+        assert second.headers["Retry-After"] == "60"
+
+    def test_stream_helper_cancels_producer_when_client_disconnects(self):
+        class DisconnectingRequest:
+            async def is_disconnected(self):
+                return True
+
+        async def run_case():
+            queue: asyncio.Queue[dict | None] = asyncio.Queue()
+            done = asyncio.Event()
+            prod_task = asyncio.create_task(asyncio.sleep(60))
+            hb_task = asyncio.create_task(asyncio.sleep(60))
+
+            chunks = [
+                chunk
+                async for chunk in _stream_assistant_events(
+                    request=DisconnectingRequest(),
+                    queue=queue,
+                    done=done,
+                    prod_task=prod_task,
+                    hb_task=hb_task,
+                )
+            ]
+
+            assert chunks == []
+            assert done.is_set() is True
+            assert prod_task.cancelled() is True
+            assert hb_task.cancelled() is True
+
+        asyncio.run(run_case())
+
+
+class TestAssistantUploads:
+    def test_upload_rejects_malware(self, client, sysadmin_headers, monkeypatch):
+        def block_upload(*_args, **_kwargs):
+            raise ValueError("Upload blocked: malware detected in 'dangerous.txt'.")
+
+        monkeypatch.setattr(
+            "app.assistant.file_handler.scan_upload_bytes",
+            block_upload,
+        )
+
+        response = client.post(
+            "/api/v1/assistant/upload",
+            headers=sysadmin_headers,
+            files={"file": ("dangerous.txt", io.BytesIO(b"not-clean"), "text/plain")},
+        )
+
+        assert response.status_code == 400
+        assert "malware detected" in response.json()["detail"].lower()

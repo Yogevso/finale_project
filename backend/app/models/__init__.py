@@ -1099,6 +1099,10 @@ class SupportTicketMessage(Base):
     sender_type = Column(String(20), nullable=False)  # "customer" or "agent"
     content = Column(Text, nullable=False)
     is_internal_note = Column(Boolean, default=False, nullable=False)  # Only visible to agents
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    file_mime_type = Column(String(100), nullable=True)
+    file_storage_key = Column(String(500), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     # Composite index for efficient message ordering

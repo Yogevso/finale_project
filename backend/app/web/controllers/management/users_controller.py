@@ -2,17 +2,31 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import logging
 from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth_context.refresh_token_service import RefreshTokenService
 from app.dependencies.tenant import TenantContext
-from app.models import Invitation, InvitationStatus, SecurityEvent, Tenant, User, UserRole, UserSession
+from app.models import (
+    Invitation,
+    InvitationStatus,
+    Notification,
+    NotificationType,
+    ReviewRequest,
+    ReviewStatus,
+    SecurityEvent,
+    Tenant,
+    User,
+    UserRole,
+)
 from app.schemas import UserCreate, UserUpdate
 from app.security import get_password_hash
+from app.services.auth_service import AuthService
+
+logger = logging.getLogger(__name__)
+_USER_CREATE_CONFLICT_DETAIL = "A user with that email or username already exists"
 
 
 class UsersController:
@@ -26,6 +40,82 @@ class UsersController:
         UserRole.VIEWER: 2,
         UserRole.CUSTOMER: 1,
     }
+
+    def _ensure_user_can_be_deactivated(self, *, user: User, db: Session) -> None:
+        if user.role == UserRole.SYSTEM_ADMIN:
+            system_admin_count = db.query(User).filter(
+                User.role == UserRole.SYSTEM_ADMIN,
+                User.is_active.is_(True),
+                User.id != user.id,
+            ).count()
+            if system_admin_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot deactivate the last active system admin",
+                    headers={"X-Error-Code": "last_system_admin"},
+                )
+        elif user.role == UserRole.ADMIN and user.tenant_id:
+            admin_count = db.query(User).filter(
+                User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
+                User.tenant_id == user.tenant_id,
+                User.is_active.is_(True),
+                User.id != user.id,
+            ).count()
+            if admin_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot deactivate the last admin for this company",
+                    headers={"X-Error-Code": "last_company_admin"},
+                )
+
+    def _cascade_user_deactivation(self, *, user: User, db: Session) -> None:
+        db.query(Invitation).filter(
+            Invitation.invited_by == user.id,
+            Invitation.status == InvitationStatus.PENDING,
+        ).update({"status": InvitationStatus.CANCELLED})
+        # H-31: Cancel pending reviews assigned to this user
+        self._cancel_pending_reviews_for_user(user=user, db=db)
+        AuthService(db).revoke_all_user_sessions(user.id, commit=False)
+
+    def _cancel_pending_reviews_for_user(self, *, user: User, db: Session) -> None:
+        """Cancel all PENDING reviews where this user is the reviewer."""
+        db.query(ReviewRequest).filter(
+            ReviewRequest.reviewed_by == user.id,
+            ReviewRequest.status == ReviewStatus.PENDING,
+        ).update({"status": ReviewStatus.CANCELLED})
+
+    @staticmethod
+    def _role_label(role: UserRole) -> str:
+        return role.value.replace("_", " ")
+
+    def _notify_role_change(
+        self,
+        *,
+        user: User,
+        old_role: UserRole,
+        chat_db: Session | None,
+    ) -> None:
+        if chat_db is None:
+            return
+
+        chat_db.add(
+            Notification(
+                user_id=user.id,
+                type=NotificationType.SYSTEM,
+                title="Your access role changed",
+                message=(
+                    f"Your role changed from {self._role_label(old_role)} "
+                    f"to {self._role_label(user.role)}. Reload or sign in again "
+                    "to apply the updated permissions."
+                ),
+                link="/profile",
+            )
+        )
+        try:
+            chat_db.commit()
+        except Exception:
+            chat_db.rollback()
+            logger.exception("Failed to persist role-change notification for user_id=%s", user.id)
 
     def list_users(
         self,
@@ -99,11 +189,13 @@ class UsersController:
 
         if db.query(User).filter(User.email == user_data.email).first():
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_USER_CREATE_CONFLICT_DETAIL,
             )
         if db.query(User).filter(User.username == user_data.username).first():
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_USER_CREATE_CONFLICT_DETAIL,
             )
 
         user = User(
@@ -114,7 +206,7 @@ class UsersController:
             role=user_data.role,
             tenant_id=target_tenant_id,
             is_active=True,
-            is_email_verified=True,
+            is_email_verified=False,
         )
         db.add(user)
         db.flush()  # Get user ID before creating security event
@@ -159,6 +251,7 @@ class UsersController:
         current_user: User,
         tenant_ctx: TenantContext,
         db: Session,
+        chat_db: Session | None = None,
     ) -> dict[str, object]:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -176,6 +269,8 @@ class UsersController:
         # Track changes for security event logging
         old_role = user.role
         old_is_active = user.is_active
+        should_revoke_sessions = False
+        deactivation_cascade_applied = False
 
         if not is_self and not is_admin:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
@@ -262,48 +357,10 @@ class UsersController:
             is_deactivating = not user_data.is_active and was_active
 
             if is_deactivating:
-                # Prevent deactivating the last system_admin
-                if user.role == UserRole.SYSTEM_ADMIN:
-                    system_admin_count = db.query(User).filter(
-                        User.role == UserRole.SYSTEM_ADMIN,
-                        User.is_active.is_(True),
-                        User.id != user.id,
-                    ).count()
-                    if system_admin_count == 0:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Cannot deactivate the last active system admin",
-                            headers={"X-Error-Code": "last_system_admin"},
-                        )
-                # Prevent deactivating the last admin in a tenant
-                elif user.role == UserRole.ADMIN and user.tenant_id:
-                    admin_count = db.query(User).filter(
-                        User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
-                        User.tenant_id == user.tenant_id,
-                        User.is_active.is_(True),
-                        User.id != user.id,
-                    ).count()
-                    if admin_count == 0:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Cannot deactivate the last admin for this company",
-                            headers={"X-Error-Code": "last_company_admin"},
-                        )
-
-                # Cascade: cancel pending invitations created by this user
-                db.query(Invitation).filter(
-                    Invitation.invited_by == user.id,
-                    Invitation.status == InvitationStatus.PENDING,
-                ).update({"status": InvitationStatus.CANCELLED})
-
-                # Cascade: revoke all active sessions for this user
-                db.query(UserSession).filter(
-                    UserSession.user_id == user.id,
-                    UserSession.revoked_at.is_(None),
-                ).update({"revoked_at": datetime.utcnow()})
-
-                # Cascade: invalidate all refresh tokens for this user
-                RefreshTokenService(db).invalidate_user_tokens(user.id)
+                self._ensure_user_can_be_deactivated(user=user, db=db)
+                self._cascade_user_deactivation(user=user, db=db)
+                should_revoke_sessions = True
+                deactivation_cascade_applied = True
 
             # User reactivation checks
             is_reactivating = user_data.is_active and not was_active
@@ -380,6 +437,16 @@ class UsersController:
                     headers={"X-Error-Code": "role_change_company_inactive"},
                 )
 
+        if user.role != old_role:
+            should_revoke_sessions = True
+            # H-31: If role was demoted, cancel pending reviews assigned to this user
+            is_demotion = self.ROLE_HIERARCHY.get(user.role, 0) < self.ROLE_HIERARCHY.get(old_role, 0)
+            if is_demotion:
+                self._cancel_pending_reviews_for_user(user=user, db=db)
+
+        if should_revoke_sessions and not deactivation_cascade_applied:
+            AuthService(db).revoke_all_user_sessions(user.id, commit=False)
+
         # Log security events for sensitive changes
         if user.role != old_role:
             db.add(SecurityEvent(
@@ -395,6 +462,8 @@ class UsersController:
 
         db.commit()
         db.refresh(user)
+        if user.role != old_role:
+            self._notify_role_change(user=user, old_role=old_role, chat_db=chat_db)
         return self._serialize_user(user, db)
 
     def delete_user(
@@ -425,6 +494,10 @@ class UsersController:
                 status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete users with higher roles"
             )
 
+        if user.is_active:
+            self._ensure_user_can_be_deactivated(user=user, db=db)
+
+        self._cascade_user_deactivation(user=user, db=db)
         user.is_active = False
         
         # Log user deletion security event

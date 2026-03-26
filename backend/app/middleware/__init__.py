@@ -9,6 +9,7 @@ from app.middleware.tenant_context import (
     TenantContextMiddleware,
     get_current_tenant_id,
     inject_tenant_context,
+    is_system_admin_context,
     require_tenant_match,
 )
 
@@ -22,5 +23,6 @@ __all__ = [
     "TenantContextMiddleware",
     "get_current_tenant_id",
     "inject_tenant_context",
+    "is_system_admin_context",
     "require_tenant_match",
 ]

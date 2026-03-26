@@ -38,16 +38,13 @@ class ChatService:
         if user_a.id == user_b_id:
             raise HTTPException(status_code=400, detail="Cannot create chat with yourself")
 
-        user_b = self.core_db.query(User).filter(User.id == user_b_id).first()
+        user_b = (
+            self.core_db.query(User)
+            .filter(User.id == user_b_id, User.tenant_id == user_a.tenant_id)
+            .first()
+        )
         if not user_b:
             raise HTTPException(status_code=404, detail="User not found")
-
-        # Tenant isolation — reject all cross-tenant chats unless SYSTEM_ADMIN
-        if user_a.tenant_id != user_b.tenant_id:
-            a_is_sysadmin = user_a.role == UserRole.SYSTEM_ADMIN or user_a.role == 'system_admin'
-            b_is_sysadmin = user_b.role == UserRole.SYSTEM_ADMIN or user_b.role == 'system_admin'
-            if not a_is_sysadmin and not b_is_sysadmin:
-                raise HTTPException(status_code=403, detail="Cannot chat with users in another organization")
 
         # Deduplication — check if direct chat already exists between these two
         dedup_query = (
@@ -55,9 +52,7 @@ class ChatService:
             .join(ChatParticipant, Chat.id == ChatParticipant.chat_id)
             .filter(Chat.type == ChatType.DIRECT)
         )
-        # Only filter by tenant when same-tenant (cross-tenant chats may be on either tenant)
-        if user_a.tenant_id == user_b.tenant_id:
-            dedup_query = dedup_query.filter(Chat.tenant_id == user_a.tenant_id)
+        dedup_query = dedup_query.filter(Chat.tenant_id == user_a.tenant_id)
         existing = (
             dedup_query
             .group_by(Chat.id)
@@ -419,6 +414,13 @@ class ChatService:
     def delete_chat(self, chat_id: int, current_user: User) -> None:
         """Delete a chat (X1-018)."""
         chat = self._get_chat_with_permission(chat_id, current_user)
+
+        # M-21: Defence-in-depth tenant re-check before destructive operation
+        if (
+            current_user.role != UserRole.SYSTEM_ADMIN
+            and chat.tenant_id != current_user.tenant_id
+        ):
+            raise HTTPException(status_code=404, detail="Chat not found")
 
         if chat.type == ChatType.GROUP:
             # Only owner can delete group chats

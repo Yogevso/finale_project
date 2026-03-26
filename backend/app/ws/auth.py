@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.auth_context.session_tokens import hash_session_identifier
-from app.config import settings
+from app.auth_context.session_tokens import hash_session_identifier, revoke_session_if_inactive
 from app.models import Tenant, User, UserRole, UserSession
 from app.security import verify_token
 
@@ -33,6 +32,7 @@ def authenticate_ws(token: str, db: Session) -> User | None:
     # --- Session revocation / inactivity (AD-003) ---
     session_identifier = payload.get("sid")
     if isinstance(session_identifier, str) and session_identifier.strip():
+        now = datetime.utcnow()
         session_hash = hash_session_identifier(session_identifier)
         user_session = (
             db.query(UserSession)
@@ -44,8 +44,8 @@ def authenticate_ws(token: str, db: Session) -> User | None:
         )
         if user_session is None or user_session.revoked_at is not None:
             return None
-        inactivity_cutoff = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS)
-        if user_session.last_active_at < inactivity_cutoff:
+        if revoke_session_if_inactive(user_session, now=now):
+            db.commit()
             return None
 
     # --- Tenant enforcement (FIX-014) ---

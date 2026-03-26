@@ -27,6 +27,7 @@ from app.models import (
     ActionType,
     AudienceEventType,
     AuditLog,
+    CollaborationSession,
     Document,
     DocumentNumberSequence,
     DocumentStatus,
@@ -78,6 +79,10 @@ _company_cache: dict[tuple[int | None, int], _CompanyLookupCacheEntry] = {}
 
 
 def _cache_get(company_id: int, tenant_id: int | None = None) -> CompanyLookupSnapshot | None:
+    if tenant_id is None:
+        # M-04/M-09: Never serve cached entries for unscoped (system-admin)
+        # queries — they would pollute or be polluted by tenant-scoped data.
+        return None
     key = (tenant_id, company_id)
     now = monotonic()
     with _company_cache_lock:
@@ -91,6 +96,9 @@ def _cache_get(company_id: int, tenant_id: int | None = None) -> CompanyLookupSn
 
 
 def _cache_set(snapshot: CompanyLookupSnapshot, tenant_id: int | None = None) -> None:
+    if tenant_id is None:
+        # M-04/M-09: Never store entries under a None tenant key.
+        return
     key = (tenant_id, snapshot.id)
     now = monotonic()
     with _company_cache_lock:
@@ -121,11 +129,30 @@ class DocumentService(TenantAwareService[Document]):
     ):
         super().__init__(db, tenant_ctx)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+        self._chat_db = chat_db
         self.notification_service = NotificationService(db, chat_db=chat_db)
 
     def _base_query(self):
         """Base query with tenant filtering applied"""
-        return super()._base_query(Document)
+        query = super()._base_query(Document)
+        if (
+            self.tenant_ctx
+            and not self.tenant_ctx.is_system_admin
+            and self.tenant_ctx.user_role == UserRole.VIEWER
+        ):
+            query = query.filter(Document.status == DocumentStatus.ACTIVE)
+        return query
+
+    def _deactivate_collab_sessions(self, document_id: int) -> None:
+        """Deactivate any active collaboration sessions for a document (M-07)."""
+        if self._chat_db is None:
+            return
+        now = datetime.utcnow()
+        self._chat_db.query(CollaborationSession).filter(
+            CollaborationSession.document_id == document_id,
+            CollaborationSession.is_active.is_(True),
+        ).update({"is_active": False, "ended_at": now})
+        self._chat_db.commit()
 
     def _verify_access(self, document: Document) -> None:
         """Verify current user can access this document"""
@@ -872,13 +899,6 @@ class DocumentService(TenantAwareService[Document]):
             if document_data.version_label is not None:
                 document.version_label = document_data.version_label
 
-            if document_data.status is not None:
-                if document.status != document_data.status:
-                    changes.append(
-                        f"Status changed from '{document.status.value}' to '{document_data.status.value}'"
-                    )
-                document.status = document_data.status
-
             if document_data.visibility is not None:
                 if document.visibility != document_data.visibility:
                     if not (document_data.reason and document_data.reason.strip()):
@@ -1076,10 +1096,19 @@ class DocumentService(TenantAwareService[Document]):
 
         return document
 
-    def delete_document(self, document_id: int, user: User) -> None:
+    def delete_document(self, document_id: int, user: User, *, if_match: str | None = None) -> None:
         """Delete document with tenant verification"""
         document = self.get_document(document_id)
         self._verify_delete_access(document, user)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
+
+        # Deactivate collaboration sessions before deleting (M-07)
+        self._deactivate_collab_sessions(document_id)
 
         with UnitOfWork(self.db):
             # Keep audit + delete in one transaction to avoid partial writes.
@@ -1188,7 +1217,7 @@ class DocumentService(TenantAwareService[Document]):
 
         return len(requested_ids)
 
-    def archive_document(self, document_id: int, user: User) -> dict:
+    def archive_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
         """
         Soft-delete a document by setting status to ARCHIVED.
 
@@ -1197,6 +1226,12 @@ class DocumentService(TenantAwareService[Document]):
         """
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
 
         if document.status == DocumentStatus.ARCHIVED:
             raise InvalidStateError("Document is already archived")
@@ -1209,9 +1244,10 @@ class DocumentService(TenantAwareService[Document]):
         visibility_snapshot = document.visibility.value if document.visibility else None
         company_ids_snapshot = company_ids.copy()
         previous_status = document.status.value
+        document_aggregate = DocumentAggregate(document)
 
         with UnitOfWork(self.db):
-            document.status = DocumentStatus.ARCHIVED
+            document_aggregate.transition_to_archived()
             document.updated_at = datetime.utcnow()
 
             write_audit_log(
@@ -1225,6 +1261,9 @@ class DocumentService(TenantAwareService[Document]):
                     f"Audience preserved: visibility={visibility_snapshot}, companies={company_ids_snapshot}"
                 ),
             )
+
+        # Deactivate collaboration sessions after archiving (M-07)
+        self._deactivate_collab_sessions(document_id)
 
         logger.info(
             "Document %d archived by user %d. Audience preserved: visibility=%s companies=%s",
@@ -1250,7 +1289,7 @@ class DocumentService(TenantAwareService[Document]):
             },
         }
 
-    def restore_document(self, document_id: int, user: User) -> dict:
+    def restore_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
         """
         Restore a soft-deleted (archived) document.
 
@@ -1263,6 +1302,12 @@ class DocumentService(TenantAwareService[Document]):
         """
         document = self.get_document(document_id)
         self._verify_access(document)
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
 
         if document.status != DocumentStatus.ARCHIVED:
             raise InvalidStateError("Only archived documents can be restored")
@@ -1294,6 +1339,7 @@ class DocumentService(TenantAwareService[Document]):
         # If document was published before, restore to ACTIVE. Otherwise DRAFT.
         has_published_version = any(v.is_published for v in document.versions)
         restore_status = DocumentStatus.ACTIVE if has_published_version else DocumentStatus.DRAFT
+        document_aggregate = DocumentAggregate(document)
 
         # Handle audience changes
         audience_changes = {
@@ -1315,7 +1361,7 @@ class DocumentService(TenantAwareService[Document]):
             new_visibility = document.visibility
 
         with UnitOfWork(self.db):
-            document.status = restore_status
+            document_aggregate.restore_from_archive(has_published_version=has_published_version)
             document.visibility = new_visibility
             document.assigned_companies = active_companies
             document.updated_at = datetime.utcnow()

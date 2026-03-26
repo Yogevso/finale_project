@@ -93,6 +93,7 @@ class DeleteDocumentCommand:
 
     document_id: int
     current_user: User
+    if_match: str | None = None
 
 
 class AssignCompanySetCommandHandler:
@@ -337,7 +338,7 @@ class DeleteDocumentCommandHandler:
 
     def _execute_use_case(self, context: CommandContext[DeleteDocumentCommand]) -> None:
         command = context.command
-        self.service.delete_document(command.document_id, command.current_user)
+        self.service.delete_document(command.document_id, command.current_user, if_match=command.if_match)
 
     def _publish(self, context: CommandContext[DeleteDocumentCommand], result: None) -> None:
         _ = (context, result)

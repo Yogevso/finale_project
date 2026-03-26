@@ -18,7 +18,7 @@ def _ensure_fts_table(db):
     db.execute(
         text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5("
-            "title, description, category, tags)"
+            "title, description, category, tags, tenant_id UNINDEXED, visibility UNINDEXED, status UNINDEXED)"
         )
     )
     db.commit()
@@ -89,6 +89,37 @@ class TestSearchIndexSyncService:
 
         assert table_exists == 1
         assert indexed_row == doc.id
+
+    def test_sync_document_stores_tenant_partition_columns(self, db, test_user):
+        from app.models import Document, DocumentStatus, DocumentVisibility
+        from app.services.search_index_service import SearchIndexSyncService
+
+        doc = Document(
+            title="FTS tenant scope document",
+            document_number=f"DOC-FTS-PART-{uuid.uuid4().hex[:6].upper()}",
+            description="Search index partition data",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.INTERNAL,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        SearchIndexSyncService(db).sync_document(doc.id)
+
+        row = db.execute(
+            text(
+                "SELECT tenant_id, visibility, status FROM documents_fts WHERE rowid = :doc_id"
+            ),
+            {"doc_id": doc.id},
+        ).fetchone()
+
+        assert row is not None
+        assert str(row[0]) == str(test_user.tenant_id)
+        assert str(row[1]).lower() == "internal"
+        assert str(row[2]).lower() == "active"
 
     def test_sync_document_executes_delete_and_insert(self, db):
         """sync_document should run two SQL statements without error."""

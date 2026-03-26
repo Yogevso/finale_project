@@ -1,5 +1,7 @@
 """Tests for document-service company lookup caching."""
 
+from app.dependencies.tenant import TenantContext
+from app.models import UserRole
 from app.services.document_service import DocumentService, _company_cache
 from tests.factories import create_tenant
 
@@ -22,7 +24,15 @@ def test_company_lookup_cache_hits_and_ttl_expiry(db, monkeypatch):
     # Clear module-level cache to isolate this test
     _company_cache.clear()
 
-    service = DocumentService(db)
+    service = DocumentService(
+        db,
+        TenantContext(
+            tenant_id=tenant.id,
+            user_id=1,
+            user_role=UserRole.ADMIN,
+            is_system_admin=False,
+        ),
+    )
 
     query_calls = {"count": 0}
     original_query = db.query

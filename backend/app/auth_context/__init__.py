@@ -15,6 +15,10 @@ from app.auth_context.refresh_token_service import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     RefreshTokenService,
 )
+from app.auth_context.invitation_tokens import (
+    hash_invitation_token,
+    looks_like_invitation_token_hash,
+)
 from app.auth_context.token_service import TokenService
 
 __all__ = [
@@ -26,6 +30,8 @@ __all__ = [
     "CollaborationTokenContract",
     "CollaborationAuthService",
     "RefreshTokenService",
+    "hash_invitation_token",
+    "looks_like_invitation_token_hash",
     "TokenService",
     "get_password_hash",
     "verify_password",

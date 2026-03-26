@@ -135,7 +135,14 @@ class DocumentUploadProcessManager:
             failed_step = step_order[-1] if step_order else "initialize"
             for created_document_id in reversed(created_document_ids):
                 try:
-                    self.document_service.delete_document(created_document_id, current_user)
+                    created_document = self.document_service.get_document(created_document_id)
+                    if created_document is None:
+                        continue
+                    self.document_service.delete_document(
+                        created_document_id,
+                        current_user,
+                        if_match=created_document.etag,
+                    )
                     compensation_order.append(f"delete_document:{created_document_id}")
                 except Exception as cleanup_error:  # pragma: no cover - defensive logging path
                     self.db.rollback()

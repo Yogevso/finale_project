@@ -58,6 +58,14 @@ def foreign_customer(db, tenant_b):
 
 
 @pytest.fixture
+def foreign_system_admin(db, tenant_b):
+    return create_user(
+        db, username="foreign_sysadmin", full_name="Foreign System Admin",
+        role=UserRole.SYSTEM_ADMIN, tenant_id=tenant_b.id,
+    )
+
+
+@pytest.fixture
 def svc(db):
     return ChatService(db)
 
@@ -163,10 +171,17 @@ class TestChatTenantIsolation:
         assert exc.value.status_code == 404
 
     def test_internal_staff_cannot_chat_cross_tenant(self, svc, editor_a, foreign_customer):
-        """Cross-tenant direct chats are rejected even for internal staff (FIX-002)."""
+        """Cross-tenant direct chats are hidden by tenant-scoped user lookup."""
         with pytest.raises(HTTPException) as exc:
             svc.create_direct_chat(editor_a, foreign_customer.id)
-        assert exc.value.status_code == 403
+        assert exc.value.status_code == 404
+
+    def test_system_admin_cannot_bypass_cross_tenant_direct_chat(
+        self, svc, editor_a, foreign_system_admin
+    ):
+        with pytest.raises(HTTPException) as exc:
+            svc.create_direct_chat(editor_a, foreign_system_admin.id)
+        assert exc.value.status_code == 404
 
 
 # =====================================================================

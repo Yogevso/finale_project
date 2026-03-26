@@ -451,7 +451,7 @@ class AttachmentServiceCommonMixin:
         content = await file.read()
 
         # AD-017: validate uploaded file magic bytes match the declared type
-        cls._validate_magic_bytes(content, file_ext, original_filename)
+        cls._validate_magic_bytes(content, original_filename, content_type)
 
         attachment = cls.create_attachment_from_bytes(
             db=db,

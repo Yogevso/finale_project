@@ -90,9 +90,11 @@ def list_published_documents(
 
     # Search by title or description
     if search:
-        search_term = f"%{search}%"
+        # M-36: Escape SQL wildcards to prevent injection
+        _escaped = search.replace("%", r"\%").replace("_", r"\_")
+        search_term = f"%{_escaped}%"
         query = query.filter(
-            (Document.title.ilike(search_term)) | (Document.description.ilike(search_term))
+            (Document.title.ilike(search_term, escape="\\")) | (Document.description.ilike(search_term, escape="\\"))
         )
 
     # Filter by category
@@ -277,6 +279,9 @@ def _stream_public_attachment(
         headers["Content-Length"] = str(size_bytes)
     if attachment.sha256:
         headers["X-Checksum-SHA256"] = attachment.sha256
+
+    # M-28: Prevent browser content-sniffing on download responses
+    headers["X-Content-Type-Options"] = "nosniff"
 
     return StreamingResponse(
         content=content_stream,

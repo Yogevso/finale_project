@@ -476,6 +476,7 @@ def update_document(
 @router.delete("/documents/{document_id}", response_model=MessageResponse)
 def delete_document(
     document_id: int,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_manager),
     delete_document_command_handler: DeleteDocumentCommandHandler = Depends(
         get_delete_document_command_handler
@@ -489,7 +490,7 @@ def delete_document(
     Cascade deletes all versions, attachments, and comments.
     """
     result = delete_document_command_handler.execute(
-        DeleteDocumentCommand(document_id=document_id, current_user=current_user)
+        DeleteDocumentCommand(document_id=document_id, current_user=current_user, if_match=if_match)
     )
     if result.is_err:
         if result.error.code == DocumentCommandErrorCode.NOT_FOUND:
@@ -795,6 +796,7 @@ def remove_company_assignment(
 @router.post("/documents/{document_id}/archive", response_model=dict)
 def archive_document(
     document_id: int,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_manager),
     document_service: DocumentService = Depends(get_document_service),
 ):
@@ -804,7 +806,7 @@ def archive_document(
     Manager+ access required.
     """
     try:
-        result = document_service.archive_document(document_id, current_user)
+        result = document_service.archive_document(document_id, current_user, if_match=if_match)
         return result
     except NotFoundError:
         raise
@@ -817,6 +819,7 @@ def archive_document(
 @router.post("/documents/{document_id}/restore", response_model=dict)
 def restore_document(
     document_id: int,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
     current_user: User = Depends(require_manager),
     document_service: DocumentService = Depends(get_document_service),
 ):
@@ -826,7 +829,7 @@ def restore_document(
     Manager+ access required.
     """
     try:
-        result = document_service.restore_document(document_id, current_user)
+        result = document_service.restore_document(document_id, current_user, if_match=if_match)
         return result
     except NotFoundError:
         raise

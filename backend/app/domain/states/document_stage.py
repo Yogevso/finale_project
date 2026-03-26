@@ -31,7 +31,7 @@ class DocumentStage:
 
 class DraftDocumentStage(DocumentStage):
     status = DocumentStatus.DRAFT
-    allowed_targets = frozenset({DocumentStatus.PENDING_REVIEW})
+    allowed_targets = frozenset({DocumentStatus.PENDING_REVIEW, DocumentStatus.ARCHIVED})
 
     def normalize_for_new_version_candidate(self) -> DocumentStatus:
         return DocumentStatus.DRAFT
@@ -39,16 +39,19 @@ class DraftDocumentStage(DocumentStage):
 
 class PendingReviewDocumentStage(DocumentStage):
     status = DocumentStatus.PENDING_REVIEW
-    allowed_targets = frozenset({DocumentStatus.APPROVED, DocumentStatus.DRAFT})
+    allowed_targets = frozenset(
+        {DocumentStatus.APPROVED, DocumentStatus.DRAFT, DocumentStatus.ARCHIVED}
+    )
 
 
 class ApprovedDocumentStage(DocumentStage):
     status = DocumentStatus.APPROVED
-    allowed_targets = frozenset({DocumentStatus.ACTIVE})
+    allowed_targets = frozenset({DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED})
 
 
 class ActiveDocumentStage(DocumentStage):
     status = DocumentStatus.ACTIVE
+    allowed_targets = frozenset({DocumentStatus.DRAFT, DocumentStatus.ARCHIVED})
 
     def normalize_for_new_version_candidate(self) -> DocumentStatus:
         return DocumentStatus.ACTIVE
@@ -56,6 +59,7 @@ class ActiveDocumentStage(DocumentStage):
 
 class ArchivedDocumentStage(DocumentStage):
     status = DocumentStatus.ARCHIVED
+    allowed_targets = frozenset({DocumentStatus.DRAFT, DocumentStatus.ACTIVE})
 
 
 _DOCUMENT_STAGES_BY_STATUS: dict[DocumentStatus, DocumentStage] = {

@@ -21,6 +21,19 @@ def test_token_service_creates_access_token_contract(test_user):
     assert payload["tenant_id"] == test_user.tenant_id
 
 
+def test_token_service_rejects_collaboration_token(test_user):
+    access_service = TokenService()
+    collab_service = CollaborationAuthService()
+
+    token = collab_service.create_collab_token(
+        user=test_user,
+        document_id=88,
+        permissions=["read", "write"],
+    )
+
+    assert access_service.verify_token(token) is None
+
+
 def test_refresh_token_service_issues_and_finds_record(db, test_user):
     service = RefreshTokenService(db)
 
@@ -60,5 +73,15 @@ def test_collaboration_auth_service_creates_token_contract(test_user):
     assert payload["sub"] == str(test_user.id)
     assert payload["username"] == test_user.username
     assert payload["email"] == test_user.email
+    assert payload["tenant_id"] == test_user.tenant_id
     assert payload["document_id"] == "88"
     assert payload["permissions"] == ["read", "write"]
+
+
+def test_collaboration_auth_service_rejects_access_token(test_user):
+    access_service = TokenService()
+    collab_service = CollaborationAuthService()
+
+    token = access_service.create_access_token_for_user(test_user)
+
+    assert collab_service.verify_collab_token(token) is None

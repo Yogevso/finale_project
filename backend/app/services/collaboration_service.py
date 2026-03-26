@@ -10,7 +10,7 @@ from app.application.policies import DocumentAccessPolicy
 from app.auth_context import CollaborationAuthService
 from app.domain.ports import CollaborationStatePort
 from app.infrastructure.composition import get_collaboration_state_port
-from app.models import Document, User
+from app.models import Document, DocumentStatus, User
 from app.services.permissions import Permission, has_permission
 
 
@@ -83,6 +83,10 @@ class CollaborationService:
 
     def can_edit_document_access(self, user: User, document: Document) -> bool:
         if not user or not user.is_active:
+            return False
+
+        # H-30: Only DRAFT documents may be collaboratively edited
+        if document.status != DocumentStatus.DRAFT:
             return False
 
         if not self._document_policy.can_edit_document(

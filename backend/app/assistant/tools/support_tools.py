@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import SupportTicket, SupportTicketMessage, User
+from app.utils.sanitization import sanitize_html_content
 
 
 class CreateSupportTicketTool(BaseTool):
@@ -31,8 +32,12 @@ class CreateSupportTicketTool(BaseTool):
         if tenant_id is None:
             return {"success": False, "result": "", "error": "Support tickets require a tenant context. Please switch to a tenant-scoped account."}
 
+        # M-49: Sanitize AI-generated content before storage
+        safe_subject = sanitize_html_content(params["subject"]) or params["subject"]
+        safe_description = sanitize_html_content(params["description"]) or params["description"]
+
         ticket = SupportTicket(
-            subject=params["subject"],
+            subject=safe_subject,
             status="open",
             priority=params.get("priority", "normal"),
             customer_id=user.id,
@@ -46,7 +51,7 @@ class CreateSupportTicketTool(BaseTool):
             ticket_id=ticket.id,
             sender_id=user.id,
             sender_type="customer",
-            content=params["description"],
+            content=safe_description,
             is_internal_note=False,
         )
         db.add(msg)

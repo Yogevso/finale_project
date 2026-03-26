@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 
 from app.auth_context import RefreshTokenService, TokenService
-from app.auth_context.session_tokens import hash_session_identifier
+from app.auth_context.session_tokens import hash_session_identifier, revoke_session_if_inactive
 from app.config import settings
 from app.models import PasswordReset, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
@@ -15,6 +15,8 @@ from app.schemas import PublicRegistrationRequest, TokenResponse, UserCreate
 from app.security import get_password_hash, verify_password
 from app.services.audit_helper import write_security_event
 from app.services.base_service import SessionService
+
+_REGISTRATION_CONFLICT_DETAIL = "A user with that email or username already exists"
 
 
 class AuthService(SessionService):
@@ -50,7 +52,6 @@ class AuthService(SessionService):
         if user.failed_login_attempts != 0 or user.locked_until is not None:
             user.failed_login_attempts = 0
             user.locked_until = None
-            self.db.commit()
 
     def _clear_expired_lock(self, user: User, now: datetime) -> None:
         if user.locked_until and user.locked_until <= now:
@@ -60,7 +61,21 @@ class AuthService(SessionService):
         user.failed_login_attempts = int(user.failed_login_attempts or 0) + 1
         if user.failed_login_attempts >= settings.ACCOUNT_LOCKOUT_MAX_ATTEMPTS:
             user.locked_until = now + timedelta(minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES)
-        self.db.commit()
+
+    def _lock_user_row(self, user_id: int) -> User | None:
+        """Re-fetch User with a row-level write-lock where supported.
+
+        PostgreSQL uses SELECT … FOR UPDATE to serialise concurrent access.
+        SQLite serialises writes at the database level, so a plain SELECT suffices.
+        """
+        q = self.db.query(User).filter(User.id == user_id)
+        try:
+            dialect = self.db.get_bind().dialect.name
+        except Exception:
+            dialect = "sqlite"
+        if dialect != "sqlite":
+            q = q.with_for_update()
+        return q.first()
 
     def issue_email_verification_token(self, user: User) -> str:
         """Create and persist a one-time email verification token."""
@@ -131,19 +146,38 @@ class AuthService(SessionService):
             get_password_hash(f"dummy_{secrets.token_urlsafe(16)}")
             return None
 
+        token = self._create_password_reset_token(user)
+        self.db.commit()
+
+        return user.email, token
+
+    def _create_password_reset_token(self, user: User) -> str:
+        """Persist a one-time password reset token for the provided user."""
         token = f"pr_{secrets.token_urlsafe(32)}"
         expires_at = datetime.utcnow() + timedelta(
             minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
         )
-        reset_record = PasswordReset(
-            user_id=user.id,
-            token_hash=get_password_hash(token),
-            expires_at=expires_at,
+        self.db.add(
+            PasswordReset(
+                user_id=user.id,
+                token_hash=get_password_hash(token),
+                token_prefix=token[:8],
+                expires_at=expires_at,
+            )
         )
-        self.db.add(reset_record)
-        self.db.commit()
+        return token
 
-        return user.email, token
+    def issue_password_reset_for_user(self, user: User) -> str:
+        """Create a password-reset token for a known target user."""
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot reset password for an inactive user",
+            )
+
+        token = self._create_password_reset_token(user)
+        self.db.commit()
+        return token
 
     def reset_password(self, token: str, new_password: str) -> None:
         """Apply password reset by one-time reset token."""
@@ -154,9 +188,14 @@ class AuthService(SessionService):
             )
 
         now = datetime.utcnow()
+        prefix = token[:8]
         reset_records = (
             self.db.query(PasswordReset)
-            .filter(PasswordReset.expires_at > now, PasswordReset.used_at.is_(None))
+            .filter(
+                PasswordReset.expires_at > now,
+                PasswordReset.used_at.is_(None),
+                PasswordReset.token_prefix == prefix,
+            )
             .all()
         )
 
@@ -188,6 +227,13 @@ class AuthService(SessionService):
             PasswordReset.user_id == user.id,
             PasswordReset.used_at.is_(None),
         ).update({"used_at": now})
+
+        # H-09: Revoke all active sessions — a reset usually means compromise.
+        self.db.query(UserSession).filter(
+            UserSession.user_id == user.id,
+            UserSession.revoked_at.is_(None),
+        ).update({"revoked_at": now})
+
         write_security_event(user_id=user.id, event_type="password_reset")
         self.db.commit()
 
@@ -268,6 +314,17 @@ class AuthService(SessionService):
         """Login user and return JWT token with refresh token"""
         user = self.user_repository.get_by_username(username)
         if user is None:
+            # H-13: Perform dummy bcrypt work to prevent timing-based user enumeration
+            verify_password(password, get_password_hash("dummy"))
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # H-32: acquire row-level lock to serialise concurrent login attempts.
+        user = self._lock_user_row(user.id)
+        if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -286,6 +343,7 @@ class AuthService(SessionService):
 
         if not verify_password(password, user.hashed_password):
             self._record_failed_login_attempt(user, now)
+            self.db.commit()
             if self._is_locked(user, datetime.utcnow()):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -383,6 +441,7 @@ class AuthService(SessionService):
         # Check if the session associated with this refresh token has been revoked
         session_identifier = self.refresh_token_service.parse_session_identifier(refresh_token)
         if session_identifier:
+            now = datetime.utcnow()
             session_hash = hash_session_identifier(session_identifier)
             user_session = (
                 self.db.query(UserSession)
@@ -398,6 +457,13 @@ class AuthService(SessionService):
                     detail="Session has been revoked",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+            if revoke_session_if_inactive(user_session, now=now):
+                self.db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session has expired due to inactivity",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -407,30 +473,45 @@ class AuthService(SessionService):
             session_identifier=session_identifier,
         )
 
-        # M-10: Rotate refresh token — invalidate old, issue new
+        # M-10 / M-03: Rotate refresh token atomically — invalidate old and
+        # issue new in a single commit so a crash between the two steps cannot
+        # leave the user without a valid token.
         valid_record.used_at = datetime.utcnow()
         new_refresh_token, _ = self.refresh_token_service.issue_refresh_token(
             user.id,
             session_identifier=session_identifier,
+            commit=False,
         )
+        self.db.commit()
 
         return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
 
-    def logout(self, user_id: int) -> None:
-        """Invalidate all refresh tokens and revoke all active sessions for user."""
-        self.refresh_token_service.invalidate_user_tokens(user_id)
-        # AD-020: also revoke all UserSession records so JWTs are rejected
+    def revoke_all_user_sessions(self, user_id: int, *, commit: bool = True) -> None:
+        """Invalidate refresh tokens and revoke all active sessions for a user."""
         now = datetime.utcnow()
-        active_sessions = (
-            self.db.query(UserSession)
-            .filter(
-                UserSession.user_id == user_id,
-                UserSession.revoked_at.is_(None),
-            )
-            .all()
-        )
-        for session in active_sessions:
-            session.revoked_at = now
+        self.db.query(PasswordReset).filter(
+            PasswordReset.user_id == user_id,
+            PasswordReset.used_at.is_(None),
+        ).update({"used_at": now})
+        self.db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.revoked_at.is_(None),
+        ).update({"revoked_at": now})
+        if commit:
+            self.db.commit()
+
+    def logout(self, user_id: int, *, session_id: int | None = None) -> None:
+        """Revoke the current session when available, otherwise fall back to all sessions."""
+        if session_id is None:
+            self.revoke_all_user_sessions(user_id)
+            return
+
+        now = datetime.utcnow()
+        self.db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.id == session_id,
+            UserSession.revoked_at.is_(None),
+        ).update({"revoked_at": now}, synchronize_session=False)
         self.db.commit()
 
     def register(self, user_data: UserCreate | PublicRegistrationRequest) -> User:
@@ -445,14 +526,16 @@ class AuthService(SessionService):
         existing_user = self.user_repository.get_by_username(user_data.username)
         if existing_user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_REGISTRATION_CONFLICT_DETAIL,
             )
 
         # Check if email already exists
         existing_email = self.user_repository.get_by_email(user_data.email)
         if existing_email:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=_REGISTRATION_CONFLICT_DETAIL,
             )
 
         # AD-001: Force customer role — ignore caller-supplied role/tenant_id

@@ -167,7 +167,9 @@ def company_cache_isolation():
 def auth_rate_limit_isolation():
     """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
     from app.services.auth_rate_limit_service import AuthRateLimitService
+    from app.services.distributed_rate_limit_service import DistributedRateLimitService
     AuthRateLimitService.reset()
+    DistributedRateLimitService.reset()
     # Also clear the general middleware's per-IP buckets so auth-path limits
     # don't carry over between tests that enable RATE_LIMIT_ENABLED.
     from app.middleware.rate_limit import RateLimitMiddleware
@@ -180,6 +182,7 @@ def auth_rate_limit_isolation():
         _app = getattr(_app, "app", None)
     yield
     AuthRateLimitService.reset()
+    DistributedRateLimitService.reset()
 
 
 @pytest.fixture(scope="function")

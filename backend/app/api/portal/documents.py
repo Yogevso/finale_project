@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.application.queries.dependencies import get_portal_documents_query_handler
@@ -28,6 +30,26 @@ from app.web.controllers.portal import PortalDocumentsController
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
 logger = logging.getLogger(__name__)
 portal_documents_controller = PortalDocumentsController()
+
+
+class PortalReadingProgressUpdate(BaseModel):
+    progress_percent: int
+
+
+class PortalReadingProgressResponse(BaseModel):
+    id: int
+    document_id: int
+    document_title: str
+    progress_percent: int
+    last_read_at: datetime
+    completed_at: datetime | None
+
+
+class PortalDocumentProgressResponse(BaseModel):
+    has_progress: bool
+    progress_percent: int
+    is_completed: bool
+    last_read_at: datetime | None = None
 
 
 def _customer_can_still_access(
@@ -54,6 +76,33 @@ def _customer_can_still_access(
         # Full access checks are done when the user actually opens the document.
         return user.tenant_id is not None and doc_tenant_id is not None and user.tenant_id == doc_tenant_id
     return False
+
+
+def _get_customer_progress_document_or_404(
+    db: Session,
+    *,
+    document_id: int,
+    current_user: User,
+) -> Document:
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.status != DocumentStatus.PUBLISHED:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.visibility == DocumentVisibility.PUBLIC:
+        return document
+
+    if document.visibility == DocumentVisibility.INTERNAL:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.visibility == DocumentVisibility.COMPANY:
+        assigned_ids = {company.id for company in (document.assigned_companies or [])}
+        if current_user.tenant_id in assigned_ids:
+            return document
+
+    raise HTTPException(status_code=404, detail="Document not found")
 
 
 def require_customer(current_user: User = Depends(get_current_active_user)) -> User:
@@ -204,6 +253,9 @@ async def download_customer_attachment(
     size_bytes = attachment.size_bytes or attachment.file_size
     if size_bytes is not None:
         headers["Content-Length"] = str(size_bytes)
+    # M-28: Prevent browser content-sniffing on download responses
+    headers["X-Content-Type-Options"] = "nosniff"
+
     return StreamingResponse(
         content=content_stream,
         media_type=attachment.mime_type or "application/octet-stream",
@@ -269,6 +321,44 @@ async def search_customer_documents(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
+
+
+@router.get("/reading-progress", response_model=list[PortalReadingProgressResponse])
+async def list_reading_progress(
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return the current customer's reading progress list."""
+    rows = (
+        db.query(
+            ReadingProgress,
+            Document.title,
+            Document.status,
+            Document.visibility,
+            Document.tenant_id,
+        )
+        .join(Document, ReadingProgress.document_id == Document.id)
+        .filter(ReadingProgress.user_id == current_user.id)
+        .order_by(ReadingProgress.last_read_at.desc())
+        .all()
+    )
+
+    results: list[PortalReadingProgressResponse] = []
+    for progress, title, doc_status, doc_visibility, doc_tenant_id in rows:
+        if not _customer_can_still_access(doc_status, doc_visibility, doc_tenant_id, current_user):
+            continue
+        results.append(
+            PortalReadingProgressResponse(
+                id=progress.id,
+                document_id=progress.document_id,
+                document_title=title,
+                progress_percent=progress.progress_percent,
+                last_read_at=progress.last_read_at,
+                completed_at=progress.completed_at,
+            )
+        )
+
+    return results
 
 
 @router.get("/reading-progress/recent")
@@ -337,3 +427,97 @@ async def get_continue_reading(
             "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
         })
     return results
+
+
+@router.put("/reading-progress/{document_id}", response_model=PortalReadingProgressResponse)
+async def update_reading_progress(
+    document_id: int,
+    data: PortalReadingProgressUpdate,
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Update reading progress for a portal-accessible document."""
+    if data.progress_percent < 0 or data.progress_percent > 100:
+        raise HTTPException(status_code=400, detail="Progress must be 0-100")
+
+    document = _get_customer_progress_document_or_404(
+        db,
+        document_id=document_id,
+        current_user=current_user,
+    )
+
+    progress = (
+        db.query(ReadingProgress)
+        .filter(
+            ReadingProgress.user_id == current_user.id,
+            ReadingProgress.document_id == document_id,
+        )
+        .first()
+    )
+
+    now = datetime.utcnow()
+    if progress:
+        if data.progress_percent < progress.progress_percent:
+            raise HTTPException(status_code=400, detail="Progress cannot decrease")
+        progress.progress_percent = data.progress_percent
+        progress.last_read_at = now
+        if data.progress_percent >= 100 and not progress.completed_at:
+            progress.completed_at = now
+    else:
+        progress = ReadingProgress(
+            user_id=current_user.id,
+            document_id=document_id,
+            progress_percent=data.progress_percent,
+            last_read_at=now,
+            completed_at=now if data.progress_percent >= 100 else None,
+        )
+        db.add(progress)
+
+    db.commit()
+    db.refresh(progress)
+
+    return PortalReadingProgressResponse(
+        id=progress.id,
+        document_id=progress.document_id,
+        document_title=document.title,
+        progress_percent=progress.progress_percent,
+        last_read_at=progress.last_read_at,
+        completed_at=progress.completed_at,
+    )
+
+
+@router.get("/reading-progress/{document_id}", response_model=PortalDocumentProgressResponse)
+async def get_document_progress(
+    document_id: int,
+    current_user: User = Depends(require_customer),
+    db: Session = Depends(get_db),
+):
+    """Return reading progress for a single portal-accessible document."""
+    _get_customer_progress_document_or_404(
+        db,
+        document_id=document_id,
+        current_user=current_user,
+    )
+
+    progress = (
+        db.query(ReadingProgress)
+        .filter(
+            ReadingProgress.user_id == current_user.id,
+            ReadingProgress.document_id == document_id,
+        )
+        .first()
+    )
+
+    if not progress:
+        return PortalDocumentProgressResponse(
+            has_progress=False,
+            progress_percent=0,
+            is_completed=False,
+        )
+
+    return PortalDocumentProgressResponse(
+        has_progress=True,
+        progress_percent=progress.progress_percent,
+        is_completed=progress.completed_at is not None,
+        last_read_at=progress.last_read_at,
+    )

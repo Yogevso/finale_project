@@ -23,6 +23,7 @@ from app.schemas.portal import (
     FeedbackResponse,
 )
 from app.security import get_current_active_user
+from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/portal", tags=["Customer Feedback"])
 
@@ -71,11 +72,12 @@ async def submit_feedback(
             raise HTTPException(status_code=403, detail="You don't have access to this document")
 
     # Create feedback
+    # M-31: Sanitize feedback content to prevent stored XSS
     feedback = Feedback(
         document_id=feedback_data.document_id,
         user_id=current_user.id,
         feedback_type=feedback_data.feedback_type,
-        content=feedback_data.content,
+        content=sanitize_html_content(feedback_data.content),
         status=FeedbackStatus.PENDING,
     )
 

@@ -6,6 +6,8 @@ import hashlib
 import io
 from pathlib import Path
 
+import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from app.models import (
@@ -19,6 +21,8 @@ from app.models import (
     UserRole,
 )
 from app.security import get_password_hash
+from app.services.attachment_service import AttachmentService
+from app.services.malware_scan_service import MalwareDetectedError
 
 DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "documents"
@@ -60,6 +64,26 @@ class TestAttachments:
         assert "id" in data
         assert "sha256" in data
 
+    def test_upload_attachment_rejects_malware(
+        self, client: TestClient, auth_headers: dict, test_document, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.attachment_service.upload.scan_upload_bytes",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                MalwareDetectedError(
+                    "Upload blocked: malware detected in 'test-file.docx'."
+                )
+            ),
+        )
+
+        response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("test-file.docx", io.BytesIO(_fixture_bytes()), DOCX_MIME_TYPE)},
+        )
+        assert response.status_code == 400
+        assert "malware detected" in response.json()["detail"].lower()
+
     def test_accepts_pdf_upload(self, client: TestClient, auth_headers: dict, test_document):
         response = client.post(
             f"/api/v1/documents/{test_document.id}/attachments",
@@ -67,6 +91,53 @@ class TestAttachments:
             files={"file": ("legacy.pdf", io.BytesIO(b"%PDF-1.4\n%EOF"), "application/pdf")},
         )
         assert response.status_code == 201
+
+    @pytest.mark.anyio
+    async def test_upload_attachment_passes_filename_and_content_type_to_magic_byte_validation(
+        self,
+        db,
+        test_document,
+        test_user,
+        monkeypatch,
+    ):
+        captured: dict[str, str] = {}
+
+        def _capture_validate(cls, content: bytes, original_filename: str, content_type: str) -> None:
+            captured["filename"] = original_filename
+            captured["content_type"] = content_type
+            assert content.startswith(b"%PDF")
+
+        def _fake_create(cls, **kwargs):
+            return None
+
+        monkeypatch.setattr(
+            AttachmentService,
+            "_validate_magic_bytes",
+            classmethod(_capture_validate),
+        )
+        monkeypatch.setattr(
+            AttachmentService,
+            "create_attachment_from_bytes",
+            classmethod(_fake_create),
+        )
+
+        upload = UploadFile(
+            filename="manual.pdf",
+            file=io.BytesIO(b"%PDF-1.4\n%EOF"),
+            headers={"content-type": "application/pdf"},
+        )
+
+        await AttachmentService.upload_attachment(
+            db=db,
+            document_id=test_document.id,
+            file=upload,
+            current_user=test_user,
+        )
+
+        assert captured == {
+            "filename": "manual.pdf",
+            "content_type": "application/pdf",
+        }
 
     def test_original_download_preserves_bytes_and_sha256(
         self, client: TestClient, auth_headers: dict, test_document
@@ -111,6 +182,34 @@ class TestAttachments:
         )
         assert legacy_download_response.status_code == 200
         assert hashlib.sha256(legacy_download_response.content).hexdigest() == expected_sha
+
+    def test_signed_download_ticket_allows_authenticated_url_download(
+        self, client: TestClient, auth_headers: dict, test_document
+    ):
+        uploaded_bytes = _fixture_bytes("wave_y_rich.docx")
+
+        upload_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("ticketed.docx", io.BytesIO(uploaded_bytes), DOCX_MIME_TYPE)},
+        )
+        assert upload_response.status_code == 201
+        attachment_id = upload_response.json()["id"]
+
+        ticket_response = client.post(
+            "/api/v1/attachments/download-ticket",
+            headers=auth_headers,
+            json={"document_id": test_document.id, "attachment_id": attachment_id},
+        )
+        assert ticket_response.status_code == 200
+        ticket = ticket_response.json()["ticket"]
+
+        download_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{attachment_id}/download",
+            params={"token": ticket},
+        )
+        assert download_response.status_code == 200
+        assert hashlib.sha256(download_response.content).hexdigest() == hashlib.sha256(uploaded_bytes).hexdigest()
 
     def test_download_with_non_latin_filename_returns_200(
         self, client: TestClient, auth_headers: dict, test_document
@@ -179,6 +278,82 @@ class TestAttachments:
         attachments = response.json()
         assert len(attachments) >= 1
         assert any(a["original_filename"] == "uploaded.docx" for a in attachments)
+
+    def test_upload_reuses_existing_blob_for_duplicate_content(
+        self,
+        client: TestClient,
+        auth_headers: dict,
+        admin_headers: dict,
+        test_document,
+        db,
+        monkeypatch,
+    ):
+        class _FakeStorageBackend:
+            def __init__(self) -> None:
+                self.files: dict[str, bytes] = {}
+                self.upload_calls = 0
+                self.delete_calls = 0
+
+            def upload(self, file_data, filename: str, content_type: str) -> str:
+                self.upload_calls += 1
+                key = f"blob-{self.upload_calls}-{filename}"
+                self.files[key] = file_data.read()
+                return key
+
+            def download(self, storage_key: str) -> bytes:
+                return self.files[storage_key]
+
+            def delete(self, storage_key: str) -> bool:
+                self.delete_calls += 1
+                self.files.pop(storage_key, None)
+                return True
+
+        fake_storage = _FakeStorageBackend()
+        monkeypatch.setattr("app.services.attachment_service.upload.get_storage_backend", lambda: fake_storage)
+        monkeypatch.setattr("app.services.attachment_service.streams.get_storage_backend", lambda: fake_storage)
+
+        first_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("duplicate.docx", io.BytesIO(_fixture_bytes()), DOCX_MIME_TYPE)},
+        )
+        assert first_response.status_code == 201
+
+        second_response = client.post(
+            f"/api/v1/documents/{test_document.id}/attachments",
+            headers=auth_headers,
+            files={"file": ("duplicate-copy.docx", io.BytesIO(_fixture_bytes()), DOCX_MIME_TYPE)},
+        )
+        assert second_response.status_code == 201
+        assert fake_storage.upload_calls == 1
+
+        attachments = (
+            db.query(Attachment)
+            .filter(Attachment.document_id == test_document.id)
+            .order_by(Attachment.id.asc())
+            .all()
+        )
+        duplicate_attachments = [
+            attachment
+            for attachment in attachments
+            if attachment.original_filename in {"duplicate.docx", "duplicate-copy.docx"}
+        ]
+        assert len(duplicate_attachments) == 2
+        assert duplicate_attachments[-1].id != duplicate_attachments[-2].id
+        assert duplicate_attachments[-1].storage_key == duplicate_attachments[-2].storage_key
+
+        delete_response = client.delete(
+            f"/api/v1/documents/{test_document.id}/attachments/{duplicate_attachments[-2].id}",
+            headers=admin_headers,
+        )
+        assert delete_response.status_code in [200, 204]
+
+        download_response = client.get(
+            f"/api/v1/documents/{test_document.id}/attachments/{duplicate_attachments[-1].id}/download",
+            headers=auth_headers,
+        )
+        assert download_response.status_code == 200
+        assert fake_storage.delete_calls == 0
 
     def test_list_attachments_hydrates_reader_artifact_fields_from_bulk_lookup(
         self, client: TestClient, auth_headers: dict, db, test_document, test_user
@@ -342,7 +517,7 @@ class TestAttachments:
         )
         assert response.status_code == 403
 
-    def test_cross_tenant_token_download_is_denied(self, client: TestClient, db, tmp_path):
+    def test_cross_tenant_download_ticket_issuance_is_denied(self, client: TestClient, db, tmp_path):
         tenant_a = Tenant(name="Tenant Download A", slug="tenant-download-a")
         tenant_b = Tenant(name="Tenant Download B", slug="tenant-download-b")
         db.add_all([tenant_a, tenant_b])
@@ -406,7 +581,43 @@ class TestAttachments:
         db.refresh(attachment)
 
         outsider_token = _login(client, "outsider_download", "outsider123")
-        response = client.get(
-            f"/api/v1/documents/{document.id}/attachments/{attachment.id}/download?token={outsider_token}"
+        response = client.post(
+            "/api/v1/attachments/download-ticket",
+            headers={"Authorization": f"Bearer {outsider_token}"},
+            json={"document_id": document.id, "attachment_id": attachment.id},
         )
         assert response.status_code == 403
+
+    def test_customer_cannot_access_management_attachment_routes(
+        self,
+        client: TestClient,
+        admin_headers: dict,
+        customer_headers: dict,
+        public_document,
+    ):
+        upload_response = client.post(
+            f"/api/v1/documents/{public_document.id}/attachments",
+            headers=admin_headers,
+            files={"file": ("public.docx", io.BytesIO(_fixture_bytes()), DOCX_MIME_TYPE)},
+        )
+        assert upload_response.status_code == 201
+        attachment_id = upload_response.json()["id"]
+
+        list_response = client.get(
+            f"/api/v1/documents/{public_document.id}/attachments",
+            headers=customer_headers,
+        )
+        assert list_response.status_code == 403
+
+        ticket_response = client.post(
+            "/api/v1/attachments/download-ticket",
+            headers=customer_headers,
+            json={"document_id": public_document.id, "attachment_id": attachment_id},
+        )
+        assert ticket_response.status_code == 403
+
+        download_response = client.get(
+            f"/api/v1/documents/{public_document.id}/attachments/{attachment_id}/download",
+            headers=customer_headers,
+        )
+        assert download_response.status_code == 403

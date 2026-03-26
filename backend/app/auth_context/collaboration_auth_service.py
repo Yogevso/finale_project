@@ -64,6 +64,8 @@ class CollaborationAuthService:
     def verify_collab_token(self, token: str) -> dict[str, Any] | None:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            if payload.get("type") != COLLABORATION_TOKEN_TYPE:
+                return None
             return payload
         except PyJWTError:
             return None

@@ -72,3 +72,36 @@ def test_invitation_policy_resolve_tenant_for_non_system_user():
     assert policy.resolve_invitation_tenant_id(7, tenant_ctx) == 7
     assert policy.resolve_invitation_tenant_id(8, tenant_ctx) is None
 
+
+def test_document_policy_requires_editor_ownership_for_edits():
+    policy = DocumentAccessPolicy()
+    owner = _build_user(1, UserRole.EDITOR, tenant_id=7)
+    other_editor = _build_user(2, UserRole.EDITOR, tenant_id=7)
+    document = Document(
+        id=11,
+        title="Owned draft",
+        document_number="DOC-OWN-001",
+        status=DocumentStatus.DRAFT,
+        tenant_id=7,
+        created_by=owner.id,
+    )
+
+    assert policy.can_edit_document(owner, document, has_edit_permission=True) is True
+    assert policy.can_edit_document(other_editor, document, has_edit_permission=True) is False
+    assert policy.can_delete_document(other_editor, document, has_delete_permission=True) is False
+
+
+def test_document_policy_allows_manager_to_manage_same_tenant_document():
+    policy = DocumentAccessPolicy()
+    manager = _build_user(3, UserRole.MANAGER, tenant_id=7)
+    document = Document(
+        id=12,
+        title="Team doc",
+        document_number="DOC-TEAM-001",
+        status=DocumentStatus.DRAFT,
+        tenant_id=7,
+        created_by=99,
+    )
+
+    assert policy.can_edit_document(manager, document, has_edit_permission=True) is True
+    assert policy.can_delete_document(manager, document, has_delete_permission=True) is True

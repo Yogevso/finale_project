@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from app.models import Document, DocumentStatus, Tenant
+from app.models import Document, DocumentStatus, SearchAnalytics, Tenant
 
 
 class TestSearch:
@@ -184,6 +184,35 @@ class TestSearch:
         assert data["total"] == 0
         assert len(data["items"]) == 0
 
+    def test_search_ignores_advanced_fts_operator_syntax(self, client, auth_headers, db, test_user):
+        matching_doc = Document(
+            title="Operator Safe Guide",
+            document_number=f"DOC-OPS-{uuid.uuid4().hex[:6].upper()}",
+            description="operator safe search coverage",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        unrelated_doc = Document(
+            title="Totally Unrelated",
+            document_number=f"DOC-OPS-{uuid.uuid4().hex[:6].upper()}",
+            description="nothing to do with the query",
+            status=DocumentStatus.ACTIVE,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add_all([matching_doc, unrelated_doc])
+        db.commit()
+
+        response = client.get(
+            "/api/v1/search/?q=operator-safe OR *",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        titles = [item["title"] for item in response.json()["items"]]
+        assert "Operator Safe Guide" in titles
+        assert "Totally Unrelated" not in titles
+
 
 class TestSavedSearches:
     """Tests for saved search functionality"""
@@ -274,3 +303,76 @@ class TestSearchSuggestions:
         response = client.get("/api/v1/search/suggestions?q=sug", headers=auth_headers)
         # May return 200 or 404 if not implemented
         assert response.status_code in [200, 404]
+
+
+class TestSearchAnalytics:
+    def test_search_analytics_redacts_cross_tenant_queries_for_system_admin(
+        self,
+        client,
+        db,
+        system_admin_headers,
+        test_user,
+        test_customer_2,
+    ):
+        db.add_all(
+            [
+                SearchAnalytics(
+                    query="tenant-one-secret",
+                    user_id=test_user.id,
+                    tenant_id=test_user.tenant_id,
+                    results_count=1,
+                ),
+                SearchAnalytics(
+                    query="tenant-two-secret",
+                    user_id=test_customer_2.id,
+                    tenant_id=test_customer_2.tenant_id,
+                    results_count=0,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/search/analytics", headers=system_admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        top_queries = [item["query"] for item in payload["top_queries"]]
+        zero_queries = [item["query"] for item in payload["zero_result_queries"]]
+
+        assert "tenant-one-secret" not in top_queries
+        assert "tenant-two-secret" not in top_queries
+        assert "tenant-two-secret" not in zero_queries
+        assert all(query.startswith("[redacted-query:") for query in top_queries)
+
+    def test_search_analytics_keeps_raw_queries_within_tenant_scope(
+        self,
+        client,
+        db,
+        admin_headers,
+        test_admin,
+        test_customer_2,
+    ):
+        db.add_all(
+            [
+                SearchAnalytics(
+                    query="tenant-admin-visible",
+                    user_id=test_admin.id,
+                    tenant_id=test_admin.tenant_id,
+                    results_count=2,
+                ),
+                SearchAnalytics(
+                    query="other-tenant-hidden",
+                    user_id=test_customer_2.id,
+                    tenant_id=test_customer_2.tenant_id,
+                    results_count=0,
+                ),
+            ]
+        )
+        db.commit()
+
+        response = client.get("/api/v1/search/analytics", headers=admin_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        top_queries = [item["query"] for item in payload["top_queries"]]
+
+        assert "tenant-admin-visible" in top_queries
+        assert "other-tenant-hidden" not in top_queries

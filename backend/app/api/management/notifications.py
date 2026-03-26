@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -70,7 +70,7 @@ class NotificationMarkRead(BaseModel):
 @router.get("/notifications", response_model=NotificationListResponse)
 def get_notifications(
     unread_only: bool = False,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):

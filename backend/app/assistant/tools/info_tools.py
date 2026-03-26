@@ -6,6 +6,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.assistant.document_access import (
+    assistant_can_view_document,
+    resolve_assistant_visible_version,
+)
 from app.assistant.tools.base import BaseTool
 from app.models import Document, DocumentStatus, DocumentVisibility, User
 from app.services.permissions import Permission, get_user_permissions
@@ -136,33 +140,18 @@ class GetDocumentContentTool(BaseTool):
     }
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
-        from app.models import UserRole, Version
-
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
 
-        # Visibility check
-        try:
-            role = UserRole(user.role) if not isinstance(user.role, UserRole) else user.role
-        except (ValueError, KeyError):
-            return {"success": False, "result": "", "error": "Invalid user role."}
-        if role == UserRole.CUSTOMER:
-            if doc.visibility == DocumentVisibility.INTERNAL:
-                return {"success": False, "result": "", "error": "You do not have access to this document."}
-            if doc.visibility == DocumentVisibility.COMPANY:
-                if not any(c.id == tenant_id for c in doc.assigned_companies):
-                    return {"success": False, "result": "", "error": "You do not have access to this document."}
-        elif tenant_id is not None and doc.tenant_id != tenant_id:
-            if doc.visibility != DocumentVisibility.PUBLIC:
-                return {"success": False, "result": "", "error": "You do not have access to this document."}
+        if not assistant_can_view_document(user, doc, tenant_id=tenant_id):
+            return {"success": False, "result": "", "error": "You do not have access to this document."}
 
-        # Get latest version content
-        version = (
-            db.query(Version)
-            .filter(Version.document_id == doc.id)
-            .order_by(Version.created_at.desc())
-            .first()
+        version = resolve_assistant_visible_version(
+            db,
+            user=user,
+            document=doc,
+            tenant_id=tenant_id,
         )
 
         if version and version.content:

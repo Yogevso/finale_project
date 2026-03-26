@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.assistant.tools.base import BaseTool
 from app.models import ActionType, User, UserRole
 from app.services.audit_helper import write_audit_log
+from app.services.auth_service import AuthService
 from app.services.permissions import Permission
 
 
@@ -229,6 +230,7 @@ class ChangeUserRoleTool(BaseTool):
 
         old_role = target.role
         target.role = new_role
+        AuthService(db).revoke_all_user_sessions(target.id, commit=False)
         # AE-005: Audit trail for AI-initiated role change
         write_audit_log(
             user_id=user.id,

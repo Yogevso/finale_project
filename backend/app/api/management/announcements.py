@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies.permissions import require_manager
 from app.models import Announcement, User
+from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/announcements", tags=["Announcements"])
 
@@ -64,8 +65,9 @@ async def create_announcement(
     current_user: User = Depends(require_manager),
 ):
     expires = datetime.fromisoformat(body.expires_at) if body.expires_at else None
+    # M-34: Sanitize announcement message to prevent stored XSS
     ann = Announcement(
-        message=body.message,
+        message=sanitize_html_content(body.message),
         type=body.type,
         created_by=current_user.id,
         expires_at=expires,
@@ -86,6 +88,9 @@ async def update_announcement(
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
     data = body.model_dump(exclude_unset=True)
+    # M-34: Sanitize message on update
+    if "message" in data and data["message"]:
+        data["message"] = sanitize_html_content(data["message"])
     if "expires_at" in data:
         data["expires_at"] = datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None
     for field, value in data.items():

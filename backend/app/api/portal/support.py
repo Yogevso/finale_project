@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.api.support_message_utils import (
+    parse_support_message_request,
+    support_message_to_response,
+)
 from app.db import get_db
 from app.models import SupportTicketStatus, User, UserRole
 from app.schemas.chat import (
-    SendTicketMessageRequest,
     SupportTicketCreate,
     SupportTicketDetailResponse,
     SupportTicketListResponse,
@@ -17,6 +20,7 @@ from app.schemas.chat import (
 )
 from app.security import get_current_active_user
 from app.services.support_service import SupportTicketService
+from app.utils.async_tasks import run_async_task
 
 router = APIRouter(prefix="/portal/support", tags=["Customer Support"])
 
@@ -71,11 +75,7 @@ def get_my_ticket(
         feedback_id=ticket.feedback_id, tenant_id=ticket.tenant_id,
         created_at=ticket.created_at, updated_at=ticket.updated_at, resolved_at=ticket.resolved_at,
         messages=[
-            SupportTicketMessageResponse(
-                id=m.id, ticket_id=m.ticket_id, sender_id=m.sender_id,
-                sender_type=m.sender_type, content=m.content,
-                is_internal_note=m.is_internal_note, created_at=m.created_at,
-            )
+            support_message_to_response(m)
             for m in visible_messages
         ],
         assignments=[],
@@ -102,19 +102,36 @@ def create_ticket(
 
 
 @router.post("/tickets/{ticket_id}/messages", response_model=SupportTicketMessageResponse, status_code=status.HTTP_201_CREATED)
-def send_message(
+async def send_message(
     ticket_id: int,
-    body: SendTicketMessageRequest,
+    request: Request,
     current_user: User = Depends(_require_customer),
     svc: SupportTicketService = Depends(_get_svc),
 ):
     """Customer sends a message on a ticket (X1-074)."""
-    msg = svc.send_message(ticket_id, current_user, body.content, is_internal_note=False)
-    return SupportTicketMessageResponse(
-        id=msg.id, ticket_id=msg.ticket_id, sender_id=msg.sender_id,
-        sender_type=msg.sender_type, content=msg.content,
-        is_internal_note=msg.is_internal_note, created_at=msg.created_at,
+    content, _is_internal_note, upload = await parse_support_message_request(
+        request,
+        allow_internal_note=False,
     )
+    file_bytes = await upload.read() if upload else None
+    msg = svc.send_message(
+        ticket_id,
+        current_user,
+        content,
+        is_internal_note=False,
+        file_bytes=file_bytes,
+        file_name=upload.filename if upload else None,
+        file_mime_type=upload.content_type if upload else None,
+    )
+    ticket = svc.get_ticket(ticket_id, current_user)
+    run_async_task(
+        svc.broadcast_message_event(
+            ticket=ticket,
+            msg=msg,
+            sender=current_user,
+        )
+    )
+    return support_message_to_response(msg)
 
 
 @router.post("/tickets/{ticket_id}/close", status_code=status.HTTP_204_NO_CONTENT)

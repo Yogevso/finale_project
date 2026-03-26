@@ -83,6 +83,36 @@ class TestSubmitForReview:
         )
         assert response.status_code == 404
 
+    def test_active_document_submits_latest_unpublished_version_without_unpublishing(
+        self,
+        client,
+        db,
+        auth_headers,
+        public_document,
+    ):
+        """Active docs should review the latest draft version while staying active."""
+        create_version_response = client.post(
+            f"/api/v1/documents/{public_document.id}/versions",
+            headers=auth_headers,
+            json={"content": "Draft candidate", "changes_summary": "review me"},
+        )
+        assert create_version_response.status_code == 201
+        version_id = create_version_response.json()["id"]
+
+        response = client.post(
+            f"/api/v1/reviews/documents/{public_document.id}/submit",
+            headers=auth_headers,
+            json={"message": "Please review the draft candidate"},
+        )
+
+        assert response.status_code in [200, 201]
+        data = response.json()
+        assert data["status"] == "pending"
+        assert data["version_id"] == version_id
+
+        db.refresh(public_document)
+        assert public_document.status == DocumentStatus.ACTIVE
+
 
 class TestPendingReviews:
     """Test listing pending reviews"""
@@ -310,6 +340,42 @@ class TestApproveReview:
         assert version_response.status_code == 200
         assert version_response.json()["is_published"] is False
 
+    def test_approve_active_document_review_keeps_document_active(
+        self,
+        client,
+        db,
+        auth_headers,
+        manager_headers,
+        public_document,
+    ):
+        """Approving a draft candidate for an active doc must not unpublish the doc."""
+        create_version_response = client.post(
+            f"/api/v1/documents/{public_document.id}/versions",
+            headers=auth_headers,
+            json={"content": "Active doc draft", "changes_summary": "candidate"},
+        )
+        assert create_version_response.status_code == 201
+        version_id = create_version_response.json()["id"]
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{public_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": version_id, "message": "Approve this draft"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        approve_response = client.post(
+            f"/api/v1/reviews/{review_id}/approve",
+            headers=manager_headers,
+            json={"comments": "Looks good"},
+        )
+        assert approve_response.status_code == 200
+        assert approve_response.json()["status"] == "approved"
+
+        db.refresh(public_document)
+        assert public_document.status == DocumentStatus.ACTIVE
+
 
 class TestRejectReview:
     """Test rejecting reviews"""
@@ -347,6 +413,42 @@ class TestRejectReview:
         # Should fail without comments
         assert response.status_code in [400, 422]
 
+    def test_reject_active_document_review_keeps_document_active(
+        self,
+        client,
+        db,
+        auth_headers,
+        manager_headers,
+        public_document,
+    ):
+        """Rejecting a draft candidate must not unpublish an active document."""
+        create_version_response = client.post(
+            f"/api/v1/documents/{public_document.id}/versions",
+            headers=auth_headers,
+            json={"content": "Reject me", "changes_summary": "candidate"},
+        )
+        assert create_version_response.status_code == 201
+        version_id = create_version_response.json()["id"]
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{public_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": version_id, "message": "Needs review"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        reject_response = client.post(
+            f"/api/v1/reviews/{review_id}/reject",
+            headers=manager_headers,
+            json={"comments": "Needs more work"},
+        )
+        assert reject_response.status_code == 200
+        assert reject_response.json()["status"] == "rejected"
+
+        db.refresh(public_document)
+        assert public_document.status == DocumentStatus.ACTIVE
+
 
 class TestCancelReview:
     """Test cancelling review submissions"""
@@ -376,6 +478,40 @@ class TestCancelReview:
         review_id = pending_review_for_cancel["id"]
         response = client.post(f"/api/v1/reviews/{review_id}/cancel", headers=viewer_auth_headers)
         assert response.status_code in [403, 404]
+
+    def test_cancel_active_document_review_keeps_document_active(
+        self,
+        client,
+        db,
+        auth_headers,
+        public_document,
+    ):
+        """Cancelling a draft candidate review must not unpublish an active document."""
+        create_version_response = client.post(
+            f"/api/v1/documents/{public_document.id}/versions",
+            headers=auth_headers,
+            json={"content": "Cancel me", "changes_summary": "candidate"},
+        )
+        assert create_version_response.status_code == 201
+        version_id = create_version_response.json()["id"]
+
+        submit_response = client.post(
+            f"/api/v1/reviews/documents/{public_document.id}/submit",
+            headers=auth_headers,
+            json={"version_id": version_id, "message": "Please review"},
+        )
+        assert submit_response.status_code in [200, 201]
+        review_id = submit_response.json()["id"]
+
+        cancel_response = client.post(
+            f"/api/v1/reviews/{review_id}/cancel",
+            headers=auth_headers,
+        )
+        assert cancel_response.status_code == 200
+        assert cancel_response.json()["status"] == "cancelled"
+
+        db.refresh(public_document)
+        assert public_document.status == DocumentStatus.ACTIVE
 
 
 class TestPeerReview:

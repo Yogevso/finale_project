@@ -181,8 +181,10 @@ def clear_dynamic_role_permissions() -> None:
 
 
 def _effective_permissions(role: UserRole) -> Set[Permission]:
-    if role in _DYNAMIC_ROLE_PERMISSIONS:
-        return _DYNAMIC_ROLE_PERMISSIONS[role]
+    dynamic_permissions = _DYNAMIC_ROLE_PERMISSIONS.get(role)
+    if dynamic_permissions is not None:
+        # An explicit dynamic empty set is deny-all for that role.
+        return dynamic_permissions
     return ROLE_PERMISSIONS.get(role, set())
 
 

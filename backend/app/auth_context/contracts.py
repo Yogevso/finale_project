@@ -61,6 +61,7 @@ class CollaborationTokenContract:
     username: str
     email: str
     role: str
+    tenant_id: int | None
     document_id: str
     permissions: list[str]
 
@@ -77,6 +78,7 @@ class CollaborationTokenContract:
             username=user.username,
             email=user.email,
             role=_serialize_role(user.role),
+            tenant_id=user.tenant_id,
             document_id=str(document_id),
             permissions=list(permissions),
         )
@@ -87,6 +89,7 @@ class CollaborationTokenContract:
             "username": self.username,
             "email": self.email,
             "role": self.role,
+            "tenant_id": self.tenant_id,
             "document_id": self.document_id,
             "permissions": list(self.permissions),
         }

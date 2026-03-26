@@ -55,9 +55,22 @@ class TokenService:
         claims = AccessTokenContract.from_user(user, session_identifier=session_identifier)
         return self.create_access_token(claims.to_payload(), expires_delta=expires_delta)
 
-    def verify_token(self, token: str) -> dict[str, Any] | None:
+    def verify_token(
+        self,
+        token: str,
+        *,
+        expected_type: str = ACCESS_TOKEN_TYPE,
+    ) -> dict[str, Any] | None:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            token_type = payload.get("type")
+            if token_type != expected_type:
+                logger.info(
+                    "JWT verification rejected token type %r (expected %r)",
+                    token_type,
+                    expected_type,
+                )
+                return None
             return payload
         except PyJWTError as err:
             logger.info("JWT verification failed: %s", type(err).__name__)

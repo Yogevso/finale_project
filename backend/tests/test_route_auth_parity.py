@@ -141,9 +141,9 @@ PUBLIC_ALLOWLIST = {
     "/api/v1/platforms/{platform_id}/documents",
     "/api/platforms",
     "/api/platforms/{platform_id}/documents",
-    "/api/v1/sitemap.xml",
     "/api/v1/announcements",
     "/api/v1/gdpr/export/{request_id}/download",  # token-based auth (URL token)
+    "/api/v1/collaboration/documents/{document_id}/verify-access",  # token-based auth (Bearer collab token)
     "/api/v1/api-keys/verify",  # API key auth (not user session)
     "/api/v1/developer/api-docs",  # public developer docs
     "/api/v1/health",

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.notifications.message import NotificationMessage
+from app.utils import escape_html, sanitize_plain_text
 
 
 class NotificationTemplate(Protocol):
@@ -144,6 +145,48 @@ class PasswordResetTemplate:
             to_email=to_email,
             subject="Password Reset Request",
             html_content=_render_base_html("Password Reset", body_html),
+            text_content=text,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class InvitationTemplate:
+    """Template for user invitation notifications."""
+
+    accept_url: str
+    inviter_name: str
+    expires_days: int = 7
+    message: str | None = None
+
+    def render(self, *, to_email: str) -> NotificationMessage:
+        inviter_name = sanitize_plain_text(self.inviter_name) or "Someone"
+        invitation_message = sanitize_plain_text(self.message)
+        safe_inviter_name = escape_html(inviter_name)
+        safe_accept_url = escape_html(self.accept_url)
+        message_html = (
+            f"<p>&ldquo;{escape_html(invitation_message)}&rdquo;</p>"
+            if invitation_message
+            else ""
+        )
+        body_html = (
+            f"<p>{safe_inviter_name} has invited you to join Documentation Platform.</p>"
+            f"{message_html}"
+            f"<p><a href='{safe_accept_url}'>Accept Invitation</a></p>"
+            f"<p>This invitation expires in {self.expires_days} days.</p>"
+        )
+        message_text = (
+            f"\"{invitation_message}\"\n\n" if invitation_message else ""
+        )
+        text = (
+            f"{inviter_name} has invited you to join Documentation Platform.\n\n"
+            f"{message_text}"
+            f"Accept invitation: {self.accept_url}\n"
+            f"This invitation expires in {self.expires_days} days.\n"
+        )
+        return NotificationMessage(
+            to_email=to_email,
+            subject=f"{inviter_name} invited you to Documentation Platform",
+            html_content=_render_base_html("You're Invited", body_html),
             text_content=text,
         )
 

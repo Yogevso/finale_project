@@ -39,6 +39,7 @@ from app.infrastructure.composition import (
     get_storage_port,
 )
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
+from app.models import UserRole
 from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
@@ -92,8 +93,20 @@ class AppContainer:
         db: Session,
         tenant_ctx: TenantContext | None = None,
         analytics_db: Session | None = None,
+        *,
+        system_scope: bool = False,
     ) -> AnalyticsServiceStranglerWrapper:
-        return AnalyticsServiceStranglerWrapper(AnalyticsService(db, tenant_ctx, analytics_db=analytics_db))
+        resolved_tenant_ctx = tenant_ctx
+        if system_scope:
+            resolved_tenant_ctx = TenantContext(
+                tenant_id=None,
+                user_id=0,
+                user_role=UserRole.SYSTEM_ADMIN,
+                is_system_admin=True,
+            )
+        return AnalyticsServiceStranglerWrapper(
+            AnalyticsService(db, resolved_tenant_ctx, analytics_db=analytics_db)
+        )
 
     def auth_service(self, db: Session) -> AuthService:
         return AuthService(db)
@@ -199,7 +212,14 @@ class AppContainer:
         return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx, analytics_db=analytics_db))
 
     def system_analytics_query_handler(self, db: Session, analytics_db: Session | None = None) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, None, analytics_db=analytics_db))
+        return AnalyticsQueryHandler(
+            self.analytics_service(
+                db,
+                None,
+                analytics_db=analytics_db,
+                system_scope=True,
+            )
+        )
 
     def search_query_handler(self, db: Session) -> SearchQueryHandler:
         return SearchQueryHandler(db)

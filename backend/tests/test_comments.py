@@ -1,8 +1,10 @@
 """Tests for Comments API"""
 
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from app.models import Comment, User
+from app.repositories.comment_repository import CommentRepository
 from app.services.comment_service import CommentService
 
 
@@ -95,6 +97,22 @@ class TestCommentsAPI:
         )
         assert response.status_code == 200
 
+    def test_customer_cannot_access_management_comment_routes(
+        self, client: TestClient, customer_headers: dict, public_document
+    ):
+        response = client.get(
+            f"/api/v1/documents/{public_document.id}/comments",
+            headers=customer_headers,
+        )
+        assert response.status_code == 403
+
+        create_response = client.post(
+            f"/api/v1/documents/{public_document.id}/comments",
+            headers=customer_headers,
+            json={"content": "Customer should use the portal route instead"},
+        )
+        assert create_response.status_code == 403
+
     def test_list_replies_only(self, client: TestClient, admin_token: str, sample_document: dict):
         """Test listing only replies to a specific comment"""
         headers = {"Authorization": f"Bearer {admin_token}"}
@@ -172,3 +190,58 @@ class TestCommentsAPI:
         persisted_reply = db.query(Comment).filter(Comment.id == reply.id).first()
         assert persisted_reply is not None
         assert persisted_reply.parent_id == parent.id
+
+    def test_parent_chain_is_eager_loaded_for_depth_checks(self, db, sample_document: dict):
+        current_user = db.query(User).filter(User.id == 1).first()
+        assert current_user is not None
+
+        root = Comment(
+            document_id=sample_document["id"],
+            user_id=current_user.id,
+            content="Root comment",
+        )
+        db.add(root)
+        db.commit()
+        db.refresh(root)
+
+        child = Comment(
+            document_id=sample_document["id"],
+            user_id=current_user.id,
+            content="Child comment",
+            parent_id=root.id,
+        )
+        db.add(child)
+        db.commit()
+        db.refresh(child)
+
+        grandchild = Comment(
+            document_id=sample_document["id"],
+            user_id=current_user.id,
+            content="Grandchild comment",
+            parent_id=child.id,
+        )
+        db.add(grandchild)
+        db.commit()
+        db.refresh(grandchild)
+        db.expire_all()
+
+        repository = CommentRepository(db)
+        select_count = 0
+
+        def before_cursor_execute(*args, **kwargs):
+            nonlocal select_count
+            statement = args[2]
+            if statement.lstrip().upper().startswith("SELECT"):
+                select_count += 1
+
+        event.listen(db.bind, "before_cursor_execute", before_cursor_execute)
+        try:
+            loaded = repository.get_by_id_for_update(grandchild.id, sample_document["id"])
+            assert loaded is not None
+            initial_select_count = select_count
+
+            assert loaded.parent is not None
+            assert loaded.parent.parent is not None
+            assert select_count == initial_select_count
+        finally:
+            event.remove(db.bind, "before_cursor_execute", before_cursor_execute)

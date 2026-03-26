@@ -188,6 +188,49 @@ def _relationships_xml(relationships: list[tuple[str, str, str]]) -> str:
     )
 
 
+def _write_ratio_bomb_pptx(path: Path, *, repeat_count: int = 2_000_000) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" '
+                'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Override PartName="/ppt/presentation.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.'
+                'presentationml.presentation.main+xml"/>'
+                "</Types>"
+            ),
+        )
+        archive.writestr(
+            "_rels/.rels",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships '
+                'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+                'officeDocument" Target="ppt/presentation.xml"/>'
+                "</Relationships>"
+            ),
+        )
+        archive.writestr(
+            "ppt/presentation.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<p:presentation '
+                'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+                'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+                "<p:sldIdLst></p:sldIdLst>"
+                "</p:presentation>"
+            ),
+        )
+        archive.writestr("ppt/bomb.txt", "A" * repeat_count)
+
+
 def _make_slide(*nodes: str) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -529,6 +572,21 @@ def test_extract_pptx_fails_for_invalid_archives(tmp_path):
     assert result.confidence == 0.0
     assert result.extraction_error is not None
     assert "Invalid PPTX archive" in result.extraction_error
+    assert [warning.code for warning in result.warnings] == ["PARSE_FAILED"]
+
+
+def test_extract_pptx_rejects_unsafe_zip_bombs(tmp_path):
+    bomb_path = tmp_path / "bomb.pptx"
+    _write_ratio_bomb_pptx(bomb_path)
+
+    result = extract_pptx(bomb_path)
+
+    assert result.status == "failed"
+    assert result.html == ""
+    assert result.confidence == 0.0
+    assert result.extraction_error is not None
+    assert "Unsafe PPTX archive" in result.extraction_error
+    assert "compression ratio limit" in result.extraction_error
     assert [warning.code for warning in result.warnings] == ["PARSE_FAILED"]
 
 

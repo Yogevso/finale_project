@@ -8,12 +8,16 @@ import os
 import uuid
 from pathlib import Path
 
-import pdfplumber
 from fastapi import UploadFile
 
 from app.assistant.rag.chunker import DocumentChunker
 from app.config import settings
 from app.models import AssistantUploadedFile
+from app.services.malware_scan_service import (
+    MalwareDetectedError,
+    MalwareScannerUnavailableError,
+    scan_upload_bytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,10 @@ class AssistantFileHandler:
         data = await file.read()
         if len(data) > MAX_FILE_SIZE:
             raise ValueError(f"File too large ({len(data)} bytes). Max is {MAX_FILE_SIZE} bytes.")
+        try:
+            scan_upload_bytes(data, original, ALLOWED_EXTENSIONS.get(ext, "application/octet-stream"))
+        except (MalwareDetectedError, MalwareScannerUnavailableError) as exc:
+            raise ValueError(str(exc)) from exc
 
         # Generate unique filename
         uid = uuid.uuid4().hex[:16]
@@ -104,6 +112,8 @@ class AssistantFileHandler:
 
     def _extract_pdf(self, path: str) -> str:
         """Extract text from PDF using pdfplumber."""
+        import pdfplumber
+
         pages: list[str] = []
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages[:100]:  # cap at 100 pages

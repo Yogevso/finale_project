@@ -313,6 +313,70 @@ class TestAF016ReadingProgressAccessCheck:
         ids = [r["document_id"] for r in resp.json()]
         assert doc.id not in ids
 
+    def test_portal_reading_progress_list_returns_customer_progress(self, client, db):
+        tenant = create_tenant(db)
+        customer = create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
+        editor = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
+
+        doc = create_document(
+            db,
+            created_by=editor.id,
+            status=DocumentStatus.PUBLISHED,
+            visibility=DocumentVisibility.PUBLIC,
+            tenant_id=tenant.id,
+        )
+        db.add(
+            ReadingProgress(
+                user_id=customer.id,
+                document_id=doc.id,
+                progress_percent=45,
+                last_read_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
+
+        headers = self._auth_header(client, db, customer)
+        resp = client.get("/api/v1/portal/reading-progress", headers=headers)
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert len(payload) == 1
+        assert payload[0]["document_id"] == doc.id
+        assert payload[0]["progress_percent"] == 45
+
+    def test_portal_reading_progress_get_and_update(self, client, db):
+        tenant = create_tenant(db)
+        customer = create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
+        editor = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
+
+        doc = create_document(
+            db,
+            created_by=editor.id,
+            status=DocumentStatus.PUBLISHED,
+            visibility=DocumentVisibility.PUBLIC,
+            tenant_id=tenant.id,
+        )
+
+        headers = self._auth_header(client, db, customer)
+
+        initial = client.get(f"/api/v1/portal/reading-progress/{doc.id}", headers=headers)
+        assert initial.status_code == 200
+        assert initial.json()["has_progress"] is False
+
+        update = client.put(
+            f"/api/v1/portal/reading-progress/{doc.id}",
+            headers=headers,
+            json={"progress_percent": 60},
+        )
+        assert update.status_code == 200
+        assert update.json()["document_id"] == doc.id
+        assert update.json()["progress_percent"] == 60
+
+        fetched = client.get(f"/api/v1/portal/reading-progress/{doc.id}", headers=headers)
+        assert fetched.status_code == 200
+        assert fetched.json()["has_progress"] is True
+        assert fetched.json()["progress_percent"] == 60
+
 
 # ===========================================================================
 # AF-017: Public changelog is NOT in management router namespace

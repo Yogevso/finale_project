@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.support_message_utils import (
+    parse_support_message_request,
+    support_message_to_response,
+)
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
 from app.application.policies.access_policies import SupportAccessPolicy
-from app.models import SupportTicketStatus, User, UserRole
+from app.models import SupportTicketStatus, User
 from app.schemas.chat import (
     AssignAgentRequest,
     HandoffRequest,
-    SendTicketMessageRequest,
     SupportTicketAssignmentResponse,
     SupportTicketCreate,
     SupportTicketDetailResponse,
@@ -23,7 +27,9 @@ from app.schemas.chat import (
     SupportTicketResponse,
     SupportTicketUpdate,
 )
+from app.security import get_current_active_user
 from app.services.support_service import SupportTicketService
+from app.utils.async_tasks import run_async_task
 from app.ws.manager import chat_manager
 
 router = APIRouter()
@@ -61,15 +67,7 @@ def _ticket_to_response(t) -> SupportTicketResponse:
 
 
 def _msg_to_response(m) -> SupportTicketMessageResponse:
-    return SupportTicketMessageResponse(
-        id=m.id,
-        ticket_id=m.ticket_id,
-        sender_id=m.sender_id,
-        sender_type=m.sender_type,
-        content=m.content,
-        is_internal_note=m.is_internal_note,
-        created_at=m.created_at,
-    )
+    return support_message_to_response(m)
 
 
 # ---- Tickets ----
@@ -215,15 +213,56 @@ def get_ticket_messages(
     response_model=SupportTicketMessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def send_ticket_message(
+async def send_ticket_message(
     ticket_id: int,
-    body: SendTicketMessageRequest,
+    request: Request,
     current_user: User = Depends(require_internal_user),
     svc: SupportTicketService = Depends(_get_support_service),
 ):
     """Send a message on a support ticket."""
-    msg = svc.send_message(ticket_id, current_user, body.content, is_internal_note=body.is_internal_note)
+    content, is_internal_note, upload = await parse_support_message_request(
+        request,
+        allow_internal_note=True,
+    )
+    file_bytes = await upload.read() if upload else None
+    msg = svc.send_message(
+        ticket_id,
+        current_user,
+        content,
+        is_internal_note=is_internal_note,
+        file_bytes=file_bytes,
+        file_name=upload.filename if upload else None,
+        file_mime_type=upload.content_type if upload else None,
+    )
+    ticket = svc.get_ticket(ticket_id, current_user)
+    run_async_task(
+        svc.broadcast_message_event(
+            ticket=ticket,
+            msg=msg,
+            sender=current_user,
+        )
+    )
     return _msg_to_response(msg)
+
+
+@router.get("/support/tickets/{ticket_id}/messages/{message_id}/attachment")
+def download_ticket_message_attachment(
+    ticket_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_active_user),
+    svc: SupportTicketService = Depends(_get_support_service),
+):
+    """Download a support ticket message attachment for any authorized ticket participant."""
+    msg, content = svc.get_message_attachment(ticket_id, message_id, current_user)
+    filename = msg.file_name or "attachment"
+    return Response(
+        content=content,
+        media_type=msg.file_mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Content-Length": str(len(content)),
+        },
+    )
 
 
 # ---- Agent Assignment ----

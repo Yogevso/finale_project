@@ -107,19 +107,18 @@ def main() -> None:
             )
         )
     else:
-        print(f"\n╔══════════════════════════════════════╗")
-        print(f"║  Tech-Debt Budget Report             ║")
-        print(f"╚══════════════════════════════════════╝\n")
+        print("\nTech-Debt Budget Report")
+        print("=======================\n")
         for marker in ("TODO", "FIXME", "HACK", "XXX"):
             c = counts.get(marker, 0)
             print(f"  {marker:8s}  {c:4d}")
-        print(f"  {'─' * 14}")
+        print("  " + ("-" * 14))
         print(f"  {'TOTAL':8s}  {total:4d}  / {args.budget}")
         print()
         if over_budget:
-            print(f"  ⚠  OVER BUDGET by {total - args.budget}")
+            print(f"  !  OVER BUDGET by {total - args.budget}")
         else:
-            print(f"  ✓  Within budget ({args.budget - total} remaining)")
+            print(f"  OK Within budget ({args.budget - total} remaining)")
         print()
 
     sys.exit(1 if over_budget else 0)

@@ -9,6 +9,7 @@ from datetime import datetime
 from enum import Enum
 
 from fastapi import HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.orm import Session, joinedload
 
 from app.application.pipeline import (
@@ -27,9 +28,11 @@ from app.errors import ConflictError, NotFoundError, PermissionDeniedError, Vali
 from app.models import (
     ActionType,
     AuditLog,
+    Document,
     Notification,
     NotificationType,
     ReviewRequest,
+    ReviewStatus,
     Tenant,
     User,
     Version,
@@ -89,18 +92,54 @@ class ApproveReviewCommandHandler:
     def last_trace(self) -> CommandExecutionTrace | None:
         return self._last_trace
 
-    def _validate(self, context: CommandContext[ApproveReviewCommand]) -> None:
-        from app.models import Document
-
-        review = (
+    def _load_review(
+        self,
+        review_id: int,
+        *,
+        for_update: bool = False,
+    ) -> ReviewRequest | None:
+        query = (
             self.db.query(ReviewRequest)
             .options(
                 joinedload(ReviewRequest.document).joinedload(Document.assigned_companies),
                 joinedload(ReviewRequest.submitter),
             )
-            .filter(ReviewRequest.id == context.command.review_id)
-            .first()
+            .filter(ReviewRequest.id == review_id)
+            .populate_existing()
         )
+        if for_update and self.db.bind is not None and self.db.bind.dialect.name != "sqlite":
+            query = query.with_for_update()
+        return query.first()
+
+    def _approve_pending_review_row(
+        self,
+        *,
+        review_id: int,
+        reviewer_id: int,
+        comments: str | None,
+        reviewed_at: datetime,
+    ) -> None:
+        approval_stmt = (
+            update(ReviewRequest)
+            .where(
+                ReviewRequest.id == review_id,
+                ReviewRequest.status == ReviewStatus.PENDING,
+            )
+            .values(
+                status=ReviewStatus.APPROVED,
+                reviewed_by=reviewer_id,
+                review_comments=comments,
+                reviewed_at=reviewed_at,
+            )
+        )
+        update_result = self.db.execute(approval_stmt)
+        if update_result.rowcount != 1:
+            raise ConflictError(
+                "This review has already been processed by another reviewer"
+            )
+
+    def _validate(self, context: CommandContext[ApproveReviewCommand]) -> None:
+        review = self._load_review(context.command.review_id)
         if not review:
             raise NotFoundError("Review not found")
 
@@ -147,9 +186,10 @@ class ApproveReviewCommandHandler:
             )
 
     def _execute_command(self, context: CommandContext[ApproveReviewCommand]) -> ReviewRequest:
-        review = context.state["review"]
-        if not isinstance(review, ReviewRequest):
-            raise RuntimeError("Missing review in command context")
+        review = self._load_review(context.command.review_id, for_update=True)
+        if not review:
+            raise NotFoundError("Review not found")
+        context.state["review"] = review
 
         review_aggregate = ReviewAggregate(review)
         document_aggregate = DocumentAggregate(review.document)
@@ -181,12 +221,18 @@ class ApproveReviewCommandHandler:
                 "re-submit for review required."
             )
 
-        review_aggregate.approve(
+        reviewed_at = datetime.utcnow()
+        self._approve_pending_review_row(
+            review_id=review.id,
             reviewer_id=current_user.id,
             comments=context.command.comments,
-            reviewed_at=datetime.utcnow(),
+            reviewed_at=reviewed_at,
         )
-        document_aggregate.transition_to_approved()
+        review.status = ReviewStatus.APPROVED
+        review.reviewed_by = current_user.id
+        review.review_comments = context.command.comments
+        review.reviewed_at = reviewed_at
+        document_aggregate.finalize_review_approval()
 
         # Build audit details with audience resolution
         audit_details = f"Approved review #{review.id} for version {review.version_id or 'n/a'}"
@@ -370,6 +416,4 @@ class ApproveReviewCommandHandler:
                     )
                 )
             raise
-
-
 

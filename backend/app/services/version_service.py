@@ -505,6 +505,18 @@ class VersionService(SessionService):
             latest_review.status if latest_review else None
         ).ensure_publishable_for_version()
 
+        # M-13: Reject publish if the reviewer who approved has since been deactivated
+        if (
+            latest_review
+            and latest_review.status == ReviewStatus.APPROVED
+            and latest_review.reviewer
+            and not latest_review.reviewer.is_active
+        ):
+            raise ValidationError(
+                "The reviewer who approved this version has been deactivated. "
+                "Please request a new review before publishing."
+            )
+
         # Ensure audience configuration is valid before publishing.
         # Kill-switch mode turns hard-blocks into advisory warnings.
         try:

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import json
 import logging
-import time
-from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
@@ -29,24 +28,26 @@ from app.db import get_chat_db, get_db
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import User, UserRole
 from app.security import get_current_active_user
+from app.services.distributed_rate_limit_service import DistributedRateLimitService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 
-# Simple in-memory per-user rate limiter
-_rate_buckets: dict[int, list[float]] = defaultdict(list)
-
 
 def _check_rate_limit(user_id: int) -> None:
-    now = time.time()
-    window = 60.0
-    bucket = _rate_buckets[user_id]
-    # Prune old entries
-    _rate_buckets[user_id] = [t for t in bucket if now - t < window]
-    if len(_rate_buckets[user_id]) >= settings.ASSISTANT_RATE_LIMIT_PER_MINUTE:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait before sending another message.")
-    _rate_buckets[user_id].append(now)
+    allowed, retry_after = DistributedRateLimitService.check_and_record(
+        scope="assistant-chat",
+        key=str(user_id),
+        max_requests=settings.ASSISTANT_RATE_LIMIT_PER_MINUTE,
+        window_seconds=60,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please wait before sending another message.",
+            headers={"Retry-After": str(max(retry_after, 1))},
+        )
 
 
 def _require_enabled() -> None:
@@ -64,6 +65,47 @@ def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
     return AssistantEngine(ollama, registry, conv_mgr)
 
 
+async def _stream_assistant_events(
+    *,
+    request: Request,
+    queue: asyncio.Queue[dict[str, Any] | None],
+    done: asyncio.Event,
+    prod_task: asyncio.Task[None],
+    hb_task: asyncio.Task[None],
+):
+    idle_deadline = asyncio.get_running_loop().time() + 180
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=1)
+            except asyncio.TimeoutError:
+                if asyncio.get_running_loop().time() >= idle_deadline:
+                    yield 'event: error\ndata: {"message":"Request timed out"}\n\n'
+                    break
+                continue
+            if event is None:
+                break
+            idle_deadline = asyncio.get_running_loop().time() + 180
+            if event.get("event") == "_keepalive":
+                yield ": keepalive\n\n"
+                continue
+            evt = event.get("event", "message")
+            data = event.get("data", "")
+            if isinstance(data, dict):
+                data = json.dumps(data)
+            yield f"event: {evt}\ndata: {data}\n\n"
+    finally:
+        done.set()
+        for task in (hb_task, prod_task):
+            if not task.done():
+                task.cancel()
+        for task in (hb_task, prod_task):
+            with suppress(asyncio.CancelledError):
+                await task
+
+
 # ------------------------------------------------------------------
 # SSE Chat
 # ------------------------------------------------------------------
@@ -72,6 +114,7 @@ def _build_engine(chat_db: Session, user: User) -> AssistantEngine:
 @router.post("/chat")
 async def chat(
     body: ChatRequest,
+    request: Request,
     user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
     chat_db: Session = Depends(get_chat_db),
@@ -84,7 +127,7 @@ async def chat(
     tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
 
     async def event_stream():
-        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         done = asyncio.Event()
 
         async def _producer():
@@ -113,27 +156,14 @@ async def chat(
         prod_task = asyncio.create_task(_producer())
         hb_task = asyncio.create_task(_heartbeat())
 
-        try:
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=180)
-                except asyncio.TimeoutError:
-                    yield 'event: error\ndata: {"message":"Request timed out"}\n\n'
-                    break
-                if event is None:
-                    break
-                if event.get("event") == "_keepalive":
-                    yield ": keepalive\n\n"
-                    continue
-                evt = event.get("event", "message")
-                data = event.get("data", "")
-                if isinstance(data, dict):
-                    data = json.dumps(data)
-                yield f"event: {evt}\ndata: {data}\n\n"
-        finally:
-            hb_task.cancel()
-            if not prod_task.done():
-                prod_task.cancel()
+        async for chunk in _stream_assistant_events(
+            request=request,
+            queue=queue,
+            done=done,
+            prod_task=prod_task,
+            hb_task=hb_task,
+        ):
+            yield chunk
 
     return StreamingResponse(
         event_stream(),
@@ -245,8 +275,10 @@ def rename_conversation(
     conv = mgr.get_conversation(conversation_id, user.id)
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found.")
-    mgr.update_title(conversation_id, title)
-    return {"id": conv.id, "title": title}
+    updated = mgr.update_title(conversation_id, title)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"id": updated.id, "title": updated.title}
 
 
 @router.delete("/conversations/{conversation_id}", status_code=204)

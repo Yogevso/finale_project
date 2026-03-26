@@ -31,5 +31,9 @@ class AnalyticsService(
 
     def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None, analytics_db: Session | None = None):
         super().__init__(db)
+        if tenant_ctx is None:
+            raise ValueError(
+                "AnalyticsService requires an explicit scope; use a system-admin tenant context for cross-tenant analytics"
+            )
         self.tenant_ctx = tenant_ctx
         self.analytics_db = analytics_db or db

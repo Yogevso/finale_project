@@ -1,9 +1,8 @@
 """Comments API Routes"""
 
-from typing import List, Optional
-
 from fastapi import APIRouter, Depends, Query, status
 
+from app.dependencies.permissions import require_internal_user
 from app.dependencies.services import get_comment_service
 from app.models import User
 from app.schemas import (
@@ -12,7 +11,6 @@ from app.schemas import (
     CommentUpdate,
     MessageResponse,
 )
-from app.security import get_current_active_user
 from app.services.comment_service import CommentService, PaginatedComments
 
 router = APIRouter()
@@ -24,7 +22,7 @@ def list_comments(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Comments per page"),
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ) -> PaginatedComments:
     """
     List comments for a document.
@@ -39,7 +37,7 @@ def list_comments(
 def get_comment_stats(
     document_id: int,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Get comment statistics for a document.
@@ -52,7 +50,7 @@ def get_comment(
     document_id: int,
     comment_id: int,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Get a specific comment with its replies.
@@ -69,7 +67,7 @@ def create_comment(
     document_id: int,
     comment_data: CommentCreate,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Create a new comment.
@@ -87,7 +85,7 @@ def update_comment(
     comment_id: int,
     comment_data: CommentUpdate,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Update a comment.
@@ -105,7 +103,7 @@ def resolve_comment(
     document_id: int,
     comment_id: int,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Mark a comment thread as resolved.
@@ -121,7 +119,7 @@ def delete_comment(
     document_id: int,
     comment_id: int,
     comment_service: CommentService = Depends(get_comment_service),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_internal_user),
 ):
     """
     Delete a comment and its replies.

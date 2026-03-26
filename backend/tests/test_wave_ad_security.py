@@ -184,14 +184,7 @@ class TestAD021PrivateComments:
         # Customer lists comments
         cust_headers = _headers_for(client, "comment_cust", "custpass1")
         r = client.get(f"/api/v1/documents/{doc.id}/comments", headers=cust_headers)
-        assert r.status_code == 200
-        comments = r.json()["items"]
-
-        # Customer should NOT see the private comment
-        contents = [c["content"] for c in comments]
-        assert "Secret internal note" not in contents
-        # But CAN see the public one (needs contributor access or to be author)
-        # The customer is NOT a contributor, so they shouldn't see any
+        assert r.status_code == 403
 
     def test_customer_cannot_create_private_comment(self, client, db):
         """AD-005: customers cannot set is_private=True."""

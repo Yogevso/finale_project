@@ -11,7 +11,7 @@ from app.assistant.tools.user_tools import (
     GetUserTool,
     ListUsersTool,
 )
-from app.models import UserRole
+from app.models import PasswordReset, UserRole, UserSession
 from tests.factories import create_user
 
 
@@ -219,6 +219,65 @@ class TestChangeUserRoleTool:
         assert result["success"] is True
         db.refresh(target)
         assert target.role == UserRole.VIEWER
+
+    def test_change_role_revokes_target_sessions(self, client, db, default_tenant):
+        caller = _make_user_obj(
+            db,
+            UserRole.ADMIN,
+            tenant_id=default_tenant.id,
+            email="a7b@portalqa.dev",
+            username="admin_role_revoke",
+        )
+        target = _make_user_obj(
+            db,
+            UserRole.EDITOR,
+            tenant_id=default_tenant.id,
+            email="r1b@portalqa.dev",
+            username="role_target_revoke",
+            plain_password="TargetPass1!",
+        )
+
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={"username": target.username, "password": "TargetPass1!"},
+        )
+        assert login_response.status_code == 200
+        login_payload = login_response.json()
+        access_headers = {"Authorization": f"Bearer {login_payload['access_token']}"}
+
+        assert client.get("/api/v1/auth/me", headers=access_headers).status_code == 200
+
+        tool = ChangeUserRoleTool()
+        result = _run(tool.execute(caller, tenant_id=default_tenant.id, params={
+            "user_id": target.id, "new_role": "viewer",
+        }, db=db))
+
+        assert result["success"] is True
+        db.refresh(target)
+        assert target.role == UserRole.VIEWER
+        assert client.get("/api/v1/auth/me", headers=access_headers).status_code == 401
+        assert client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": login_payload["refresh_token"]},
+        ).status_code == 401
+
+        session = (
+            db.query(UserSession)
+            .filter(UserSession.user_id == target.id)
+            .order_by(UserSession.id.desc())
+            .first()
+        )
+        assert session is not None
+        assert session.revoked_at is not None
+        assert (
+            db.query(PasswordReset)
+            .filter(
+                PasswordReset.user_id == target.id,
+                PasswordReset.used_at.is_(None),
+            )
+            .count()
+            == 0
+        )
 
     def test_cannot_promote_above_own_role(self, db):
         """An editor cannot promote someone to admin."""
