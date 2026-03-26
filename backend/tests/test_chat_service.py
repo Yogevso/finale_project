@@ -1,7 +1,8 @@
 """Chat service tests — X1-049 to X1-053."""
 
 import pytest
-from fastapi import HTTPException
+
+from app.errors import DomainError
 
 from app.models import (
     Chat,
@@ -90,7 +91,7 @@ class TestDirectChatDeduplication:
         assert user_ids == {editor_a.id, editor_b.id}
 
     def test_cannot_create_chat_with_self(self, svc, editor_a):
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.create_direct_chat(editor_a, editor_a.id)
         assert exc.value.status_code == 400
 
@@ -113,7 +114,7 @@ class TestGroupChatPermissions:
 
     def test_member_cannot_delete_group(self, svc, editor_a, editor_b):
         chat = svc.create_group_chat(editor_a, "Test Group", [editor_b.id])
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.delete_chat(chat.id, editor_b)
         assert exc.value.status_code == 403
 
@@ -124,13 +125,13 @@ class TestGroupChatPermissions:
 
     def test_member_cannot_add_participant(self, svc, editor_a, editor_b, editor_c):
         chat = svc.create_group_chat(editor_a, "Test Group", [editor_b.id])
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.add_participant(chat.id, editor_b, editor_c.id)
         assert exc.value.status_code == 403
 
     def test_cannot_remove_owner(self, svc, editor_a, editor_b):
         chat = svc.create_group_chat(editor_a, "Test Group", [editor_b.id])
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.remove_participant(chat.id, editor_a, editor_a.id)
         assert exc.value.status_code == 400
 
@@ -158,7 +159,7 @@ class TestChatTenantIsolation:
             role=UserRole.CUSTOMER, tenant_id=foreign_customer.tenant_id,
         )
         chat = svc.create_direct_chat(foreign_customer, customer_same.id)
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc._get_chat_with_permission(chat.id, editor_a)
         # Different tenant + not a participant → 404 to hide existence
         assert exc.value.status_code == 404
@@ -166,20 +167,20 @@ class TestChatTenantIsolation:
     def test_cannot_access_other_tenant_chat(self, svc, editor_a, editor_b, foreign_customer):
         """A non-participant from another tenant gets 404."""
         chat = svc.create_direct_chat(editor_a, editor_b.id)
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc._get_chat_with_permission(chat.id, foreign_customer)
         assert exc.value.status_code == 404
 
     def test_internal_staff_cannot_chat_cross_tenant(self, svc, editor_a, foreign_customer):
         """Cross-tenant direct chats are hidden by tenant-scoped user lookup."""
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.create_direct_chat(editor_a, foreign_customer.id)
         assert exc.value.status_code == 404
 
     def test_system_admin_cannot_bypass_cross_tenant_direct_chat(
         self, svc, editor_a, foreign_system_admin
     ):
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.create_direct_chat(editor_a, foreign_system_admin.id)
         assert exc.value.status_code == 404
 

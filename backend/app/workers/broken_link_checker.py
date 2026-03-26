@@ -32,7 +32,7 @@ def process_batch(batch_size: int) -> AsyncJobBatchReport:
         report.completed = 1
         if broken_count > 0:
             logger.info("Found %d broken links", broken_count)
-    except Exception:
+    except Exception:  # policy: LOSSY — worker loop records failure and continues polling
         logger.exception("Broken link scan failed")
         report.dead_lettered = 1
     finally:

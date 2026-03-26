@@ -5,11 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.domain.events import (
+    CommentChatBridgeRequested,
     CommentCreated,
     DocumentPublished,
     InProcessDomainEventDispatcher,
 )
 from app.models import (
+    ChatMessage,
+    ChatParticipant,
     Comment,
     Document,
     DocumentStatus,
@@ -23,6 +26,10 @@ from app.models import (
 )
 from app.schemas import CommentCreate
 from app.services.comment_service import CommentService
+from app.services.domain_event_handlers import (
+    bridge_comment_to_chat,
+    build_comment_chat_bridge_context_json,
+)
 from app.services.version_service import VersionService
 
 
@@ -143,7 +150,7 @@ def test_version_service_emits_document_published_event(db):
     assert event.published_by_user_id == publisher.id
 
 
-def test_comment_service_emits_comment_created_event(db):
+def test_comment_service_emits_comment_side_effect_events(db):
     tenant = Tenant(name="comment-test-tenant", slug="comment-test", company_type="customer")
     db.add(tenant)
     db.flush()
@@ -207,11 +214,94 @@ def test_comment_service_emits_comment_created_event(db):
     )
 
     assert created.id is not None
-    assert len(dispatcher.events) == 1
-    event = dispatcher.events[0]
-    assert isinstance(event, CommentCreated)
-    assert event.document_id == document.id
-    assert event.parent_comment_author_id == author.id
-    assert event.commenter_user_id == commenter.id
-    assert event.is_private is True
-    assert event.has_anchor is True
+    assert len(dispatcher.events) == 2
+
+    created_event = dispatcher.events[0]
+    assert isinstance(created_event, CommentCreated)
+    assert created_event.document_id == document.id
+    assert created_event.parent_comment_author_id == author.id
+    assert created_event.commenter_user_id == commenter.id
+    assert created_event.is_private is True
+    assert created_event.has_anchor is True
+
+    bridge_event = dispatcher.events[1]
+    assert isinstance(bridge_event, CommentChatBridgeRequested)
+    assert bridge_event.document_id == document.id
+    assert bridge_event.comment_id == created.id
+    assert bridge_event.document_author_id == author.id
+    assert bridge_event.commenter_user_id == commenter.id
+
+
+def test_comment_chat_bridge_is_idempotent(db):
+    tenant = Tenant(name="comment-bridge-tenant", slug="comment-bridge", company_type="customer")
+    db.add(tenant)
+    db.flush()
+
+    author = User(
+        email="bridge-author@example.com",
+        username="bridgeauthor",
+        full_name="Bridge Author",
+        hashed_password="hashed",
+        role=UserRole.EDITOR,
+        is_active=True,
+        tenant_id=tenant.id,
+    )
+    commenter = User(
+        email="bridge-commenter@example.com",
+        username="bridgecommenter",
+        full_name="Bridge Commenter",
+        hashed_password="hashed",
+        role=UserRole.EDITOR,
+        is_active=True,
+        tenant_id=tenant.id,
+    )
+    db.add_all([author, commenter])
+    db.commit()
+    db.refresh(author)
+    db.refresh(commenter)
+
+    document = Document(
+        title="Bridgeable Document",
+        document_number="DOC-BRIDGE-001",
+        description="for bridge tests",
+        status=DocumentStatus.DRAFT,
+        created_by=author.id,
+        tenant_id=tenant.id,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    comment = Comment(
+        document_id=document.id,
+        user_id=commenter.id,
+        content="Please review this section",
+        anchor_text="Section 2.1",
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    event = CommentChatBridgeRequested(
+        document_id=document.id,
+        comment_id=comment.id,
+        document_author_id=author.id,
+        commenter_user_id=commenter.id,
+        commenter_display_name=commenter.full_name,
+    )
+
+    bridge_comment_to_chat(event, core_db=db, chat_db=db)
+    bridge_comment_to_chat(event, core_db=db, chat_db=db)
+
+    participants = db.query(ChatParticipant).all()
+    assert len(participants) == 2
+
+    context_json = build_comment_chat_bridge_context_json(event)
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.context_json == context_json)
+        .all()
+    )
+    assert len(messages) == 1
+    assert "Please review this section" in messages[0].content
+    assert "[View in document](" in messages[0].content

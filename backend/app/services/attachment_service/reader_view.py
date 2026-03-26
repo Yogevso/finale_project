@@ -128,7 +128,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
 
         try:
             payload = json.loads(raw_json)
-        except Exception:
+        except Exception:  # policy: DEGRADED — invalid stored TOC payload falls back to an empty structure
             logger.warning("Invalid reader_toc_json for attachment %s", attachment.id)
             return {}
 
@@ -376,7 +376,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             reader_artifact.generated_at = datetime.utcnow()
             cls._apply_reader_artifact_to_attachment(attachment, reader_artifact)
             db.commit()
-        except Exception as exc:
+        except Exception as exc:  # policy: COMPENSATING — persist a failed artifact state instead of crashing the worker
             logger.exception("Reader artifact generation failed for attachment %s", attachment_id)
             attachment = db.query(Attachment).filter(Attachment.id == attachment_id).first()
             if attachment:

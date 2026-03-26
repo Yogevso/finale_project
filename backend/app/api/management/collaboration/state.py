@@ -11,7 +11,7 @@ from app.adapters import CollaborationContractAdapter
 from app.collaboration.dependencies import get_collab_state_manager
 from app.collaboration.state_manager import CollabStateManager
 from app.db import get_db
-from app.dependencies.services import get_collaboration_service
+from app.dependencies.services import get_collaboration_auth_service, get_collaboration_service
 from app.models import Document, User
 from app.services.collaboration_service import CollaborationService
 from app.security import get_current_active_user
@@ -51,6 +51,7 @@ class CollaborationAuthorizationResponse(BaseModel):
 def _get_verified_collaboration_payload(
     document_id: int,
     credentials: HTTPAuthorizationCredentials | None = Depends(collaboration_bearer),
+    collaboration_auth_service: CollaborationAuthService = Depends(get_collaboration_auth_service),
 ) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
@@ -58,7 +59,7 @@ def _get_verified_collaboration_payload(
             detail="Collaboration token required",
         )
 
-    payload = CollaborationAuthService().verify_collab_token(credentials.credentials)
+    payload = collaboration_auth_service.verify_collab_token(credentials.credentials)
     if payload is None or payload.get("document_id") != str(document_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

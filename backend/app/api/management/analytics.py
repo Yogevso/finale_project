@@ -385,7 +385,7 @@ def export_csv(
         )
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — translate exporter failures into stable API errors
         logger.exception("Analytics export failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

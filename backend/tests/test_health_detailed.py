@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from app.services.document_audience_service import _company_cache
+
 
 class TestHealthEndpoints:
     """Test health check endpoints"""
@@ -75,3 +77,19 @@ class TestHealthEndpoints:
         assert "email_enabled" in config
         assert "s3_enabled" in config
         assert "debug_mode" in config
+
+    def test_detailed_health_includes_company_cache_metrics(self, client: TestClient):
+        _company_cache.clear(reset_metrics=True)
+
+        response = client.get("/health/detailed")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "caches" in data
+        cache = data["caches"]["document_company_lookup"]
+        assert cache["entry_count"] == 0
+        assert "hits" in cache
+        assert "misses" in cache
+        assert "expired" in cache
+        assert "writes" in cache
+        assert "evictions" in cache

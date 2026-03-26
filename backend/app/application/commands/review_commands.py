@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from fastapi import HTTPException, status
 from sqlalchemy import update
 from sqlalchemy.orm import Session, joinedload
 
@@ -393,27 +392,3 @@ class ApproveReviewCommandHandler:
                     message=exc.message,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    ApproveReviewCommandError(
-                        code=ApproveReviewCommandErrorCode.NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_403_FORBIDDEN:
-                return Result.err(
-                    ApproveReviewCommandError(
-                        code=ApproveReviewCommandErrorCode.PERMISSION_DENIED,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_409_CONFLICT:
-                return Result.err(
-                    ApproveReviewCommandError(
-                        code=ApproveReviewCommandErrorCode.CONFLICT,
-                        message=str(exc.detail),
-                    )
-                )
-            raise
-

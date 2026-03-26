@@ -63,6 +63,7 @@ def test_direct_chat_api_masks_cross_tenant_user_enumeration_like_missing_user(
     assert cross_tenant_response.status_code == 404
     assert missing_user_response.status_code == 404
     assert cross_tenant_response.json() == missing_user_response.json() == {
-        "detail": "User not found"
+        "detail": "User not found",
+        "error_code": "not_found",
     }
     assert db.query(Chat).count() == 0

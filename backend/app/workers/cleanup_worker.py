@@ -283,7 +283,7 @@ def main() -> None:
             try:
                 result = run_cleanup(dry_run=args.dry_run)
                 logger.info("Cleanup complete: %s", result)
-            except Exception:
+            except Exception:  # policy: LOSSY — worker loop records failure and continues polling
                 logger.exception("Cleanup cycle failed")
             time.sleep(args.interval)
     else:

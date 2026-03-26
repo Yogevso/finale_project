@@ -106,7 +106,7 @@ class DistributedRateLimitService:
             allowed = int(result[0]) == 1
             retry_after = max(int(result[1]), 0)
             return allowed, retry_after
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis distributed limiter may fall back to in-memory safely
             logger.warning("Redis distributed rate-limit failed, falling back to in-memory")
             return cls._memory_check_and_record(
                 key,

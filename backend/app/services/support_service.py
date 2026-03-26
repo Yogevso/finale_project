@@ -11,11 +11,10 @@ from html import escape
 from pathlib import Path
 from typing import Optional
 
-from fastapi import HTTPException
-from sqlalchemy import or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.errors import NotFoundError, PermissionDeniedError, ServiceUnavailableError, ValidationError
 from app.models import (
     Feedback,
     Notification,
@@ -28,6 +27,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.repositories import SupportTicketRepository, UserRepository
 from app.services.attachment_service.common import AttachmentServiceCommonMixin
 from app.services.email_service import email_service
 from app.services.malware_scan_service import (
@@ -88,6 +88,8 @@ class SupportTicketService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.ticket_repository = SupportTicketRepository(db)
+        self.user_repository = UserRepository(db)
 
     @staticmethod
     def _sanitize_message_content(content: str, *, allow_empty: bool = False) -> str:
@@ -95,10 +97,10 @@ class SupportTicketService:
         if not normalized_content:
             if allow_empty:
                 return ""
-            raise HTTPException(status_code=400, detail="content is empty after sanitization")
+            raise ValidationError("content is empty after sanitization")
         sanitized_content = (sanitize_html_content(normalized_content) or "").strip()
         if not sanitized_content:
-            raise HTTPException(status_code=400, detail="content is empty after sanitization")
+            raise ValidationError("content is empty after sanitization")
         return sanitized_content
 
     @staticmethod
@@ -141,38 +143,19 @@ class SupportTicketService:
         *,
         exclude_user_id: int | None = None,
     ) -> list[User]:
-        assigned_agents = (
-            self.db.query(User)
-            .join(
-                SupportTicketAssignment,
-                SupportTicketAssignment.agent_id == User.id,
-            )
-            .filter(
-                SupportTicketAssignment.ticket_id == ticket.id,
-                User.is_active.is_(True),
-            )
+        recipients = self.ticket_repository.list_assigned_active_agents(
+            ticket.id,
+            exclude_user_id=exclude_user_id,
         )
-        if exclude_user_id is not None:
-            assigned_agents = assigned_agents.filter(User.id != exclude_user_id)
-        recipients = assigned_agents.all()
         if recipients:
             return recipients
 
         support_roles = [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
-        fallback_query = self.db.query(User).filter(
-            User.is_active.is_(True),
-            User.role.in_(support_roles),
+        return self.user_repository.list_active_by_roles(
+            support_roles,
+            tenant_id=ticket.tenant_id,
+            exclude_user_id=exclude_user_id,
         )
-        if exclude_user_id is not None:
-            fallback_query = fallback_query.filter(User.id != exclude_user_id)
-        if ticket.tenant_id is not None:
-            fallback_query = fallback_query.filter(
-                or_(
-                    User.role == UserRole.SYSTEM_ADMIN,
-                    User.tenant_id == ticket.tenant_id,
-                )
-            )
-        return fallback_query.all()
 
     def _list_support_email_recipients(
         self,
@@ -292,7 +275,7 @@ class SupportTicketService:
         agent: User,
         message_content: str,
     ) -> None:
-        customer = ticket.customer or self.db.query(User).filter(User.id == ticket.customer_id).first()
+        customer = ticket.customer or self.user_repository.get_by_id(ticket.customer_id)
         if customer is None:
             return
 
@@ -324,7 +307,7 @@ class SupportTicketService:
         ticket: SupportTicket,
         actor: User,
     ) -> None:
-        customer = ticket.customer or self.db.query(User).filter(User.id == ticket.customer_id).first()
+        customer = ticket.customer or self.user_repository.get_by_id(ticket.customer_id)
         if customer is None:
             return
 
@@ -364,15 +347,11 @@ class SupportTicketService:
             normalized_type not in AttachmentServiceCommonMixin.ALLOWED_TYPES
             and file_ext not in self._SUPPORTED_ATTACHMENT_EXTENSIONS
         ):
-            raise HTTPException(
-                status_code=400,
-                detail=f"File type not allowed: {normalized_type}",
-            )
+            raise ValidationError(f"File type not allowed: {normalized_type}")
 
         if len(file_bytes) > settings.MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Max size: {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB",
+            raise ValidationError(
+                f"File too large. Max size: {settings.MAX_UPLOAD_SIZE // (1024 * 1024)}MB"
             )
 
         AttachmentServiceCommonMixin._validate_magic_bytes(
@@ -383,9 +362,9 @@ class SupportTicketService:
         try:
             scan_upload_bytes(file_bytes, normalized_name, normalized_type)
         except MalwareDetectedError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise ValidationError(str(exc)) from exc
         except MalwareScannerUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+            raise ServiceUnavailableError(str(exc)) from exc
 
         storage = get_storage_backend()
         storage_key = storage.upload(
@@ -401,36 +380,29 @@ class SupportTicketService:
         message_id: int,
         current_user: User,
     ) -> tuple[SupportTicketMessage, bytes]:
-        ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
         self._check_ticket_access(ticket, current_user)
 
-        message = (
-            self.db.query(SupportTicketMessage)
-            .filter(
-                SupportTicketMessage.id == message_id,
-                SupportTicketMessage.ticket_id == ticket_id,
-            )
-            .first()
-        )
+        message = self.ticket_repository.get_message(ticket_id, message_id)
         if not message or not message.file_storage_key:
-            raise HTTPException(status_code=404, detail="Attachment not found")
+            raise NotFoundError("Attachment not found")
         if message.is_internal_note and current_user.id == ticket.customer_id:
-            raise HTTPException(status_code=404, detail="Attachment not found")
+            raise NotFoundError("Attachment not found")
 
         try:
             content = get_storage_backend().download(message.file_storage_key)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Attachment not found") from exc
-        except Exception as exc:
+            raise NotFoundError("Attachment not found") from exc
+        except Exception as exc:  # policy: BOUNDARY — attachment download failure becomes a stable HTTP error
             logger.warning(
                 "Failed to download support attachment %s for message %s: %s",
                 message.file_storage_key,
                 message.id,
                 exc,
             )
-            raise HTTPException(status_code=503, detail="Attachment temporarily unavailable") from exc
+            raise ServiceUnavailableError("Attachment temporarily unavailable") from exc
 
         return message, content
 
@@ -500,7 +472,7 @@ class SupportTicketService:
                 Feedback.id == feedback_id, Feedback.user_id == customer.id
             ).first()
             if not fb:
-                raise HTTPException(status_code=404, detail="Feedback not found")
+                raise NotFoundError("Feedback not found")
 
         ticket = SupportTicket(
             customer_id=customer.id,
@@ -540,12 +512,10 @@ class SupportTicketService:
             Feedback.id == feedback_id, Feedback.user_id == customer.id
         ).first()
         if not fb:
-            raise HTTPException(status_code=404, detail="Feedback not found")
+            raise NotFoundError("Feedback not found")
 
         # Check no duplicate ticket for this feedback
-        existing = self.db.query(SupportTicket).filter(
-            SupportTicket.feedback_id == feedback_id
-        ).first()
+        existing = self.ticket_repository.get_by_feedback_id(feedback_id)
         if existing:
             return existing
 
@@ -562,18 +532,9 @@ class SupportTicketService:
 
     def get_ticket(self, ticket_id: int, current_user: User) -> SupportTicket:
         """Get ticket with messages and assignments (X1-068)."""
-        ticket = (
-            self.db.query(SupportTicket)
-            .options(
-                joinedload(SupportTicket.messages),
-                joinedload(SupportTicket.assignments),
-                joinedload(SupportTicket.customer),
-            )
-            .filter(SupportTicket.id == ticket_id)
-            .first()
-        )
+        ticket = self.ticket_repository.get_by_id_with_detail(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
 
         self._check_ticket_access(ticket, current_user)
         return ticket
@@ -586,31 +547,12 @@ class SupportTicketService:
         page_size: int = 20,
     ) -> tuple[list[SupportTicket], int]:
         """List tickets visible to the current user (X1-069)."""
-        query = self.db.query(SupportTicket).options(joinedload(SupportTicket.customer))
-
-        # Customers/viewers see only their own tickets
-        if current_user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
-            query = query.filter(SupportTicket.customer_id == current_user.id)
-        elif current_user.role != UserRole.SYSTEM_ADMIN:
-            # Internal staff see only tickets within their tenant
-            if current_user.tenant_id is None:
-                # Staff without a tenant should see nothing (not all unscoped tickets)
-                query = query.filter(SupportTicket.id == -1)  # yields empty result
-            else:
-                query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
-
-        if status_filter:
-            query = query.filter(SupportTicket.status == status_filter)
-
-        total = query.count()
-        tickets = (
-            query
-            .order_by(SupportTicket.updated_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-            .all()
+        return self.ticket_repository.list_visible_to_user(
+            current_user,
+            status_filter=status_filter,
+            page=page,
+            page_size=page_size,
         )
-        return tickets, total
 
     # ------------------------------------------------------------------
     # Ticket updates
@@ -634,9 +576,8 @@ class SupportTicketService:
         if status is not None:
             allowed = _allowed_transitions(current_user).get(ticket.status, set())
             if status not in allowed:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot transition from {ticket.status.value} to {status.value}",
+                raise ValidationError(
+                    f"Cannot transition from {ticket.status.value} to {status.value}"
                 )
             ticket.status = status
             if status == SupportTicketStatus.RESOLVED:
@@ -657,13 +598,13 @@ class SupportTicketService:
 
     def close_ticket_as_customer(self, ticket_id: int, customer: User) -> SupportTicket:
         """Customer closes their own ticket (X1-075)."""
-        ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
         if ticket.customer_id != customer.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionDeniedError("Access denied")
         if ticket.status not in (SupportTicketStatus.RESOLVED, SupportTicketStatus.OPEN):
-            raise HTTPException(status_code=400, detail="Only resolved or open tickets can be closed")
+            raise ValidationError("Only resolved or open tickets can be closed")
         ticket.status = SupportTicketStatus.CLOSED
         self.db.commit()
         self.db.refresh(ticket)
@@ -685,26 +626,26 @@ class SupportTicketService:
         file_mime_type: str | None = None,
     ) -> SupportTicketMessage:
         """Send a message on a ticket (X1-071)."""
-        ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
         self._check_ticket_access(ticket, sender)
 
         # M-48: Prevent messaging on closed tickets
         if ticket.status == SupportTicketStatus.CLOSED:
-            raise HTTPException(status_code=400, detail="Cannot send messages on closed tickets")
+            raise ValidationError("Cannot send messages on closed tickets")
 
         # Determine sender_type
         if sender.id == ticket.customer_id:
             sender_type = "customer"
             if is_internal_note:
-                raise HTTPException(status_code=403, detail="Customers cannot create internal notes")
+                raise PermissionDeniedError("Customers cannot create internal notes")
         else:
             sender_type = "agent"
 
         has_attachment = file_bytes is not None
         if not (content or "").strip() and not has_attachment:
-            raise HTTPException(status_code=400, detail="content or file is required")
+            raise ValidationError("content or file is required")
 
         sanitized_content = self._sanitize_message_content(content, allow_empty=has_attachment)
         attachment_storage_key: str | None = None
@@ -761,11 +702,11 @@ class SupportTicketService:
 
         try:
             self.db.commit()
-        except Exception:
+        except Exception:  # policy: COMPENSATING — message persistence failure must clean up orphaned attachment state
             if attachment_storage_key:
                 try:
                     get_storage_backend().delete(attachment_storage_key)
-                except Exception as cleanup_exc:
+                except Exception as cleanup_exc:  # policy: COMPENSATING — orphan cleanup is best-effort during rollback
                     logger.warning(
                         "Failed to clean up orphaned support attachment %s: %s",
                         attachment_storage_key,
@@ -779,22 +720,14 @@ class SupportTicketService:
         self, ticket_id: int, current_user: User
     ) -> list[SupportTicketMessage]:
         """Get messages for a ticket. Internal notes hidden from customers (X1-071)."""
-        ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
         self._check_ticket_access(ticket, current_user)
-
-        query = (
-            self.db.query(SupportTicketMessage)
-            .filter(SupportTicketMessage.ticket_id == ticket_id)
-            .order_by(SupportTicketMessage.created_at.asc())
+        return self.ticket_repository.list_messages(
+            ticket_id,
+            include_internal_notes=current_user.id != ticket.customer_id,
         )
-
-        # Hide internal notes from customers
-        if current_user.id == ticket.customer_id:
-            query = query.filter(SupportTicketMessage.is_internal_note.is_(False))
-
-        return query.all()
 
     # ------------------------------------------------------------------
     # Agent assignment
@@ -806,21 +739,19 @@ class SupportTicketService:
         """Assign an agent to a ticket (X1-070)."""
         ticket = self._get_ticket_for_agent(ticket_id, current_user)
 
-        agent = self.db.query(User).filter(User.id == agent_id).first()
+        agent = self.user_repository.get_by_id(agent_id)
         if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise NotFoundError("Agent not found")
         if agent.role in (UserRole.CUSTOMER, UserRole.VIEWER):
-            raise HTTPException(status_code=400, detail="User does not have agent permissions")
+            raise ValidationError("User does not have agent permissions")
         # Tenant isolation: agent must belong to the same tenant as the ticket
         if agent.role != UserRole.SYSTEM_ADMIN and ticket.tenant_id is not None:
             if agent.tenant_id != ticket.tenant_id:
-                raise HTTPException(status_code=403, detail="Agent does not belong to the same tenant as the ticket")
+                raise PermissionDeniedError(
+                    "Agent does not belong to the same tenant as the ticket"
+                )
 
-        existing = (
-            self.db.query(SupportTicketAssignment)
-            .filter_by(ticket_id=ticket_id, agent_id=agent_id)
-            .first()
-        )
+        existing = self.ticket_repository.get_assignment(ticket_id, agent_id)
         if existing:
             existing.is_primary = is_primary
             self.db.commit()
@@ -828,10 +759,7 @@ class SupportTicketService:
             return existing
 
         if is_primary:
-            # Demote any existing primary
-            self.db.query(SupportTicketAssignment).filter_by(
-                ticket_id=ticket_id, is_primary=True
-            ).update({"is_primary": False})
+            self.ticket_repository.demote_primary_assignments(ticket_id)
 
         assignment = SupportTicketAssignment(
             ticket_id=ticket_id, agent_id=agent_id, is_primary=is_primary
@@ -850,13 +778,9 @@ class SupportTicketService:
         """Remove an agent from a ticket."""
         self._get_ticket_for_agent(ticket_id, current_user)
 
-        assignment = (
-            self.db.query(SupportTicketAssignment)
-            .filter_by(ticket_id=ticket_id, agent_id=agent_id)
-            .first()
-        )
+        assignment = self.ticket_repository.get_assignment(ticket_id, agent_id)
         if not assignment:
-            raise HTTPException(status_code=404, detail="Assignment not found")
+            raise NotFoundError("Assignment not found")
 
         self.db.delete(assignment)
         self.db.commit()
@@ -871,27 +795,22 @@ class SupportTicketService:
         """Transfer primary ownership to another agent (X1-102)."""
         ticket = self._get_ticket_for_agent(ticket_id, current_user)
 
-        target = self.db.query(User).filter(User.id == target_agent_id).first()
+        target = self.user_repository.get_by_id(target_agent_id)
         if not target:
-            raise HTTPException(status_code=404, detail="Target agent not found")
+            raise NotFoundError("Target agent not found")
         if target.role in (UserRole.CUSTOMER, UserRole.VIEWER):
-            raise HTTPException(status_code=400, detail="Target user is not an agent")
+            raise ValidationError("Target user is not an agent")
         # Tenant isolation: target agent must belong to the same tenant as the ticket
         if target.role != UserRole.SYSTEM_ADMIN and ticket.tenant_id is not None:
             if target.tenant_id != ticket.tenant_id:
-                raise HTTPException(status_code=403, detail="Target agent does not belong to the same tenant as the ticket")
+                raise PermissionDeniedError(
+                    "Target agent does not belong to the same tenant as the ticket"
+                )
 
         # Demote all existing primaries
-        self.db.query(SupportTicketAssignment).filter_by(
-            ticket_id=ticket_id, is_primary=True
-        ).update({"is_primary": False})
+        self.ticket_repository.demote_primary_assignments(ticket_id)
 
-        # Upsert the target agent as primary
-        existing = (
-            self.db.query(SupportTicketAssignment)
-            .filter_by(ticket_id=ticket_id, agent_id=target_agent_id)
-            .first()
-        )
+        existing = self.ticket_repository.get_assignment(ticket_id, target_agent_id)
         if existing:
             existing.is_primary = True
             assignment = existing
@@ -938,11 +857,7 @@ class SupportTicketService:
         self, ticket: SupportTicket, customer: User
     ) -> None:
         """Create notifications for assigned agents when customer sends a message (X1-087)."""
-        assignments = (
-            self.db.query(SupportTicketAssignment)
-            .filter(SupportTicketAssignment.ticket_id == ticket.id)
-            .all()
-        )
+        assignments = self.ticket_repository.list_assignments(ticket.id)
         for a in assignments:
             self.db.add(Notification(
                 user_id=a.agent_id,
@@ -959,14 +874,9 @@ class SupportTicketService:
         usernames = list(dict.fromkeys(MENTION_RE.findall(content)))
         if not usernames:
             return
-        mentioned = (
-            self.db.query(User)
-            .filter(
-                User.username.in_(usernames),
-                User.is_active.is_(True),
-                User.id != sender.id,
-            )
-            .all()
+        mentioned = self.user_repository.list_active_by_usernames(
+            usernames,
+            exclude_user_id=sender.id,
         )
         for u in mentioned:
             if u.role in (UserRole.CUSTOMER, UserRole.VIEWER):
@@ -989,28 +899,28 @@ class SupportTicketService:
             return
         # Tenant isolation: if user has no tenant, deny access to any tenant's tickets
         if user.tenant_id is None:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionDeniedError("Access denied")
         # Tenant isolation: user's tenant must match ticket's tenant
         if ticket.tenant_id is not None and ticket.tenant_id != user.tenant_id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionDeniedError("Access denied")
         if user.role in (UserRole.ADMIN, UserRole.MANAGER, UserRole.EDITOR):
             return
         # Customers/viewers can only see their own tickets
         if ticket.customer_id != user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionDeniedError("Access denied")
 
     def _get_ticket_for_agent(self, ticket_id: int, user: User) -> SupportTicket:
         """Get ticket ensuring user has agent-level access with tenant scoping."""
-        ticket = self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+        ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
-            raise HTTPException(status_code=404, detail="Ticket not found")
+            raise NotFoundError("Ticket not found")
         if user.role == UserRole.SYSTEM_ADMIN:
             return ticket
         if user.role in (UserRole.ADMIN, UserRole.MANAGER):
             # Deny access if user has no tenant
             if user.tenant_id is None:
-                raise HTTPException(status_code=403, detail="Access denied")
+                raise PermissionDeniedError("Access denied")
             if ticket.tenant_id is not None and ticket.tenant_id != user.tenant_id:
-                raise HTTPException(status_code=403, detail="Access denied")
+                raise PermissionDeniedError("Access denied")
             return ticket
-        raise HTTPException(status_code=403, detail="Agent-level access required")
+        raise PermissionDeniedError("Agent-level access required")

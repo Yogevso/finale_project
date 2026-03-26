@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.domain.specifications import VisibilitySpec
+from app.errors import NotFoundError
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
     Attachment,
@@ -129,7 +129,7 @@ class PortalDocumentsQueryHandler:
         from app.application.policies.access_policies import DocumentAccessPolicy
         policy = DocumentAccessPolicy()
         if not policy.can_view_document(user, document):
-            raise HTTPException(status_code=404, detail="Document not found")
+            raise NotFoundError("Document not found")
 
     def _customer_documents_query(self, user: User):
         repository = DocumentRepository(self.db)
@@ -270,7 +270,7 @@ class PortalDocumentsQueryHandler:
         def load_projection() -> PortalDocumentDetail:
             document = self.db.query(Document).filter(Document.id == query.document_id).first()
             if not document:
-                raise HTTPException(status_code=404, detail="Document not found")
+                raise NotFoundError("Document not found")
             self._ensure_customer_document_access(document, query.current_user)
 
             attachments = (
@@ -324,14 +324,14 @@ class PortalDocumentsQueryHandler:
     def execute_get_attachment(self, query: GetPortalAttachmentQuery) -> dict:
         document = self.db.query(Document).filter(Document.id == query.document_id).first()
         if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
+            raise NotFoundError("Document not found")
         self._ensure_customer_document_access(document, query.current_user)
 
         # C6: Only serve attachments present at publish time
         from app.services.published_attachment_resolver import is_attachment_in_published_snapshot
 
         if not is_attachment_in_published_snapshot(self.db, query.document_id, query.attachment_id):
-            raise HTTPException(status_code=404, detail="Attachment not found")
+            raise NotFoundError("Attachment not found")
 
         attachment = (
             self.db.query(Attachment)
@@ -342,7 +342,7 @@ class PortalDocumentsQueryHandler:
             .first()
         )
         if not attachment:
-            raise HTTPException(status_code=404, detail="Attachment not found")
+            raise NotFoundError("Attachment not found")
 
         return {
             "id": attachment.id,

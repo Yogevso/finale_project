@@ -220,7 +220,7 @@ class PptxExtractor:
         except UnsafeArchiveError as exc:
             logger.warning("PPTX extraction rejected for %s: %s", source_name, exc)
             return self._failed_result("Unsafe PPTX archive", exc)
-        except Exception as exc:
+        except Exception as exc:  # policy: FAIL_FAST — extraction returns a stable failure result for unexpected parse errors
             logger.exception("PPTX extraction failed for %s", source_name)
             return self._failed_result("PPTX extraction failed", exc)
 

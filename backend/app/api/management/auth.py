@@ -16,6 +16,7 @@ from app.dependencies.services import (
     get_auth_service,
     get_collaboration_service,
 )
+from app.errors import DomainError
 from app.models import ActionType, InvitationStatus, Tenant, User, UserRole
 from app.repositories import InvitationRepository, UserRepository
 from app.schemas import (
@@ -214,7 +215,7 @@ def login(
             client_ip=client_ip,
             user_agent=request.headers.get("user-agent"),
         )
-    except HTTPException as exc:
+    except DomainError as exc:
         if (
             settings.RATE_LIMIT_ENABLED
             and not _is_e2e_bypass_request(request)
@@ -304,7 +305,7 @@ def reset_password(
 
     try:
         auth_service.reset_password(payload.token, payload.new_password)
-    except HTTPException:
+    except DomainError:
         if settings.RATE_LIMIT_ENABLED and not _is_e2e_bypass_request(request):
             retry_after = AuthRateLimitService.finalize_reset_password_attempt(client_ip)
             if retry_after > 0:

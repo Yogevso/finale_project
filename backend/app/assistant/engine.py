@@ -422,7 +422,7 @@ class AssistantEngine:
         # Smart routing: hybrid keyword + embedding selection
         try:
             relevant_tools = await _select_relevant_tools_hybrid(message, all_tools) if all_tools else []
-        except Exception:
+        except Exception:  # policy: LOSSY — tool routing can fall back to simpler selection
             logger.warning("Hybrid routing failed, falling back to keyword-only", exc_info=True)
             relevant_tools = _select_relevant_tools(message, all_tools) if all_tools else []
 
@@ -604,7 +604,7 @@ class AssistantEngine:
                     if chunk.get("done"):
                         total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get("eval_count", 0)
                 self._conv.add_message(conv.id, "assistant", full_text, token_count=total_tokens or None)
-            except Exception:
+            except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                 logger.exception("Ollama streaming request failed")
                 yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
                 return
@@ -622,7 +622,7 @@ class AssistantEngine:
                         num_ctx=4096,    # Small context = fast inference
                     )
                     total_tokens += response.get("prompt_eval_count", 0) + response.get("eval_count", 0)
-                except Exception:
+                except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                     logger.exception("Ollama request failed")
                     yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
                     return
@@ -811,7 +811,7 @@ class AssistantEngine:
                         if chunk.get("done"):
                             total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get("eval_count", 0)
                     self._conv.add_message(conv.id, "assistant", full_text, token_count=total_tokens or None)
-                except Exception:
+                except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                     logger.exception("Ollama streaming summary failed")
                     yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
                     return
@@ -909,7 +909,7 @@ class AssistantEngine:
                     title = title[:79] + "…"
                 return title
             return None
-        except Exception:
+        except Exception:  # policy: LOSSY — title generation is optional UX sugar
             logger.debug("LLM title generation failed", exc_info=True)
             return None
 
@@ -930,7 +930,7 @@ class AssistantEngine:
                     "result_preview": (result.result or "")[:1000],
                 }),
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — audit logging must not block tool execution
             logger.warning("Failed to write audit log for tool %s", tc.name, exc_info=True)
 
     @staticmethod

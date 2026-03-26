@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from fastapi import HTTPException, status
-
 from app.application.dto import ActorContext
 from app.application.interfaces.use_cases import PublishApprovedVersion
 from app.application.pipeline import (
@@ -137,33 +135,3 @@ class PublishApprovedVersionCommandHandler:
                     message=exc.message,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    PublishApprovedVersionCommandError(
-                        code=PublishApprovedVersionCommandErrorCode.NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_403_FORBIDDEN:
-                return Result.err(
-                    PublishApprovedVersionCommandError(
-                        code=PublishApprovedVersionCommandErrorCode.PERMISSION_DENIED,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_400_BAD_REQUEST:
-                return Result.err(
-                    PublishApprovedVersionCommandError(
-                        code=PublishApprovedVersionCommandErrorCode.INVALID_STATE,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_409_CONFLICT:
-                return Result.err(
-                    PublishApprovedVersionCommandError(
-                        code=PublishApprovedVersionCommandErrorCode.CONFLICT,
-                        message=str(exc.detail),
-                    )
-                )
-            raise

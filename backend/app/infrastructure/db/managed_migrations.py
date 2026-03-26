@@ -27,7 +27,7 @@ def run_managed_migrations(
     try:
         from alembic import command
         from alembic.config import Config
-    except Exception as exc:  # pragma: no cover - import path is environment dependent.
+    except Exception as exc:  # policy: DEGRADED — missing Alembic keeps lightweight migrations available; pragma: no cover - import path is environment dependent.
         logger.warning("Alembic import unavailable; using lightweight migrations only: %s", exc)
         return False
 
@@ -44,7 +44,7 @@ def run_managed_migrations(
     try:
         command.upgrade(config, "head")
         return True
-    except Exception as exc:
+    except Exception as exc:  # policy: DEGRADED — managed migrations can fall back to lightweight bootstrap
         logger.warning(
             "Managed migration upgrade failed; continuing with lightweight fallback: %s",
             exc,

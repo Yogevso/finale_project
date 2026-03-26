@@ -61,7 +61,7 @@ def _ping_connection_on_checkout(dbapi_conn, connection_record, connection_proxy
     try:
         cursor.execute("SELECT 1")
         cursor.fetchone()
-    except Exception:
+    except Exception:  # policy: FAIL_FAST — unhealthy DB connections must be recycled immediately
         logger.warning("Database connection health check failed, recycling connection")
         raise
     finally:

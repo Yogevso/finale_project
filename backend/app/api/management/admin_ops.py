@@ -587,7 +587,7 @@ def get_system_status(
             latency_ms=db_ms,
             details=f"{user_count} users, {tenant_count} tenants, {doc_count} documents",
         ))
-    except Exception as exc:
+    except Exception as exc:  # policy: DEGRADED — admin diagnostics should surface degraded status, not crash
         services.append(ServiceStatus(
             name="database", status="down", details=f"Connection failed: {exc}",
         ))

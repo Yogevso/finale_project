@@ -24,14 +24,15 @@ from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
+from app.container import build_container
 from app.db import get_db
+from app.errors import DomainError
 from app.models import (
     SupportTicket,
     SupportTicketAssignment,
     User,
     UserRole,
 )
-from app.services.support_service import SupportTicketService
 from app.ws.auth import authenticate_ws
 from app.ws.manager import chat_manager
 
@@ -59,7 +60,7 @@ async def support_websocket(
             msg = json.loads(raw)
             if msg.get("event") == "authenticate":
                 token = msg.get("data", {}).get("token")
-        except Exception:
+        except Exception:  # policy: LOSSY — websocket send failure is handled by disconnect cleanup
             pass  # Auth parse failed; token stays None and connection will be closed below
 
     if not token:
@@ -145,7 +146,9 @@ async def _handle_send_message(websocket: WebSocket, user: User, data: dict, db:
         await _send_error(websocket, "ticket_id and content are required")
         return
 
-    svc = SupportTicketService(db)
+    app = getattr(websocket, "app", None)
+    container = getattr(getattr(app, "state", None), "container", None) or build_container()
+    svc = container.support_ticket_service(db)
     try:
         msg = svc.send_message(
             ticket_id,
@@ -154,8 +157,8 @@ async def _handle_send_message(websocket: WebSocket, user: User, data: dict, db:
             is_internal_note=bool(is_internal_note),
         )
         ticket = svc.get_ticket(ticket_id, user)
-    except HTTPException as exc:
-        await _send_error(websocket, str(exc.detail))
+    except DomainError as exc:
+        await _send_error(websocket, exc.message)
         return
 
     await svc.broadcast_message_event(ticket=ticket, msg=msg, sender=user)

@@ -7,11 +7,12 @@ import os
 from pathlib import Path
 from typing import Iterator, List, Optional
 
-from fastapi import BackgroundTasks, HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.domain.value_objects import SemanticVersion
+from app.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.models import Attachment, AttachmentArtifact, Document, DocumentVisibility, User, UserRole
 from app.services.permissions import (
     Permission,
@@ -120,21 +121,18 @@ class AttachmentServiceCommonMixin:
         if sigs is None:
             return
         if len(content) < 4:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too small to be a valid {file_ext} file: {original_filename}",
+            raise ValidationError(
+                f"File too small to be a valid {file_ext} file: {original_filename}"
             )
         if not any(content[:len(sig)] == sig for sig in sigs):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content does not match extension {file_ext}: {original_filename}",
+            raise ValidationError(
+                f"File content does not match extension {file_ext}: {original_filename}"
             )
         # WebP: RIFF header is shared with AVI/WAV, verify "WEBP" at offset 8
         if file_ext == ".webp":
             if len(content) < 12 or content[8:12] != b"WEBP":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"File content does not match extension {file_ext}: {original_filename}",
+                raise ValidationError(
+                    f"File content does not match extension {file_ext}: {original_filename}"
                 )
 
     @classmethod
@@ -303,17 +301,13 @@ class AttachmentServiceCommonMixin:
             # Anonymous/public flows are governed by caller-specific route rules.
             # Defence-in-depth: only PUBLIC documents should be accessible without auth.
             if document.visibility != DocumentVisibility.PUBLIC:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Authentication required to access this document's attachments",
+                raise PermissionDeniedError(
+                    "Authentication required to access this document's attachments"
                 )
             return
 
         if not can_view_document(current_user, document):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to access this document",
-            )
+            raise PermissionDeniedError("You don't have permission to access this document")
 
         # Internal users are tenant-scoped unless explicitly global.
         if is_internal_user(current_user) and current_user.role != UserRole.SYSTEM_ADMIN:
@@ -322,16 +316,12 @@ class AttachmentServiceCommonMixin:
                 and current_user.tenant_id is not None
                 and document.tenant_id != current_user.tenant_id
             ):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't have permission to access attachments for this tenant",
+                raise PermissionDeniedError(
+                    "You don't have permission to access attachments for this tenant"
                 )
 
         if not has_permission(current_user, Permission.DOWNLOAD_ATTACHMENTS):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to access attachments",
-            )
+            raise PermissionDeniedError("You don't have permission to access attachments")
 
     @classmethod
     def _get_document_for_attachment_access(
@@ -342,7 +332,7 @@ class AttachmentServiceCommonMixin:
     ) -> Document:
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         cls._enforce_attachment_access(document, current_user)
         return document
@@ -378,9 +368,7 @@ class AttachmentServiceCommonMixin:
         )
 
         if not attachment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
-            )
+            raise NotFoundError("Attachment not found")
 
         cls._apply_existing_artifacts_to_attachment(db, attachment)
         return attachment
@@ -400,7 +388,7 @@ class AttachmentServiceCommonMixin:
         # Check document exists
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         # Only admin/editor/manager/system_admin can upload
         if current_user.role not in [
@@ -409,10 +397,7 @@ class AttachmentServiceCommonMixin:
             UserRole.MANAGER,
             UserRole.SYSTEM_ADMIN,
         ]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins, managers and editors can upload attachments",
-            )
+            raise PermissionDeniedError("Only admins, managers and editors can upload attachments")
 
         # Validate file type (allow octet-stream if extension is supported)
         content_type = file.content_type or "application/octet-stream"
@@ -442,10 +427,7 @@ class AttachmentServiceCommonMixin:
             content_type not in cls.ALLOWED_TYPES
             and file_ext not in allowed_extensions
         ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File type not allowed: {content_type}",
-            )
+            raise ValidationError(f"File type not allowed: {content_type}")
 
         # Read file content
         content = await file.read()

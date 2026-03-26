@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from app.config import settings
 from app.domain.events import (
+    CommentChatBridgeRequested,
     CommentCreated,
     CompanyAssignmentsUpdated,
     DocumentPublished,
@@ -70,6 +71,26 @@ def test_outbox_dispatcher_event_key_is_idempotent(db):
     assert db.query(DomainEventOutbox).count() == 1
     row = db.query(DomainEventOutbox).first()
     assert row.event_key == "comment_created:55"
+
+
+def test_outbox_dispatcher_comment_chat_bridge_event_key_is_idempotent(db):
+    dispatcher = build_outbox_event_dispatcher(db)
+    event = CommentChatBridgeRequested(
+        document_id=200,
+        comment_id=55,
+        document_author_id=8,
+        commenter_user_id=3,
+        commenter_display_name="Tester",
+    )
+
+    dispatcher.dispatch(event)
+    dispatcher.dispatch(event)
+    db.commit()
+
+    assert db.query(DomainEventOutbox).count() == 1
+    row = db.query(DomainEventOutbox).first()
+    assert row.event_type == "CommentChatBridgeRequested"
+    assert row.event_key == "comment_chat_bridge_requested:55"
 
 
 def test_assignment_outbox_event_uses_configured_max_attempts(db, monkeypatch):

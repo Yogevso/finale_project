@@ -105,7 +105,7 @@ class AssistantFileHandler:
             if ext == ".pptx":
                 return self._extract_pptx(data)
 
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — file handler wraps extractor failures consistently
             logger.warning("Text extraction failed for %s: %s", path, exc)
             return None
         return None

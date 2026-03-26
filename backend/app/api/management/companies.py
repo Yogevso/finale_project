@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.auth_context.refresh_token_service import RefreshTokenService
 from app.db import get_db
+from app.dependencies.permissions import require_admin, require_system_admin
 from app.models import (
     Document,
     DocumentStatus,
@@ -35,7 +36,6 @@ from app.schemas.company import (
     CompanyUserAdd,
     CompanyUserInfo,
 )
-from app.security import get_current_active_user
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
 
@@ -50,21 +50,6 @@ def _decode_documents_cursor(cursor: str) -> tuple[datetime, int]:
         return datetime.fromisoformat(updated_at_raw), int(document_id_raw)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid cursor format") from exc
-
-
-def require_admin(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require admin or system_admin role"""
-    if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
-
-
-def require_system_admin(current_user: User = Depends(get_current_active_user)) -> User:
-    """Require system_admin role."""
-    if current_user.role != UserRole.SYSTEM_ADMIN:
-        raise HTTPException(status_code=403, detail="System admin access required")
-    return current_user
-
 
 def _enforce_tenant_scope(current_user: User, company_id: int) -> None:
     """Non-system-admins can only access their own tenant's company."""

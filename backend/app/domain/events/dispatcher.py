@@ -30,7 +30,7 @@ class InProcessDomainEventDispatcher:
         for handler in handlers:
             try:
                 handler(event)
-            except Exception:
+            except Exception:  # policy: LOSSY — one failing subscriber must not block the event fan-out
                 logger.exception(
                     "Domain event handler failed for %s",
                     type(event).__name__,

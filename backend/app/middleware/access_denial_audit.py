@@ -47,7 +47,7 @@ class AccessDenialAuditMiddleware(BaseHTTPMiddleware):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — access-denial audit should not block the response path
             logger.debug("Failed to write access denial security event", exc_info=True)
 
         return response

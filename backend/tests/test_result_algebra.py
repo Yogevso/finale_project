@@ -1,7 +1,6 @@
 """Tests for typed Result algebra and command/query handlers."""
 
 import pytest
-from fastapi import HTTPException, status
 
 from app.application.commands.document_commands import (
     AssignCompanySetCommand,
@@ -105,18 +104,18 @@ def test_publish_approved_version_handler_maps_expected_errors(test_user):
     assert result.error.code == PublishApprovedVersionCommandErrorCode.CONFLICT
 
 
-def test_publish_approved_version_handler_re_raises_unexpected_http_error(test_user):
+def test_publish_approved_version_handler_re_raises_unexpected_error(test_user):
     class StubUnexpectedUseCase:
         def publish_approved_version(self, _document_id, _version_id, _current_user):
-            raise HTTPException(status_code=status.HTTP_418_IM_A_TEAPOT, detail="boom")
+            raise RuntimeError("boom")
 
     handler = PublishApprovedVersionCommandHandler(StubUnexpectedUseCase())
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuntimeError) as exc_info:
         _ = handler.execute(
             PublishApprovedVersionCommand(document_id=1, version_id=2, current_user=test_user)
         )
 
-    assert exc_info.value.status_code == status.HTTP_418_IM_A_TEAPOT
+    assert str(exc_info.value) == "boom"
 
 
 def test_get_document_query_handler_returns_typed_result(db, test_document):

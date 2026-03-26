@@ -41,6 +41,9 @@ jobs:
       - name: Backend architecture checks
         run: python scripts/architecture_checks/check_backend_architecture.py
 
+      - name: Broad exception policy checks
+        run: python scripts/architecture_checks/check_exception_policy_annotations.py
+
       - name: Collab architecture checks
         run: python scripts/architecture_checks/check_collab_architecture.py
 

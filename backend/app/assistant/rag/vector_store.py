@@ -147,7 +147,7 @@ class VectorStore:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector query failure falls back to empty semantic results
             logger.exception("ChromaDB query failed")
             return []
 
@@ -190,7 +190,7 @@ class VectorStore:
                 count = len(existing["ids"])
                 logger.info("Removed %d chunks for document %d", count, doc_id)
                 return count
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector delete failure should not crash higher-level cleanup
             logger.exception("Failed to delete chunks for document %d", doc_id)
         return 0
 
@@ -209,6 +209,6 @@ class VectorStore:
                     "status": "ready",
                 }
             return {"total_chunks": 0, "total_documents": 0, "status": "empty"}
-        except Exception:
+        except Exception:  # policy: DEGRADED — vector stats failure should report an error status instead
             logger.exception("Failed to get vector store stats")
             return {"total_chunks": 0, "total_documents": 0, "status": "error"}

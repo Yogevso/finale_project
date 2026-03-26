@@ -101,7 +101,14 @@ class FastAPIAppFactory:
             allow_credentials=True,
             # AD-015: explicit method and header allowlists
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-E2E-Test", "X-Idempotency-Key", "X-Request-ID"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-E2E-Test",
+                "X-Idempotency-Key",
+                "X-Request-ID",
+                "X-Trace-ID",
+            ],
         )
 
     @staticmethod
@@ -120,6 +127,7 @@ class FastAPIAppFactory:
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.message, "error_code": exc.error_code},
+                headers=exc.headers,
             )
 
         @app.exception_handler(Exception)
@@ -177,7 +185,7 @@ class FastAPIAppFactory:
                     RbacService.publish_policies(db)
                 finally:
                     db.close()
-            except Exception as exc:
+            except Exception as exc:  # policy: DEGRADED — optional startup integration should not block boot
                 logger.warning("RBAC publish skipped: %s", exc)
 
             # Pre-warm the Ollama model so the first request is fast
@@ -190,7 +198,7 @@ class FastAPIAppFactory:
                     )
                     import asyncio
                     asyncio.ensure_future(ollama.warmup())
-                except Exception as exc:
+                except Exception as exc:  # policy: DEGRADED — optional startup integration should not block boot
                     logger.warning("Ollama warmup skipped: %s", exc)
 
     @staticmethod

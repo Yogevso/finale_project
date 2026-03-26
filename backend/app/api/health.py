@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.services.document_audience_service import get_company_lookup_cache_metrics
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,7 +27,7 @@ def _check_database(db: Session) -> dict[str, Any]:
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:
+    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -58,7 +59,7 @@ def _check_storage() -> dict[str, Any]:
             "bucket": settings.S3_BUCKET,
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:
+    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Storage health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -139,6 +140,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
     db_status = _check_database(db)
     storage_status = _check_storage()
     system_info = _get_system_info()
+    cache_metrics = get_company_lookup_cache_metrics()
 
     all_healthy = all(s.get("status") == "healthy" for s in [db_status, storage_status])
 
@@ -161,5 +163,18 @@ async def detailed_health_check(db: Session = Depends(get_db)):
             "s3_enabled": settings.S3_ENABLED,
             "debug_mode": settings.DEBUG,
             "log_level": settings.LOG_LEVEL,
+        },
+        "caches": {
+            "document_company_lookup": {
+                "entry_count": cache_metrics.entry_count,
+                "max_entries": cache_metrics.max_entries,
+                "ttl_seconds": cache_metrics.ttl_seconds,
+                "hits": cache_metrics.hits,
+                "misses": cache_metrics.misses,
+                "expired": cache_metrics.expired,
+                "writes": cache_metrics.writes,
+                "evictions": cache_metrics.evictions,
+                "clears": cache_metrics.clears,
+            }
         },
     }

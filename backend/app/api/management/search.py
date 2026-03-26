@@ -116,7 +116,7 @@ def search_documents(
             results_count=result.total,
         ))
         analytics_db.commit()
-    except Exception:
+    except Exception:  # policy: LOSSY — analytics logging must not block search responses
         logger.debug("Failed to log search analytics", exc_info=True)
 
     return SearchResponse(

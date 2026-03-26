@@ -86,7 +86,7 @@ class AnalyzeUploadedFileTool(BaseTool):
             response = await client.chat([{"role": "user", "content": prompt}])
             answer = response.get("message", {}).get("content", "")
             return {"success": True, "result": answer or "No response generated."}
-        except Exception:
+        except Exception:  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
             logger.exception("File analysis failed")
             return {"success": False, "result": "", "error": "File analysis failed. AI service may be busy."}
 
@@ -138,6 +138,6 @@ class CompareFilesTool(BaseTool):
             response = await client.chat([{"role": "user", "content": prompt}])
             result = response.get("message", {}).get("content", "")
             return {"success": True, "result": result or "No response generated."}
-        except Exception:
+        except Exception:  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
             logger.exception("File comparison failed")
             return {"success": False, "result": "", "error": "File comparison failed. AI service may be busy."}

@@ -156,7 +156,7 @@ class AuthRateLimitService:
                     return False, max(int(math.ceil(locked_until_ts - now)), 1)
                 rclient.delete(lock_key)
             return True, 0
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis auth rate-limit check failed, falling back to in-memory")
             return cls._memory_check_allowed(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
 
@@ -222,7 +222,7 @@ class AuthRateLimitService:
                 rclient.set(lock_key, str(locked_until), ex=lock_seconds)
                 return max(int(math.ceil(lock_seconds)), 1)
             return 0
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis auth rate-limit record failed, falling back to in-memory")
             return cls._memory_record_failure(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
 
@@ -258,7 +258,7 @@ class AuthRateLimitService:
             try:
                 rclient.delete(f"authrl:attempts:{key}", f"authrl:lock:{key}")
                 return
-            except Exception:
+            except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
                 logger.warning("Redis auth rate-limit success record failed, falling back to in-memory")
         now_ts = time.time()
         with cls._lock:
@@ -316,7 +316,7 @@ class AuthRateLimitService:
             allowed = int(result[0])
             retry_after = int(result[1])
             return (allowed == 1), max(retry_after, 0)
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis atomic auth rate-limit failed, falling back to in-memory")
             return cls._memory_check_and_record(
                 key,
@@ -412,7 +412,7 @@ class AuthRateLimitService:
                 rclient.set(lock_key, str(locked_until), ex=lock_seconds)
                 return max(int(math.ceil(lock_seconds)), 1)
             return 0
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis auth rate-limit finalize failed, falling back to in-memory")
             return cls._memory_lock_if_limit_reached(
                 key,

@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from fastapi import HTTPException
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.application.policies.access_policies import DocumentAccessPolicy
+from app.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
     Chat,
     ChatMessage,
@@ -36,7 +36,7 @@ class ChatService:
     def create_direct_chat(self, user_a: User, user_b_id: int) -> Chat:
         """Create or return existing direct chat between two users (X1-007)."""
         if user_a.id == user_b_id:
-            raise HTTPException(status_code=400, detail="Cannot create chat with yourself")
+            raise ValidationError("Cannot create chat with yourself")
 
         user_b = (
             self.core_db.query(User)
@@ -44,7 +44,7 @@ class ChatService:
             .first()
         )
         if not user_b:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise NotFoundError("User not found")
 
         # Deduplication — check if direct chat already exists between these two
         dedup_query = (
@@ -89,9 +89,9 @@ class ChatService:
     def create_group_chat(self, creator: User, name: str, participant_ids: list[int]) -> Chat:
         """Create a new group chat (X1-008)."""
         if not name or not name.strip():
-            raise HTTPException(status_code=400, detail="Group name is required")
+            raise ValidationError("Group name is required")
         if len(participant_ids) < 1:
-            raise HTTPException(status_code=400, detail="At least one other participant is required")
+            raise ValidationError("At least one other participant is required")
 
         # Validate all participants exist and are in the same tenant
         participants = (
@@ -102,7 +102,7 @@ class ChatService:
         valid_ids = {p.id for p in participants}
         invalid = set(participant_ids) - valid_ids - {creator.id}
         if invalid:
-            raise HTTPException(status_code=400, detail="Some participants not found or not in your organization")
+            raise ValidationError("Some participants not found or not in your organization")
 
         chat = Chat(
             type=ChatType.GROUP,
@@ -139,11 +139,11 @@ class ChatService:
         """
         doc = self.core_db.query(Document).filter(Document.id == document_id).first()
         if not doc:
-            raise HTTPException(status_code=404, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         # Verify creator has access to this document
         if not self._access_policy.can_view_document(creator, doc):
-            raise HTTPException(status_code=403, detail="You don't have access to this document")
+            raise PermissionDeniedError("You don't have access to this document")
 
         # Check for existing document-scoped chat
         existing = (
@@ -204,15 +204,15 @@ class ChatService:
         """Add a participant to a group chat (X1-008)."""
         chat = self._get_chat_with_permission(chat_id, current_user, require_admin=True)
         if chat.type != ChatType.GROUP:
-            raise HTTPException(status_code=400, detail="Cannot add participants to direct chats")
+            raise ValidationError("Cannot add participants to direct chats")
 
         target = self.core_db.query(User).filter(User.id == user_id, User.tenant_id == chat.tenant_id).first()
         if not target:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise NotFoundError("User not found")
 
         existing = self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
         if existing:
-            raise HTTPException(status_code=400, detail="User is already a participant")
+            raise ValidationError("User is already a participant")
 
         participant = ChatParticipant(chat_id=chat_id, user_id=user_id, role=ChatParticipantRole.MEMBER)
         self.db.add(participant)
@@ -233,14 +233,14 @@ class ChatService:
         """Remove a participant from a group chat (X1-008)."""
         chat = self._get_chat_with_permission(chat_id, current_user, require_admin=True)
         if chat.type != ChatType.GROUP:
-            raise HTTPException(status_code=400, detail="Cannot remove participants from direct chats")
+            raise ValidationError("Cannot remove participants from direct chats")
 
         participant = self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
         if not participant:
-            raise HTTPException(status_code=404, detail="Participant not found")
+            raise NotFoundError("Participant not found")
 
         if participant.role == ChatParticipantRole.OWNER:
-            raise HTTPException(status_code=400, detail="Cannot remove the chat owner")
+            raise ValidationError("Cannot remove the chat owner")
 
         target = self.core_db.query(User).filter(User.id == user_id).first()
         self.db.delete(participant)
@@ -265,11 +265,10 @@ class ChatService:
         self._get_chat_with_permission(chat_id, sender)
         content = content.strip()
         if not content:
-            raise HTTPException(status_code=400, detail="Message content cannot be empty")
+            raise ValidationError("Message content cannot be empty")
         if len(content) > self.MAX_MESSAGE_LENGTH:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Message exceeds maximum length of {self.MAX_MESSAGE_LENGTH} characters",
+            raise ValidationError(
+                f"Message exceeds maximum length of {self.MAX_MESSAGE_LENGTH} characters"
             )
 
         msg = ChatMessage(
@@ -420,7 +419,7 @@ class ChatService:
             current_user.role != UserRole.SYSTEM_ADMIN
             and chat.tenant_id != current_user.tenant_id
         ):
-            raise HTTPException(status_code=404, detail="Chat not found")
+            raise NotFoundError("Chat not found")
 
         if chat.type == ChatType.GROUP:
             # Only owner can delete group chats
@@ -428,7 +427,7 @@ class ChatService:
                 chat_id=chat_id, user_id=current_user.id, role=ChatParticipantRole.OWNER
             ).first()
             if not owner and current_user.role != UserRole.SYSTEM_ADMIN:
-                raise HTTPException(status_code=403, detail="Only the group owner can delete this chat")
+                raise PermissionDeniedError("Only the group owner can delete this chat")
 
         self.db.delete(chat)
         self.db.commit()
@@ -489,7 +488,7 @@ class ChatService:
         """Rename a group chat (X1-045)."""
         chat = self._get_chat_with_permission(chat_id, current_user, require_admin=True)
         if chat.type != ChatType.GROUP:
-            raise HTTPException(status_code=400, detail="Cannot rename direct chats")
+            raise ValidationError("Cannot rename direct chats")
         old_name = chat.name
         chat.name = name.strip()
         self.db.add(ChatMessage(
@@ -509,7 +508,7 @@ class ChatService:
             chat_id=chat_id, user_id=current_user.id
         ).first()
         if not participant:
-            raise HTTPException(status_code=404, detail="Not a participant")
+            raise NotFoundError("Not a participant")
         participant.is_muted = not participant.is_muted
         self.db.commit()
         return participant.is_muted
@@ -520,17 +519,17 @@ class ChatService:
         """Change a participant's role (X1-046)."""
         chat = self._get_chat_with_permission(chat_id, current_user, require_admin=True)
         if chat.type != ChatType.GROUP:
-            raise HTTPException(status_code=400, detail="Cannot change roles in direct chats")
+            raise ValidationError("Cannot change roles in direct chats")
 
         participant = self.db.query(ChatParticipant).filter_by(
             chat_id=chat_id, user_id=target_user_id
         ).first()
         if not participant:
-            raise HTTPException(status_code=404, detail="Participant not found")
+            raise NotFoundError("Participant not found")
         if participant.role == ChatParticipantRole.OWNER:
-            raise HTTPException(status_code=400, detail="Cannot change the owner's role")
+            raise ValidationError("Cannot change the owner's role")
         if new_role == ChatParticipantRole.OWNER:
-            raise HTTPException(status_code=400, detail="Cannot transfer ownership")
+            raise ValidationError("Cannot transfer ownership")
 
         participant.role = new_role
         target = self.db.query(User).filter(User.id == target_user_id).first()
@@ -558,22 +557,22 @@ class ChatService:
         chat = query.first()
 
         if not chat:
-            raise HTTPException(status_code=404, detail="Chat not found")
+            raise NotFoundError("Chat not found")
 
         # Tenant isolation — SYSTEM_ADMIN is exempt, everyone else must match
         if user.role != UserRole.SYSTEM_ADMIN and chat.tenant_id != user.tenant_id:
-            raise HTTPException(status_code=404, detail="Chat not found")
+            raise NotFoundError("Chat not found")
 
         # Participation check
         participant = self.db.query(ChatParticipant).filter_by(
             chat_id=chat_id, user_id=user.id
         ).first()
         if not participant and user.role != UserRole.SYSTEM_ADMIN:
-            raise HTTPException(status_code=403, detail="You are not a participant in this chat")
+            raise PermissionDeniedError("You are not a participant in this chat")
 
         if require_admin and participant:
             if participant.role not in (ChatParticipantRole.OWNER, ChatParticipantRole.ADMIN):
                 if user.role != UserRole.SYSTEM_ADMIN:
-                    raise HTTPException(status_code=403, detail="Only chat owner/admin can perform this action")
+                    raise PermissionDeniedError("Only chat owner/admin can perform this action")
 
         return chat

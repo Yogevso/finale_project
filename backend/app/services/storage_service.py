@@ -193,7 +193,7 @@ def get_storage_backend() -> StorageBackend:
     if settings.S3_ENABLED:
         try:
             return S3StorageBackend()
-        except Exception:
+        except Exception:  # policy: DEGRADED — S3 initialisation may fall back to local storage when allowed
             if settings.ALLOW_LOCAL_STORAGE_FALLBACK:
                 logger.critical(
                     "S3 storage backend initialisation failed — "

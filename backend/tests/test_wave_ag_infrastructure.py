@@ -127,6 +127,11 @@ class TestAG022TechDebtBudget:
         workflow = (root / ".github" / "workflows" / "architecture-fitness.yml").read_text()
         assert "python backend/scripts/tech_debt_budget.py --budget 200" in workflow
 
+    def test_architecture_fitness_runs_exception_policy_check(self):
+        root = Path(__file__).resolve().parent.parent.parent
+        workflow = (root / ".github" / "workflows" / "architecture-fitness.yml").read_text()
+        assert "python scripts/architecture_checks/check_exception_policy_annotations.py" in workflow
+
 
 # ══════════════════════════════════════════════════════════════════
 # AG-018: Email retry on transient SMTP failure
@@ -302,15 +307,15 @@ class TestAG020ScheduledPublish:
 
 
 class TestAG021EagerLoading:
-    """Admin users list endpoint should use joinedload to avoid N+1."""
+    """Repository-backed admin users list query should use joinedload to avoid N+1."""
 
-    def test_users_controller_uses_joinedload(self):
-        """Verify the controller source imports and uses joinedload."""
+    def test_user_repository_uses_joinedload(self):
+        """Verify the user repository source imports and uses joinedload."""
         import inspect
-        from app.web.controllers.management.users_controller import UsersController
+        from app.repositories.user_repository import UserRepository
 
-        source = inspect.getsource(UsersController)
-        assert "joinedload" in source, "UsersController should use joinedload"
+        source = inspect.getsource(UserRepository)
+        assert "joinedload" in source, "UserRepository should use joinedload"
 
     def test_admin_list_users_returns_data(self, client, db, admin_token):
         """Admin list users endpoint should return user list."""

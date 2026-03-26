@@ -58,7 +58,7 @@ async def chat_websocket(
             msg = json.loads(raw)
             if msg.get("event") == "authenticate":
                 token = msg.get("data", {}).get("token")
-        except Exception:
+        except Exception:  # policy: LOSSY — websocket send failure is handled by disconnect cleanup
             pass  # Auth parse failed; token stays None and connection will be closed below
 
     if not token:

@@ -28,5 +28,5 @@ def run_async_task(coro: Awaitable[object]) -> None:
 def _run_in_new_loop(coro: Awaitable[object]) -> None:
     try:
         asyncio.run(coro)
-    except Exception:  # pragma: no cover - defensive logging path
+    except Exception:  # policy: LOSSY — detached background task failure must stay off the caller path; pragma: no cover - defensive logging path
         logger.exception("Background async task failed")

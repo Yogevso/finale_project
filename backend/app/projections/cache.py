@@ -68,7 +68,7 @@ class ProjectionCache:
         try:
             normalized = [ProjectionCache._normalize_key_fragment(part) for part in key_parts]
             return json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-        except Exception as exc:
+        except Exception as exc:  # policy: DEGRADED — projection cache failure falls back to uncached path
             raise ProjectionCacheError(f"Unable to serialize projection cache key: {exc}") from exc
 
     def _evict_if_needed(self, *, now: float) -> None:

@@ -79,7 +79,7 @@ def render_html_to_pdf(html: str, *, title: str = "Document") -> bytes:
 
         # Fallback: re-open and save
         return _fallback_render(html, title)
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — renderer returns a stable empty-result contract on failure
         logger.exception("PDF render failed: %s", exc)
         return b""
 
@@ -109,6 +109,6 @@ def _fallback_render(html: str, title: str) -> bytes:
         pdf_bytes = doc.tobytes()
         doc.close()
         return pdf_bytes
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — fallback renderer returns a stable empty-result contract on failure
         logger.exception("Fallback PDF render failed: %s", exc)
         return b""

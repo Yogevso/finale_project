@@ -9,10 +9,11 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.errors import ServiceUnavailableError, ValidationError
 from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment, Document, User, Version, VersionBumpType
 from app.services.malware_scan_service import (
@@ -82,9 +83,8 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         # Validate file size
         file_size = len(content)
         if file_size > cls.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB",
+            raise ValidationError(
+                f"File too large. Max size: {cls.MAX_FILE_SIZE // (1024 * 1024)}MB"
             )
 
         # AG-014: Magic-byte validation for restricted types
@@ -92,15 +92,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         try:
             scan_upload_bytes(content, original_filename, content_type)
         except MalwareDetectedError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
+            raise ValidationError(str(exc)) from exc
         except MalwareScannerUnavailableError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-            ) from exc
+            raise ServiceUnavailableError(str(exc)) from exc
 
         checksum_sha256 = hashlib.sha256(content).hexdigest()
         reusable_attachment = cls._find_reusable_attachment_blob(
@@ -134,7 +128,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                 )
                 storage_path = storage_key
                 logger.info(f"Uploaded attachment to storage: {storage_key}")
-            except Exception as e:
+            except Exception as e:  # policy: DEGRADED — storage upload may fall back to local persistence
                 logger.error(f"Storage upload failed: {e}")
                 if not settings.ALLOW_LOCAL_STORAGE_FALLBACK:
                     raise StorageError(f"Storage unavailable and fallback disabled: {e}") from e
@@ -175,7 +169,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             db.add(attachment)
             db.commit()
             db.refresh(attachment)
-        except Exception as db_error:
+        except Exception as db_error:  # policy: COMPENSATING — DB failure must clean up orphaned storage artifacts
             # Clean up orphaned storage file if DB commit fails
             logger.error(f"DB commit failed for attachment, cleaning up storage: {db_error}")
             if reusable_attachment is None:
@@ -183,7 +177,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     storage = get_storage_backend()
                     storage.delete(storage_path)
                     logger.info(f"Cleaned up orphaned storage file: {storage_path}")
-                except Exception as cleanup_error:
+                except Exception as cleanup_error:  # policy: COMPENSATING — orphan cleanup is best-effort during rollback
                     logger.warning(f"Failed to clean up storage file {storage_path}: {cleanup_error}")
             raise
         
@@ -236,7 +230,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     logger.info(
                         f"Created initial version {next_version} for document {document_id}"
                     )
-            except Exception as e:
+            except Exception as e:  # policy: LOSSY — HTML conversion failure must not discard the uploaded attachment
                 logger.error(f"Failed to convert document to HTML: {e}")
 
         return attachment

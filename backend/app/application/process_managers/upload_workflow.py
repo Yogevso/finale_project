@@ -131,7 +131,7 @@ class DocumentUploadProcessManager:
             )
             self._last_trace = trace
             return UploadWorkflowResult(document=document, trace=trace)
-        except Exception:
+        except Exception:  # policy: COMPENSATING — upload workflow must roll back partial document creation
             failed_step = step_order[-1] if step_order else "initialize"
             for created_document_id in reversed(created_document_ids):
                 try:
@@ -144,7 +144,7 @@ class DocumentUploadProcessManager:
                         if_match=created_document.etag,
                     )
                     compensation_order.append(f"delete_document:{created_document_id}")
-                except Exception as cleanup_error:  # pragma: no cover - defensive logging path
+                except Exception as cleanup_error:  # policy: COMPENSATING — rollback cleanup is best-effort; pragma: no cover - defensive logging path
                     self.db.rollback()
                     self.logger.warning(
                         "Failed upload rollback cleanup for document_id=%s: %s",

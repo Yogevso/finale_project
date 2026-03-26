@@ -4,11 +4,10 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import HTTPException, status
-
 from app.auth_context import RefreshTokenService, TokenService
 from app.auth_context.session_tokens import hash_session_identifier, revoke_session_if_inactive
 from app.config import settings
+from app.errors import AuthenticationError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import PasswordReset, Tenant, User, UserRole, UserSession
 from app.repositories import UserRepository
 from app.schemas import PublicRegistrationRequest, TokenResponse, UserCreate
@@ -33,16 +32,20 @@ class AuthService(SessionService):
         self.token_service = token_service or TokenService()
         self.refresh_token_service = refresh_token_service or RefreshTokenService(db)
 
+    @staticmethod
+    def _bearer_auth_error(detail: str) -> AuthenticationError:
+        return AuthenticationError(
+            detail,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     def _ensure_tenant_is_active(self, user: User) -> None:
         """Reject auth flows for users tied to inactive tenants."""
         if user.role == UserRole.SYSTEM_ADMIN or user.tenant_id is None:
             return
         tenant = self.db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
         if tenant and not tenant.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Company is inactive",
-            )
+            raise PermissionDeniedError("Company is inactive")
 
     @staticmethod
     def _is_locked(user: User, now: datetime) -> bool:
@@ -71,7 +74,7 @@ class AuthService(SessionService):
         q = self.db.query(User).filter(User.id == user_id)
         try:
             dialect = self.db.get_bind().dialect.name
-        except Exception:
+        except Exception:  # policy: DEGRADED — dialect lookup failure falls back to SQLite-safe locking behavior
             dialect = "sqlite"
         if dialect != "sqlite":
             q = q.with_for_update()
@@ -91,10 +94,7 @@ class AuthService(SessionService):
     def verify_email(self, token: str) -> None:
         """Verify a user email by token and mark the account as verified."""
         if not token.startswith("ev_"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired verification token",
-            )
+            raise ValidationError("Invalid or expired verification token")
 
         now = datetime.utcnow()
         candidates = (
@@ -117,10 +117,7 @@ class AuthService(SessionService):
                 break
 
         if matched_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired verification token",
-            )
+            raise ValidationError("Invalid or expired verification token")
 
         matched_user.is_email_verified = True
         matched_user.email_verification_token_hash = None
@@ -170,10 +167,7 @@ class AuthService(SessionService):
     def issue_password_reset_for_user(self, user: User) -> str:
         """Create a password-reset token for a known target user."""
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot reset password for an inactive user",
-            )
+            raise ValidationError("Cannot reset password for an inactive user")
 
         token = self._create_password_reset_token(user)
         self.db.commit()
@@ -182,10 +176,7 @@ class AuthService(SessionService):
     def reset_password(self, token: str, new_password: str) -> None:
         """Apply password reset by one-time reset token."""
         if not token.startswith("pr_"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset token",
-            )
+            raise ValidationError("Invalid or expired reset token")
 
         now = datetime.utcnow()
         prefix = token[:8]
@@ -206,17 +197,11 @@ class AuthService(SessionService):
                 break
 
         if matched_record is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset token",
-            )
+            raise ValidationError("Invalid or expired reset token")
 
         user = self.user_repository.get_by_id(matched_record.user_id)
         if user is None or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset token",
-            )
+            raise ValidationError("Invalid or expired reset token")
 
         user.hashed_password = get_password_hash(new_password)
         user.failed_login_attempts = 0
@@ -241,10 +226,7 @@ class AuthService(SessionService):
         """Manually unlock a locked user account."""
         user = self.user_repository.get_by_id(user_id)
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
+            raise NotFoundError("User not found")
 
         user.failed_login_attempts = 0
         user.locked_until = None
@@ -316,59 +298,34 @@ class AuthService(SessionService):
         if user is None:
             # H-13: Perform dummy bcrypt work to prevent timing-based user enumeration
             verify_password(password, get_password_hash("dummy"))
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise self._bearer_auth_error("Incorrect username or password")
 
         # H-32: acquire row-level lock to serialise concurrent login attempts.
         user = self._lock_user_row(user.id)
         if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise self._bearer_auth_error("Incorrect username or password")
 
         now = datetime.utcnow()
         self._clear_expired_lock(user, now)
 
         if self._is_locked(user, now):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise self._bearer_auth_error("Incorrect username or password")
 
         if not verify_password(password, user.hashed_password):
             self._record_failed_login_attempt(user, now)
             self.db.commit()
             if self._is_locked(user, datetime.utcnow()):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Incorrect username or password",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+                raise self._bearer_auth_error("Incorrect username or password")
+            raise self._bearer_auth_error("Incorrect username or password")
 
         self._reset_failed_attempts_if_needed(user)
 
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive"
-            )
+            raise PermissionDeniedError("User account is inactive")
         self._ensure_tenant_is_active(user)
 
         if not user.is_email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="email_not_verified",
-            )
+            raise PermissionDeniedError("email_not_verified")
 
         self._record_login_context(user=user, client_ip=client_ip, user_agent=user_agent)
         session_identifier = secrets.token_urlsafe(32)
@@ -409,11 +366,13 @@ class AuthService(SessionService):
             session_identifier=session_identifier,
         )
 
-        # Create refresh token
+        # Keep the successful-login write path to a single explicit commit.
         refresh_token, _ = self.refresh_token_service.issue_refresh_token(
             user.id,
             session_identifier=session_identifier,
+            commit=False,
         )
+        self.db.commit()
 
         return TokenResponse(
             access_token=access_token, refresh_token=refresh_token, token_type="bearer"
@@ -424,18 +383,12 @@ class AuthService(SessionService):
         valid_record = self.refresh_token_service.find_valid_record(refresh_token)
 
         if not valid_record:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired refresh token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise self._bearer_auth_error("Invalid or expired refresh token")
 
         # Get user
         user = self.user_repository.get_by_id(valid_record.user_id)
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
-            )
+            raise AuthenticationError("User not found or inactive")
         self._ensure_tenant_is_active(user)
 
         # Check if the session associated with this refresh token has been revoked
@@ -452,18 +405,10 @@ class AuthService(SessionService):
                 .first()
             )
             if user_session is None or user_session.revoked_at is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Session has been revoked",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+                raise self._bearer_auth_error("Session has been revoked")
             if revoke_session_if_inactive(user_session, now=now):
                 self.db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Session has expired due to inactivity",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+                raise self._bearer_auth_error("Session has expired due to inactivity")
 
         # Create new access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -525,18 +470,12 @@ class AuthService(SessionService):
         # Check if username already exists
         existing_user = self.user_repository.get_by_username(user_data.username)
         if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=_REGISTRATION_CONFLICT_DETAIL,
-            )
+            raise ValidationError(_REGISTRATION_CONFLICT_DETAIL)
 
         # Check if email already exists
         existing_email = self.user_repository.get_by_email(user_data.email)
         if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=_REGISTRATION_CONFLICT_DETAIL,
-            )
+            raise ValidationError(_REGISTRATION_CONFLICT_DETAIL)
 
         # AD-001: Force customer role — ignore caller-supplied role/tenant_id
         # Staff users are created via invitation acceptance or admin flows.
@@ -562,9 +501,7 @@ class AuthService(SessionService):
         """Change user password and invalidate all existing sessions."""
         # Verify old password
         if not verify_password(old_password, user.hashed_password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password"
-            )
+            raise ValidationError("Incorrect current password")
 
         # M-11: atomic password change + session revocation in single transaction
         now = datetime.utcnow()

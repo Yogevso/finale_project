@@ -69,7 +69,7 @@ class DocumentIndexer:
         texts = [c.text for c in chunks]
         try:
             embeddings = await self._embeddings.embed_batch(texts)
-        except Exception:
+        except Exception:  # policy: DEGRADED — indexing errors should surface as warnings without crashing callers
             logger.exception("Failed to generate embeddings for document %d", document_id)
             return 0
 
@@ -139,7 +139,7 @@ class DocumentIndexer:
                 if count > 0:
                     indexed += 1
                     total_chunks += count
-            except Exception as exc:
+            except Exception as exc:  # policy: LOSSY — per-document indexing failure should not abort the batch
                 logger.exception("Failed to index document %d", document_id)
                 errors.append(f"Document {document_id} ({title}): {exc}")
 

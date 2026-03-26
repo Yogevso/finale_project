@@ -91,7 +91,7 @@ class ToolRegistry:
                 result=result.get("result", ""),
                 error=result.get("error"),
             )
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — registry wraps tool execution failures consistently
             logger.exception("Tool %s raised an exception", name)
             return ToolResult(
                 tool_call_id="",

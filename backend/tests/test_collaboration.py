@@ -61,6 +61,26 @@ class TestCollabToken:
         assert decoded["type"] == "collaboration"
         assert decoded["document_id"] == str(test_document.id)
         assert "permissions" in decoded
+        assert response.headers["X-Trace-ID"] == decoded["trace_id"]
+        assert response.headers["X-Request-ID"]
+
+    def test_get_collab_token_preserves_incoming_trace_id(
+        self, client, auth_headers, test_document
+    ):
+        response = client.post(
+            "/api/v1/auth/collab-token",
+            headers={**auth_headers, "X-Trace-ID": "trace-collab-client-123"},
+            json={"document_id": test_document.id},
+        )
+
+        assert response.status_code == 200
+        decoded = jwt.decode(
+            response.json()["token"],
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        assert response.headers["X-Trace-ID"] == "trace-collab-client-123"
+        assert decoded["trace_id"] == "trace-collab-client-123"
 
     def test_get_collab_token_document_not_found(self, client, auth_headers):
         """Test getting a token for non-existent document"""

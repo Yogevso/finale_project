@@ -37,7 +37,7 @@ async def parse_support_message_request(
     if "application/json" in content_type:
         try:
             payload = await request.json()
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — invalid request parsing becomes a client-facing request error
             raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
         if not isinstance(payload, dict):
             raise HTTPException(status_code=400, detail="Invalid JSON body")

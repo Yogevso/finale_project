@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from fastapi import HTTPException, status
-
 from app.application.interfaces.use_cases import AssignCompanySet
 from app.application.pipeline import (
     CommandContext,
@@ -157,23 +155,6 @@ class AssignCompanySetCommandHandler:
                     error_code=exc.error_code,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    AssignCompanySetCommandError(
-                        code=AssignCompanySetCommandErrorCode.DOCUMENT_NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_400_BAD_REQUEST:
-                return Result.err(
-                    AssignCompanySetCommandError(
-                        code=AssignCompanySetCommandErrorCode.INVALID_COMPANY_SET,
-                        message=str(exc.detail),
-                        error_code="invalid_company_set",
-                    )
-                )
-            raise
 
 
 class CreateDocumentCommandHandler:
@@ -223,23 +204,6 @@ class CreateDocumentCommandHandler:
                     error_code=exc.error_code,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_400_BAD_REQUEST:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.VALIDATION,
-                        message=str(exc.detail),
-                        error_code="validation_error",
-                    )
-                )
-            raise
 
 
 class UpdateDocumentCommandHandler:
@@ -294,23 +258,6 @@ class UpdateDocumentCommandHandler:
                     error_code=exc.error_code,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_400_BAD_REQUEST:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.VALIDATION,
-                        message=str(exc.detail),
-                        error_code="validation_error",
-                    )
-                )
-            raise
 
 
 class DeleteDocumentCommandHandler:
@@ -360,20 +307,3 @@ class DeleteDocumentCommandHandler:
                     error_code=exc.error_code,
                 )
             )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_404_NOT_FOUND:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.NOT_FOUND,
-                        message=str(exc.detail),
-                    )
-                )
-            if exc.status_code == status.HTTP_400_BAD_REQUEST:
-                return Result.err(
-                    DocumentCommandError(
-                        code=DocumentCommandErrorCode.VALIDATION,
-                        message=str(exc.detail),
-                        error_code="validation_error",
-                    )
-                )
-            raise

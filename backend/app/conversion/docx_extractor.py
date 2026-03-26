@@ -236,7 +236,7 @@ class DocxExtractor:
 
                 try:
                     document = Document(BytesIO(content))
-                except Exception:
+                except Exception:  # policy: LOSSY — python-docx probe is advisory; XML extraction remains authoritative
                     logger.warning(
                         "DOCX python-docx probe failed for %s; continuing with XML extraction",
                         source_name,
@@ -255,7 +255,7 @@ class DocxExtractor:
         except UnsafeArchiveError as exc:
             logger.warning("DOCX extraction rejected for %s: %s", source_name, exc)
             return self._failed_result("Unsafe DOCX archive", exc)
-        except Exception as exc:
+        except Exception as exc:  # policy: FAIL_FAST — extraction returns a stable failure result for unexpected parse errors
             logger.exception("DOCX extraction failed for %s", source_name)
             return self._failed_result("DOCX extraction failed", exc)
 
@@ -1300,7 +1300,7 @@ class DocxExtractor:
                 image_bytes,
                 max_size=MAX_EMBEDDED_IMAGE_SIZE,
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — image compression fallback should preserve extraction output
             logger.warning("Falling back to original image bytes after compression failure")
             return image_bytes, content_type
 

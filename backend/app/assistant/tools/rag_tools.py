@@ -64,7 +64,7 @@ class SemanticSearchTool(BaseTool):
 
         try:
             query_embedding = await _embeddings.embed_text(query)
-        except Exception:
+        except Exception:  # policy: BOUNDARY — semantic search failures become tool errors, not crashes
             logger.exception("Failed to embed search query")
             return {"success": False, "error": "Semantic search is temporarily unavailable (embedding service error)."}
 
@@ -193,7 +193,7 @@ class SummarizeDocumentTool(BaseTool):
                 "success": True,
                 "result": f"**Summary of \"{doc.title}\":**\n\n{summary}",
             }
-        except Exception:
+        except Exception:  # policy: BOUNDARY — summarization failures become tool errors, not crashes
             logger.exception("Failed to generate document summary")
             return {"success": False, "error": "Summarization failed. The AI service may be busy."}
 
@@ -288,7 +288,7 @@ class AskAboutDocumentTool(BaseTool):
             if sources:
                 result += f"\n\n*Sources: {', '.join(sources)}*"
             return {"success": True, "result": result}
-        except Exception:
+        except Exception:  # policy: BOUNDARY — document QA failures become tool errors, not crashes
             logger.exception("Failed to answer question about document")
             return {"success": False, "error": "Q&A failed. The AI service may be busy."}
 

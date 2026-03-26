@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy.orm import Session
-
 from app.api.support_message_utils import (
     parse_support_message_request,
     support_message_to_response,
 )
-from app.db import get_db
-from app.models import SupportTicketStatus, User, UserRole
+from app.dependencies.permissions import require_customer
+from app.dependencies.services import get_support_ticket_service
+from app.models import SupportTicketStatus, User
 from app.schemas.chat import (
     SupportTicketCreate,
     SupportTicketDetailResponse,
@@ -18,30 +17,16 @@ from app.schemas.chat import (
     SupportTicketMessageResponse,
     SupportTicketResponse,
 )
-from app.security import get_current_active_user
-from app.services.support_service import SupportTicketService
 from app.utils.async_tasks import run_async_task
 
 router = APIRouter(prefix="/portal/support", tags=["Customer Support"])
-
-
-def _require_customer(current_user: User = Depends(get_current_active_user)) -> User:
-    if current_user.role != UserRole.CUSTOMER:
-        raise HTTPException(status_code=403, detail="This endpoint is only for customer users.")
-    return current_user
-
-
-def _get_svc(db: Session = Depends(get_db)) -> SupportTicketService:
-    return SupportTicketService(db)
-
-
 @router.get("/tickets", response_model=SupportTicketListResponse)
 def list_my_tickets(
     status_filter: SupportTicketStatus | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(_require_customer),
-    svc: SupportTicketService = Depends(_get_svc),
+    current_user: User = Depends(require_customer),
+    svc = Depends(get_support_ticket_service),
 ):
     """List customer's own support tickets (X1-072)."""
     tickets, total = svc.list_tickets(current_user, status_filter=status_filter, page=page, page_size=page_size)
@@ -62,8 +47,8 @@ def list_my_tickets(
 @router.get("/tickets/{ticket_id}", response_model=SupportTicketDetailResponse)
 def get_my_ticket(
     ticket_id: int,
-    current_user: User = Depends(_require_customer),
-    svc: SupportTicketService = Depends(_get_svc),
+    current_user: User = Depends(require_customer),
+    svc = Depends(get_support_ticket_service),
 ):
     """Get ticket detail with messages — internal notes excluded (X1-073)."""
     ticket = svc.get_ticket(ticket_id, current_user)
@@ -85,8 +70,8 @@ def get_my_ticket(
 @router.post("/tickets", response_model=SupportTicketResponse, status_code=status.HTTP_201_CREATED)
 def create_ticket(
     body: SupportTicketCreate,
-    current_user: User = Depends(_require_customer),
-    svc: SupportTicketService = Depends(_get_svc),
+    current_user: User = Depends(require_customer),
+    svc = Depends(get_support_ticket_service),
 ):
     """Create a new support ticket (X1-072)."""
     ticket = svc.create_ticket(
@@ -105,8 +90,8 @@ def create_ticket(
 async def send_message(
     ticket_id: int,
     request: Request,
-    current_user: User = Depends(_require_customer),
-    svc: SupportTicketService = Depends(_get_svc),
+    current_user: User = Depends(require_customer),
+    svc = Depends(get_support_ticket_service),
 ):
     """Customer sends a message on a ticket (X1-074)."""
     content, _is_internal_note, upload = await parse_support_message_request(
@@ -137,8 +122,8 @@ async def send_message(
 @router.post("/tickets/{ticket_id}/close", status_code=status.HTTP_204_NO_CONTENT)
 def close_ticket(
     ticket_id: int,
-    current_user: User = Depends(_require_customer),
-    svc: SupportTicketService = Depends(_get_svc),
+    current_user: User = Depends(require_customer),
+    svc = Depends(get_support_ticket_service),
 ):
     """Customer closes a resolved ticket (X1-075)."""
     svc.close_ticket_as_customer(ticket_id, current_user)

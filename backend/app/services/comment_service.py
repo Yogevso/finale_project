@@ -3,11 +3,15 @@
 from dataclasses import dataclass
 from typing import List, Optional, Set
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.domain.events import CommentCreated, InProcessDomainEventDispatcher
+from app.domain.events import (
+    CommentChatBridgeRequested,
+    CommentCreated,
+    InProcessDomainEventDispatcher,
+)
+from app.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.models import Attachment, Comment, Document, NotificationType, User, UserRole
 from app.repositories import (
     CommentRepository,
@@ -236,12 +240,12 @@ class CommentService(SessionService):
         # Check document exists
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         # Y15-016: Tenant isolation - non-system-admins can only see comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+                raise NotFoundError("Document not found")
 
         # Get all contributors to this document for visibility checks
         contributors = CommentService.get_document_contributors(self.db, document_id)
@@ -282,12 +286,12 @@ class CommentService(SessionService):
         # Y15-016: Verify document exists and user has tenant access
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
         
         # Tenant isolation: non-system-admins can only access comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+                raise NotFoundError("Document not found")
         
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
@@ -296,15 +300,12 @@ class CommentService(SessionService):
         )
 
         if not comment:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+            raise NotFoundError("Comment not found")
 
         # Check visibility using new contributor-based rules
         contributors = CommentService.get_document_contributors(self.db, document_id)
         if not CommentService.can_view_comment(self.db, comment, current_user, contributors):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to view this comment",
-            )
+            raise PermissionDeniedError("You don't have permission to view this comment")
 
         return CommentService._to_comment_response(comment, self.db, current_user, contributors)
 
@@ -315,12 +316,12 @@ class CommentService(SessionService):
         # Check document exists
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
 
         # Y15-016: Tenant isolation - non-system-admins can only create comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+                raise NotFoundError("Document not found")
 
         parent_id = comment_data.parent_id
 
@@ -330,14 +331,9 @@ class CommentService(SessionService):
         if parent_id:
             parent_comment = self.comment_repository.get_by_id_for_update(parent_id, document_id)
             if not parent_comment:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Parent comment not found"
-                )
+                raise NotFoundError("Parent comment not found")
             if self._comment_depth(parent_comment) >= self.MAX_REPLY_DEPTH:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Replies are limited to two nested levels",
-                )
+                raise ValidationError("Replies are limited to two nested levels")
 
         # Create comment with new fields
         # AD-005: customers cannot create private comments
@@ -360,7 +356,12 @@ class CommentService(SessionService):
         with UnitOfWork(self.db) as uow:
             self.db.add(comment)
             uow.flush()
-            self._publish_comment_created_event(document, comment, current_user, parent_comment)
+            self._publish_comment_side_effect_events(
+                document,
+                comment,
+                current_user,
+                parent_comment,
+            )
             comment_link = f"/documents/{document.id}?tab=comments&comment={comment.id}"
             mention_type = (
                 NotificationType.COMMENT_REPLY if parent_comment else NotificationType.COMMENT_ADDED
@@ -396,10 +397,7 @@ class CommentService(SessionService):
         self.db.refresh(comment, ["user"])
 
         comment.reply_count = 0
-
-        # Bridge to chat: create/find direct chat with document author
-        chat_id = self._bridge_comment_to_chat(document, comment, current_user)
-        comment.chat_id = chat_id
+        comment.chat_id = None
 
         return comment
 
@@ -460,12 +458,12 @@ class CommentService(SessionService):
 
             chat_svc.send_message(chat.id, current_user, content)
             return chat.id
-        except Exception:
+        except Exception:  # policy: LOSSY — chat bridge failure must not block comment creation
             # Chat bridging is best-effort — never block comment creation
             logger.debug("Chat bridging failed for comment", exc_info=True)
             return None
 
-    def _publish_comment_created_event(
+    def _publish_comment_side_effect_events(
         self,
         document: Document,
         comment: Comment,
@@ -487,6 +485,15 @@ class CommentService(SessionService):
                 has_anchor=bool(comment.anchor_text),
             )
         )
+        self.event_dispatcher.dispatch(
+            CommentChatBridgeRequested(
+                document_id=document.id,
+                comment_id=comment.id,
+                document_author_id=document.created_by,
+                commenter_user_id=current_user.id,
+                commenter_display_name=current_user.full_name or current_user.username,
+            )
+        )
 
     def update_comment(
         self,
@@ -499,12 +506,12 @@ class CommentService(SessionService):
         # Y15-016: Verify document exists and user has tenant access
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
         
         # Tenant isolation: non-system-admins can only update comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+                raise NotFoundError("Document not found")
         
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
@@ -513,7 +520,7 @@ class CommentService(SessionService):
         )
 
         if not comment:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+            raise NotFoundError("Comment not found")
 
         # Check permissions
         is_admin = current_user.role in [
@@ -528,10 +535,7 @@ class CommentService(SessionService):
         with UnitOfWork(self.db):
             if comment_data.content is not None:
                 if not is_author and not is_admin:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Only the comment author can update the content",
-                    )
+                    raise PermissionDeniedError("Only the comment author can update the content")
                 comment.content = comment_data.content
                 self.notification_service.notify_mentions(
                     content=comment.content,
@@ -546,9 +550,8 @@ class CommentService(SessionService):
             # Only admins/editors/managers can resolve comments
             if comment_data.is_resolved is not None:
                 if not is_admin:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Only admins, managers and editors can resolve comments",
+                    raise PermissionDeniedError(
+                        "Only admins, managers and editors can resolve comments"
                     )
                 comment.is_resolved = comment_data.is_resolved
 
@@ -562,24 +565,23 @@ class CommentService(SessionService):
         # Y15-016: Verify document exists and user has tenant access
         document = self.document_repository.get_by_id(document_id)
         if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise NotFoundError("Document not found")
         
         # Tenant isolation: non-system-admins can only delete comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+                raise NotFoundError("Document not found")
         
         comment = self.comment_repository.get_by_id_for_document(comment_id, document_id)
 
         if not comment:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+            raise NotFoundError("Comment not found")
 
         # Only the comment author or admin can delete
         is_admin = current_user.role in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
         if comment.user_id != current_user.id and not is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the comment author, admin or manager can delete this comment",
+            raise PermissionDeniedError(
+                "Only the comment author, admin or manager can delete this comment"
             )
 
         with UnitOfWork(self.db):

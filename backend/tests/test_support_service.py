@@ -1,9 +1,9 @@
 """Support ticket service tests — X1-107 to X1-111."""
 
 import pytest
-from fastapi import HTTPException
 
 from app.config import settings
+from app.errors import DomainError
 from app.models import (
     Document,
     DocumentStatus,
@@ -136,7 +136,7 @@ class TestCreateTicketFromFeedback:
         assert ticket1.id == ticket2.id
 
     def test_feedback_not_found_raises_404(self, svc, customer):
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.create_ticket_from_feedback(customer, 99999)
         assert exc.value.status_code == 404
 
@@ -170,7 +170,7 @@ class TestInternalNotes:
 
     def test_customer_cannot_create_internal_note(self, svc, customer):
         ticket = svc.create_ticket(customer, "Test", "Content")
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.send_message(ticket.id, customer, "Sneaky note", is_internal_note=True)
         assert exc.value.status_code == 403
 
@@ -209,7 +209,7 @@ class TestStatusTransitions:
         ticket = svc.create_ticket(customer, "Subject", "Content")
         ticket.status = SupportTicketStatus.IN_PROGRESS
         svc.db.commit()
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.close_ticket_as_customer(ticket.id, customer)
         assert exc.value.status_code == 400
 
@@ -280,13 +280,13 @@ class TestCustomerIsolation:
 
     def test_customer_cannot_see_other_customer_ticket(self, svc, customer, customer_b):
         ticket = svc.create_ticket(customer, "Private ticket", "Help me")
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.get_ticket(ticket.id, customer_b)
         assert exc.value.status_code == 403
 
     def test_customer_cannot_message_other_ticket(self, svc, customer, customer_b):
         ticket = svc.create_ticket(customer, "Private ticket", "Help me")
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.send_message(ticket.id, customer_b, "Intruder message")
         assert exc.value.status_code == 403
 
@@ -465,6 +465,6 @@ class TestSupportMessageAttachments:
         assert loaded_message.id == message.id
         assert content == b"hello support"
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(DomainError) as exc:
             svc.get_message_attachment(ticket.id, message.id, customer_b)
         assert exc.value.status_code == 403

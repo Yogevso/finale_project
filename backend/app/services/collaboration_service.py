@@ -38,6 +38,7 @@ class CollaborationService:
         document_id: int,
         permissions: list[str],
         expires_delta: Optional[timedelta] = None,
+        trace_id: str | None = None,
     ) -> str:
         """Create a collaboration JWT token for WebSocket access."""
         normalized_document_id = self._contract_adapter.coerce_document_id(document_id)
@@ -47,6 +48,7 @@ class CollaborationService:
             document_id=normalized_document_id,
             permissions=normalized_permissions,
             expires_delta=expires_delta,
+            trace_id=trace_id,
         )
 
     @staticmethod
@@ -55,6 +57,7 @@ class CollaborationService:
         document_id: int,
         permissions: list[str],
         expires_delta: Optional[timedelta] = None,
+        trace_id: str | None = None,
     ) -> str:
         """
         Create a JWT token specifically for WebSocket collaboration.
@@ -70,6 +73,7 @@ class CollaborationService:
             document_id=normalized_document_id,
             permissions=normalized_permissions,
             expires_delta=expires_delta,
+            trace_id=trace_id,
         )
 
     def can_view_document_access(self, user: User, document: Document) -> bool:

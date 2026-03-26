@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.errors import RateLimitExceededError
 from app.models import Document, TenantQuota, User
 
 
@@ -16,9 +16,8 @@ def check_user_quota(db: Session, tenant_id: int) -> None:
         return
     current = db.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 0
     if current >= quota.max_users:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Tenant user quota reached ({quota.max_users}). Contact your administrator.",
+        raise RateLimitExceededError(
+            f"Tenant user quota reached ({quota.max_users}). Contact your administrator."
         )
 
 
@@ -29,7 +28,6 @@ def check_document_quota(db: Session, tenant_id: int) -> None:
         return
     current = db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
     if current >= quota.max_documents:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Tenant document quota reached ({quota.max_documents}). Contact your administrator.",
+        raise RateLimitExceededError(
+            f"Tenant document quota reached ({quota.max_documents}). Contact your administrator."
         )

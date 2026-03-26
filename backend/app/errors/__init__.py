@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from fastapi import status
 
 
@@ -11,11 +13,18 @@ class DomainError(Exception):
     status_code = status.HTTP_400_BAD_REQUEST
     error_code = "domain_error"
 
-    def __init__(self, message: str, *, error_code: str | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        headers: Mapping[str, str] | None = None,
+    ):
         super().__init__(message)
         self.message = message
         if error_code is not None:
             self.error_code = error_code
+        self.headers = dict(headers or {})
 
 
 class ValidationError(DomainError):
@@ -66,3 +75,23 @@ class PreconditionRequiredError(DomainError):
     status_code = status.HTTP_428_PRECONDITION_REQUIRED
     error_code = "precondition_required"
 
+
+class RateLimitExceededError(DomainError):
+    """Caller exceeded an enforced quota or rate limit."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = "rate_limit_exceeded"
+
+
+class OperationFailedError(DomainError):
+    """A requested operation failed even though inputs/permissions were valid."""
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "operation_failed"
+
+
+class ServiceUnavailableError(DomainError):
+    """A required dependency is temporarily unavailable."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = "service_unavailable"

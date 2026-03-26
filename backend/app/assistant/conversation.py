@@ -293,5 +293,5 @@ class ConversationManager:
                 logger.info("Auto-summarized conversation %d (%d messages)", conversation_id, msg_count)
             else:
                 logger.warning("LLM summary rejected for conversation %d (too short or invalid)", conversation_id)
-        except Exception:
+        except Exception:  # policy: LOSSY — auto-summary failure should not block normal conversation flow
             logger.warning("Failed to auto-summarize conversation %d", conversation_id, exc_info=True)

@@ -80,7 +80,7 @@ async def embedding_route(
         selected = {name for name, score in scores[:top_k] if score >= min_score}
         return selected
 
-    except Exception:
+    except Exception:  # policy: LOSSY — routing heuristics can fall back to the safe default tool set
         logger.warning("Embedding routing failed, returning empty set", exc_info=True)
         return set()
 

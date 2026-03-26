@@ -260,7 +260,7 @@ def _stream_public_attachment(
                     **_audience_policy_headers(DocumentVisibility.PUBLIC),
                 },
             )
-        except Exception:
+        except Exception:  # policy: LOSSY — PDF preview is optional; serve original attachment instead
             logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
 
     attachment, content_stream = AttachmentService.open_original_stream(

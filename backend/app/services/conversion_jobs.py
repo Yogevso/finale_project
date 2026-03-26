@@ -273,7 +273,7 @@ def process_conversion_job(
 
         db.commit()
         return _job_disposition(job)
-    except Exception as exc:
+    except Exception as exc:  # policy: RETRYABLE — durable job runner records failure and schedules retry/dead-lettering
         logger.exception("Conversion job %s failed unexpectedly", job_id)
         db.rollback()
         job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
@@ -572,7 +572,7 @@ def process_pdf_export_job(
         job.last_error = None
         db.commit()
         return AsyncJobDisposition.COMPLETED
-    except Exception as exc:
+    except Exception as exc:  # policy: RETRYABLE — durable job runner records failure and schedules retry/dead-lettering
         logger.exception("PDF export job %s failed", job_id)
         db.rollback()
         job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()

@@ -36,7 +36,7 @@ def _get_redis_client():
             )
             _redis_client.ping()
             logger.info("Rate limiter using Redis backend")
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis unavailable — falling back to in-memory rate limiting")
             _redis_client = None
     return _redis_client
@@ -203,7 +203,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             remaining = limit - count
             return False, remaining, reset_time
-        except Exception:
+        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis rate-limit error — falling back to in-memory")
             return False, limit - 1, int(time.time()) + window
 
