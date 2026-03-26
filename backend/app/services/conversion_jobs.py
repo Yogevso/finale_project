@@ -365,17 +365,20 @@ def process_pending_jobs_once(*, batch_size: int = 10, force: bool = False) -> i
 def enqueue_conversion(
     attachment_id: int,
     *,
+    db: Session | None = None,
     background_tasks: Optional[BackgroundTasks] = None,
     force: bool = False,
 ) -> None:
     """Enqueue reader-artifact generation as a durable DB job."""
-    db = SessionLocal()
+    owns_session = db is None
+    session = db or SessionLocal()
     try:
-        job = _get_or_create_job(db, attachment_id=attachment_id)
+        job = _get_or_create_job(session, attachment_id=attachment_id)
         _set_job_pending(job, force=force)
-        db.commit()
+        session.commit()
     finally:
-        db.close()
+        if owns_session:
+            session.close()
 
     # Optional fast-path in request lifecycle: process one pending job asynchronously.
     if background_tasks is not None:

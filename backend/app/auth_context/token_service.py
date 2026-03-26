@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 import jwt
-from jwt.exceptions import PyJWTError
+from jwt.exceptions import InvalidSignatureError, PyJWTError
 
 from app.auth_context.contracts import ACCESS_TOKEN_TYPE, AccessTokenContract
 from app.config import settings
@@ -24,10 +24,17 @@ class TokenService:
         self,
         *,
         secret_key: str | None = None,
+        legacy_secret_key: str | None = None,
         algorithm: str | None = None,
         access_token_expire_minutes: int | None = None,
     ) -> None:
         self.secret_key = secret_key or settings.SECRET_KEY
+        configured_legacy_secret = legacy_secret_key or settings.SECRET_KEY_OLD
+        self.legacy_secret_keys = tuple(
+            candidate
+            for candidate in (configured_legacy_secret,)
+            if candidate and candidate != self.secret_key
+        )
         self.algorithm = algorithm or settings.ALGORITHM
         self.access_token_expire_minutes = (
             access_token_expire_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -61,17 +68,25 @@ class TokenService:
         *,
         expected_type: str = ACCESS_TOKEN_TYPE,
     ) -> dict[str, Any] | None:
-        try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            token_type = payload.get("type")
-            if token_type != expected_type:
-                logger.info(
-                    "JWT verification rejected token type %r (expected %r)",
-                    token_type,
-                    expected_type,
-                )
+        verification_keys = (self.secret_key, *self.legacy_secret_keys)
+        for index, signing_key in enumerate(verification_keys):
+            try:
+                payload = jwt.decode(token, signing_key, algorithms=[self.algorithm])
+                token_type = payload.get("type")
+                if token_type != expected_type:
+                    logger.info(
+                        "JWT verification rejected token type %r (expected %r)",
+                        token_type,
+                        expected_type,
+                    )
+                    return None
+                return payload
+            except InvalidSignatureError:
+                if index < len(verification_keys) - 1:
+                    continue
+                logger.info("JWT verification failed: InvalidSignatureError")
                 return None
-            return payload
-        except PyJWTError as err:
-            logger.info("JWT verification failed: %s", type(err).__name__)
-            return None
+            except PyJWTError as err:
+                logger.info("JWT verification failed: %s", type(err).__name__)
+                return None
+        return None

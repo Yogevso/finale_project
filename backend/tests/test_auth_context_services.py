@@ -117,3 +117,45 @@ def test_collaboration_auth_service_rejects_access_token(test_user):
     token = access_service.create_access_token_for_user(test_user)
 
     assert collab_service.verify_collab_token(token) is None
+
+
+def test_token_service_accepts_previous_secret_during_rotation(test_user):
+    service = TokenService(secret_key="n" * 32, legacy_secret_key="o" * 32)
+    token = jwt.encode(
+        {
+            "sub": str(test_user.id),
+            "username": test_user.username,
+            "role": test_user.role.value,
+            "tenant_id": test_user.tenant_id,
+            "type": "access",
+        },
+        "o" * 32,
+        algorithm=settings.ALGORITHM,
+    )
+
+    payload = service.verify_token(token)
+
+    assert payload is not None
+    assert payload["sub"] == str(test_user.id)
+
+
+def test_collaboration_auth_service_accepts_previous_secret_during_rotation(test_user):
+    service = CollaborationAuthService(secret_key="n" * 32, legacy_secret_key="o" * 32)
+    token = jwt.encode(
+        {
+            "sub": str(test_user.id),
+            "username": test_user.username,
+            "email": test_user.email,
+            "tenant_id": test_user.tenant_id,
+            "document_id": "88",
+            "permissions": ["read"],
+            "type": "collaboration",
+        },
+        "o" * 32,
+        algorithm=settings.ALGORITHM,
+    )
+
+    payload = service.verify_collab_token(token)
+
+    assert payload is not None
+    assert payload["document_id"] == "88"

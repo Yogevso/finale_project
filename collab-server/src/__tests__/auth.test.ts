@@ -9,7 +9,11 @@ import {
   extractToken,
   extractDocumentId,
 } from '../auth.js';
-import { resolveCollaborationJwtSecret } from '../authContext/collaborationAuthService.js';
+import {
+  CollaborationAuthService,
+  resolveCollaborationJwtSecret,
+  resolveCollaborationJwtVerificationSecrets,
+} from '../authContext/collaborationAuthService.js';
 import { signCollaborationToken } from './factories/collaborationFixtures.js';
 
 const SHARED_SECRET = process.env.SECRET_KEY || process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -32,6 +36,18 @@ describe('Authentication', () => {
           JWT_SECRET: 'legacy-secret-material-1234567890',
         }),
       ).toBe('legacy-secret-material-1234567890');
+    });
+
+    it('includes SECRET_KEY_OLD for verification during rotation', () => {
+      expect(
+        resolveCollaborationJwtVerificationSecrets({
+          SECRET_KEY: 'shared-secret-material-1234567890',
+          SECRET_KEY_OLD: 'old-secret-material-1234567890123',
+        }),
+      ).toEqual([
+        'shared-secret-material-1234567890',
+        'old-secret-material-1234567890123',
+      ]);
     });
   });
 
@@ -97,6 +113,16 @@ describe('Authentication', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Invalid token');
+    });
+
+    it('should accept token signed with SECRET_KEY_OLD during rotation', () => {
+      const oldSecret = 'old-shared-secret-material-1234567890';
+      const token = signCollaborationToken({}, oldSecret);
+      const authService = new CollaborationAuthService([SHARED_SECRET, oldSecret]);
+
+      const result = authService.verifyCollabToken(token, '123');
+
+      expect(result.success).toBe(true);
     });
 
     it('should assign consistent user colors', () => {

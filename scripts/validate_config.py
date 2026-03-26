@@ -23,12 +23,13 @@ from pathlib import Path
 BACKEND_REQUIRED = [
     "DATABASE_URL",
     "SECRET_KEY",
-    "JWT_SECRET_KEY",
 ]
 
 BACKEND_PRODUCTION = [
     "APP_ENV",
     "CORS_ORIGINS",
+    "REDIS_URL",
+    "SEARCH_BACKEND_MODE",
 ]
 
 FRONTEND_REQUIRED = [
@@ -36,15 +37,14 @@ FRONTEND_REQUIRED = [
 ]
 
 FRONTEND_PRODUCTION = [
-    "VITE_AUTH_COOKIE_SECURE",
+    "VITE_COLLAB_SERVER_URL",
 ]
 
-COLLAB_REQUIRED = [
-    "PORT",
-]
+COLLAB_REQUIRED = []
 
 COLLAB_PRODUCTION = [
     "BACKEND_URL",
+    "SECRET_KEY",
 ]
 
 
@@ -88,8 +88,17 @@ def validate_component(
     if is_prod and name == "backend":
         if env.get("SECRET_KEY", "").lower() in ("changeme", "dev-secret"):
             warnings.append("SECRET_KEY appears to be a dev placeholder")
-        if env.get("JWT_SECRET_KEY", "").lower() in ("changeme", "dev-secret"):
-            warnings.append("JWT_SECRET_KEY appears to be a dev placeholder")
+        if env.get("SEED_DEMO_DATA", "").lower() in ("1", "true", "yes", "on"):
+            warnings.append("SEED_DEMO_DATA enables demo data seeding in production")
+        if env.get("SEARCH_BACKEND_MODE", "").lower() == "auto":
+            warnings.append("SEARCH_BACKEND_MODE=auto is not allowed in production")
+    if is_prod and name == "collab-server":
+        if env.get("SECRET_KEY", "").lower() in ("changeme", "dev-secret"):
+            warnings.append("SECRET_KEY appears to be a dev placeholder")
+    if name == "collab-server" and env.get("JWT_SECRET"):
+        warnings.append("JWT_SECRET is legacy fallback only; prefer SECRET_KEY")
+    if name == "frontend" and env.get("VITE_COLLAB_WS_URL"):
+        warnings.append("VITE_COLLAB_WS_URL is deprecated; use VITE_COLLAB_SERVER_URL")
 
     return ValidationResult(component=name, missing=missing, warnings=warnings)
 
@@ -107,9 +116,10 @@ def main() -> int:
     root = Path(__file__).resolve().parent.parent
 
     # Merge os.environ with any .env files (os.environ takes precedence)
-    backend_env = {**load_env_file(root / "backend" / ".env"), **os.environ}
-    frontend_env = {**load_env_file(root / "frontend" / ".env"), **os.environ}
-    collab_env = {**load_env_file(root / "collab-server" / ".env"), **os.environ}
+    root_env = load_env_file(root / ".env")
+    backend_env = {**root_env, **load_env_file(root / "backend" / ".env"), **os.environ}
+    frontend_env = {**root_env, **load_env_file(root / "frontend" / ".env"), **os.environ}
+    collab_env = {**root_env, **load_env_file(root / "collab-server" / ".env"), **os.environ}
 
     results = [
         validate_component("backend", BACKEND_REQUIRED, BACKEND_PRODUCTION, backend_env, is_prod),
@@ -127,6 +137,20 @@ def main() -> int:
                 print(f"[WARN] {r.component}: {w}")
         if not r.missing and not r.warnings:
             print(f"[OK] {r.component}")
+
+    if is_prod:
+        backend_old = backend_env.get("SECRET_KEY_OLD", "")
+        collab_old = collab_env.get("SECRET_KEY_OLD", "")
+        if bool(backend_old) != bool(collab_old):
+            print(
+                "[WARN] rotation: SECRET_KEY_OLD should be set on both backend and collab-server "
+                "during a coordinated grace-period rotation"
+            )
+        elif backend_old and collab_old and backend_old != collab_old:
+            print(
+                "[WARN] rotation: backend and collab-server SECRET_KEY_OLD values differ; "
+                "grace-period token verification may fail"
+            )
 
     return 1 if has_error else 0
 

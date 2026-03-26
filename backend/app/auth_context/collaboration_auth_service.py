@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
-from jwt.exceptions import PyJWTError
+from jwt.exceptions import InvalidSignatureError, PyJWTError
 
 from app.auth_context.contracts import (
     COLLABORATION_TOKEN_TYPE,
@@ -27,10 +27,17 @@ class CollaborationAuthService:
         self,
         *,
         secret_key: str | None = None,
+        legacy_secret_key: str | None = None,
         algorithm: str | None = None,
         collab_token_expire_minutes: int = COLLAB_TOKEN_EXPIRE_MINUTES,
     ) -> None:
         self.secret_key = secret_key or settings.SECRET_KEY
+        configured_legacy_secret = legacy_secret_key or settings.SECRET_KEY_OLD
+        self.legacy_secret_keys = tuple(
+            candidate
+            for candidate in (configured_legacy_secret,)
+            if candidate and candidate != self.secret_key
+        )
         self.algorithm = algorithm or settings.ALGORITHM
         self.collab_token_expire_minutes = collab_token_expire_minutes
 
@@ -66,10 +73,15 @@ class CollaborationAuthService:
         return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
 
     def verify_collab_token(self, token: str) -> dict[str, Any] | None:
-        try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            if payload.get("type") != COLLABORATION_TOKEN_TYPE:
+        verification_keys = (self.secret_key, *self.legacy_secret_keys)
+        for signing_key in verification_keys:
+            try:
+                payload = jwt.decode(token, signing_key, algorithms=[self.algorithm])
+                if payload.get("type") != COLLABORATION_TOKEN_TYPE:
+                    return None
+                return payload
+            except InvalidSignatureError:
+                continue
+            except PyJWTError:
                 return None
-            return payload
-        except PyJWTError:
-            return None
+        return None

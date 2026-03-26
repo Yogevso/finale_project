@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""AA-007 & AA-008: Disaster recovery validation and failover simulation.
+"""Disaster recovery validation for the active production database backend.
 
-Validates backup recency against RTO/RPO targets and tests S3 failover.
+Validates:
+- backup recency against RPO targets
+- restore tooling/readiness against the active backend
+- S3 failover behavior (when configured)
 
 Usage:
     python -m scripts.disaster_recovery_validation
+    python -m scripts.disaster_recovery_validation --database-url postgresql://...
     python -m scripts.disaster_recovery_validation --check-rpo
     python -m scripts.disaster_recovery_validation --test-s3-failover
 """
@@ -14,42 +18,58 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-# Recovery targets
-RTO_HOURS = 4  # Recovery Time Objective — must restore service within 4 hours
-RPO_HOURS = 1  # Recovery Point Objective — max 1 hour of data loss acceptable
+from scripts.backup_restore_drill import (
+    DEFAULT_DATABASE_URL,
+    backup_pattern_for_target,
+    resolve_database_target,
+)
 
+RTO_HOURS = 4
+RPO_HOURS = 1
 BACKUP_DIR = Path("data/backups")
 DR_REPORT_DIR = Path("data/dr_reports")
 
 
-def check_backup_recency() -> dict:
-    """Verify that the most recent backup is within RPO window."""
-    if not BACKUP_DIR.exists():
+def check_backup_recency(
+    *,
+    database_url: str | None = None,
+    backup_dir: Path = BACKUP_DIR,
+) -> dict[str, Any]:
+    """Verify that the latest backend-specific backup is inside the RPO window."""
+    target = resolve_database_target(database_url or DEFAULT_DATABASE_URL)
+    if not backup_dir.exists():
         return {
             "status": "fail",
             "reason": "No backup directory found",
+            "backend": target.dialect,
             "rpo_hours": RPO_HOURS,
         }
 
-    backups = sorted(BACKUP_DIR.glob("portal_backup_*.db"), key=lambda f: f.stat().st_mtime, reverse=True)
+    backups = sorted(
+        backup_dir.glob(backup_pattern_for_target(target)),
+        key=lambda candidate: candidate.stat().st_mtime,
+        reverse=True,
+    )
     if not backups:
         return {
             "status": "fail",
-            "reason": "No backup files found",
+            "reason": f"No {target.dialect} backup files found",
+            "backend": target.dialect,
             "rpo_hours": RPO_HOURS,
         }
 
     latest = backups[0]
-    mtime = datetime.fromtimestamp(latest.stat().st_mtime)
-    age = datetime.utcnow() - mtime
+    age = datetime.now(UTC) - datetime.fromtimestamp(latest.stat().st_mtime, UTC)
     age_hours = age.total_seconds() / 3600
-
     return {
         "status": "pass" if age_hours <= RPO_HOURS else "fail",
+        "backend": target.dialect,
         "latest_backup": str(latest),
         "backup_age_hours": round(age_hours, 2),
         "rpo_target_hours": RPO_HOURS,
@@ -58,45 +78,70 @@ def check_backup_recency() -> dict:
     }
 
 
-def estimate_restore_time() -> dict:
-    """Estimate restore time based on DB size and backup availability."""
-    db_path = Path("data/portal.db")
-    if not db_path.exists():
-        return {"status": "skip", "reason": "Database not found"}
+def estimate_restore_time(
+    *,
+    database_url: str | None = None,
+    backup_dir: Path = BACKUP_DIR,
+) -> dict[str, Any]:
+    """Estimate restore readiness and tooling support for the active backend."""
+    target = resolve_database_target(database_url or DEFAULT_DATABASE_URL)
+    latest_backups = sorted(
+        backup_dir.glob(backup_pattern_for_target(target)),
+        key=lambda candidate: candidate.stat().st_mtime,
+        reverse=True,
+    )
+    latest_backup = latest_backups[0] if latest_backups else None
 
-    db_size_mb = db_path.stat().st_size / (1024 * 1024)
-    # Conservative estimate: ~1 minute per 100MB for SQLite restore
-    estimated_restore_minutes = max(1, db_size_mb / 100)
+    if target.dialect == "postgresql":
+        required_tools = ["pg_dump", "pg_restore", "psql", "createdb", "dropdb"]
+        missing_tools = [tool for tool in required_tools if shutil.which(tool) is None]
+        size_bytes = latest_backup.stat().st_size if latest_backup else 0
+        size_mb = size_bytes / (1024 * 1024)
+        estimated_minutes = max(1.0, size_mb / 250.0)
+        return {
+            "backend": target.dialect,
+            "latest_backup": str(latest_backup) if latest_backup else None,
+            "backup_size_mb": round(size_mb, 2),
+            "estimated_restore_minutes": round(estimated_minutes, 1),
+            "rto_target_hours": RTO_HOURS,
+            "within_rto": (estimated_minutes / 60) <= RTO_HOURS,
+            "missing_tools": missing_tools,
+            "status": "pass"
+            if latest_backup is not None and not missing_tools and (estimated_minutes / 60) <= RTO_HOURS
+            else "fail",
+        }
 
+    sqlite_path = target.sqlite_path
+    if not sqlite_path or not sqlite_path.exists():
+        return {"status": "skip", "backend": target.dialect, "reason": "SQLite database not found"}
+
+    db_size_mb = sqlite_path.stat().st_size / (1024 * 1024)
+    estimated_minutes = max(1.0, db_size_mb / 100.0)
     return {
+        "backend": target.dialect,
         "db_size_mb": round(db_size_mb, 2),
-        "estimated_restore_minutes": round(estimated_restore_minutes, 1),
+        "estimated_restore_minutes": round(estimated_minutes, 1),
         "rto_target_hours": RTO_HOURS,
-        "within_rto": (estimated_restore_minutes / 60) <= RTO_HOURS,
-        "status": "pass" if (estimated_restore_minutes / 60) <= RTO_HOURS else "fail",
+        "within_rto": (estimated_minutes / 60) <= RTO_HOURS,
+        "status": "pass" if (estimated_minutes / 60) <= RTO_HOURS else "fail",
     }
 
 
-def test_s3_failover() -> dict:
-    """AA-008: Test S3 storage failover (if configured).
-
-    Verifies that the local fallback works when S3 is unavailable.
-    """
+def test_s3_failover() -> dict[str, Any]:
+    """Validate the documented S3-to-local fallback behavior."""
     s3_enabled = os.environ.get("S3_ENABLED", "false").lower() == "true"
     allow_fallback = os.environ.get("ALLOW_LOCAL_STORAGE_FALLBACK", "true").lower() == "true"
 
     if not s3_enabled:
         return {
             "status": "skip",
-            "reason": "S3 not enabled — using local storage only",
+            "reason": "S3 not enabled; local storage is the only active path",
             "local_fallback_enabled": allow_fallback,
         }
 
-    # If S3 is enabled, check connectivity
     s3_bucket = os.environ.get("S3_BUCKET", "document-portal")
     s3_endpoint = os.environ.get("S3_ENDPOINT_URL", "")
-
-    result: dict = {
+    result: dict[str, Any] = {
         "s3_enabled": True,
         "s3_bucket": s3_bucket,
         "s3_endpoint": s3_endpoint or "AWS default",
@@ -105,84 +150,72 @@ def test_s3_failover() -> dict:
 
     try:
         import boto3
-        from botocore.exceptions import ClientError, NoCredentialsError
 
-        client_kwargs: dict = {"service_name": "s3"}
+        client_kwargs: dict[str, Any] = {"service_name": "s3"}
         if s3_endpoint:
             client_kwargs["endpoint_url"] = s3_endpoint
-
-        s3 = boto3.client(**client_kwargs)
-        s3.head_bucket(Bucket=s3_bucket)
+        boto3.client(**client_kwargs).head_bucket(Bucket=s3_bucket)
         result["s3_primary_status"] = "reachable"
         result["status"] = "pass"
     except ImportError:
         result["s3_primary_status"] = "boto3 not installed"
         result["status"] = "skip"
-    except Exception as e:
-        result["s3_primary_status"] = f"unreachable: {e}"
+    except Exception as exc:  # policy: DEGRADED - failover validation should report primary outage and fallback truthfully
+        result["s3_primary_status"] = f"unreachable: {exc}"
         result["status"] = "pass" if allow_fallback else "fail"
         result["failover_to_local"] = allow_fallback
-
     return result
 
 
-def run_full_validation() -> dict:
-    """Run all disaster recovery validation checks."""
+def run_full_validation(*, database_url: str | None = None) -> dict[str, Any]:
+    """Run all DR validation checks."""
+    target = resolve_database_target(database_url or DEFAULT_DATABASE_URL)
     report = {
         "validated_at": datetime.utcnow().isoformat(),
+        "backend": target.dialect,
+        "database_url": target.database_url,
         "targets": {"rto_hours": RTO_HOURS, "rpo_hours": RPO_HOURS},
         "checks": {},
     }
 
     print("=" * 60)
     print("  DISASTER RECOVERY VALIDATION")
-    print(f"  RTO Target: {RTO_HOURS} hours | RPO Target: {RPO_HOURS} hours")
+    print(f"  Backend: {target.dialect} | RTO: {RTO_HOURS}h | RPO: {RPO_HOURS}h")
     print("=" * 60)
     print()
 
-    # Check 1: Backup recency (RPO)
     print("Check 1: Backup recency (RPO)...")
-    rpo = check_backup_recency()
+    rpo = check_backup_recency(database_url=target.database_url)
     report["checks"]["backup_recency"] = rpo
-    status = "✓" if rpo["status"] == "pass" else "✗" if rpo["status"] == "fail" else "⊘"
-    backup_age = rpo.get('backup_age_hours', '?')
-    rpo_reason = rpo.get('reason', f'Backup age: {backup_age}h (target: ≤{RPO_HOURS}h)')
-    print(f"  {status} {rpo_reason}")
+    print(f"  {'PASS' if rpo['status'] == 'pass' else 'FAIL'} {rpo.get('reason', rpo.get('latest_backup', 'no backup'))}")
 
-    # Check 2: Restore time (RTO)
-    print("Check 2: Estimated restore time (RTO)...")
-    rto = estimate_restore_time()
+    print("Check 2: Restore tooling/readiness (RTO)...")
+    rto = estimate_restore_time(database_url=target.database_url)
     report["checks"]["restore_time"] = rto
-    status = "✓" if rto["status"] == "pass" else "✗" if rto["status"] == "fail" else "⊘"
-    print(f"  {status} Est. restore: {rto.get('estimated_restore_minutes', '?')}min (target: ≤{RTO_HOURS}h)")
+    print(
+        f"  {'PASS' if rto['status'] == 'pass' else 'FAIL'} "
+        f"Est. restore: {rto.get('estimated_restore_minutes', '?')}min"
+    )
 
-    # Check 3: S3 failover
     print("Check 3: S3 failover simulation...")
     s3 = test_s3_failover()
     report["checks"]["s3_failover"] = s3
-    status = "✓" if s3["status"] == "pass" else "✗" if s3["status"] == "fail" else "⊘"
-    print(f"  {status} {s3.get('reason', s3.get('s3_primary_status', 'checked'))}")
+    print(f"  {'PASS' if s3['status'] == 'pass' else 'FAIL' if s3['status'] == 'fail' else 'SKIP'} {s3.get('reason', s3.get('s3_primary_status', 'checked'))}")
 
-    # Overall
-    statuses = [c["status"] for c in report["checks"].values()]
+    statuses = [check["status"] for check in report["checks"].values()]
     report["overall_status"] = "fail" if "fail" in statuses else "pass"
-
-    print()
-    print("=" * 60)
-    print(f"  DR VALIDATION: {report['overall_status'].upper()}")
-    print("=" * 60)
-
     return report
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Disaster recovery validation")
+    parser = argparse.ArgumentParser(description="Validate disaster recovery readiness")
+    parser.add_argument("--database-url", default=None, help="SQLAlchemy database URL")
     parser.add_argument("--check-rpo", action="store_true", help="Only check RPO")
     parser.add_argument("--test-s3-failover", action="store_true", help="Only test S3 failover")
     args = parser.parse_args()
 
     if args.check_rpo:
-        result = check_backup_recency()
+        result = check_backup_recency(database_url=args.database_url)
         print(json.dumps(result, indent=2))
         sys.exit(0 if result["status"] != "fail" else 1)
 
@@ -191,13 +224,11 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         sys.exit(0 if result["status"] != "fail" else 1)
 
-    report = run_full_validation()
-
+    report = run_full_validation(database_url=args.database_url)
     DR_REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report_path = DR_REPORT_DIR / f"dr_validation_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-    report_path.write_text(json.dumps(report, indent=2))
-    print(f"\nReport saved to: {report_path}")
-
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"Report saved to: {report_path}")
     sys.exit(0 if report["overall_status"] == "pass" else 1)
 
 

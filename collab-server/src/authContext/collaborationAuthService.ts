@@ -49,42 +49,62 @@ export function resolveCollaborationJwtSecret(env: NodeJS.ProcessEnv = process.e
   return secret;
 }
 
+export function resolveCollaborationJwtVerificationSecrets(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const primarySecret = resolveCollaborationJwtSecret(env);
+  const legacySecrets = [env.SECRET_KEY_OLD].filter(
+    (candidate): candidate is string => Boolean(candidate && candidate !== primarySecret),
+  );
+  return [primarySecret, ...legacySecrets];
+}
+
 export class CollaborationAuthService {
-  private readonly jwtSecret: string;
+  private readonly jwtSecrets: string[];
   private readonly contractAdapter: CollaborationTokenContractAdapter;
 
   constructor(
-    jwtSecret: string = resolveCollaborationJwtSecret(),
+    jwtSecrets: string[] = resolveCollaborationJwtVerificationSecrets(),
     contractAdapter: CollaborationTokenContractAdapter = new CollaborationTokenContractAdapter(),
   ) {
-    this.jwtSecret = jwtSecret;
+    this.jwtSecrets = jwtSecrets;
     this.contractAdapter = contractAdapter;
   }
 
   verifyCollabToken(token: string, documentId: string): AuthResult {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret);
-      return this.contractAdapter.mapDecodedToken(decoded, documentId);
-    } catch (error) {
-      if (error instanceof jwt.TokenExpiredError) {
+    for (const secret of this.jwtSecrets) {
+      try {
+        const decoded = jwt.verify(token, secret);
+        return this.contractAdapter.mapDecodedToken(decoded, documentId);
+      } catch (error) {
+        if (error instanceof jwt.TokenExpiredError) {
+          return {
+            success: false,
+            error: 'Token has expired',
+          };
+        }
+
+        if (error instanceof jwt.JsonWebTokenError) {
+          if (error.message === 'invalid signature') {
+            continue;
+          }
+          return {
+            success: false,
+            error: 'Invalid token',
+          };
+        }
+
         return {
           success: false,
-          error: 'Token has expired',
+          error: 'Authentication failed',
         };
       }
-
-      if (error instanceof jwt.JsonWebTokenError) {
-        return {
-          success: false,
-          error: 'Invalid token',
-        };
-      }
-
-      return {
-        success: false,
-        error: 'Authentication failed',
-      };
     }
+
+    return {
+      success: false,
+      error: 'Invalid token',
+    };
   }
 
   canWrite(permissions: CollaborationPermission[]): boolean {

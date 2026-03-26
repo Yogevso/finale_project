@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -33,24 +32,17 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         cls,
         attachment_id: int,
         *,
+        db: Session | None = None,
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
-        """Schedule asynchronous generation of a derived reader artifact."""
-        if background_tasks:
-            background_tasks.add_task(
-                cls.generate_reader_artifact,
-                attachment_id,
-                force,
-            )
-            return
-
-        worker = threading.Thread(
-            target=cls.generate_reader_artifact,
-            args=(attachment_id, force),
-            daemon=True,
+        """Schedule asynchronous generation through the durable conversion queue."""
+        cls.enqueue_conversion(
+            attachment_id,
+            db=db,
+            background_tasks=background_tasks,
+            force=force,
         )
-        worker.start()
 
     @staticmethod
     def _normalize_toc_items(raw_items: Any) -> list[dict[str, Any]]:
@@ -456,6 +448,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             db.refresh(attachment)
             cls.schedule_reader_artifact_generation(
                 attachment.id,
+                db=db,
                 background_tasks=background_tasks,
                 force=force_retry,
             )

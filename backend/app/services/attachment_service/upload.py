@@ -184,7 +184,11 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
         cls._ensure_artifact_rows(db, attachment, persist=True)
 
         if supports_reader_artifact:
-            cls.schedule_reader_artifact_generation(attachment.id, background_tasks=background_tasks)
+            cls.schedule_reader_artifact_generation(
+                attachment.id,
+                db=db,
+                background_tasks=background_tasks,
+            )
 
         if convert_to_html:
             try:
@@ -239,6 +243,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
     def enqueue_conversion(
         attachment_id: int,
         *,
+        db: Session | None = None,
         background_tasks: Optional[BackgroundTasks] = None,
         force: bool = False,
     ) -> None:
@@ -247,6 +252,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         enqueue_conversion_job(
             attachment_id,
+            db=db,
             background_tasks=background_tasks,
             force=force,
         )
