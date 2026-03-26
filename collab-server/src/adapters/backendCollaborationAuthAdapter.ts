@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 
 import type { CollaborationPermission } from '../authContext/contracts.js';
+import { buildTraceHeaders } from '../trace.js';
 import { normalizeApiPrefix } from './backendDocumentStateTransportAdapter.js';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
@@ -29,11 +30,13 @@ export function buildCollaborationVerifyAccessUrl(
 export async function verifyCollaborationAccess(
   documentId: string,
   token: string,
+  traceId?: string,
 ): Promise<VerifyCollaborationAccessResult> {
   try {
     const response = await axios.get(buildCollaborationVerifyAccessUrl(documentId), {
       headers: {
         Authorization: `Bearer ${token}`,
+        ...buildTraceHeaders(traceId),
       },
       timeout: BACKEND_TIMEOUT_MS,
     });

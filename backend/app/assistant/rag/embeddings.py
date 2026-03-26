@@ -9,11 +9,23 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.observability import REQUEST_ID_HEADER, TRACE_ID_HEADER, current_request_id, current_trace_id
 
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 2
 _RETRY_BACKOFF = 1.0
+
+
+def _trace_headers() -> dict[str, str]:
+    headers: dict[str, str] = {}
+    trace_id = current_trace_id.get(None)
+    if trace_id:
+        headers[TRACE_ID_HEADER] = trace_id
+    request_id = current_request_id.get(None)
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
+    return headers
 
 
 class OllamaEmbeddings:
@@ -48,12 +60,13 @@ class OllamaEmbeddings:
             return []
         client = self._get_client()
         payload: dict[str, Any] = {"model": self._model, "input": texts}
+        headers = _trace_headers()
 
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 resp = await client.post(
-                    f"{self._base_url}/api/embed", json=payload,
+                    f"{self._base_url}/api/embed", json=payload, headers=headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -74,12 +87,13 @@ class OllamaEmbeddings:
         """Send a single embed request with retry logic."""
         client = self._get_client()
         payload: dict[str, Any] = {"model": self._model, "input": text}
+        headers = _trace_headers()
 
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 resp = await client.post(
-                    f"{self._base_url}/api/embed", json=payload,
+                    f"{self._base_url}/api/embed", json=payload, headers=headers,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -116,6 +130,6 @@ class OllamaEmbeddings:
             )
             resp.raise_for_status()
             return True
-        except Exception:
+        except Exception:  # policy: BOUNDARY — embedding backend failure becomes a stable fallback
             logger.warning("Failed to ensure embedding model %s", self._model, exc_info=True)
             return False

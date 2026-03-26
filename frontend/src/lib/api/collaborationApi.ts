@@ -1,4 +1,5 @@
 import { API_BASE_URL, type ApiHttpClient, type Constructor } from './httpClient'
+import { withTraceHeader } from '@/lib/requestTrace'
 import {
   type CollaborationActiveSessionsResponseDto,
   type CollaborationActivityFeedResponseDto,
@@ -61,10 +62,10 @@ export const CollaborationApiMixin = <TBase extends Constructor<ApiHttpClient>>(
           method: 'POST',
           keepalive: true,
           credentials: 'include',
-          headers: {
+          headers: withTraceHeader({
             'Content-Type': 'application/json',
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
+          }),
           body: JSON.stringify({
             session_id: sessionId,
             edits_count: editsCount,

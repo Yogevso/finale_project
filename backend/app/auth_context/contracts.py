@@ -64,6 +64,7 @@ class CollaborationTokenContract:
     tenant_id: int | None
     document_id: str
     permissions: list[str]
+    trace_id: str
 
     @classmethod
     def from_user(
@@ -72,6 +73,7 @@ class CollaborationTokenContract:
         *,
         document_id: int,
         permissions: list[str],
+        trace_id: str,
     ) -> "CollaborationTokenContract":
         return cls(
             sub=str(user.id),
@@ -81,6 +83,7 @@ class CollaborationTokenContract:
             tenant_id=user.tenant_id,
             document_id=str(document_id),
             permissions=list(permissions),
+            trace_id=trace_id,
         )
 
     def to_payload(self) -> dict[str, Any]:
@@ -92,4 +95,5 @@ class CollaborationTokenContract:
             "tenant_id": self.tenant_id,
             "document_id": self.document_id,
             "permissions": list(self.permissions),
+            "trace_id": self.trace_id,
         }

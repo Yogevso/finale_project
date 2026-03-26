@@ -44,6 +44,7 @@ export function isCollaborationTokenContract(
     !isString(candidate.role) ||
     !isNullableInteger(candidate.tenant_id) ||
     !isString(candidate.document_id) ||
+    !isString(candidate.trace_id) ||
     !isPermissionList(candidate.permissions)
   ) {
     return false;

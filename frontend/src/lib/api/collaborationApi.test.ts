@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CollaborationApiMixin } from './collaborationApi'
 import { API_BASE_URL, ApiHttpClient } from './httpClient'
+import { TRACE_ID_HEADER } from '@/lib/requestTrace'
 
 const mockAxiosInstance = {
   post: vi.fn(),
@@ -57,6 +58,7 @@ describe('CollaborationApiMixin', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token-123',
           'Content-Type': 'application/json',
+          [TRACE_ID_HEADER]: expect.any(String),
         }),
       }),
     )

@@ -45,6 +45,7 @@ describe('Authentication', () => {
       expect(result.user).toBeDefined();
       expect(result.user?.userId).toBe('1');
       expect(result.user?.username).toBe('testuser');
+      expect(result.user?.traceId).toBe('trace-collab-123');
       expect(result.permissions).toEqual(['read', 'write']);
     });
 

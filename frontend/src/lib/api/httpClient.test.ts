@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { API_BASE_URL, ApiHttpClient } from './httpClient'
+import { TRACE_ID_HEADER } from '@/lib/requestTrace'
 
 type MockResponseErrorHandler = (error: {
   config?: { url?: string; headers?: Record<string, string> }
@@ -78,6 +79,7 @@ describe('ApiHttpClient refresh interceptor', () => {
     for (const [requestConfig] of mockAxiosInstance.mock.calls) {
       const config = requestConfig as { headers?: Record<string, string> } | undefined
       expect(config?.headers?.Authorization).toBe('Bearer new-access-token')
+      expect(config?.headers?.[TRACE_ID_HEADER]).toBeTruthy()
     }
   })
 
@@ -98,5 +100,23 @@ describe('ApiHttpClient refresh interceptor', () => {
     expect(mockedAxios.post).toHaveBeenCalledTimes(1)
     expect(mockAxiosInstance).toHaveBeenCalledTimes(0)
     expect(client.getToken()).toBeNull()
+  })
+
+  it('adds a trace header to outgoing requests and preserves an existing one', () => {
+    const client = new ApiHttpClient()
+    client.setToken('access-token')
+
+    const onRequest = mockAxiosInstance.interceptors.request.use.mock.calls[0]?.[0] as
+      | ((config: { headers?: Record<string, string> }) => { headers?: Record<string, string> })
+      | undefined
+
+    expect(onRequest).toBeTruthy()
+
+    const traced = onRequest!({ headers: {} })
+    expect(traced.headers?.Authorization).toBe('Bearer access-token')
+    expect(traced.headers?.[TRACE_ID_HEADER]).toBeTruthy()
+
+    const existing = onRequest!({ headers: { [TRACE_ID_HEADER]: 'trace-existing' } })
+    expect(existing.headers?.[TRACE_ID_HEADER]).toBe('trace-existing')
   })
 })

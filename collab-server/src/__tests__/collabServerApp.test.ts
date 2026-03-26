@@ -134,6 +134,7 @@ describe('CollabServerApp config and runtime composition', () => {
             email: 'editor@example.com',
             role: 'editor',
             color: '#123456',
+            traceId: 'trace-123',
           },
           permissions: ['read', 'write'],
         })),
@@ -171,6 +172,7 @@ describe('CollabServerApp config and runtime composition', () => {
             email: 'editor@example.com',
             role: 'editor',
             color: '#123456',
+            traceId: 'trace-123',
           },
           permissions: ['read', 'write'],
         })),
@@ -196,6 +198,11 @@ describe('CollabServerApp config and runtime composition', () => {
     expect(canWrite).toHaveBeenCalledWith(['read']);
     expect(connection.readOnly).toBe(true);
     expect(result.permissions).toEqual(['read']);
+    expect((app as any).runtime.verifyCollaborationAccess).toHaveBeenCalledWith(
+      '123',
+      'collab-token',
+      'trace-123',
+    );
     expect(registerDocumentConnectionAuth).toHaveBeenCalledWith(
       expect.objectContaining({
         documentId: '123',

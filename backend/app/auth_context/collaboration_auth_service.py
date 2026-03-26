@@ -15,6 +15,7 @@ from app.auth_context.contracts import (
 )
 from app.config import settings
 from app.models import User
+from app.observability import current_trace_id, generate_trace_id
 
 COLLAB_TOKEN_EXPIRE_MINUTES = 60
 
@@ -40,11 +41,14 @@ class CollaborationAuthService:
         document_id: int,
         permissions: list[str],
         expires_delta: timedelta | None = None,
+        trace_id: str | None = None,
     ) -> str:
+        effective_trace_id = trace_id or current_trace_id.get(None) or generate_trace_id()
         claims = CollaborationTokenContract.from_user(
             user,
             document_id=document_id,
             permissions=permissions,
+            trace_id=effective_trace_id,
         )
         payload = claims.to_payload()
         issued_at = datetime.now(timezone.utc)

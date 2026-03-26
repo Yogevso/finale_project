@@ -3,6 +3,7 @@
  */
 import axios from 'axios'
 import { api } from '@/lib/api'
+import { withTraceHeader } from '@/lib/requestTrace'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -16,10 +17,12 @@ const portalClient = axios.create({
 
 // Add auth header to requests
 portalClient.interceptors.request.use((config) => {
+  const headers = withTraceHeader((config.headers ?? {}) as Record<string, string>)
+  config.headers = headers
   // AD-004: get token from in-memory API client, not localStorage
   const token = api.getToken()
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    headers.Authorization = `Bearer ${token}`
   }
   return config
 })

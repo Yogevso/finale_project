@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance } from 'axios'
 import type { TokenResponse } from '@/types'
+import { withTraceHeader } from '@/lib/requestTrace'
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -48,8 +49,10 @@ export class ApiHttpClient {
 
     // Add auth header to requests
     this.client.interceptors.request.use((config) => {
+      const headers = withTraceHeader((config.headers ?? {}) as Record<string, string>)
+      config.headers = headers
       if (this.token) {
-        config.headers.Authorization = `Bearer ${this.token}`
+        headers.Authorization = `Bearer ${this.token}`
       }
       return config
     })
@@ -118,10 +121,12 @@ export class ApiHttpClient {
   }
 
   private setAuthHeader(request: MutableRequestConfig, token: string) {
-    if (!request.headers || typeof request.headers !== 'object') {
-      request.headers = {}
-    }
-    const headers = request.headers as Record<string, string>
+    const headers = withTraceHeader(
+      request.headers && typeof request.headers === 'object'
+        ? (request.headers as Record<string, string>)
+        : {},
+    )
+    request.headers = headers
     headers.Authorization = `Bearer ${token}`
   }
 

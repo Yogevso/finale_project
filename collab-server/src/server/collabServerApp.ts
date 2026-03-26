@@ -16,6 +16,7 @@ import {
   unregisterDocumentConnectionAuth,
 } from '../documentAuthStore.js';
 import { clearDocumentCache, initCacheInvalidation, loadDocument, saveDocument, stopCacheInvalidation } from '../persistence.js';
+import { formatTracePrefix } from '../trace.js';
 import type { AwarenessUser, ConnectionContext } from '../types.js';
 import { getUserColor } from '../types.js';
 import { ConnectionRegistry } from './connectionRegistry.js';
@@ -250,7 +251,11 @@ export class CollabServerApp {
       throw new Error(authResult.error || 'Authentication failed');
     }
 
-    const backendAuthResult = await this.runtime.verifyCollaborationAccess(documentId, token);
+    const backendAuthResult = await this.runtime.verifyCollaborationAccess(
+      documentId,
+      token,
+      authResult.user.traceId,
+    );
     if (!backendAuthResult.success) {
       throw new Error(backendAuthResult.error || 'Authentication failed');
     }
@@ -275,7 +280,7 @@ export class CollabServerApp {
       writeCapable,
     });
     console.log(
-      `[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`,
+      `${formatTracePrefix(authResult.user.traceId)}[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`,
     );
 
     return {
@@ -371,7 +376,9 @@ export class CollabServerApp {
         });
 
         if (user) {
-          console.log(`[Disconnect] User ${user.username} left document ${documentId}`);
+          console.log(
+            `${formatTracePrefix(user.traceId)}[Disconnect] User ${user.username} left document ${documentId}`,
+          );
         }
       },
       onStoreDocument: async ({ documentName, document }) => {

@@ -43,6 +43,7 @@ export class CollaborationTokenContractAdapter {
         email: decoded.email,
         role: decoded.role,
         color: getUserColor(decoded.sub),
+        traceId: decoded.trace_id,
       },
       permissions: decoded.permissions,
     };

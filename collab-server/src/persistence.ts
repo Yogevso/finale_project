@@ -14,6 +14,7 @@ import {
   buildDocumentStateUrl,
 } from './adapters/backendDocumentStateTransportAdapter.js';
 import type { DocumentStateTransportPort } from './ports/documentStateTransportPort.js';
+import { extractTraceIdFromToken, formatTracePrefix } from './trace.js';
 
 export { buildDocumentStateUrl };
 
@@ -187,27 +188,37 @@ export async function loadDocument(
     console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
     return null;
   }
+  const traceId = extractTraceIdFromToken(token);
 
   // Check cache first
   const cached = documentCache.get(documentId);
   if (cached) {
-    console.log(`[Persistence] Loaded document ${documentId} from cache`);
+    console.log(
+      `${formatTracePrefix(traceId)}[Persistence] Loaded document ${documentId} from cache`,
+    );
     return cached;
   }
 
   try {
     const state = stateContractAdapter.normalizeLoadedState(
-      await transport.loadDocumentState(documentId, token),
+      await transport.loadDocumentState(documentId, token, traceId),
     );
     if (state) {
       cacheSet(documentId, state);
-      console.log(`[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`);
+      console.log(
+        `${formatTracePrefix(traceId)}[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`,
+      );
       return state;
     }
-    console.log(`[Persistence] Document ${documentId} has no existing state`);
+    console.log(
+      `${formatTracePrefix(traceId)}[Persistence] Document ${documentId} has no existing state`,
+    );
     return null;
   } catch (error) {
-    console.error(`[Persistence] Failed to load document ${documentId}:`, error);
+    console.error(
+      `${formatTracePrefix(traceId)}[Persistence] Failed to load document ${documentId}:`,
+      error,
+    );
     return null;
   }
 }
@@ -227,18 +238,24 @@ export async function saveDocument(
     console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
     return { success: false, error: 'Token is not valid for this document' };
   }
+  const traceId = extractTraceIdFromToken(token);
 
   // Update cache
   cacheSet(documentId, state);
 
   try {
-    await transport.saveDocumentState(documentId, state, token);
+    await transport.saveDocumentState(documentId, state, token, traceId);
     publishCacheInvalidation(documentId);
 
-    console.log(`[Persistence] Saved document ${documentId} to backend (${state.length} bytes)`);
+    console.log(
+      `${formatTracePrefix(traceId)}[Persistence] Saved document ${documentId} to backend (${state.length} bytes)`,
+    );
     return { success: true };
   } catch (error) {
-    console.error(`[Persistence] Failed to save document ${documentId}:`, error);
+    console.error(
+      `${formatTracePrefix(traceId)}[Persistence] Failed to save document ${documentId}:`,
+      error,
+    );
     return {
       success: false,
       error: stateContractAdapter.toErrorMessage(error),

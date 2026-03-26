@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.1.0",
+  "contract_version": "1.2.0",
   "consumer": "collab-server",
   "provider": "backend",
   "collaboration_token": {
@@ -12,7 +12,8 @@
       "role",
       "tenant_id",
       "document_id",
-      "permissions"
+      "permissions",
+      "trace_id"
     ],
     "fixture": {
       "sub": "7",
@@ -22,6 +23,7 @@
       "tenant_id": 9,
       "document_id": "42",
       "permissions": ["read", "write"],
+      "trace_id": "trace-contract-42",
       "type": "collaboration"
     }
   }
