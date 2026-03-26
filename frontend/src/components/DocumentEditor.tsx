@@ -6,6 +6,7 @@ import {
   resolveSelectedAttachment,
 } from '@/lib/attachmentSelection'
 import { useCollaboration } from '@/lib/useCollaboration'
+import { reportRuntimeError, reportRuntimeWarning } from '@/lib/runtimeReporter'
 import { getUserColor } from '@/lib/userColors'
 import { useAuth } from '@/lib/auth'
 import type { Attachment } from '@/types'
@@ -42,7 +43,12 @@ export default function DocumentEditor({
     username: user?.username || 'Anonymous',
     userId: user?.id || 0,
     enabled: collaborationEnabled && Boolean(user),
-    onError: (err) => console.error('Collaboration error:', err),
+    onError: (err) =>
+      reportRuntimeError({
+        scope: 'editor.collaboration',
+        message: 'Collaboration runtime error',
+        error: err,
+      }),
   })
 
   const userColor = getUserColor(user?.id || 0)
@@ -103,7 +109,11 @@ export default function DocumentEditor({
           setOriginalContent(result.value)
 
           if (result.messages.length > 0) {
-            console.warn('Mammoth conversion messages:', result.messages)
+            reportRuntimeWarning({
+              scope: 'editor.conversion',
+              message: 'Mammoth conversion returned warnings',
+              error: result.messages,
+            })
           }
         } else {
           setContent(
@@ -112,7 +122,11 @@ export default function DocumentEditor({
           setOriginalContent('')
         }
       } catch (loadError) {
-        console.error('Failed to load document:', loadError)
+        reportRuntimeError({
+          scope: 'editor.document',
+          message: 'Failed to load editable document',
+          error: loadError,
+        })
         setError('Failed to load document content')
       } finally {
         setLoading(false)
@@ -139,7 +153,11 @@ export default function DocumentEditor({
       setHasChanges(false)
       setIsEditing(false)
     } catch (saveError) {
-      console.error('Failed to save:', saveError)
+      reportRuntimeError({
+        scope: 'editor.document',
+        message: 'Failed to save document changes',
+        error: saveError,
+      })
       setError('Failed to save changes')
     } finally {
       setSaving(false)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { api } from '@/lib/api'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 import type {
   Attachment,
   AttachmentExtractionWarning,
@@ -121,7 +122,11 @@ export function useReaderArtifact({
           return
         }
 
-        console.error('Reader View load error:', loadError)
+        reportRuntimeError({
+          scope: 'preview.reader',
+          message: 'Reader View load failed',
+          error: loadError,
+        })
         setReaderError('Failed to load Reader View.')
         setReaderHtmlContent(null)
         setIsReaderLoading(false)
@@ -168,7 +173,11 @@ export function useReaderArtifact({
 
       setReaderReloadToken((previous) => previous + 1)
     } catch (retryError) {
-      console.error('Reader View retry failed:', retryError)
+      reportRuntimeError({
+        scope: 'preview.reader',
+        message: 'Reader View retry failed',
+        error: retryError,
+      })
       setReaderError('Retry failed.')
       setIsReaderLoading(false)
     }

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 import { CollaborationTokenContractAdapter } from '../adapters/collaborationTokenContractAdapter.js';
+import { createStructuredLogger } from '../logger.js';
 import type { UserContext } from '../types.js';
 import type { CollaborationPermission } from './contracts.js';
 
@@ -11,25 +12,38 @@ export interface AuthResult {
   error?: string;
 }
 
+const logger = createStructuredLogger('collab.auth');
+
 export function resolveCollaborationJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
   const secret = env.SECRET_KEY || env.JWT_SECRET;
 
   if (!secret) {
-    console.error('FATAL: SECRET_KEY environment variable is required (JWT_SECRET is a legacy fallback)');
+    logger.error('SECRET_KEY environment variable is required', {
+      hasLegacyJwtSecret: Boolean(env.JWT_SECRET),
+    });
     process.exit(1);
   }
 
   if (secret.length < 32) {
     const nodeEnv = env.NODE_ENV || 'development';
     if (nodeEnv === 'production') {
-      console.error('FATAL: collaboration signing secret is too short. Use at least 32 characters.');
+      logger.error('Collaboration signing secret is too short for production', {
+        minRecommendedLength: 32,
+        actualLength: secret.length,
+      });
       process.exit(1);
     }
     if (secret.length < 16) {
-      console.error('FATAL: collaboration signing secret must be at least 16 characters, even in development.');
+      logger.error('Collaboration signing secret is too short even for development', {
+        minLength: 16,
+        actualLength: secret.length,
+      });
       process.exit(1);
     }
-    console.warn('WARNING: collaboration signing secret is shorter than recommended (32+ chars)');
+    logger.warn('Collaboration signing secret is shorter than recommended', {
+      recommendedLength: 32,
+      actualLength: secret.length,
+    });
   }
 
   return secret;

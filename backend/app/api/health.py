@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
+from app.infrastructure.degradation import get_degradation_metrics
 from app.services.document_audience_service import get_company_lookup_cache_metrics
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ async def detailed_health_check(db: Session = Depends(get_db)):
     storage_status = _check_storage()
     system_info = _get_system_info()
     cache_metrics = get_company_lookup_cache_metrics()
+    degradation_metrics = get_degradation_metrics()
 
     all_healthy = all(s.get("status") == "healthy" for s in [db_status, storage_status])
 
@@ -175,6 +177,24 @@ async def detailed_health_check(db: Session = Depends(get_db)):
                 "writes": cache_metrics.writes,
                 "evictions": cache_metrics.evictions,
                 "clears": cache_metrics.clears,
+            }
+        },
+        "runtime": {
+            "degradation": {
+                "total_events": degradation_metrics.total_events,
+                "by_policy": dict(degradation_metrics.by_policy),
+                "by_key": dict(degradation_metrics.by_key),
+                "last_recorded_at": degradation_metrics.last_recorded_at,
+                "components": {
+                    component: {
+                        "total_events": metrics.total_events,
+                        "by_policy": dict(metrics.by_policy),
+                        "last_recorded_at": metrics.last_recorded_at,
+                        "last_error_type": metrics.last_error_type,
+                        "last_error_message": metrics.last_error_message,
+                    }
+                    for component, metrics in degradation_metrics.components.items()
+                },
             }
         },
     }

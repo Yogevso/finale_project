@@ -15,6 +15,7 @@ import type { PreApprovePolicy, ReviewRequest, Version } from '@/types'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import { useFocusTrap } from '@/hooks/useAccessibility'
+import { reportRuntimeError } from '@/lib/runtimeReporter'
 
 interface ReviewDialogProps {
   review: ReviewRequest
@@ -52,7 +53,13 @@ export default function ReviewDialog({
       setLoadingVersion(true)
       api.getVersion(review.document_id, review.version_id)
         .then(setVersion)
-        .catch(console.error)
+        .catch((error) => {
+          reportRuntimeError({
+            scope: 'review.dialog',
+            message: 'Failed to load review version details',
+            error,
+          })
+        })
         .finally(() => setLoadingVersion(false))
     }
   }, [review.version_id, review.document_id])
@@ -69,7 +76,11 @@ export default function ReviewDialog({
         }
       })
       .catch((error) => {
-        console.error(error)
+        reportRuntimeError({
+          scope: 'review.dialog',
+          message: 'Failed to load pre-approve policy',
+          error,
+        })
         if (!isCancelled) {
           setPreApprovePolicy(null)
           setPolicyError('Approval checks could not be loaded. Approval is temporarily disabled.')

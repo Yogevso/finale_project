@@ -15,8 +15,8 @@ import {
   registerDocumentConnectionAuth,
   unregisterDocumentConnectionAuth,
 } from '../documentAuthStore.js';
+import { createStructuredLogger } from '../logger.js';
 import { clearDocumentCache, initCacheInvalidation, loadDocument, saveDocument, stopCacheInvalidation } from '../persistence.js';
-import { formatTracePrefix } from '../trace.js';
 import type { AwarenessUser, ConnectionContext } from '../types.js';
 import { getUserColor } from '../types.js';
 import { ConnectionRegistry } from './connectionRegistry.js';
@@ -49,6 +49,8 @@ export type CollabRuntimeDependencies = {
   registerDocumentConnectionAuth: typeof registerDocumentConnectionAuth;
   unregisterDocumentConnectionAuth: typeof unregisterDocumentConnectionAuth;
 };
+
+const logger = createStructuredLogger('collab.server');
 
 export const PERSISTENCE_FAILURE_MESSAGE =
   'Changes are no longer being saved to the server. Keep this tab open and reconnect before closing it.';
@@ -146,15 +148,21 @@ export class CollabServerApp {
     }
 
     await this.healthServer.start();
-    console.log(
-      `[Health] HTTP health check available at http://${this.config.host}:${this.healthServer.port}/health`,
-    );
+    logger.info('Health endpoint available', {
+      host: this.config.host,
+      port: this.healthServer.port,
+      path: '/health',
+    });
 
     await this.server.listen();
-    console.log(`[Server] Hocuspocus server running on ws://${this.config.host}:${this.config.port}`);
-    console.log(
-      `[Server] Connect to: ws://${this.config.host}:${this.config.port}/document/{documentId}?token={jwt}`,
-    );
+    logger.info('Hocuspocus server running', {
+      host: this.config.host,
+      port: this.config.port,
+      websocketUrl: `ws://${this.config.host}:${this.config.port}`,
+    });
+    logger.info('Collaboration connection template ready', {
+      websocketUrlTemplate: `ws://${this.config.host}:${this.config.port}/document/{documentId}?token={jwt}`,
+    });
     this.started = true;
   }
 
@@ -170,16 +178,13 @@ export class CollabServerApp {
   }
 
   printStartupBanner(): void {
-    console.log('============================================');
-    console.log('  Hocuspocus Collaboration Server');
-    console.log('============================================');
-    console.log(`  WebSocket Port: ${this.config.port}`);
-    console.log(`  Health Port: ${this.config.healthPort}`);
-    console.log(`  Host: ${this.config.host}`);
-    console.log(
-      `  Redis: ${this.config.redisUrl ? `ENABLED (${this.config.redisUrl})` : 'DISABLED (single-server mode)'}`,
-    );
-    console.log('============================================');
+    logger.info('Collaboration server configuration', {
+      host: this.config.host,
+      websocketPort: this.config.port,
+      healthPort: this.config.healthPort,
+      redisEnabled: Boolean(this.config.redisUrl),
+      redisUrl: this.config.redisUrl || null,
+    });
   }
 
   private broadcastPersistenceFailure(documentId: string, payload: storePayload): void {
@@ -213,9 +218,7 @@ export class CollabServerApp {
     const token = this.runtime.getDocumentTokenForStore(documentId);
 
     if (!token) {
-      console.error(
-        `[Database] No write-capable token available to save document ${documentId}`,
-      );
+      logger.error('No write-capable token available to save document', { documentId });
       this.broadcastPersistenceFailure(documentId, payload);
       return;
     }
@@ -279,9 +282,12 @@ export class CollabServerApp {
       token,
       writeCapable,
     });
-    console.log(
-      `${formatTracePrefix(authResult.user.traceId)}[Auth] User ${authResult.user.username} authenticated for document ${documentId} (readonly: ${connection.readOnly})`,
-    );
+    logger.info('User authenticated for collaboration document', {
+      traceId: authResult.user.traceId,
+      username: authResult.user.username,
+      documentId,
+      readOnly: Boolean(connection.readOnly),
+    });
 
     return {
       user: authResult.user,
@@ -294,7 +300,7 @@ export class CollabServerApp {
     const extensions: Extension[] = [
       new Logger({
         log: (message) => {
-          console.log(`[Hocuspocus] ${message}`);
+          logger.info('Hocuspocus runtime event', { message });
         },
         onLoadDocument: true,
         onStoreDocument: true,
@@ -333,7 +339,7 @@ export class CollabServerApp {
             const token = this.runtime.getDocumentTokenForLoad(documentId);
 
             if (!token) {
-              console.log(`[Database] No token available for document ${documentId}`);
+              logger.warn('No token available to load document', { documentId });
               return null;
             }
 
@@ -345,7 +351,7 @@ export class CollabServerApp {
       onAuthenticate: this.authenticateConnection,
       onLoadDocument: async ({ documentName }) => {
         const documentId = this.runtime.extractDocumentId(documentName);
-        console.log(`[Document] Loading document ${documentId}`);
+        logger.info('Loading collaboration document', { documentId });
       },
       onChange: async ({ documentName, document }) => {
         this.runtime.extractDocumentId(documentName);
@@ -376,15 +382,20 @@ export class CollabServerApp {
         });
 
         if (user) {
-          console.log(
-            `${formatTracePrefix(user.traceId)}[Disconnect] User ${user.username} left document ${documentId}`,
-          );
+          logger.info('User disconnected from collaboration document', {
+            traceId: user.traceId,
+            username: user.username,
+            documentId,
+          });
         }
       },
       onStoreDocument: async ({ documentName, document }) => {
         const documentId = this.runtime.extractDocumentId(documentName);
         const state = Y.encodeStateAsUpdate(document);
-        console.log(`[Store] Final save for document ${documentId} (${state.length} bytes)`);
+        logger.info('Final collaboration document save', {
+          documentId,
+          bytes: state.length,
+        });
       },
       afterUnloadDocument: async ({ documentName }) => {
         const documentId = this.runtime.extractDocumentId(documentName);

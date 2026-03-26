@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
@@ -73,3 +75,16 @@ def test_app_factory_startup_initializes_runtime_once(monkeypatch):
 
     assert init_calls == ["init"]
     assert publish_calls == ["publish", "publish"]
+
+
+def test_app_factory_does_not_emit_fastapi_on_event_deprecation_warning():
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        app = FastAPIAppFactory().create()
+        with TestClient(app):
+            pass
+
+    assert not any(
+        warning.category is DeprecationWarning and "on_event is deprecated" in str(warning.message)
+        for warning in captured
+    )

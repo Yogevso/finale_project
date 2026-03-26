@@ -13,8 +13,9 @@ import {
   BackendDocumentStateTransportAdapter,
   buildDocumentStateUrl,
 } from './adapters/backendDocumentStateTransportAdapter.js';
+import { createStructuredLogger } from './logger.js';
 import type { DocumentStateTransportPort } from './ports/documentStateTransportPort.js';
-import { extractTraceIdFromToken, formatTracePrefix } from './trace.js';
+import { extractTraceIdFromToken } from './trace.js';
 
 export { buildDocumentStateUrl };
 
@@ -30,6 +31,8 @@ const CACHE_INVALIDATION_MAX_AGE_MS = 5 * 60 * 1000;
 let redisPub: Redis | null = null;
 let redisSub: Redis | null = null;
 let cacheInvalidationSecret = '';
+const persistenceLogger = createStructuredLogger('collab.persistence');
+const cacheLogger = createStructuredLogger('collab.cache_invalidation');
 
 type CacheInvalidationEnvelope = {
   documentId: string;
@@ -115,17 +118,17 @@ export async function initCacheInvalidation(redisUrl: string, secret: string): P
   redisSub.on('message', (_channel: string, message: string) => {
     const documentId = decodeCacheInvalidationMessage(message, cacheInvalidationSecret);
     if (!documentId) {
-      console.warn('[CacheInval] Ignored unsigned or invalid invalidation payload');
+      cacheLogger.warn('Ignored invalid invalidation payload');
       return;
     }
 
     if (documentCache.has(documentId)) {
       documentCache.delete(documentId);
-      console.log(`[CacheInval] Evicted cache for document ${documentId} (remote save)`);
+      cacheLogger.info('Evicted cached document after remote save', { documentId });
     }
   });
 
-  console.log('[CacheInval] Redis cache invalidation active');
+  cacheLogger.info('Redis cache invalidation active');
 }
 
 export async function stopCacheInvalidation(): Promise<void> {
@@ -146,7 +149,10 @@ function publishCacheInvalidation(documentId: string): void {
       CACHE_INVALIDATION_CHANNEL,
       encodeCacheInvalidationMessage(documentId, cacheInvalidationSecret),
     ).catch((err: unknown) => {
-      console.error(`[CacheInval] Failed to publish invalidation for ${documentId}:`, err);
+      cacheLogger.error('Failed to publish invalidation', {
+        documentId,
+        error: err,
+      });
     });
   }
 }
@@ -185,7 +191,7 @@ export async function loadDocument(
   // H-21: Verify the token is actually meant for this document
   const decoded = jwt.decode(token) as Record<string, unknown> | null;
   if (!decoded || String(decoded.document_id) !== String(documentId)) {
-    console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
+    persistenceLogger.warn('Token document_id mismatch during load', { documentId });
     return null;
   }
   const traceId = extractTraceIdFromToken(token);
@@ -193,9 +199,7 @@ export async function loadDocument(
   // Check cache first
   const cached = documentCache.get(documentId);
   if (cached) {
-    console.log(
-      `${formatTracePrefix(traceId)}[Persistence] Loaded document ${documentId} from cache`,
-    );
+    persistenceLogger.info('Loaded document from cache', { documentId, traceId });
     return cached;
   }
 
@@ -205,20 +209,17 @@ export async function loadDocument(
     );
     if (state) {
       cacheSet(documentId, state);
-      console.log(
-        `${formatTracePrefix(traceId)}[Persistence] Loaded document ${documentId} from backend (${state.length} bytes)`,
-      );
+      persistenceLogger.info('Loaded document from backend', {
+        documentId,
+        traceId,
+        bytes: state.length,
+      });
       return state;
     }
-    console.log(
-      `${formatTracePrefix(traceId)}[Persistence] Document ${documentId} has no existing state`,
-    );
+    persistenceLogger.info('Document has no existing persisted state', { documentId, traceId });
     return null;
   } catch (error) {
-    console.error(
-      `${formatTracePrefix(traceId)}[Persistence] Failed to load document ${documentId}:`,
-      error,
-    );
+    persistenceLogger.error('Failed to load document', { documentId, traceId, error });
     return null;
   }
 }
@@ -235,7 +236,7 @@ export async function saveDocument(
   // H-21: Verify the token is actually meant for this document
   const decoded = jwt.decode(token) as Record<string, unknown> | null;
   if (!decoded || String(decoded.document_id) !== String(documentId)) {
-    console.error(`[Persistence] Token document_id mismatch for document ${documentId}`);
+    persistenceLogger.warn('Token document_id mismatch during save', { documentId });
     return { success: false, error: 'Token is not valid for this document' };
   }
   const traceId = extractTraceIdFromToken(token);
@@ -247,15 +248,19 @@ export async function saveDocument(
     await transport.saveDocumentState(documentId, state, token, traceId);
     publishCacheInvalidation(documentId);
 
-    console.log(
-      `${formatTracePrefix(traceId)}[Persistence] Saved document ${documentId} to backend (${state.length} bytes)`,
-    );
+    persistenceLogger.info('Saved document to backend', {
+      documentId,
+      traceId,
+      bytes: state.length,
+    });
     return { success: true };
   } catch (error) {
-    console.error(
-      `${formatTracePrefix(traceId)}[Persistence] Failed to save document ${documentId}:`,
+    persistenceLogger.error('Failed to save document', {
+      documentId,
+      traceId,
+      bytes: state.length,
       error,
-    );
+    });
     return {
       success: false,
       error: stateContractAdapter.toErrorMessage(error),
@@ -316,7 +321,7 @@ function escapeHtml(text: string): string {
  */
 export function clearDocumentCache(documentId: string): void {
   documentCache.delete(documentId);
-  console.log(`[Persistence] Cleared cache for document ${documentId}`);
+  persistenceLogger.info('Cleared cached document state', { documentId });
 }
 
 /**

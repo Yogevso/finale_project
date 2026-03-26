@@ -2,11 +2,20 @@
 
 from fastapi.testclient import TestClient
 
+from app.infrastructure.degradation import (
+    DegradationPolicy,
+    record_degradation,
+    reset_degradation_metrics,
+)
 from app.services.document_audience_service import _company_cache
 
 
 class TestHealthEndpoints:
     """Test health check endpoints"""
+
+    def setup_method(self):
+        _company_cache.clear(reset_metrics=True)
+        reset_degradation_metrics()
 
     def test_basic_health(self, client: TestClient):
         """Test basic health endpoint"""
@@ -79,8 +88,6 @@ class TestHealthEndpoints:
         assert "debug_mode" in config
 
     def test_detailed_health_includes_company_cache_metrics(self, client: TestClient):
-        _company_cache.clear(reset_metrics=True)
-
         response = client.get("/health/detailed")
 
         assert response.status_code == 200
@@ -93,3 +100,23 @@ class TestHealthEndpoints:
         assert "expired" in cache
         assert "writes" in cache
         assert "evictions" in cache
+
+    def test_detailed_health_includes_runtime_degradation_metrics(self, client: TestClient):
+        record_degradation(
+            DegradationPolicy.LOSSY,
+            "support.notifications",
+            RuntimeError("smtp unavailable"),
+        )
+
+        response = client.get("/health/detailed")
+
+        assert response.status_code == 200
+        data = response.json()
+        degradation = data["runtime"]["degradation"]
+        assert degradation["total_events"] == 1
+        assert degradation["by_policy"]["lossy"] == 1
+        assert degradation["by_key"]["lossy:support.notifications"] == 1
+        component = degradation["components"]["support.notifications"]
+        assert component["total_events"] == 1
+        assert component["last_error_type"] == "RuntimeError"
+        assert component["last_error_message"] == "smtp unavailable"
