@@ -98,9 +98,11 @@ const assistantApi = {
     onEvent: (event: SSEEvent) => void,
     signal?: AbortSignal,
     documentIds?: number[],
+    fileIds?: number[],
   ): Promise<void> {
     const body: Record<string, unknown> = { conversation_id: conversationId, message }
     if (documentIds && documentIds.length > 0) body.document_ids = documentIds
+    if (fileIds && fileIds.length > 0) body.file_ids = fileIds
     const res = await fetch(`${API_BASE_URL}/assistant/chat`, {
       method: 'POST',
       headers: authHeaders(),

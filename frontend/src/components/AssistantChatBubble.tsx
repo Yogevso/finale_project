@@ -63,8 +63,8 @@ export default function AssistantChatBubble() {
   }, [])
 
   const handleSend = useCallback(
-    (text: string, documentIds?: number[]) => {
-      chat.sendMessage(text, documentIds)
+    (text: string, documentIds?: number[], fileIds?: number[]) => {
+      chat.sendMessage(text, documentIds, fileIds)
     },
     [chat],
   )

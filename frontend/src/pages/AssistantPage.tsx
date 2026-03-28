@@ -23,7 +23,7 @@ import assistantApi from '@/lib/api/assistantApi'
 import { useAssistantChat } from '@/features/assistant/useAssistantChat'
 import AssistantMessageListFallback from '@/features/assistant/AssistantMessageListFallback'
 import AssistantInput from '@/features/assistant/AssistantInput'
-import type { AssistantConversation } from '@/types/assistant'
+import type { AssistantConversation, AssistantHealthStatus } from '@/types/assistant'
 
 const AssistantMessageList = lazy(() => import('@/features/assistant/AssistantMessageList'))
 
@@ -108,6 +108,36 @@ function groupConversations(convs: AssistantConversation[]): { label: string; it
   return order.filter(l => groups.has(l)).map(l => ({ label: l, items: groups.get(l)! }))
 }
 
+function getAssistantStatusClasses(status: AssistantHealthStatus['status'] | null): string {
+  switch (status) {
+    case 'ready':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    case 'degraded':
+      return 'bg-amber-50 text-amber-700 border-amber-200'
+    case 'disabled':
+      return 'bg-slate-100 text-slate-600 border-slate-200'
+    case 'unavailable':
+      return 'bg-rose-50 text-rose-700 border-rose-200'
+    default:
+      return 'bg-slate-100 text-slate-500 border-slate-200'
+  }
+}
+
+function getAssistantStatusLabel(status: AssistantHealthStatus['status'] | null): string {
+  switch (status) {
+    case 'ready':
+      return 'Ready'
+    case 'degraded':
+      return 'Degraded'
+    case 'disabled':
+      return 'Disabled'
+    case 'unavailable':
+      return 'Unavailable'
+    default:
+      return 'Checking'
+  }
+}
+
 // ── Page component ──────────────────────────────────────────────
 
 export default function AssistantPage() {
@@ -121,12 +151,20 @@ export default function AssistantPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [assistantHealth, setAssistantHealth] = useState<AssistantHealthStatus | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
 
   // Load conversations on mount
   useEffect(() => {
     refreshConversations()
     chat.loadTools()
+    assistantApi.getHealth().then(setAssistantHealth).catch(() => {
+      setAssistantHealth({
+        status: 'unavailable',
+        model: 'unknown',
+        ollama_healthy: false,
+      })
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -198,8 +236,8 @@ export default function AssistantPage() {
   )
 
   const handleSend = useCallback(
-    async (text: string, documentIds?: number[]) => {
-      await chat.sendMessage(text, documentIds)
+    async (text: string, documentIds?: number[], fileIds?: number[]) => {
+      await chat.sendMessage(text, documentIds, fileIds)
       // Refresh sidebar after first message (new conversation appears)
       setTimeout(refreshConversations, 500)
     },
@@ -406,8 +444,16 @@ export default function AssistantPage() {
           )}
           <Sparkles className="h-4 w-4 text-sky-600" />
           <h1 className="card-title text-sm">AI Assistant</h1>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getAssistantStatusClasses(assistantHealth?.status ?? null)}`}
+          >
+            {getAssistantStatusLabel(assistantHealth?.status ?? null)}
+          </span>
           <span className="text-xs text-slate-400">
             {chat.availableTools.length > 0 && `${chat.availableTools.length} tools available`}
+          </span>
+          <span className="hidden text-xs text-slate-400 lg:inline">
+            Best results: attach files or @mention documents for grounding.
           </span>
           <div className="ml-auto">
             {chat.messages.length > 0 && (
@@ -430,6 +476,7 @@ export default function AssistantPage() {
             userName={user?.full_name || 'there'}
             suggestions={suggestions}
             toolCount={chat.availableTools.length}
+            assistantStatus={assistantHealth?.status ?? null}
             onSuggestionClick={handleSend}
           />
         ) : (
@@ -551,11 +598,13 @@ function WelcomeScreen({
   userName,
   suggestions,
   toolCount,
+  assistantStatus,
   onSuggestionClick,
 }: {
   userName: string
   suggestions: string[]
   toolCount: number
+  assistantStatus: AssistantHealthStatus['status'] | null
   onSuggestionClick: (text: string) => void
 }) {
   return (
@@ -572,6 +621,27 @@ function WelcomeScreen({
           I can help you search documents, manage content, check settings,
           and more. {toolCount > 0 && `I have ${toolCount} tools at your disposal.`}
         </p>
+      </div>
+
+      <div className="grid w-full max-w-3xl gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ground Answers</p>
+          <p className="mt-2 text-sm text-slate-700">
+            Mention documents with <span className="font-mono">@</span> or attach files so I can answer from real platform context.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Safe Actions</p>
+          <p className="mt-2 text-sm text-slate-700">
+            I will ask for confirmation before destructive changes such as deletes or deactivations.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assistant Status</p>
+          <p className="mt-2 text-sm text-slate-700">
+            Current status: <span className="font-semibold">{getAssistantStatusLabel(assistantStatus)}</span>.
+          </p>
+        </div>
       </div>
 
       <div className="grid w-full max-w-md gap-2">
