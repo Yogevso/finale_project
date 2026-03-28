@@ -59,11 +59,14 @@ from app.models import (
     AuditLog,
     AssistantConversation,
     Notification,
+    NotificationType,
     SecurityEvent,
     Tenant,
     User,
     UserRole,
 )
+from app.services.chat_service import ChatService
+from app.services.notification_service import NotificationService
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -258,6 +261,122 @@ class TestCrossDBIsolation:
         chat_tables = set(inspect(chat_engine).get_table_names())
         assert "users" not in chat_tables
         assert "documents" not in chat_tables
+
+
+class TestCrossDBServiceBehavior:
+    def test_chat_service_uses_core_db_for_direct_chat_display_names(self):
+        core_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        chat_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        CoreBase.metadata.create_all(bind=core_engine)
+        ChatBase.metadata.create_all(bind=chat_engine)
+        CoreSession = sessionmaker(bind=core_engine)
+        ChatSession = sessionmaker(bind=chat_engine)
+        core_session = CoreSession()
+        chat_session = ChatSession()
+
+        try:
+            tenant = Tenant(
+                name="Chat Multi DB Tenant",
+                slug="chat-multi-db-tenant",
+                is_active=True,
+                contact_email="chat-multi-db@example.com",
+                company_type="customer",
+            )
+            core_session.add(tenant)
+            core_session.flush()
+
+            editor_a = User(
+                email="chat-a@example.com",
+                username="chat_a",
+                full_name="Chat Editor A",
+                hashed_password="fake",
+                role=UserRole.EDITOR,
+                is_active=True,
+                tenant_id=tenant.id,
+            )
+            editor_b = User(
+                email="chat-b@example.com",
+                username="chat_b",
+                full_name="Chat Editor B",
+                hashed_password="fake",
+                role=UserRole.EDITOR,
+                is_active=True,
+                tenant_id=tenant.id,
+            )
+            core_session.add_all([editor_a, editor_b])
+            core_session.commit()
+
+            svc = ChatService(chat_session, core_db=core_session)
+            svc.create_direct_chat(editor_a, editor_b.id)
+
+            chats = svc.get_user_chats(editor_a)
+
+            assert len(chats) == 1
+            assert chats[0]["display_name"] == "Chat Editor B"
+        finally:
+            chat_session.close()
+            core_session.close()
+            chat_engine.dispose()
+            core_engine.dispose()
+
+    def test_notification_service_commits_chat_db_after_primary_commit(self):
+        core_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        chat_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        CoreBase.metadata.create_all(bind=core_engine)
+        ChatBase.metadata.create_all(bind=chat_engine)
+        CoreSession = sessionmaker(bind=core_engine)
+        ChatSession = sessionmaker(bind=chat_engine)
+        core_session = CoreSession()
+        chat_session = ChatSession()
+        verifier = ChatSession()
+
+        try:
+            tenant = Tenant(
+                name="Notif Multi DB Tenant",
+                slug="notif-multi-db-tenant",
+                is_active=True,
+                contact_email="notif-multi-db@example.com",
+                company_type="customer",
+            )
+            core_session.add(tenant)
+            core_session.flush()
+
+            user = User(
+                email="notif@example.com",
+                username="notif_user",
+                full_name="Notification User",
+                hashed_password="fake",
+                role=UserRole.EDITOR,
+                is_active=True,
+                tenant_id=tenant.id,
+            )
+            core_session.add(user)
+            core_session.commit()
+
+            service = NotificationService(core_session, chat_db=chat_session)
+            service.create_notification(
+                user_id=user.id,
+                notification_type=NotificationType.SYSTEM,
+                title="System alert",
+                message="Chat DB commit check",
+                link="/notifications",
+            )
+
+            assert verifier.query(Notification).count() == 0
+
+            core_session.commit()
+            verifier.expire_all()
+
+            notifications = verifier.query(Notification).all()
+            assert len(notifications) == 1
+            assert notifications[0].user_id == user.id
+            assert notifications[0].title == "System alert"
+        finally:
+            verifier.close()
+            chat_session.close()
+            core_session.close()
+            chat_engine.dispose()
+            core_engine.dispose()
 
 
 # ── Test 4: No FK constraint to external tables ─────────────────────────

@@ -15,6 +15,7 @@ from app.models import (
     DocumentVisibility,
     Feedback,
     FeedbackStatus,
+    SupportTicket,
     User,
 )
 from app.schemas.portal import (
@@ -22,9 +23,22 @@ from app.schemas.portal import (
     FeedbackListResponse,
     FeedbackResponse,
 )
+from app.services.support_service import SupportTicketService
 from app.utils.sanitization import sanitize_html_content
 
 router = APIRouter(prefix="/portal", tags=["Customer Feedback"])
+
+
+def _feedback_ticket_id(db: Session, feedback_id: int) -> int | None:
+    ticket = db.query(SupportTicket.id).filter(SupportTicket.feedback_id == feedback_id).first()
+    return ticket[0] if ticket else None
+
+
+def _normalize_anchor_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(value.split()).strip()
+    return normalized[:1000] if normalized else None
 
 
 @router.post("/feedback", response_model=FeedbackResponse)
@@ -70,19 +84,24 @@ async def submit_feedback(
         user_id=current_user.id,
         feedback_type=feedback_data.feedback_type,
         content=sanitize_html_content(feedback_data.content),
+        anchor_text=_normalize_anchor_text(feedback_data.anchor_text),
         status=FeedbackStatus.PENDING,
     )
 
     db.add(feedback)
-    db.commit()
+    db.flush()
+
+    ticket = SupportTicketService(db).get_or_create_feedback_ticket(feedback)
     db.refresh(feedback)
 
     return FeedbackResponse(
         id=feedback.id,
         document_id=feedback.document_id,
         document_title=document.title,
+        ticket_id=ticket.id,
         feedback_type=feedback.feedback_type,
         content=feedback.content,
+        anchor_text=feedback.anchor_text,
         status=feedback.status,
         response=None,
         responded_at=None,
@@ -115,6 +134,13 @@ async def list_my_feedback(
 
     # Get feedback with documents
     feedback_list = query.order_by(Feedback.created_at.desc()).offset(offset).limit(per_page).all()
+    ticket_ids = {
+        feedback_id: ticket_id
+        for feedback_id, ticket_id in db.query(SupportTicket.feedback_id, SupportTicket.id)
+        .filter(SupportTicket.feedback_id.in_([fb.id for fb in feedback_list]))
+        .all()
+        if feedback_id is not None
+    }
 
     items = []
     for fb in feedback_list:
@@ -133,8 +159,10 @@ async def list_my_feedback(
                 id=fb.id,
                 document_id=fb.document_id,
                 document_title=document_title,
+                ticket_id=ticket_ids.get(fb.id),
                 feedback_type=fb.feedback_type,
                 content=fb.content,
+                anchor_text=fb.anchor_text,
                 status=fb.status,
                 response=fb.response,
                 responded_at=fb.responded_at,
@@ -189,8 +217,10 @@ async def get_feedback_detail(
         id=feedback.id,
         document_id=feedback.document_id,
         document_title=document_title,
+        ticket_id=_feedback_ticket_id(db, feedback.id),
         feedback_type=feedback.feedback_type,
         content=feedback.content,
+        anchor_text=feedback.anchor_text,
         status=feedback.status,
         response=feedback.response,
         responded_at=feedback.responded_at,
@@ -263,90 +293,6 @@ async def get_or_create_document_chat(
     db.commit()
     db.refresh(chat)
     return {"chat_id": chat.id, "name": chat.name, "created": True}
-
-
-@router.get("/chats/{chat_id}/messages")
-async def list_chat_messages(
-    chat_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_customer),
-):
-    """Return messages for a chat the customer participates in."""
-    from app.models import Chat, ChatParticipant, ChatMessage
-
-    chat = db.query(Chat).filter(Chat.id == chat_id).first()
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat not found")
-
-    is_participant = (
-        db.query(ChatParticipant)
-        .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == current_user.id)
-        .first()
-    )
-    if not is_participant:
-        raise HTTPException(status_code=403, detail="Not a participant")
-
-    messages = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.chat_id == chat_id)
-        .order_by(ChatMessage.created_at.asc())
-        .all()
-    )
-    return [
-        {
-            "id": m.id,
-            "sender_id": m.sender_id,
-            "content": m.content,
-            "message_type": m.message_type.value if m.message_type else "user",
-            "context_json": m.context_json,
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        }
-        for m in messages
-    ]
-
-
-@router.post("/chats/{chat_id}/messages")
-async def send_chat_message(
-    chat_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_customer),
-):
-    """Customer sends a message in a document chat."""
-    from app.models import Chat, ChatParticipant, ChatMessage, ChatMessageType
-
-    chat = db.query(Chat).filter(Chat.id == chat_id).first()
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat not found")
-
-    is_participant = (
-        db.query(ChatParticipant)
-        .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == current_user.id)
-        .first()
-    )
-    if not is_participant:
-        raise HTTPException(status_code=403, detail="Not a participant")
-
-    content = (body.get("content") or "").strip()
-    if not content:
-        raise HTTPException(status_code=422, detail="Content required")
-
-    msg = ChatMessage(
-        chat_id=chat_id,
-        sender_id=current_user.id,
-        content=content,
-        message_type=ChatMessageType.USER,
-        context_json=body.get("context_json"),
-    )
-    db.add(msg)
-    db.commit()
-    db.refresh(msg)
-    return {
-        "id": msg.id,
-        "sender_id": msg.sender_id,
-        "content": msg.content,
-        "created_at": msg.created_at.isoformat() if msg.created_at else None,
-    }
 
 
 @router.post("/feedback/{feedback_id}/chat")

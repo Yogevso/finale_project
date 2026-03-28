@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
@@ -67,12 +67,28 @@ const typeConfig: Record<FeedbackType, { label: string; icon: React.ReactNode; c
 }
 
 export default function FeedbackPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<FeedbackStatus | ''>('')
   const [typeFilter, setTypeFilter] = useState<FeedbackType | ''>('')
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackDetailResponse | null>(null)
   const [page, setPage] = useState(1)
   const queryClient = useQueryClient()
+  const selectedFeedbackId = Number(searchParams.get('feedback') || '')
+
+  const openFeedback = (feedback: FeedbackDetailResponse) => {
+    setSelectedFeedback(feedback)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('feedback', String(feedback.id))
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  const closeFeedback = () => {
+    setSelectedFeedback(null)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('feedback')
+    setSearchParams(nextParams, { replace: true })
+  }
 
   // Fetch feedback list
   const { data, isLoading, isError, refetch } = useQuery({
@@ -85,22 +101,36 @@ export default function FeedbackPage() {
         type: typeFilter || undefined,
         search: search || undefined,
       }),
+    refetchInterval: 15000,
   })
+
+  const feedbackDetailQuery = useQuery({
+    queryKey: ['feedback-management-detail', selectedFeedbackId],
+    queryFn: () => api.getFeedback(selectedFeedbackId),
+    enabled: Number.isInteger(selectedFeedbackId) && selectedFeedbackId > 0,
+  })
+
+  useEffect(() => {
+    if (feedbackDetailQuery.data) {
+      setSelectedFeedback(feedbackDetailQuery.data)
+    }
+  }, [feedbackDetailQuery.data])
 
   // Fetch stats
   const { data: stats, isLoading: isStatsLoading } = useQuery({
     queryKey: ['feedback-stats'],
     queryFn: () => api.getManagementFeedbackStats(),
+    refetchInterval: 15000,
   })
 
   // Respond mutation
   const respondMutation = useMutation({
     mutationFn: ({ id, response }: { id: number; response: string }) =>
       api.respondToFeedback(id, response),
-    onSuccess: () => {
+    onSuccess: (updatedFeedback) => {
       queryClient.invalidateQueries({ queryKey: ['feedback-management'] })
       queryClient.invalidateQueries({ queryKey: ['feedback-stats'] })
-      setSelectedFeedback(null)
+      setSelectedFeedback(updatedFeedback)
     },
   })
 
@@ -108,9 +138,12 @@ export default function FeedbackPage() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: FeedbackStatus }) =>
       api.updateFeedbackStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (updatedFeedback) => {
       queryClient.invalidateQueries({ queryKey: ['feedback-management'] })
       queryClient.invalidateQueries({ queryKey: ['feedback-stats'] })
+      setSelectedFeedback((current) =>
+        current && current.id === updatedFeedback.id ? updatedFeedback : current,
+      )
     },
   })
 
@@ -118,7 +151,7 @@ export default function FeedbackPage() {
     <div className="page-stack">
       <PageHeader
         title="Customer Feedback"
-        subtitle="Manage and respond to customer feedback"
+        subtitle="Review customer feedback and continue longer conversations in Support."
       />
 
       {/* Stats Cards */}
@@ -326,15 +359,23 @@ export default function FeedbackPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedFeedback(feedback)}
+                        onClick={() => openFeedback(feedback)}
                         className="btn-secondary table-action-btn"
                       >
                         View
                       </button>
+                      {feedback.ticket_id ? (
+                        <Link
+                          to={`/support?ticket=${feedback.ticket_id}`}
+                          className="btn-secondary table-action-btn"
+                        >
+                          Open Support Conversation
+                        </Link>
+                      ) : null}
                       {feedback.status === 'pending' && (
                         <button
                           type="button"
-                          onClick={() => setSelectedFeedback(feedback)}
+                          onClick={() => openFeedback(feedback)}
                           className="btn-primary table-action-btn"
                         >
                           <Send className="w-3 h-3" />
@@ -394,7 +435,7 @@ export default function FeedbackPage() {
       {selectedFeedback && (
         <FeedbackResponseDialog
           feedback={selectedFeedback}
-          onClose={() => setSelectedFeedback(null)}
+          onClose={closeFeedback}
           onRespond={(response) =>
             respondMutation.mutate({ id: selectedFeedback.id, response })
           }

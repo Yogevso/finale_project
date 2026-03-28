@@ -28,13 +28,14 @@ interface ChatSidebarProps {
   searchFilter: string
   onSearchChange: (value: string) => void
   onSelectChat: (chatId: number) => void
-  onNewChat: () => void
+  onNewChat?: () => void
   globalSearchResults?: ChatMessage[]
   globalSearchLoading?: boolean
   onSelectMessage?: (chatId: number, messageId: number) => void
   isLoading?: boolean
   isError?: boolean
   onRetry?: () => void
+  showNewChatButton?: boolean
 }
 
 export default function ChatSidebar({
@@ -50,6 +51,7 @@ export default function ChatSidebar({
   isLoading = false,
   isError = false,
   onRetry,
+  showNewChatButton = true,
 }: ChatSidebarProps) {
   const showGlobalResults = searchFilter.length >= 2 && (globalSearchResults || globalSearchLoading)
   const chatListRef = useRef<HTMLDivElement | null>(null)
@@ -66,12 +68,14 @@ export default function ChatSidebar({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
-        <button
-          onClick={onNewChat}
-          className="btn-primary px-3 py-1.5"
-        >
-          + New
-        </button>
+        {showNewChatButton && onNewChat ? (
+          <button
+            onClick={onNewChat}
+            className="btn-primary px-3 py-1.5"
+          >
+            + New
+          </button>
+        ) : null}
       </div>
 
       {/* Search */}
@@ -102,8 +106,12 @@ export default function ChatSidebar({
             <EmptyState
               icon={<MessageCircle className="h-8 w-8" aria-hidden="true" />}
               title="No conversations yet"
-              description="Start a new chat to get going."
-              action={{ label: 'New chat', onClick: onNewChat }}
+              description={
+                showNewChatButton && onNewChat
+                  ? 'Start a new chat to get going.'
+                  : 'Messages you already participate in will appear here.'
+              }
+              action={showNewChatButton && onNewChat ? { label: 'New chat', onClick: onNewChat } : undefined}
             />
           </div>
         ) : shouldVirtualizeChats ? (

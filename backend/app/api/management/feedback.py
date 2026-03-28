@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_internal_user, require_manager
 from app.models import (
     Attachment,
@@ -19,8 +19,7 @@ from app.models import (
     Feedback,
     FeedbackStatus,
     FeedbackType,
-    Notification,
-    NotificationType,
+    SupportTicket,
     Tenant,
     User,
     UserRole,
@@ -28,6 +27,7 @@ from app.models import (
 )
 from app.security import get_current_active_user
 from app.application.policies.access_policies import FeedbackAccessPolicy
+from app.services.support_service import SupportTicketService
 
 _feedback_policy = FeedbackAccessPolicy()
 
@@ -95,6 +95,7 @@ class FeedbackDetailResponse(BaseModel):
     user_email: str
     tenant_id: Optional[int] = None
     tenant_name: Optional[str] = None
+    ticket_id: Optional[int] = None
     feedback_type: FeedbackType
     status: FeedbackStatus
     content: str
@@ -131,6 +132,19 @@ class FeedbackStatusUpdate(BaseModel):
 
 
 router = APIRouter(prefix="/feedback", tags=["Feedback Management"])
+
+
+def _feedback_ticket_map(db: Session, feedback_ids: list[int]) -> dict[int, int]:
+    if not feedback_ids:
+        return {}
+
+    return {
+        feedback_id: ticket_id
+        for feedback_id, ticket_id in db.query(SupportTicket.feedback_id, SupportTicket.id)
+        .filter(SupportTicket.feedback_id.in_(feedback_ids))
+        .all()
+        if feedback_id is not None
+    }
 
 
 def _feedback_manage_guard(current_user: User = Depends(get_current_active_user)) -> User:
@@ -232,6 +246,7 @@ async def list_all_feedback(
     items = visible_feedback[start_idx:end_idx]
 
     # Build response
+    ticket_ids = _feedback_ticket_map(db, [fb.id for fb in items])
     response_items = []
     for fb in items:
         tenant = (
@@ -250,6 +265,7 @@ async def list_all_feedback(
                 user_email=fb.user.email if fb.user and _feedback_policy.can_see_email(current_user) else "",
                 tenant_id=fb.user.tenant_id if fb.user else None,
                 tenant_name=tenant.name if tenant else None,
+                ticket_id=ticket_ids.get(fb.id),
                 feedback_type=fb.feedback_type,
                 status=fb.status,
                 content=fb.content,
@@ -317,6 +333,7 @@ async def get_feedback(
         user_email=feedback.user.email if feedback.user and _feedback_policy.can_see_email(current_user) else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
+        ticket_id=_feedback_ticket_map(db, [feedback.id]).get(feedback.id),
         feedback_type=feedback.feedback_type,
         status=feedback.status,
         content=feedback.content,
@@ -334,12 +351,15 @@ async def respond_to_feedback(
     feedback_id: int,
     data: FeedbackRespondRequest,
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     current_user: User = Depends(require_manager),
 ):
     """
     Respond to customer feedback. Sets status to RESPONDED and notifies customer.
     Only allowed for contributors to the document.
     """
+    support_service = SupportTicketService(db, chat_db=chat_db)
+
     feedback = (
         db.query(Feedback)
         .options(
@@ -360,23 +380,15 @@ async def respond_to_feedback(
             detail="You don't have permission to respond to this feedback",
         )
 
-    # Update feedback
+    ticket = support_service.get_or_create_feedback_ticket(feedback)
+
+    # Persist legacy feedback summary fields while the real conversation lives on the ticket.
     feedback.response = data.response
     feedback.responded_by = current_user.id
     feedback.responded_at = datetime.utcnow()
     feedback.status = FeedbackStatus.RESPONDED
 
-    # Create notification for the customer
-    notification = Notification(
-        user_id=feedback.user_id,
-        type=NotificationType.FEEDBACK_RESPONDED,
-        title="Your feedback received a response",
-        message=f"Your feedback on '{feedback.document.title}' has been responded to",
-        link="/portal/feedback",
-    )
-    db.add(notification)
-
-    db.commit()
+    support_service.send_message(ticket.id, current_user, data.response)
     db.refresh(feedback)
 
     # Reload with responder
@@ -407,6 +419,7 @@ async def respond_to_feedback(
         user_email=feedback.user.email if feedback.user else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
+        ticket_id=ticket.id,
         feedback_type=feedback.feedback_type,
         status=feedback.status,
         content=feedback.content,
@@ -471,6 +484,7 @@ async def update_feedback_status(
         user_email=feedback.user.email if feedback.user else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
+        ticket_id=_feedback_ticket_map(db, [feedback.id]).get(feedback.id),
         feedback_type=feedback.feedback_type,
         status=feedback.status,
         content=feedback.content,

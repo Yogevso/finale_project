@@ -29,6 +29,7 @@ const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 const SupportPage = lazy(() => import('./pages/SupportPage'))
 const CannedResponsesPage = lazy(() => import('./pages/CannedResponsesPage'))
 const AccessibilityStatementPage = lazy(() => import('./pages/AccessibilityStatementPage'))
+const CustomerChatPage = lazy(() => import('./pages/portal/CustomerChatPage'))
 const CustomerSupportPage = lazy(() => import('./pages/portal/CustomerSupportPage'))
 const ViewerDocumentPage = lazy(() => import('./pages/viewer/ViewerDocumentPage'))
 // Public portal pages
@@ -489,6 +490,7 @@ function App() {
           <Route path="dashboard" element={<CustomerDashboard />} />
           <Route path="documents" element={<CustomerDocumentsPage />} />
           <Route path="documents/:id" element={<CustomerDocumentPage />} />
+          <Route path="chat" element={<CustomerChatPage />} />
           <Route path="feedback" element={<MyFeedbackPage />} />
           <Route path="support" element={<CustomerSupportPage />} />
           <Route path="assistant" element={<AssistantPage />} />

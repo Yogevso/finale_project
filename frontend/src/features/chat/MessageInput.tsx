@@ -8,8 +8,13 @@ import { Send, Paperclip, Image, X, Smile } from 'lucide-react'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
 import OptimizedImage from '@/components/OptimizedImage'
+import { COMMUNICATION_INPUT_LIMITS, normalizeMultilineInput } from '@/lib/uiInputRules'
+import {
+  PLATFORM_UPLOAD_MAX_SIZE_BYTES,
+  PLATFORM_UPLOAD_MAX_SIZE_MB,
+} from '@/lib/uploadLimits'
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const MAX_FILE_SIZE = PLATFORM_UPLOAD_MAX_SIZE_BYTES
 
 interface MessageInputProps {
   onSend: (content: string) => void
@@ -77,7 +82,7 @@ export default function MessageInput({
       setPreviewUrl(null)
       return
     }
-    const trimmed = value.trim()
+    const trimmed = normalizeMultilineInput(value, COMMUNICATION_INPUT_LIMITS.chatMessage)
     if (!trimmed) return
     onSend(trimmed)
     setValue('')
@@ -105,7 +110,7 @@ export default function MessageInput({
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > MAX_FILE_SIZE) {
-      alert('File is too large (max 10 MB)')
+      alert(`File is too large (max ${PLATFORM_UPLOAD_MAX_SIZE_MB} MB)`)
       return
     }
     setPendingFile(file)
@@ -234,6 +239,7 @@ export default function MessageInput({
           placeholder={pendingFile ? `Send ${pendingFile.name}` : placeholder}
           disabled={disabled || !!pendingFile}
           rows={1}
+          maxLength={COMMUNICATION_INPUT_LIMITS.chatMessage}
           className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
         />
         <button
@@ -246,6 +252,11 @@ export default function MessageInput({
           <Send className="h-4 w-4" />
         </button>
       </div>
+      {!pendingFile ? (
+        <div className="px-4 pb-3 text-right text-xs text-gray-400">
+          {value.length}/{COMMUNICATION_INPUT_LIMITS.chatMessage}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Search, Users, User as UserIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import type { User } from '@/types'
+import type { ChatEligibleUser } from '@/types/chat'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface NewChatModalProps {
@@ -26,12 +26,12 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const { data: users = [], isLoading } = useQuery({
-    queryKey: ['users', { search }],
-    queryFn: () => api.getUsers({ search: search || undefined, is_active: true }),
+    queryKey: ['chatEligibleUsers', { search }],
+    queryFn: () => api.getChatEligibleUsers({ search: search || undefined }),
   })
 
   // Filter out current user
-  const filteredUsers = users.filter((u: User) => u.id !== currentUser?.id)
+  const filteredUsers = users.filter((u: ChatEligibleUser) => u.id !== currentUser?.id)
 
   const createDirect = useMutation({
     mutationFn: (userId: number) => api.createDirectChat({ user_id: userId }),
@@ -56,6 +56,9 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
   }
 
   const isPending = createDirect.isPending || createGroup.isPending
+
+  const formatRoleLabel = (role: ChatEligibleUser['role']) =>
+    role === 'customer' ? 'Customer' : role.replace('_', ' ')
 
   return (
     <div className="modal-overlay flex items-center justify-center p-4">
@@ -130,11 +133,11 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder="Search people..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
-              aria-label="Search users"
+              aria-label="Search people"
             />
           </div>
         </div>
@@ -146,7 +149,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
           ) : filteredUsers.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-gray-400">No users found</p>
           ) : (
-            filteredUsers.map((u: User) => (
+            filteredUsers.map((u: ChatEligibleUser) => (
               <button
                 key={u.id}
                 type="button"
@@ -167,7 +170,18 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gray-900">{u.full_name}</p>
-                  <p className="truncate text-xs text-gray-500">{u.email}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-xs text-gray-500">{u.email}</p>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        u.role === 'customer'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {formatRoleLabel(u.role)}
+                    </span>
+                  </div>
                 </div>
                 {tab === 'group' && selectedIds.includes(u.id) && (
                   <div className="h-5 w-5 rounded-full bg-sky-600 text-center text-xs leading-5 text-white">✓</div>

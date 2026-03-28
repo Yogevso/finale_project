@@ -5,6 +5,7 @@
 import type {
   Chat,
   ChatDetail,
+  ChatEligibleUser,
   ChatListResponse,
   ChatMessage,
   ChatMessageListResponse,
@@ -20,8 +21,18 @@ import type { ApiClientBase, Constructor } from './httpClient'
 
 export const ChatApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBase) =>
   class extends Base {
+    async getChatEligibleUsers(params?: { search?: string }): Promise<ChatEligibleUser[]> {
+      const { data } = await this.client.get<ChatEligibleUser[]>('/chats/eligible-users', { params })
+      return data
+    }
+
     async getChats(): Promise<ChatListResponse> {
       const { data } = await this.client.get<ChatListResponse>('/chats')
+      return data
+    }
+
+    async getPortalChats(): Promise<ChatListResponse> {
+      const { data } = await this.client.get<ChatListResponse>('/portal/chats')
       return data
     }
 
@@ -40,6 +51,11 @@ export const ChatApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBa
       return data
     }
 
+    async getPortalChatDetail(chatId: number): Promise<ChatDetail> {
+      const { data } = await this.client.get<ChatDetail>(`/portal/chats/${chatId}`)
+      return data
+    }
+
     async deleteChat(chatId: number): Promise<void> {
       await this.client.delete(`/chats/${chatId}`)
     }
@@ -51,8 +67,20 @@ export const ChatApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBa
       return data
     }
 
+    async getPortalChatMessages(chatId: number, beforeId?: number, limit = 50): Promise<ChatMessageListResponse> {
+      const { data } = await this.client.get<ChatMessageListResponse>(`/portal/chats/${chatId}/messages`, {
+        params: { before_id: beforeId, limit },
+      })
+      return data
+    }
+
     async sendChatMessage(chatId: number, request: SendMessageRequest): Promise<ChatMessage> {
       const { data } = await this.client.post<ChatMessage>(`/chats/${chatId}/messages`, request)
+      return data
+    }
+
+    async sendPortalChatMessage(chatId: number, request: SendMessageRequest): Promise<ChatMessage> {
+      const { data } = await this.client.post<ChatMessage>(`/portal/chats/${chatId}/messages`, request)
       return data
     }
 
@@ -76,6 +104,10 @@ export const ChatApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBa
 
     async markChatAsRead(chatId: number): Promise<void> {
       await this.client.post(`/chats/${chatId}/read`)
+    }
+
+    async markPortalChatAsRead(chatId: number): Promise<void> {
+      await this.client.post(`/portal/chats/${chatId}/read`)
     }
 
     async searchChatMessages(chatId: number, q: string, limit = 50): Promise<ChatMessageListResponse> {

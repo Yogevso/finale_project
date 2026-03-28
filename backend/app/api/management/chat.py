@@ -8,15 +8,17 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_internal_user
 from app.models import User, ChatMessage, ChatParticipant
 
 CHAT_UPLOAD_DIR = Path("data/uploads/chat")
 CHAT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-MAX_CHAT_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_CHAT_FILE_SIZE = settings.MAX_UPLOAD_SIZE
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 ALLOWED_FILE_TYPES = ALLOWED_IMAGE_TYPES | {
     "application/pdf",
@@ -30,6 +32,7 @@ ALLOWED_FILE_TYPES = ALLOWED_IMAGE_TYPES | {
 from app.schemas.chat import (
     AddParticipantRequest,
     ChatDetailResponse,
+    ChatEligibleUserResponse,
     ChatListItem,
     ChatListResponse,
     ChatMessageListResponse,
@@ -84,6 +87,45 @@ def _participant_to_response(p, db: Session) -> ChatParticipantResponse:
 
 
 # ---- Chat CRUD ----
+
+
+@router.get("/chats/eligible-users", response_model=list[ChatEligibleUserResponse])
+def list_chat_eligible_users(
+    search: str | None = Query(None, min_length=1, max_length=255),
+    current_user: User = Depends(require_internal_user),
+    db: Session = Depends(get_db),
+):
+    """List active same-tenant chat targets for any internal user."""
+    query = db.query(User).filter(
+        User.tenant_id == current_user.tenant_id,
+        User.is_active.is_(True),
+        User.id != current_user.id,
+    )
+    if search:
+        normalized = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                User.full_name.ilike(normalized),
+                User.email.ilike(normalized),
+                User.username.ilike(normalized),
+            )
+        )
+
+    users = (
+        query.order_by(User.full_name.asc(), User.id.asc())
+        .limit(50)
+        .all()
+    )
+    return [
+        ChatEligibleUserResponse(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            avatar_url=user.avatar_url,
+        )
+        for user in users
+    ]
 
 
 @router.get("/chats", response_model=ChatListResponse)
@@ -229,7 +271,10 @@ async def upload_chat_file(
 
     data = await file.read()
     if len(data) > MAX_CHAT_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large (max {MAX_CHAT_FILE_SIZE // (1024 * 1024)} MB)",
+        )
 
     ext = Path(file.filename or "file").suffix
     storage_name = f"{uuid.uuid4().hex}{ext}"

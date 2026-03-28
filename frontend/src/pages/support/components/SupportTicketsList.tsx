@@ -85,7 +85,18 @@ export function SupportTicketsList({
                 #{ticket.id}
               </div>
               <div className="admin-table-cell text-sm font-medium text-slate-900 dark:text-slate-100">
-                {ticket.subject}
+                <div className="min-w-0">
+                  <div className="truncate">{ticket.subject}</div>
+                  <span
+                    className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      ticket.feedback_id
+                        ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                    }`}
+                  >
+                    {ticket.feedback_id ? 'Feedback conversation' : 'Support ticket'}
+                  </span>
+                </div>
               </div>
               <div className="admin-table-cell text-sm text-slate-600 dark:text-slate-300">
                 {ticket.customer_full_name || '-'}

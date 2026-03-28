@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
@@ -47,6 +47,22 @@ function formatFileSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function renderSourceBadge(feedbackId: number | null) {
+  if (feedbackId) {
+    return (
+      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">
+        Feedback conversation
+      </span>
+    )
+  }
+
+  return (
+    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      Support ticket
+    </span>
+  )
+}
+
 export default function CustomerSupportPage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -57,9 +73,16 @@ export default function CustomerSupportPage() {
   const prefillContent = searchParams.get('content') || ''
 
   useEffect(() => {
+    const ticketParam = Number(searchParams.get('ticket') || '')
+    if (Number.isInteger(ticketParam) && ticketParam > 0) {
+      setActiveTicketId(ticketParam)
+    }
+
     if (searchParams.get('new') === '1') {
       setShowCreate(true)
-      setSearchParams({}, { replace: true })
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('new')
+      setSearchParams(nextParams, { replace: true })
     }
   }, [searchParams, setSearchParams])
 
@@ -98,7 +121,7 @@ export default function CustomerSupportPage() {
         <PageHeader
           eyebrow="Customer Portal"
           title="Support"
-          subtitle="Get help from our team"
+          subtitle="Track support tickets and feedback conversations with our team."
         />
         <MessageSkeleton rows={4} />
       </div>
@@ -111,7 +134,7 @@ export default function CustomerSupportPage() {
         <PageHeader
           eyebrow="Customer Portal"
           title="Support"
-          subtitle="Get help from our team"
+          subtitle="Track support tickets and feedback conversations with our team."
         />
         <ErrorState
           title="Ticket could not be loaded"
@@ -127,7 +150,12 @@ export default function CustomerSupportPage() {
       <div className="animate-fade-in">
         <CustomerTicketView
           ticket={ticketQuery.data}
-          onBack={() => setActiveTicketId(null)}
+          onBack={() => {
+            setActiveTicketId(null)
+            const nextParams = new URLSearchParams(searchParams)
+            nextParams.delete('ticket')
+            setSearchParams(nextParams, { replace: true })
+          }}
         />
       </div>
     )
@@ -138,7 +166,7 @@ export default function CustomerSupportPage() {
       <PageHeader
         eyebrow="Customer Portal"
         title="Support"
-        subtitle="Get help from our team"
+        subtitle="Track support tickets and feedback conversations with our team."
         actions={
           <button
             onClick={() => setShowCreate(true)}
@@ -170,15 +198,23 @@ export default function CustomerSupportPage() {
             <button
               key={ticket.id}
               type="button"
-              onClick={() => setActiveTicketId(ticket.id)}
+              onClick={() => {
+                setActiveTicketId(ticket.id)
+                const nextParams = new URLSearchParams(searchParams)
+                nextParams.set('ticket', String(ticket.id))
+                setSearchParams(nextParams, { replace: true })
+              }}
               className="surface-card w-full rounded-xl p-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70"
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="card-title">{ticket.subject}</p>
-                  <p className="helper-copy mt-1">
-                    #{ticket.id} - {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {renderSourceBadge(ticket.feedback_id)}
+                    <p className="helper-copy">
+                      #{ticket.id} - {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`helper-copy font-medium ${PRIORITY_COLORS[ticket.priority]}`}>
@@ -345,6 +381,30 @@ function CustomerTicketView({
           </button>
         )}
       </div>
+
+      {ticket.feedback_id ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/40">
+          <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+            Feedback conversation
+          </p>
+          <p className="mt-1 text-sm text-violet-700 dark:text-violet-200">
+            This support thread started from your feedback and now continues here.
+          </p>
+          <Link
+            to={`/portal/feedback?feedback=${ticket.feedback_id}`}
+            className="btn-secondary table-action-btn mt-3 inline-flex"
+          >
+            View original feedback
+          </Link>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Support ticket</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Use this thread for direct help from our support team.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="max-h-[60vh] space-y-4 overflow-y-auto p-4">

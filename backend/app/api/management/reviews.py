@@ -15,14 +15,13 @@ from app.application.commands.review_commands import (
     ApproveReviewCommandHandler,
 )
 from app.application.policies import DocumentAccessPolicy, ReviewPolicy
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.domain.aggregates import DocumentAggregate, ReviewAggregate
 from app.errors import ConflictError, PermissionDeniedError, ValidationError
 from app.models import (
     ActionType,
     Document,
     DocumentStatus,
-    Notification,
     NotificationType,
     ReviewRequest,
     ReviewStatus,
@@ -31,6 +30,7 @@ from app.models import (
     Version,
 )
 from app.services.audit_helper import write_audit_log
+from app.services.notification_service import NotificationService
 from app.schemas import (
     ApprovalPolicyCheck,
     AudienceDiff,
@@ -194,9 +194,12 @@ async def submit_for_review(
     document_id: int,
     data: ReviewSubmit,
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Submit a document for review"""
+    notification_service = NotificationService(db, chat_db=chat_db)
+
     if not can_submit_for_review(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -292,14 +295,13 @@ async def submit_for_review(
     reviewers = reviewers.all()
 
     for reviewer in reviewers:
-        notification = Notification(
+        notification_service.create_notification(
             user_id=reviewer.id,
-            type=NotificationType.REVIEW_SUBMITTED,
+            notification_type=NotificationType.REVIEW_SUBMITTED,
             title="Document submitted for review",
             message=f"{current_user.full_name} submitted '{document.title}' for review",
             link=f"/documents/{document_id}",
         )
-        db.add(notification)
 
     db.commit()
     db.refresh(review)
@@ -639,9 +641,12 @@ async def reject_review(
     review_id: int,
     data: ReviewReject,
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Reject a review request (comments required)"""
+    notification_service = NotificationService(db, chat_db=chat_db)
+
     review = (
         db.query(ReviewRequest)
         .options(
@@ -678,14 +683,13 @@ async def reject_review(
     _cancel_stale_pending_reviews(db, review.document_id, exclude_review_id=review.id)
 
     # Notify submitter
-    notification = Notification(
+    notification_service.create_notification(
         user_id=review.submitted_by,
-        type=NotificationType.REVIEW_REJECTED,
+        notification_type=NotificationType.REVIEW_REJECTED,
         title="Document rejected",
         message=f"Your document '{review.document.title}' was rejected by {current_user.full_name}. Reason: {data.comments[:100]}...",
         link=f"/documents/{review.document_id}",
     )
-    db.add(notification)
     write_audit_log(
         user_id=current_user.id,
         document_id=review.document_id,

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Callable
 
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.models import Document, DocumentWatcher, Notification, NotificationType, User, UserRole
@@ -13,6 +15,49 @@ from app.services.base_service import SessionService
 
 MENTION_PATTERN = re.compile(r"(?<![\w@])@([A-Za-z0-9][A-Za-z0-9._-]{1,99})")
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+_CHAT_DB_SYNC_KEY = "notification_chat_db_sync_targets"
+_CHAT_DB_PENDING_PREFIX = "notification_chat_db_pending:"
+logger = logging.getLogger(__name__)
+
+
+def _pending_chat_db_key(chat_db: Session) -> str:
+    return f"{_CHAT_DB_PENDING_PREFIX}{id(chat_db)}"
+
+
+def ensure_chat_db_sync(db: Session, chat_db: Session | None) -> None:
+    """Commit a separate chat DB only after the primary DB commits successfully."""
+    if chat_db is None or chat_db is db:
+        return
+
+    sync_targets: set[int] = db.info.setdefault(_CHAT_DB_SYNC_KEY, set())
+    chat_db_id = id(chat_db)
+    if chat_db_id in sync_targets:
+        return
+    sync_targets.add(chat_db_id)
+
+    def _after_commit(session: Session) -> None:
+        pending_key = _pending_chat_db_key(chat_db)
+        if not session.info.pop(pending_key, False):
+            return
+        try:
+            chat_db.commit()
+        except Exception:
+            chat_db.rollback()
+            logger.exception("Failed to commit chat_db notification writes")
+
+    def _after_rollback(session: Session) -> None:
+        pending_key = _pending_chat_db_key(chat_db)
+        if session.info.pop(pending_key, False):
+            chat_db.rollback()
+
+    def _after_soft_rollback(session: Session, _previous_transaction) -> None:
+        pending_key = _pending_chat_db_key(chat_db)
+        if session.info.pop(pending_key, False):
+            chat_db.rollback()
+
+    event.listen(db, "after_commit", _after_commit)
+    event.listen(db, "after_rollback", _after_rollback)
+    event.listen(db, "after_soft_rollback", _after_soft_rollback)
 
 
 class NotificationService(SessionService):
@@ -21,6 +66,7 @@ class NotificationService(SessionService):
     def __init__(self, db: Session, chat_db: Session | None = None):
         super().__init__(db)
         self.chat_db = chat_db or db
+        ensure_chat_db_sync(db, self.chat_db)
         self.user_repository = UserRepository(db)
 
     @staticmethod
@@ -49,6 +95,8 @@ class NotificationService(SessionService):
             link=link,
         )
         self.chat_db.add(notification)
+        if self.chat_db is not self.db:
+            self.db.info[_pending_chat_db_key(self.chat_db)] = True
         return notification
 
     def notify_mentions(

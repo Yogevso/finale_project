@@ -5,6 +5,7 @@
 
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
+import { COMMUNICATION_INPUT_LIMITS } from '@/lib/uiInputRules'
 
 // Mock emoji-mart to avoid import issues in test
 vi.mock('@emoji-mart/data', () => ({ default: {} }))
@@ -78,5 +79,15 @@ describe('MessageInput', () => {
     )
 
     expect(screen.getByPlaceholderText('Reply to Alice...')).toBeInTheDocument()
+  })
+
+  it('applies the documented chat limit and shows a live counter', () => {
+    render(<MessageInput onSend={vi.fn()} onTyping={vi.fn()} />)
+
+    const textarea = screen.getByPlaceholderText(/type a message/i)
+    fireEvent.change(textarea, { target: { value: 'Hello' } })
+
+    expect(textarea).toHaveAttribute('maxLength', String(COMMUNICATION_INPUT_LIMITS.chatMessage))
+    expect(screen.getByText(`5/${COMMUNICATION_INPUT_LIMITS.chatMessage}`)).toBeInTheDocument()
   })
 })

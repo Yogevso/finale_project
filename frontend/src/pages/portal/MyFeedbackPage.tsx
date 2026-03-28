@@ -1,9 +1,9 @@
 /**
  * MyFeedbackPage - Customer's feedback history
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { portalApi, type FeedbackItem } from '../../lib/portalApi'
@@ -62,8 +62,24 @@ const typeConfig = {
 
 export default function MyFeedbackPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [statusFilter, setStatusFilter] = useState<'pending' | 'responded' | 'closed' | ''>('')
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null)
+  const selectedFeedbackId = Number(searchParams.get('feedback') || '')
+
+  const openFeedbackDetails = (feedback: FeedbackItem) => {
+    setSelectedFeedback(feedback)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.set('feedback', String(feedback.id))
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  const closeFeedbackDetails = () => {
+    setSelectedFeedback(null)
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('feedback')
+    setSearchParams(nextParams, { replace: true })
+  }
 
   const {
     data: feedback,
@@ -75,12 +91,29 @@ export default function MyFeedbackPage() {
     queryFn: () => portalApi.getFeedbackList({ status: statusFilter || undefined }),
   })
 
+  const feedbackDetailQuery = useQuery({
+    queryKey: ['portal', 'feedback-detail', selectedFeedbackId],
+    queryFn: () => portalApi.getFeedback(selectedFeedbackId),
+    enabled: Number.isInteger(selectedFeedbackId) && selectedFeedbackId > 0,
+  })
+
+  useEffect(() => {
+    if (feedbackDetailQuery.data) {
+      setSelectedFeedback(feedbackDetailQuery.data)
+    }
+  }, [feedbackDetailQuery.data])
+
+  const buildDocumentLink = (item: FeedbackItem) =>
+    item.anchor_text
+      ? `/portal/documents/${item.document_id}?fullscreen=1&highlight=${encodeURIComponent(item.anchor_text)}`
+      : `/portal/documents/${item.document_id}?fullscreen=1`
+
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="Customer Portal"
         title="My Feedback"
-        subtitle="Track your feedback submissions and responses"
+        subtitle="Track feedback submissions and continue longer conversations in Support."
       />
 
       <div className="surface-card rounded-2xl p-4">
@@ -145,11 +178,11 @@ export default function MyFeedbackPage() {
               <div
                 key={item.id}
                 className="cursor-pointer p-4 hover:bg-slate-50 dark:hover:bg-slate-800/70"
-                onClick={() => setSelectedFeedback(item)}
+                onClick={() => openFeedbackDetails(item)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
-                    setSelectedFeedback(item)
+                    openFeedbackDetails(item)
                   }
                 }}
                 role="button"
@@ -163,13 +196,18 @@ export default function MyFeedbackPage() {
                         <span className="body-copy">{type.label}</span>
                         <span className="helper-copy">-</span>
                         <Link
-                          to={`/portal/documents/${item.document_id}?fullscreen=1`}
+                          to={buildDocumentLink(item)}
                           className="card-title truncate text-sky-600 hover:text-sky-500"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {item.document_title}
                         </Link>
                       </div>
+                      {item.anchor_text ? (
+                        <p className="helper-copy mt-1 italic">
+                          On selected text: "{item.anchor_text}"
+                        </p>
+                      ) : null}
                       <p className="body-copy mt-1 line-clamp-2 text-slate-900 dark:text-slate-100">{item.content}</p>
                       <p className="helper-copy mt-2">
                         Submitted {formatDate(item.created_at)}
@@ -205,7 +243,7 @@ export default function MyFeedbackPage() {
                   Feedback Details
                 </h2>
                 <button
-                  onClick={() => setSelectedFeedback(null)}
+                  onClick={closeFeedbackDetails}
                   className="btn-icon h-9 w-9"
                   type="button"
                   aria-label="Close feedback details"
@@ -232,7 +270,7 @@ export default function MyFeedbackPage() {
               <div>
                 <p className="helper-copy">Document</p>
                 <Link
-                  to={`/portal/documents/${selectedFeedback.document_id}?fullscreen=1`}
+                  to={buildDocumentLink(selectedFeedback)}
                   className="card-title mt-1 flex items-center text-sky-600 hover:text-sky-500"
                   onClick={() => setSelectedFeedback(null)}
                 >
@@ -240,6 +278,17 @@ export default function MyFeedbackPage() {
                   {selectedFeedback.document_title}
                 </Link>
               </div>
+
+              {selectedFeedback.anchor_text ? (
+                <div>
+                  <p className="helper-copy">Selected Text</p>
+                  <div className="mt-1 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40">
+                    <p className="body-copy whitespace-pre-wrap italic text-slate-900 dark:text-slate-100">
+                      "{selectedFeedback.anchor_text}"
+                    </p>
+                  </div>
+                </div>
+              ) : null}
 
               <div>
                 <p className="helper-copy">Your Feedback</p>
@@ -270,6 +319,21 @@ export default function MyFeedbackPage() {
                 </div>
               )}
 
+              {selectedFeedback.ticket_id ? (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/40">
+                  <p className="body-copy text-slate-900 dark:text-slate-100">
+                    This feedback is now part of a live support conversation.
+                  </p>
+                  <Link
+                    to={`/portal/support?ticket=${selectedFeedback.ticket_id}`}
+                    className="btn-primary table-action-btn mt-3 inline-flex"
+                    onClick={closeFeedbackDetails}
+                  >
+                    Open support conversation
+                  </Link>
+                </div>
+              ) : null}
+
               {selectedFeedback.status === 'pending' && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40">
                   <div className="flex items-center">
@@ -284,7 +348,7 @@ export default function MyFeedbackPage() {
 
             <div className="rounded-b-2xl border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
               <button
-                onClick={() => setSelectedFeedback(null)}
+                onClick={closeFeedbackDetails}
                 className="btn-secondary table-action-btn w-full"
                 type="button"
               >

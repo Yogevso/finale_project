@@ -34,8 +34,7 @@ class ConnectionManager:
     # ------------------------------------------------------------------
 
     async def connect_chat(self, websocket: WebSocket, user_id: int, chat_ids: list[int]) -> None:
-        """Accept connection and subscribe user to their chat rooms."""
-        await websocket.accept()
+        """Register an already-accepted chat websocket and subscribe it to rooms."""
         if user_id not in self._user_connections:
             self._user_connections[user_id] = set()
         self._user_connections[user_id].add(websocket)
@@ -46,8 +45,7 @@ class ConnectionManager:
             self._chat_connections[chat_id][user_id] = websocket
 
     async def connect_support(self, websocket: WebSocket, user_id: int, ticket_ids: list[int]) -> None:
-        """Accept connection and subscribe user to their support ticket rooms."""
-        await websocket.accept()
+        """Register an already-accepted support websocket and subscribe it to rooms."""
         if user_id not in self._user_connections:
             self._user_connections[user_id] = set()
         self._user_connections[user_id].add(websocket)
