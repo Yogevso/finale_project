@@ -27,6 +27,17 @@ export const queryKeys = {
       date_from?: string
       date_to?: string
     }) => ['documents', 'list', params ?? {}] as const,
+    deletedList: (params?: {
+      page?: number
+      page_size?: number
+      search?: string
+      status?: string
+      visibility?: string
+      category?: string
+      company_id?: number
+      date_from?: string
+      date_to?: string
+    }) => ['documents', 'deleted-list', params ?? {}] as const,
     detail: (documentId: QueryEntityId) => ['documents', 'detail', normalizeId(documentId)] as const,
     tags: (query?: string, limit?: number) => ['documents', 'tags', query ?? '', limit ?? 20] as const,
     duplicateCheck: (title: string) => ['documents', 'duplicate-check', title] as const,

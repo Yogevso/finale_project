@@ -15,6 +15,10 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/dateUtils'
+import {
+  COMMUNICATION_INPUT_LIMITS,
+  normalizeMultilineInput,
+} from '@/lib/uiInputRules'
 import type { FeedbackDetailResponse, FeedbackStatus, FeedbackType } from '@/types'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 
@@ -64,13 +68,17 @@ export default function FeedbackResponseDialog({
   const { containerRef } = useFocusTrap(onClose)
 
   const submitResponse = () => {
-    if (!response.trim()) {
+    const normalizedResponse = normalizeMultilineInput(
+      response,
+      COMMUNICATION_INPUT_LIMITS.feedbackResponse,
+    )
+    if (!normalizedResponse) {
       setResponseError('A response is required before sending.')
       return
     }
 
     setResponseError('')
-    onRespond(response.trim())
+    onRespond(normalizedResponse)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -196,10 +204,14 @@ export default function FeedbackResponseDialog({
                 rows={5}
                 placeholder="Type your response to the customer..."
                 className="input-field resize-none"
+                maxLength={COMMUNICATION_INPUT_LIMITS.feedbackResponse}
                 required
                 aria-invalid={!!responseError}
                 aria-describedby={responseError ? 'feedback-response-error' : undefined}
               />
+              <p className="mt-2 text-right text-xs text-slate-500">
+                {response.length}/{COMMUNICATION_INPUT_LIMITS.feedbackResponse}
+              </p>
               {responseError ? (
                 <p id="feedback-response-error" role="alert" className="mt-2 text-sm text-rose-500">
                   {responseError}
@@ -228,10 +240,18 @@ export default function FeedbackResponseDialog({
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
+        <div className="flex items-center gap-3">
+          {feedback.ticket_id ? (
+            <Link
+              to={`/support?ticket=${feedback.ticket_id}`}
+              className="btn-secondary"
+            >
+              Open Support Conversation
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
               className="btn-ghost"
             >
               Close

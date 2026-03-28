@@ -3,6 +3,7 @@ import TagEditor from '@/components/TagEditor'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import { formatDate } from '@/lib/dateUtils'
 import { formatDueDate, isOverdueDueDate } from '@/lib/documentDueDates'
+import { getDocumentDisplayDescription } from '@/lib/documentDisplay'
 import type { AudienceAccessPreview, Company, Document, ReviewRequest } from '@/types'
 import { AlertTriangle, Building2, CheckCircle, Clock, History, X, XCircle } from 'lucide-react'
 
@@ -50,6 +51,12 @@ export function DocumentDetailsView({
   const showAssignmentSection =
     document.visibility === 'company' || canAssignCompanies || assignedCompanies.length > 0
   const isOverdue = isOverdueDueDate(document.due_date)
+  const documentDescription = getDocumentDisplayDescription(document.description)
+  const companyAssignmentGuidance =
+    document.visibility === 'company'
+      ? (audienceAccessPreview?.access_summary ??
+        'Assigned companies only gain customer access after the document is published.')
+      : 'Pre-assign companies here, then switch visibility to Company and publish the document to grant customer access.'
 
   return (
     <div className="surface-card rounded-2xl p-6 space-y-6">
@@ -114,8 +121,8 @@ export function DocumentDetailsView({
 
       <div>
         <p className="helper-copy font-medium uppercase tracking-wide">Description</p>
-        <p className="body-copy mt-1 whitespace-pre-wrap text-slate-900 dark:text-slate-100">
-          {document.description || 'No description'}
+        <p className="body-copy mt-1 max-w-4xl whitespace-pre-wrap leading-7 text-slate-900 dark:text-slate-100 [overflow-wrap:anywhere]">
+          {documentDescription}
         </p>
       </div>
 
@@ -183,7 +190,7 @@ export function DocumentDetailsView({
       </div>
 
       {showAssignmentSection ? (
-        <div className="border-t border-slate-200 pt-6">
+        <div id="company-assignments" className="border-t border-slate-200 pt-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Building2 className="w-5 h-5 text-slate-500" />
@@ -200,9 +207,7 @@ export function DocumentDetailsView({
             ) : null}
           </div>
           <p className="helper-copy mb-3">
-            {document.visibility === 'company'
-              ? 'Assigned companies currently have audience access.'
-              : 'Pre-assign companies here, then switch visibility to Company to grant access.'}
+            {companyAssignmentGuidance}
           </p>
 
           {showCompanySelector ? (

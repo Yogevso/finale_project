@@ -15,6 +15,12 @@ import { useAuth } from '@/lib/auth'
 import { createCustomDocumentTemplate } from '@/lib/documentTemplates'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import {
+  DOCUMENT_INPUT_LIMITS,
+  normalizeCommaSeparatedInput,
+  normalizeMultilineInput,
+  normalizeSingleLineInput,
+} from '@/lib/uiInputRules'
 import type { DocumentListResponse } from '@/types'
 
 type SourceDocumentSummary = Pick<DocumentListResponse['items'][number], 'id' | 'title' | 'document_number'>
@@ -57,8 +63,13 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<CreateDocumentFieldErrors>({})
   const [generateWord, setGenerateWord] = useState(false)
-  const debouncedTitle = useDebouncedValue(formData.title, 250)
-  const debouncedCopySourceSearch = useDebouncedValue(copySourceSearch, 250)
+  const normalizedTitle = normalizeSingleLineInput(formData.title, DOCUMENT_INPUT_LIMITS.title)
+  const normalizedCopySourceSearch = normalizeSingleLineInput(
+    copySourceSearch,
+    DOCUMENT_INPUT_LIMITS.filterSearch,
+  )
+  const debouncedTitle = useDebouncedValue(normalizedTitle, 250)
+  const debouncedCopySourceSearch = useDebouncedValue(normalizedCopySourceSearch, 250)
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: defaultVisibility,
@@ -205,18 +216,43 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+    const sanitizedFormData = {
+      ...formData,
+      title: normalizeSingleLineInput(formData.title, DOCUMENT_INPUT_LIMITS.title),
+      description: normalizeMultilineInput(formData.description, DOCUMENT_INPUT_LIMITS.description),
+      category: normalizeSingleLineInput(formData.category, DOCUMENT_INPUT_LIMITS.category),
+      topic: normalizeSingleLineInput(formData.topic, DOCUMENT_INPUT_LIMITS.topic),
+      platform: normalizeSingleLineInput(formData.platform, DOCUMENT_INPUT_LIMITS.platform),
+      release_branch: normalizeSingleLineInput(
+        formData.release_branch,
+        DOCUMENT_INPUT_LIMITS.releaseBranch,
+      ),
+      tags: normalizeCommaSeparatedInput(formData.tags, DOCUMENT_INPUT_LIMITS.tags),
+      due_date: formData.due_date?.trim() || '',
+      company_ids: Array.from(
+        new Set((formData.company_ids ?? []).filter((companyId) => Number.isInteger(companyId) && companyId > 0)),
+      ),
+    }
+    const normalizedTemplateName = normalizeSingleLineInput(
+      templateName,
+      DOCUMENT_INPUT_LIMITS.templateName,
+    )
+    const normalizedTemplateDescription = normalizeMultilineInput(
+      templateDescription,
+      DOCUMENT_INPUT_LIMITS.templateDescription,
+    )
 
-    if (!saveAsTemplate && !formData.title.trim()) {
+    if (!saveAsTemplate && !sanitizedFormData.title) {
       setFieldErrors({ title: 'Title is required' })
       return
     }
 
-    if (!saveAsTemplate && !formData.platform?.trim() && !formData.platform_id) {
+    if (!saveAsTemplate && !sanitizedFormData.platform && !sanitizedFormData.platform_id) {
       setFieldErrors({ platform: 'Platform is required' })
       return
     }
 
-    if (saveAsTemplate && !(templateName.trim() || formData.title.trim())) {
+    if (saveAsTemplate && !(normalizedTemplateName || sanitizedFormData.title)) {
       setFieldErrors({
         title: 'Add a template title or use a template name override.',
         templateName: 'Add a template name override or template title.',
@@ -226,16 +262,15 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
 
     if (saveAsTemplate) {
       createCustomDocumentTemplate({
-        name: templateName.trim() || formData.title.trim(),
+        name: normalizedTemplateName || sanitizedFormData.title,
         description:
-          templateDescription.trim() ||
-          formData.description?.trim() ||
+          normalizedTemplateDescription ||
+          sanitizedFormData.description ||
           'Reusable template saved from the document editor.',
-        category: formData.category?.trim() || 'Custom',
-        tags: (formData.tags || '')
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean),
+        category: sanitizedFormData.category || 'Custom',
+        tags: sanitizedFormData.tags
+          ? sanitizedFormData.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+          : [],
         content: formData.content?.trim() || '<p>Start writing here.</p>',
       })
       toast.success('Template saved', 'Added to your personal Template Library.')
@@ -243,13 +278,13 @@ export function useCreateDocumentFlow({ onClose }: { onClose: () => void }) {
       return
     }
 
-    const audienceValidationIssue = validateAudienceFormPayload(formData)
+    const audienceValidationIssue = validateAudienceFormPayload(sanitizedFormData)
     if (audienceValidationIssue) {
       setError(audienceValidationIssue.message)
       return
     }
 
-    createMutation.mutate(formData)
+    createMutation.mutate(sanitizedFormData)
   }
 
   return {

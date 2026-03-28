@@ -33,8 +33,10 @@ const mockedController = vi.mocked(useDocumentsPageController)
 
 function buildControllerWithDocuments(count: number) {
   return {
+    isAdmin: true,
     isEditor: true,
     isManager: true,
+    showDeleted: false,
     isQuickCreateMode: false,
     showCreateModal: false,
     showUploadModal: false,
@@ -70,6 +72,7 @@ function buildControllerWithDocuments(count: number) {
     setShowUploadModal: vi.fn(),
     setShowCreateModal: vi.fn(),
     setShowQuickStartModal: vi.fn(),
+    setShowDeleted: vi.fn(),
     setSearch: vi.fn(),
     setStatusFilter: vi.fn(),
     setVisibilityFilter: vi.fn(),
@@ -87,10 +90,14 @@ function buildControllerWithDocuments(count: number) {
     toggleAllVisibleDocuments: vi.fn(),
     handleArchiveOrRestore: vi.fn(),
     handleDelete: vi.fn(),
+    handleRestoreDeleted: vi.fn(),
+    handlePurgeDeleted: vi.fn(),
     handleVisibilityChange: vi.fn(),
     cancelPendingVisibilityChange: vi.fn(),
     confirmPendingVisibilityChange: vi.fn(),
     resetFilters: vi.fn(),
+    restoreDeletedMutation: { isPending: false },
+    purgeMutation: { isPending: false },
   }
 }
 

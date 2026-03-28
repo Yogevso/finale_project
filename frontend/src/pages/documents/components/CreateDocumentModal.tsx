@@ -11,6 +11,7 @@ import {
   listAudiencePresets,
 } from '@/features/documents'
 import type { DocumentTemplate } from '@/lib/documentTemplates'
+import { DOCUMENT_INPUT_LIMITS } from '@/lib/uiInputRules'
 import { useCreateDocumentFlow } from '@/pages/documents/hooks/useCreateDocumentFlow'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 
@@ -134,6 +135,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                       onChange={(event) => setCopySourceSearch(event.target.value)}
                       className="input-field"
                       placeholder="Search by title or document number"
+                      maxLength={DOCUMENT_INPUT_LIMITS.filterSearch}
                     />
                   </div>
 
@@ -243,6 +245,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                         className="input-field"
                         placeholder={formData.title || 'Use the title as the template name'}
                         aria-invalid={fieldErrors.templateName ? true : undefined}
+                        maxLength={DOCUMENT_INPUT_LIMITS.templateName}
                       />
                     </FormField>
                     <TextArea
@@ -253,7 +256,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                       className="min-h-[5rem]"
                       rows={2}
                       placeholder={formData.description || 'Explain when to reuse this template'}
-                      showCharacterCount={false}
+                      maxLength={DOCUMENT_INPUT_LIMITS.templateDescription}
                     />
                   </div>
                 ) : null}
@@ -283,6 +286,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   placeholder={isTemplateMode ? 'Enter template title' : 'Enter document title'}
                   required={!isTemplateMode}
                   aria-invalid={fieldErrors.title ? true : undefined}
+                  maxLength={DOCUMENT_INPUT_LIMITS.title}
                 />
                 {!isTemplateMode && duplicateCheckQuery.data?.has_matches ? (
                   <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -322,7 +326,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                 className="min-h-[5rem]"
                 rows={2}
                 placeholder="Brief description"
-                showCharacterCount={false}
+                maxLength={DOCUMENT_INPUT_LIMITS.description}
               />
 
               {!isTemplateMode ? (
@@ -406,13 +410,14 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
               <FormField label="Category" htmlFor="create-document-category">
                 <input
                   id="create-document-category"
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="input-field"
-                  placeholder="e.g., Policy, Guide"
-                />
-              </FormField>
+                type="text"
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="input-field"
+                placeholder="e.g., Policy, Guide"
+                maxLength={DOCUMENT_INPUT_LIMITS.category}
+              />
+            </FormField>
 
               {!isTemplateMode ? (
                 <FormField
@@ -435,6 +440,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                     placeholder="Choose an existing platform or type a new one"
                     required
                     aria-invalid={fieldErrors.platform ? true : undefined}
+                    maxLength={DOCUMENT_INPUT_LIMITS.platform}
                   />
                   <datalist id="document-platform-options">
                     {platformSuggestions.map((platformName) => (
@@ -454,6 +460,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                       onChange={(e) => setFormData({ ...formData, release_branch: e.target.value })}
                       className="input-field"
                       placeholder="e.g., R580"
+                      maxLength={DOCUMENT_INPUT_LIMITS.releaseBranch}
                     />
                   </FormField>
 
@@ -477,6 +484,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
                   className="input-field"
                   placeholder="Comma-separated"
+                  maxLength={DOCUMENT_INPUT_LIMITS.tags}
                 />
               </FormField>
 

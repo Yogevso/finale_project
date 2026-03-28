@@ -10,6 +10,10 @@ import {
 } from 'lucide-react'
 import { feedbackSchema } from '@/lib/validation/schemas'
 import { validateForm } from '@/lib/validation'
+import {
+  COMMUNICATION_INPUT_LIMITS,
+  normalizeMultilineInput,
+} from '@/lib/uiInputRules'
 
 interface FeedbackFormProps {
   onSubmit: (data: {
@@ -35,12 +39,19 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setValidationError('')
-    const result = validateForm(feedbackSchema, { feedback_type: feedbackType, content: content.trim() })
+    const normalizedContent = normalizeMultilineInput(
+      content,
+      COMMUNICATION_INPUT_LIMITS.feedbackContent,
+    )
+    const result = validateForm(feedbackSchema, {
+      feedback_type: feedbackType,
+      content: normalizedContent,
+    })
     if (result.errors) {
       setValidationError(Object.values(result.errors)[0] || 'Please fix the form errors')
       return
     }
-    onSubmit({ feedback_type: feedbackType, content: content.trim() })
+    onSubmit({ feedback_type: feedbackType, content: normalizedContent })
   }
 
   const getColorClasses = (type: typeof feedbackTypes[number], isSelected: boolean) => {
@@ -93,13 +104,14 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
           placeholder="Please provide details about your question, suggestion, or issue..."
           className="input-field resize-none"
           minLength={10}
+          maxLength={COMMUNICATION_INPUT_LIMITS.feedbackContent}
           required
         />
         <p className="mt-1 text-sm text-slate-500">
           {content.length < 10 ? (
             `Minimum 10 characters required (${10 - content.length} more needed)`
           ) : (
-            `${content.length} characters`
+            `${content.length}/${COMMUNICATION_INPUT_LIMITS.feedbackContent} characters`
           )}
         </p>
       </div>

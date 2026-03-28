@@ -18,6 +18,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const navItems = getNavigationForRole(user?.role || null)
   const location = useLocation()
+  const headerRef = useRef<HTMLElement | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
@@ -26,6 +27,44 @@ export default function Layout() {
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname, location.search])
+
+  useEffect(() => {
+    const root = document.documentElement
+
+    if (isFullscreen) {
+      root.style.setProperty('--app-shell-header-height', '0px')
+      return () => {
+        root.style.setProperty('--app-shell-header-height', '0px')
+      }
+    }
+
+    const header = headerRef.current
+    if (!header) {
+      return undefined
+    }
+
+    const syncHeaderHeight = () => {
+      root.style.setProperty('--app-shell-header-height', `${header.getBoundingClientRect().height}px`)
+    }
+
+    syncHeaderHeight()
+
+    let resizeObserver: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        syncHeaderHeight()
+      })
+      resizeObserver.observe(header)
+    }
+
+    window.addEventListener('resize', syncHeaderHeight)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', syncHeaderHeight)
+      root.style.setProperty('--app-shell-header-height', '0px')
+    }
+  }, [isFullscreen, mobileMenuOpen])
 
   // #65 — Focus trap for mobile menu
   useEffect(() => {
@@ -69,7 +108,7 @@ export default function Layout() {
       <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
-      <header className="app-shell-header sticky top-0 z-20 border-b border-sky-200 bg-sky-100/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+      <header ref={headerRef} className="app-shell-header sticky top-0 z-30 border-b border-sky-200 bg-sky-100/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
           {/* Logo + Mobile toggle */}
           <div className="flex items-center justify-between gap-3">
