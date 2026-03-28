@@ -155,6 +155,16 @@ def projection_cache_isolation():
 
 
 @pytest.fixture(autouse=True)
+def system_email_runtime_isolation():
+    """Reset in-process SMTP runtime overrides between tests."""
+    from app.services.system_email_settings_service import SystemEmailSettingsService
+
+    SystemEmailSettingsService.reset_runtime_override()
+    yield
+    SystemEmailSettingsService.reset_runtime_override()
+
+
+@pytest.fixture(autouse=True)
 def company_cache_isolation():
     """Clear the module-level company lookup cache between tests."""
     from app.services.document_service import _company_cache
