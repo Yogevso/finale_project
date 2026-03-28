@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
 
@@ -19,7 +19,7 @@ from app.api.management.auth import (
 from app.application.contexts.users.api import UsersContextAPI
 from app.config import settings
 from app.db import get_chat_db, get_db
-from app.dependencies.permissions import require_admin, require_manager
+from app.dependencies.permissions import require_admin, require_manager, require_system_admin
 from app.dependencies.services import get_auth_service
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.models import ActionType, SecurityEvent, User, UserRole, UserSession
@@ -52,6 +52,28 @@ class NotificationPreferencesUpdateRequest(BaseModel):
 
 class NotificationPreferencesResponse(BaseModel):
     notification_preferences: dict[str, bool]
+
+
+_DEFAULT_ONBOARDING_GUIDE_VERSION = 1
+_DEFAULT_ONBOARDING_CHECKLIST_VERSION = 1
+_MAX_ONBOARDING_STEP_COUNT = 24
+_MAX_ONBOARDING_STEP_LENGTH = 80
+
+
+class UserOnboardingStateResponse(BaseModel):
+    guide_version: int = Field(default=_DEFAULT_ONBOARDING_GUIDE_VERSION, ge=1)
+    guide_seen_at: Optional[datetime] = None
+    checklist_version: int = Field(default=_DEFAULT_ONBOARDING_CHECKLIST_VERSION, ge=1)
+    completed_steps: list[str] = Field(default_factory=list)
+    checklist_completed_at: Optional[datetime] = None
+
+
+class UserOnboardingStateUpdateRequest(BaseModel):
+    guide_version: Optional[int] = Field(None, ge=1)
+    guide_seen_at: Optional[datetime] = None
+    checklist_version: Optional[int] = Field(None, ge=1)
+    completed_steps: Optional[list[str]] = None
+    checklist_completed_at: Optional[datetime] = None
 
 
 class AvatarUploadResponse(BaseModel):
@@ -103,6 +125,65 @@ class SecurityEventListResponse(BaseModel):
 
 def _users_context_api() -> UsersContextAPI:
     return UsersContextAPI()
+
+
+def _normalize_onboarding_datetime(value: object) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _normalize_onboarding_completed_steps(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_step in value:
+        if not isinstance(raw_step, str):
+            continue
+        step_id = raw_step.strip()
+        if not step_id or len(step_id) > _MAX_ONBOARDING_STEP_LENGTH or step_id in seen:
+            continue
+        seen.add(step_id)
+        normalized.append(step_id)
+        if len(normalized) >= _MAX_ONBOARDING_STEP_COUNT:
+            break
+    return normalized
+
+
+def _normalize_user_onboarding_state(value: object) -> UserOnboardingStateResponse:
+    raw_state = value if isinstance(value, dict) else {}
+    guide_version = raw_state.get("guide_version")
+    checklist_version = raw_state.get("checklist_version")
+
+    return UserOnboardingStateResponse(
+        guide_version=guide_version
+        if isinstance(guide_version, int) and guide_version >= 1
+        else _DEFAULT_ONBOARDING_GUIDE_VERSION,
+        guide_seen_at=_normalize_onboarding_datetime(raw_state.get("guide_seen_at")),
+        checklist_version=checklist_version
+        if isinstance(checklist_version, int) and checklist_version >= 1
+        else _DEFAULT_ONBOARDING_CHECKLIST_VERSION,
+        completed_steps=_normalize_onboarding_completed_steps(raw_state.get("completed_steps")),
+        checklist_completed_at=_normalize_onboarding_datetime(
+            raw_state.get("checklist_completed_at")
+        ),
+    )
 
 
 @router.get("/users", response_model=list[UserWithCompanyResponse])
@@ -219,6 +300,43 @@ def update_my_notification_preferences(
     return NotificationPreferencesResponse(
         notification_preferences=current_user.notification_preferences or {}
     )
+
+
+@router.get("/users/me/onboarding", response_model=UserOnboardingStateResponse)
+def get_my_onboarding_state(
+    current_user: User = Depends(get_current_active_user),
+):
+    return _normalize_user_onboarding_state(current_user.onboarding_state)
+
+
+@router.patch("/users/me/onboarding", response_model=UserOnboardingStateResponse)
+def update_my_onboarding_state(
+    payload: UserOnboardingStateUpdateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    next_state = _normalize_user_onboarding_state(current_user.onboarding_state)
+
+    if "guide_version" in payload.model_fields_set and payload.guide_version is not None:
+        next_state.guide_version = payload.guide_version
+    if "guide_seen_at" in payload.model_fields_set:
+        next_state.guide_seen_at = payload.guide_seen_at
+    if "checklist_version" in payload.model_fields_set and payload.checklist_version is not None:
+        next_state.checklist_version = payload.checklist_version
+    if "completed_steps" in payload.model_fields_set:
+        next_state.completed_steps = _normalize_onboarding_completed_steps(
+            payload.completed_steps or []
+        )
+    if "checklist_completed_at" in payload.model_fields_set:
+        next_state.checklist_completed_at = payload.checklist_completed_at
+
+    if not next_state.completed_steps:
+        next_state.checklist_completed_at = None
+
+    current_user.onboarding_state = next_state.model_dump(mode="json")
+    db.commit()
+
+    return next_state
 
 
 @router.post("/users/me/avatar", response_model=AvatarUploadResponse)
@@ -469,6 +587,24 @@ def delete_user(
         db=db,
     )
     return None
+
+
+@router.delete("/users/{user_id}/hard-delete", response_model=MessageResponse)
+def hard_delete_user(
+    user_id: int,
+    current_user: User = Depends(require_system_admin),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
+):
+    _users_context_api().hard_delete_user(
+        user_id=user_id,
+        current_user=current_user,
+        tenant_ctx=tenant_ctx,
+        db=db,
+        chat_db=chat_db,
+    )
+    return MessageResponse(message="User permanently deleted")
 
 
 @router.get("/users/{user_id}/company-binding")

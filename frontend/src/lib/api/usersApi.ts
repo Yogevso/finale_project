@@ -2,6 +2,8 @@ import type {
   SecurityEventListResponse,
   SessionBulkRevokeResponse,
   User,
+  UserOnboardingState,
+  UserOnboardingStateUpdate,
   UserRole,
   UserSessionListResponse,
 } from '@/types'
@@ -77,6 +79,21 @@ export const UsersApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TB
       return data.notification_preferences
     }
 
+    async getMyOnboardingState(): Promise<UserOnboardingState> {
+      const { data } = await this.client.get<UserOnboardingState>('/users/me/onboarding')
+      return data
+    }
+
+    async updateMyOnboardingState(
+      payload: UserOnboardingStateUpdate,
+    ): Promise<UserOnboardingState> {
+      const { data } = await this.client.patch<UserOnboardingState>(
+        '/users/me/onboarding',
+        payload,
+      )
+      return data
+    }
+
     async uploadMyAvatar(file: File): Promise<{ avatar_url: string; message: string }> {
       const formData = new FormData()
       formData.append('file', file)
@@ -115,6 +132,10 @@ export const UsersApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TB
 
     async deleteUser(id: number): Promise<void> {
       await this.client.delete(`/users/${id}`)
+    }
+
+    async hardDeleteUser(id: number): Promise<void> {
+      await this.client.delete(`/users/${id}/hard-delete`)
     }
   }
 

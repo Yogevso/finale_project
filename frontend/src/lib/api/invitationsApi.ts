@@ -2,6 +2,7 @@ import type {
   AcceptInvitationRequest,
   Invitation,
   InvitationCreate,
+  InvitationEmailPreviewResponse,
   InvitationListResponse,
   InvitationStatus,
   InvitationValidateResponse,
@@ -11,10 +12,12 @@ import {
   type AcceptInvitationRequestDto,
   type InvitationCreateDto,
   type InvitationDto,
+  type InvitationEmailPreviewResponseDto,
   type InvitationListResponseDto,
   type InvitationValidateResponseDto,
   type TokenResponseDto,
   mapInvitationDto,
+  mapInvitationEmailPreviewResponseDto,
   mapInvitationListResponseDto,
   mapInvitationValidateResponseDto,
   mapTokenResponseDto,
@@ -37,6 +40,13 @@ export const InvitationsApiMixin = <TBase extends Constructor<ApiClientBase>>(Ba
     async getInvitation(id: number): Promise<Invitation> {
       const { data } = await this.client.get<InvitationDto>(`/invitations/${id}`)
       return mapInvitationDto(data)
+    }
+
+    async getInvitationEmailPreview(id: number): Promise<InvitationEmailPreviewResponse> {
+      const { data } = await this.client.get<InvitationEmailPreviewResponseDto>(
+        `/invitations/${id}/email-preview`,
+      )
+      return mapInvitationEmailPreviewResponseDto(data)
     }
 
     async createInvitation(invitation: InvitationCreate): Promise<Invitation> {

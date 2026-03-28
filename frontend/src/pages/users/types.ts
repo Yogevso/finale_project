@@ -22,5 +22,7 @@ export type UserFormSubmission = UserCreateFormData | UserUpdateFormData
 export type PendingConfirmState = {
   title: string
   description: string
+  confirmLabel?: string
+  variant?: 'danger' | 'warning'
   onConfirm: () => void
 } | null

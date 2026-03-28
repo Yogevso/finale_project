@@ -1,4 +1,4 @@
-import { Building2, Edit2, MessageCircle, Trash2, User as UserIcon } from 'lucide-react'
+import { Building2, Edit2, MessageCircle, Trash2, User as UserIcon, UserX } from 'lucide-react'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -16,9 +16,12 @@ interface UsersTableSectionProps {
   onOpenCreateDialog: () => void
   onEditUser: (user: User) => void
   onRequestDeactivate: (user: User) => void
+  onRequestHardDelete: (user: User) => void
   onStartDirectChat: (userId: number) => void
   currentUserId?: number
   isMessagePending: boolean
+  canDeactivateUsers: boolean
+  canHardDeleteUsers: boolean
 }
 
 export function UsersTableSection({
@@ -29,9 +32,12 @@ export function UsersTableSection({
   onOpenCreateDialog,
   onEditUser,
   onRequestDeactivate,
+  onRequestHardDelete,
   onStartDirectChat,
   currentUserId,
   isMessagePending,
+  canDeactivateUsers,
+  canHardDeleteUsers,
 }: UsersTableSectionProps) {
   if (isLoading) {
     return <TableSkeleton rows={7} columns={5} />
@@ -138,13 +144,24 @@ export function UsersTableSection({
               >
                 <Edit2 className="h-4 w-4" />
               </button>
-              {user.id !== currentUserId ? (
+              {user.id !== currentUserId && canDeactivateUsers && user.is_active ? (
                 <button
                   type="button"
                   onClick={() => onRequestDeactivate(user)}
                   className="admin-icon-action-danger"
                   title="Deactivate"
                   aria-label={`Deactivate ${user.full_name}`}
+                >
+                  <UserX className="h-4 w-4" />
+                </button>
+              ) : null}
+              {user.id !== currentUserId && canHardDeleteUsers && !user.is_active ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestHardDelete(user)}
+                  className="admin-icon-action-danger"
+                  title="Delete permanently"
+                  aria-label={`Permanently delete ${user.full_name}`}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

@@ -182,14 +182,18 @@ class FastAPIAppFactory:
 
             try:
                 from app.services.rbac_service import RbacService
+                from app.services.system_email_settings_service import (
+                    SystemEmailSettingsService,
+                )
 
                 db = SessionLocal()
                 try:
                     RbacService.publish_policies(db)
+                    SystemEmailSettingsService.load_runtime_override(db)
                 finally:
                     db.close()
             except Exception as exc:  # policy: DEGRADED - optional startup integration should not block boot
-                logger.warning("RBAC publish skipped: %s", exc)
+                logger.warning("RBAC/email runtime startup sync skipped: %s", exc)
 
             # Pre-warm the Ollama model so the first request is fast
             if settings.APP_ENV != "testing":

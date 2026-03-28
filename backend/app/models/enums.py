@@ -121,6 +121,15 @@ class InvitationStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class InvitationEmailDeliveryStatus(str, enum.Enum):
+    """Invitation email delivery state."""
+
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    SUPPRESSED = "suppressed"
+
+
 class CollaborationActivityType(str, enum.Enum):
     """Collaboration activity types."""
 

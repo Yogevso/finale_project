@@ -169,8 +169,13 @@ class AppContainer:
         )
         return service
 
-    def support_ticket_service(self, db: Session) -> SupportTicketService:
-        return SupportTicketService(db)
+    def support_ticket_service(
+        self,
+        db: Session,
+        *,
+        chat_db: Session | None = None,
+    ) -> SupportTicketService:
+        return SupportTicketService(db, chat_db=chat_db)
 
     def collaboration_service(self, db: Session | None = None) -> CollaborationService:
         state_port = self.collaboration_state_port(db) if db else None
@@ -229,9 +234,15 @@ class AppContainer:
     ) -> PublishApprovedVersionCommandHandler:
         return PublishApprovedVersionCommandHandler(self.publish_approved_version_use_case(db))
 
-    def approve_review_command_handler(self, db: Session) -> ApproveReviewCommandHandler:
+    def approve_review_command_handler(
+        self,
+        db: Session,
+        *,
+        chat_db: Session | None = None,
+    ) -> ApproveReviewCommandHandler:
         return ApproveReviewCommandHandler(
             db,
+            chat_db=chat_db,
             review_policy=self.review_policy,
             document_access_policy=self.document_access_policy,
         )

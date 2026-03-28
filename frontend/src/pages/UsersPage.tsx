@@ -4,6 +4,7 @@ import ConfirmationDialog from '@/components/ConfirmationDialog'
 import InviteUserDialog from '@/components/InviteUserDialog'
 import PageHeader from '@/components/PageHeader'
 import {
+  InvitationEmailPreviewDialog,
   PendingInvitationsSection,
   UserFormDialog,
   UsersFiltersToolbar,
@@ -77,15 +78,19 @@ export default function UsersPage() {
         onOpenCreateDialog={() => controller.setShowCreateDialog(true)}
         onEditUser={controller.setEditingUser}
         onRequestDeactivate={controller.requestDeactivateUser}
+        onRequestHardDelete={controller.requestHardDeleteUser}
         onStartDirectChat={(userId) => controller.messageMutation.mutate(userId)}
         currentUserId={currentUser?.id}
         isMessagePending={controller.messageMutation.isPending}
+        canDeactivateUsers={controller.canDeactivateUsers}
+        canHardDeleteUsers={controller.canHardDeleteUsers}
       />
 
       <PendingInvitationsSection
         invitations={controller.pendingInvitations}
         isLoading={controller.invitationsQuery.isLoading}
         onOpenInviteDialog={() => controller.setShowInviteDialog(true)}
+        onPreviewInvitation={controller.setPreviewInvitation}
         onResendInvitation={(invitationId) =>
           controller.resendInvitationMutation.mutate(invitationId)
         }
@@ -94,11 +99,22 @@ export default function UsersPage() {
         isCancelPending={controller.cancelInvitationMutation.isPending}
       />
 
+      <InvitationEmailPreviewDialog
+        open={!!controller.previewInvitation}
+        invitation={controller.previewInvitation}
+        preview={controller.invitationPreviewQuery.data}
+        isLoading={controller.invitationPreviewQuery.isLoading}
+        isError={controller.invitationPreviewQuery.isError}
+        onRetry={() => void controller.invitationPreviewQuery.refetch()}
+        onClose={() => controller.setPreviewInvitation(null)}
+      />
+
       <ConfirmationDialog
         open={!!controller.pendingConfirm}
         title={controller.pendingConfirm?.title ?? ''}
         description={controller.pendingConfirm?.description}
-        confirmLabel="Confirm"
+        confirmLabel={controller.pendingConfirm?.confirmLabel ?? 'Confirm'}
+        variant={controller.pendingConfirm?.variant ?? 'danger'}
         onConfirm={() => controller.pendingConfirm?.onConfirm()}
         onCancel={() => controller.setPendingConfirm(null)}
       />

@@ -5,6 +5,10 @@ import type {
   PublicRegistrationData,
   RbacPoliciesResponse,
   RbacPoliciesUpdate,
+  SystemDocumentLifecycleSettingsResponse,
+  SystemDocumentLifecycleSettingsUpdate,
+  SystemEmailSettingsResponse,
+  SystemEmailSettingsUpdate,
   SystemSettingsResponse,
   SystemSettingsUpdate,
   TokenResponse,
@@ -14,15 +18,23 @@ import {
   type MessageResponseDto,
   type RbacPoliciesResponseDto,
   type RbacPoliciesUpdateDto,
+  type SystemDocumentLifecycleSettingsResponseDto,
+  type SystemDocumentLifecycleSettingsUpdateDto,
+  type SystemEmailSettingsResponseDto,
+  type SystemEmailSettingsUpdateDto,
   type SystemSettingsResponseDto,
   type SystemSettingsUpdateDto,
   type TokenResponseDto,
   type UserDto,
   mapMessageResponseDto,
+  mapSystemDocumentLifecycleSettingsResponseDto,
+  mapSystemEmailSettingsResponseDto,
   mapRbacPoliciesResponseDto,
   mapSystemSettingsResponseDto,
   mapTokenResponseDto,
   mapUserDto,
+  toSystemDocumentLifecycleSettingsUpdateDto,
+  toSystemEmailSettingsUpdateDto,
   toRbacPoliciesUpdateDto,
   toSystemSettingsUpdateDto,
 } from './dto'
@@ -88,6 +100,42 @@ export const AuthApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: TBa
         requestDto as SystemSettingsUpdateDto,
       )
       return mapSystemSettingsResponseDto(data)
+    }
+
+    async getSystemDocumentLifecycleSettings(): Promise<SystemDocumentLifecycleSettingsResponse> {
+      const { data } = await this.client.get<SystemDocumentLifecycleSettingsResponseDto>(
+        '/system/settings/document-lifecycle',
+      )
+      return mapSystemDocumentLifecycleSettingsResponseDto(data)
+    }
+
+    async updateSystemDocumentLifecycleSettings(
+      payload: SystemDocumentLifecycleSettingsUpdate,
+    ): Promise<SystemDocumentLifecycleSettingsResponse> {
+      const requestDto = toSystemDocumentLifecycleSettingsUpdateDto(payload)
+      const { data } = await this.client.put<SystemDocumentLifecycleSettingsResponseDto>(
+        '/system/settings/document-lifecycle',
+        requestDto as SystemDocumentLifecycleSettingsUpdateDto,
+      )
+      return mapSystemDocumentLifecycleSettingsResponseDto(data)
+    }
+
+    async getSystemEmailSettings(): Promise<SystemEmailSettingsResponse> {
+      const { data } = await this.client.get<SystemEmailSettingsResponseDto>(
+        '/system/settings/email',
+      )
+      return mapSystemEmailSettingsResponseDto(data)
+    }
+
+    async updateSystemEmailSettings(
+      payload: SystemEmailSettingsUpdate,
+    ): Promise<SystemEmailSettingsResponse> {
+      const requestDto = toSystemEmailSettingsUpdateDto(payload)
+      const { data } = await this.client.put<SystemEmailSettingsResponseDto>(
+        '/system/settings/email',
+        requestDto as SystemEmailSettingsUpdateDto,
+      )
+      return mapSystemEmailSettingsResponseDto(data)
     }
 
     async getRbacPolicies(): Promise<RbacPoliciesResponse> {

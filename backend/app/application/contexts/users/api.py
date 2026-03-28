@@ -9,18 +9,56 @@ from sqlalchemy.orm import Session
 
 from app.container import AppContainer, build_container
 from app.dependencies.tenant import TenantContext
-from app.errors import NotFoundError, PermissionDeniedError, ValidationError
+from app.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from app.models import (
+    AdminAction,
+    Announcement,
+    ApiKey,
+    AssistantConversation,
+    AssistantUploadedFile,
+    Attachment,
+    Bookmark,
+    CannedResponse,
+    ChangelogEntry,
+    Chat,
+    ChatMessage,
+    ChatParticipant,
+    CollaborationActivity,
+    CollaborationSession,
+    CollaborationSnapshot,
+    Comment,
+    DataRequest,
+    Document,
+    DocumentWatcher,
+    Experiment,
+    ExperimentAssignment,
+    FeatureFlag,
+    Feedback,
+    ImpersonationSession,
     Invitation,
     InvitationStatus,
     Notification,
     NotificationType,
+    PasswordReset,
+    ReadingProgress,
+    RbacPolicy,
     ReviewRequest,
     ReviewStatus,
+    SavedSearch,
     SecurityEvent,
+    SupportTicket,
+    SupportTicketAssignment,
+    SupportTicketMessage,
+    SystemSetting,
     Tenant,
+    TenantQuota,
     User,
+    UserSession,
     UserRole,
+    Version,
+    WebhookRegistration,
+    MaintenanceWindow,
+    document_company_assignments,
 )
 from app.repositories import UserRepository
 from app.schemas import UserCreate, UserUpdate
@@ -61,6 +99,29 @@ class UsersContextAPI:
     def _admin_access_required() -> PermissionDeniedError:
         return PermissionDeniedError("Admin access required")
 
+    def _get_user_for_delete(
+        self,
+        *,
+        user_id: int,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+    ) -> User:
+        user = self._user_repository(db).get_by_id_with_tenant(user_id)
+        if not user:
+            raise NotFoundError("User not found")
+
+        if not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+            raise NotFoundError("User not found")
+
+        if user.id == current_user.id:
+            raise ValidationError("You cannot delete yourself")
+
+        if not self._can_manage_role(current_user.role, user.role):
+            raise PermissionDeniedError("Cannot delete users with higher roles")
+
+        return user
+
     def _ensure_user_can_be_deactivated(self, *, user: User, db: Session) -> None:
         user_repository = self._user_repository(db)
         if user.role == UserRole.SYSTEM_ADMIN:
@@ -97,6 +158,188 @@ class UsersContextAPI:
             ReviewRequest.reviewed_by == user.id,
             ReviewRequest.status == ReviewStatus.PENDING,
         ).update({"status": ReviewStatus.CANCELLED})
+
+    @staticmethod
+    def _build_hard_delete_blocker_message(blockers: list[str]) -> str:
+        preview = ", ".join(blockers[:4])
+        if len(blockers) > 4:
+            preview = f"{preview}, and {len(blockers) - 4} more"
+        return (
+            "Cannot permanently delete user because they still own preserved records in: "
+            f"{preview}. Reassign or remove those records first."
+        )
+
+    def _collect_hard_delete_blockers(
+        self,
+        *,
+        user: User,
+        db: Session,
+        chat_db: Session | None,
+    ) -> list[str]:
+        blockers: list[str] = []
+        blocker_checks = [
+            ("documents", db.query(Document.id).filter(Document.created_by == user.id)),
+            ("versions", db.query(Version.id).filter(Version.created_by == user.id)),
+            ("attachments", db.query(Attachment.id).filter(Attachment.uploaded_by == user.id)),
+            ("comments", db.query(Comment.id).filter(Comment.user_id == user.id)),
+            ("feedback", db.query(Feedback.id).filter(Feedback.user_id == user.id)),
+            (
+                "review submissions",
+                db.query(ReviewRequest.id).filter(ReviewRequest.submitted_by == user.id),
+            ),
+            ("support tickets", db.query(SupportTicket.id).filter(SupportTicket.customer_id == user.id)),
+            (
+                "support messages",
+                db.query(SupportTicketMessage.id).filter(SupportTicketMessage.sender_id == user.id),
+            ),
+            ("admin actions", db.query(AdminAction.id).filter(AdminAction.requested_by == user.id)),
+            ("data requests", db.query(DataRequest.id).filter(DataRequest.user_id == user.id)),
+        ]
+
+        for label, query in blocker_checks:
+            if query.first() is not None:
+                blockers.append(label)
+
+        if chat_db is None:
+            return blockers
+
+        chat_blocker_checks = [
+            ("owned chats", chat_db.query(Chat.id).filter(Chat.created_by == user.id)),
+            (
+                "chat participation",
+                chat_db.query(ChatParticipant.id).filter(ChatParticipant.user_id == user.id),
+            ),
+            ("chat messages", chat_db.query(ChatMessage.id).filter(ChatMessage.sender_id == user.id)),
+        ]
+        for label, query in chat_blocker_checks:
+            if query.first() is not None:
+                blockers.append(label)
+
+        return blockers
+
+    def _purge_hard_delete_core_dependencies(
+        self,
+        *,
+        user: User,
+        replacement_user_id: int,
+        db: Session,
+    ) -> None:
+        db.query(Invitation).filter(Invitation.created_user_id == user.id).update(
+            {Invitation.created_user_id: None},
+            synchronize_session=False,
+        )
+        db.query(Invitation).filter(Invitation.invited_by == user.id).update(
+            {Invitation.invited_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(ReviewRequest).filter(ReviewRequest.reviewed_by == user.id).update(
+            {ReviewRequest.reviewed_by: None},
+            synchronize_session=False,
+        )
+        db.query(Feedback).filter(Feedback.responded_by == user.id).update(
+            {Feedback.responded_by: None},
+            synchronize_session=False,
+        )
+        db.query(Version).filter(Version.published_by == user.id).update(
+            {Version.published_by: None},
+            synchronize_session=False,
+        )
+        db.query(SystemSetting).filter(SystemSetting.updated_by == user.id).update(
+            {SystemSetting.updated_by: None},
+            synchronize_session=False,
+        )
+        db.query(RbacPolicy).filter(RbacPolicy.updated_by == user.id).update(
+            {RbacPolicy.updated_by: None},
+            synchronize_session=False,
+        )
+        db.query(TenantQuota).filter(TenantQuota.updated_by == user.id).update(
+            {TenantQuota.updated_by: None},
+            synchronize_session=False,
+        )
+        db.query(FeatureFlag).filter(FeatureFlag.updated_by == user.id).update(
+            {FeatureFlag.updated_by: None},
+            synchronize_session=False,
+        )
+        db.query(AdminAction).filter(AdminAction.reviewed_by == user.id).update(
+            {AdminAction.reviewed_by: None},
+            synchronize_session=False,
+        )
+        db.query(Announcement).filter(Announcement.created_by == user.id).update(
+            {Announcement.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(ChangelogEntry).filter(ChangelogEntry.created_by == user.id).update(
+            {ChangelogEntry.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(CannedResponse).filter(CannedResponse.created_by == user.id).update(
+            {CannedResponse.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(SupportTicketAssignment).filter(
+            SupportTicketAssignment.agent_id == user.id
+        ).delete(synchronize_session=False)
+        db.query(ApiKey).filter(ApiKey.user_id == user.id).delete(synchronize_session=False)
+        db.query(Experiment).filter(Experiment.created_by == user.id).update(
+            {Experiment.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(ExperimentAssignment).filter(ExperimentAssignment.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(ImpersonationSession).filter(
+            ImpersonationSession.admin_user_id == user.id
+        ).delete(synchronize_session=False)
+        db.query(WebhookRegistration).filter(WebhookRegistration.created_by == user.id).update(
+            {WebhookRegistration.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(MaintenanceWindow).filter(MaintenanceWindow.created_by == user.id).update(
+            {MaintenanceWindow.created_by: replacement_user_id},
+            synchronize_session=False,
+        )
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
+        db.query(PasswordReset).filter(PasswordReset.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(SavedSearch).filter(SavedSearch.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(Bookmark).filter(Bookmark.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(DocumentWatcher).filter(DocumentWatcher.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.query(ReadingProgress).filter(ReadingProgress.user_id == user.id).delete(
+            synchronize_session=False
+        )
+        db.execute(
+            document_company_assignments.update()
+            .where(document_company_assignments.c.assigned_by == user.id)
+            .values(assigned_by=None)
+        )
+
+    @staticmethod
+    def _purge_hard_delete_chat_dependencies(*, user_id: int, chat_db: Session) -> None:
+        chat_db.query(Notification).filter(Notification.user_id == user_id).delete(
+            synchronize_session=False
+        )
+        chat_db.query(AssistantUploadedFile).filter(
+            AssistantUploadedFile.user_id == user_id
+        ).delete(synchronize_session=False)
+        chat_db.query(AssistantConversation).filter(
+            AssistantConversation.user_id == user_id
+        ).delete(synchronize_session=False)
+        chat_db.query(CollaborationSession).filter(
+            CollaborationSession.user_id == user_id
+        ).delete(synchronize_session=False)
+        chat_db.query(CollaborationActivity).filter(
+            CollaborationActivity.user_id == user_id
+        ).delete(synchronize_session=False)
+        chat_db.query(CollaborationSnapshot).filter(
+            CollaborationSnapshot.created_by == user_id
+        ).update({CollaborationSnapshot.created_by: None}, synchronize_session=False)
 
     @staticmethod
     def _role_label(role: UserRole) -> str:
@@ -422,18 +665,12 @@ class UsersContextAPI:
         if current_user.role not in [UserRole.ADMIN, UserRole.SYSTEM_ADMIN]:
             raise self._admin_access_required()
 
-        user = self._user_repository(db).get_by_id_with_tenant(user_id)
-        if not user:
-            raise NotFoundError("User not found")
-
-        if not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
-            raise NotFoundError("User not found")
-
-        if user.id == current_user.id:
-            raise ValidationError("You cannot delete yourself")
-
-        if not self._can_manage_role(current_user.role, user.role):
-            raise PermissionDeniedError("Cannot delete users with higher roles")
+        user = self._get_user_for_delete(
+            user_id=user_id,
+            current_user=current_user,
+            tenant_ctx=tenant_ctx,
+            db=db,
+        )
 
         if user.is_active:
             self._ensure_user_can_be_deactivated(user=user, db=db)
@@ -449,6 +686,65 @@ class UsersContextAPI:
         )
 
         db.commit()
+
+    def hard_delete_user(
+        self,
+        *,
+        user_id: int,
+        current_user: User,
+        tenant_ctx: TenantContext,
+        db: Session,
+        chat_db: Session | None = None,
+    ) -> None:
+        if current_user.role != UserRole.SYSTEM_ADMIN:
+            raise PermissionDeniedError("Only system administrators can permanently delete users")
+
+        user = self._get_user_for_delete(
+            user_id=user_id,
+            current_user=current_user,
+            tenant_ctx=tenant_ctx,
+            db=db,
+        )
+
+        if user.is_active:
+            raise self._validation_error(
+                "Deactivate the user before permanent deletion",
+                error_code="user_must_be_deactivated_first",
+            )
+
+        blockers = self._collect_hard_delete_blockers(user=user, db=db, chat_db=chat_db)
+        if blockers:
+            raise ConflictError(
+                self._build_hard_delete_blocker_message(blockers),
+                error_code="user_hard_delete_blocked",
+            )
+
+        self._cascade_user_deactivation(user=user, db=db)
+        self._purge_hard_delete_core_dependencies(
+            user=user,
+            replacement_user_id=current_user.id,
+            db=db,
+        )
+        if chat_db is db:
+            self._purge_hard_delete_chat_dependencies(user_id=user_id, chat_db=chat_db)
+        db.delete(user)
+        db.add(
+            SecurityEvent(
+                user_id=current_user.id,
+                event_type="user_hard_deleted",
+            )
+        )
+        db.commit()
+
+        if chat_db is None or chat_db is db:
+            return
+
+        try:
+            self._purge_hard_delete_chat_dependencies(user_id=user_id, chat_db=chat_db)
+            chat_db.commit()
+        except Exception:  # policy: BOUNDARY — hard delete succeeded in core DB; chat cleanup is best-effort
+            chat_db.rollback()
+            logger.exception("Failed to purge chat-side data for hard-deleted user_id=%s", user_id)
 
     def check_company_binding(
         self,

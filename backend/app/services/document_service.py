@@ -12,6 +12,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.dependencies.tenant import TenantContext
 from app.domain.aggregates import DocumentAggregate
 from app.domain.events import CompanyAssignmentsUpdated, InProcessDomainEventDispatcher
@@ -49,6 +50,7 @@ from app.utils.concurrency import ensure_if_match_matches
 
 logger = logging.getLogger(__name__)
 
+
 class DocumentService(TenantAwareService[Document]):
     """Document CRUD service with multi-tenancy support"""
 
@@ -69,9 +71,21 @@ class DocumentService(TenantAwareService[Document]):
         self.metadata_service = DocumentMetadataService(db)
         self.notification_service = NotificationService(db, chat_db=chat_db)
 
-    def _base_query(self):
+    _DELETE_RECOVERY_ROLES = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN}
+
+    def _base_query(
+        self,
+        model=None,
+        *,
+        include_deleted: bool = False,
+        deleted_only: bool = False,
+    ):
         """Base query with tenant filtering applied"""
-        query = super()._base_query(Document)
+        query = super()._base_query(model or Document)
+        if deleted_only:
+            query = query.filter(Document.deleted_at.isnot(None))
+        elif not include_deleted:
+            query = query.filter(Document.deleted_at.is_(None))
         if (
             self.tenant_ctx
             and not self.tenant_ctx.is_system_admin
@@ -79,6 +93,27 @@ class DocumentService(TenantAwareService[Document]):
         ):
             query = query.filter(Document.status == DocumentStatus.ACTIVE)
         return query
+
+    @staticmethod
+    def _document_purge_deadline(now: datetime) -> datetime:
+        return now + timedelta(days=settings.DOCUMENT_DELETE_GRACE_DAYS)
+
+    @staticmethod
+    def _invalidate_document_projection_caches() -> None:
+        from app.projections import invalidate_portal_audience_cache, invalidate_search_audience_cache
+
+        invalidate_portal_audience_cache()
+        invalidate_search_audience_cache()
+
+    def _remove_document_from_search_index(self, document_id: int) -> None:
+        from app.services.search_index_service import SearchIndexSyncService
+
+        SearchIndexSyncService(self.db).remove_document(document_id)
+
+    def _sync_document_search_index(self, document_id: int) -> None:
+        from app.services.search_index_service import SearchIndexSyncService
+
+        SearchIndexSyncService(self.db).sync_document(document_id)
 
     def _deactivate_collab_sessions(self, document_id: int) -> None:
         """Deactivate any active collaboration sessions for a document (M-07)."""
@@ -315,9 +350,11 @@ class DocumentService(TenantAwareService[Document]):
                     continue
                 raise
 
-    def get_document(self, document_id: int) -> Optional[Document]:
+    def get_document(self, document_id: int, *, include_deleted: bool = False) -> Optional[Document]:
         """Get document by ID with tenant filtering"""
-        document = self._base_query().filter(Document.id == document_id).first()
+        document = (
+            self._base_query(include_deleted=include_deleted).filter(Document.id == document_id).first()
+        )
         return document
 
     def get_watch_status(self, document_id: int, user: User) -> bool:
@@ -389,9 +426,10 @@ class DocumentService(TenantAwareService[Document]):
         date_to: Optional[date] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = "desc",
+        deleted_only: bool = False,
     ) -> tuple[List[Document], int]:
         """Get list of documents with filters, pagination, and tenant filtering"""
-        query = self._base_query()
+        query = self._base_query(deleted_only=deleted_only)
 
         # Apply filters
         if status:
@@ -834,20 +872,13 @@ class DocumentService(TenantAwareService[Document]):
 
         # If visibility or company assignments changed, invalidate portal cache
         if has_visibility_update or has_company_assignment_update:
-            from app.projections import (
-                invalidate_portal_audience_cache,
-                invalidate_search_audience_cache,
-            )
-            invalidate_portal_audience_cache()
-            invalidate_search_audience_cache()
-            # Sync FTS5 search index so queries reflect the new audience
-            from app.services.search_index_service import SearchIndexSyncService
-            SearchIndexSyncService(self.db).sync_document(document_id)
+            self._invalidate_document_projection_caches()
+            self._sync_document_search_index(document_id)
 
         return document
 
     def delete_document(self, document_id: int, user: User, *, if_match: str | None = None) -> None:
-        """Delete document with tenant verification"""
+        """Move a document into the delete recovery window."""
         document = self.get_document(document_id)
         self._verify_delete_access(document, user)
         ensure_if_match_matches(
@@ -857,21 +888,118 @@ class DocumentService(TenantAwareService[Document]):
             row_version=document.row_version,
         )
 
+        if document.deleted_at is not None:
+            raise InvalidStateError("Document is already deleted")
+
         # Deactivate collaboration sessions before deleting (M-07)
         self._deactivate_collab_sessions(document_id)
+        now = datetime.utcnow()
+        purge_at = self._document_purge_deadline(now)
 
         with UnitOfWork(self.db):
-            # Keep audit + delete in one transaction to avoid partial writes.
+            document.deleted_at = now
+            document.deleted_by = user.id
+            document.purge_at = purge_at
+            document.updated_at = now
+
             audit = AuditLog(
                 user_id=user.id,
                 document_id=document.id,
                 action=ActionType.DELETE,
-                details=f"Deleted document: {document.title}",
+                details=(
+                    f"Moved document '{document.title}' to recovery window until "
+                    f"{purge_at.isoformat()}"
+                ),
             )
             self.db.add(audit)
 
-            # Delete document (cascade will delete versions, attachments, comments)
+        self._invalidate_document_projection_caches()
+        self._remove_document_from_search_index(document_id)
+
+    def restore_deleted_document(
+        self,
+        document_id: int,
+        user: User,
+        *,
+        if_match: str | None = None,
+    ) -> Document:
+        """Restore a deleted document from the recovery window."""
+        document = self.get_document(document_id, include_deleted=True)
+        if document is None or document.deleted_at is None:
+            raise NotFoundError("Document not found")
+        self._verify_access(document)
+        if user.role not in self._DELETE_RECOVERY_ROLES:
+            raise PermissionDeniedError("Only admins can restore deleted documents")
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
+
+        with UnitOfWork(self.db):
+            document.deleted_at = None
+            document.deleted_by = None
+            document.purge_at = None
+            document.updated_at = datetime.utcnow()
+
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.UPDATE,
+                details=f"Restored deleted document: {document.title}",
+            )
+            self.db.add(audit)
+
+        self._invalidate_document_projection_caches()
+        self._sync_document_search_index(document_id)
+        self.db.refresh(document)
+        return document
+
+    def purge_document(
+        self,
+        document_id: int,
+        user: User,
+        *,
+        if_match: str | None = None,
+        allow_active: bool = False,
+        enforce_admin: bool = True,
+    ) -> None:
+        """Permanently remove a document row."""
+        document = self.get_document(document_id, include_deleted=True)
+        if document is None:
+            raise NotFoundError("Document not found")
+        self._verify_access(document)
+
+        if allow_active:
+            self._verify_delete_access(document, user)
+        elif document.deleted_at is None:
+            raise InvalidStateError("Only deleted documents can be permanently removed")
+
+        if enforce_admin and user.role not in self._DELETE_RECOVERY_ROLES:
+            raise PermissionDeniedError("Only admins can permanently delete documents")
+
+        ensure_if_match_matches(
+            if_match=if_match,
+            resource_type="document",
+            resource_id=document.id,
+            row_version=document.row_version,
+        )
+
+        self._deactivate_collab_sessions(document_id)
+
+        with UnitOfWork(self.db):
+            audit = AuditLog(
+                user_id=user.id,
+                document_id=document.id,
+                action=ActionType.DELETE,
+                details=f"Permanently deleted document: {document.title}",
+            )
+            self.db.add(audit)
             self.db.delete(document)
+
+        self._invalidate_document_projection_caches()
+        self._remove_document_from_search_index(document_id)
 
     def assign_company_set(
         self,
@@ -955,15 +1083,8 @@ class DocumentService(TenantAwareService[Document]):
                 )
 
         # Safety net: explicitly invalidate portal + search cache after audience change
-        from app.projections import (
-            invalidate_portal_audience_cache,
-            invalidate_search_audience_cache,
-        )
-        invalidate_portal_audience_cache()
-        invalidate_search_audience_cache()
-        # Sync FTS5 search index so queries reflect the new audience
-        from app.services.search_index_service import SearchIndexSyncService
-        SearchIndexSyncService(self.db).sync_document(document_id)
+        self._invalidate_document_projection_caches()
+        self._sync_document_search_index(document_id)
 
         return len(requested_ids)
 
@@ -1024,10 +1145,8 @@ class DocumentService(TenantAwareService[Document]):
         )
 
         # Archived docs should be removed from active search/public results
-        from app.projections import invalidate_search_audience_cache
-        invalidate_search_audience_cache()
-        from app.services.search_index_service import SearchIndexSyncService
-        SearchIndexSyncService(self.db).sync_document(document_id)
+        self._invalidate_document_projection_caches()
+        self._sync_document_search_index(document_id)
 
         return {
             "document_id": document_id,
@@ -1118,6 +1237,9 @@ class DocumentService(TenantAwareService[Document]):
             user.id,
             audience_changes,
         )
+
+        self._invalidate_document_projection_caches()
+        self._sync_document_search_index(document_id)
 
         return {
             "document_id": document_id,

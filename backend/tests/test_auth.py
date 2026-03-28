@@ -167,6 +167,83 @@ def test_update_my_profile_rejects_inactive_company(client, auth_headers, db, de
     assert response.json()["detail"] == "Company is inactive"
 
 
+def test_get_my_onboarding_defaults(client, auth_headers):
+    response = client.get("/api/v1/users/me/onboarding", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["guide_version"] == 1
+    assert payload["guide_seen_at"] is None
+    assert payload["checklist_version"] == 1
+    assert payload["completed_steps"] == []
+    assert payload["checklist_completed_at"] is None
+
+
+def test_update_my_onboarding_state_persists_normalized_steps(
+    client,
+    auth_headers,
+    db,
+    test_user,
+):
+    response = client.patch(
+        "/api/v1/users/me/onboarding",
+        headers=auth_headers,
+        json={
+            "guide_version": 1,
+            "guide_seen_at": "2026-03-28T09:00:00Z",
+            "checklist_version": 1,
+            "completed_steps": [" open_documents ", "open_documents", "", "message_support"],
+            "checklist_completed_at": "2026-03-28T09:05:00Z",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["completed_steps"] == ["open_documents", "message_support"]
+    assert payload["guide_seen_at"].startswith("2026-03-28T09:00:00")
+    assert payload["checklist_completed_at"].startswith("2026-03-28T09:05:00")
+
+    db.refresh(test_user)
+    assert test_user.onboarding_state["completed_steps"] == [
+        "open_documents",
+        "message_support",
+    ]
+
+
+def test_update_my_onboarding_state_can_clear_completion(
+    client,
+    auth_headers,
+    db,
+    test_user,
+):
+    test_user.onboarding_state = {
+        "guide_version": 1,
+        "guide_seen_at": "2026-03-28T09:00:00",
+        "checklist_version": 1,
+        "completed_steps": ["open_documents"],
+        "checklist_completed_at": "2026-03-28T09:05:00",
+    }
+    db.commit()
+
+    response = client.patch(
+        "/api/v1/users/me/onboarding",
+        headers=auth_headers,
+        json={
+            "completed_steps": [],
+            "checklist_completed_at": None,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["completed_steps"] == []
+    assert payload["checklist_completed_at"] is None
+
+    db.refresh(test_user)
+    assert test_user.onboarding_state["completed_steps"] == []
+    assert test_user.onboarding_state["checklist_completed_at"] is None
+
+
 def test_login_returns_refresh_token(client, test_user):
     """Test that login returns a refresh token"""
     response = client.post(

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, BookMarked, BookOpen, CheckCircle2, FileText } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import AdminFirstCompanyWizard from '@/components/AdminFirstCompanyWizard'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 import { ErrorState } from '@/components/ErrorState'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
+import OnboardingGuideDialog from '@/components/OnboardingGuideDialog'
 import PageHeader from '@/components/PageHeader'
 import Skeleton from '@/components/Skeleton'
+import { useOnboarding } from '@/features/onboarding/useOnboarding'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { portalApi } from '@/lib/portalApi'
@@ -29,12 +31,16 @@ interface DashboardProgressItem {
 
 export default function DashboardPage() {
   const { user, isCustomer, isAdmin } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [isAdminWizardDismissed, setIsAdminWizardDismissed] = useState(false)
-  const onboardingStorageKey = `onboarding_completed_${user?.id ?? 'unknown'}`
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
+  const [hasAutoOpenedGuide, setHasAutoOpenedGuide] = useState(false)
+  const [isChecklistCollapsed, setIsChecklistCollapsed] = useState(false)
   const adminWizardStorageKey = useMemo(
     () => `admin-wizard-dismissed-${user?.id ?? 'unknown'}`,
     [user?.id],
   )
+  const onboarding = useOnboarding(user?.role)
 
   useEffect(() => {
     if (!user || !isAdmin || isCustomer) {
@@ -84,6 +90,35 @@ export default function DashboardPage() {
     !companiesOnboardingQuery.isLoading &&
     (companiesOnboardingQuery.data?.total ?? 0) === 0
   const documentsPath = isCustomer ? '/portal/documents' : '/documents'
+  const shouldForceGuideOpen = searchParams.get('onboarding') === '1'
+
+  useEffect(() => {
+    if (!user || shouldShowAdminWizard || hasAutoOpenedGuide) {
+      return
+    }
+    if (shouldForceGuideOpen || onboarding.shouldAutoOpenGuide) {
+      setIsGuideOpen(true)
+      setHasAutoOpenedGuide(true)
+    }
+  }, [
+    hasAutoOpenedGuide,
+    onboarding.shouldAutoOpenGuide,
+    shouldForceGuideOpen,
+    shouldShowAdminWizard,
+    user,
+  ])
+
+  const closeGuide = () => {
+    setIsGuideOpen(false)
+    if (shouldForceGuideOpen) {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('onboarding')
+      setSearchParams(nextParams, { replace: true })
+    }
+    if (onboarding.shouldAutoOpenGuide) {
+      void onboarding.markGuideSeen()
+    }
+  }
 
   return (
     <div className="page-stack-lg">
@@ -93,11 +128,35 @@ export default function DashboardPage() {
         eyebrow="Internal Portal"
       />
 
+      {!shouldShowAdminWizard && (
+        <OnboardingGuideDialog
+          open={isGuideOpen}
+          config={onboarding.config}
+          onClose={closeGuide}
+        />
+      )}
+
       {user && !shouldShowAdminWizard && (
         <OnboardingChecklist
-          storageKey={onboardingStorageKey}
-          role={user.role}
-          documentsPath={documentsPath}
+          title={onboarding.config?.checklistTitle ?? 'Welcome onboarding checklist'}
+          description={
+            onboarding.config?.checklistDescription ??
+            'Complete these quick steps to get familiar with the workspace.'
+          }
+          steps={onboarding.config?.steps ?? []}
+          completedSteps={onboarding.completedSteps}
+          completionDate={onboarding.serverState.checklist_completed_at}
+          isPending={onboarding.isPending}
+          isCollapsed={isChecklistCollapsed}
+          onToggleCollapsed={() => setIsChecklistCollapsed((current) => !current)}
+          onToggleStep={(stepId) => {
+            void onboarding.toggleChecklistStep(stepId)
+          }}
+          onReset={() => {
+            setIsChecklistCollapsed(false)
+            void onboarding.resetChecklist()
+          }}
+          onOpenGuide={() => setIsGuideOpen(true)}
         />
       )}
 

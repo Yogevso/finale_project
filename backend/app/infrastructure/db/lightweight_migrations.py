@@ -28,6 +28,9 @@ def run_lightweight_migrations(
         _ensure_platforms_table(conn)
         _ensure_document_columns(conn)
         _sync_document_platform_links(conn)
+        _repair_document_status_lifecycle_drift(conn)
+        _ensure_user_columns(conn)
+        _ensure_feedback_columns(conn)
         _ensure_attachment_columns(conn)
         _ensure_support_ticket_message_columns(conn)
         _backfill_attachment_aliases(conn)
@@ -38,6 +41,7 @@ def run_lightweight_migrations(
         _ensure_document_assignment_indexes(conn)
         _ensure_audit_log_columns(conn)
         _backfill_invitation_security_fields(conn)
+        _ensure_invitation_delivery_columns(conn)
         if not skip_versions_semantic_migration:
             _ensure_versions_semantic_columns(conn)
         conn.commit()
@@ -77,6 +81,9 @@ def _ensure_document_columns(conn: Connection) -> None:
         "parent_id": "ALTER TABLE documents ADD COLUMN parent_id INTEGER",
         "release_branch": "ALTER TABLE documents ADD COLUMN release_branch VARCHAR(100)",
         "row_version": "ALTER TABLE documents ADD COLUMN row_version INTEGER NOT NULL DEFAULT 1",
+        "deleted_by": "ALTER TABLE documents ADD COLUMN deleted_by INTEGER",
+        "deleted_at": "ALTER TABLE documents ADD COLUMN deleted_at DATETIME",
+        "purge_at": "ALTER TABLE documents ADD COLUMN purge_at DATETIME",
     }
     for column_name, ddl in required_document_columns.items():
         if column_name not in existing:
@@ -92,6 +99,9 @@ def _ensure_document_columns(conn: Connection) -> None:
         )
     )
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_platform_id ON documents (platform_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_by ON documents (deleted_by)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_at ON documents (deleted_at)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_purge_at ON documents (purge_at)"))
 
 
 def _sync_document_platform_links(conn: Connection) -> None:
@@ -178,6 +188,27 @@ def _sync_document_platform_links(conn: Connection) -> None:
         )
 
 
+def _repair_document_status_lifecycle_drift(conn: Connection) -> None:
+    """Backfill document status from published-version reality for SQLite startups."""
+    conn.execute(
+        text(
+            """
+            UPDATE documents
+            SET status = 'ACTIVE'
+            WHERE deleted_at IS NULL
+              AND status != 'ARCHIVED'
+              AND status != 'ACTIVE'
+              AND EXISTS (
+                SELECT 1
+                FROM versions
+                WHERE versions.document_id = documents.id
+                  AND versions.is_published = 1
+              )
+            """
+        )
+    )
+
+
 def _ensure_attachment_columns(conn: Connection) -> None:
     attachment_columns = conn.execute(text("PRAGMA table_info(attachments)")).fetchall()
     existing_attachment_columns = {row[1] for row in attachment_columns}
@@ -239,6 +270,40 @@ def _ensure_attachment_columns(conn: Connection) -> None:
             "ON attachments (reader_html_status)"
         )
     )
+
+
+def _ensure_user_columns(conn: Connection) -> None:
+    user_table = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+    ).fetchone()
+    if user_table is None:
+        return
+
+    user_columns = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+    existing_user_columns = {row[1] for row in user_columns}
+    required_user_columns = {
+        "onboarding_state": "ALTER TABLE users ADD COLUMN onboarding_state JSON",
+    }
+    for column_name, ddl in required_user_columns.items():
+        if column_name not in existing_user_columns:
+            conn.execute(text(ddl))
+
+
+def _ensure_feedback_columns(conn: Connection) -> None:
+    feedback_table = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='feedbacks'")
+    ).fetchone()
+    if feedback_table is None:
+        return
+
+    feedback_columns = conn.execute(text("PRAGMA table_info(feedbacks)")).fetchall()
+    existing_feedback_columns = {row[1] for row in feedback_columns}
+    required_feedback_columns = {
+        "anchor_text": "ALTER TABLE feedbacks ADD COLUMN anchor_text TEXT",
+    }
+    for column_name, ddl in required_feedback_columns.items():
+        if column_name not in existing_feedback_columns:
+            conn.execute(text(ddl))
 
 
 def _ensure_support_ticket_message_columns(conn: Connection) -> None:
@@ -609,6 +674,71 @@ def _backfill_invitation_security_fields(conn: Connection) -> None:
             text(f"UPDATE invitations SET {set_clause} WHERE id = :invitation_id"),
             params,
         )
+
+
+def _ensure_invitation_delivery_columns(conn: Connection) -> None:
+    invitation_table = conn.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'")
+    ).fetchone()
+    if invitation_table is None:
+        return
+
+    invitation_columns = conn.execute(text("PRAGMA table_info(invitations)")).fetchall()
+    existing_columns = {row[1] for row in invitation_columns}
+    required_columns = {
+        "email_delivery_status": (
+            "ALTER TABLE invitations ADD COLUMN email_delivery_status VARCHAR(20) "
+            "NOT NULL DEFAULT 'pending'"
+        ),
+        "email_delivery_attempt_count": (
+            "ALTER TABLE invitations ADD COLUMN email_delivery_attempt_count INTEGER "
+            "NOT NULL DEFAULT 0"
+        ),
+        "email_last_attempted_at": (
+            "ALTER TABLE invitations ADD COLUMN email_last_attempted_at DATETIME"
+        ),
+        "email_last_sent_at": "ALTER TABLE invitations ADD COLUMN email_last_sent_at DATETIME",
+        "email_last_error": "ALTER TABLE invitations ADD COLUMN email_last_error TEXT",
+        "email_last_subject": (
+            "ALTER TABLE invitations ADD COLUMN email_last_subject VARCHAR(255)"
+        ),
+        "email_last_sender_email": (
+            "ALTER TABLE invitations ADD COLUMN email_last_sender_email VARCHAR(255)"
+        ),
+        "email_last_sender_name": (
+            "ALTER TABLE invitations ADD COLUMN email_last_sender_name VARCHAR(255)"
+        ),
+    }
+    for column_name, ddl in required_columns.items():
+        if column_name not in existing_columns:
+            conn.execute(text(ddl))
+
+    conn.execute(
+        text(
+            """
+            UPDATE invitations
+            SET email_delivery_status = 'pending'
+            WHERE email_delivery_status IS NULL OR TRIM(email_delivery_status) = ''
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            UPDATE invitations
+            SET email_delivery_attempt_count = 0
+            WHERE email_delivery_attempt_count IS NULL OR email_delivery_attempt_count < 0
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_invitations_email_delivery_status
+            ON invitations (email_delivery_status)
+            """
+        )
+    )
 
 
 def _ensure_versions_semantic_columns(conn: Connection) -> None:

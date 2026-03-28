@@ -3,21 +3,25 @@ import { useMutation } from '@tanstack/react-query'
 
 import AvatarUpload from '@/components/AvatarUpload'
 import NotificationPreferences from '@/components/NotificationPreferences'
+import OnboardingGuideDialog from '@/components/OnboardingGuideDialog'
 import PageHeader from '@/components/PageHeader'
 import ProfileSettingsNav from '@/components/ProfileSettingsNav'
 import { FormField, SubmitButton } from '@/components/form'
+import { useOnboarding } from '@/features/onboarding/useOnboarding'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useToast } from '@/lib/toast'
 
 export default function ProfileSettingsPage() {
   const { user, refreshUser } = useAuth()
+  const onboarding = useOnboarding(user?.role)
   const toast = useToast()
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [timezone, setTimezone] = useState(user?.timezone || 'UTC')
   const [timezoneSearch, setTimezoneSearch] = useState('')
   const [locale, setLocale] = useState(user?.locale || 'en')
   const [fullNameError, setFullNameError] = useState('')
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
 
   const localeOptions = [
     { value: 'en', label: 'English' },
@@ -105,6 +109,17 @@ export default function ProfileSettingsPage() {
       <PageHeader
         title="Profile Settings"
         subtitle="Manage your profile information and personal preferences."
+      />
+
+      <OnboardingGuideDialog
+        open={isGuideOpen}
+        config={onboarding.config}
+        onClose={() => {
+          setIsGuideOpen(false)
+          if (onboarding.shouldAutoOpenGuide) {
+            void onboarding.markGuideSeen()
+          }
+        }}
       />
 
       <ProfileSettingsNav />
@@ -250,13 +265,42 @@ export default function ProfileSettingsPage() {
       />
 
       <div className="surface-card space-y-3 rounded-2xl p-6">
-        <h3 className="section-title">Product Tour</h3>
+        <h3 className="section-title">Onboarding &amp; Product Tour</h3>
         <p className="body-copy dark:text-slate-300">
-          Replay onboarding tours for the documents list and document detail screens.
+          Reopen the welcome guide, reset your role-based checklist, or replay the document tours.
         </p>
-        <button type="button" className="btn-secondary table-action-btn" onClick={replayTours}>
-          Replay tour
-        </button>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/90 p-4">
+          <div className="text-sm font-semibold text-slate-900">
+            {onboarding.completedCount}/{onboarding.totalSteps} onboarding steps completed
+          </div>
+          <p className="mt-1 text-sm text-slate-600">
+            {onboarding.isChecklistComplete
+              ? 'Your checklist is complete. Reset it any time if you want to walk the product again.'
+              : 'The checklist stays role-specific, so it keeps pointing to the most relevant product areas for you.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="btn-secondary table-action-btn"
+            onClick={() => setIsGuideOpen(true)}
+          >
+            Open welcome guide
+          </button>
+          <button
+            type="button"
+            className="btn-secondary table-action-btn"
+            onClick={() => {
+              void onboarding.resetChecklist()
+            }}
+            disabled={onboarding.isPending}
+          >
+            Reset onboarding checklist
+          </button>
+          <button type="button" className="btn-secondary table-action-btn" onClick={replayTours}>
+            Replay tour
+          </button>
+        </div>
       </div>
     </div>
   )
