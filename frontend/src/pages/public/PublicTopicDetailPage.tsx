@@ -6,6 +6,7 @@ import { ErrorState } from '@/components/ErrorState'
 import OptimizedImage from '@/components/OptimizedImage'
 import { CardSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 function TagPill({ label }: { label: string }) {
   return <span className="pill border-white/50 bg-white/90 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{label}</span>
@@ -24,6 +25,7 @@ export default function PublicTopicDetailPage() {
     queryKey: ['public-topic', slug],
     queryFn: () => publicApi.getTopic(slug || ''),
     enabled: !!slug,
+    ...audienceSensitiveQueryOptions,
   })
 
   const {
@@ -35,6 +37,7 @@ export default function PublicTopicDetailPage() {
     queryKey: ['public-topic-docs', slug],
     queryFn: () => publicApi.getDocuments({ page: 1, page_size: 30, topic: slug }),
     enabled: !!slug,
+    ...audienceSensitiveQueryOptions,
   })
 
   if (topicLoading) {

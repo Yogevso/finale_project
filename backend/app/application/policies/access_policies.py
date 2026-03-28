@@ -62,6 +62,8 @@ class DocumentAccessPolicy:
 
     def can_view_document(self, user: Optional[User], document: Document) -> bool:
         """Document read access, including anonymous access for public active docs."""
+        if getattr(document, "deleted_at", None) is not None:
+            return False
         if document.visibility == DocumentVisibility.PUBLIC:
             if document.status == DocumentStatus.ACTIVE:
                 return True
@@ -91,6 +93,8 @@ class DocumentAccessPolicy:
         return False
 
     def can_edit_document(self, user: User, document: Document, has_edit_permission: bool) -> bool:
+        if getattr(document, "deleted_at", None) is not None:
+            return False
         if not user or not user.is_active or not has_edit_permission:
             return False
         role = self._role(user)
@@ -103,6 +107,8 @@ class DocumentAccessPolicy:
     def can_delete_document(
         self, user: User, document: Document, has_delete_permission: bool
     ) -> bool:
+        if getattr(document, "deleted_at", None) is not None:
+            return False
         if not user or not user.is_active or not has_delete_permission:
             return False
         role = self._role(user)
@@ -115,6 +121,8 @@ class DocumentAccessPolicy:
     def can_publish_document(
         self, user: User, document: Document, has_publish_permission: bool
     ) -> bool:
+        if getattr(document, "deleted_at", None) is not None:
+            return False
         if not user or not user.is_active or not has_publish_permission:
             return False
         return self._same_tenant_or_unscoped(user, document)

@@ -12,8 +12,13 @@ from app.repositories.base import BaseRepository
 class DocumentRepository(BaseRepository):
     """Document persistence/query access."""
 
-    def query(self) -> Query:
-        return self.db.query(Document)
+    def query(self, *, include_deleted: bool = False, deleted_only: bool = False) -> Query:
+        query = self.db.query(Document)
+        if deleted_only:
+            return query.filter(Document.deleted_at.isnot(None))
+        if not include_deleted:
+            return query.filter(Document.deleted_at.is_(None))
+        return query
 
     def get_by_id(self, document_id: int) -> Document | None:
         return self.query().filter(Document.id == document_id).first()

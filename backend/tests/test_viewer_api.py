@@ -13,6 +13,22 @@ from app.models import (
 )
 
 
+def _publish_document(db, *, document: Document, user_id: int, version_number: int = 1):
+    db.add(
+        Version(
+            document_id=document.id,
+            version_number=version_number,
+            content=f"Published content {document.id}",
+            changes_summary="published",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            created_by=user_id,
+        )
+    )
+    db.commit()
+    db.refresh(document)
+
+
 class TestViewerDocuments:
     """Tests for public viewer document endpoints"""
 
@@ -30,6 +46,7 @@ class TestViewerDocuments:
         )
         db.add(doc)
         db.commit()
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         # Access without auth
         response = client.get("/api/v1/viewer/documents")
@@ -71,6 +88,7 @@ class TestViewerDocuments:
         )
         db.add(doc)
         db.commit()
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get("/api/v1/viewer/documents?search=searchterm123")
         assert response.status_code == 200
@@ -88,6 +106,7 @@ class TestViewerDocuments:
         )
         db.add(doc)
         db.commit()
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get("/api/v1/viewer/documents?category=policies")
         assert response.status_code == 200
@@ -95,6 +114,7 @@ class TestViewerDocuments:
     def test_list_documents_pagination(self, client, db, test_user):
         """Test pagination"""
         # Create multiple documents
+        documents = []
         for i in range(5):
             doc = Document(
                 title=f"Pagination Test Doc {i}",
@@ -105,7 +125,15 @@ class TestViewerDocuments:
                 tenant_id=test_user.tenant_id,
             )
             db.add(doc)
+            documents.append(doc)
         db.commit()
+        for index, document in enumerate(documents, start=1):
+            _publish_document(
+                db,
+                document=document,
+                user_id=test_user.id,
+                version_number=index,
+            )
 
         response = client.get("/api/v1/viewer/documents?page=1&page_size=2")
         assert response.status_code == 200
@@ -126,6 +154,7 @@ class TestViewerDocuments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get(f"/api/v1/viewer/documents/{doc.id}")
         assert response.status_code == 200
@@ -188,6 +217,29 @@ class TestViewerDocuments:
         response = client.get(f"/api/v1/viewer/documents/{internal_doc.id}")
         assert response.status_code == 404
 
+    def test_viewer_excludes_active_public_documents_without_published_versions(
+        self, client, db, test_user
+    ):
+        doc = Document(
+            title="Viewer Hidden Until Published",
+            document_number=f"DOC-VIEW-HIDDEN-{uuid.uuid4().hex[:6].upper()}",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_user.id,
+            tenant_id=test_user.tenant_id,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+
+        list_response = client.get("/api/v1/viewer/documents")
+        assert list_response.status_code == 200
+        titles = [item["title"] for item in list_response.json()["items"]]
+        assert "Viewer Hidden Until Published" not in titles
+
+        detail_response = client.get(f"/api/v1/viewer/documents/{doc.id}")
+        assert detail_response.status_code == 404
+
 
 class TestViewerVersions:
     """Tests for viewer version endpoints"""
@@ -248,10 +300,7 @@ class TestViewerVersions:
         db.commit()
 
         response = client.get(f"/api/v1/viewer/documents/{doc.id}/versions")
-        assert response.status_code == 200
-        # Unpublished version should not appear
-        data = response.json()
-        assert len(data) == 0
+        assert response.status_code == 404
 
 
 class TestViewerComments:
@@ -270,6 +319,7 @@ class TestViewerComments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         # Add comment
         comment = Comment(
@@ -296,6 +346,7 @@ class TestViewerComments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         public_comment = Comment(
             document_id=doc.id,
@@ -336,6 +387,7 @@ class TestViewerAttachments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         attachment = Attachment(
             document_id=doc.id,

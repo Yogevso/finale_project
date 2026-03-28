@@ -57,9 +57,19 @@ def get_public_documents_query(db: Session):
     Only returns documents that are:
     - visibility = PUBLIC
     - status = ACTIVE (published)
+    - have at least one published version
     """
+    published_doc_ids = (
+        db.query(Version.document_id)
+        .filter(Version.is_published.is_(True))
+        .group_by(Version.document_id)
+        .subquery()
+    )
     return db.query(Document).filter(
-        Document.visibility == DocumentVisibility.PUBLIC, Document.status == DocumentStatus.ACTIVE
+        Document.visibility == DocumentVisibility.PUBLIC,
+        Document.status == DocumentStatus.ACTIVE,
+        Document.deleted_at.is_(None),
+        Document.id.in_(db.query(published_doc_ids.c.document_id)),
     )
 
 
@@ -387,10 +397,9 @@ def list_public_categories(db: Session = Depends(get_db)):
     """
     # Query categories with counts
     category_counts = (
-        db.query(Document.category, func.count(Document.id).label("count"))
+        get_public_documents_query(db)
+        .with_entities(Document.category, func.count(Document.id).label("count"))
         .filter(
-            Document.visibility == DocumentVisibility.PUBLIC,
-            Document.status == DocumentStatus.ACTIVE,
             Document.category != None,  # noqa: E711
             Document.category != "",
         )
@@ -561,10 +570,9 @@ def get_public_stats(db: Session = Depends(get_db)):
 
     # Count categories
     category_count = (
-        db.query(func.count(func.distinct(Document.category)))
+        get_public_documents_query(db)
+        .with_entities(func.count(func.distinct(Document.category)))
         .filter(
-            Document.visibility == DocumentVisibility.PUBLIC,
-            Document.status == DocumentStatus.ACTIVE,
             Document.category != None,  # noqa: E711
             Document.category != "",
         )

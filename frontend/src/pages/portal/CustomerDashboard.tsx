@@ -1,11 +1,16 @@
 /**
  * CustomerDashboard - Main dashboard for customer portal
  */
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorState } from '@/components/ErrorState'
+import OnboardingChecklist from '@/components/OnboardingChecklist'
+import OnboardingGuideDialog from '@/components/OnboardingGuideDialog'
+import { useOnboarding } from '@/features/onboarding/useOnboarding'
 import { useAuth } from '../../lib/auth'
 import { portalApi } from '../../lib/portalApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 import PageHeader from '@/components/PageHeader'
 import { StatCardSkeleton } from '@/components/skeletons'
 import {
@@ -20,6 +25,34 @@ import {
 
 export default function CustomerDashboard() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const onboarding = useOnboarding(user?.role)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
+  const [hasAutoOpenedGuide, setHasAutoOpenedGuide] = useState(false)
+  const [isChecklistCollapsed, setIsChecklistCollapsed] = useState(false)
+  const shouldForceGuideOpen = searchParams.get('onboarding') === '1'
+
+  useEffect(() => {
+    if (!user || hasAutoOpenedGuide) {
+      return
+    }
+    if (shouldForceGuideOpen || onboarding.shouldAutoOpenGuide) {
+      setIsGuideOpen(true)
+      setHasAutoOpenedGuide(true)
+    }
+  }, [hasAutoOpenedGuide, onboarding.shouldAutoOpenGuide, shouldForceGuideOpen, user])
+
+  const closeGuide = () => {
+    setIsGuideOpen(false)
+    if (shouldForceGuideOpen) {
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('onboarding')
+      setSearchParams(nextParams, { replace: true })
+    }
+    if (onboarding.shouldAutoOpenGuide) {
+      void onboarding.markGuideSeen()
+    }
+  }
 
   const {
     data: stats,
@@ -29,16 +62,19 @@ export default function CustomerDashboard() {
   } = useQuery({
     queryKey: ['portal', 'stats'],
     queryFn: () => portalApi.getDashboardStats(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: recentDocs, isLoading: docsLoading } = useQuery({
     queryKey: ['portal', 'documents', 'recent'],
     queryFn: () => portalApi.getDocuments({ per_page: 6 }),
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: categories } = useQuery({
     queryKey: ['portal', 'categories'],
     queryFn: () => portalApi.getCategories(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: continueReading } = useQuery({
@@ -57,6 +93,34 @@ export default function CustomerDashboard() {
         eyebrow="Customer Portal"
         title={`Welcome back, ${user?.full_name || 'Customer'}!`}
         subtitle="Access your documents and resources from your personalized portal."
+      />
+
+      <OnboardingGuideDialog
+        open={isGuideOpen}
+        config={onboarding.config}
+        onClose={closeGuide}
+      />
+
+      <OnboardingChecklist
+        title={onboarding.config?.checklistTitle ?? 'Customer onboarding checklist'}
+        description={
+          onboarding.config?.checklistDescription ??
+          'Use this checklist once so you know where your main customer workflows live.'
+        }
+        steps={onboarding.config?.steps ?? []}
+        completedSteps={onboarding.completedSteps}
+        completionDate={onboarding.serverState.checklist_completed_at}
+        isPending={onboarding.isPending}
+        isCollapsed={isChecklistCollapsed}
+        onToggleCollapsed={() => setIsChecklistCollapsed((current) => !current)}
+        onToggleStep={(stepId) => {
+          void onboarding.toggleChecklistStep(stepId)
+        }}
+        onReset={() => {
+          setIsChecklistCollapsed(false)
+          void onboarding.resetChecklist()
+        }}
+        onOpenGuide={() => setIsGuideOpen(true)}
       />
 
       {isStatsError ? (

@@ -4,6 +4,7 @@
 import axios, { AxiosHeaders } from 'axios'
 import { api } from '@/lib/api'
 import { withTraceHeader } from '@/lib/requestTrace'
+import type { AttachmentOutlineItem } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -69,6 +70,7 @@ export interface PortalDocumentDetail {
   created_at: string
   updated_at: string
   published_at?: string
+  toc_items?: AttachmentOutlineItem[]
   attachments: PortalAttachment[]
 }
 
@@ -93,8 +95,10 @@ export interface FeedbackItem {
   id: number
   document_id: number
   document_title: string
+  ticket_id?: number | null
   feedback_type: 'question' | 'suggestion' | 'issue' | 'other'
   content: string
+  anchor_text?: string | null
   status: 'pending' | 'responded' | 'closed'
   response?: string
   responded_at?: string
@@ -305,6 +309,7 @@ export const portalApi = {
     document_id: number
     feedback_type: 'question' | 'suggestion' | 'issue' | 'other'
     content: string
+    anchor_text?: string
   }): Promise<FeedbackItem> {
     const response = await portalClient.post('/portal/feedback', data)
     return response.data

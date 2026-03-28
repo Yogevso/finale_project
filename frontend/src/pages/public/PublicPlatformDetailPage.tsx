@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { TableSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 type DocumentSort = 'latest' | 'name' | 'category' | 'version' | 'status'
 
@@ -32,6 +33,7 @@ export default function PublicPlatformDetailPage() {
         sort_order: sortOrder,
       }),
     enabled: isValidPlatformId,
+    ...audienceSensitiveQueryOptions,
   })
 
   const formatDateOrDash = (value?: string) => {

@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { CardSkeleton } from '@/components/skeletons'
+import { audienceSensitiveQueryOptions, fetchFresh } from '@/lib/queryFreshness'
 import type { Document, DocumentListResponse } from '@/types'
 
 export default function ViewerHomePage() {
@@ -29,19 +30,21 @@ export default function ViewerHomePage() {
       if (search) params.set('search', search)
       if (category) params.set('category', category)
 
-      const response = await fetch(`/api/v1/viewer/documents?${params}`)
+      const response = await fetchFresh(`/api/v1/viewer/documents?${params}`)
       if (!response.ok) throw new Error('Failed to fetch documents')
       return response.json() as Promise<DocumentListResponse>
     },
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: categories = [] } = useQuery<string[]>({
     queryKey: ['viewer-categories'],
     queryFn: async () => {
-      const response = await fetch('/api/v1/viewer/documents/categories')
+      const response = await fetchFresh('/api/v1/viewer/documents/categories')
       if (!response.ok) throw new Error('Failed to fetch categories')
       return response.json() as Promise<string[]>
     },
+    ...audienceSensitiveQueryOptions,
   })
 
   const handleSearch = (e: React.FormEvent) => {

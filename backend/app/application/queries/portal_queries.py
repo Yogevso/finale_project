@@ -29,10 +29,12 @@ from app.schemas.portal import (
     PortalAttachment,
     PortalDashboardStats,
     PortalDocumentDetail,
+    PortalDocumentTocItem,
     PortalDocumentListResponse,
     PortalDocumentSummary,
     PortalFacetsResponse,
 )
+from app.services.attachment_service import AttachmentService
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +142,7 @@ class PortalDocumentsQueryHandler:
             .filter(Version.is_published.is_(True))
             .subquery()
         )
-        return base.filter(Document.id.in_(published_doc_ids))
+        return base.filter(Document.id.in_(published_doc_ids), Document.deleted_at.is_(None))
 
     @staticmethod
     def _tenant_scope(user: User) -> str:
@@ -268,19 +270,32 @@ class PortalDocumentsQueryHandler:
 
     def execute_get_document(self, query: GetPortalDocumentQuery) -> PortalDocumentDetail:
         def load_projection() -> PortalDocumentDetail:
-            document = self.db.query(Document).filter(Document.id == query.document_id).first()
+            document = (
+                self.db.query(Document)
+                .filter(Document.id == query.document_id, Document.deleted_at.is_(None))
+                .first()
+            )
             if not document:
                 raise NotFoundError("Document not found")
             self._ensure_customer_document_access(document, query.current_user)
+            visible_version = self._portal_visible_version(document)
+            if visible_version is None:
+                raise NotFoundError("Document not found")
 
             attachments = (
                 self.db.query(Attachment).filter(Attachment.document_id == query.document_id).all()
             )
+            toc_items: list[PortalDocumentTocItem] = []
+            for attachment in attachments:
+                stored_items = AttachmentService._get_stored_reader_toc_items(attachment)
+                if not stored_items:
+                    continue
+                toc_items = [PortalDocumentTocItem(**item) for item in stored_items]
+                break
             tags = [tag.strip() for tag in (document.tags or "").split(",") if tag.strip()]
-            visible_version = self._portal_visible_version(document)
-            content = visible_version.content if visible_version else ""
-            version_number = visible_version.version_number if visible_version else 1
-            published_at = visible_version.published_at if visible_version else None
+            content = visible_version.content
+            version_number = visible_version.version_number
+            published_at = visible_version.published_at
 
             return PortalDocumentDetail(
                 id=document.id,
@@ -298,6 +313,7 @@ class PortalDocumentsQueryHandler:
                 created_at=document.created_at,
                 updated_at=document.updated_at,
                 published_at=published_at,
+                toc_items=toc_items,
                 attachments=[
                     PortalAttachment(
                         id=att.id,
@@ -322,7 +338,11 @@ class PortalDocumentsQueryHandler:
         )
 
     def execute_get_attachment(self, query: GetPortalAttachmentQuery) -> dict:
-        document = self.db.query(Document).filter(Document.id == query.document_id).first()
+        document = (
+            self.db.query(Document)
+            .filter(Document.id == query.document_id, Document.deleted_at.is_(None))
+            .first()
+        )
         if not document:
             raise NotFoundError("Document not found")
         self._ensure_customer_document_access(document, query.current_user)

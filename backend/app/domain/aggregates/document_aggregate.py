@@ -22,6 +22,15 @@ class DocumentAggregate:
     def __init__(self, document: Document):
         self.document = document
 
+    def _has_published_version(self) -> bool:
+        return any(version.is_published for version in (self.document.versions or []))
+
+    def _reconcile_to_active_if_published(self) -> bool:
+        if not self._has_published_version():
+            return False
+        self.document.status = DocumentStatus.ACTIVE
+        return True
+
     def ensure_submittable_for_review(self) -> None:
         self._submittable_spec.assert_satisfied(self.document)
 
@@ -88,11 +97,15 @@ class DocumentAggregate:
         """Keep active docs public while a new draft version moves through review."""
         if self.document.status == DocumentStatus.ACTIVE:
             return
+        if self._reconcile_to_active_if_published():
+            return
         self.transition_to_pending_review()
 
     def finalize_review_approval(self) -> None:
         """Active docs stay active until the approved draft version is explicitly published."""
         if self.document.status == DocumentStatus.ACTIVE:
+            return
+        if self._reconcile_to_active_if_published():
             return
         self.transition_to_approved()
 
@@ -100,10 +113,15 @@ class DocumentAggregate:
         """Rejecting/cancelling a review should not unpublish an already active document."""
         if self.document.status == DocumentStatus.ACTIVE:
             return
+        if self._reconcile_to_active_if_published():
+            return
         self.transition_to_draft()
 
     def prepare_for_new_version_candidate(self) -> None:
         """Keep already-active docs public; normalize other states back to draft."""
+        if self._has_published_version():
+            self.document.status = DocumentStatus.ACTIVE
+            return
         self.document.status = self._workflow.normalize_for_new_version_candidate(
             self.document.status
         )

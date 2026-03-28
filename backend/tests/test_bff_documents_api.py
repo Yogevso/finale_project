@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.models import DocumentStatus
 from tests.scenarios import (
     create_cross_tenant_document_scenario,
     create_document_detail_bundle_scenario,
@@ -47,6 +48,60 @@ def test_document_detail_page_bundle_returns_composed_payload(
     assert "audience_changed_since_publish" in payload["audience_access_preview"]
     assert payload["review_history"]["total"] == 1
     assert payload["review_history"]["items"][0]["id"] == scenario.review.id
+
+
+def test_document_detail_page_bundle_explains_company_draft_is_not_customer_visible(
+    client,
+    db,
+    auth_headers,
+    test_user,
+    test_tenant,
+):
+    scenario = create_document_detail_bundle_scenario(
+        db,
+        user=test_user,
+        tenant=test_tenant,
+    )
+    scenario.document.status = DocumentStatus.DRAFT
+    db.commit()
+
+    response = client.get(
+        f"/api/v1/bff/documents/{scenario.document.id}/detail-page",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (
+        payload["audience_access_preview"]["access_summary"]
+        == "1 assigned company is staged, but customers will not see this document until it is marked Published and a version has been published."
+    )
+
+
+def test_document_detail_page_bundle_explains_company_active_without_published_version(
+    client,
+    db,
+    auth_headers,
+    test_user,
+    test_tenant,
+):
+    scenario = create_document_detail_bundle_scenario(
+        db,
+        user=test_user,
+        tenant=test_tenant,
+    )
+
+    response = client.get(
+        f"/api/v1/bff/documents/{scenario.document.id}/detail-page",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (
+        payload["audience_access_preview"]["access_summary"]
+        == "1 assigned company is set, but customers still cannot see this document because no version has been published yet."
+    )
 
 
 def test_document_detail_page_bundle_is_tenant_scoped(client, db, auth_headers, test_user):

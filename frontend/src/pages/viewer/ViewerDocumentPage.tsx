@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import NotFoundState from '@/components/NotFoundState'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
+import { audienceSensitiveQueryOptions, fetchFresh } from '@/lib/queryFreshness'
 import { useTheme } from '@/hooks/useTheme'
 import type {
   Attachment,
@@ -29,7 +30,7 @@ export default function ViewerDocumentPage() {
   const { data: document, isLoading: docLoading, error } = useQuery<Document>({
     queryKey: ['viewer-document', id],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/viewer/documents/${id}`)
+      const response = await fetchFresh(`/api/v1/viewer/documents/${id}`)
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error('Document not found')
@@ -39,18 +40,20 @@ export default function ViewerDocumentPage() {
       return response.json() as Promise<Document>
     },
     enabled: !!id,
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: versions = [] } = useQuery<Version[]>({
     queryKey: ['viewer-document-versions', id],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/viewer/documents/${id}/versions`)
+      const response = await fetchFresh(`/api/v1/viewer/documents/${id}/versions`)
       if (!response.ok) {
         return []
       }
       return response.json() as Promise<Version[]>
     },
     enabled: !!id,
+    ...audienceSensitiveQueryOptions,
   })
 
   const { data: selectedVersionAttachments = [], isLoading: selectedVersionAttachmentsLoading } =
@@ -60,13 +63,14 @@ export default function ViewerDocumentPage() {
         if (!selectedVersionId) {
           return []
         }
-        const response = await fetch(`/api/v1/viewer/documents/${id}/versions/${selectedVersionId}/attachments`)
+        const response = await fetchFresh(`/api/v1/viewer/documents/${id}/versions/${selectedVersionId}/attachments`)
         if (!response.ok) {
           return []
         }
         return response.json() as Promise<Attachment[]>
       },
       enabled: !!id && !!selectedVersionId,
+      ...audienceSensitiveQueryOptions,
     })
 
   const isSyntheticUploadPlaceholder = (value?: string | null) => {

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 import {
   buildCategoryTree,
@@ -27,21 +28,25 @@ export function usePublicDocumentsPageController() {
   const docsQuery = useQuery({
     queryKey: ['public-documents', { page, page_size: 12, category, search }],
     queryFn: () => publicApi.getDocuments({ page, page_size: 12, category, search }),
+    ...audienceSensitiveQueryOptions,
   })
 
   const categoriesQuery = useQuery({
     queryKey: ['public-categories'],
     queryFn: () => publicApi.getCategories(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const platformHistoryQuery = useQuery({
     queryKey: ['public-platform-history-preview'],
     queryFn: () => publicApi.getPlatformHistory(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const platformOverviewQuery = useQuery({
     queryKey: ['public-platform-overview-preview'],
     queryFn: () => publicApi.getPlatformsOverview(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const sortedCategories = useMemo(() => {

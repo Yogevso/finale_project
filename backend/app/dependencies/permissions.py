@@ -264,7 +264,11 @@ class DocumentAccessChecker:
 
         Returns the document if access is granted, raises HTTPException otherwise.
         """
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = (
+            db.query(Document)
+            .filter(Document.id == document_id, Document.deleted_at.is_(None))
+            .first()
+        )
 
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
@@ -307,7 +311,11 @@ async def get_document_if_accessible(
         ):
             return document
     """
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.deleted_at.is_(None))
+        .first()
+    )
 
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")

@@ -69,10 +69,26 @@ class PortalDocumentDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
+    toc_items: List["PortalDocumentTocItem"] = []
     attachments: List[PortalAttachment] = []
 
     class Config:
         from_attributes = True
+
+
+class PortalDocumentTocItem(BaseModel):
+    """Stored reader outline item for portal consumers."""
+
+    id: str
+    level: int = 1
+    title: str
+    page: int = 1
+    page_start: int = 1
+    page_end: Optional[int] = None
+    anchor_id: Optional[str] = None
+
+
+PortalDocumentDetail.model_rebuild()
 
 
 class PortalDocumentListResponse(BaseModel):
@@ -107,6 +123,7 @@ class FeedbackCreate(BaseModel):
     document_id: int
     feedback_type: FeedbackType = FeedbackType.OTHER
     content: str = Field(..., min_length=10, max_length=5000)
+    anchor_text: Optional[str] = Field(default=None, max_length=1000)
 
 
 class FeedbackResponse(BaseModel):
@@ -115,8 +132,10 @@ class FeedbackResponse(BaseModel):
     id: int
     document_id: int
     document_title: str
+    ticket_id: Optional[int] = None
     feedback_type: FeedbackType
     content: str
+    anchor_text: Optional[str] = None
     status: FeedbackStatus
     response: Optional[str] = None
     responded_at: Optional[datetime] = None
