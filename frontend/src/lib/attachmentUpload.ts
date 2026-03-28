@@ -1,4 +1,9 @@
-const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024
+import {
+  PLATFORM_UPLOAD_MAX_SIZE_BYTES,
+  PLATFORM_UPLOAD_MAX_SIZE_LABEL,
+} from './uploadLimits'
+
+const MAX_ATTACHMENT_SIZE_BYTES = PLATFORM_UPLOAD_MAX_SIZE_BYTES
 
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/msword',
@@ -53,7 +58,7 @@ function getExtension(filename: string): string {
 
 export function validateAttachmentFile(file: Pick<File, 'name' | 'size' | 'type'>): string | null {
   if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-    return 'File too large. Max size: 10MB.'
+    return `File too large. Max size: ${PLATFORM_UPLOAD_MAX_SIZE_LABEL}.`
   }
 
   const normalizedType = (file.type || '').toLowerCase()

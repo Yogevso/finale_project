@@ -16,7 +16,7 @@ vi.mock('@/features/documents', () => ({
 }))
 
 vi.mock('@/pages/documents/hooks/useUploadDocumentFlow', () => ({
-  ACCEPTED_FILE_TYPES: '.docx,.pptx',
+  ACCEPTED_FILE_TYPES: '.docx,.pptx,.pdf',
   MANAGER_UPLOAD_STATUS_OPTIONS: [
     { value: 'draft', label: 'Draft' },
     { value: 'approved', label: 'Approved' },
@@ -52,6 +52,9 @@ function buildHookState(isPending: boolean, overrides: Record<string, unknown> =
     canManageAdvancedUploadOptions: false,
     contentFile: null,
     releaseNotesFile: null,
+    selectedFileIsPdf: false,
+    pdfConversionTarget: 'docx',
+    setPdfConversionTarget: vi.fn(),
     error: '',
     setError: vi.fn(),
     dragActive: false,
@@ -120,9 +123,25 @@ describe('UploadDocumentModal', () => {
 
     render(<UploadDocumentModal onClose={vi.fn()} />)
 
-    expect(screen.getByText(/upload docx or pptx/i)).toBeInTheDocument()
+    expect(screen.getByText(/upload docx, pptx, or pdf/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/platform/i)).toBeInTheDocument()
     expect(screen.queryByText(/^FILE$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^UP$/)).not.toBeInTheDocument()
+  })
+
+  it('shows PDF conversion options when the selected file is a PDF', () => {
+    useUploadDocumentFlowMock.mockReturnValue(
+      buildHookState(false, {
+        selectedFileIsPdf: true,
+        selectedFile: { name: 'legacy.pdf', size: 2_000_000 },
+        pdfConversionTarget: 'pptx',
+      }),
+    )
+
+    render(<UploadDocumentModal onClose={vi.fn()} />)
+
+    expect(screen.getByText(/pdf conversion target/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/word \(.docx\)/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/powerpoint \(.pptx\)/i)).toBeChecked()
   })
 })

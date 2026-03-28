@@ -3,6 +3,10 @@ import {
   normalizeAudienceFormPayload,
   validateAudienceFormPayload,
 } from '@/features/documents/forms'
+import {
+  PLATFORM_UPLOAD_MAX_SIZE_BYTES,
+  PLATFORM_UPLOAD_MAX_SIZE_LABEL,
+} from '@/lib/uploadLimits'
 import type {
   Company,
   Document,
@@ -41,6 +45,7 @@ export type DocumentUploadMetadataInput = {
   companyIds?: number[]
   releaseNotesFile?: File | null
   contentFile?: File | null
+  pdfConversionTarget?: 'docx' | 'pptx' | null
 }
 
 export type DocumentsUseCasesClient = Pick<
@@ -51,9 +56,12 @@ export type DocumentsUseCasesClient = Pick<
   | 'deleteDocument'
   | 'generateWordAttachment'
   | 'getAssignedCompanies'
+  | 'getDeletedDocuments'
   | 'getDocument'
   | 'getDocumentCalendarExport'
   | 'getDocuments'
+  | 'purgeDocument'
+  | 'restoreDeletedDocument'
   | 'getVersion'
   | 'getVersions'
   | 'restoreDocument'
@@ -64,7 +72,7 @@ export type DocumentsUseCasesClient = Pick<
 export type UploadDocumentOptions = Parameters<DocumentsUseCasesClient['uploadDocument']>[2]
 
 export const DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES = '.docx,.pptx,.pdf'
-export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = 10 * 1024 * 1024
+export const DOCUMENT_UPLOAD_MAX_SIZE_BYTES = PLATFORM_UPLOAD_MAX_SIZE_BYTES
 
 export const DOCUMENT_UPLOAD_ALLOWED_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -97,11 +105,11 @@ export function validateDocumentUploadFile(file: File): string | null {
     DOCUMENT_UPLOAD_ALLOWED_EXTENSIONS.has(extension)
 
   if (!isSupported) {
-    return 'Only DOCX and PPTX files are allowed'
+    return 'Only DOCX, PPTX, and PDF files are allowed'
   }
 
   if (file.size > DOCUMENT_UPLOAD_MAX_SIZE_BYTES) {
-    return 'File size must be less than 10MB'
+    return `File size must be less than ${PLATFORM_UPLOAD_MAX_SIZE_LABEL}`
   }
 
   return null
@@ -204,7 +212,14 @@ function toUploadMetadata(input: DocumentUploadMetadataInput) {
     company_ids: audience.company_ids.length > 0 ? audience.company_ids : undefined,
     release_notes: input.releaseNotesFile ?? undefined,
     content_file: input.contentFile ?? undefined,
+    pdf_conversion_target: input.pdfConversionTarget ?? undefined,
   }
+}
+
+function isPdfUploadFile(file: File): boolean {
+  const normalizedType = (file.type || '').toLowerCase()
+  const normalizedName = (file.name || '').toLowerCase()
+  return normalizedType === 'application/pdf' || normalizedName.endsWith('.pdf')
 }
 
 export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
@@ -213,8 +228,20 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return client.getDocuments(params)
     },
 
+    listDeletedDocuments(params: DocumentQueryParams): Promise<DocumentListResponse> {
+      return client.getDeletedDocuments(params)
+    },
+
     deleteDocument(documentId: number): Promise<MessageResponse> {
       return client.deleteDocument(documentId)
+    },
+
+    restoreDeletedDocument(documentId: number): Promise<Document> {
+      return client.restoreDeletedDocument(documentId)
+    },
+
+    purgeDocument(documentId: number): Promise<MessageResponse> {
+      return client.purgeDocument(documentId)
     },
 
     archiveDocument(documentId: number) {
@@ -335,6 +362,10 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       })
       if (audienceValidationIssue) {
         throw new Error(audienceValidationIssue.message)
+      }
+
+      if (isPdfUploadFile(file) && !metadata.pdfConversionTarget) {
+        throw new Error('Choose how to convert this PDF before uploading.')
       }
 
       return await client.uploadDocument(file, toUploadMetadata(metadata), options)

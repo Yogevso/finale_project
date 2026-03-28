@@ -54,8 +54,11 @@ from app.application.queries.document_queries import (
     ListDocumentsQueryHandler,
 )
 from app.config import settings
+from app.conversion.pdf_to_docx import convert_pdf_to_docx
+from app.conversion.pdf_to_pptx import convert_pdf_to_pptx
 from app.db import get_db
 from app.dependencies.permissions import (
+    require_admin,
     require_editor,
     require_internal_user,
     require_manager,
@@ -89,6 +92,57 @@ from app.utils.html_to_docx import html_to_docx_bytes
 router = APIRouter()
 logger = logging.getLogger(__name__)
 AUDIENCE_ASSIGNMENT_SCHEMA_VERSION = settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+PDF_UPLOAD_MIME_TYPE = "application/pdf"
+DOCX_UPLOAD_MIME_TYPE = (
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
+PPTX_UPLOAD_MIME_TYPE = (
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+)
+PDF_CONVERSION_TARGETS = {"docx", "pptx"}
+
+
+def _is_pdf_upload(*, content_type: str, filename: str) -> bool:
+    normalized_content_type = (content_type or "").lower()
+    normalized_filename = (filename or "").lower()
+    return normalized_content_type.startswith(PDF_UPLOAD_MIME_TYPE) or normalized_filename.endswith(
+        ".pdf"
+    )
+
+
+def _normalize_pdf_conversion_target(raw_value: str | None) -> str | None:
+    if raw_value is None:
+        return None
+    normalized = raw_value.strip().lower()
+    if normalized in PDF_CONVERSION_TARGETS:
+        return normalized
+    return None
+
+
+def _build_generated_pdf_working_attachment(
+    *,
+    pdf_bytes: bytes,
+    original_filename: str,
+    pdf_conversion_target: str,
+) -> tuple[bytes, str, str]:
+    safe_filename = os.path.basename(original_filename or "uploaded-document.pdf")
+    stem, _ = os.path.splitext(safe_filename)
+    base_name = stem or "uploaded-document"
+
+    if pdf_conversion_target == "docx":
+        result = convert_pdf_to_docx(pdf_bytes)
+        if result.error or not result.docx_bytes:
+            raise ValidationError(
+                f"Failed to convert PDF to DOCX: {result.error or 'empty output'}"
+            )
+        return result.docx_bytes, f"{base_name}.docx", DOCX_UPLOAD_MIME_TYPE
+
+    result = convert_pdf_to_pptx(pdf_bytes)
+    if result.error or not result.pptx_bytes:
+        raise ValidationError(
+            f"Failed to convert PDF to PPTX: {result.error or 'empty output'}"
+        )
+    return result.pptx_bytes, f"{base_name}.pptx", PPTX_UPLOAD_MIME_TYPE
 
 
 def _escape_ical_text(value: str) -> str:
@@ -308,6 +362,48 @@ def list_documents(
     )
 
 
+@router.get("/documents/deleted", response_model=DocumentListResponse)
+def list_deleted_documents(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    status: Optional[DocumentStatus] = Query(None, description="Filter by status"),
+    visibility: Optional[DocumentVisibility] = Query(None, description="Filter by visibility"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    search: Optional[str] = Query(None, description="Search in title, description, tags"),
+    company_id: Optional[int] = Query(None, description="Filter by assigned company"),
+    date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
+    date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
+    sort_by: Optional[str] = Query(None, pattern="^(title|created_at|updated_at|status|category)$", description="Sort field: title, created_at, updated_at, status, category"),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"),
+    current_user: User = Depends(require_admin),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Get paginated list of documents in the delete recovery window."""
+    _ = current_user
+    skip = (page - 1) * page_size
+    items, total = document_service.get_documents(
+        skip=skip,
+        limit=page_size,
+        status=status,
+        visibility=visibility,
+        category=category,
+        search=search,
+        company_id=company_id,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        deleted_only=True,
+    )
+    return DocumentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=ceil(total / page_size) if total > 0 else 0,
+    )
+
+
 @router.get("/documents/tags", response_model=DocumentTagSuggestionsResponse)
 def list_document_tags(
     q: Optional[str] = Query(None, description="Optional tag search term"),
@@ -483,11 +579,10 @@ def delete_document(
     ),
 ):
     """
-    Delete document.
+    Move document into the delete recovery window.
 
     Requires: MANAGER role or above.
     Only documents in user's tenant can be deleted.
-    Cascade deletes all versions, attachments, and comments.
     """
     result = delete_document_command_handler.execute(
         DeleteDocumentCommand(document_id=document_id, current_user=current_user, if_match=if_match)
@@ -498,7 +593,46 @@ def delete_document(
         if result.error.code == DocumentCommandErrorCode.VALIDATION:
             raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected document-delete command error")
-    return MessageResponse(message="Document deleted successfully")
+    return MessageResponse(
+        message=f"Document moved to recovery window for {settings.DOCUMENT_DELETE_GRACE_DAYS} days"
+    )
+
+
+@router.post("/documents/{document_id}/restore-deleted", response_model=DocumentResponse)
+def restore_deleted_document(
+    document_id: int,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+    current_user: User = Depends(require_admin),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Restore a deleted document from the recovery window. Admin-only."""
+    try:
+        return document_service.restore_deleted_document(document_id, current_user, if_match=if_match)
+    except NotFoundError:
+        raise
+    except InvalidStateError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+
+
+@router.delete("/documents/{document_id}/purge", response_model=MessageResponse)
+def purge_document(
+    document_id: int,
+    if_match: Optional[str] = Header(None, alias="If-Match"),
+    current_user: User = Depends(require_admin),
+    document_service: DocumentService = Depends(get_document_service),
+):
+    """Permanently delete a document already in the recovery window. Admin-only."""
+    try:
+        document_service.purge_document(document_id, current_user, if_match=if_match)
+        return MessageResponse(message="Document permanently deleted")
+    except NotFoundError:
+        raise
+    except InvalidStateError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
 
 
 @router.post(
@@ -508,6 +642,7 @@ async def upload_document(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    pdf_conversion_target: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
@@ -531,29 +666,30 @@ async def upload_document(
     Upload a document file and create a new document with it attached.
 
     Requires: EDITOR role or above.
-    Max file size: 10MB.
-    Allowed types: DOCX and PPTX.
+    Max file size: 50MB.
+    Allowed types: DOCX, PPTX, and PDF.
 
     The file name will be used as the document title if not provided.
     """
     normalized_content_type = (file.content_type or "").lower()
     normalized_filename = (file.filename or "").lower()
     allowed_mime_types = {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        DOCX_UPLOAD_MIME_TYPE,
+        PPTX_UPLOAD_MIME_TYPE,
     }
     allowed_extensions = {".docx", ".pptx"}
-    blocked_mime_prefix = "/".join(("application", "pdf"))
-    blocked_extension = "." + "pdf"
-    if normalized_content_type.startswith(blocked_mime_prefix) or normalized_filename.endswith(
-        blocked_extension
-    ):
-        raise ValidationError("PDF uploads are not allowed")
+    is_pdf_upload = _is_pdf_upload(content_type=normalized_content_type, filename=normalized_filename)
+    normalized_pdf_conversion_target = _normalize_pdf_conversion_target(pdf_conversion_target)
+    if is_pdf_upload and normalized_pdf_conversion_target is None:
+        raise ValidationError("PDF uploads require pdf_conversion_target of docx or pptx")
+    if not is_pdf_upload and pdf_conversion_target is not None:
+        raise ValidationError("pdf_conversion_target is only supported for PDF uploads")
     if not (
-        normalized_content_type in allowed_mime_types
+        is_pdf_upload
+        or normalized_content_type in allowed_mime_types
         or any(normalized_filename.endswith(extension) for extension in allowed_extensions)
     ):
-        raise ValidationError("Only DOCX and PPTX files are allowed")
+        raise ValidationError("Only DOCX, PPTX, and PDF files are allowed")
 
     # Use filename as title if not provided
     raw_filename = file.filename or "Uploaded Document"
@@ -651,6 +787,33 @@ async def upload_document(
         attachment_uploader=AttachmentService.upload_attachment,
         logger=logger,
     )
+    after_primary_attachment = None
+    after_primary_attachment_step_name = None
+    if is_pdf_upload:
+        pdf_bytes = await file.read()
+        await file.seek(0)
+
+        async def attach_generated_pdf_working_file(document: object) -> None:
+            generated_bytes, generated_filename, generated_content_type = (
+                _build_generated_pdf_working_attachment(
+                    pdf_bytes=pdf_bytes,
+                    original_filename=safe_filename,
+                    pdf_conversion_target=normalized_pdf_conversion_target or "docx",
+                )
+            )
+            AttachmentService.create_attachment_from_bytes(
+                db=db,
+                document_id=document.id,
+                content=generated_bytes,
+                original_filename=generated_filename,
+                content_type=generated_content_type,
+                current_user=current_user,
+                convert_to_html=False,
+                background_tasks=background_tasks,
+            )
+
+        after_primary_attachment = attach_generated_pdf_working_file
+        after_primary_attachment_step_name = "attach_generated_pdf_working_file"
 
     try:
         upload_result = await upload_manager.execute(
@@ -661,6 +824,8 @@ async def upload_document(
             content_file=content_file,
             release_notes_file=release_notes,
             release_notes_document_data=release_data,
+            after_primary_attachment=after_primary_attachment,
+            after_primary_attachment_step_name=after_primary_attachment_step_name,
         )
         document = upload_result.document
     except HTTPException:

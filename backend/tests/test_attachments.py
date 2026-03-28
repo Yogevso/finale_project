@@ -10,6 +10,7 @@ import pytest
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.models import (
     Attachment,
     AttachmentArtifact,
@@ -91,6 +92,9 @@ class TestAttachments:
             files={"file": ("legacy.pdf", io.BytesIO(b"%PDF-1.4\n%EOF"), "application/pdf")},
         )
         assert response.status_code == 201
+
+    def test_attachment_service_uses_shared_upload_limit(self):
+        assert AttachmentService.MAX_FILE_SIZE == settings.MAX_UPLOAD_SIZE == 50 * 1024 * 1024
 
     @pytest.mark.anyio
     async def test_upload_attachment_passes_filename_and_content_type_to_magic_byte_validation(

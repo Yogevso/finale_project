@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import hashlib
 import io
 import logging
@@ -13,9 +14,10 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.domain.aggregates import DocumentAggregate
 from app.errors import ServiceUnavailableError, ValidationError
 from app.legacy_wrappers import get_document_converter_wrapper
-from app.models import Attachment, Document, User, Version, VersionBumpType
+from app.models import Attachment, Document, DocumentStatus, User, Version, VersionBumpType
 from app.services.malware_scan_service import (
     MalwareDetectedError,
     MalwareScannerUnavailableError,
@@ -192,6 +194,10 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
 
         if convert_to_html:
             try:
+                document = db.query(Document).filter(Document.id == document_id).first()
+                if document is None:
+                    raise ValidationError("Document not found")
+
                 wrapper = get_document_converter_wrapper()
                 html_content = wrapper.convert_document_to_html(
                     content,
@@ -214,6 +220,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                             existing_version.semantic_version, existing_version.version_number
                         )
                     )
+                    should_publish_version = document.status == DocumentStatus.ACTIVE
+                    assigned_company_ids = sorted(company.id for company in (document.assigned_companies or []))
+                    published_attachment_ids_snapshot = json.dumps([attachment.id])
 
                     version = Version(
                         document_id=document_id,
@@ -224,12 +233,23 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                         else VersionBumpType.MAJOR,
                         content=html_content,
                         changes_summary=f"Initial content from uploaded file: {original_filename}",
-                        is_published=True,
-                        published_at=attachment.uploaded_at,
-                        published_by=current_user.id,
+                        is_published=should_publish_version,
+                        published_at=attachment.uploaded_at if should_publish_version else None,
+                        published_by=current_user.id if should_publish_version else None,
                         created_by=current_user.id,
+                        audience_visibility_snapshot=(
+                            document.visibility.value if should_publish_version else None
+                        ),
+                        audience_company_ids_snapshot=(
+                            json.dumps(assigned_company_ids) if should_publish_version else None
+                        ),
+                        published_attachment_ids_snapshot=(
+                            published_attachment_ids_snapshot if should_publish_version else None
+                        ),
                     )
                     db.add(version)
+                    if should_publish_version:
+                        DocumentAggregate(document).transition_to_active()
                     db.commit()
                     logger.info(
                         f"Created initial version {next_version} for document {document_id}"

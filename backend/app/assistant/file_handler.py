@@ -32,7 +32,7 @@ ALLOWED_EXTENSIONS: dict[str, str] = {
     ".md": "text/markdown",
 }
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = settings.MAX_UPLOAD_SIZE
 
 
 class AssistantFileHandler:
@@ -58,7 +58,9 @@ class AssistantFileHandler:
 
         data = await file.read()
         if len(data) > MAX_FILE_SIZE:
-            raise ValueError(f"File too large ({len(data)} bytes). Max is {MAX_FILE_SIZE} bytes.")
+            raise ValueError(
+                f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB."
+            )
         try:
             scan_upload_bytes(data, original, ALLOWED_EXTENSIONS.get(ext, "application/octet-stream"))
         except (MalwareDetectedError, MalwareScannerUnavailableError) as exc:

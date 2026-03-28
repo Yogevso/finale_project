@@ -5,8 +5,10 @@ import uuid
 
 from fastapi import HTTPException
 
-from app.models import Document
+from app.models import Attachment, Document, Version
 from app.services.attachment_service import AttachmentService
+from app.conversion.pdf_to_docx import PdfConversionResult
+from app.conversion.pdf_to_pptx import PdfToPptxConversionResult
 
 
 DOCX_MIME_TYPE = (
@@ -19,22 +21,148 @@ def _docx_bytes() -> bytes:
     return b"PK\x03\x04minimal-docx-fixture"
 
 
+def _pdf_bytes() -> bytes:
+    return b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+
+
 def _upload_data(**overrides):
     payload = {"platform": DEFAULT_PLATFORM}
     payload.update(overrides)
     return payload
 
 
-def test_upload_rejects_pdf_documents(client, auth_headers):
+class _HtmlWrapper:
+    def convert_document_to_html(self, content, mime_type, filename=""):
+        return "<p>Converted DOCX body</p>"
+
+
+def test_upload_requires_conversion_target_for_pdf_documents(client, auth_headers):
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
         data=_upload_data(),
-        files={"file": ("legacy.pdf", io.BytesIO(b"%PDF-1.4\n%EOF"), "application/pdf")},
+        files={"file": ("legacy.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "PDF uploads are not allowed"
+    assert response.json()["detail"] == "PDF uploads require pdf_conversion_target of docx or pptx"
+
+
+def test_upload_rejects_pdf_conversion_target_for_non_pdf_documents(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data=_upload_data(pdf_conversion_target="docx"),
+        files={"file": ("default-upload.docx", io.BytesIO(_docx_bytes()), DOCX_MIME_TYPE)},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "pdf_conversion_target is only supported for PDF uploads"
+
+
+def test_upload_pdf_preserves_original_and_generates_docx_working_file(
+    client, auth_headers, db, monkeypatch
+):
+    wrapper_calls = {}
+
+    class _FakeWrapper:
+        def convert_document_to_html(self, content, mime_type, filename=""):
+            wrapper_calls["content"] = content
+            wrapper_calls["mime_type"] = mime_type
+            wrapper_calls["filename"] = filename
+            return "<p>Converted PDF body</p>"
+
+    monkeypatch.setattr(
+        "app.services.attachment_service.upload.get_document_converter_wrapper",
+        lambda: _FakeWrapper(),
+    )
+    monkeypatch.setattr(
+        "app.api.management.documents.convert_pdf_to_docx",
+        lambda _content: PdfConversionResult(docx_bytes=_docx_bytes(), page_count=1),
+    )
+
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data=_upload_data(pdf_conversion_target="docx"),
+        files={"file": ("legacy.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 201, response.json()
+    document_id = response.json()["id"]
+    attachments = (
+        db.query(Attachment)
+        .filter(Attachment.document_id == document_id)
+        .order_by(Attachment.id.asc())
+        .all()
+    )
+
+    assert [attachment.original_filename for attachment in attachments] == [
+        "legacy.pdf",
+        "legacy.docx",
+    ]
+    assert [attachment.mime_type for attachment in attachments] == [
+        "application/pdf",
+        DOCX_MIME_TYPE,
+    ]
+    versions = (
+        db.query(Version)
+        .filter(Version.document_id == document_id)
+        .order_by(Version.version_number.asc())
+        .all()
+    )
+    assert len(versions) == 2
+    assert versions[-1].content == "<p>Converted PDF body</p>"
+    assert wrapper_calls == {
+        "content": _pdf_bytes(),
+        "mime_type": "application/pdf",
+        "filename": "legacy.pdf",
+    }
+
+
+def test_upload_pdf_preserves_original_and_generates_pptx_working_file(
+    client, auth_headers, db, monkeypatch
+):
+    class _FakeWrapper:
+        def convert_document_to_html(self, content, mime_type, filename=""):
+            return "<p>Converted PDF body</p>"
+
+    monkeypatch.setattr(
+        "app.services.attachment_service.upload.get_document_converter_wrapper",
+        lambda: _FakeWrapper(),
+    )
+    monkeypatch.setattr(
+        "app.api.management.documents.convert_pdf_to_pptx",
+        lambda _content: PdfToPptxConversionResult(
+            pptx_bytes=b"PK\x03\x04generated-pptx",
+            page_count=1,
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/documents/upload",
+        headers=auth_headers,
+        data=_upload_data(pdf_conversion_target="pptx"),
+        files={"file": ("deck.pdf", io.BytesIO(_pdf_bytes()), "application/pdf")},
+    )
+
+    assert response.status_code == 201, response.json()
+    document_id = response.json()["id"]
+    attachments = (
+        db.query(Attachment)
+        .filter(Attachment.document_id == document_id)
+        .order_by(Attachment.id.asc())
+        .all()
+    )
+
+    assert [attachment.original_filename for attachment in attachments] == [
+        "deck.pdf",
+        "deck.pptx",
+    ]
+    assert [attachment.mime_type for attachment in attachments] == [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ]
 
 
 def test_upload_requires_platform(client, auth_headers):
@@ -48,8 +176,12 @@ def test_upload_requires_platform(client, auth_headers):
     assert response.json()["detail"] == "Platform is required"
 
 
-def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers):
+def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers, db, monkeypatch):
     """Upload with a platform but without status/visibility should stay non-public draft."""
+    monkeypatch.setattr(
+        "app.services.attachment_service.upload.get_document_converter_wrapper",
+        lambda: _HtmlWrapper(),
+    )
     response = client.post(
         "/api/v1/documents/upload",
         headers=auth_headers,
@@ -61,6 +193,14 @@ def test_upload_defaults_to_draft_and_internal_visibility(client, auth_headers):
     payload = response.json()
     assert payload["status"] == "draft"
     assert payload["visibility"] == "internal"
+    versions = (
+        db.query(Version)
+        .filter(Version.document_id == payload["id"])
+        .order_by(Version.version_number.asc())
+        .all()
+    )
+    assert len(versions) == 2
+    assert versions[-1].is_published is False
 
 
 def test_editor_cannot_direct_publish_via_upload_override(client, auth_headers):
@@ -75,8 +215,12 @@ def test_editor_cannot_direct_publish_via_upload_override(client, auth_headers):
     assert response.status_code == 403
 
 
-def test_manager_can_explicitly_publish_via_upload_override(client, manager_headers):
+def test_manager_can_explicitly_publish_via_upload_override(client, manager_headers, db, monkeypatch):
     """Managers and above may explicitly publish/upload as public."""
+    monkeypatch.setattr(
+        "app.services.attachment_service.upload.get_document_converter_wrapper",
+        lambda: _HtmlWrapper(),
+    )
     response = client.post(
         "/api/v1/documents/upload",
         headers=manager_headers,
@@ -88,6 +232,15 @@ def test_manager_can_explicitly_publish_via_upload_override(client, manager_head
     payload = response.json()
     assert payload["status"] == "active"
     assert payload["visibility"] == "public"
+    versions = (
+        db.query(Version)
+        .filter(Version.document_id == payload["id"])
+        .order_by(Version.version_number.asc())
+        .all()
+    )
+    assert len(versions) == 2
+    assert versions[-1].is_published is True
+    assert versions[-1].published_at is not None
 
 
 def test_upload_company_visibility_requires_assignment(client, auth_headers):

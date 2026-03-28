@@ -12,6 +12,8 @@ import {
   useUploadDocumentFlow,
 } from '@/pages/documents/hooks/useUploadDocumentFlow'
 import { useFocusTrap } from '@/hooks/useAccessibility'
+import { DOCUMENT_INPUT_LIMITS } from '@/lib/uiInputRules'
+import { PLATFORM_UPLOAD_MAX_SIZE_LABEL } from '@/lib/uploadLimits'
 
 export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
   const {
@@ -41,6 +43,9 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
     canManageAdvancedUploadOptions,
     contentFile,
     releaseNotesFile,
+    selectedFileIsPdf,
+    pdfConversionTarget,
+    setPdfConversionTarget,
     error,
     setError,
     dragActive,
@@ -163,22 +168,72 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                   <UploadCloud className="h-7 w-7" aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="card-title">Upload DOCX or PPTX</p>
+                  <p className="card-title">Upload DOCX, PPTX, or PDF</p>
                   <p className="body-copy mt-1">
                     Drag and drop a file here, or click to browse.
                   </p>
                 </div>
-                <p className="helper-copy">DOCX, PPTX (max 10MB)</p>
+                <p className="helper-copy">
+                  DOCX, PPTX, PDF (max {PLATFORM_UPLOAD_MAX_SIZE_LABEL})
+                </p>
               </div>
             )}
           </button>
+
+          {selectedFileIsPdf ? (
+            <div className="surface-muted space-y-4 p-4">
+              <div>
+                <p className="section-title text-base">PDF Conversion Target</p>
+                <p className="helper-copy mt-1">
+                  Keep the original PDF attached and generate a working Word or PowerPoint file for editing.
+                </p>
+              </div>
+              <fieldset>
+                <legend className="helper-copy mb-2 block font-medium uppercase tracking-wide">
+                  Convert PDF into
+                </legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="surface-card flex cursor-pointer items-start gap-3 p-3">
+                    <input
+                      type="radio"
+                      name="pdf-conversion-target"
+                      value="docx"
+                      checked={pdfConversionTarget === 'docx'}
+                      onChange={() => setPdfConversionTarget('docx')}
+                    />
+                    <span>
+                      <span className="card-title block">Word (.docx)</span>
+                      <span className="helper-copy">
+                        Best when the PDF should continue as an editable document.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="surface-card flex cursor-pointer items-start gap-3 p-3">
+                    <input
+                      type="radio"
+                      name="pdf-conversion-target"
+                      value="pptx"
+                      checked={pdfConversionTarget === 'pptx'}
+                      onChange={() => setPdfConversionTarget('pptx')}
+                    />
+                    <span>
+                      <span className="card-title block">PowerPoint (.pptx)</span>
+                      <span className="helper-copy">
+                        Best when each PDF page should carry forward as presentation slides.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+          ) : null}
 
           {canManageAdvancedUploadOptions ? (
             <div className="surface-muted space-y-4 p-4">
               <div>
                 <p className="section-title text-base">Manager upload options</p>
                 <p className="helper-copy mt-1">
-                  Set the initial status or attach supporting DOCX/PPTX files during upload.
+                  Set the initial status or attach supporting files during upload.
                 </p>
               </div>
 
@@ -201,6 +256,11 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                     </option>
                   ))}
                 </select>
+                <p className="helper-copy mt-1">
+                  Company and public portals only update after the document is Published and a
+                  version has been published. Draft uploads stay internal even if companies are
+                  assigned.
+                </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -262,6 +322,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setTitle(e.target.value)}
               className="input-field"
               placeholder="Document title (uses filename if empty)"
+              maxLength={DOCUMENT_INPUT_LIMITS.title}
             />
           </div>
 
@@ -278,6 +339,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               className="input-field"
               placeholder="Choose an existing platform or type a new one"
               required
+              maxLength={DOCUMENT_INPUT_LIMITS.platform}
             />
             <datalist id="upload-platform-options">
               {platformSuggestions.map((platformName) => (
@@ -303,7 +365,11 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               className="input-field"
               rows={2}
               placeholder="Optional description"
+              maxLength={DOCUMENT_INPUT_LIMITS.description}
             />
+            <p className="helper-copy mt-1 text-right">
+              {description.length}/{DOCUMENT_INPUT_LIMITS.description}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -321,6 +387,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setCategory(e.target.value)}
                 className="input-field"
                 placeholder="e.g., Reports"
+                maxLength={DOCUMENT_INPUT_LIMITS.category}
               />
             </div>
             <div>
@@ -334,6 +401,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setTags(e.target.value)}
                 className="input-field"
                 placeholder="tag1, tag2"
+                maxLength={DOCUMENT_INPUT_LIMITS.tags}
               />
             </div>
           </div>
@@ -415,6 +483,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setReleaseBranch(e.target.value)}
               className="input-field"
               placeholder="e.g., R580"
+              maxLength={DOCUMENT_INPUT_LIMITS.releaseBranch}
             />
           </div>
 
