@@ -24,6 +24,7 @@ import type {
   FeedbackListManagementResponse,
   Invitation,
   InvitationCreate,
+  InvitationEmailPreviewResponse,
   InvitationListResponse,
   InvitationValidateResponse,
   MessageResponse,
@@ -34,6 +35,10 @@ import type {
   ReviewListResponse,
   ReviewRequest,
   ReviewSubmit,
+  SystemDocumentLifecycleSettingsResponse,
+  SystemDocumentLifecycleSettingsUpdate,
+  SystemEmailSettingsResponse,
+  SystemEmailSettingsUpdate,
   RbacPoliciesResponse,
   RbacPoliciesUpdate,
   SystemSettingsResponse,
@@ -85,6 +90,7 @@ import type {
   FeedbackListManagementResponseDto,
   InvitationCreateDto,
   InvitationDto,
+  InvitationEmailPreviewResponseDto,
   InvitationListResponseDto,
   InvitationValidateResponseDto,
   ManagementFeedbackStatsDto,
@@ -106,6 +112,10 @@ import type {
   SearchResponseDto,
   RbacPoliciesResponseDto,
   RbacPoliciesUpdateDto,
+  SystemDocumentLifecycleSettingsResponseDto,
+  SystemDocumentLifecycleSettingsUpdateDto,
+  SystemEmailSettingsResponseDto,
+  SystemEmailSettingsUpdateDto,
   SystemSettingsResponseDto,
   SystemSettingsUpdateDto,
   TenantAnalyticsDto,
@@ -152,6 +162,36 @@ export function toSystemSettingsUpdateDto(
   payload: SystemSettingsUpdate,
 ): SystemSettingsUpdateDto {
   return { settings: { ...payload.settings } }
+}
+
+export function mapSystemDocumentLifecycleSettingsResponseDto(
+  dto: SystemDocumentLifecycleSettingsResponseDto,
+): SystemDocumentLifecycleSettingsResponse {
+  return {
+    ...dto,
+    settings: { ...dto.settings },
+  }
+}
+
+export function toSystemDocumentLifecycleSettingsUpdateDto(
+  payload: SystemDocumentLifecycleSettingsUpdate,
+): SystemDocumentLifecycleSettingsUpdateDto {
+  return { ...payload }
+}
+
+export function mapSystemEmailSettingsResponseDto(
+  dto: SystemEmailSettingsResponseDto,
+): SystemEmailSettingsResponse {
+  return {
+    ...dto,
+    settings: { ...dto.settings },
+  }
+}
+
+export function toSystemEmailSettingsUpdateDto(
+  payload: SystemEmailSettingsUpdate,
+): SystemEmailSettingsUpdateDto {
+  return { ...payload }
 }
 
 export function mapRbacPoliciesResponseDto(
@@ -454,7 +494,17 @@ export function mapCompanyDocumentsResponseDto(
 }
 
 export function mapInvitationDto(dto: InvitationDto): Invitation {
-  return { ...dto }
+  return {
+    ...dto,
+    email_delivery_status: dto.email_delivery_status ?? 'pending',
+    email_delivery_attempt_count: dto.email_delivery_attempt_count ?? 0,
+    email_last_attempted_at: dto.email_last_attempted_at ?? null,
+    email_last_sent_at: dto.email_last_sent_at ?? null,
+    email_last_error: dto.email_last_error ?? null,
+    email_last_subject: dto.email_last_subject ?? null,
+    email_last_sender_email: dto.email_last_sender_email ?? null,
+    email_last_sender_name: dto.email_last_sender_name ?? null,
+  }
 }
 
 export function mapInvitationListResponseDto(
@@ -468,6 +518,12 @@ export function mapInvitationListResponseDto(
 
 export function toInvitationCreateDto(payload: InvitationCreate): InvitationCreateDto {
   return { ...payload }
+}
+
+export function mapInvitationEmailPreviewResponseDto(
+  dto: InvitationEmailPreviewResponseDto,
+): InvitationEmailPreviewResponse {
+  return { ...dto }
 }
 
 export function mapInvitationValidateResponseDto(

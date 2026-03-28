@@ -42,6 +42,22 @@ export interface User {
   updated_at: string
 }
 
+export interface UserOnboardingState {
+  guide_version: number
+  guide_seen_at?: string | null
+  checklist_version: number
+  completed_steps: string[]
+  checklist_completed_at?: string | null
+}
+
+export interface UserOnboardingStateUpdate {
+  guide_version?: number
+  guide_seen_at?: string | null
+  checklist_version?: number
+  completed_steps?: string[]
+  checklist_completed_at?: string | null
+}
+
 export interface PublicRegistrationData {
   email: string
   username: string
@@ -147,6 +163,9 @@ export interface Document {
   created_by: number
   created_at: string
   updated_at: string
+  deleted_at?: string | null
+  purge_at?: string | null
+  deleted_by?: number | null
   created_by_user?: User
   versions_count?: number
   attachments_count?: number
@@ -483,6 +502,9 @@ export type NotificationType =
   | 'feedback_received'
   | 'feedback_responded'
   | 'invitation_sent'
+  | 'ticket_handoff'
+  | 'ticket_new_customer_msg'
+  | 'ticket_mention'
   | 'system'
 
 export interface Notification {
@@ -549,6 +571,62 @@ export interface SystemSettingsResponse {
 
 export interface SystemSettingsUpdate {
   settings: Record<string, unknown>
+}
+
+export type EmailSecurityMode = 'ssl_tls' | 'starttls' | 'none'
+
+export interface SystemEmailSettings {
+  enabled: boolean
+  host?: string | null
+  port: number
+  security: EmailSecurityMode
+  username?: string | null
+  from_email: string
+  from_name: string
+  password_configured: boolean
+  password_masked?: string | null
+}
+
+export interface SystemEmailSettingsResponse {
+  settings: SystemEmailSettings
+  source: 'database' | 'environment'
+  updated_at?: string | null
+  updated_by?: number | null
+}
+
+export interface SystemEmailSettingsUpdate {
+  enabled: boolean
+  host?: string | null
+  port: number
+  security: EmailSecurityMode
+  username?: string | null
+  password?: string | null
+  clear_password?: boolean
+  from_email: string
+  from_name: string
+}
+
+export type ArchiveRetentionUnit = 'days' | 'months' | 'years'
+
+export interface SystemDocumentLifecycleSettings {
+  auto_archive_enabled: boolean
+  auto_archive_after_value: number
+  auto_archive_after_unit: ArchiveRetentionUnit
+  auto_archive_basis: 'last_published'
+  delete_grace_days: number
+}
+
+export interface SystemDocumentLifecycleSettingsResponse {
+  settings: SystemDocumentLifecycleSettings
+  source: 'database' | 'default'
+  updated_at?: string | null
+  updated_by?: number | null
+}
+
+export interface SystemDocumentLifecycleSettingsUpdate {
+  auto_archive_enabled: boolean
+  auto_archive_after_value: number
+  auto_archive_after_unit: ArchiveRetentionUnit
 }
 
 export interface RbacPolicy {
@@ -725,6 +803,7 @@ export interface FeedbackDetailResponse {
   user_email: string
   tenant_id?: number | null
   tenant_name?: string | null
+  ticket_id?: number | null
   feedback_type: FeedbackType
   status: FeedbackStatus
   content: string
@@ -760,6 +839,7 @@ export function isInternalUser(role: UserRole): boolean {
 
 // ========== Invitation Types ==========
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'cancelled'
+export type InvitationEmailDeliveryStatus = 'pending' | 'sent' | 'failed' | 'suppressed'
 
 export interface Invitation {
   id: number
@@ -774,6 +854,14 @@ export interface Invitation {
   expires_at: string
   created_at: string
   accepted_at?: string
+  email_delivery_status: InvitationEmailDeliveryStatus
+  email_delivery_attempt_count: number
+  email_last_attempted_at?: string | null
+  email_last_sent_at?: string | null
+  email_last_error?: string | null
+  email_last_subject?: string | null
+  email_last_sender_email?: string | null
+  email_last_sender_name?: string | null
 }
 
 export interface InvitationListResponse {
@@ -799,6 +887,17 @@ export interface InvitationValidateResponse {
   inviter_name?: string
   message?: string
   expires_at?: string
+}
+
+export interface InvitationEmailPreviewResponse {
+  invitation_id: number
+  email: string
+  from_email: string
+  from_name: string
+  subject: string
+  html_content: string
+  text_content?: string | null
+  preview_accept_url: string
 }
 
 export interface AcceptInvitationRequest {
