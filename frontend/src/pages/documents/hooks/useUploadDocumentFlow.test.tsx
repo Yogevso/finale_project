@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DOCUMENT_INPUT_LIMITS } from '@/lib/uiInputRules'
 import { useUploadDocumentFlow } from './useUploadDocumentFlow'
 
 const navigateMock = vi.fn()
@@ -31,7 +32,7 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('@/features/documents', () => ({
-  DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES: '.docx,.pptx',
+  DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES: '.docx,.pptx,.pdf',
   documentsUseCases: {
     listDocuments: (...args: unknown[]) => listDocumentsMock(...args),
     uploadDocument: (...args: unknown[]) => uploadDocumentMock(...args),
@@ -106,7 +107,7 @@ describe('useUploadDocumentFlow', () => {
   })
 
   it('rejects invalid files before they are selected', () => {
-    validateDocumentUploadFileMock.mockReturnValue('Only DOCX and PPTX files are allowed')
+    validateDocumentUploadFileMock.mockReturnValue('Only DOCX, PPTX, and PDF files are allowed')
     const { wrapper } = createWrapper()
     const { result } = renderHook(() => useUploadDocumentFlow({ onClose: vi.fn() }), { wrapper })
 
@@ -117,7 +118,7 @@ describe('useUploadDocumentFlow', () => {
     })
 
     expect(result.current.selectedFile).toBeNull()
-    expect(result.current.error).toBe('Only DOCX and PPTX files are allowed')
+    expect(result.current.error).toBe('Only DOCX, PPTX, and PDF files are allowed')
   })
 
   it('requires a file before submitting', () => {
@@ -225,6 +226,77 @@ describe('useUploadDocumentFlow', () => {
     })
   })
 
+  it('normalizes upload metadata and falls back to the file stem when title is blank', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose }), { wrapper })
+    const file = new File(['docx'], 'release-notes-2026.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+
+    act(() => {
+      result.current.handleFileSelect(file)
+      result.current.setTitle('   ')
+      result.current.setDescription(' First line.  \n\n\nSecond line.   ')
+      result.current.setCategory('  Reports  ')
+      result.current.setPlatform('  Meteor   Lake  ')
+      result.current.setReleaseBranch('  R580  ')
+      result.current.setTags('ops, release, Ops')
+      result.current.setDueDate(' 2026-04-01 ')
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(file, {
+        title: 'release-notes-2026',
+        description: 'First line.\n\nSecond line.',
+        category: 'Reports',
+        platform: 'Meteor Lake',
+        releaseBranch: 'R580',
+        tags: 'ops, release',
+        dueDate: '2026-04-01',
+        status: 'draft',
+        visibility: 'internal',
+        companyIds: [],
+        contentFile: null,
+        releaseNotesFile: null,
+      }, expect.objectContaining({
+        onUploadProgress: expect.any(Function),
+      }))
+    })
+  })
+
+  it('truncates oversized upload titles to the documented limit', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose }), { wrapper })
+    const file = new File(['docx'], 'guide.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    const oversizedTitle = ` ${'B'.repeat(DOCUMENT_INPUT_LIMITS.title + 20)} `
+
+    act(() => {
+      result.current.handleFileSelect(file)
+      result.current.setTitle(oversizedTitle)
+      result.current.setPlatform('Meteor Lake')
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(file, expect.objectContaining({
+        title: 'B'.repeat(DOCUMENT_INPUT_LIMITS.title),
+      }), expect.objectContaining({
+        onUploadProgress: expect.any(Function),
+      }))
+    })
+  })
+
   it('surfaces upload errors through local state and toast feedback', async () => {
     uploadDocumentMock.mockRejectedValue(new Error('boom'))
     extractApiErrorMessageMock.mockReturnValue('Upload exploded')
@@ -318,9 +390,48 @@ describe('useUploadDocumentFlow', () => {
     })
   })
 
+  it('forwards the selected PDF conversion target for PDF uploads', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useUploadDocumentFlow({ onClose }), { wrapper })
+    const primaryFile = new File(['pdf'], 'legacy.pdf', {
+      type: 'application/pdf',
+    })
+
+    act(() => {
+      result.current.handleFileSelect(primaryFile)
+      result.current.setPlatform('Meteor Lake')
+      result.current.setPdfConversionTarget('pptx')
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(uploadDocumentMock).toHaveBeenCalledWith(primaryFile, {
+        title: 'legacy',
+        description: '',
+        category: '',
+        platform: 'Meteor Lake',
+        releaseBranch: '',
+        tags: '',
+        dueDate: '',
+        status: 'draft',
+        visibility: 'internal',
+        companyIds: [],
+        contentFile: null,
+        releaseNotesFile: null,
+        pdfConversionTarget: 'pptx',
+      }, expect.objectContaining({
+        onUploadProgress: expect.any(Function),
+      }))
+    })
+  })
+
   it('rejects invalid supplemental files before upload', () => {
     validateDocumentUploadFileMock.mockImplementation((file: File) =>
-      file.name.endsWith('.pdf') ? 'Only DOCX and PPTX files are allowed' : null,
+      file.name.endsWith('.exe') ? 'Only DOCX, PPTX, and PDF files are allowed' : null,
     )
     const { wrapper } = createWrapper()
     const { result } = renderHook(() => useUploadDocumentFlow({ onClose: vi.fn() }), { wrapper })
@@ -328,12 +439,12 @@ describe('useUploadDocumentFlow', () => {
     act(() => {
       result.current.handleSupplementalFileSelect(
         'releaseNotes',
-        new File(['pdf'], 'notes.pdf', { type: 'application/pdf' }),
+        new File(['exe'], 'notes.exe', { type: 'application/octet-stream' }),
       )
     })
 
     expect(result.current.releaseNotesFile).toBeNull()
-    expect(result.current.error).toBe('Release notes file: Only DOCX and PPTX files are allowed')
+    expect(result.current.error).toBe('Release notes file: Only DOCX, PPTX, and PDF files are allowed')
   })
 
   it('hides manager upload extras for non-manager editors', () => {

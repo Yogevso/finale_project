@@ -70,6 +70,44 @@ async def test_upload_process_manager_compensates_parent_and_child_on_release_no
     assert db.query(Document).filter(Document.title.like("PM Parent Doc%")).count() == 0
 
 
+@pytest.mark.anyio
+async def test_upload_process_manager_compensates_when_after_primary_attachment_fails(
+    db, test_user
+):
+    service = DocumentService(db)
+
+    async def fake_uploader(*args, **kwargs):
+        return None
+
+    async def fail_after_primary(_document):
+        raise HTTPException(status_code=500, detail="generated working file failed")
+
+    manager = DocumentUploadProcessManager(
+        db=db,
+        document_service=service,
+        attachment_uploader=fake_uploader,
+    )
+
+    with pytest.raises(HTTPException, match="generated working file failed"):
+        await manager.execute(
+            parent_document_data=build_document_create(
+                title="PM PDF Upload",
+                description="parent",
+            ),
+            current_user=test_user,
+            background_tasks=BackgroundTasks(),
+            primary_file=_docx_upload_file("parent.docx"),
+            after_primary_attachment=fail_after_primary,
+            after_primary_attachment_step_name="attach_generated_pdf_working_file",
+        )
+
+    trace = manager.last_trace
+    assert trace is not None
+    assert trace.failed_step == "attach_generated_pdf_working_file"
+    assert trace.compensation_order == (f"delete_document:{trace.created_document_ids[0]}",)
+    assert db.query(Document).filter(Document.title == "PM PDF Upload").count() == 0
+
+
 def test_conversion_process_manager_marks_completed_when_preview_ready():
     job = build_attachment_conversion_job(
         attachment_id=42,

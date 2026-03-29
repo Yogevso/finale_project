@@ -5,6 +5,23 @@ from datetime import datetime
 import pytest
 
 
+def _publish_document(db, *, document_id: int, user_id: int, version_number: int = 1):
+    from app.models import Version
+
+    db.add(
+        Version(
+            document_id=document_id,
+            version_number=version_number,
+            content=f"Published content {document_id}",
+            changes_summary="published",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            created_by=user_id,
+        )
+    )
+    db.commit()
+
+
 class TestPublicDocumentsEndpoint:
     """Test /api/v1/public/documents endpoint"""
 
@@ -55,6 +72,28 @@ class TestPublicDocumentsEndpoint:
         data = response.json()
         titles = [doc["title"] for doc in data["items"]]
         assert "Test Document" not in titles
+
+    def test_list_public_documents_excludes_active_docs_without_published_version(
+        self, client, db, test_admin
+    ):
+        from app.models import Document, DocumentStatus, DocumentVisibility
+
+        document = Document(
+            title="Active Without Published Version",
+            document_number="DOC-PUB-NOVERSION-001",
+            description="Should not appear in public list",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
+        )
+        db.add(document)
+        db.commit()
+
+        response = client.get("/api/v1/public/documents")
+        assert response.status_code == 200
+        titles = [doc["title"] for doc in response.json()["items"]]
+        assert "Active Without Published Version" not in titles
 
     def test_list_public_documents_with_pagination(self, client, public_document):
         """Should support pagination parameters"""
@@ -173,18 +212,23 @@ class TestPublicTopicsEndpoint:
             " SDK-TOOLS ",
         ]
         for index, raw_topic in enumerate(raw_topics, start=1):
-            db.add(
-                Document(
-                    title=f"Topic Legacy {index}",
-                    document_number=f"DOC-TOPIC-{index:04d}",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic=raw_topic,
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                )
+            document = Document(
+                title=f"Topic Legacy {index}",
+                document_number=f"DOC-TOPIC-{index:04d}",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic=raw_topic,
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
             )
-        db.commit()
+            db.add(document)
+            db.flush()
+            _publish_document(
+                db,
+                document_id=document.id,
+                user_id=test_admin.id,
+                version_number=index,
+            )
 
         response = client.get("/api/v1/public/topics")
         assert response.status_code == 200
@@ -200,38 +244,44 @@ class TestPublicTopicsEndpoint:
         db.add(Topic(name="Design Systems", slug="design-systems"))
         db.flush()
 
-        db.add_all(
-            [
-                Document(
-                    title="Design Canonical",
-                    document_number="DOC-TOPIC-DES-0001",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="design-systems",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-                Document(
-                    title="Design Name",
-                    document_number="DOC-TOPIC-DES-0002",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="Design Systems",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-                Document(
-                    title="Design Slugified Name",
-                    document_number="DOC-TOPIC-DES-0003",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="design-systems",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-            ]
-        )
-        db.commit()
+        documents = [
+            Document(
+                title="Design Canonical",
+                document_number="DOC-TOPIC-DES-0001",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="design-systems",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+            Document(
+                title="Design Name",
+                document_number="DOC-TOPIC-DES-0002",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="Design Systems",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+            Document(
+                title="Design Slugified Name",
+                document_number="DOC-TOPIC-DES-0003",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="design-systems",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+        ]
+        db.add_all(documents)
+        db.flush()
+        for index, document in enumerate(documents, start=1):
+            _publish_document(
+                db,
+                document_id=document.id,
+                user_id=test_admin.id,
+                version_number=index,
+            )
 
         response = client.get("/api/v1/public/topics/design-systems")
         assert response.status_code == 200
@@ -247,47 +297,53 @@ class TestPublicTopicsEndpoint:
         db.add(Topic(name="SDKs & Tools", slug="sdk-tools"))
         db.flush()
 
-        db.add_all(
-            [
-                Document(
-                    title="Alias Match Slug",
-                    document_number="DOC-TOPIC-FLT-0001",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="sdk-tools",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-                Document(
-                    title="Alias Match Name",
-                    document_number="DOC-TOPIC-FLT-0002",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="SDKs & Tools",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-                Document(
-                    title="Alias Match Slugified Name",
-                    document_number="DOC-TOPIC-FLT-0003",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="sdks-tools",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-                Document(
-                    title="Other Topic",
-                    document_number="DOC-TOPIC-FLT-0004",
-                    status=DocumentStatus.ACTIVE,
-                    visibility=DocumentVisibility.PUBLIC,
-                    topic="platform",
-                    created_by=test_admin.id,
-                    tenant_id=test_admin.tenant_id,
-                ),
-            ]
-        )
-        db.commit()
+        documents = [
+            Document(
+                title="Alias Match Slug",
+                document_number="DOC-TOPIC-FLT-0001",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="sdk-tools",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+            Document(
+                title="Alias Match Name",
+                document_number="DOC-TOPIC-FLT-0002",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="SDKs & Tools",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+            Document(
+                title="Alias Match Slugified Name",
+                document_number="DOC-TOPIC-FLT-0003",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="sdks-tools",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+            Document(
+                title="Other Topic",
+                document_number="DOC-TOPIC-FLT-0004",
+                status=DocumentStatus.ACTIVE,
+                visibility=DocumentVisibility.PUBLIC,
+                topic="platform",
+                created_by=test_admin.id,
+                tenant_id=test_admin.tenant_id,
+            ),
+        ]
+        db.add_all(documents)
+        db.flush()
+        for index, document in enumerate(documents, start=1):
+            _publish_document(
+                db,
+                document_id=document.id,
+                user_id=test_admin.id,
+                version_number=index,
+            )
 
         response = client.get("/api/v1/public/documents?topic=sdk-tools")
         assert response.status_code == 200

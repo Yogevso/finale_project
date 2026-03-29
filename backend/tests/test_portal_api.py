@@ -1,5 +1,6 @@
 """Tests for the Customer Portal API endpoints"""
 
+import json
 from uuid import uuid4
 
 from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Version
@@ -149,6 +150,58 @@ class TestPortalDocumentDetailEndpoint:
             == f"/api/v1/portal/documents/{public_document.id}/attachments/{attachment.id}/download"
         )
 
+    def test_portal_detail_uses_stored_reader_outline_for_toc(
+        self,
+        client,
+        db,
+        customer_headers,
+        public_document,
+        test_admin,
+    ):
+        attachment = Attachment(
+            document_id=public_document.id,
+            filename="portal-outline.docx",
+            original_filename="portal-outline.docx",
+            file_size=128,
+            mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            storage_path="/tmp/portal-outline.docx",
+            uploaded_by=test_admin.id,
+            reader_toc_json=json.dumps(
+                {
+                    "toc_items": [
+                        {
+                            "id": "toc-0",
+                            "title": "Internal outline heading",
+                            "level": 1,
+                            "page": 1,
+                            "page_start": 1,
+                            "page_end": 1,
+                            "anchor_id": "heading-0",
+                        }
+                    ]
+                }
+            ),
+        )
+        db.add(attachment)
+        db.commit()
+
+        response = client.get(
+            f"/api/v1/portal/documents/{public_document.id}", headers=customer_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json()["toc_items"] == [
+            {
+                "id": "toc-0",
+                "title": "Internal outline heading",
+                "level": 1,
+                "page": 1,
+                "page_start": 1,
+                "page_end": 1,
+                "anchor_id": "heading-0",
+            }
+        ]
+
     def test_list_and_detail_use_same_published_version_when_newer_draft_exists(
         self, client, db, customer_headers, test_admin
     ):
@@ -249,17 +302,115 @@ class TestPortalDocumentDetailEndpoint:
         doc_ids = [item["id"] for item in list_payload["items"]]
         assert document.id not in doc_ids, "Unpublished-only document must not appear in portal list"
 
-        # Detail should return 404 or omit content
+        # Detail should return 404 as well
         detail_response = client.get(
             f"/api/v1/portal/documents/{document.id}",
             headers=customer_headers,
         )
-        assert detail_response.status_code in (404, 200), "Expected 404 or 200 without draft content"
-        if detail_response.status_code == 200:
-            detail_payload = detail_response.json()
-            # If 200, content must NOT be the unpublished drafts
-            assert detail_payload.get("content") != "older draft content"
-            assert detail_payload.get("content") != "latest draft content"
+        assert detail_response.status_code == 404
+
+    def test_visibility_transition_from_public_to_company_updates_public_and_portal_reads(
+        self,
+        client,
+        db,
+        system_admin_headers,
+        customer_headers,
+        customer_2_headers,
+        test_admin,
+        test_tenant,
+    ):
+        from app.models import Platform
+
+        platform = Platform(
+            name="Transition Platform",
+            slug=f"transition-platform-{uuid4().hex[:8]}",
+        )
+        db.add(platform)
+        db.flush()
+
+        document = Document(
+            title="Audience Transition Document",
+            document_number=f"DOC-TRANSITION-{uuid4().hex[:8].upper()}",
+            description="Moves from public to company",
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            category="Guides",
+            topic="release-notes",
+            platform=platform.name,
+            platform_id=platform.id,
+            created_by=test_admin.id,
+            tenant_id=test_admin.tenant_id,
+        )
+        db.add(document)
+        db.flush()
+        db.add(
+            Version(
+                document_id=document.id,
+                version_number=1,
+                content="Published transition content",
+                changes_summary="published",
+                is_published=True,
+                created_by=test_admin.id,
+            )
+        )
+        db.commit()
+        db.refresh(document)
+
+        public_before = client.get("/api/v1/public/documents")
+        assert public_before.status_code == 200
+        assert document.id in [item["id"] for item in public_before.json()["items"]]
+
+        viewer_before = client.get("/api/v1/viewer/documents")
+        assert viewer_before.status_code == 200
+        assert document.id in [item["id"] for item in viewer_before.json()["items"]]
+
+        portal_before = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        assert portal_before.status_code == 200
+        assert document.id in [item["id"] for item in portal_before.json()["items"]]
+
+        platform_before = client.get("/api/platforms")
+        assert platform_before.status_code == 200
+        assert any(item["id"] == platform.id for item in platform_before.json()["items"])
+
+        update_response = client.put(
+            f"/api/v1/documents/{document.id}",
+            headers={**system_admin_headers, "If-Match": document.etag},
+            json={
+                "visibility": "company",
+                "company_ids": [test_tenant.id],
+                "reason": "Restrict release to customer company",
+            },
+        )
+        assert update_response.status_code == 200
+
+        public_after = client.get("/api/v1/public/documents")
+        assert public_after.status_code == 200
+        assert document.id not in [item["id"] for item in public_after.json()["items"]]
+
+        viewer_after = client.get("/api/v1/viewer/documents")
+        assert viewer_after.status_code == 200
+        assert document.id not in [item["id"] for item in viewer_after.json()["items"]]
+
+        public_detail_after = client.get(f"/api/v1/public/documents/{document.id}")
+        assert public_detail_after.status_code == 404
+
+        viewer_detail_after = client.get(f"/api/v1/viewer/documents/{document.id}")
+        assert viewer_detail_after.status_code == 404
+
+        portal_after = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        assert portal_after.status_code == 200
+        assert document.id in [item["id"] for item in portal_after.json()["items"]]
+
+        other_customer_after = client.get(
+            "/api/v1/portal/documents?per_page=100",
+            headers=customer_2_headers,
+        )
+        assert other_customer_after.status_code == 200
+        assert document.id not in [item["id"] for item in other_customer_after.json()["items"]]
+
+        platform_after = client.get("/api/platforms")
+        assert platform_after.status_code == 200
+        assert all(item["id"] != platform.id for item in platform_after.json()["items"])
 
 
 class TestPortalFeedbackEndpoint:
@@ -280,6 +431,27 @@ class TestPortalFeedbackEndpoint:
         data = response.json()
         assert data["content"] == "I have a question about this document"
         assert data["feedback_type"] == "question"
+
+    def test_customer_feedback_can_include_selected_excerpt(
+        self,
+        client,
+        customer_headers,
+        public_document,
+    ):
+        response = client.post(
+            "/api/v1/portal/feedback",
+            headers=customer_headers,
+            json={
+                "document_id": public_document.id,
+                "feedback_type": "suggestion",
+                "content": "This section needs clarification.",
+                "anchor_text": "Important selected sentence from the document.",
+            },
+        )
+
+        assert response.status_code in [200, 201]
+        data = response.json()
+        assert data["anchor_text"] == "Important selected sentence from the document."
 
     def test_customer_can_list_own_feedback(self, client, customer_headers, public_document):
         """Customer should be able to list their own feedback"""
@@ -319,6 +491,29 @@ class TestPortalFeedbackEndpoint:
         data = response.json()
         contents = [f["content"] for f in data.get("items", [])]
         assert "Customer 1 issue" not in contents
+
+    def test_customer_feedback_detail_returns_anchor_text(
+        self,
+        client,
+        customer_headers,
+        public_document,
+    ):
+        created = client.post(
+            "/api/v1/portal/feedback",
+            headers=customer_headers,
+            json={
+                "document_id": public_document.id,
+                "feedback_type": "issue",
+                "content": "The wording is ambiguous.",
+                "anchor_text": "Selected paragraph that is ambiguous.",
+            },
+        )
+        feedback_id = created.json()["id"]
+
+        response = client.get(f"/api/v1/portal/feedback/{feedback_id}", headers=customer_headers)
+
+        assert response.status_code == 200
+        assert response.json()["anchor_text"] == "Selected paragraph that is ambiguous."
 
 
 class TestPortalDashboardEndpoint:

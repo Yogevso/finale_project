@@ -448,6 +448,18 @@ class TestEnvVarValidation:
         assert test_settings.SECRET_KEY is not None
         assert "sqlite" in test_settings.DATABASE_URL
 
+    def test_default_cors_origins_include_loopback_dev_hosts(self):
+        """Development defaults should trust both localhost and 127.0.0.1 origins."""
+        test_settings = Settings(
+            DATABASE_URL="sqlite:///test.db",
+            APP_ENV="development",
+        )
+
+        assert "http://localhost:3000" in test_settings.CORS_ORIGINS
+        assert "http://127.0.0.1:3000" in test_settings.CORS_ORIGINS
+        assert "http://localhost:5173" in test_settings.CORS_ORIGINS
+        assert "http://127.0.0.1:5173" in test_settings.CORS_ORIGINS
+
     def test_settings_validates_secret_length_in_production(self, monkeypatch):
         """Settings should validate SECRET_KEY length in production."""
         with pytest.raises(RuntimeError, match="SECRET_KEY is too short"):

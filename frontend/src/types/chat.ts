@@ -61,6 +61,14 @@ export interface ChatListResponse {
   total: number
 }
 
+export interface ChatEligibleUser {
+  id: number
+  email: string
+  full_name: string
+  role: 'system_admin' | 'admin' | 'manager' | 'editor' | 'viewer' | 'customer'
+  avatar_url?: string | null
+}
+
 export interface ChatMessageListResponse {
   items: ChatMessage[]
   has_more: boolean

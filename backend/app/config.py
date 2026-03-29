@@ -75,9 +75,15 @@ class Settings(BaseSettings):
     RETENTION_CHAT_MESSAGES_DAYS: int = 365
     RETENTION_ASSISTANT_CONVERSATIONS_DAYS: int = 180
     RETENTION_COLLAB_SNAPSHOTS_DAYS: int = 90   # Non-pinned only
+    DOCUMENT_DELETE_GRACE_DAYS: int = 30
 
     # CORS — M-14: override via CORS_ORIGINS env var (comma-separated or JSON array)
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -112,7 +118,7 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str = "Documentation Platform"
 
     # File Upload
-    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS: set[str] = {".docx", ".pptx", ".txt"}
     LIBREOFFICE_BIN: Optional[str] = None
     MALWARE_SCAN_MODE: str = "disabled"  # disabled | log_only | enforce

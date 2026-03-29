@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 import { SEO } from '@/components/SEO'
 import { CardSkeleton, ListSkeleton } from '@/components/skeletons'
 
@@ -21,6 +22,7 @@ export default function PublicHomePage() {
   } = useQuery({
     queryKey: ['public-documents', { page: 1, page_size: 6 }],
     queryFn: () => publicApi.getDocuments({ page: 1, page_size: 6 }),
+    ...audienceSensitiveQueryOptions,
   })
 
   // Fetch categories
@@ -32,6 +34,7 @@ export default function PublicHomePage() {
   } = useQuery({
     queryKey: ['public-categories'],
     queryFn: () => publicApi.getCategories(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const handleSearch = (e: React.FormEvent) => {

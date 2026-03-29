@@ -1,4 +1,4 @@
-import type { UserRole } from '@/types'
+import type { InvitationEmailDeliveryStatus, UserRole } from '@/types'
 
 export const ALL_USER_ROLES: UserRole[] = [
   'system_admin',
@@ -23,5 +23,20 @@ export function getRoleBadgeColor(role: UserRole | string) {
       return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
     default:
       return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+  }
+}
+
+export function getInvitationDeliveryBadgeColor(
+  status: InvitationEmailDeliveryStatus | string | null | undefined,
+) {
+  switch (status) {
+    case 'sent':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
+    case 'failed':
+      return 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200'
+    case 'suppressed':
+      return 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+    default:
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'
   }
 }

@@ -1,25 +1,53 @@
-import { Building2, Clock, Mail, RefreshCw, XCircle } from 'lucide-react'
+import { Building2, Clock, Eye, Mail, RefreshCw, XCircle } from 'lucide-react'
 
 import { EmptyState } from '@/components/EmptyState'
 import { TableSkeleton } from '@/components/skeletons'
 import type { Invitation } from '@/types'
 
-import { getRoleBadgeColor } from '../constants'
+import { getInvitationDeliveryBadgeColor, getRoleBadgeColor } from '../constants'
 
 interface PendingInvitationsSectionProps {
   invitations: Invitation[]
   isLoading: boolean
   onOpenInviteDialog: () => void
+  onPreviewInvitation: (invitation: Invitation) => void
   onResendInvitation: (invitationId: number) => void
   onRequestCancelInvitation: (invitation: Invitation) => void
   isResendPending: boolean
   isCancelPending: boolean
 }
 
+function formatDeliveryDetails(invitation: Invitation): string {
+  if (invitation.email_delivery_status === 'failed') {
+    return invitation.email_last_error || 'Last delivery attempt failed.'
+  }
+  if (invitation.email_delivery_status === 'sent' && invitation.email_last_sent_at) {
+    return `Sent ${new Date(invitation.email_last_sent_at).toLocaleString()}`
+  }
+  if (invitation.email_delivery_status === 'suppressed') {
+    return 'Delivery is suppressed by the current email configuration.'
+  }
+  if (invitation.email_last_attempted_at) {
+    return `Last checked ${new Date(invitation.email_last_attempted_at).toLocaleString()}`
+  }
+  return 'Queued for delivery.'
+}
+
+function formatSender(invitation: Invitation): string | null {
+  if (!invitation.email_last_sender_email) {
+    return null
+  }
+  if (invitation.email_last_sender_name) {
+    return `${invitation.email_last_sender_name} <${invitation.email_last_sender_email}>`
+  }
+  return invitation.email_last_sender_email
+}
+
 export function PendingInvitationsSection({
   invitations,
   isLoading,
   onOpenInviteDialog,
+  onPreviewInvitation,
   onResendInvitation,
   onRequestCancelInvitation,
   isResendPending,
@@ -40,7 +68,7 @@ export function PendingInvitationsSection({
       </div>
 
       {isLoading ? (
-        <TableSkeleton rows={3} columns={6} />
+        <TableSkeleton rows={3} columns={7} />
       ) : invitations.length === 0 ? (
         <div className="p-6">
           <EmptyState
@@ -59,6 +87,7 @@ export function PendingInvitationsSection({
                 <th>Role</th>
                 <th>Company</th>
                 <th>Invited By</th>
+                <th>Email Status</th>
                 <th>Expires</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -91,12 +120,38 @@ export function PendingInvitationsSection({
                   </td>
                   <td className="admin-table-cell body-copy">{invitation.inviter_name || '-'}</td>
                   <td className="admin-table-cell">
+                    <div className="space-y-1">
+                      <span
+                        className={`pill capitalize ${getInvitationDeliveryBadgeColor(invitation.email_delivery_status)}`}
+                      >
+                        {invitation.email_delivery_status}
+                      </span>
+                      <p className="max-w-xs text-xs text-slate-500 dark:text-slate-400">
+                        {formatDeliveryDetails(invitation)}
+                      </p>
+                      {formatSender(invitation) ? (
+                        <p className="max-w-xs truncate text-xs text-slate-400 dark:text-slate-500">
+                          {formatSender(invitation)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="admin-table-cell">
                     <span className="text-sm text-slate-500 dark:text-slate-400">
                       {new Date(invitation.expires_at).toLocaleDateString()}
                     </span>
                   </td>
                   <td className="admin-table-cell text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onPreviewInvitation(invitation)}
+                        className="admin-icon-action"
+                        title="Preview Invitation Email"
+                        aria-label={`Preview invitation email for ${invitation.email}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => onResendInvitation(invitation.id)}

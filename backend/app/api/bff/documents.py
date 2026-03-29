@@ -16,7 +16,7 @@ from app.application.queries.document_queries import (
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
 from app.errors import NotFoundError
-from app.models import DocumentVisibility, ReviewRequest, User, Version
+from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, User, Version
 from app.schemas import (
     AudienceAccessPreviewResponse,
     DocumentDetailPageBundleResponse,
@@ -33,8 +33,10 @@ DEFAULT_REVIEW_HISTORY_PER_PAGE = 20
 
 def _build_audience_access_preview(
     *,
+    document_status: DocumentStatus,
     visibility: DocumentVisibility,
     assigned_companies: list[TenantSummary],
+    has_published_version: bool,
     published_visibility_snapshot: str | None = None,
     published_company_ids_snapshot: list[int] | None = None,
 ) -> AudienceAccessPreviewResponse:
@@ -50,12 +52,31 @@ def _build_audience_access_preview(
                 audience_changed = True
 
     if visibility == DocumentVisibility.PUBLIC:
+        if document_status != DocumentStatus.ACTIVE:
+            access_summary = (
+                "Public access is staged, but external users will not see this document until "
+                "it is marked Published and a version has been published."
+            )
+        elif not has_published_version:
+            access_summary = (
+                "This document is marked Published, but external users still cannot see it "
+                "because no version has been published yet."
+            )
+        elif audience_changed:
+            access_summary = (
+                "External users still see the last published snapshot. Republish the current "
+                "version to push the latest audience settings live."
+            )
+        else:
+            access_summary = (
+                "Visible to the public (including anonymous users) and all internal users."
+            )
         return AudienceAccessPreviewResponse(
             visibility=visibility,
             is_public=True,
             includes_internal_users=True,
             target_companies=[],
-            access_summary="Visible to the public (including anonymous users) and all internal users.",
+            access_summary=access_summary,
             published_visibility_snapshot=published_visibility_snapshot,
             published_company_ids_snapshot=published_company_ids_snapshot,
             audience_changed_since_publish=audience_changed,
@@ -71,12 +92,39 @@ def _build_audience_access_preview(
             published_company_ids_snapshot=published_company_ids_snapshot,
             audience_changed_since_publish=audience_changed,
         )
+
+    company_count = len(assigned_companies)
+    company_label = "company" if company_count == 1 else "companies"
+    company_verb = "is" if company_count == 1 else "are"
+    if company_count == 0:
+        access_summary = (
+            "No companies are assigned yet. Customers will not see this document until at least "
+            "one company is assigned and a version is published."
+        )
+    elif document_status != DocumentStatus.ACTIVE:
+        access_summary = (
+            f"{company_count} assigned {company_label} {company_verb} staged, but customers will not see "
+            "this document until it is marked Published and a version has been published."
+        )
+    elif not has_published_version:
+        access_summary = (
+            f"{company_count} assigned {company_label} {company_verb} set, but customers still cannot see "
+            "this document because no version has been published yet."
+        )
+    elif audience_changed:
+        access_summary = (
+            "Assigned companies still see the last published snapshot. Republish the current "
+            "version to push the latest company assignments live."
+        )
+    else:
+        access_summary = "Visible to internal users and explicitly assigned companies."
+
     return AudienceAccessPreviewResponse(
         visibility=visibility,
         is_public=False,
         includes_internal_users=True,
         target_companies=assigned_companies,
-        access_summary="Visible to internal users and explicitly assigned companies.",
+        access_summary=access_summary,
         published_visibility_snapshot=published_visibility_snapshot,
         published_company_ids_snapshot=published_company_ids_snapshot,
         audience_changed_since_publish=audience_changed,
@@ -175,8 +223,10 @@ def get_document_detail_page_bundle(
                     published_company_ids_snapshot = None
 
         audience_access_preview = _build_audience_access_preview(
+            document_status=document.status,
             visibility=document.visibility,
             assigned_companies=assigned_companies,
+            has_published_version=latest_published_version is not None,
             published_visibility_snapshot=published_visibility_snapshot,
             published_company_ids_snapshot=published_company_ids_snapshot,
         )

@@ -54,8 +54,8 @@ class AttachmentServiceCommonMixin:
         "image/webp",
     }
 
-    # Max file size: 10MB
-    MAX_FILE_SIZE = 10 * 1024 * 1024
+    # Max file size follows the shared application upload boundary.
+    MAX_FILE_SIZE = settings.MAX_UPLOAD_SIZE
     STREAM_CHUNK_SIZE = 1024 * 1024
     READER_STATUS_PENDING = "pending"
     READER_STATUS_PROCESSING = "processing"
@@ -410,6 +410,7 @@ class AttachmentServiceCommonMixin:
             ".xlsx",
             ".ppt",
             ".pptx",
+            ".pdf",
             ".txt",
             ".md",
             ".html",

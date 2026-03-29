@@ -44,6 +44,44 @@ def test_document_aggregate_visibility_change_requires_manager_or_above():
         aggregate.ensure_visibility_change_allowed(UserRole.EDITOR)
 
 
+def test_document_aggregate_keeps_published_documents_active_during_review_flows():
+    document = Document(
+        title="Published lifecycle doc",
+        document_number="DOC-AGG-0003",
+        status=DocumentStatus.APPROVED,
+        created_by=1,
+        tenant_id=1,
+    )
+    document.versions = [
+        Version(
+            id=10,
+            document_id=1,
+            version_number=1,
+            created_by=1,
+            is_published=True,
+        ),
+        Version(
+            id=11,
+            document_id=1,
+            version_number=2,
+            created_by=1,
+            is_published=False,
+        ),
+    ]
+
+    aggregate = DocumentAggregate(document)
+    aggregate.finalize_review_approval()
+    assert document.status == DocumentStatus.ACTIVE
+
+    document.status = DocumentStatus.DRAFT
+    aggregate.revert_review_submission()
+    assert document.status == DocumentStatus.ACTIVE
+
+    document.status = DocumentStatus.APPROVED
+    aggregate.prepare_for_new_version_candidate()
+    assert document.status == DocumentStatus.ACTIVE
+
+
 def test_review_aggregate_approve_updates_state():
     review = ReviewRequest(document_id=1, submitted_by=2, status=ReviewStatus.PENDING)
 
@@ -88,4 +126,3 @@ def test_invitation_aggregate_cancel_requires_pending_status():
 
     with pytest.raises(ValidationError, match="pending invitations"):
         aggregate.cancel()
-

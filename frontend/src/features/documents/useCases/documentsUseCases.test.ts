@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildDocumentsListQueryParams,
   createDocumentsUseCases,
+  DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES,
   DOCUMENT_UPLOAD_MAX_SIZE_BYTES,
   validateDocumentUploadFile,
   type DocumentsUseCasesClient,
@@ -16,11 +17,14 @@ function createClientMocks(): DocumentsUseCasesClient {
     deleteDocument: vi.fn(),
     generateWordAttachment: vi.fn(),
     getAssignedCompanies: vi.fn(),
+    getDeletedDocuments: vi.fn(),
     getDocument: vi.fn(),
     getDocumentCalendarExport: vi.fn(),
     getDocuments: vi.fn(),
     getVersion: vi.fn(),
     getVersions: vi.fn(),
+    purgeDocument: vi.fn(),
+    restoreDeletedDocument: vi.fn(),
     restoreDocument: vi.fn(),
     updateDocument: vi.fn(),
     uploadDocument: vi.fn(),
@@ -162,7 +166,40 @@ describe('documents use cases', () => {
       company_ids: undefined,
       release_notes: undefined,
       content_file: undefined,
+      pdf_conversion_target: undefined,
     }, { onUploadProgress })
+  })
+
+  it('forwards PDF conversion target metadata to the upload endpoint', async () => {
+    const client = createClientMocks()
+    vi.mocked(client.uploadDocument).mockResolvedValue({ id: 10 } as never)
+    const useCases = createDocumentsUseCases(client)
+    const file = { name: 'legacy.pdf', type: 'application/pdf', size: 10 } as File
+
+    await useCases.uploadDocument(file, {
+      title: 'Legacy PDF',
+      description: '',
+      category: '',
+      platform: 'Core Platform',
+      releaseBranch: '',
+      tags: '',
+      pdfConversionTarget: 'pptx',
+    })
+
+    expect(client.uploadDocument).toHaveBeenCalledWith(file, {
+      title: 'Legacy PDF',
+      description: undefined,
+      category: undefined,
+      release_branch: undefined,
+      tags: undefined,
+      platform: 'Core Platform',
+      status: undefined,
+      visibility: 'internal',
+      company_ids: undefined,
+      release_notes: undefined,
+      content_file: undefined,
+      pdf_conversion_target: 'pptx',
+    }, undefined)
   })
 
   it('requires company selection when creating a company-visible document', async () => {
@@ -263,6 +300,25 @@ describe('documents use cases', () => {
     expect(client.uploadDocument).not.toHaveBeenCalled()
   })
 
+  it('requires a conversion target for PDF uploads before the API call', async () => {
+    const client = createClientMocks()
+    const useCases = createDocumentsUseCases(client)
+    const file = { name: 'legacy.pdf', type: 'application/pdf', size: 10 } as File
+
+    await expect(
+      useCases.uploadDocument(file, {
+        title: 'Legacy PDF',
+        description: '',
+        category: '',
+        platform: 'Core Platform',
+        releaseBranch: '',
+        tags: '',
+      }),
+    ).rejects.toThrow('Choose how to convert this PDF before uploading.')
+
+    expect(client.uploadDocument).not.toHaveBeenCalled()
+  })
+
   it('validates upload files by type and size', () => {
     const unsupportedFile = { name: 'notes.txt', type: 'text/plain', size: 128 } as File
     const oversizedFile = {
@@ -272,9 +328,16 @@ describe('documents use cases', () => {
     } as File
     const validFile = { name: 'guide.docx', type: '', size: 200 } as File
 
-    expect(validateDocumentUploadFile(unsupportedFile)).toBe('Only DOCX and PPTX files are allowed')
-    expect(validateDocumentUploadFile(oversizedFile)).toBe('File size must be less than 10MB')
+    expect(validateDocumentUploadFile(unsupportedFile)).toBe(
+      'Only DOCX, PPTX, and PDF files are allowed',
+    )
+    expect(validateDocumentUploadFile(oversizedFile)).toBe('File size must be less than 50MB')
     expect(validateDocumentUploadFile(validFile)).toBeNull()
+  })
+
+  it('documents the current 50MB upload boundary', () => {
+    expect(DOCUMENT_UPLOAD_MAX_SIZE_BYTES).toBe(50 * 1024 * 1024)
+    expect(DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES).toContain('.pdf')
   })
 
   it('accepts PDF uploads in the client validation layer', () => {

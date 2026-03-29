@@ -9,15 +9,19 @@ from sqlalchemy.orm import Session
 
 from app.models import SystemSetting
 
+_INTERNAL_KEY_PREFIX = "__internal."
+
 
 class SystemSettingsService:
     """Service for reading/writing system settings"""
 
     @staticmethod
-    def get_settings(db: Session) -> Dict[str, Any]:
+    def get_settings(db: Session, *, include_internal: bool = False) -> Dict[str, Any]:
         settings: Dict[str, Any] = {}
         rows = db.query(SystemSetting).order_by(SystemSetting.key).all()
         for row in rows:
+            if not include_internal and row.key.startswith(_INTERNAL_KEY_PREFIX):
+                continue
             if row.value is None:
                 settings[row.key] = None
                 continue
@@ -30,7 +34,8 @@ class SystemSettingsService:
     @staticmethod
     def upsert_settings(db: Session, settings: Dict[str, Any], updated_by: int | None) -> None:
         existing_rows = db.query(SystemSetting).all()
-        existing_keys = {row.key for row in existing_rows}
+        managed_rows = [row for row in existing_rows if not row.key.startswith(_INTERNAL_KEY_PREFIX)]
+        existing_keys = {row.key for row in managed_rows}
         incoming_keys = set(settings.keys())
 
         # Remove keys that were deleted in the UI

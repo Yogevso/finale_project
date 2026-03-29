@@ -39,7 +39,7 @@ export interface AvailableTool {
 }
 
 export interface AssistantHealthStatus {
-  status: 'ready' | 'unavailable' | 'disabled'
+  status: 'ready' | 'degraded' | 'unavailable' | 'disabled'
   model: string
   ollama_healthy: boolean
 }

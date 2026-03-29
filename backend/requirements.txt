@@ -242,6 +242,8 @@ python-docx==1.2.0
     # via
     #   -r requirements.in
     #   html2docx
+python-pptx==1.0.2
+    # via -r requirements.in
 python-dotenv==1.2.2
     # via
     #   -r requirements.in
@@ -355,5 +357,7 @@ websocket-client==1.9.0
     # via kubernetes
 websockets==16.0
     # via uvicorn
+xlsxwriter==3.2.9
+    # via python-pptx
 zipp==3.23.0
     # via importlib-metadata

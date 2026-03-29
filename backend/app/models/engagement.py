@@ -18,6 +18,7 @@ from app.models._shared import (
 from app.models.enums import (
     FeedbackStatus,
     FeedbackType,
+    InvitationEmailDeliveryStatus,
     InvitationStatus,
     NotificationType,
     ReviewStatus,
@@ -155,6 +156,7 @@ class Feedback(Base):
     feedback_type = Column(SQLEnum(FeedbackType), default=FeedbackType.OTHER, nullable=False)
     status = Column(SQLEnum(FeedbackStatus), default=FeedbackStatus.PENDING, nullable=False, index=True)
     content = Column(Text, nullable=False)
+    anchor_text = Column(Text, nullable=True)
     response = Column(Text, nullable=True)
     responded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     responded_at = Column(DateTime, nullable=True)
@@ -227,6 +229,19 @@ class Invitation(Base):
     message = Column(Text, nullable=True)
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)
+    email_delivery_status = Column(
+        SQLEnum(InvitationEmailDeliveryStatus),
+        default=InvitationEmailDeliveryStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+    email_delivery_attempt_count = Column(Integer, default=0, nullable=False)
+    email_last_attempted_at = Column(DateTime, nullable=True)
+    email_last_sent_at = Column(DateTime, nullable=True)
+    email_last_error = Column(Text, nullable=True)
+    email_last_subject = Column(String(255), nullable=True)
+    email_last_sender_email = Column(String(255), nullable=True)
+    email_last_sender_name = Column(String(255), nullable=True)
     created_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -41,9 +41,13 @@ vi.mock('@/lib/api', () => ({
 
 class MockWebSocket {
   static instances: MockWebSocket[] = []
+  static CONNECTING = 0
+  static OPEN = 1
+  static CLOSING = 2
+  static CLOSED = 3
 
   url: string
-  readyState = 0
+  readyState = MockWebSocket.CONNECTING
   onopen: ((event: Event) => void) | null = null
   onmessage: ((event: MessageEvent) => void) | null = null
   onclose: ((event: Event) => void) | null = null
@@ -56,7 +60,7 @@ class MockWebSocket {
   }
 
   emitOpen() {
-    this.readyState = 1
+    this.readyState = MockWebSocket.OPEN
     this.onopen?.(new Event('open'))
   }
 
@@ -65,7 +69,7 @@ class MockWebSocket {
   }
 
   close() {
-    this.readyState = 3
+    this.readyState = MockWebSocket.CLOSED
     this.onclose?.(new Event('close'))
   }
 }
@@ -146,13 +150,13 @@ function buildList(tickets: SupportTicket[]): SupportTicketListResponse {
   return { items: tickets, total: tickets.length, page: 1, page_size: 50 }
 }
 
-function renderPage() {
+function renderPage(initialEntries = ['/portal/support']) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <CustomerSupportPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -224,6 +228,29 @@ describe('CustomerSupportPage — ticket detail', () => {
       // Ticket detail header shows subject
       expect(screen.getByText('I have a problem uploading')).toBeInTheDocument()
     })
+  })
+
+  it('opens a ticket directly from the query string', async () => {
+    renderPage(['/portal/support?ticket=1'])
+
+    await waitFor(() => {
+      expect(screen.getByText('I have a problem uploading')).toBeInTheDocument()
+    })
+
+    expect(mockGetMyTicket).toHaveBeenCalledWith(1)
+  })
+
+  it('shows feedback-origin context when a support ticket started from feedback', async () => {
+    mockGetMyTicket.mockResolvedValue(buildTicketDetail({ feedback_id: 88 }))
+    renderPage(['/portal/support?ticket=1'])
+
+    await waitFor(() => {
+      expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByRole('link', { name: /view original feedback/i }),
+    ).toHaveAttribute('href', '/portal/feedback?feedback=88')
   })
 
   it('filters out internal notes in customer view', async () => {

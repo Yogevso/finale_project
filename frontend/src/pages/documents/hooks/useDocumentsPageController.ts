@@ -9,9 +9,11 @@ import {
 } from '@/features/documents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useAuth } from '@/lib/auth'
+import { getDocumentDisplayTitle, UNTITLED_DOCUMENT_LABEL } from '@/lib/documentDisplay'
 import { queryKeys } from '@/lib/queryKeys'
 import { buildSavedViewPayload, parseSavedDocumentsView } from '@/pages/documents/lib/savedViews'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import { DOCUMENT_INPUT_LIMITS, normalizeSingleLineInput } from '@/lib/uiInputRules'
 import type { BulkDocumentMetadataUpdate, DocumentStatus, DocumentVisibility } from '@/types'
 
 type VisibilityChangeRequest = {
@@ -50,7 +52,7 @@ const getVisibilityUpdateErrorMessage = (error: unknown) => {
 }
 
 export function useDocumentsPageController() {
-  const { isEditor, isManager } = useAuth()
+  const { isAdmin, isEditor, isManager } = useAuth()
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const toast = useToast()
@@ -72,6 +74,7 @@ export function useDocumentsPageController() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [showQuickStartModal, setShowQuickStartModal] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
   const [visibilityOverrides, setVisibilityOverrides] = useState<Record<number, DocumentVisibility>>(
     {},
   )
@@ -80,12 +83,19 @@ export function useDocumentsPageController() {
 
   const action = searchParams.get('action')
   const isQuickCreateMode = action === 'create'
+  const isUploadMode = action === 'upload'
 
   useEffect(() => {
     if (isQuickCreateMode) {
       setShowQuickStartModal(true)
     }
   }, [isQuickCreateMode])
+
+  useEffect(() => {
+    if (isUploadMode) {
+      setShowUploadModal(true)
+    }
+  }, [isUploadMode])
 
   const listQueryParams = buildDocumentsListQueryParams({
     page,
@@ -100,8 +110,13 @@ export function useDocumentsPageController() {
   })
 
   const documentsQuery = useQuery({
-    queryKey: queryKeys.documents.list(listQueryParams),
-    queryFn: () => documentsUseCases.listDocuments(listQueryParams),
+    queryKey: showDeleted
+      ? queryKeys.documents.deletedList(listQueryParams)
+      : queryKeys.documents.list(listQueryParams),
+    queryFn: () =>
+      showDeleted
+        ? documentsUseCases.listDeletedDocuments(listQueryParams)
+        : documentsUseCases.listDocuments(listQueryParams),
   })
 
   const companiesQuery = useQuery({
@@ -119,6 +134,38 @@ export function useDocumentsPageController() {
     () => (savedViewsQuery.data ?? []).map(parseSavedDocumentsView),
     [savedViewsQuery.data],
   )
+  const searchSuggestions = useMemo(() => {
+    const suggestions = new Set<string>()
+
+    for (const document of documentsQuery.data?.items ?? []) {
+      const normalizedTitle = getDocumentDisplayTitle(document.title).trim()
+      const normalizedNumber =
+        typeof document.document_number === 'string' ? document.document_number.trim() : ''
+
+      if (normalizedTitle && normalizedTitle !== UNTITLED_DOCUMENT_LABEL) {
+        suggestions.add(normalizedTitle)
+      }
+
+      if (normalizedNumber) {
+        suggestions.add(normalizedNumber)
+      }
+    }
+
+    return Array.from(suggestions).sort((left, right) => left.localeCompare(right))
+  }, [documentsQuery.data?.items])
+  const categorySuggestions = useMemo(() => {
+    const suggestions = new Set<string>()
+
+    for (const document of documentsQuery.data?.items ?? []) {
+      const normalizedCategory =
+        typeof document.category === 'string' ? document.category.trim() : ''
+      if (normalizedCategory) {
+        suggestions.add(normalizedCategory)
+      }
+    }
+
+    return Array.from(suggestions).sort((left, right) => left.localeCompare(right))
+  }, [documentsQuery.data?.items])
 
   useEffect(() => {
     const currentItems = documentsQuery.data?.items
@@ -130,10 +177,16 @@ export function useDocumentsPageController() {
     setSelectedDocumentIds((previous) => previous.filter((documentId) => currentPageIds.has(documentId)))
   }, [documentsQuery.data?.items])
 
+  useEffect(() => {
+    setSelectedDocumentIds([])
+    setPage(1)
+  }, [showDeleted])
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => documentsUseCases.deleteDocument(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document moved to recovery window')
     },
     onError: (error: unknown) => {
       const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
@@ -142,6 +195,30 @@ export function useDocumentsPageController() {
           apiError.message ||
           'Failed to delete document. You may need Manager or Admin role.',
       )
+    },
+  })
+
+  const restoreDeletedMutation = useMutation({
+    mutationFn: (id: number) => documentsUseCases.restoreDeletedDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document restored')
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to restore deleted document.')
+    },
+  })
+
+  const purgeMutation = useMutation({
+    mutationFn: (id: number) => documentsUseCases.purgeDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
+      toast.success('Document permanently deleted')
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { detail?: string } }; message?: string }
+      alert(apiError.response?.data?.detail || apiError.message || 'Failed to permanently delete document.')
     },
   })
 
@@ -213,9 +290,10 @@ export function useDocumentsPageController() {
   })
 
   const saveViewMutation = useMutation({
-    mutationFn: (name: string) =>
-      api.createSavedSearch({
-        name,
+    mutationFn: (name: string) => {
+      const normalizedName = normalizeSingleLineInput(name, DOCUMENT_INPUT_LIMITS.savedViewName)
+      return api.createSavedSearch({
+        name: normalizedName,
         ...buildSavedViewPayload({
           search,
           statusFilter,
@@ -225,7 +303,8 @@ export function useDocumentsPageController() {
           dateFrom,
           dateTo,
         }),
-      }),
+      })
+    },
     onSuccess: (savedView) => {
       setActiveSavedViewId(savedView.id)
       queryClient.invalidateQueries({ queryKey: ['documents', 'saved-views'] })
@@ -259,8 +338,30 @@ export function useDocumentsPageController() {
     if (!isManager) {
       return
     }
-    if (confirm(`Are you sure you want to delete "${title}"?`)) {
+    if (
+      confirm(
+        `Move "${title}" to the recovery window? It will disappear from normal views immediately and stay recoverable for 30 days.`,
+      )
+    ) {
       deleteMutation.mutate(id)
+    }
+  }
+
+  const handleRestoreDeleted = (id: number, title: string) => {
+    if (!isAdmin) {
+      return
+    }
+    if (confirm(`Restore "${title}" to the normal documents list?`)) {
+      restoreDeletedMutation.mutate(id)
+    }
+  }
+
+  const handlePurgeDeleted = (id: number, title: string) => {
+    if (!isAdmin) {
+      return
+    }
+    if (confirm(`Permanently delete "${title}"? This cannot be undone.`)) {
+      purgeMutation.mutate(id)
     }
   }
 
@@ -382,7 +483,10 @@ export function useDocumentsPageController() {
 
   return {
     isEditor,
+    isAdmin,
     isManager,
+    showDeleted,
+    setShowDeleted,
     page,
     setPage,
     search,
@@ -420,6 +524,8 @@ export function useDocumentsPageController() {
       clearActiveSavedView()
       setDateTo(value)
     },
+    searchSuggestions,
+    categorySuggestions,
     activeSavedViewId,
     savedViews,
     saveCurrentView: (name: string) => saveViewMutation.mutate(name),
@@ -442,10 +548,12 @@ export function useDocumentsPageController() {
     documentsQuery,
     companiesQuery,
     deleteMutation,
+    restoreDeletedMutation,
     archiveMutation,
     visibilityMutation,
     bulkMetadataMutation,
     restoreMutation,
+    purgeMutation,
     showBulkEditModal,
     setShowBulkEditModal,
     selectedDocumentIds,
@@ -454,6 +562,8 @@ export function useDocumentsPageController() {
     clearSelection: () => setSelectedDocumentIds([]),
     handleArchiveOrRestore,
     handleDelete,
+    handleRestoreDeleted,
+    handlePurgeDeleted,
     handleVisibilityChange,
     confirmPendingVisibilityChange,
     cancelPendingVisibilityChange,

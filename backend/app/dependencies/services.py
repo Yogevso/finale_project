@@ -94,12 +94,13 @@ def get_document_conversion_service(
 
 def get_support_ticket_service(
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     container: AppContainer = Depends(get_container),
 ) -> SupportTicketService:
     """Resolve support ticket service from the shared container."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    return container.support_ticket_service(db)
+    return container.support_ticket_service(db, chat_db=chat_db)
 
 
 def get_collaboration_auth_service(

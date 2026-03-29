@@ -80,7 +80,7 @@ The dashboard shows key metrics at a glance:
 1. Open document detail page
 2. Go to **"Attachments"** tab
 3. Click **"Upload"** or drag-and-drop files
-4. Maximum file size: 10MB
+4. Maximum file size: 50MB
 
 #### Supported File Types
 - Documents: DOCX, PPTX
@@ -205,7 +205,7 @@ Save frequently used searches:
 2. Ensure at least one version is **published**
 
 ### File Upload Fails
-1. Check file size (max 10MB)
+1. Check file size (max 50MB)
 2. Check file type is supported
 3. Try smaller file or different format
 

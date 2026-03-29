@@ -24,6 +24,25 @@ router = APIRouter(prefix="/viewer/documents", tags=["viewer"])
 logger = logging.getLogger(__name__)
 
 
+def _published_document_ids_subquery(db: Session):
+    return (
+        db.query(Version.document_id)
+        .filter(Version.is_published.is_(True))
+        .group_by(Version.document_id)
+        .subquery()
+    )
+
+
+def _viewer_published_documents_query(db: Session):
+    published_doc_ids = _published_document_ids_subquery(db)
+    return db.query(Document).filter(
+        Document.status == DocumentStatus.ACTIVE,
+        Document.visibility == DocumentVisibility.PUBLIC,
+        Document.deleted_at.is_(None),
+        Document.id.in_(db.query(published_doc_ids.c.document_id)),
+    )
+
+
 def _audience_policy_headers(visibility: DocumentVisibility) -> dict[str, str]:
     """Return embed/sharing policy headers for streaming responses."""
     embed = ExternalEmbedPolicySpec.for_visibility(visibility)
@@ -41,15 +60,7 @@ def _audience_policy_headers(visibility: DocumentVisibility) -> dict[str, str]:
 
 
 def _get_active_document_or_404(db: Session, document_id: int) -> Document:
-    document = (
-        db.query(Document)
-        .filter(
-            Document.id == document_id,
-            Document.status == DocumentStatus.ACTIVE,
-            Document.visibility == DocumentVisibility.PUBLIC,
-        )
-        .first()
-    )
+    document = _viewer_published_documents_query(db).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(
             status_code=404,
@@ -85,8 +96,7 @@ def list_published_documents(
     List published/active documents (public access, no auth required).
     Only shows documents with status='active'.
     """
-    query = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE)
-    query = query.filter(Document.visibility == DocumentVisibility.PUBLIC)
+    query = _viewer_published_documents_query(db)
 
     # Search by title or description
     if search:
@@ -121,10 +131,9 @@ def list_published_documents(
 def list_categories(db: Session = Depends(get_db)):
     """Get list of categories from published documents."""
     categories = (
-        db.query(Document.category)
+        _viewer_published_documents_query(db)
+        .with_entities(Document.category)
         .filter(
-            Document.status == DocumentStatus.ACTIVE,
-            Document.visibility == DocumentVisibility.PUBLIC,
             Document.category.isnot(None),
         )
         .distinct()

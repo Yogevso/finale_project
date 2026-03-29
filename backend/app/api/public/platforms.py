@@ -37,10 +37,11 @@ def _public_platform_documents_query(db: Session):
     latest_published = _latest_published_subquery(db)
     query = (
         db.query(Document, latest_published.c.published_at, latest_published.c.version_number)
-        .outerjoin(latest_published, Document.id == latest_published.c.document_id)
+        .join(latest_published, Document.id == latest_published.c.document_id)
         .filter(
             Document.visibility == DocumentVisibility.PUBLIC,
             Document.status == DocumentStatus.ACTIVE,
+            Document.deleted_at.is_(None),
             Document.platform_id.is_not(None),
         )
     )
@@ -59,10 +60,11 @@ def list_platform_overview(db: Session = Depends(get_db)):
             latest_published.c.version_number,
         )
         .join(Platform, Document.platform_id == Platform.id)
-        .outerjoin(latest_published, Document.id == latest_published.c.document_id)
+        .join(latest_published, Document.id == latest_published.c.document_id)
         .filter(
             Document.visibility == DocumentVisibility.PUBLIC,
             Document.status == DocumentStatus.ACTIVE,
+            Document.deleted_at.is_(None),
             Document.platform_id.is_not(None),
         )
         .all()

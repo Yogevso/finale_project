@@ -14,7 +14,7 @@ import { api } from '@/lib/api'
 import { API_BASE_URL } from '@/lib/api/httpClient'
 
 interface Props {
-  onSend: (text: string, documentIds?: number[]) => void
+  onSend: (text: string, documentIds?: number[], fileIds?: number[]) => void
   onCancel: () => void
   isLoading: boolean
   disabled?: boolean
@@ -67,7 +67,12 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
       }
     }
     const docIds = attachedDocs.map(d => d.id)
-    onSend(trimmed, docIds.length > 0 ? docIds : undefined)
+    const fileIds = attachedFiles.map(file => file.id)
+    onSend(
+      trimmed,
+      docIds.length > 0 ? docIds : undefined,
+      fileIds.length > 0 ? fileIds : undefined,
+    )
     setText('')
     setAttachedDocs([])
     setAttachedFiles([])
@@ -382,7 +387,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
             value={text}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message… (@ mention doc, / for commands)"
+            placeholder="Type a message… (@ mention docs, attach files, / for commands)"
             rows={1}
             disabled={disabled}
             className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none disabled:opacity-50 max-h-[200px]"
@@ -412,7 +417,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
       </div>
 
       <p className="mt-1.5 text-[10px] text-slate-400 text-center">
-        Enter to send · Shift+Enter for new line · @ to mention a document · / for commands
+        Enter to send · Shift+Enter for new line · @ to mention a document · attach files for grounding · / for commands
       </p>
     </div>
   )

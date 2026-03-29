@@ -16,7 +16,7 @@ import type {
 } from '../types'
 
 export function useUsersPageController() {
-  const { isManager, user: currentUser } = useAuth()
+  const { isAdmin, isManager, isSystemAdmin, user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const toast = useToast()
@@ -29,6 +29,7 @@ export function useUsersPageController() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [previewInvitation, setPreviewInvitation] = useState<Invitation | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirmState>(null)
 
   const usersQuery = useQuery({
@@ -53,6 +54,12 @@ export function useUsersPageController() {
     queryKey: ['invitations', 'pending'],
     queryFn: () => api.getInvitations({ status: 'pending' as InvitationStatus, per_page: 50 }),
     enabled: isManager,
+  })
+
+  const invitationPreviewQuery = useQuery({
+    queryKey: ['invitations', 'preview', previewInvitation?.id],
+    queryFn: () => api.getInvitationEmailPreview(previewInvitation!.id),
+    enabled: isManager && previewInvitation !== null,
   })
 
   const createMutation = useMutation({
@@ -88,6 +95,20 @@ export function useUsersPageController() {
     },
     onError: (error: unknown) => {
       toast.error('Failed to deactivate user', extractApiErrorMessage(error, 'Please try again.'))
+    },
+  })
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: number) => api.hardDeleteUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('User permanently deleted')
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        'Failed to permanently delete user',
+        extractApiErrorMessage(error, 'Please try again.'),
+      )
     },
   })
 
@@ -132,13 +153,30 @@ export function useUsersPageController() {
   const users = usersQuery.data ?? []
   const companies = companiesQuery.data?.items ?? []
   const pendingInvitations = invitationsQuery.data?.items ?? []
+  const canDeactivateUsers = isAdmin
+  const canHardDeleteUsers = isSystemAdmin
 
   const requestDeactivateUser = (user: User) => {
     setPendingConfirm({
       title: 'Deactivate user',
-      description: `Are you sure you want to deactivate ${user.full_name}?`,
+      description: `${user.full_name} will lose access immediately, but their account can still be restored later.`,
+      confirmLabel: 'Deactivate',
+      variant: 'warning',
       onConfirm: () => {
         deleteMutation.mutate(user.id)
+        setPendingConfirm(null)
+      },
+    })
+  }
+
+  const requestHardDeleteUser = (user: User) => {
+    setPendingConfirm({
+      title: 'Permanently delete user',
+      description: `${user.full_name} will be removed permanently. This only works for inactive users without retained ownership records.`,
+      confirmLabel: 'Delete Permanently',
+      variant: 'danger',
+      onConfirm: () => {
+        hardDeleteMutation.mutate(user.id)
         setPendingConfirm(null)
       },
     })
@@ -157,7 +195,11 @@ export function useUsersPageController() {
 
   return {
     isManager,
+    isAdmin,
+    isSystemAdmin,
     currentUser,
+    canDeactivateUsers,
+    canHardDeleteUsers,
     roles: ALL_USER_ROLES,
     searchInput,
     setSearchInput,
@@ -173,6 +215,8 @@ export function useUsersPageController() {
     setShowInviteDialog,
     editingUser,
     setEditingUser,
+    previewInvitation,
+    setPreviewInvitation,
     pendingConfirm,
     setPendingConfirm,
     usersQuery,
@@ -181,13 +225,16 @@ export function useUsersPageController() {
     companies,
     pendingInvitations,
     invitationsQuery,
+    invitationPreviewQuery,
     createMutation,
     updateMutation,
     deleteMutation,
+    hardDeleteMutation,
     cancelInvitationMutation,
     resendInvitationMutation,
     messageMutation,
     requestDeactivateUser,
+    requestHardDeleteUser,
     requestCancelInvitation,
   }
 }

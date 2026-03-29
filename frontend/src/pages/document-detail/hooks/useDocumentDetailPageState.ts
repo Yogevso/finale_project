@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -32,6 +32,7 @@ interface ApiMutationError {
 }
 
 const UNKNOWN_DOCUMENT_KEY = 'unknown'
+const DOCUMENT_DETAIL_TABS: DocumentDetailTab[] = ['preview', 'details', 'versions', 'attachments']
 
 const extractErrorText = (value: unknown): string | null => {
   if (typeof value === 'string') {
@@ -107,12 +108,22 @@ export function useDocumentDetailPageState() {
   const [showSubmitReview, setShowSubmitReview] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
+  const appliedDeepLinkRef = useRef<string | null>(null)
 
   const documentIdKey = id ?? UNKNOWN_DOCUMENT_KEY
   const documentId = Number(id)
 
   const isFullscreen =
     location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
+  const locationSearch = location.search
+  const locationHash = location.hash ?? ''
+  const searchParams = useMemo(() => new URLSearchParams(locationSearch), [locationSearch])
+  const requestedTabParam = searchParams.get('tab')
+  const requestedTab = DOCUMENT_DETAIL_TABS.includes(requestedTabParam as DocumentDetailTab)
+    ? (requestedTabParam as DocumentDetailTab)
+    : null
+  const shouldOpenCompanyManager =
+    searchParams.get('manage_companies') === '1' || locationHash === '#company-assignments'
 
   const bffQueryKey = queryKeys.bff.documentDetailBundle(documentIdKey)
 
@@ -268,6 +279,42 @@ export function useDocumentDetailPageState() {
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [hasUnsavedAssignmentChanges])
+
+  useEffect(() => {
+    if (!document) {
+      return
+    }
+
+    const deepLinkKey = `${documentIdKey}:${locationSearch}:${locationHash}`
+    if (appliedDeepLinkRef.current === deepLinkKey) {
+      return
+    }
+
+    if (requestedTab) {
+      setActiveTabState(requestedTab)
+    }
+
+    if (shouldOpenCompanyManager) {
+      setActiveTabState('details')
+      if (isManager) {
+        setAssignmentDraftIds(assignedCompanyIds)
+        setShowCompanySelector(true)
+      }
+    }
+
+    if (requestedTab || shouldOpenCompanyManager) {
+      appliedDeepLinkRef.current = deepLinkKey
+    }
+  }, [
+    assignedCompanyIds,
+    document,
+    documentIdKey,
+    isManager,
+    locationHash,
+    locationSearch,
+    requestedTab,
+    shouldOpenCompanyManager,
+  ])
 
   const confirmDiscardUnsavedAssignments = useCallback(() => {
     if (!hasUnsavedAssignmentChanges) {

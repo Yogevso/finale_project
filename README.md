@@ -17,7 +17,7 @@ A multi-tenant document management platform built for Intel. Internal staff crea
 - **Document Management** — CRUD, rich text editor (TipTap), categorization/tagging, Draft → Active → Archived workflow, bulk upload (PDF/Word), DOCX/PPTX content extraction
 - **Version Control** — Immutable version history, publish to viewer portal, version comparison, rollback
 - **Review Workflow** — Submit/approve/reject pipeline, audience snapshots with drift detection, stale-company checks at publish time, audience version locking
-- **File Attachments** — Upload PDF, Word, images; S3-compatible storage (AWS S3, MinIO, Azure Blob, local); magic-byte validation; 10 MB default limit
+- **File Attachments** — Upload PDF, Word, images; S3-compatible storage (AWS S3, MinIO, Azure Blob, local); magic-byte validation; 50 MB default limit
 - **Real-Time Collaboration** — Google Docs-style simultaneous editing, live cursor presence, Yjs CRDT conflict resolution, offline support, snapshots
 - **Comments & Collaboration** — Threaded comments with replies, private comments, inline text anchoring, resolution workflow, @mentions
 - **AI Assistant** — Self-hosted LLM (Ollama llama3.1:8b), RAG pipeline with ChromaDB, 29 tool-augmented responses, document access policy enforcement on all tools

@@ -23,7 +23,7 @@ from app.application.commands.version_commands import (
     PublishApprovedVersionCommandHandler,
 )
 from app.container import AppContainer, build_container, get_container
-from app.db import get_db
+from app.db import get_chat_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 
 
@@ -98,12 +98,13 @@ def get_publish_approved_version_command_handler(
 
 def get_approve_review_command_handler(
     db: Session = Depends(get_db),
+    chat_db: Session = Depends(get_chat_db),
     container: AppContainer = Depends(get_container),
 ) -> ApproveReviewCommandHandler:
     """Resolve the approve-review command handler."""
     if not isinstance(container, AppContainer):
         container = build_container()
-    handler = container.approve_review_command_handler(db)
+    handler = container.approve_review_command_handler(db, chat_db=chat_db)
     bus = container.command_bus()
     bus.register(ApproveReviewCommand, handler.execute)
     return CommandBusHandlerAdapter(bus)

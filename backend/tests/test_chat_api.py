@@ -67,3 +67,65 @@ def test_direct_chat_api_masks_cross_tenant_user_enumeration_like_missing_user(
         "error_code": "not_found",
     }
     assert db.query(Chat).count() == 0
+
+
+def test_editor_can_list_same_tenant_chat_targets_including_customers(
+    client,
+    db,
+    auth_headers,
+    test_user,
+):
+    create_user(
+        db,
+        email="customer-chat-target@example.com",
+        username="customer_chat_target",
+        full_name="Customer Chat Target",
+        plain_password="customerpass123",
+        role=UserRole.CUSTOMER,
+        tenant_id=test_user.tenant_id,
+        is_active=True,
+    )
+    create_user(
+        db,
+        email="inactive-chat-target@example.com",
+        username="inactive_chat_target",
+        full_name="Inactive Chat Target",
+        plain_password="inactivepass123",
+        role=UserRole.CUSTOMER,
+        tenant_id=test_user.tenant_id,
+        is_active=False,
+    )
+
+    response = client.get("/api/v1/chats/eligible-users?search=chat", headers=auth_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["full_name"] for item in payload] == ["Customer Chat Target"]
+    assert payload[0]["role"] == "customer"
+    assert all(item["id"] != test_user.id for item in payload)
+
+
+def test_viewer_can_list_chat_targets_but_customer_cannot(
+    client,
+    db,
+    viewer_auth_headers,
+    customer_headers,
+    test_viewer,
+):
+    customer = create_user(
+        db,
+        email="chat-target-viewer@example.com",
+        username="chat_target_viewer",
+        full_name="Chat Target Viewer",
+        plain_password="customerpass123",
+        role=UserRole.CUSTOMER,
+        tenant_id=test_viewer.tenant_id,
+        is_active=True,
+    )
+
+    viewer_response = client.get("/api/v1/chats/eligible-users?search=viewer", headers=viewer_auth_headers)
+    customer_response = client.get("/api/v1/chats/eligible-users", headers=customer_headers)
+
+    assert viewer_response.status_code == 200
+    assert [item["id"] for item in viewer_response.json()] == [customer.id]
+    assert customer_response.status_code == 403

@@ -389,7 +389,7 @@ class ChatService:
                     .first()
                 )
                 if other:
-                    other_user = self.db.query(User).filter(User.id == other.user_id).first()
+                    other_user = self.core_db.query(User).filter(User.id == other.user_id).first()
                     display_name = other_user.full_name if other_user else "Unknown"
                 else:
                     display_name = "Unknown"
@@ -532,7 +532,7 @@ class ChatService:
             raise ValidationError("Cannot transfer ownership")
 
         participant.role = new_role
-        target = self.db.query(User).filter(User.id == target_user_id).first()
+        target = self.core_db.query(User).filter(User.id == target_user_id).first()
         self.db.add(ChatMessage(
             chat_id=chat_id,
             sender_id=current_user.id,

@@ -5,13 +5,16 @@
 import { useRef, useEffect, useMemo, useState } from 'react'
 import { MessageCircle, Search, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { MessageSkeleton } from '@/components/skeletons'
-import type { ChatDetail, ChatMessage as ChatMessageType } from '@/types/chat'
+import type {
+  ChatDetail,
+  ChatMessage as ChatMessageType,
+  ChatMessageListResponse,
+} from '@/types/chat'
 import ChatHeader from './ChatHeader'
 import ChatMessageBubble from './ChatMessage'
 import MessageInput from './MessageInput'
@@ -37,6 +40,8 @@ interface ChatViewProps {
   onOpenSettings?: () => void
   scrollToMessageId?: number | null
   onScrollToMessageHandled?: () => void
+  searchMessages?: (chatId: number, query: string) => Promise<ChatMessageListResponse>
+  composerDisabled?: boolean
 }
 
 export default function ChatView({
@@ -60,6 +65,8 @@ export default function ChatView({
   onOpenSettings,
   scrollToMessageId,
   onScrollToMessageHandled,
+  searchMessages,
+  composerDisabled,
 }: ChatViewProps) {
   const { user } = useAuth()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -71,8 +78,10 @@ export default function ChatView({
 
   const searchResults = useQuery({
     queryKey: ['chatSearch', chat?.id, debouncedSearch, messages.length],
-    queryFn: () => (chat ? api.searchChatMessages(chat.id, debouncedSearch) : Promise.reject()),
-    enabled: !!chat && debouncedSearch.length > 0,
+    queryFn: () => (
+      chat && searchMessages ? searchMessages(chat.id, debouncedSearch) : Promise.reject()
+    ),
+    enabled: !!chat && !!searchMessages && debouncedSearch.length > 0,
   })
 
   // Ordered list of matching message IDs (chronological in the view = reversed API order)
@@ -165,7 +174,7 @@ export default function ChatView({
         onMuteToggle={onMuteToggle}
         isMuted={isMuted}
         onLeaveChat={onLeaveChat}
-        onSearch={() => setShowSearch(!showSearch)}
+        onSearch={searchMessages ? () => setShowSearch(!showSearch) : undefined}
         onOpenSettings={onOpenSettings}
       />
 
@@ -273,7 +282,12 @@ export default function ChatView({
         )}
       </div>
 
-      <MessageInput onSend={onSend} onFileUpload={onFileUpload} onTyping={onTyping} disabled={!isConnected} />
+      <MessageInput
+        onSend={onSend}
+        onFileUpload={onFileUpload}
+        onTyping={onTyping}
+        disabled={composerDisabled ?? !isConnected}
+      />
     </div>
   )
 }

@@ -7,8 +7,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Search, UserPlus } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import type { User } from '@/types'
 import type { ChatDetail } from '@/types/chat'
+import type { ChatEligibleUser } from '@/types/chat'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 
 interface AddPeopleModalProps {
@@ -26,13 +26,13 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
   const existingUserIds = new Set(chat.participants.map((p) => p.user_id))
 
   const { data: users = [], isLoading } = useQuery({
-    queryKey: ['users', { search }],
-    queryFn: () => api.getUsers({ search: search || undefined, is_active: true }),
+    queryKey: ['chatEligibleUsers', { search }],
+    queryFn: () => api.getChatEligibleUsers({ search: search || undefined }),
   })
 
   // Filter out current user and already-in-chat users
   const available = users.filter(
-    (u: User) => u.id !== currentUser?.id && !existingUserIds.has(u.id),
+    (u: ChatEligibleUser) => u.id !== currentUser?.id && !existingUserIds.has(u.id),
   )
 
   const addMutation = useMutation({
@@ -79,7 +79,7 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
-              aria-label="Search users"
+              aria-label="Search people"
             />
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
               {search ? 'No matching users' : 'All users are already in this chat'}
             </p>
           ) : (
-            available.map((u: User) => (
+            available.map((u: ChatEligibleUser) => (
               <div
                 key={u.id}
                 className="flex items-center gap-3 rounded-lg px-4 py-2.5 hover:bg-gray-50"

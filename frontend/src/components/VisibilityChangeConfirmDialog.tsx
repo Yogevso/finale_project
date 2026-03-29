@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useId } from 'react'
 import { getVisibilityLabel } from '@/features/documents'
+import {
+  COMMUNICATION_INPUT_LIMITS,
+  normalizeMultilineInput,
+} from '@/lib/uiInputRules'
 import type { DocumentVisibility } from '@/types'
 import CompanySelector from './CompanySelector'
 import { useFocusTrap } from '@/hooks/useAccessibility'
@@ -58,8 +62,12 @@ export default function VisibilityChangeConfirmDialog({
   const showReasonError = reason.length > 0 && !reasonIsValid
 
   const handleConfirm = () => {
+    const normalizedReason = normalizeMultilineInput(
+      reason,
+      COMMUNICATION_INPUT_LIMITS.visibilityReason,
+    )
     onConfirm({
-      reason: reason.trim(),
+      reason: normalizedReason,
       companyIds: isCompanyVisibility ? selectedCompanyIds : undefined,
     })
   }
@@ -133,12 +141,14 @@ export default function VisibilityChangeConfirmDialog({
             className="input-field min-h-[92px]"
             placeholder="Describe why this visibility change is required..."
             disabled={isSubmitting}
+            maxLength={COMMUNICATION_INPUT_LIMITS.visibilityReason}
             data-testid="visibility-change-reason"
             aria-invalid={showReasonError}
             aria-describedby={showReasonError ? `${reasonHintId} ${reasonErrorId}` : reasonHintId}
           />
           <p id={reasonHintId} className="text-xs text-slate-500">
-            Minimum 3 characters. Reason is stored in the audience audit trail.
+            Minimum 3 characters. Reason is stored in the audience audit trail. {reason.length}/
+            {COMMUNICATION_INPUT_LIMITS.visibilityReason}
           </p>
           {showReasonError ? (
             <p id={reasonErrorId} role="alert" className="text-xs text-rose-600">

@@ -122,7 +122,7 @@ describe('SupportPage — ticket list', () => {
   it('renders page header', async () => {
     renderPage()
     expect(screen.getByText('Support')).toBeInTheDocument()
-    expect(screen.getByText(/manage customer support tickets/i)).toBeInTheDocument()
+    expect(screen.getByText(/manage support tickets and feedback conversations/i)).toBeInTheDocument()
   })
 
   it('shows "No tickets found" when empty', async () => {
@@ -136,7 +136,7 @@ describe('SupportPage — ticket list', () => {
     mockGetSupportTickets.mockResolvedValue(
       buildTicketList([
         buildTicket({ id: 1, subject: 'Bug report A', status: 'open' }),
-        buildTicket({ id: 2, subject: 'Feature request B', status: 'resolved' }),
+        buildTicket({ id: 2, subject: 'Feature request B', status: 'resolved', feedback_id: 22 }),
       ]),
     )
     renderPage()
@@ -146,6 +146,27 @@ describe('SupportPage — ticket list', () => {
     })
     expect(screen.getByText('Feature request B')).toBeInTheDocument()
     expect(screen.getByText('2 ticket(s)')).toBeInTheDocument()
+    expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+    expect(screen.getByText('Support ticket')).toBeInTheDocument()
+  })
+
+  it('shows a feedback-origin banner in ticket detail when the ticket came from feedback', async () => {
+    mockGetSupportTickets.mockResolvedValue(buildTicketList([buildTicket({ feedback_id: 41 })]))
+    mockGetSupportTicket.mockResolvedValue(buildTicketDetail({ feedback_id: 41 }))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Need help with upload')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByText('Need help with upload'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByRole('link', { name: /view original feedback/i }),
+    ).toHaveAttribute('href', '/admin/feedback?feedback=41')
   })
 
   it('displays customer name and priority badges', async () => {

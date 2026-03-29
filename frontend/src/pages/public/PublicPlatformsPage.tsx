@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { TableSkeleton } from '@/components/skeletons'
 import { publicApi, type PublicPlatformOverviewItem } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 type PlatformSort = 'latest' | 'docs' | 'name'
 
@@ -22,6 +23,7 @@ export default function PublicPlatformsPage() {
   } = useQuery({
     queryKey: ['platform-overview'],
     queryFn: () => publicApi.getPlatformsOverview(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const filteredSummaries = useMemo(() => {

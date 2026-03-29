@@ -116,7 +116,8 @@ class TestCreateTicketFromFeedback:
         ticket = svc.create_ticket_from_feedback(customer, feedback.id)
         assert ticket.customer_id == customer.id
         assert ticket.feedback_id == feedback.id
-        assert feedback.content[:100] in ticket.subject
+        assert "feedback" in ticket.subject.lower()
+        assert "FB Doc" in ticket.subject
         assert ticket.status == SupportTicketStatus.OPEN
 
     def test_initial_message_matches_feedback(self, db, svc, customer, feedback):
@@ -383,6 +384,162 @@ class TestSupportNotifications:
         assert notification.type == NotificationType.TICKET_NEW_CUSTOMER_MSG
         assert notification.title == f"New support ticket #{ticket.id}"
         assert notification.link == f"/support?ticket={ticket.id}"
+
+    def test_customer_reply_notifies_default_support_agents_when_ticket_has_no_assignments(
+        self,
+        svc,
+        customer,
+        agent,
+    ):
+        ticket = svc.create_ticket(customer, "Unassigned follow-up", "Please help")
+        count_before = (
+            svc.db.query(Notification)
+            .filter(
+                Notification.user_id == agent.id,
+                Notification.type == NotificationType.TICKET_NEW_CUSTOMER_MSG,
+            )
+            .count()
+        )
+
+        svc.send_message(ticket.id, customer, "Any update on this ticket?")
+
+        notifications = (
+            svc.db.query(Notification)
+            .filter(
+                Notification.user_id == agent.id,
+                Notification.type == NotificationType.TICKET_NEW_CUSTOMER_MSG,
+            )
+            .order_by(Notification.id.asc())
+            .all()
+        )
+        assert len(notifications) == count_before + 1
+        assert notifications[-1].title == f"New message on ticket #{ticket.id}"
+        assert notifications[-1].link == f"/support?ticket={ticket.id}"
+
+    def test_feedback_follow_up_notifies_contributors_when_ticket_has_no_assignments(
+        self,
+        db,
+        svc,
+        tenant,
+        customer,
+        agent,
+    ):
+        document = create_document(
+            db,
+            title="Feedback Follow-up Guide",
+            created_by=agent.id,
+            status=DocumentStatus.ACTIVE,
+            visibility=DocumentVisibility.PUBLIC,
+            tenant_id=tenant.id,
+        )
+        feedback = Feedback(
+            user_id=customer.id,
+            document_id=document.id,
+            feedback_type=FeedbackType.QUESTION,
+            content="The guide needs more detail.",
+        )
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+
+        ticket = svc.get_or_create_feedback_ticket(feedback)
+        count_before = (
+            svc.db.query(Notification)
+            .filter(
+                Notification.user_id == agent.id,
+                Notification.type == NotificationType.FEEDBACK_RECEIVED,
+            )
+            .count()
+        )
+
+        svc.send_message(ticket.id, customer, "Adding another example of the issue.")
+
+        notifications = (
+            svc.db.query(Notification)
+            .filter(
+                Notification.user_id == agent.id,
+                Notification.type == NotificationType.FEEDBACK_RECEIVED,
+            )
+            .order_by(Notification.id.asc())
+            .all()
+        )
+        assert len(notifications) == count_before + 1
+        assert notifications[-1].title == 'New customer reply on "Feedback Follow-up Guide"'
+        assert notifications[-1].link == f"/support?ticket={ticket.id}"
+
+    def test_handoff_creates_target_agent_notification(
+        self,
+        svc,
+        customer,
+        agent,
+        agent_b,
+    ):
+        ticket = svc.create_ticket(customer, "Handoff notification", "Please triage")
+        svc.assign_agent(ticket.id, agent, agent.id, is_primary=True)
+
+        svc.handoff_ticket(ticket.id, agent, agent_b.id, note="Take over please")
+
+        notification = (
+            svc.db.query(Notification)
+            .filter(Notification.user_id == agent_b.id)
+            .order_by(Notification.id.desc())
+            .first()
+        )
+        assert notification is not None
+        assert notification.type == NotificationType.TICKET_HANDOFF
+        assert notification.title == f"Ticket #{ticket.id} handed off to you"
+        assert notification.link == f"/support?ticket={ticket.id}"
+
+    def test_internal_note_mentions_only_notify_same_tenant_users(
+        self,
+        db,
+        svc,
+        tenant,
+        customer,
+        agent,
+    ):
+        same_tenant_editor = create_user(
+            db,
+            username="same_tenant_editor",
+            full_name="Same Tenant Editor",
+            role=UserRole.EDITOR,
+            tenant_id=tenant.id,
+        )
+        external_tenant = create_tenant(
+            db,
+            name="External Mention Tenant",
+            slug="external-mention-tenant",
+        )
+        external_editor = create_user(
+            db,
+            username="external_editor",
+            full_name="External Editor",
+            role=UserRole.EDITOR,
+            tenant_id=external_tenant.id,
+        )
+        ticket = svc.create_ticket(customer, "Mention scope", "Need help")
+
+        svc.send_message(
+            ticket.id,
+            agent,
+            f"@{same_tenant_editor.username} please review with @{external_editor.username}",
+            is_internal_note=True,
+        )
+
+        same_tenant_notifications = (
+            svc.db.query(Notification)
+            .filter(Notification.user_id == same_tenant_editor.id)
+            .all()
+        )
+        external_notifications = (
+            svc.db.query(Notification)
+            .filter(Notification.user_id == external_editor.id)
+            .all()
+        )
+
+        assert len(same_tenant_notifications) == 1
+        assert same_tenant_notifications[0].type == NotificationType.TICKET_MENTION
+        assert external_notifications == []
 
     def test_resolving_ticket_emails_customer(
         self,

@@ -1,6 +1,7 @@
 import { MessageSquareText, Paperclip, Search, Send, X } from 'lucide-react'
 
 import { SubmitButton, TextArea } from '@/components/form'
+import { COMMUNICATION_INPUT_LIMITS } from '@/lib/uiInputRules'
 import { CardSkeleton } from '@/components/skeletons'
 import type { CannedResponseListResponse } from '@/types/chat'
 
@@ -167,7 +168,7 @@ export function SupportReplyComposer({
               isInternal ? 'Internal note (not visible to customer)...' : 'Reply to customer...'
             }
             rows={2}
-            maxLength={2000}
+            maxLength={COMMUNICATION_INPUT_LIMITS.supportReply}
             error={messageError}
             required={!selectedFile}
           />

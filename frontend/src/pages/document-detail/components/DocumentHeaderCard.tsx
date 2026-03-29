@@ -1,5 +1,6 @@
 import type { DocumentStatus } from '@/types'
 import { formatDueDate } from '@/lib/documentDueDates'
+import { getDocumentDisplayTitle } from '@/lib/documentDisplay'
 import {
   AlertTriangle,
   Archive,
@@ -62,6 +63,7 @@ export function DocumentHeaderCard({
   onArchive,
   onRestore,
 }: DocumentHeaderCardProps) {
+  const resolvedDocumentTitle = getDocumentDisplayTitle(documentTitle)
   const headerActionClassName =
     'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20'
   const headerStatusClassName =
@@ -79,7 +81,9 @@ export function DocumentHeaderCard({
             <ArrowLeft className="w-4 h-4" />
             Back to Documents
           </button>
-          <h1 className="page-title md:text-3xl !text-white">{documentTitle}</h1>
+          <h1 className="page-title max-w-4xl leading-tight md:text-3xl !text-white [overflow-wrap:anywhere]">
+            {resolvedDocumentTitle}
+          </h1>
           <p className="helper-copy mt-1 flex flex-wrap items-center gap-2 text-sky-100/80">
             <span>{documentNumber}</span>
             {readingTimeMinutes ? (

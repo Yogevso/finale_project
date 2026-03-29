@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { api } from '@/lib/api'
+import { WS_BASE_URL } from '@/lib/wsBaseUrl'
 import type { SupportTicketMessage, SupportWsEvent } from '@/types/chat'
-
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
 const RECONNECT_BASE_MS = 3000
 const RECONNECT_CAP_MS = 60000
 

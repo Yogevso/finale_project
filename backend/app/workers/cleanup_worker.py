@@ -16,9 +16,12 @@ Run:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import time
 from datetime import datetime, timedelta
+
+import sqlalchemy as sa
 
 from app.config import settings
 from app.db import (
@@ -27,9 +30,13 @@ from app.db import (
     SessionLocal,
 )
 from app.models import (
+    ActionType,
     AssistantConversation,
     ChatMessage,
     CollaborationSnapshot,
+    CollaborationSession,
+    Document,
+    DocumentStatus,
     IdempotencyKeyRecord,
     Notification,
     NpsSurvey,
@@ -39,12 +46,29 @@ from app.models import (
     SupportTicket,
     SupportTicketStatus,
     UserSession,
+    Version,
+)
+from app.services.audit_helper import write_audit_log
+from app.services.search_index_service import SearchIndexSyncService
+from app.services.system_document_lifecycle_settings_service import (
+    SystemDocumentLifecycleSettingsService,
 )
 
 logger = logging.getLogger(__name__)
 
 IDEMPOTENCY_TTL_DAYS = 7
 EXPIRED_RESET_GRACE_DAYS = 7
+
+
+def _column_exists(db, table: str, column: str) -> bool:
+    inspector = sa.inspect(db.bind)
+    return any(existing["name"] == column for existing in inspector.get_columns(table))
+
+
+def _document_model_columns_available(db) -> bool:
+    required_columns = {"audience_version"}
+    existing_columns = {existing["name"] for existing in sa.inspect(db.bind).get_columns("documents")}
+    return required_columns.issubset(existing_columns)
 
 
 def purge_expired_sessions(cutoff: datetime, *, dry_run: bool = False) -> int:
@@ -200,6 +224,135 @@ def purge_old_assistant_conversations(cutoff: datetime, *, dry_run: bool = False
         db.close()
 
 
+def purge_soft_deleted_documents(cutoff: datetime, *, dry_run: bool = False) -> int:
+    """Delete documents whose recovery window has expired."""
+    db = SessionLocal()
+    try:
+        if not (
+            _column_exists(db, "documents", "deleted_at")
+            and _column_exists(db, "documents", "purge_at")
+            and _document_model_columns_available(db)
+        ):
+            logger.info("Skipped deleted-document purge; recovery columns are not present yet")
+            return 0
+        query = db.query(Document).filter(
+            Document.deleted_at.isnot(None),
+            Document.purge_at.isnot(None),
+            Document.purge_at < cutoff,
+        )
+        count = query.count()
+        if not dry_run and count:
+            for document in query.all():
+                db.delete(document)
+            db.commit()
+        logger.info("Purged %d soft-deleted documents (dry_run=%s)", count, dry_run)
+        return count
+    finally:
+        db.close()
+
+
+def auto_archive_published_documents(now: datetime, *, dry_run: bool = False) -> int:
+    """Archive active documents whose latest published version is older than the configured retention window."""
+    db = SessionLocal()
+    chat_db = ChatSessionLocal()
+    try:
+        if not (
+            _column_exists(db, "documents", "status")
+            and _column_exists(db, "documents", "deleted_at")
+            and _column_exists(db, "documents", "row_version")
+            and _column_exists(db, "versions", "published_at")
+        ):
+            logger.info("Skipped document auto-archive; required retention columns are not present yet")
+            return 0
+        lifecycle_settings, _metadata = SystemDocumentLifecycleSettingsService.get_effective_settings(db)
+        cutoff = lifecycle_settings.archive_cutoff(now)
+        if cutoff is None:
+            logger.info("Skipped document auto-archive; policy is disabled")
+            return 0
+
+        latest_published = (
+            db.query(
+                Version.document_id.label("document_id"),
+                sa.func.max(Version.published_at).label("last_published"),
+            )
+            .filter(
+                Version.is_published.is_(True),
+                Version.published_at.isnot(None),
+            )
+            .group_by(Version.document_id)
+            .subquery()
+        )
+
+        rows = (
+            db.query(Document.id, latest_published.c.last_published)
+            .join(latest_published, latest_published.c.document_id == Document.id)
+            .filter(
+                Document.status == DocumentStatus.ACTIVE,
+                Document.deleted_at.is_(None),
+                latest_published.c.last_published <= cutoff,
+            )
+            .all()
+        )
+        count = len(rows)
+        if not dry_run and rows:
+            from app.projections import invalidate_portal_audience_cache, invalidate_search_audience_cache
+
+            archived_document_ids: list[int] = []
+            search_index = SearchIndexSyncService(db)
+
+            for document_id, last_published in rows:
+                db.query(Document).filter(Document.id == document_id).update(
+                    {
+                        Document.status: DocumentStatus.ARCHIVED,
+                        Document.updated_at: now,
+                        Document.row_version: Document.row_version + 1,
+                    },
+                    synchronize_session=False,
+                )
+                archived_document_ids.append(int(document_id))
+                search_index.remove_document(int(document_id))
+                write_audit_log(
+                    user_id=None,
+                    document_id=document_id,
+                    action=ActionType.SYSTEM,
+                    details=json.dumps(
+                        {
+                            "event": "document_auto_archived",
+                            "basis": lifecycle_settings.auto_archive_basis,
+                            "last_published": (
+                                last_published.isoformat() if last_published is not None else None
+                            ),
+                            "cutoff": cutoff.isoformat(),
+                            "auto_archive_after_value": lifecycle_settings.auto_archive_after_value,
+                            "auto_archive_after_unit": lifecycle_settings.auto_archive_after_unit,
+                        },
+                        sort_keys=True,
+                    ),
+                )
+
+            db.commit()
+
+            chat_db.query(CollaborationSession).filter(
+                CollaborationSession.document_id.in_(archived_document_ids),
+                CollaborationSession.is_active.is_(True),
+            ).update({"is_active": False, "ended_at": now}, synchronize_session=False)
+            chat_db.commit()
+
+            invalidate_portal_audience_cache()
+            invalidate_search_audience_cache()
+
+        logger.info(
+            "Auto-archived %d documents (dry_run=%s, cutoff=%s)",
+            count,
+            dry_run,
+            cutoff.isoformat(),
+        )
+        return count
+    finally:
+        chat_db.close()
+        db.close()
+
+
 def purge_expired_collab_snapshots(now: datetime, *, dry_run: bool = False) -> int:
     """Delete non-pinned collaboration snapshots past their expires_at or older than retention."""
     db = ChatSessionLocal()
@@ -261,6 +414,8 @@ def run_cleanup(*, dry_run: bool = False) -> dict[str, int]:
         cutoff = now - timedelta(days=settings.RETENTION_ASSISTANT_CONVERSATIONS_DAYS)
         result["assistant_conversations"] = purge_old_assistant_conversations(cutoff, dry_run=dry_run)
 
+    result["auto_archived_documents"] = auto_archive_published_documents(now, dry_run=dry_run)
+    result["deleted_documents"] = purge_soft_deleted_documents(now, dry_run=dry_run)
     result["collab_snapshots"] = purge_expired_collab_snapshots(now, dry_run=dry_run)
 
     return result

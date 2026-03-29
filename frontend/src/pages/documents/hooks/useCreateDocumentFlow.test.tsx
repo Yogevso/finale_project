@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadCustomDocumentTemplates } from '@/lib/documentTemplates'
+import { DOCUMENT_INPUT_LIMITS } from '@/lib/uiInputRules'
 import { useCreateDocumentFlow } from './useCreateDocumentFlow'
 
 const navigateMock = vi.fn()
@@ -193,6 +194,78 @@ describe('useCreateDocumentFlow', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Document created', 'Opening the editor...')
       expect(onClose).toHaveBeenCalledTimes(1)
       expect(navigateMock).toHaveBeenCalledWith('/documents/321/fullscreen')
+    })
+  })
+
+  it('normalizes document metadata before creating a draft', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateDocumentFlow({ onClose }), { wrapper })
+
+    act(() => {
+      result.current.setFormData((previous) => ({
+        ...previous,
+        title: '  Normal   Draft  ',
+        description: ' First line.  \n\n\nSecond line.   ',
+        category: '  Guides  ',
+        platform: '  Meteor   Lake  ',
+        release_branch: '  R580  ',
+        tags: 'ops, guide, Ops, onboarding',
+        company_ids: [5, 5, 0, -1],
+        content: '<p>Body</p>',
+      }))
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(createDraftDocumentMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Normal Draft',
+          description: 'First line.\n\nSecond line.',
+          category: 'Guides',
+          platform: 'Meteor Lake',
+          release_branch: 'R580',
+          tags: 'ops, guide, onboarding',
+          company_ids: [5],
+        }),
+        { generateWord: false },
+      )
+    })
+  })
+
+  it('truncates oversized titles before duplicate checks and creation', async () => {
+    const onClose = vi.fn()
+    const { wrapper } = createWrapper()
+    const { result } = renderHook(() => useCreateDocumentFlow({ onClose }), { wrapper })
+    const oversizedTitle = `  ${'A'.repeat(DOCUMENT_INPUT_LIMITS.title + 25)}  `
+
+    act(() => {
+      result.current.setFormData((previous) => ({
+        ...previous,
+        title: oversizedTitle,
+        platform: 'Core Platform',
+        content: '<p>Body</p>',
+      }))
+    })
+
+    await waitFor(() => {
+      expect(checkDocumentDuplicatesMock).toHaveBeenCalledWith('A'.repeat(DOCUMENT_INPUT_LIMITS.title))
+    })
+
+    act(() => {
+      result.current.handleSubmit({ preventDefault: vi.fn() } as never)
+    })
+
+    await waitFor(() => {
+      expect(createDraftDocumentMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'A'.repeat(DOCUMENT_INPUT_LIMITS.title),
+        }),
+        { generateWord: false },
+      )
     })
   })
 

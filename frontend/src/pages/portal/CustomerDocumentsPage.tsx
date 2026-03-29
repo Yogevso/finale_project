@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
 import { CardSkeleton } from '@/components/skeletons'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 import { portalApi } from '../../lib/portalApi'
 import type { FacetItem } from '../../lib/portalApi'
@@ -64,12 +65,14 @@ export default function CustomerDocumentsPage() {
         search: search || undefined,
         per_page: 12,
       }),
+    ...audienceSensitiveQueryOptions,
   })
 
   // Fetch facets for sidebar
   const { data: facets } = useQuery({
     queryKey: ['portal', 'facets'],
     queryFn: () => portalApi.getFacets(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const handleSearchChange = (nextSearch: string) => {

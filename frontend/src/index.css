@@ -10,6 +10,7 @@
   :root {
     --font-display: "Space Grotesk", sans-serif;
     --font-body: "IBM Plex Sans", sans-serif;
+    --app-shell-header-height: 0px;
     --background: 210 35% 98%;
     --foreground: 222 47% 11%;
     --brand: 209 100% 40%;
@@ -186,7 +187,9 @@
   }
 
   .admin-sticky-toolbar {
-    @apply sticky top-3 z-20 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur px-4 py-3 shadow-sm;
+    @apply sticky z-10 isolate overflow-hidden rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm;
+    top: calc(var(--app-shell-header-height, 0px) + 0.75rem);
+    backdrop-filter: blur(14px);
   }
 
   .admin-sticky-toolbar::before {

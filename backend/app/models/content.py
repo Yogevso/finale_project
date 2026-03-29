@@ -147,12 +147,22 @@ class User(Base):
     timezone = Column(String(64), default="UTC", nullable=False)
     locale = Column(String(10), default="en", nullable=False)
     notification_preferences = Column(JSON, nullable=True)
+    onboarding_state = Column(JSON, nullable=True)
     avatar_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     tenant = relationship("Tenant", back_populates="users")
-    documents = relationship("Document", back_populates="created_by_user")
+    documents = relationship(
+        "Document",
+        back_populates="created_by_user",
+        foreign_keys="[Document.created_by]",
+    )
+    deleted_documents = relationship(
+        "Document",
+        foreign_keys="[Document.deleted_by]",
+        back_populates="deleted_by_user",
+    )
     comments = relationship("Comment", back_populates="user")
     user_sessions = relationship("UserSession", back_populates="user")
     password_resets = relationship("PasswordReset", back_populates="user")
@@ -224,6 +234,9 @@ class Document(Base):
     thumbnail_url = Column(String(500), nullable=True)
     yjs_state = Column(LargeBinary, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    deleted_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    purge_at = Column(DateTime, nullable=True, index=True)
     parent_id = Column(
         Integer,
         ForeignKey("documents.id", ondelete="SET NULL"),
@@ -236,7 +249,8 @@ class Document(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     tenant = relationship("Tenant", back_populates="documents")
-    created_by_user = relationship("User", back_populates="documents")
+    created_by_user = relationship("User", back_populates="documents", foreign_keys=[created_by])
+    deleted_by_user = relationship("User", foreign_keys=[deleted_by], back_populates="deleted_documents")
     platform_ref = relationship("Platform", back_populates="documents")
     parent = relationship("Document", remote_side=[id], backref="children")
     versions = relationship("Version", back_populates="document", cascade="all, delete-orphan")

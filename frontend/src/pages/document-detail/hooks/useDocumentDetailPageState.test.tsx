@@ -149,6 +149,25 @@ describe('useDocumentDetailPageState', () => {
     expect(result.current.contentWidthClass).toBe('max-w-none')
   })
 
+  it('opens the details tab and company assignment manager from deep links', () => {
+    mockedUseLocation.mockReturnValue({
+      pathname: '/documents/42',
+      search: '?tab=details&manage_companies=1',
+      hash: '#company-assignments',
+    } as never)
+
+    const queryClient = createQueryClient()
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(() => useDocumentDetailPageState(), { wrapper })
+
+    expect(result.current.activeTab).toBe('details')
+    expect(result.current.showCompanySelector).toBe(true)
+    expect(result.current.assignmentDraftCompanyIds).toEqual([12])
+  })
+
   it('submits review, resets modal state, and invalidates related queries', async () => {
     const queryClient = createQueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')

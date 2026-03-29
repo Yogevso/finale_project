@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader'
 import VisibilityChangeConfirmDialog from '@/components/VisibilityChangeConfirmDialog'
 import { useTour } from '@/hooks/useTour'
 import { documentsPageTour } from '@/lib/tour'
+import { DOCUMENT_INPUT_LIMITS, normalizeSingleLineInput } from '@/lib/uiInputRules'
 import {
   BulkMetadataEditModal,
   CreateDocumentModal,
@@ -32,6 +33,7 @@ export default function DocumentsPage() {
   )
   const tour = useTour('documents-page', tourSteps)
   const totalDocuments = controller.documentsQuery.data?.total ?? 0
+  const currentPageItems = controller.documentsQuery.data?.items ?? []
   const hasActiveFilters =
     controller.search.trim().length > 0 ||
     controller.statusFilter !== '' ||
@@ -44,6 +46,54 @@ export default function DocumentsPage() {
     !controller.documentsQuery.isLoading &&
     (controller.documentsQuery.data?.items.length ?? 0) === 0
   const hasDocumentsError = controller.documentsQuery.isError ?? false
+  const visibleDocumentsCount = currentPageItems.length
+  const publishedCount = currentPageItems.filter((document) => document.status === 'active').length
+  const attentionCount = currentPageItems.filter(
+    (document) => document.status === 'draft' || document.status === 'pending_review',
+  ).length
+  const companyScopedCount = currentPageItems.filter(
+    (document) =>
+      (controller.visibilityOverrides[document.id] || document.visibility || 'internal') === 'company',
+  ).length
+  const pageHeaderMeta = controller.showDeleted ? (
+    <div className="flex flex-wrap gap-2">
+      <span className="admin-summary-badge">{totalDocuments} recoverable</span>
+      <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+        Purge after 30 days
+      </span>
+      <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600">
+        {controller.isAdmin ? 'Admins can restore or purge.' : 'Recovery view only.'}
+      </span>
+    </div>
+  ) : (
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Current View</div>
+        <div className="mt-2 text-2xl font-semibold text-slate-900">{visibleDocumentsCount}</div>
+        <p className="mt-1 text-sm text-slate-600">
+          {hasActiveFilters ? 'documents match the current filters on this page.' : 'documents are visible on this page.'}
+        </p>
+      </div>
+      <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Workflow</div>
+        <div className="mt-2 text-sm font-medium text-slate-900">
+          Published {publishedCount} • Needs attention {attentionCount}
+        </div>
+        <p className="mt-1 text-sm text-slate-600">
+          Drafts and review items stay visible here until they are published or archived.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Audience</div>
+        <div className="mt-2 text-sm font-medium text-slate-900">
+          Company-visible {companyScopedCount}
+        </div>
+        <p className="mt-1 text-sm text-slate-600">
+          Assign companies in Details, then publish the document before customers can see it.
+        </p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page-stack-lg">
@@ -60,9 +110,14 @@ export default function DocumentsPage() {
 
       <PageHeader
         title="Documents"
-        subtitle="Manage all documents"
+        subtitle={
+          controller.showDeleted
+            ? 'Restore documents during the 30-day recovery window or permanently remove them when needed.'
+            : 'Create, upload, filter, and manage audience access from a single workspace.'
+        }
+        meta={pageHeaderMeta}
         actions={
-          controller.isEditor ? (
+          controller.isEditor && !controller.showDeleted ? (
             <>
               <button
                 type="button"
@@ -103,23 +158,36 @@ export default function DocumentsPage() {
           onDateFromChange={controller.setDateFrom}
           dateTo={controller.dateTo}
           onDateToChange={controller.setDateTo}
+          onResetFilters={controller.resetFilters}
           savedViews={controller.savedViews}
           activeSavedViewId={controller.activeSavedViewId}
           onApplySavedView={controller.applySavedView}
           onSaveCurrentView={() => {
             const viewName = window.prompt('Name this saved view')
-            if (viewName && viewName.trim()) {
-              controller.saveCurrentView(viewName.trim())
+            const normalizedViewName = normalizeSingleLineInput(
+              viewName,
+              DOCUMENT_INPUT_LIMITS.savedViewName,
+            )
+            if (normalizedViewName) {
+              controller.saveCurrentView(normalizedViewName)
             }
           }}
           onDeleteSavedView={controller.deleteSavedView}
           companies={controller.companiesQuery.data?.items ?? []}
+          categorySuggestions={controller.categorySuggestions}
+          searchSuggestions={controller.searchSuggestions}
           statusDetailsRef={controller.statusDetailsRef}
           visibilityDetailsRef={controller.visibilityDetailsRef}
+          isAdmin={controller.isAdmin}
+          showDeleted={controller.showDeleted}
+          onShowDeletedChange={controller.setShowDeleted}
         />
       )}
 
-      {!controller.isQuickCreateMode && controller.isManager && controller.selectedDocumentIds.length > 0 ? (
+      {!controller.isQuickCreateMode &&
+      controller.isManager &&
+      !controller.showDeleted &&
+      controller.selectedDocumentIds.length > 0 ? (
         <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -155,6 +223,11 @@ export default function DocumentsPage() {
             onRetry={() => void controller.documentsQuery.refetch?.()}
           />
         ) : showGuidedEmptyState ? (
+          controller.showDeleted ? (
+            <div className="surface-card rounded-2xl p-8 text-center text-slate-600">
+              No documents are waiting in the delete recovery window.
+            </div>
+          ) : (
           <DocumentsEmptyState
             hasActiveFilters={hasActiveFilters}
             canCreate={controller.isEditor}
@@ -162,11 +235,14 @@ export default function DocumentsPage() {
             onUpload={() => controller.setShowUploadModal(true)}
             onClearFilters={controller.resetFilters}
           />
+          )
         ) : (
           <DocumentsTable
             data={controller.documentsQuery.data}
             isLoading={controller.documentsQuery.isLoading}
             isManager={controller.isManager}
+            isAdmin={controller.isAdmin}
+            showDeleted={controller.showDeleted}
             page={controller.page}
             visibilityOverrides={controller.visibilityOverrides}
             selectedDocumentIds={controller.selectedDocumentIds}
@@ -174,6 +250,8 @@ export default function DocumentsPage() {
             onToggleAllVisibleDocuments={controller.toggleAllVisibleDocuments}
             onArchiveOrRestore={controller.handleArchiveOrRestore}
             onDelete={controller.handleDelete}
+            onRestoreDeleted={controller.handleRestoreDeleted}
+            onPurgeDeleted={controller.handlePurgeDeleted}
             onVisibilityChange={controller.handleVisibilityChange}
             onPageChange={controller.setPage}
           />

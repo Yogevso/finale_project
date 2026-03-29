@@ -6,6 +6,7 @@ import { ErrorState } from '@/components/ErrorState'
 import OptimizedImage from '@/components/OptimizedImage'
 import { CardSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 export default function PublicTopicsPage() {
   const {
@@ -16,6 +17,7 @@ export default function PublicTopicsPage() {
   } = useQuery({
     queryKey: ['public-topics'],
     queryFn: () => publicApi.getTopics(),
+    ...audienceSensitiveQueryOptions,
   })
 
   return (

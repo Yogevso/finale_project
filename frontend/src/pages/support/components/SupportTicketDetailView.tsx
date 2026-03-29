@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns'
 import { ArrowLeft, ArrowRightLeft, UserPlus } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import type { SupportTicketDetail } from '@/types/chat'
 
@@ -57,6 +58,32 @@ export function SupportTicketDetailView({
           <UserPlus className="h-4 w-4" /> Assign
         </button>
       </div>
+
+      {ticket.feedback_id ? (
+        <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
+          <div>
+            <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+              Feedback conversation
+            </p>
+            <p className="mt-1 text-sm text-violet-700 dark:text-violet-200">
+              This support thread started from customer feedback and now continues in Support.
+            </p>
+          </div>
+          <Link
+            to={`/admin/feedback?feedback=${ticket.feedback_id}`}
+            className="btn-secondary table-action-btn"
+          >
+            View original feedback
+          </Link>
+        </div>
+      ) : (
+        <div className="surface-card rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Support ticket</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            This is a direct support conversation with the customer.
+          </p>
+        </div>
+      )}
 
       <SupportMessageList
         ticket={ticket}

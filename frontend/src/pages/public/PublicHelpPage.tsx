@@ -6,6 +6,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { SEO } from '@/components/SEO'
 import { ListSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 export default function PublicHelpPage() {
   const [search, setSearch] = useState('')
@@ -19,6 +20,7 @@ export default function PublicHelpPage() {
   } = useQuery({
     queryKey: ['public-categories'],
     queryFn: () => publicApi.getCategories(),
+    ...audienceSensitiveQueryOptions,
   })
 
   const handleSearch = (e: React.FormEvent) => {

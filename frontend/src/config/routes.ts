@@ -157,6 +157,12 @@ export const customerNavItems: RouteConfig[] = [
     customerOnly: true,
   },
   {
+    path: '/portal/chat',
+    label: 'Messages',
+    icon: MessageCircle,
+    customerOnly: true,
+  },
+  {
     path: '/portal/feedback',
     label: 'My Feedback',
     icon: MessageSquare,

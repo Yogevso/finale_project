@@ -320,6 +320,139 @@ class TestEngineToolCalling:
         assert len(error_events) == 1
         assert "unavailable" in error_events[0]["data"]["message"].lower()
 
+    def test_confirmation_only_tool_call_skips_summary_llm(self):
+        ollama = AsyncMock(spec=OllamaClient)
+        reg = MagicMock(spec=ToolRegistry)
+        conv_mgr = MagicMock(spec=ConversationManager)
+
+        reg.get_ollama_tools.return_value = [_make_tool_def("delete_document")]
+        confirm_tool = MagicMock()
+        confirm_tool.confirm_before_execute = True
+        reg.get.return_value = confirm_tool
+
+        mock_conv = MagicMock()
+        mock_conv.id = 1
+        mock_conv.context_document_ids = None
+        conv_mgr.create_conversation.return_value = mock_conv
+        conv_mgr.build_message_history.return_value = []
+
+        ollama.chat.return_value = {
+            "message": {
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "delete_document", "arguments": {"document_id": 5}}}
+                ],
+            }
+        }
+        ollama.chat_stream = AsyncMock()
+
+        engine = AssistantEngine(ollama, reg, conv_mgr)
+        user = _make_user()
+
+        events = _run(_collect_events(engine.chat(user, None, "Delete document 5", None, MagicMock())))
+
+        assert any(event["event"] == "confirm_required" for event in events)
+        confirmation_text = "".join(event["data"] for event in events if event["event"] == "token")
+        assert "confirmation" in confirmation_text.lower()
+        ollama.chat_stream.assert_not_called()
+
+    def test_all_failed_tools_use_deterministic_failure_response(self):
+        from app.assistant.schemas import ToolResult
+
+        ollama = AsyncMock(spec=OllamaClient)
+        reg = MagicMock(spec=ToolRegistry)
+        conv_mgr = MagicMock(spec=ConversationManager)
+
+        reg.get_ollama_tools.return_value = [_make_tool_def("list_users")]
+        reg.get.return_value = None
+
+        mock_conv = MagicMock()
+        mock_conv.id = 1
+        mock_conv.context_document_ids = None
+        conv_mgr.create_conversation.return_value = mock_conv
+        conv_mgr.build_message_history.return_value = []
+
+        ollama.chat.return_value = {
+            "message": {
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "list_users", "arguments": {}}}
+                ],
+            }
+        }
+        ollama.chat_stream = AsyncMock()
+        reg.execute_tool.return_value = ToolResult(
+            tool_call_id="",
+            name="list_users",
+            success=False,
+            result="",
+            error="Directory service unavailable",
+        )
+
+        engine = AssistantEngine(ollama, reg, conv_mgr)
+        user = _make_user()
+
+        events = _run(_collect_events(engine.chat(user, None, "List all users", None, MagicMock())))
+
+        tokens = "".join(event["data"] for event in events if event["event"] == "token")
+        assert "every tool call failed" in tokens.lower()
+        assert "directory service unavailable" in tokens.lower()
+        ollama.chat_stream.assert_not_called()
+
+    def test_parallel_tool_exception_emits_failed_tool_result(self):
+        from app.assistant.schemas import ToolResult
+
+        ollama = AsyncMock(spec=OllamaClient)
+        reg = MagicMock(spec=ToolRegistry)
+        conv_mgr = MagicMock(spec=ConversationManager)
+
+        reg.get_ollama_tools.return_value = [
+            _make_tool_def("list_users"),
+            _make_tool_def("get_site_settings"),
+        ]
+        reg.get.return_value = None
+
+        mock_conv = MagicMock()
+        mock_conv.id = 1
+        mock_conv.context_document_ids = None
+        conv_mgr.create_conversation.return_value = mock_conv
+        conv_mgr.build_message_history.return_value = []
+
+        ollama.chat.return_value = {
+            "message": {
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "list_users", "arguments": {}}},
+                    {"function": {"name": "get_site_settings", "arguments": {}}},
+                ],
+            }
+        }
+
+        async def mock_stream(**kwargs):
+            yield {"message": {"content": "Summary"}}
+
+        ollama.chat_stream = mock_stream
+        reg.execute_tool = AsyncMock(side_effect=[
+            RuntimeError("boom"),
+            ToolResult(
+                tool_call_id="",
+                name="get_site_settings",
+                success=True,
+                result="Settings loaded",
+            ),
+        ])
+
+        engine = AssistantEngine(ollama, reg, conv_mgr)
+        user = _make_user()
+
+        events = _run(_collect_events(engine.chat(user, None, "List users and settings", None, MagicMock())))
+
+        tool_results = [event["data"] for event in events if event["event"] == "tool_result"]
+        assert len(tool_results) == 2
+        failed_result = next(result for result in tool_results if result["name"] == "list_users")
+        assert failed_result["success"] is False
+        assert "internal error" in failed_result["error"].lower()
+
 
 # ---------------------------------------------------------------------------
 # Engine — audit logging

@@ -13,6 +13,7 @@ import {
   LogIn,
 } from 'lucide-react'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 import { parseDocumentHtml } from '@/lib/documentRenderer'
 import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
 import { useTheme } from '@/hooks/useTheme'
@@ -39,6 +40,7 @@ export default function PublicDocumentPage() {
     queryKey: ['public-document', documentId],
     queryFn: () => publicApi.getDocument(documentId),
     enabled: documentId > 0,
+    ...audienceSensitiveQueryOptions,
   })
   const renderedContent = useMemo(() => parseDocumentHtml(doc?.content ?? ''), [doc?.content])
 

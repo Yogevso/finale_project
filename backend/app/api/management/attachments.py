@@ -450,7 +450,7 @@ async def upload_attachment(
     Upload a new attachment.
 
     Only admins and editors can upload attachments.
-    Max file size: 10MB.
+    Max file size: 50MB.
     Allowed types: Office docs, images, text files.
     """
     attachment = await AttachmentService.upload_attachment(

@@ -30,7 +30,7 @@ export interface UseAssistantChat {
   confirmRequired: { id: string; name: string; arguments: Record<string, unknown> } | null
   titleVersion: number
 
-  sendMessage: (text: string, documentIds?: number[]) => Promise<void>
+  sendMessage: (text: string, documentIds?: number[], fileIds?: number[]) => Promise<void>
   regenerateLastResponse: () => Promise<void>
   cancelResponse: () => void
   newConversation: () => void
@@ -67,7 +67,7 @@ export function useAssistantChat(): UseAssistantChat {
 
   // ── Send a message ─────────────────────────────────────────────
 
-  const sendMessage = useCallback(async (text: string, documentIds?: number[]) => {
+  const sendMessage = useCallback(async (text: string, documentIds?: number[], fileIds?: number[]) => {
     setError(null)
     setIsLoading(true)
     setIsStreaming(false)
@@ -161,6 +161,7 @@ export function useAssistantChat(): UseAssistantChat {
         },
         abort.signal,
         documentIds,
+        fileIds,
       )
 
       // ── SSE stream completed — reload from DB for perfect rendering ──

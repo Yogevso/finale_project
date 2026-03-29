@@ -102,6 +102,15 @@ class TestAG017CollabUrlSingleSource:
                 f"{dc_file} still uses deprecated VITE_COLLAB_WS_URL"
             )
 
+    def test_dev_compose_allows_loopback_frontend_origins(self):
+        """Development compose should allow both localhost and 127.0.0.1 frontend origins."""
+        root = Path(__file__).resolve().parent.parent.parent
+        content = (root / "docker-compose.yml").read_text()
+        assert "http://localhost:3000" in content
+        assert "http://127.0.0.1:3000" in content
+        assert "http://localhost:5173" in content
+        assert "http://127.0.0.1:5173" in content
+
     def test_frontend_uses_vite_collab_server_url(self):
         """Frontend hook must reference VITE_COLLAB_SERVER_URL."""
         root = Path(__file__).resolve().parent.parent.parent
@@ -172,7 +181,7 @@ class TestAG017CollabUrlSingleSource:
         root = Path(__file__).resolve().parent.parent.parent
         content = (root / ".env.example").read_text()
         assert "SECRET_KEY_OLD=" in content
-        assert "MAX_UPLOAD_SIZE=10485760" in content
+        assert "MAX_UPLOAD_SIZE=52428800" in content
 
     def test_root_env_example_documents_assistant_capacity_knobs(self):
         """Root env example should document assistant admission-control settings."""
@@ -575,6 +584,8 @@ class TestAG019CleanupWorker:
         assert "sessions" in result
         assert "password_resets" in result
         assert "idempotency_records" in result
+        assert "auto_archived_documents" in result
+        assert "deleted_documents" in result
 
 
 # ══════════════════════════════════════════════════════════════════

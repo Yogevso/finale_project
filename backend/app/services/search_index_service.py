@@ -51,6 +51,7 @@ FTS_POPULATE_STATEMENT = text(
         COALESCE(visibility, ''),
         COALESCE(status, '')
     FROM documents
+    WHERE deleted_at IS NULL
     """
 )
 FTS_DELETE_ROW_STATEMENT = text(f"DELETE FROM {FTS_TABLE_NAME} WHERE rowid = :doc_id")
@@ -68,6 +69,7 @@ FTS_INSERT_ROW_STATEMENT = text(
         COALESCE(status, '')
     FROM documents
     WHERE id = :doc_id
+      AND deleted_at IS NULL
     """
 )
 FTS_INTEGRITY_CHECK_STATEMENT = text(
@@ -150,7 +152,10 @@ class SearchIndexSyncService:
         try:
             self._ensure_index_exists()
             self._rebuild_index_contents()
-            count = self.db.execute(text("SELECT COUNT(*) FROM documents")).scalar() or 0
+            count = (
+                self.db.execute(text("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL")).scalar()
+                or 0
+            )
             logger.info("FTS5 search index rebuilt - %d documents indexed", count)
             return int(count)
         except OperationalError:

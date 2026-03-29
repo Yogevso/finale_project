@@ -12,6 +12,7 @@ from app.models import (
     ChatType,
     SupportTicketPriority,
     SupportTicketStatus,
+    UserRole,
 )
 
 
@@ -80,6 +81,16 @@ class ChatListResponse(BaseModel):
     total: int
     page: int = 1
     page_size: int = 50
+
+
+class ChatEligibleUserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    role: UserRole
+    avatar_url: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CreateDirectChatRequest(BaseModel):

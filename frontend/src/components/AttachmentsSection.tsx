@@ -5,6 +5,7 @@ import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import { ATTACHMENT_INPUT_ACCEPT, validateAttachmentFile } from '@/lib/attachmentUpload'
+import { PLATFORM_UPLOAD_MAX_SIZE_LABEL } from '@/lib/uploadLimits'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -119,7 +120,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
           <p className="text-slate-500 text-sm">No attachments yet</p>
           {isEditor && (
             <p className="text-slate-400 text-xs mt-1">
-              Upload DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF, text, or image files up to 10MB
+              Upload DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF, text, or image files up to {PLATFORM_UPLOAD_MAX_SIZE_LABEL}
             </p>
           )}
         </div>

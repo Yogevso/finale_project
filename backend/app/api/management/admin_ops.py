@@ -9,6 +9,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
@@ -99,6 +100,19 @@ def _parse_settings(tenant: Tenant) -> dict:
         return json.loads(tenant.settings)
     except (json.JSONDecodeError, TypeError):
         return {}
+
+
+def _collab_health_urls(base_url: str) -> list[str]:
+    """Probe the configured collab URL and the Docker health endpoint companion port."""
+    parsed = urlparse(base_url)
+    scheme = {"ws": "http", "wss": "https"}.get(parsed.scheme, parsed.scheme or "http")
+    primary = parsed._replace(scheme=scheme, path="/health", params="", query="", fragment="")
+    urls = [urlunparse(primary)]
+
+    if parsed.port == 8002 and parsed.hostname:
+        urls.append(urlunparse(primary._replace(netloc=f"{parsed.hostname}:8003")))
+
+    return list(dict.fromkeys(urls))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -619,31 +633,39 @@ def get_system_status(
         import urllib.request
         from app.config import settings as _cfg
         collab_url = _cfg.COLLAB_SERVER_URL
-        t0 = time.perf_counter()
-        req = urllib.request.Request(f"{collab_url}/health", method="GET")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            collab_ms = round((time.perf_counter() - t0) * 1000, 1)
-            collab_payload = json.loads(resp.read().decode("utf-8"))
-            active_docs = collab_payload.get("activeDocuments")
-            total_connections = collab_payload.get("totalConnections")
-            saturation = collab_payload.get("saturation")
-            hot_documents = collab_payload.get("documents", {}).get("topDocuments", [])
-            top_document = hot_documents[0] if hot_documents else None
-            detail_parts = [f"WebSocket server responding ({collab_ms}ms)"]
-            if active_docs is not None and total_connections is not None:
-                detail_parts.append(f"{active_docs} docs / {total_connections} conns")
-            if saturation:
-                detail_parts.append(f"saturation={saturation}")
-            if isinstance(top_document, dict) and top_document.get("documentId") is not None:
-                detail_parts.append(
-                    f"hot={top_document['documentId']}:{top_document.get('totalConnections', 0)}"
-                )
-            services.append(ServiceStatus(
-                name="collab-server",
-                status="healthy" if collab_payload.get("status") == "healthy" else "degraded",
-                latency_ms=collab_ms,
-                details=", ".join(detail_parts),
-            ))
+        last_error: Exception | None = None
+        for health_url in _collab_health_urls(collab_url):
+            try:
+                t0 = time.perf_counter()
+                req = urllib.request.Request(health_url, method="GET")
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    collab_ms = round((time.perf_counter() - t0) * 1000, 1)
+                    collab_payload = json.loads(resp.read().decode("utf-8"))
+                    active_docs = collab_payload.get("activeDocuments")
+                    total_connections = collab_payload.get("totalConnections")
+                    saturation = collab_payload.get("saturation")
+                    hot_documents = collab_payload.get("documents", {}).get("topDocuments", [])
+                    top_document = hot_documents[0] if hot_documents else None
+                    detail_parts = [f"WebSocket server responding ({collab_ms}ms)"]
+                    if active_docs is not None and total_connections is not None:
+                        detail_parts.append(f"{active_docs} docs / {total_connections} conns")
+                    if saturation:
+                        detail_parts.append(f"saturation={saturation}")
+                    if isinstance(top_document, dict) and top_document.get("documentId") is not None:
+                        detail_parts.append(
+                            f"hot={top_document['documentId']}:{top_document.get('totalConnections', 0)}"
+                        )
+                    services.append(ServiceStatus(
+                        name="collab-server",
+                        status="healthy" if collab_payload.get("status") == "healthy" else "degraded",
+                        latency_ms=collab_ms,
+                        details=", ".join(detail_parts),
+                    ))
+                    break
+            except Exception as exc:
+                last_error = exc
+        else:
+            raise last_error or RuntimeError("Collab server health probe failed")
     except Exception:  # policy: LOSSY — collab is optional; report degraded
         services.append(ServiceStatus(
             name="collab-server", status="degraded",

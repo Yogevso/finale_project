@@ -188,6 +188,12 @@ export default function NotificationBell() {
       case 'review_reminder':
       case 'review_escalated':
         return <ClipboardCheck className="w-4 h-4 text-amber-500" />
+      case 'feedback_received':
+      case 'feedback_responded':
+      case 'ticket_new_customer_msg':
+      case 'ticket_mention':
+      case 'ticket_handoff':
+        return <MessageSquare className="w-4 h-4 text-indigo-500" />
       case 'system':
       default:
         return <AlertCircle className="w-4 h-4 text-slate-500" />

@@ -28,6 +28,10 @@ describe('attachmentUpload', () => {
         size: ATTACHMENT_MAX_SIZE_BYTES + 1,
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       }),
-    ).toBe('File too large. Max size: 10MB.')
+    ).toBe('File too large. Max size: 50MB.')
+  })
+
+  it('documents the shared 50MB attachment boundary', () => {
+    expect(ATTACHMENT_MAX_SIZE_BYTES).toBe(50 * 1024 * 1024)
   })
 })

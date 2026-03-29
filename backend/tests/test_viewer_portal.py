@@ -1,8 +1,24 @@
 """Tests for Viewer Portal API"""
 
 import uuid
+from datetime import datetime
 
 from app.models import Comment, Document, DocumentStatus, DocumentVisibility, Version
+
+
+def _publish_document(db, *, document: Document, user_id: int, version_number: int = 1):
+    db.add(
+        Version(
+            document_id=document.id,
+            version_number=version_number,
+            content=f"Published content {document.id}",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            created_by=user_id,
+        )
+    )
+    db.commit()
+    db.refresh(document)
 
 
 class TestViewerDocuments:
@@ -30,6 +46,7 @@ class TestViewerDocuments:
         )
         db.add_all([active_doc, draft_doc])
         db.commit()
+        _publish_document(db, document=active_doc, user_id=test_user.id)
 
         # Get viewer documents (no auth required)
         response = client.get("/api/v1/viewer/documents")
@@ -54,6 +71,7 @@ class TestViewerDocuments:
         )
         db.add(doc)
         db.commit()
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get("/api/v1/viewer/documents?search=xylophone123")
         assert response.status_code == 200
@@ -73,6 +91,7 @@ class TestViewerDocuments:
         )
         db.add(doc)
         db.commit()
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get("/api/v1/viewer/documents?category=hr")
         assert response.status_code == 200
@@ -83,6 +102,7 @@ class TestViewerDocuments:
     def test_viewer_pagination(self, client, db, test_user):
         """Test pagination in viewer"""
         # Create multiple documents
+        documents = []
         for i in range(5):
             doc = Document(
                 title=f"Pagination Test Doc {i}",
@@ -93,7 +113,15 @@ class TestViewerDocuments:
                 tenant_id=test_user.tenant_id,
             )
             db.add(doc)
+            documents.append(doc)
         db.commit()
+        for index, document in enumerate(documents, start=1):
+            _publish_document(
+                db,
+                document=document,
+                user_id=test_user.id,
+                version_number=index,
+            )
 
         # Get first page with small size
         response = client.get("/api/v1/viewer/documents?page=1&page_size=2")
@@ -116,6 +144,7 @@ class TestViewerDocuments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get(f"/api/v1/viewer/documents/{doc.id}")
         assert response.status_code == 200
@@ -141,8 +170,7 @@ class TestViewerDocuments:
         db.refresh(doc)
 
         response = client.get(f"/api/v1/viewer/documents/{doc.id}")
-        # Should either return 404 or filter out draft
-        assert response.status_code in [404, 403, 200]  # Depends on implementation
+        assert response.status_code == 404
 
 
 class TestViewerVersions:
@@ -195,6 +223,7 @@ class TestViewerAttachments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         response = client.get(f"/api/v1/viewer/documents/{doc.id}/attachments")
         assert response.status_code == 200
@@ -218,6 +247,7 @@ class TestViewerComments:
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        _publish_document(db, document=doc, user_id=test_user.id)
 
         # Add a comment
         comment = Comment(
@@ -258,6 +288,8 @@ class TestViewerCategories:
         )
         db.add_all([doc1, doc2])
         db.commit()
+        _publish_document(db, document=doc1, user_id=test_user.id, version_number=1)
+        _publish_document(db, document=doc2, user_id=test_user.id, version_number=2)
 
         response = client.get("/api/v1/viewer/categories")
         # May or may not be implemented

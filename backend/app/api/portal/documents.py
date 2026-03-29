@@ -84,7 +84,11 @@ def _get_customer_progress_document_or_404(
     document_id: int,
     current_user: User,
 ) -> Document:
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.deleted_at.is_(None))
+        .first()
+    )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -193,7 +197,11 @@ async def download_customer_attachment(
 ):
     """Stream-download an attachment through the portal's own access checks."""
     db: Session = portal_documents_query_handler.db
-    doc = db.query(Document).filter_by(id=document_id).first()
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.deleted_at.is_(None))
+        .first()
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     portal_documents_query_handler._ensure_customer_document_access(doc, current_user)

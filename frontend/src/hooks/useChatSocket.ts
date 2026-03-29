@@ -7,8 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage, ChatWsEvent } from '@/types/chat'
 import { api } from '@/lib/api'
-
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+import { WS_BASE_URL } from '@/lib/wsBaseUrl'
 
 export interface UseChatSocketOptions {
   enabled?: boolean

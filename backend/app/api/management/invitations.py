@@ -1,6 +1,7 @@
 """Invitation Management API Routes"""
 
 import asyncio
+import logging
 import secrets
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -13,11 +14,13 @@ from sqlalchemy.orm import Session
 from app.auth_context.invitation_tokens import hash_invitation_token
 from app.application.policies import InvitationPolicy
 from app.config import settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
 from app.domain.aggregates import InvitationAggregate
 from app.domain.factories import InvitationFactory
 from app.models import (
+    Invitation,
+    InvitationEmailDeliveryStatus,
     InvitationStatus,
     Tenant,
     User,
@@ -25,35 +28,118 @@ from app.models import (
 )
 from app.repositories import InvitationRepository, UserRepository
 from app.security import get_current_active_user
-from app.services.email_service import email_service
+from app.services.email_service import EmailSendResult, email_service
+from app.services.system_email_settings_service import SystemEmailSettingsService
 from app.utils.sanitization import sanitize_plain_text
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Invitation expiration in days
 INVITATION_EXPIRY_DAYS = 7
 invitation_policy = InvitationPolicy()
 _INVITATION_CREATE_CONFLICT_DETAIL = "Unable to send an invitation for that email"
 _INVITATION_RESEND_CONFLICT_DETAIL = "Unable to resend invitation for that email"
+_EMAIL_PREVIEW_TOKEN = "preview-token-redacted"
+_background_session_factory = SessionLocal
 
 
 def _run_async_email(coro):
     """Execute async email calls from sync endpoints/background tasks."""
     try:
-        asyncio.run(coro)
+        return asyncio.run(coro)
     except RuntimeError:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(coro)
+            return loop.run_until_complete(coro)
         finally:
             loop.close()
 
 
+def _build_accept_url(raw_token: str) -> str:
+    return f"{settings.BASE_URL}/invitation/accept?token={quote(raw_token)}"
+
+
+def _get_tenant_name(db: Session, tenant_id: int | None) -> str | None:
+    if not tenant_id:
+        return None
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    return tenant.name if tenant else None
+
+
+def _build_invitation_response(
+    invitation: Invitation,
+    *,
+    inviter_name: str,
+    tenant_name: str | None,
+) -> "InvitationResponse":
+    return InvitationResponse(
+        id=invitation.id,
+        email=invitation.email,
+        role=invitation.role,
+        tenant_id=invitation.tenant_id,
+        tenant_name=tenant_name,
+        invited_by=invitation.invited_by,
+        inviter_name=inviter_name,
+        status=invitation.status,
+        message=invitation.message,
+        expires_at=invitation.expires_at,
+        created_at=invitation.created_at,
+        accepted_at=invitation.accepted_at,
+        email_delivery_status=invitation.email_delivery_status,
+        email_delivery_attempt_count=invitation.email_delivery_attempt_count,
+        email_last_attempted_at=invitation.email_last_attempted_at,
+        email_last_sent_at=invitation.email_last_sent_at,
+        email_last_error=invitation.email_last_error,
+        email_last_subject=invitation.email_last_subject,
+        email_last_sender_email=invitation.email_last_sender_email,
+        email_last_sender_name=invitation.email_last_sender_name,
+    )
+
+
+def _persist_invitation_delivery(invitation_id: int, result: EmailSendResult) -> None:
+    db = _background_session_factory()
+    try:
+        invitation = db.query(Invitation).filter(Invitation.id == invitation_id).first()
+        if not invitation:
+            logger.warning(
+                "Skipping invitation email delivery persistence for missing invitation %s",
+                invitation_id,
+            )
+            return
+
+        invitation.email_delivery_status = InvitationEmailDeliveryStatus(result.status)
+        invitation.email_delivery_attempt_count = (
+            max(invitation.email_delivery_attempt_count or 0, 0) + result.attempt_count
+        )
+        invitation.email_last_attempted_at = result.attempted_at
+        if result.sent_at is not None:
+            invitation.email_last_sent_at = result.sent_at
+        invitation.email_last_error = result.error_message
+        invitation.email_last_subject = result.subject
+        invitation.email_last_sender_email = result.sender_email
+        invitation.email_last_sender_name = result.sender_name
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to persist invitation email delivery metadata for invitation %s",
+            invitation_id,
+        )
+    finally:
+        db.close()
+
+
 def _send_invitation_email_task(
-    to_email: str, accept_url: str, inviter_name: str, expires_days: int, message: str | None,
+    invitation_id: int,
+    to_email: str,
+    accept_url: str,
+    inviter_name: str,
+    expires_days: int,
+    message: str | None,
 ) -> None:
-    _run_async_email(
-        email_service.send_invitation(
+    result = _run_async_email(
+        email_service.send_invitation_detailed(
             to_email=to_email,
             accept_url=accept_url,
             inviter_name=inviter_name,
@@ -61,6 +147,7 @@ def _send_invitation_email_task(
             message=message,
         )
     )
+    _persist_invitation_delivery(invitation_id, result)
 
 
 # ========== Schemas ==========
@@ -88,6 +175,27 @@ class InvitationResponse(BaseModel):
     expires_at: datetime
     created_at: datetime
     accepted_at: Optional[datetime] = None
+    email_delivery_status: InvitationEmailDeliveryStatus = InvitationEmailDeliveryStatus.PENDING
+    email_delivery_attempt_count: int = 0
+    email_last_attempted_at: Optional[datetime] = None
+    email_last_sent_at: Optional[datetime] = None
+    email_last_error: Optional[str] = None
+    email_last_subject: Optional[str] = None
+    email_last_sender_email: Optional[str] = None
+    email_last_sender_name: Optional[str] = None
+
+
+class InvitationEmailPreviewResponse(BaseModel):
+    """Safe preview of an invitation email."""
+
+    invitation_id: int
+    email: str
+    from_email: str
+    from_name: str
+    subject: str
+    html_content: str
+    text_content: Optional[str] = None
+    preview_accept_url: str
 
 
 class InvitationListResponse(BaseModel):
@@ -127,6 +235,32 @@ def resolve_invitation_tenant_id(
             detail="Cannot invite users to other companies",
         )
     return target_tenant_id
+
+
+def _build_invitation_email_preview(
+    invitation: Invitation,
+    *,
+    inviter_name: str,
+) -> InvitationEmailPreviewResponse:
+    preview_accept_url = _build_accept_url(_EMAIL_PREVIEW_TOKEN)
+    message = email_service.render_invitation_message(
+        to_email=invitation.email,
+        accept_url=preview_accept_url,
+        inviter_name=inviter_name,
+        expires_days=INVITATION_EXPIRY_DAYS,
+        message=invitation.message,
+    )
+    config = SystemEmailSettingsService.active_runtime_settings()
+    return InvitationEmailPreviewResponse(
+        invitation_id=invitation.id,
+        email=invitation.email,
+        from_email=config.from_email,
+        from_name=config.from_name,
+        subject=message.subject,
+        html_content=message.html_content,
+        text_content=message.text_content,
+        preview_accept_url=preview_accept_url,
+    )
 
 
 @router.post("/invitations", response_model=InvitationResponse, status_code=status.HTTP_201_CREATED)
@@ -206,36 +340,20 @@ def create_invitation(
     db.refresh(invitation)
 
     # H-12: Send invitation email in background
-    accept_url = f"{settings.BASE_URL}/invitation/accept?token={quote(raw_token)}"
+    accept_url = _build_accept_url(raw_token)
     background_tasks.add_task(
         _send_invitation_email_task,
+        invitation_id=invitation.id,
         to_email=invitation.email,
         accept_url=accept_url,
         inviter_name=current_user.full_name,
         expires_days=INVITATION_EXPIRY_DAYS,
         message=invitation.message,
     )
-
-    # Get tenant name for response
-    tenant_name = None
-    if invitation.tenant_id:
-        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
-        if tenant:
-            tenant_name = tenant.name
-
-    return InvitationResponse(
-        id=invitation.id,
-        email=invitation.email,
-        role=invitation.role,
-        tenant_id=invitation.tenant_id,
-        tenant_name=tenant_name,
-        invited_by=invitation.invited_by,
+    return _build_invitation_response(
+        invitation,
         inviter_name=current_user.full_name,
-        status=invitation.status,
-        message=invitation.message,
-        expires_at=invitation.expires_at,
-        created_at=invitation.created_at,
-        accepted_at=invitation.accepted_at,
+        tenant_name=_get_tenant_name(db, invitation.tenant_id),
     )
 
 
@@ -272,30 +390,20 @@ def list_invitations(
     inviter_ids = sorted({inv.invited_by for inv in invitations})
     inviters = user_repository.list_by_ids(inviter_ids)
     inviter_map = {user.id: user for user in inviters}
+    tenant_ids = sorted({inv.tenant_id for inv in invitations if inv.tenant_id is not None})
+    tenant_map = {
+        tenant.id: tenant.name
+        for tenant in db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
+    } if tenant_ids else {}
 
     items = []
     for inv in invitations:
         inviter = inviter_map.get(inv.invited_by)
-        tenant_name = None
-        if inv.tenant_id:
-            tenant = db.query(Tenant).filter(Tenant.id == inv.tenant_id).first()
-            if tenant:
-                tenant_name = tenant.name
-
         items.append(
-            InvitationResponse(
-                id=inv.id,
-                email=inv.email,
-                role=inv.role,
-                tenant_id=inv.tenant_id,
-                tenant_name=tenant_name,
-                invited_by=inv.invited_by,
+            _build_invitation_response(
+                inv,
                 inviter_name=inviter.full_name if inviter else "Unknown",
-                status=inv.status,
-                message=inv.message,
-                expires_at=inv.expires_at,
-                created_at=inv.created_at,
-                accepted_at=inv.accepted_at,
+                tenant_name=tenant_map.get(inv.tenant_id),
             )
         )
 
@@ -331,25 +439,38 @@ def get_invitation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     inviter = user_repository.get_by_id(invitation.invited_by)
-    tenant_name = None
-    if invitation.tenant_id:
-        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
-        if tenant:
-            tenant_name = tenant.name
-
-    return InvitationResponse(
-        id=invitation.id,
-        email=invitation.email,
-        role=invitation.role,
-        tenant_id=invitation.tenant_id,
-        tenant_name=tenant_name,
-        invited_by=invitation.invited_by,
+    return _build_invitation_response(
+        invitation,
         inviter_name=inviter.full_name if inviter else "Unknown",
-        status=invitation.status,
-        message=invitation.message,
-        expires_at=invitation.expires_at,
-        created_at=invitation.created_at,
-        accepted_at=invitation.accepted_at,
+        tenant_name=_get_tenant_name(db, invitation.tenant_id),
+    )
+
+
+@router.get("/invitations/{invitation_id}/email-preview", response_model=InvitationEmailPreviewResponse)
+def get_invitation_email_preview(
+    invitation_id: int,
+    current_user: User = Depends(get_current_active_user),
+    tenant_ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """Render a safe invitation email preview without exposing a live token."""
+    invitation_repository = InvitationRepository(db)
+    user_repository = UserRepository(db)
+
+    if not invitation_policy.can_manage_invitations(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    invitation = invitation_repository.get_by_id(invitation_id)
+    if not invitation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+
+    if not invitation_policy.can_access_invitation_tenant(invitation.tenant_id, tenant_ctx):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+
+    inviter = user_repository.get_by_id(invitation.invited_by)
+    return _build_invitation_email_preview(
+        invitation,
+        inviter_name=inviter.full_name if inviter else "Unknown",
     )
 
 
@@ -436,35 +557,20 @@ def resend_invitation(
     db.refresh(invitation)
 
     inviter = user_repository.get_by_id(invitation.invited_by)
-    tenant_name = None
-    if invitation.tenant_id:
-        tenant = db.query(Tenant).filter(Tenant.id == invitation.tenant_id).first()
-        if tenant:
-            tenant_name = tenant.name
-
-    accept_url = f"{settings.BASE_URL}/invitation/accept?token={quote(raw_token)}"
+    accept_url = _build_accept_url(raw_token)
     background_tasks.add_task(
         _send_invitation_email_task,
+        invitation_id=invitation.id,
         to_email=invitation.email,
         accept_url=accept_url,
         inviter_name=inviter.full_name if inviter else "Unknown",
         expires_days=INVITATION_EXPIRY_DAYS,
         message=invitation.message,
     )
-
-    return InvitationResponse(
-        id=invitation.id,
-        email=invitation.email,
-        role=invitation.role,
-        tenant_id=invitation.tenant_id,
-        tenant_name=tenant_name,
-        invited_by=invitation.invited_by,
+    return _build_invitation_response(
+        invitation,
         inviter_name=inviter.full_name if inviter else "Unknown",
-        status=invitation.status,
-        message=invitation.message,
-        expires_at=invitation.expires_at,
-        created_at=invitation.created_at,
-        accepted_at=invitation.accepted_at,
+        tenant_name=_get_tenant_name(db, invitation.tenant_id),
     )
 
 

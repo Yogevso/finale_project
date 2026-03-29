@@ -8,6 +8,7 @@ import type {
   Company,
   CompanyListResponse,
   Invitation,
+  InvitationEmailPreviewResponse,
   InvitationListResponse,
   User,
 } from '@/types'
@@ -15,26 +16,32 @@ import type {
 const mockGetUsers = vi.fn()
 const mockGetCompanies = vi.fn()
 const mockGetInvitations = vi.fn()
+const mockGetInvitationEmailPreview = vi.fn()
 const mockCreateUser = vi.fn()
 const mockUpdateUser = vi.fn()
 const mockDeleteUser = vi.fn()
+const mockHardDeleteUser = vi.fn()
 const mockCancelInvitation = vi.fn()
 const mockResendInvitation = vi.fn()
 const mockCreateDirectChat = vi.fn()
 
+let mockAuthUser: User = {
+  id: 10,
+  full_name: 'Admin User',
+  email: 'admin@example.com',
+  username: 'admin',
+  role: 'admin',
+  is_active: true,
+  tenant_id: 1,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({
-    user: {
-      id: 10,
-      full_name: 'Admin User',
-      email: 'admin@example.com',
-      username: 'admin',
-      role: 'admin',
-      is_active: true,
-      tenant_id: 1,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    },
+    user: mockAuthUser,
+    isSystemAdmin: mockAuthUser.role === 'system_admin',
+    isAdmin: mockAuthUser.role === 'admin' || mockAuthUser.role === 'system_admin',
     isManager: true,
   }),
 }))
@@ -44,9 +51,11 @@ vi.mock('@/lib/api', () => ({
     getUsers: (...args: unknown[]) => mockGetUsers(...args),
     getCompanies: (...args: unknown[]) => mockGetCompanies(...args),
     getInvitations: (...args: unknown[]) => mockGetInvitations(...args),
+    getInvitationEmailPreview: (...args: unknown[]) => mockGetInvitationEmailPreview(...args),
     createUser: (...args: unknown[]) => mockCreateUser(...args),
     updateUser: (...args: unknown[]) => mockUpdateUser(...args),
     deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
+    hardDeleteUser: (...args: unknown[]) => mockHardDeleteUser(...args),
     cancelInvitation: (...args: unknown[]) => mockCancelInvitation(...args),
     resendInvitation: (...args: unknown[]) => mockResendInvitation(...args),
     createDirectChat: (...args: unknown[]) => mockCreateDirectChat(...args),
@@ -108,6 +117,31 @@ function buildInvitation(overrides: Partial<Invitation> = {}): Invitation {
     status: 'pending',
     expires_at: '2026-04-01T00:00:00Z',
     created_at: '2026-03-01T00:00:00Z',
+    email_delivery_status: 'sent',
+    email_delivery_attempt_count: 1,
+    email_last_attempted_at: '2026-03-27T10:00:00Z',
+    email_last_sent_at: '2026-03-27T10:00:01Z',
+    email_last_error: null,
+    email_last_subject: 'Admin User invited you to Documentation Platform',
+    email_last_sender_email: 'mailer@example.com',
+    email_last_sender_name: 'Mailer',
+    ...overrides,
+  }
+}
+
+function buildInvitationEmailPreviewResponse(
+  overrides: Partial<InvitationEmailPreviewResponse> = {},
+): InvitationEmailPreviewResponse {
+  return {
+    invitation_id: 77,
+    email: 'invited@example.com',
+    from_email: 'mailer@example.com',
+    from_name: 'Mailer',
+    subject: 'Admin User invited you to Documentation Platform',
+    html_content: '<p>Preview body with preview-token-redacted</p>',
+    text_content: 'Preview body with preview-token-redacted',
+    preview_accept_url:
+      'http://localhost:3000/invitation/accept?token=preview-token-redacted',
     ...overrides,
   }
 }
@@ -148,9 +182,21 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockAuthUser = {
+    id: 10,
+    full_name: 'Admin User',
+    email: 'admin@example.com',
+    username: 'admin',
+    role: 'admin',
+    is_active: true,
+    tenant_id: 1,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  }
   mockGetUsers.mockResolvedValue([buildUser()])
   mockGetCompanies.mockResolvedValue(buildCompanyListResponse([buildCompany()]))
   mockGetInvitations.mockResolvedValue(buildInvitationListResponse([buildInvitation()]))
+  mockGetInvitationEmailPreview.mockResolvedValue(buildInvitationEmailPreviewResponse())
   mockCreateUser.mockResolvedValue(
     buildUser({
       id: 99,
@@ -162,6 +208,7 @@ beforeEach(() => {
   )
   mockUpdateUser.mockResolvedValue(buildUser())
   mockDeleteUser.mockResolvedValue(undefined)
+  mockHardDeleteUser.mockResolvedValue(undefined)
   mockCancelInvitation.mockResolvedValue(undefined)
   mockResendInvitation.mockResolvedValue(undefined)
   mockCreateDirectChat.mockResolvedValue({ id: 501 })
@@ -180,6 +227,7 @@ describe('UsersPage', () => {
     expect(screen.getByText('jane@example.com')).toBeInTheDocument()
     expect(screen.getByText('Pending Invitations')).toBeInTheDocument()
     expect(screen.getByText('invited@example.com')).toBeInTheDocument()
+    expect(screen.getByText('sent')).toBeInTheDocument()
   })
 
   it('creates a user from the page dialog', async () => {
@@ -243,6 +291,61 @@ describe('UsersPage', () => {
 
     await waitFor(() => {
       expect(mockCancelInvitation).toHaveBeenCalledWith(77)
+    })
+  })
+
+  it('deactivates a user from the table', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /deactivate jane doe/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^deactivate$/i }))
+
+    await waitFor(() => {
+      expect(mockDeleteUser).toHaveBeenCalledWith(22)
+    })
+  })
+
+  it('opens the invitation email preview dialog', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('invited@example.com')).toBeInTheDocument()
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /preview invitation email for invited@example\.com/i }),
+    )
+
+    await waitFor(() => {
+      expect(mockGetInvitationEmailPreview).toHaveBeenCalledWith(77)
+    })
+
+    expect(screen.getByRole('dialog', { name: /invitation email preview/i })).toBeInTheDocument()
+    expect(screen.getByText('Mailer <mailer@example.com>')).toBeInTheDocument()
+  })
+
+  it('allows a system admin to permanently delete an inactive user', async () => {
+    mockAuthUser = {
+      ...mockAuthUser,
+      role: 'system_admin',
+    }
+    mockGetUsers.mockResolvedValue([buildUser({ is_active: false })])
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Jane Doe')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /permanently delete jane doe/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^delete permanently$/i }))
+
+    await waitFor(() => {
+      expect(mockHardDeleteUser).toHaveBeenCalledWith(22)
     })
   })
 })

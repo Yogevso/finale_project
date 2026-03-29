@@ -229,6 +229,9 @@ class DocumentResponse(DocumentBase):
     created_by: int
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
+    purge_at: Optional[datetime] = None
+    deleted_by: Optional[int] = None
 
     # Optional related data
     created_by_user: Optional["UserResponse"] = None

@@ -125,7 +125,7 @@ cp .env.example .env
 | `S3_ACCESS_KEY` | *(none)* | Conditional | S3 access key |
 | `S3_SECRET_KEY` | *(none)* | Conditional | S3 secret key |
 | `S3_REGION` | `us-east-1` | No | AWS region |
-| `MAX_UPLOAD_SIZE` | `10485760` | No | Max file upload size (bytes). Current production tier intentionally treats 10MB as the large-document boundary. |
+| `MAX_UPLOAD_SIZE` | `52428800` | No | Max file upload size (bytes). Current production tier allows uploads up to 50MB before additional worker/infra scaling concerns apply. |
 
 ### Email Settings
 

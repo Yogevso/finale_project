@@ -63,6 +63,11 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       return mapDocumentListResponseDto(data)
     }
 
+    async getDeletedDocuments(params?: DocumentQueryParams): Promise<DocumentListResponse> {
+      const { data } = await this.client.get<DocumentListResponseDto>('/documents/deleted', { params })
+      return mapDocumentListResponseDto(data)
+    }
+
     async getDocumentStats(): Promise<DocumentDashboardStats> {
       const { data } = await this.client.get<DocumentDashboardStats>('/documents/stats')
       return data
@@ -129,6 +134,16 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       return mapMessageResponseDto(data)
     }
 
+    async restoreDeletedDocument(id: number): Promise<Document> {
+      const { data } = await this.client.post<DocumentDto>(`/documents/${id}/restore-deleted`)
+      return mapDocumentDto(data)
+    }
+
+    async purgeDocument(id: number): Promise<MessageResponse> {
+      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}/purge`)
+      return mapMessageResponseDto(data)
+    }
+
     async archiveDocument(id: number): Promise<DocumentArchiveResult> {
       const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/archive`)
       return data
@@ -171,6 +186,7 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
         status?: string
         release_notes?: File | null
         content_file?: File | null
+        pdf_conversion_target?: string
       },
       options?: DocumentUploadApiOptions,
     ): Promise<Document> {
@@ -196,6 +212,9 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       if (metadata?.status) formData.append('status', metadata.status)
       if (metadata?.release_notes) formData.append('release_notes', metadata.release_notes)
       if (metadata?.content_file) formData.append('content_file', metadata.content_file)
+      if (metadata?.pdf_conversion_target) {
+        formData.append('pdf_conversion_target', metadata.pdf_conversion_target)
+      }
 
       const { data } = await this.client.post<DocumentDto>('/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },

@@ -1,230 +1,154 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Circle, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Circle, RotateCcw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import type { UserRole } from '@/types'
+
+import type { OnboardingStep } from '@/features/onboarding/config'
 
 type OnboardingChecklistProps = {
-  storageKey: string
-  role: UserRole
-  documentsPath: string
-}
-
-type ChecklistState = {
-  completed_steps: string[]
-  onboarding_completed: boolean
-}
-
-type ChecklistStep = {
-  id: string
   title: string
   description: string
-  href: string
-}
-
-const DEFAULT_STATE: ChecklistState = {
-  completed_steps: [],
-  onboarding_completed: false,
+  steps: OnboardingStep[]
+  completedSteps: string[]
+  completionDate?: string | null
+  isPending?: boolean
+  isCollapsed?: boolean
+  onToggleCollapsed: () => void
+  onToggleStep: (stepId: string) => void
+  onReset: () => void
+  onOpenGuide: () => void
 }
 
 export default function OnboardingChecklist({
-  storageKey,
-  role,
-  documentsPath,
+  title,
+  description,
+  steps,
+  completedSteps,
+  completionDate,
+  isPending = false,
+  isCollapsed = false,
+  onToggleCollapsed,
+  onToggleStep,
+  onReset,
+  onOpenGuide,
 }: OnboardingChecklistProps) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [state, setState] = useState<ChecklistState>(DEFAULT_STATE)
-
-  const steps = useMemo<ChecklistStep[]>(() => {
-    if (role === 'viewer') {
-      return [
-        {
-          id: 'browse_documents',
-          title: 'Browse documents',
-          description: 'Open the documents area and review available content.',
-          href: documentsPath,
-        },
-        {
-          id: 'follow_document',
-          title: 'Follow a document',
-          description: 'Open a document and use notifications/bookmarks to follow updates.',
-          href: documentsPath,
-        },
-        {
-          id: 'set_notification_preferences',
-          title: 'Set notification preferences',
-          description: 'Choose which updates should trigger email notifications.',
-          href: '/profile#notifications',
-        },
-      ]
-    }
-
-    if (role === 'editor') {
-      return [
-        {
-          id: 'create_first_document',
-          title: 'Create your first document',
-          description: 'Start a new document draft from the documents page.',
-          href: '/documents?action=create',
-        },
-        {
-          id: 'invite_reviewer',
-          title: 'Invite a reviewer',
-          description: 'Open user management and invite a reviewer for your content.',
-          href: '/users',
-        },
-        {
-          id: 'publish_document',
-          title: 'Publish a document',
-          description: 'Submit and publish a reviewed document.',
-          href: '/reviews',
-        },
-      ]
-    }
-
-    if (role === 'admin' || role === 'system_admin') {
-      return [
-        {
-          id: 'invite_team',
-          title: 'Invite your team',
-          description: 'Send invitations so your team can start collaborating.',
-          href: '/users',
-        },
-        {
-          id: 'set_up_categories',
-          title: 'Set up categories',
-          description: 'Create category structure for your documentation.',
-          href: '/documents',
-        },
-        {
-          id: 'review_pending_approvals',
-          title: 'Review pending approvals',
-          description: 'Process pending approvals in the review queue.',
-          href: '/reviews',
-        },
-      ]
-    }
-
-    return [
-      {
-        id: 'set_up_profile',
-        title: 'Set up profile',
-        description: 'Review your profile details and avatar settings.',
-        href: '/profile',
-      },
-      {
-        id: 'explore_documents',
-        title: 'Explore documents',
-        description: 'Open the document workspace and review what is available.',
-        href: documentsPath,
-      },
-      {
-        id: 'set_notification_preferences',
-        title: 'Set notification preferences',
-        description: 'Choose which updates should trigger email notifications.',
-        href: '/profile#notifications',
-      },
-    ]
-  }, [documentsPath, role])
-
-  useEffect(() => {
-    const rawState = window.localStorage.getItem(storageKey)
-    if (!rawState) {
-      setState(DEFAULT_STATE)
-      setIsVisible(true)
-      return
-    }
-
-    try {
-      const parsedState = JSON.parse(rawState) as ChecklistState
-      const normalizedState: ChecklistState = {
-        completed_steps: Array.isArray(parsedState.completed_steps)
-          ? parsedState.completed_steps
-          : [],
-        onboarding_completed: Boolean(parsedState.onboarding_completed),
-      }
-      setState(normalizedState)
-      setIsVisible(!normalizedState.onboarding_completed)
-    } catch {
-      setState(DEFAULT_STATE)
-      setIsVisible(true)
-    }
-  }, [storageKey])
-
-  const persistState = (nextState: ChecklistState) => {
-    setState(nextState)
-    window.localStorage.setItem(storageKey, JSON.stringify(nextState))
-  }
-
-  const completedCount = steps.filter((step) =>
-    state.completed_steps.includes(step.id),
-  ).length
-  const isComplete = completedCount === steps.length
-
-  const toggleStep = (stepId: string) => {
-    const stepIsCompleted = state.completed_steps.includes(stepId)
-    const nextCompletedSteps = stepIsCompleted
-      ? state.completed_steps.filter((id) => id !== stepId)
-      : [...state.completed_steps, stepId]
-
-    const nextState: ChecklistState = {
-      completed_steps: nextCompletedSteps,
-      onboarding_completed: nextCompletedSteps.length === steps.length,
-    }
-
-    persistState(nextState)
-    if (nextState.onboarding_completed) {
-      setIsVisible(false)
-    }
-  }
-
-  const dismissChecklist = () => {
-    const completedState: ChecklistState = {
-      completed_steps: steps.map((step) => step.id),
-      onboarding_completed: true,
-    }
-    persistState(completedState)
-    setIsVisible(false)
-  }
-
-  if (!isVisible) {
+  if (steps.length === 0) {
     return null
   }
 
-  return (
-    <div className="surface-card rounded-2xl border border-sky-200 bg-sky-50/70 p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="eyebrow text-sky-700">Welcome</p>
-          <h2 className="text-xl font-display font-semibold text-slate-900">
-            Onboarding checklist
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Complete these quick steps to finish your setup.
-          </p>
+  const completedCount = steps.filter((step) => completedSteps.includes(step.id)).length
+  const isComplete = completedCount === steps.length
+  const progressPercent = Math.round((completedCount / steps.length) * 100)
+  const completionLabel = completionDate
+    ? new Date(completionDate).toLocaleDateString()
+    : null
+
+  if (isCollapsed && !isComplete) {
+    return (
+      <div className="surface-card rounded-2xl border border-sky-200 bg-sky-50/75 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-sky-800">
+              <Sparkles className="h-4 w-4" />
+              Welcome onboarding
+            </div>
+            <p className="mt-1 text-sm text-slate-700">
+              {completedCount}/{steps.length} steps completed. Keep this visible until you know where
+              the main workflows live.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary table-action-btn" onClick={onOpenGuide}>
+              Reopen guide
+            </button>
+            <button type="button" className="btn-primary table-action-btn" onClick={onToggleCollapsed}>
+              Expand checklist
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={dismissChecklist}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-white hover:text-slate-700"
-          aria-label="Dismiss onboarding checklist"
-        >
-          <X className="h-4 w-4" />
-        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="surface-card rounded-2xl border border-sky-200 bg-[linear-gradient(180deg,_rgba(240,249,255,0.95)_0%,_rgba(255,255,255,0.98)_100%)] p-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="max-w-3xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-800">
+            <Sparkles className="h-3.5 w-3.5" />
+            Welcome onboarding
+          </div>
+          <h2 className="mt-3 text-xl font-display font-semibold text-slate-900">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-secondary table-action-btn" onClick={onOpenGuide}>
+            Reopen guide
+          </button>
+          <button type="button" className="btn-ghost" onClick={onReset} disabled={isPending}>
+            <RotateCcw className="h-4 w-4" />
+            Reset
+          </button>
+          {!isComplete ? (
+            <button type="button" className="btn-ghost" onClick={onToggleCollapsed}>
+              <ChevronUp className="h-4 w-4" />
+              Minimize
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white/90 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              {isComplete ? 'Checklist completed' : `${completedCount} of ${steps.length} steps complete`}
+            </div>
+            <p className="mt-1 text-sm text-slate-600">
+              {isComplete
+                ? completionLabel
+                  ? `Completed on ${completionLabel}. You can still reopen the guide or reset the checklist at any time.`
+                  : 'You have finished the checklist. You can still reopen the guide or reset the checklist at any time.'
+                : 'Mark steps as you go. This does not block your work, but it keeps the important product surfaces easy to find.'}
+            </p>
+          </div>
+          <div className="min-w-[140px]">
+            <div className="h-2.5 w-full rounded-full bg-slate-200">
+              <div
+                className={`h-2.5 rounded-full transition-all ${
+                  isComplete ? 'bg-emerald-500' : 'bg-sky-600'
+                }`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              {progressPercent}% complete
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
         {steps.map((step) => {
-          const stepIsCompleted = state.completed_steps.includes(step.id)
+          const stepIsCompleted = completedSteps.includes(step.id)
+
           return (
             <div
               key={step.id}
-              className="rounded-xl border border-slate-200 bg-white p-4"
+              className={`rounded-2xl border p-4 transition ${
+                stepIsCompleted
+                  ? 'border-emerald-200 bg-emerald-50/70'
+                  : 'border-slate-200 bg-white/95'
+              }`}
             >
               <div className="flex items-start gap-3">
                 <button
                   type="button"
-                  onClick={() => toggleStep(step.id)}
-                  className="mt-0.5 text-sky-700 hover:text-sky-800"
+                  onClick={() => onToggleStep(step.id)}
+                  disabled={isPending}
+                  className={`mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                    stepIsCompleted
+                      ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
+                      : 'border-slate-200 bg-white text-sky-700 hover:border-sky-200 hover:bg-sky-50'
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
                   aria-label={`${stepIsCompleted ? 'Unmark' : 'Mark'} ${step.title} complete`}
                 >
                   {stepIsCompleted ? (
@@ -233,18 +157,26 @@ export default function OnboardingChecklist({
                     <Circle className="h-5 w-5" />
                   )}
                 </button>
+
                 <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm font-medium ${
-                      stepIsCompleted ? 'text-slate-500 line-through' : 'text-slate-900'
-                    }`}
-                  >
-                    {step.title}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">{step.description}</p>
-                  <Link to={step.href} className="mt-2 inline-flex text-xs font-medium text-sky-700 hover:text-sky-800">
-                    Go to step
-                  </Link>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p
+                        className={`text-sm font-semibold ${
+                          stepIsCompleted ? 'text-emerald-800' : 'text-slate-900'
+                        }`}
+                      >
+                        {step.title}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{step.description}</p>
+                    </div>
+                    <Link
+                      to={step.href}
+                      className="btn-secondary table-action-btn shrink-0 justify-center"
+                    >
+                      {step.hrefLabel}
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -252,14 +184,14 @@ export default function OnboardingChecklist({
         })}
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-sm">
-        <p className="text-slate-600">
-          {completedCount}/{steps.length} completed
-        </p>
-        {isComplete && (
-          <span className="font-medium text-emerald-700">Checklist completed</span>
-        )}
-      </div>
+      {!isComplete ? (
+        <div className="mt-5 flex justify-end">
+          <button type="button" className="btn-ghost" onClick={onToggleCollapsed}>
+            <ChevronDown className="h-4 w-4" />
+            Keep checklist compact
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

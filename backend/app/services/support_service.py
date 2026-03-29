@@ -16,8 +16,10 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.errors import NotFoundError, PermissionDeniedError, ServiceUnavailableError, ValidationError
 from app.models import (
+    Attachment,
+    Comment,
+    Document,
     Feedback,
-    Notification,
     NotificationType,
     SupportTicket,
     SupportTicketAssignment,
@@ -26,6 +28,7 @@ from app.models import (
     SupportTicketStatus,
     User,
     UserRole,
+    Version,
 )
 from app.repositories import SupportTicketRepository, UserRepository
 from app.services.attachment_service.common import AttachmentServiceCommonMixin
@@ -35,6 +38,7 @@ from app.services.malware_scan_service import (
     MalwareScannerUnavailableError,
     scan_upload_bytes,
 )
+from app.services.notification_service import NotificationService
 from app.services.storage_service import get_storage_backend
 from app.utils.async_tasks import run_async_task
 from app.utils.sanitization import sanitize_html_content
@@ -86,10 +90,12 @@ class SupportTicketService:
         ".webp",
     }
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, chat_db: Session | None = None):
         self.db = db
+        self.chat_db = chat_db or db
         self.ticket_repository = SupportTicketRepository(db)
         self.user_repository = UserRepository(db)
+        self.notification_service = NotificationService(db, chat_db=self.chat_db)
 
     @staticmethod
     def _sanitize_message_content(content: str, *, allow_empty: bool = False) -> str:
@@ -117,6 +123,90 @@ class SupportTicketService:
     @staticmethod
     def _customer_ticket_link(ticket_id: int) -> str:
         return f"{settings.BASE_URL}/portal/support?ticket={ticket_id}"
+
+    def _feedback_ticket_subject(self, feedback: Feedback) -> str:
+        document_title: str | None = None
+        if getattr(feedback, "document", None) is not None and feedback.document is not None:
+            document_title = feedback.document.title
+        if not document_title:
+            document = self.db.query(Document).filter(Document.id == feedback.document_id).first()
+            document_title = document.title if document else f"Document #{feedback.document_id}"
+
+        type_label = feedback.feedback_type.value.replace("_", " ").title()
+        subject = f"{type_label} feedback: {document_title}".strip()
+        return subject[:500]
+
+    def _feedback_document_title(self, feedback: Feedback) -> str:
+        if getattr(feedback, "document", None) is not None and feedback.document is not None:
+            return feedback.document.title
+
+        document = self.db.query(Document).filter(Document.id == feedback.document_id).first()
+        return document.title if document else f"Document #{feedback.document_id}"
+
+    def _feedback_contributor_user_ids(self, document_id: int) -> set[int]:
+        contributor_ids: set[int] = set()
+
+        document = self.db.query(Document).filter(Document.id == document_id).first()
+        if document and document.created_by:
+            contributor_ids.add(document.created_by)
+
+        for (user_id,) in (
+            self.db.query(Version.created_by)
+            .filter(Version.document_id == document_id)
+            .distinct()
+            .all()
+        ):
+            if user_id:
+                contributor_ids.add(user_id)
+
+        for (user_id,) in (
+            self.db.query(Attachment.uploaded_by)
+            .filter(Attachment.document_id == document_id)
+            .distinct()
+            .all()
+        ):
+            if user_id:
+                contributor_ids.add(user_id)
+
+        for (user_id,) in (
+            self.db.query(Comment.user_id)
+            .filter(Comment.document_id == document_id)
+            .distinct()
+            .all()
+        ):
+            if user_id:
+                contributor_ids.add(user_id)
+
+        return contributor_ids
+
+    def _list_feedback_notification_recipients(
+        self,
+        *,
+        ticket: SupportTicket,
+        feedback: Feedback,
+        exclude_user_id: int | None = None,
+    ) -> list[User]:
+        recipients: dict[int, User] = {}
+
+        contributor_ids = self._feedback_contributor_user_ids(feedback.document_id)
+        for user in self.user_repository.list_by_ids(list(contributor_ids)):
+            if not user.is_active:
+                continue
+            if exclude_user_id is not None and user.id == exclude_user_id:
+                continue
+            if user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
+                continue
+            if user.role != UserRole.SYSTEM_ADMIN and user.tenant_id != ticket.tenant_id:
+                continue
+            recipients[user.id] = user
+
+        for user in self._list_support_notification_recipients(
+            ticket,
+            exclude_user_id=exclude_user_id,
+        ):
+            recipients[user.id] = user
+
+        return list(recipients.values())
 
     def _queue_email(
         self,
@@ -178,18 +268,36 @@ class SupportTicketService:
         ticket: SupportTicket,
         customer: User,
     ) -> None:
+        if ticket.feedback_id:
+            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
+            if feedback is not None:
+                document_title = self._feedback_document_title(feedback)
+                type_label = feedback.feedback_type.value.replace("_", " ")
+                recipients = self._list_feedback_notification_recipients(
+                    ticket=ticket,
+                    feedback=feedback,
+                    exclude_user_id=customer.id,
+                )
+                for recipient in recipients:
+                    self.notification_service.create_notification(
+                        user_id=recipient.id,
+                        notification_type=NotificationType.FEEDBACK_RECEIVED,
+                        title=f"New feedback on \"{document_title}\"",
+                        message=f"{customer.full_name} submitted {type_label} feedback.",
+                        link=f"/support?ticket={ticket.id}",
+                    )
+                return
+
         for recipient in self._list_support_notification_recipients(
             ticket,
             exclude_user_id=customer.id,
         ):
-            self.db.add(
-                Notification(
-                    user_id=recipient.id,
-                    type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
-                    title=f"New support ticket #{ticket.id}",
-                    message=f"{customer.full_name} opened \"{ticket.subject}\"",
-                    link=f"/support?ticket={ticket.id}",
-                )
+            self.notification_service.create_notification(
+                user_id=recipient.id,
+                notification_type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
+                title=f"New support ticket #{ticket.id}",
+                message=f"{customer.full_name} opened \"{ticket.subject}\"",
+                link=f"/support?ticket={ticket.id}",
             )
 
     def _email_support_agents_about_new_ticket(
@@ -258,14 +366,24 @@ class SupportTicketService:
         ticket: SupportTicket,
         agent: User,
     ) -> None:
-        self.db.add(
-            Notification(
-                user_id=ticket.customer_id,
-                type=NotificationType.SYSTEM,
-                title=f"New reply on ticket #{ticket.id}",
-                message=f"{agent.full_name} replied to \"{ticket.subject}\".",
-                link=f"/portal/support?ticket={ticket.id}",
-            )
+        if ticket.feedback_id:
+            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
+            if feedback is not None:
+                self.notification_service.create_notification(
+                    user_id=ticket.customer_id,
+                    notification_type=NotificationType.FEEDBACK_RESPONDED,
+                    title="New response to your feedback",
+                    message=f"{agent.full_name} replied about \"{self._feedback_document_title(feedback)}\".",
+                    link=f"/portal/support?ticket={ticket.id}",
+                )
+                return
+
+        self.notification_service.create_notification(
+            user_id=ticket.customer_id,
+            notification_type=NotificationType.SYSTEM,
+            title=f"New reply on ticket #{ticket.id}",
+            message=f"{agent.full_name} replied to \"{ticket.subject}\".",
+            link=f"/portal/support?ticket={ticket.id}",
         )
 
     def _email_customer_on_agent_reply(
@@ -514,17 +632,32 @@ class SupportTicketService:
         if not fb:
             raise NotFoundError("Feedback not found")
 
-        # Check no duplicate ticket for this feedback
-        existing = self.ticket_repository.get_by_feedback_id(feedback_id)
+        return self.get_or_create_feedback_ticket(fb)
+
+    def get_or_create_feedback_ticket(self, feedback: Feedback) -> SupportTicket:
+        """Return the support ticket linked to feedback, creating it on first use."""
+        existing = self.ticket_repository.get_by_feedback_id(feedback.id)
         if existing:
             return existing
 
+        customer = feedback.user or self.user_repository.get_by_id(feedback.user_id)
+        if customer is None:
+            raise NotFoundError("Customer not found")
+
         return self.create_ticket(
             customer=customer,
-            subject=f"Support: {fb.content[:100]}",
-            content=fb.content,
-            feedback_id=feedback_id,
+            subject=self._feedback_ticket_subject(feedback),
+            content=self._feedback_ticket_initial_message(feedback),
+            category=feedback.feedback_type.value,
+            feedback_id=feedback.id,
         )
+
+    @staticmethod
+    def _feedback_ticket_initial_message(feedback: Feedback) -> str:
+        excerpt = " ".join((feedback.anchor_text or "").split()).strip()
+        if not excerpt:
+            return feedback.content
+        return f'Selected text: "{excerpt}"\n\n{feedback.content}'
 
     # ------------------------------------------------------------------
     # Ticket queries
@@ -691,7 +824,7 @@ class SupportTicketService:
                 message_content=sanitized_content,
             )
         elif is_internal_note:
-            self._notify_mentions_in_note(ticket_id, sender, content)
+            self._notify_mentions_in_note(ticket, sender, content)
         else:
             self._notify_customer_on_agent_reply(ticket=ticket, agent=sender)
             self._email_customer_on_agent_reply(
@@ -836,14 +969,14 @@ class SupportTicketService:
         ))
 
         # Notify the target agent
-        self.db.add(Notification(
+        self.notification_service.create_notification(
             user_id=target_agent_id,
-            type=NotificationType.TICKET_HANDOFF,
+            notification_type=NotificationType.TICKET_HANDOFF,
             title=f"Ticket #{ticket_id} handed off to you",
             message=f"{current_user.full_name} transferred ticket \"{ticket.subject}\" to you."
-                    + (f" Note: {note.strip()}" if note.strip() else ""),
+            + (f" Note: {note.strip()}" if note.strip() else ""),
             link=f"/support?ticket={ticket_id}",
-        ))
+        )
 
         self.db.commit()
         self.db.refresh(assignment)
@@ -856,19 +989,40 @@ class SupportTicketService:
     def _notify_agents_on_customer_message(
         self, ticket: SupportTicket, customer: User
     ) -> None:
-        """Create notifications for assigned agents when customer sends a message (X1-087)."""
-        assignments = self.ticket_repository.list_assignments(ticket.id)
-        for a in assignments:
-            self.db.add(Notification(
-                user_id=a.agent_id,
-                type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
+        """Create notifications for the responsible internal recipients (X1-087)."""
+        if ticket.feedback_id:
+            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
+            if feedback is not None:
+                document_title = self._feedback_document_title(feedback)
+                recipients = self._list_feedback_notification_recipients(
+                    ticket=ticket,
+                    feedback=feedback,
+                    exclude_user_id=customer.id,
+                )
+                for recipient in recipients:
+                    self.notification_service.create_notification(
+                        user_id=recipient.id,
+                        notification_type=NotificationType.FEEDBACK_RECEIVED,
+                        title=f"New customer reply on \"{document_title}\"",
+                        message=f"{customer.full_name} added more detail to the feedback conversation.",
+                        link=f"/support?ticket={ticket.id}",
+                    )
+                return
+
+        for recipient in self._list_support_notification_recipients(
+            ticket,
+            exclude_user_id=customer.id,
+        ):
+            self.notification_service.create_notification(
+                user_id=recipient.id,
+                notification_type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
                 title=f"New message on ticket #{ticket.id}",
                 message=f"{customer.full_name} sent a message on \"{ticket.subject}\"",
                 link=f"/support?ticket={ticket.id}",
-            ))
+            )
 
     def _notify_mentions_in_note(
-        self, ticket_id: int, sender: User, content: str
+        self, ticket: SupportTicket, sender: User, content: str
     ) -> None:
         """Parse @mentions in internal notes and notify mentioned agents (X1-101)."""
         usernames = list(dict.fromkeys(MENTION_RE.findall(content)))
@@ -876,18 +1030,19 @@ class SupportTicketService:
             return
         mentioned = self.user_repository.list_active_by_usernames(
             usernames,
+            tenant_id=ticket.tenant_id,
             exclude_user_id=sender.id,
         )
         for u in mentioned:
             if u.role in (UserRole.CUSTOMER, UserRole.VIEWER):
                 continue
-            self.db.add(Notification(
+            self.notification_service.create_notification(
                 user_id=u.id,
-                type=NotificationType.TICKET_MENTION,
-                title=f"You were mentioned in ticket #{ticket_id}",
+                notification_type=NotificationType.TICKET_MENTION,
+                title=f"You were mentioned in ticket #{ticket.id}",
                 message=f"{sender.full_name} mentioned you: \"{content[:120]}\"",
-                link=f"/support?ticket={ticket_id}",
-            ))
+                link=f"/support?ticket={ticket.id}",
+            )
 
     # ------------------------------------------------------------------
     # Helpers

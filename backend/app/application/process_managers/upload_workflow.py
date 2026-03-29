@@ -33,6 +33,7 @@ class UploadWorkflowResult:
 
 
 AttachmentUploader = Callable[..., Awaitable[Any]]
+PostPrimaryAttachmentHook = Callable[[Any], Awaitable[None]]
 
 
 class DocumentUploadProcessManager:
@@ -66,6 +67,8 @@ class DocumentUploadProcessManager:
         content_file: UploadFile | None = None,
         release_notes_file: UploadFile | None = None,
         release_notes_document_data: DocumentCreate | None = None,
+        after_primary_attachment: PostPrimaryAttachmentHook | None = None,
+        after_primary_attachment_step_name: str | None = None,
     ) -> UploadWorkflowResult:
         step_order: list[str] = []
         compensation_order: list[str] = []
@@ -85,6 +88,10 @@ class DocumentUploadProcessManager:
                 current_user,
                 background_tasks=background_tasks,
             )
+
+            if after_primary_attachment is not None:
+                step_order.append(after_primary_attachment_step_name or "after_primary_attachment")
+                await after_primary_attachment(document)
 
             if content_file is not None:
                 step_order.append("attach_content_file")
@@ -138,10 +145,12 @@ class DocumentUploadProcessManager:
                     created_document = self.document_service.get_document(created_document_id)
                     if created_document is None:
                         continue
-                    self.document_service.delete_document(
+                    self.document_service.purge_document(
                         created_document_id,
                         current_user,
                         if_match=created_document.etag,
+                        allow_active=True,
+                        enforce_admin=False,
                     )
                     compensation_order.append(f"delete_document:{created_document_id}")
                 except Exception as cleanup_error:  # policy: COMPENSATING — rollback cleanup is best-effort; pragma: no cover - defensive logging path

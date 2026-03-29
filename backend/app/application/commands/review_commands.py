@@ -28,7 +28,6 @@ from app.models import (
     ActionType,
     AuditLog,
     Document,
-    Notification,
     NotificationType,
     ReviewRequest,
     ReviewStatus,
@@ -36,6 +35,7 @@ from app.models import (
     User,
     Version,
 )
+from app.services.notification_service import NotificationService
 from app.services.permissions import Permission, has_permission
 
 logger = logging.getLogger(__name__)
@@ -73,10 +73,12 @@ class ApproveReviewCommandHandler:
         self,
         db: Session,
         *,
+        chat_db: Session | None = None,
         review_policy: ReviewPolicy | None = None,
         document_access_policy: DocumentAccessPolicy | None = None,
     ):
         self.db = db
+        self.notification_service = NotificationService(db, chat_db=chat_db)
         self.review_policy = review_policy or ReviewPolicy()
         self.document_access_policy = document_access_policy or DocumentAccessPolicy()
         self._last_trace: CommandExecutionTrace | None = None
@@ -260,14 +262,12 @@ class ApproveReviewCommandHandler:
                 details=audit_details,
             )
         )
-        self.db.add(
-            Notification(
-                user_id=review.submitted_by,
-                type=NotificationType.REVIEW_APPROVED,
-                title="Document approved",
-                message=f"Your document '{review.document.title}' has been approved by {current_user.full_name}",
-                link=f"/documents/{review.document_id}",
-            )
+        self.notification_service.create_notification(
+            user_id=review.submitted_by,
+            notification_type=NotificationType.REVIEW_APPROVED,
+            title="Document approved",
+            message=f"Your document '{review.document.title}' has been approved by {current_user.full_name}",
+            link=f"/documents/{review.document_id}",
         )
 
         self.db.commit()

@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 
 from app.config import settings
 from app.models import Notification, NotificationType, User, UserRole
-from tests.factories.domain import create_user
+from tests.factories.domain import create_document, create_user
 
 
 def test_admin_created_user_requires_email_verification(
@@ -152,3 +152,118 @@ def test_role_change_creates_user_notification(
     assert "viewer" in (notification.message or "")
     assert "editor" in (notification.message or "")
     assert notification.link == "/profile"
+
+
+def test_system_admin_can_hard_delete_inactive_user_without_owned_records(
+    client,
+    db,
+    system_admin_headers,
+    default_tenant,
+):
+    target_user = create_user(
+        db,
+        email="hard-delete@example.com",
+        username="hard_delete_user",
+        full_name="Hard Delete User",
+        plain_password="HardDelete1!",
+        role=UserRole.VIEWER,
+        tenant_id=default_tenant.id,
+        is_active=False,
+    )
+
+    response = client.delete(
+        f"/api/v1/users/{target_user.id}/hard-delete",
+        headers=system_admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "User permanently deleted"
+    assert db.query(User).filter(User.id == target_user.id).first() is None
+
+
+def test_hard_delete_requires_user_to_be_inactive(
+    client,
+    db,
+    system_admin_headers,
+    default_tenant,
+):
+    target_user = create_user(
+        db,
+        email="active-hard-delete@example.com",
+        username="active_hard_delete",
+        full_name="Active Hard Delete",
+        plain_password="HardDelete1!",
+        role=UserRole.VIEWER,
+        tenant_id=default_tenant.id,
+        is_active=True,
+    )
+
+    response = client.delete(
+        f"/api/v1/users/{target_user.id}/hard-delete",
+        headers=system_admin_headers,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error_code"] == "user_must_be_deactivated_first"
+    assert db.query(User).filter(User.id == target_user.id).first() is not None
+
+
+def test_hard_delete_blocks_users_with_preserved_document_ownership(
+    client,
+    db,
+    system_admin_headers,
+    default_tenant,
+):
+    target_user = create_user(
+        db,
+        email="owner-hard-delete@example.com",
+        username="owner_hard_delete",
+        full_name="Owner Hard Delete",
+        plain_password="HardDelete1!",
+        role=UserRole.EDITOR,
+        tenant_id=default_tenant.id,
+        is_active=False,
+    )
+    create_document(
+        db,
+        title="Owned Document",
+        document_number="DOC-HARD-DELETE-001",
+        created_by=target_user.id,
+        tenant_id=default_tenant.id,
+    )
+
+    response = client.delete(
+        f"/api/v1/users/{target_user.id}/hard-delete",
+        headers=system_admin_headers,
+    )
+
+    assert response.status_code == 409
+    payload = response.json()
+    assert payload["error_code"] == "user_hard_delete_blocked"
+    assert "documents" in payload["detail"]
+    assert db.query(User).filter(User.id == target_user.id).first() is not None
+
+
+def test_admin_cannot_hard_delete_users(
+    client,
+    db,
+    admin_headers,
+    default_tenant,
+):
+    target_user = create_user(
+        db,
+        email="admin-cannot-hard-delete@example.com",
+        username="admin_cannot_hard_delete",
+        full_name="Admin Cannot Hard Delete",
+        plain_password="HardDelete1!",
+        role=UserRole.VIEWER,
+        tenant_id=default_tenant.id,
+        is_active=False,
+    )
+
+    response = client.delete(
+        f"/api/v1/users/{target_user.id}/hard-delete",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 403

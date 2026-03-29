@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { CardSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -47,6 +48,7 @@ export default function PublicSearchPage() {
   const { data: categories } = useQuery({
     queryKey: ['public-categories'],
     queryFn: () => publicApi.getCategories(),
+    ...audienceSensitiveQueryOptions,
   })
 
   // Fetch search results
@@ -60,6 +62,7 @@ export default function PublicSearchPage() {
     queryKey: ['public-search', { q: query, page, category }],
     queryFn: () => publicApi.search({ q: query, page, page_size: 20, category }),
     enabled: query.length >= 2,
+    ...audienceSensitiveQueryOptions,
   })
 
   // Update search input when URL changes

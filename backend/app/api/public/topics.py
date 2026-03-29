@@ -12,15 +12,29 @@ from app.utils.topic_normalization import build_topic_lookup, normalize_topic_to
 router = APIRouter(prefix="/public", tags=["Public"])
 
 
+def _published_document_ids_subquery(db: Session):
+    from app.models import Version
+
+    return (
+        db.query(Version.document_id)
+        .filter(Version.is_published.is_(True))
+        .group_by(Version.document_id)
+        .subquery()
+    )
+
+
 def _public_topic_counts(db: Session, topics: list[Topic]) -> dict[str, int]:
     topic_lookup = build_topic_lookup(topics)
     canonical_slugs = {topic.slug for topic in topics}
+    published_doc_ids = _published_document_ids_subquery(db)
 
     raw_counts = (
         db.query(Document.topic, func.count(Document.id))
         .filter(
             Document.visibility == DocumentVisibility.PUBLIC,
             Document.status == DocumentStatus.ACTIVE,
+            Document.deleted_at.is_(None),
+            Document.id.in_(db.query(published_doc_ids.c.document_id)),
             Document.topic != None,  # noqa: E711
             Document.topic != "",
         )

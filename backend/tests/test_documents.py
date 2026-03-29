@@ -583,7 +583,7 @@ def test_restore_document_returns_archived_draft_to_draft(
 
 
 def test_delete_document(client, admin_headers, db, test_admin):
-    """Test deleting a document (requires manager role or above)"""
+    """Test moving a document into the delete recovery window."""
     # Create document
     doc = Document(
         title="To Delete",
@@ -604,10 +604,132 @@ def test_delete_document(client, admin_headers, db, test_admin):
     )
 
     assert response.status_code == 200
+    assert "recovery window" in response.json()["message"].lower()
 
-    # Verify deletion
+    db.refresh(doc)
+    assert doc.deleted_at is not None
+    assert doc.purge_at is not None
+    assert doc.deleted_by == test_admin.id
+
+    # Verify hidden from normal reads
     get_response = client.get(f"/api/v1/documents/{doc_id}", headers=admin_headers)
     assert get_response.status_code == 404
+
+
+def test_deleted_document_appears_in_admin_recovery_view(client, admin_headers, db, test_admin):
+    doc = Document(
+        title="Recoverable Doc",
+        document_number="DOC-DELETE-REC-0001",
+        status=DocumentStatus.DRAFT,
+        created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    delete_response = client.delete(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
+    assert delete_response.status_code == 200
+
+    deleted_response = client.get("/api/v1/documents/deleted", headers=admin_headers)
+    assert deleted_response.status_code == 200
+    payload = deleted_response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["id"] == doc.id
+    assert payload["items"][0]["deleted_at"] is not None
+    assert payload["items"][0]["purge_at"] is not None
+
+
+def test_admin_can_restore_deleted_document(client, admin_headers, db, test_admin):
+    doc = Document(
+        title="Restore Me",
+        document_number="DOC-DELETE-REC-0002",
+        status=DocumentStatus.ARCHIVED,
+        created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    delete_response = client.delete(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
+    assert delete_response.status_code == 200
+
+    db.refresh(doc)
+    restore_response = client.post(
+        f"/api/v1/documents/{doc.id}/restore-deleted",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
+    assert restore_response.status_code == 200
+    restored = restore_response.json()
+    assert restored["id"] == doc.id
+    assert restored["deleted_at"] is None
+    assert restored["purge_at"] is None
+    assert restored["status"] == "archived"
+
+    db.refresh(doc)
+    assert doc.deleted_at is None
+    assert doc.purge_at is None
+
+
+def test_manager_cannot_restore_deleted_document(client, manager_headers, db, test_manager):
+    doc = Document(
+        title="Manager Restore Blocked",
+        document_number="DOC-DELETE-REC-0003",
+        status=DocumentStatus.DRAFT,
+        created_by=test_manager.id,
+        tenant_id=test_manager.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    delete_response = client.delete(
+        f"/api/v1/documents/{doc.id}",
+        headers={**manager_headers, "If-Match": doc.etag},
+    )
+    assert delete_response.status_code == 200
+
+    db.refresh(doc)
+    restore_response = client.post(
+        f"/api/v1/documents/{doc.id}/restore-deleted",
+        headers={**manager_headers, "If-Match": doc.etag},
+    )
+    assert restore_response.status_code == 403
+
+
+def test_admin_can_purge_deleted_document(client, admin_headers, db, test_admin):
+    doc = Document(
+        title="Purge Me",
+        document_number="DOC-DELETE-REC-0004",
+        status=DocumentStatus.DRAFT,
+        created_by=test_admin.id,
+        tenant_id=test_admin.tenant_id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    delete_response = client.delete(
+        f"/api/v1/documents/{doc.id}",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
+    assert delete_response.status_code == 200
+
+    db.refresh(doc)
+    purge_response = client.delete(
+        f"/api/v1/documents/{doc.id}/purge",
+        headers={**admin_headers, "If-Match": doc.etag},
+    )
+    assert purge_response.status_code == 200
+    assert purge_response.json()["message"] == "Document permanently deleted"
+    assert db.query(Document).filter(Document.id == doc.id).first() is None
 
 
 def test_delete_document_forbidden_for_editor(client, auth_headers, db, test_user):
@@ -828,20 +950,23 @@ def test_delete_document_rolls_back_audit_when_delete_fails(db, test_admin, monk
     db.refresh(doc)
 
     service = DocumentService(db)
-    original_delete = db.delete
+    original_add = db.add
 
-    def fail_document_delete(instance):
-        if isinstance(instance, Document):
+    def fail_delete_audit(instance):
+        if isinstance(instance, AuditLog) and instance.action == ActionType.DELETE:
             raise RuntimeError("forced delete failure")
-        return original_delete(instance)
+        return original_add(instance)
 
-    monkeypatch.setattr(db, "delete", fail_document_delete)
+    monkeypatch.setattr(db, "add", fail_delete_audit)
 
     with pytest.raises(RuntimeError, match="forced delete failure"):
         service.delete_document(doc.id, test_admin, if_match=doc.etag)
 
     db.expire_all()
-    assert db.query(Document).filter(Document.id == doc.id).count() == 1
+    persisted_doc = db.query(Document).filter(Document.id == doc.id).first()
+    assert persisted_doc is not None
+    assert persisted_doc.deleted_at is None
+    assert persisted_doc.purge_at is None
     assert (
         db.query(AuditLog)
         .filter(

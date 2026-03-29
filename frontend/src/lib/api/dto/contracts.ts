@@ -25,6 +25,7 @@ import type {
   AcceptInvitationRequest,
   Invitation,
   InvitationCreate,
+  InvitationEmailPreviewResponse,
   InvitationListResponse,
   InvitationValidateResponse,
   MessageResponse,
@@ -37,6 +38,10 @@ import type {
   ReviewListResponse,
   ReviewRequest,
   ReviewSubmit,
+  SystemDocumentLifecycleSettingsResponse,
+  SystemDocumentLifecycleSettingsUpdate,
+  SystemEmailSettingsResponse,
+  SystemEmailSettingsUpdate,
   SystemSettingsResponse,
   SystemSettingsUpdate,
   RecentActivity,
@@ -114,6 +119,10 @@ export type CompanyDocumentsResponseDto = CompanyDocumentsResponse
 
 export type InvitationDto = Contract<'InvitationResponse', Invitation>
 export type InvitationCreateDto = Contract<'InvitationCreate', InvitationCreate>
+export type InvitationEmailPreviewResponseDto = Contract<
+  'InvitationEmailPreviewResponse',
+  InvitationEmailPreviewResponse
+>
 export type InvitationListResponseDto = Contract<'InvitationListResponse', InvitationListResponse>
 export type InvitationValidateResponseDto = Contract<'InvitationValidateResponse', InvitationValidateResponse>
 export type AcceptInvitationRequestDto = Contract<'AcceptInvitationRequest', AcceptInvitationRequest>
@@ -123,6 +132,22 @@ export type NotificationCountResponseDto = NotificationCountResponse
 
 export type SystemSettingsResponseDto = Contract<'SystemSettingsResponse', SystemSettingsResponse>
 export type SystemSettingsUpdateDto = Contract<'SystemSettingsUpdate', SystemSettingsUpdate>
+export type SystemDocumentLifecycleSettingsResponseDto = Contract<
+  'SystemDocumentLifecycleSettingsResponse',
+  SystemDocumentLifecycleSettingsResponse
+>
+export type SystemDocumentLifecycleSettingsUpdateDto = Contract<
+  'SystemDocumentLifecycleSettingsUpdate',
+  SystemDocumentLifecycleSettingsUpdate
+>
+export type SystemEmailSettingsResponseDto = Contract<
+  'SystemEmailSettingsResponse',
+  SystemEmailSettingsResponse
+>
+export type SystemEmailSettingsUpdateDto = Contract<
+  'SystemEmailSettingsUpdate',
+  SystemEmailSettingsUpdate
+>
 export type RbacPoliciesResponseDto = Contract<'RbacPoliciesResponse', RbacPoliciesResponse>
 export type RbacPoliciesUpdateDto = Contract<'RbacPoliciesUpdate', RbacPoliciesUpdate>
 

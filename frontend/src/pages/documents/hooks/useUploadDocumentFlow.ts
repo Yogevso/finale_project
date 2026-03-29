@@ -14,6 +14,13 @@ import { useAuth } from '@/lib/auth'
 import type { DocumentStatus, DocumentVisibility } from '@/types'
 import { queryKeys } from '@/lib/queryKeys'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
+import {
+  DOCUMENT_INPUT_LIMITS,
+  normalizeCommaSeparatedInput,
+  normalizeFileStem,
+  normalizeMultilineInput,
+  normalizeSingleLineInput,
+} from '@/lib/uiInputRules'
 
 export const ACCEPTED_FILE_TYPES = DOCUMENT_UPLOAD_ACCEPTED_FILE_TYPES
 export const MANAGER_UPLOAD_STATUS_OPTIONS: Array<{ value: DocumentStatus; label: string }> = [
@@ -46,9 +53,18 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
   const [companyIds, setCompanyIds] = useState<number[]>([])
   const [contentFile, setContentFile] = useState<File | null>(null)
   const [releaseNotesFile, setReleaseNotesFile] = useState<File | null>(null)
+  const [pdfConversionTarget, setPdfConversionTarget] = useState<'docx' | 'pptx'>('docx')
   const [error, setError] = useState('')
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgressPercent, setUploadProgressPercent] = useState<number | null>(null)
+  const selectedFileIsPdf = useMemo(() => {
+    if (!selectedFile) {
+      return false
+    }
+    const normalizedType = (selectedFile.type || '').toLowerCase()
+    const normalizedName = (selectedFile.name || '').toLowerCase()
+    return normalizedType === 'application/pdf' || normalizedName.endsWith('.pdf')
+  }, [selectedFile])
   const audienceDirtyState = getAudienceDirtyState(
     {
       visibility: defaultVisibility,
@@ -93,22 +109,28 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
 
     return Array.from(new Set(names)).sort((left, right) => left.localeCompare(right))
   }, [platformSuggestionsQuery.data?.items])
+  const normalizedUploadMetadata = {
+    title:
+      normalizeSingleLineInput(title, DOCUMENT_INPUT_LIMITS.title) ||
+      normalizeFileStem(selectedFile?.name, DOCUMENT_INPUT_LIMITS.title),
+    description: normalizeMultilineInput(description, DOCUMENT_INPUT_LIMITS.description),
+    category: normalizeSingleLineInput(category, DOCUMENT_INPUT_LIMITS.category),
+    platform: normalizeSingleLineInput(platform, DOCUMENT_INPUT_LIMITS.platform),
+    releaseBranch: normalizeSingleLineInput(releaseBranch, DOCUMENT_INPUT_LIMITS.releaseBranch),
+    tags: normalizeCommaSeparatedInput(tags, DOCUMENT_INPUT_LIMITS.tags),
+    dueDate: dueDate.trim(),
+  }
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
       documentsUseCases.uploadDocument(file, {
-        title,
-        description,
-        category,
-        platform,
-        releaseBranch,
-        tags,
-        dueDate,
+        ...normalizedUploadMetadata,
         status: isManager ? uploadStatus : undefined,
         visibility,
         companyIds,
         contentFile,
         releaseNotesFile,
+        pdfConversionTarget: selectedFileIsPdf ? pdfConversionTarget : undefined,
       }, {
         onUploadProgress: (event) => {
           if (!event.total || event.total <= 0) {
@@ -157,7 +179,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     setSelectedFile(file)
     setError('')
     if (!title) {
-      setTitle(file.name.replace(/\.[^/.]+$/, ''))
+      setTitle(normalizeFileStem(file.name, DOCUMENT_INPUT_LIMITS.title))
     }
   }
 
@@ -203,7 +225,7 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
       return
     }
 
-    if (!platform.trim()) {
+    if (!normalizedUploadMetadata.platform) {
       setError('Platform is required')
       return
     }
@@ -248,6 +270,9 @@ export function useUploadDocumentFlow({ onClose }: { onClose: () => void }) {
     canManageAdvancedUploadOptions: isManager,
     contentFile,
     releaseNotesFile,
+    selectedFileIsPdf,
+    pdfConversionTarget,
+    setPdfConversionTarget,
     error,
     setError,
     dragActive,

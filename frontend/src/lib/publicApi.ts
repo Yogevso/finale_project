@@ -5,6 +5,8 @@
  * to published documents with PUBLIC visibility.
  */
 
+import { fetchFresh } from '@/lib/queryFreshness'
+
 const API_BASE = '/api/v1/public'
 const PLATFORM_API_BASE = '/api/platforms'
 
@@ -206,7 +208,7 @@ export const publicApi = {
     if (params.sort_by) searchParams.set('sort_by', params.sort_by)
     if (params.sort_order) searchParams.set('sort_order', params.sort_order)
 
-    const response = await fetch(`${API_BASE}/documents?${searchParams}`)
+    const response = await fetchFresh(`${API_BASE}/documents?${searchParams}`)
     if (!response.ok) {
       throw new Error('Failed to fetch public documents')
     }
@@ -217,7 +219,7 @@ export const publicApi = {
    * Get a single public document by ID
    */
   async getDocument(id: number): Promise<PublicDocumentDetail> {
-    const response = await fetch(`${API_BASE}/documents/${id}`)
+    const response = await fetchFresh(`${API_BASE}/documents/${id}`)
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error('Document not found or not publicly accessible')
@@ -231,7 +233,7 @@ export const publicApi = {
    * Get platform history grouped by platform/category/year.
    */
   async getPlatformHistory(): Promise<PublicPlatformHistoryResponse> {
-    const response = await fetch(`${API_BASE}/platforms/history`)
+    const response = await fetchFresh(`${API_BASE}/platforms/history`)
     if (!response.ok) {
       throw new Error('Failed to fetch platform history')
     }
@@ -242,7 +244,7 @@ export const publicApi = {
    * Get high-level platform rows for the overview table.
    */
   async getPlatformsOverview(): Promise<PublicPlatformOverviewResponse> {
-    const response = await fetch(`${PLATFORM_API_BASE}`)
+    const response = await fetchFresh(`${PLATFORM_API_BASE}`)
     if (!response.ok) {
       throw new Error('Failed to fetch platforms overview')
     }
@@ -261,7 +263,7 @@ export const publicApi = {
     if (params.sort_by) searchParams.set('sort_by', params.sort_by)
     if (params.sort_order) searchParams.set('sort_order', params.sort_order)
 
-    const response = await fetch(
+    const response = await fetchFresh(
       `${PLATFORM_API_BASE}/${platformId}/documents?${searchParams.toString()}`
     )
     if (!response.ok) {
@@ -274,7 +276,7 @@ export const publicApi = {
    * Get list of categories with document counts
    */
   async getCategories(): Promise<PublicCategoriesResponse> {
-    const response = await fetch(`${API_BASE}/categories`)
+    const response = await fetchFresh(`${API_BASE}/categories`)
     if (!response.ok) {
       throw new Error('Failed to fetch categories')
     }
@@ -300,7 +302,7 @@ export const publicApi = {
     if (params.topic) searchParams.set('topic', params.topic)
     if (params.platform) searchParams.set('platform', params.platform)
 
-    const response = await fetch(`${API_BASE}/search?${searchParams}`)
+    const response = await fetchFresh(`${API_BASE}/search?${searchParams}`)
     if (!response.ok) {
       throw new Error('Failed to search documents')
     }
@@ -311,7 +313,7 @@ export const publicApi = {
    * Get public statistics
    */
   async getStats(): Promise<PublicStats> {
-    const response = await fetch(`${API_BASE}/stats`)
+    const response = await fetchFresh(`${API_BASE}/stats`)
     if (!response.ok) {
       throw new Error('Failed to fetch stats')
     }
@@ -322,7 +324,7 @@ export const publicApi = {
    * Get list of public topics
    */
   async getTopics(): Promise<PublicTopicsResponse> {
-    const response = await fetch(`${API_BASE}/topics`)
+    const response = await fetchFresh(`${API_BASE}/topics`)
     if (!response.ok) {
       throw new Error('Failed to fetch topics')
     }
@@ -333,7 +335,7 @@ export const publicApi = {
    * Get a single topic by slug
    */
   async getTopic(slug: string): Promise<PublicTopic> {
-    const response = await fetch(`${API_BASE}/topics/${slug}`)
+    const response = await fetchFresh(`${API_BASE}/topics/${slug}`)
     if (!response.ok) {
       throw new Error('Failed to fetch topic')
     }
@@ -344,7 +346,7 @@ export const publicApi = {
    * Get attachment info for a public document
    */
   async getAttachment(documentId: number, attachmentId: number): Promise<PublicAttachmentInfo> {
-    const response = await fetch(`${API_BASE}/documents/${documentId}/attachments/${attachmentId}`)
+    const response = await fetchFresh(`${API_BASE}/documents/${documentId}/attachments/${attachmentId}`)
     if (!response.ok) {
       throw new Error('Failed to fetch attachment info')
     }
@@ -355,7 +357,7 @@ export const publicApi = {
    * Get active announcements
    */
   async getAnnouncements(): Promise<PublicAnnouncement[]> {
-    const response = await fetch('/api/v1/announcements')
+    const response = await fetchFresh('/api/v1/announcements')
     if (!response.ok) {
       throw new Error('Failed to fetch announcements')
     }

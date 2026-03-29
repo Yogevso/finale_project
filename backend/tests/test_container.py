@@ -87,7 +87,7 @@ def test_service_dependency_providers_resolve_via_container(db, test_user):
     assert get_version_service(db=db, container=container) is not None
     assert get_collaboration_service(db=db, container=container) is not None
     assert get_document_service(db=db, tenant_ctx=tenant_ctx, container=container) is not None
-    assert get_support_ticket_service(db=db, container=container) is not None
+    assert get_support_ticket_service(db=db, chat_db=db, container=container) is not None
     assert isinstance(get_document_conversion_service(container=container), DocumentConversionPipeline)
 
 
@@ -165,7 +165,7 @@ def test_use_case_and_handler_dependencies_resolve_via_container(db, test_user):
     assert assign_use_case is not None
 
     publish_handler = get_publish_approved_version_command_handler(db=db, container=container)
-    approve_handler = get_approve_review_command_handler(db=db, container=container)
+    approve_handler = get_approve_review_command_handler(db=db, chat_db=db, container=container)
     create_document_handler = get_create_document_command_handler(
         db=db,
         tenant_ctx=tenant_ctx,
