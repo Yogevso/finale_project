@@ -11,7 +11,7 @@ export const DOCUMENT_INPUT_LIMITS = {
   filterSearch: 120,
   filterCategory: 80,
   savedViewName: 80,
-} as const
+} as const;
 
 export const COMMUNICATION_INPUT_LIMITS = {
   chatMessage: 2000,
@@ -19,57 +19,70 @@ export const COMMUNICATION_INPUT_LIMITS = {
   feedbackContent: 2000,
   feedbackResponse: 2000,
   visibilityReason: 280,
-} as const
+} as const;
 
-export function normalizeSingleLineInput(value: string | null | undefined, maxLength: number): string {
+export const COMMUNICATION_INPUT_MIN_LENGTHS = {
+  feedbackContent: 3,
+} as const;
+
+export function normalizeSingleLineInput(
+  value: string | null | undefined,
+  maxLength: number
+): string {
   const normalized = String(value ?? '')
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
+    .trim();
 
-  return normalized.slice(0, maxLength)
+  return normalized.slice(0, maxLength);
 }
 
-export function normalizeMultilineInput(value: string | null | undefined, maxLength: number): string {
+export function normalizeMultilineInput(
+  value: string | null | undefined,
+  maxLength: number
+): string {
   const normalized = String(value ?? '')
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/[ \t]+$/g, ''))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
-    .trim()
+    .trim();
 
-  return normalized.slice(0, maxLength)
+  return normalized.slice(0, maxLength);
 }
 
-export function normalizeCommaSeparatedInput(value: string | null | undefined, maxLength: number): string {
-  const seen = new Set<string>()
-  const items: string[] = []
+export function normalizeCommaSeparatedInput(
+  value: string | null | undefined,
+  maxLength: number
+): string {
+  const seen = new Set<string>();
+  const items: string[] = [];
 
   for (const rawItem of String(value ?? '').split(',')) {
-    const item = normalizeSingleLineInput(rawItem, maxLength)
+    const item = normalizeSingleLineInput(rawItem, maxLength);
     if (!item) {
-      continue
+      continue;
     }
 
-    const normalizedKey = item.toLowerCase()
+    const normalizedKey = item.toLowerCase();
     if (seen.has(normalizedKey)) {
-      continue
+      continue;
     }
 
-    const nextValue = items.length === 0 ? item : `${items.join(', ')}, ${item}`
+    const nextValue = items.length === 0 ? item : `${items.join(', ')}, ${item}`;
     if (nextValue.length > maxLength) {
-      break
+      break;
     }
 
-    seen.add(normalizedKey)
-    items.push(item)
+    seen.add(normalizedKey);
+    items.push(item);
   }
 
-  return items.join(', ')
+  return items.join(', ');
 }
 
 export function normalizeFileStem(fileName: string | null | undefined, maxLength: number): string {
-  const strippedExtension = String(fileName ?? '').replace(/\.[^/.]+$/, '')
-  return normalizeSingleLineInput(strippedExtension, maxLength)
+  const strippedExtension = String(fileName ?? '').replace(/\.[^/.]+$/, '');
+  return normalizeSingleLineInput(strippedExtension, maxLength);
 }

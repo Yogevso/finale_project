@@ -19,6 +19,7 @@ vi.mock('@/lib/auth', () => ({
 // Mock API
 const mockGetSupportTickets = vi.fn()
 const mockGetSupportTicket = vi.fn()
+const mockGetSupportTicketSummary = vi.fn()
 const mockGetTicketViewers = vi.fn()
 const mockGetUsers = vi.fn()
 const mockSendSupportTicketMessage = vi.fn()
@@ -27,6 +28,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     getSupportTickets: (...args: unknown[]) => mockGetSupportTickets(...args),
     getSupportTicket: (...args: unknown[]) => mockGetSupportTicket(...args),
+    getSupportTicketSummary: (...args: unknown[]) => mockGetSupportTicketSummary(...args),
     getTicketViewers: (...args: unknown[]) => mockGetTicketViewers(...args),
     getUsers: (...args: unknown[]) => mockGetUsers(...args),
     sendSupportTicketMessage: (...args: unknown[]) => mockSendSupportTicketMessage(...args),
@@ -52,6 +54,10 @@ function buildTicket(overrides: Partial<SupportTicket> = {}): SupportTicket {
     updated_at: '2026-01-01T12:00:00Z',
     resolved_at: null,
     customer_full_name: 'Jane Doe',
+    last_customer_message_at: null,
+    has_unread_activity: false,
+    awaiting_agent_reply: false,
+    needs_attention: false,
     ...overrides,
   }
 }
@@ -114,6 +120,12 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetSupportTickets.mockResolvedValue(buildTicketList([]))
+  mockGetSupportTicketSummary.mockResolvedValue({
+    unread_count: 0,
+    customer_reply_count: 0,
+    needs_attention_count: 0,
+    nav_badge_count: 0,
+  })
   mockGetTicketViewers.mockResolvedValue({ ticket_id: 1, viewer_ids: [10] })
   mockGetUsers.mockResolvedValue([])
 })
@@ -122,7 +134,7 @@ describe('SupportPage — ticket list', () => {
   it('renders page header', async () => {
     renderPage()
     expect(screen.getByText('Support')).toBeInTheDocument()
-    expect(screen.getByText(/manage support tickets and feedback conversations/i)).toBeInTheDocument()
+    expect(screen.getByText(/manage support tickets and escalated feedback conversations/i)).toBeInTheDocument()
   })
 
   it('shows "No tickets found" when empty', async () => {
@@ -146,7 +158,7 @@ describe('SupportPage — ticket list', () => {
     })
     expect(screen.getByText('Feature request B')).toBeInTheDocument()
     expect(screen.getByText('2 ticket(s)')).toBeInTheDocument()
-    expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+    expect(screen.getByText('Escalated from feedback')).toBeInTheDocument()
     expect(screen.getByText('Support ticket')).toBeInTheDocument()
   })
 
@@ -162,7 +174,7 @@ describe('SupportPage — ticket list', () => {
     fireEvent.click(screen.getByText('Need help with upload'))
 
     await waitFor(() => {
-      expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+      expect(screen.getByText('Escalated from feedback')).toBeInTheDocument()
     })
     expect(
       screen.getByRole('link', { name: /view original feedback/i }),

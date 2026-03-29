@@ -90,6 +90,10 @@ function buildTicket(overrides: Partial<SupportTicket> = {}): SupportTicket {
     updated_at: '2026-01-01T12:00:00Z',
     resolved_at: null,
     customer_full_name: 'Jane Doe',
+    last_customer_message_at: null,
+    has_unread_activity: false,
+    awaiting_agent_reply: false,
+    needs_attention: false,
     ...overrides,
   }
 }
@@ -245,7 +249,7 @@ describe('CustomerSupportPage — ticket detail', () => {
     renderPage(['/portal/support?ticket=1'])
 
     await waitFor(() => {
-      expect(screen.getByText('Feedback conversation')).toBeInTheDocument()
+      expect(screen.getByText('Escalated from feedback')).toBeInTheDocument()
     })
 
     expect(

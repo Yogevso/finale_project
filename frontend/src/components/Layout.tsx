@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-do
 
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
-import { useChatUnreadCount } from '@/features/chat/useChatUnreadCount'
+import { useRouteBadgeCounts } from '@/hooks/useRouteBadgeCounts'
 
 import GlobalSearchBar from './GlobalSearchBar'
 import NotificationBell from './NotificationBell'
@@ -22,7 +22,7 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
-  const chatUnreadCount = useChatUnreadCount()
+  const { getBadgeCount } = useRouteBadgeCounts(user?.role || null)
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -164,7 +164,7 @@ export default function Layout() {
           <nav className="hidden md:flex flex-wrap items-center gap-2 text-sm" aria-label="Primary">
             {navItems.map((item) => {
               const Icon = item.icon
-              const badge = item.path === '/chat' && chatUnreadCount > 0 ? chatUnreadCount : 0
+              const badge = getBadgeCount(item.path)
               return (
                 <NavLink
                   key={item.path}
@@ -182,7 +182,7 @@ export default function Layout() {
                   </span>
                   {item.label}
                   {badge > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${badge} unread messages`}>
+                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${badge} pending items`}>
                       <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
                     </span>
                   )}
@@ -203,7 +203,7 @@ export default function Layout() {
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
-                const badge = item.path === '/chat' && chatUnreadCount > 0 ? chatUnreadCount : 0
+                const badge = getBadgeCount(item.path)
                 return (
                   <NavLink
                     key={item.path}

@@ -6,6 +6,7 @@ import type {
   SupportTicket,
   SupportTicketDetail,
   SupportTicketListResponse,
+  SupportTicketSummary,
   SupportTicketCreate,
   SupportTicketUpdate,
   SupportTicketMessage,
@@ -55,6 +56,18 @@ export const SupportApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
 
     async createSupportTicket(request: SupportTicketCreate): Promise<SupportTicket> {
       const { data } = await this.client.post<SupportTicket>('/support/tickets', request)
+      return data
+    }
+
+    async createSupportTicketFromFeedback(feedbackId: number): Promise<SupportTicket> {
+      const { data } = await this.client.post<SupportTicket>(
+        `/support/tickets/from-feedback/${feedbackId}`,
+      )
+      return data
+    }
+
+    async getSupportTicketSummary(): Promise<SupportTicketSummary> {
+      const { data } = await this.client.get<SupportTicketSummary>('/support/tickets/summary')
       return data
     }
 

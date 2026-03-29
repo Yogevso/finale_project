@@ -8,6 +8,7 @@ import { Menu, Search, X, HelpCircle } from 'lucide-react'
 
 import { getNavigationForRole } from '@/config/routes'
 import { useAuth } from '@/lib/auth'
+import { useRouteBadgeCounts } from '@/hooks/useRouteBadgeCounts'
 import NpsWidget from '@/components/NpsWidget'
 import AssistantChatBubble from '@/components/AssistantChatBubble'
 import { SkipNavLink } from '@/components/a11y/SkipNavLink'
@@ -16,6 +17,7 @@ export default function CustomerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, logout } = useAuth()
   const navigation = getNavigationForRole(user?.role || null)
+  const { getBadgeCount } = useRouteBadgeCounts(user?.role || null)
   const location = useLocation()
   const navigate = useNavigate()
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
@@ -63,12 +65,13 @@ export default function CustomerLayout() {
           <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
             {navigation.map((item) => {
               const Icon = item.icon
+              const badge = getBadgeCount(item.path)
               return (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) =>
-                    `px-4 py-2 rounded-full transition-colors ${
+                    `relative px-4 py-2 rounded-full transition-colors ${
                       isActive
                         ? 'bg-white text-sky-800 font-semibold border border-sky-200'
                         : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
@@ -79,6 +82,11 @@ export default function CustomerLayout() {
                     <Icon className="h-4 w-4" />
                   </span>
                   {item.label}
+                  {badge > 0 ? (
+                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
                 </NavLink>
               )
             })}
@@ -122,6 +130,7 @@ export default function CustomerLayout() {
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navigation.map((item) => {
                 const Icon = item.icon
+                const badge = getBadgeCount(item.path)
                 return (
                   <NavLink
                     key={item.path}
@@ -139,6 +148,11 @@ export default function CustomerLayout() {
                       <Icon className="h-4 w-4" />
                     </span>
                     {item.label}
+                    {badge > 0 ? (
+                      <span className="ml-auto flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null}
                   </NavLink>
                 )
               })}

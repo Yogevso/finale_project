@@ -29,6 +29,11 @@ export function useSupportPageController() {
       }),
   })
 
+  const summaryQuery = useQuery({
+    queryKey: ['supportTicketSummary'],
+    queryFn: () => api.getSupportTicketSummary(),
+  })
+
   const ticketQuery = useQuery({
     queryKey: ['supportTicket', activeTicketId],
     queryFn: () => api.getSupportTicket(activeTicketId as number),
@@ -52,5 +57,7 @@ export function useSupportPageController() {
     ticketsQuery,
     ticketQuery,
     tickets: ticketsQuery.data?.items ?? [],
+    summaryQuery,
+    supportSummary: summaryQuery.data ?? null,
   }
 }

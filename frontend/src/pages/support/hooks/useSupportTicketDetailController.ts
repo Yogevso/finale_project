@@ -39,6 +39,7 @@ export function useSupportTicketDetailController(
   const invalidateTicketQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['supportTicket', ticket.id] })
     queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+    queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
   }
 
   const resetComposer = () => {
@@ -75,6 +76,8 @@ export function useSupportTicketDetailController(
     mutationFn: (agentId: number) => api.unassignSupportAgent(ticket.id, agentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supportTicket', ticket.id] })
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
     },
     onError: (error: unknown) => {
       toast.error('Failed to unassign agent', extractApiErrorMessage(error, 'Please try again.'))

@@ -27,6 +27,8 @@ export function HandoffModal({ ticketId, onClose }: HandoffModalProps) {
     mutationFn: () => api.handoffTicket(ticketId, selectedAgentId!, note),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supportTicket', ticketId] })
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
       onClose()
     },
   })

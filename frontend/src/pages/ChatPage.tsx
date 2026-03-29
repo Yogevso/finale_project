@@ -114,7 +114,7 @@ export default function ChatPage() {
     <div className="page-stack flex h-[calc(100vh-4rem)] flex-col">
       <PageHeader
         title="Messages"
-        subtitle="Direct conversations only. Support tickets and feedback conversations stay in Support."
+        subtitle="Direct conversations only. Support tickets and escalated feedback conversations stay in Support."
       />
 
       <div className="surface-card mx-4 mb-4 flex flex-1 overflow-hidden rounded-2xl">

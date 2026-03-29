@@ -10,7 +10,7 @@ export default function SupportPage() {
   if (controller.activeTicketId && controller.ticketQuery.isLoading) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Support" subtitle="Manage support tickets and feedback conversations" />
+        <PageHeader title="Support" subtitle="Manage support tickets and escalated feedback conversations." />
         <div className="mx-4 mb-4">
           <ListSkeleton rows={5} />
         </div>
@@ -21,7 +21,7 @@ export default function SupportPage() {
   if (controller.activeTicketId && controller.ticketQuery.isError) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Support" subtitle="Manage support tickets and feedback conversations" />
+        <PageHeader title="Support" subtitle="Manage support tickets and escalated feedback conversations." />
         <div className="mx-4 mb-4">
           <ErrorState
             title="Ticket could not be loaded"
@@ -36,7 +36,7 @@ export default function SupportPage() {
   if (controller.activeTicketId && controller.ticketQuery.data) {
     return (
       <div className="space-y-4">
-        <PageHeader title="Support" subtitle="Manage support tickets and feedback conversations" />
+        <PageHeader title="Support" subtitle="Manage support tickets and escalated feedback conversations." />
         <div className="mx-4 mb-4">
           <SupportTicketDetailView
             ticket={controller.ticketQuery.data}
@@ -49,9 +49,10 @@ export default function SupportPage() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHeader title="Support" subtitle="Manage support tickets and feedback conversations" />
+      <PageHeader title="Support" subtitle="Manage support tickets and escalated feedback conversations." />
       <SupportTicketsList
         tickets={controller.tickets}
+        summary={controller.supportSummary}
         isLoading={controller.ticketsQuery.isLoading}
         isError={controller.ticketsQuery.isError}
         onRetry={() => void controller.ticketsQuery.refetch()}

@@ -1,13 +1,13 @@
 /**
  * CustomerDocumentPage - Document detail view for customer portal
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { useLocation, useNavigate, useParams, Link } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { portalApi, type FeedbackItem, type FeedbackListResponse } from '../../lib/portalApi'
-import { useAuth } from '@/lib/auth'
-import { parseDocumentHtml } from '@/lib/documentRenderer'
-import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { portalApi, type FeedbackItem, type FeedbackListResponse } from '../../lib/portalApi';
+import { useAuth } from '@/lib/auth';
+import { parseDocumentHtml } from '@/lib/documentRenderer';
+import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness';
 import {
   applyHighlights,
   clearHighlights,
@@ -17,19 +17,20 @@ import {
   mergeTocSections,
   processHtmlIntoSections,
   type TocSection,
-} from '@/pages/document-detail/helpers/previewHelpers'
-import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar'
-import { TocPanel } from '@/pages/document-detail/components/TocPanel'
+} from '@/pages/document-detail/helpers/previewHelpers';
+import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
+import { TocPanel } from '@/pages/document-detail/components/TocPanel';
 import {
   InlineFeedbackPopups,
   type InlineFeedbackPopupState,
   type SelectionPopupState,
-} from '@/pages/portal/components/InlineFeedbackPopups'
-import FeedbackForm from '../../components/FeedbackForm'
+} from '@/pages/portal/components/InlineFeedbackPopups';
+import FeedbackForm from '../../components/FeedbackForm';
 import {
   COMMUNICATION_INPUT_LIMITS,
+  COMMUNICATION_INPUT_MIN_LENGTHS,
   normalizeMultilineInput,
-} from '@/lib/uiInputRules'
+} from '@/lib/uiInputRules';
 import {
   DOCUMENT_FONT_SIZE_VALUES,
   getDocumentFontSize,
@@ -39,7 +40,7 @@ import {
   setDocumentTheme,
   type DocumentFontSize,
   type DocumentTheme,
-} from '@/lib/documentReadingPreferences'
+} from '@/lib/documentReadingPreferences';
 import {
   FileText,
   ArrowLeft,
@@ -51,23 +52,23 @@ import {
   CheckCircle,
   BookOpen,
   LifeBuoy,
-} from 'lucide-react'
-import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth'
-import NotFoundState from '@/components/NotFoundState'
-import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
+} from 'lucide-react';
+import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readingWidth';
+import NotFoundState from '@/components/NotFoundState';
+import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar';
 
-const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '' }
+const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '' };
 const EMPTY_INLINE_FEEDBACK_POPUP: InlineFeedbackPopupState = {
   show: false,
   x: 0,
   y: 0,
   text: '',
-}
+};
 
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function formatDate(dateStr: string): string {
@@ -75,125 +76,133 @@ function formatDate(dateStr: string): string {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  })
+  });
 }
 
 function escapeSelector(value: string): string {
-  return value.replace(/([ #;&,.+*~':"!^$[\]()=>|/@])/g, '\\$1')
+  return value.replace(/([ #;&,.+*~':"!^$[\]()=>|/@])/g, '\\$1');
 }
 
 export default function CustomerDocumentPage() {
-  const { id } = useParams<{ id: string }>()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [submittedFeedback, setSubmittedFeedback] = useState<FeedbackItem | null>(null)
-  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'))
-  const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
-  const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme())
-  const [tocCollapsed, setTocCollapsed] = useState(false)
-  const [activeHeading, setActiveHeading] = useState<string | null>(null)
-  const [selectionPopup, setSelectionPopup] = useState<SelectionPopupState>(EMPTY_SELECTION_POPUP)
-  const [inlineFeedbackPopup, setInlineFeedbackPopup] =
-    useState<InlineFeedbackPopupState>(EMPTY_INLINE_FEEDBACK_POPUP)
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [submittedFeedback, setSubmittedFeedback] = useState<FeedbackItem | null>(null);
+  const [contentWidth, setContentWidth] = useState<ReadingWidth>(() => getReadingWidth('reading'));
+  const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize());
+  const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme());
+  const [tocCollapsed, setTocCollapsed] = useState(false);
+  const [activeHeading, setActiveHeading] = useState<string | null>(null);
+  const [selectionPopup, setSelectionPopup] = useState<SelectionPopupState>(EMPTY_SELECTION_POPUP);
+  const [inlineFeedbackPopup, setInlineFeedbackPopup] = useState<InlineFeedbackPopupState>(
+    EMPTY_INLINE_FEEDBACK_POPUP
+  );
   const [inlineFeedbackType, setInlineFeedbackType] = useState<
     'question' | 'suggestion' | 'issue' | 'other'
-  >('suggestion')
-  const [inlineFeedbackContent, setInlineFeedbackContent] = useState('')
-  const [inlineFeedbackError, setInlineFeedbackError] = useState('')
-  const { isCustomer } = useAuth()
-  const contentRef = useRef<HTMLDivElement | null>(null)
-  const lastSavedProgress = useRef<number>(0)
-  const rafId = useRef<number | null>(null)
-  const isFullscreen = location.search.includes('fullscreen=1')
+  >('suggestion');
+  const [inlineFeedbackContent, setInlineFeedbackContent] = useState('');
+  const [inlineFeedbackError, setInlineFeedbackError] = useState('');
+  const { isCustomer } = useAuth();
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const lastSavedProgress = useRef<number>(0);
+  const rafId = useRef<number | null>(null);
+  const isFullscreen = location.search.includes('fullscreen=1');
   const highlightText = useMemo(
     () => new URLSearchParams(location.search).get('highlight')?.trim() ?? '',
-    [location.search],
-  )
+    [location.search]
+  );
 
-  const { data: document, isLoading, error } = useQuery({
+  const {
+    data: document,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['portal', 'document', id],
     queryFn: () => portalApi.getDocument(Number(id)),
     enabled: !!id,
     ...audienceSensitiveQueryOptions,
-  })
+  });
   const processedPreview = useMemo(
     () => processHtmlIntoSections(document?.content ?? ''),
-    [document?.content],
-  )
+    [document?.content]
+  );
   const renderedContent = useMemo(
     () => parseDocumentHtml(processedPreview.html),
-    [processedPreview.html],
-  )
+    [processedPreview.html]
+  );
   const tocSections = useMemo(() => {
-    const htmlSections = processedPreview.sections
-    const outlineSections = mapOutlineItemsToSections(document?.toc_items || [])
+    const htmlSections = processedPreview.sections;
+    const outlineSections = mapOutlineItemsToSections(document?.toc_items || []);
     if (outlineSections.length === 0) {
-      return htmlSections
+      return htmlSections;
     }
 
-    const filteredOutlineSections = filterOutlineSectionsByHtml(outlineSections, processedPreview.html)
+    const filteredOutlineSections = filterOutlineSectionsByHtml(
+      outlineSections,
+      processedPreview.html
+    );
     if (filteredOutlineSections.length === 0) {
-      return htmlSections
+      return htmlSections;
     }
 
-    return mergeTocSections(filteredOutlineSections, htmlSections)
-  }, [document?.toc_items, processedPreview.html, processedPreview.sections])
+    return mergeTocSections(filteredOutlineSections, htmlSections);
+  }, [document?.toc_items, processedPreview.html, processedPreview.sections]);
   const sectionLinkBasePath = isFullscreen
     ? `/portal/documents/${id}?fullscreen=1`
-    : `/portal/documents/${id}`
+    : `/portal/documents/${id}`;
   const contentStyle = useMemo(
     () =>
       ({
         '--doc-font-size': DOCUMENT_FONT_SIZE_VALUES[fontSize],
       }) as CSSProperties,
-    [fontSize],
-  )
+    [fontSize]
+  );
   const documentPaperClass = useMemo(
     () =>
       `${contentWidth === 'fluid' ? 'document-preview-paper document-preview-paper-fluid' : 'document-preview-paper'} ${getDocumentThemeClassName(theme)}`,
-    [contentWidth, theme],
-  )
+    [contentWidth, theme]
+  );
 
   const { data: relatedDocs } = useQuery({
     queryKey: ['portal', 'document', id, 'related'],
     queryFn: () => portalApi.getRelatedDocuments(Number(id)),
     enabled: !!id,
     ...audienceSensitiveQueryOptions,
-  })
+  });
 
   const closeInlineFeedbackPopup = useCallback(() => {
-    setSelectionPopup(EMPTY_SELECTION_POPUP)
-    setInlineFeedbackPopup(EMPTY_INLINE_FEEDBACK_POPUP)
-    setInlineFeedbackContent('')
-    setInlineFeedbackError('')
-    setInlineFeedbackType('suggestion')
-    window.getSelection()?.removeAllRanges()
-  }, [])
+    setSelectionPopup(EMPTY_SELECTION_POPUP);
+    setInlineFeedbackPopup(EMPTY_INLINE_FEEDBACK_POPUP);
+    setInlineFeedbackContent('');
+    setInlineFeedbackError('');
+    setInlineFeedbackType('suggestion');
+    window.getSelection()?.removeAllRanges();
+  }, []);
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
-    setFontSizeState(value)
-    setDocumentFontSize(value)
-  }, [])
+    setFontSizeState(value);
+    setDocumentFontSize(value);
+  }, []);
 
   const handleSetTheme = useCallback((value: DocumentTheme) => {
-    setThemeState(value)
-    setDocumentTheme(value)
-  }, [])
+    setThemeState(value);
+    setDocumentTheme(value);
+  }, []);
 
   const feedbackMutation = useMutation({
     mutationFn: (data: {
-      feedback_type: 'question' | 'suggestion' | 'issue' | 'other'
-      content: string
-      anchor_text?: string
+      feedback_type: 'question' | 'suggestion' | 'issue' | 'other';
+      content: string;
+      anchor_text?: string;
     }) =>
       portalApi.submitFeedback({
         document_id: Number(id),
         ...data,
       }),
     onMutate: async (data) => {
-      const optimisticFeedbackId = -Date.now()
-      const nowIso = new Date().toISOString()
+      const optimisticFeedbackId = -Date.now();
+      const nowIso = new Date().toISOString();
       const optimisticFeedback: FeedbackItem = {
         id: optimisticFeedbackId,
         document_id: Number(id),
@@ -205,101 +214,101 @@ export default function CustomerDocumentPage() {
         status: 'pending',
         created_at: nowIso,
         updated_at: nowIso,
-      }
-      setSubmittedFeedback(optimisticFeedback)
+      };
+      setSubmittedFeedback(optimisticFeedback);
 
       const previousFeedbackQueries = queryClient.getQueriesData<FeedbackListResponse>({
         queryKey: ['portal', 'feedback'],
-      })
+      });
 
       previousFeedbackQueries.forEach(([queryKey, previous]) => {
-        if (!previous) return
+        if (!previous) return;
 
         const filters =
           Array.isArray(queryKey) && typeof queryKey[2] === 'object' && queryKey[2] !== null
             ? (queryKey[2] as { status?: 'pending' | 'responded' | 'closed' })
-            : undefined
+            : undefined;
 
         if (filters?.status && filters.status !== 'pending') {
-          return
+          return;
         }
 
         queryClient.setQueryData<FeedbackListResponse>(queryKey, {
           ...previous,
           items: [optimisticFeedback, ...previous.items],
           total: previous.total + 1,
-        })
-      })
+        });
+      });
 
-      return { optimisticFeedbackId, previousFeedbackQueries }
+      return { optimisticFeedbackId, previousFeedbackQueries };
     },
     onError: (_error, _variables, context) => {
-      setSubmittedFeedback(null)
+      setSubmittedFeedback(null);
       context?.previousFeedbackQueries.forEach(([queryKey, previous]) => {
-        queryClient.setQueryData(queryKey, previous)
-      })
+        queryClient.setQueryData(queryKey, previous);
+      });
     },
     onSuccess: (createdFeedback, _variables, context) => {
-      closeInlineFeedbackPopup()
-      setSubmittedFeedback(createdFeedback)
+      closeInlineFeedbackPopup();
+      setSubmittedFeedback(createdFeedback);
       queryClient.setQueriesData<FeedbackListResponse>(
         { queryKey: ['portal', 'feedback'] },
         (current) => {
-          if (!current) return current
+          if (!current) return current;
           return {
             ...current,
             items: current.items.map((item) =>
-              item.id === context?.optimisticFeedbackId ? createdFeedback : item,
+              item.id === context?.optimisticFeedbackId ? createdFeedback : item
             ),
-          }
-        },
-      )
+          };
+        }
+      );
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['portal', 'feedback'] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'feedback'] });
     },
-  })
+  });
 
   const updateProgressMutation = useMutation({
     mutationFn: (percent: number) => portalApi.updateReadingProgress(Number(id), percent),
-  })
+  });
 
   const handleSelectionMouseUp = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
       if ((event.target as HTMLElement).closest('.inline-comment-popup')) {
-        return
+        return;
       }
 
-      const selection = window.getSelection()
+      const selection = window.getSelection();
       if (!selection || selection.isCollapsed) {
         if (!inlineFeedbackPopup.show) {
-          setSelectionPopup(EMPTY_SELECTION_POPUP)
+          setSelectionPopup(EMPTY_SELECTION_POPUP);
         }
-        return
+        return;
       }
 
-      const selectedText = selection.toString().trim()
+      const selectedText = selection.toString().trim();
       if (selectedText.length < 3) {
-        setSelectionPopup(EMPTY_SELECTION_POPUP)
-        return
+        setSelectionPopup(EMPTY_SELECTION_POPUP);
+        return;
       }
 
-      const range = selection.getRangeAt(0)
-      const rect = range.getBoundingClientRect()
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
       setSelectionPopup({
         show: true,
         x: rect.left + rect.width / 2,
         y: rect.top - 10,
         text: selectedText,
-      })
-      setInlineFeedbackError('')
+      });
+      setInlineFeedbackError('');
     },
-    [inlineFeedbackPopup.show],
-  )
+    [inlineFeedbackPopup.show]
+  );
 
   const handleOpenInlineFeedbackForm = useCallback(() => {
     if (!selectionPopup.text) {
-      return
+      return;
     }
 
     setInlineFeedbackPopup({
@@ -307,192 +316,193 @@ export default function CustomerDocumentPage() {
       x: selectionPopup.x,
       y: selectionPopup.y + 60,
       text: selectionPopup.text,
-    })
-    setSelectionPopup(EMPTY_SELECTION_POPUP)
-    setInlineFeedbackError('')
-  }, [selectionPopup])
+    });
+    setSelectionPopup(EMPTY_SELECTION_POPUP);
+    setInlineFeedbackError('');
+  }, [selectionPopup]);
 
   const handleSubmitInlineFeedback = useCallback(() => {
     const normalizedContent = normalizeMultilineInput(
       inlineFeedbackContent,
-      COMMUNICATION_INPUT_LIMITS.feedbackContent,
-    )
-    if (normalizedContent.length < 10) {
-      setInlineFeedbackError('Please enter at least 10 characters of feedback.')
-      return
+      COMMUNICATION_INPUT_LIMITS.feedbackContent
+    );
+    if (normalizedContent.length < COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent) {
+      setInlineFeedbackError(
+        `Please enter at least ${COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent} characters of feedback.`
+      );
+      return;
     }
 
-    setInlineFeedbackError('')
+    setInlineFeedbackError('');
     feedbackMutation.mutate({
       feedback_type: inlineFeedbackType,
       content: normalizedContent,
       anchor_text: inlineFeedbackPopup.text,
-    })
-  }, [
-    feedbackMutation,
-    inlineFeedbackContent,
-    inlineFeedbackPopup.text,
-    inlineFeedbackType,
-  ])
+    });
+  }, [feedbackMutation, inlineFeedbackContent, inlineFeedbackPopup.text, inlineFeedbackType]);
 
   const computeAndSaveProgress = useCallback(() => {
     if (!isCustomer || !contentRef.current || !id) {
-      return
+      return;
     }
 
-    const element = contentRef.current
-    const scrollY = window.scrollY
-    const elementTop = element.getBoundingClientRect().top + scrollY
-    const elementHeight = element.scrollHeight
-    const viewportHeight = window.innerHeight
-    const end = elementTop + elementHeight - viewportHeight
+    const element = contentRef.current;
+    const scrollY = window.scrollY;
+    const elementTop = element.getBoundingClientRect().top + scrollY;
+    const elementHeight = element.scrollHeight;
+    const viewportHeight = window.innerHeight;
+    const end = elementTop + elementHeight - viewportHeight;
 
-    let progress = 0
+    let progress = 0;
     if (end <= elementTop) {
-      progress = 100
+      progress = 100;
     } else if (scrollY <= elementTop) {
-      progress = 0
+      progress = 0;
     } else if (scrollY >= end) {
-      progress = 100
+      progress = 100;
     } else {
-      progress = Math.round(((scrollY - elementTop) / (end - elementTop)) * 100)
+      progress = Math.round(((scrollY - elementTop) / (end - elementTop)) * 100);
     }
 
-    progress = Math.max(0, Math.min(100, progress))
+    progress = Math.max(0, Math.min(100, progress));
     if (progress <= lastSavedProgress.current) {
       // Continue updating the active TOC item even when progress doesn't advance.
     } else {
-      const currentMilestone = Math.floor(progress / 10) * 10
-      const savedMilestone = Math.floor(lastSavedProgress.current / 10) * 10
+      const currentMilestone = Math.floor(progress / 10) * 10;
+      const savedMilestone = Math.floor(lastSavedProgress.current / 10) * 10;
       if (currentMilestone > savedMilestone && progress > lastSavedProgress.current) {
-        lastSavedProgress.current = progress
-        updateProgressMutation.mutate(progress)
+        lastSavedProgress.current = progress;
+        updateProgressMutation.mutate(progress);
       }
     }
 
     const headings = Array.from(
-      element.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'),
-    )
+      element.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]')
+    );
     if (headings.length === 0) {
-      setActiveHeading(null)
-      return
+      setActiveHeading(null);
+      return;
     }
 
-    const viewportOffset = isFullscreen ? 140 : 180
-    let nextActiveHeading: string | null = null
+    const viewportOffset = isFullscreen ? 140 : 180;
+    let nextActiveHeading: string | null = null;
     headings.forEach((heading) => {
       if (heading.getBoundingClientRect().top <= viewportOffset) {
-        nextActiveHeading = heading.id
+        nextActiveHeading = heading.id;
       }
-    })
+    });
 
     if (!nextActiveHeading) {
-      nextActiveHeading = headings[0]?.id ?? null
+      nextActiveHeading = headings[0]?.id ?? null;
     }
 
-    setActiveHeading(nextActiveHeading)
-  }, [id, isCustomer, isFullscreen, updateProgressMutation])
+    setActiveHeading(nextActiveHeading);
+  }, [id, isCustomer, isFullscreen, updateProgressMutation]);
 
   useEffect(() => {
     if (!isCustomer || !id) {
-      return
+      return;
     }
 
     const handleScroll = () => {
       if (rafId.current !== null) {
-        return
+        return;
       }
       rafId.current = window.requestAnimationFrame(() => {
-        rafId.current = null
-        computeAndSaveProgress()
-      })
-    }
+        rafId.current = null;
+        computeAndSaveProgress();
+      });
+    };
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
 
     return () => {
-      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('scroll', handleScroll);
       if (rafId.current !== null) {
-        window.cancelAnimationFrame(rafId.current)
-        rafId.current = null
+        window.cancelAnimationFrame(rafId.current);
+        rafId.current = null;
       }
-    }
-  }, [computeAndSaveProgress, id, isCustomer])
+    };
+  }, [computeAndSaveProgress, id, isCustomer]);
 
   useEffect(() => {
-    const container = contentRef.current
+    const container = contentRef.current;
     if (!container) {
-      return
+      return;
     }
 
-    clearHighlights(container)
+    clearHighlights(container);
     if (!highlightText) {
-      return
+      return;
     }
 
-    let clearTimer: number | null = null
+    let clearTimer: number | null = null;
     const applyTimer = window.setTimeout(() => {
-      applyHighlights(container, highlightText)
-      const firstHighlight = container.querySelector<HTMLElement>('mark.doc-highlight')
+      applyHighlights(container, highlightText);
+      const firstHighlight = container.querySelector<HTMLElement>('mark.doc-highlight');
       if (firstHighlight) {
-        firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
         clearTimer = window.setTimeout(() => {
-          clearHighlights(container)
-        }, 6000)
+          clearHighlights(container);
+        }, 6000);
       }
-    }, 250)
+    }, 250);
 
     return () => {
-      window.clearTimeout(applyTimer)
+      window.clearTimeout(applyTimer);
       if (clearTimer !== null) {
-        window.clearTimeout(clearTimer)
+        window.clearTimeout(clearTimer);
       }
-      clearHighlights(container)
-    }
-  }, [highlightText, renderedContent])
+      clearHighlights(container);
+    };
+  }, [highlightText, renderedContent]);
 
-  const handleSectionClick = useCallback((section: TocSection) => {
-    const anchorId = section.anchorId || `heading-${section.index}`
-    const container = contentRef.current
-    if (!container) {
-      return
-    }
+  const handleSectionClick = useCallback(
+    (section: TocSection) => {
+      const anchorId = section.anchorId || `heading-${section.index}`;
+      const container = contentRef.current;
+      if (!container) {
+        return;
+      }
 
-    const byAnchor =
-      container.querySelector<HTMLElement>(`#${escapeSelector(anchorId)}`) ??
-      container.ownerDocument.getElementById(anchorId)
-    const matched = byAnchor && container.contains(byAnchor)
-      ? byAnchor
-      : findSectionMatchInRoot(container, section)?.element ?? null
-    const fallbackHeading =
-      matched ??
-      Array.from(
-        container.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'),
-      )[section.index] ??
-      null
+      const byAnchor =
+        container.querySelector<HTMLElement>(`#${escapeSelector(anchorId)}`) ??
+        container.ownerDocument.getElementById(anchorId);
+      const matched =
+        byAnchor && container.contains(byAnchor)
+          ? byAnchor
+          : (findSectionMatchInRoot(container, section)?.element ?? null);
+      const fallbackHeading =
+        matched ??
+        Array.from(
+          container.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]')
+        )[section.index] ??
+        null;
 
-    if (!fallbackHeading) {
-      return
-    }
+      if (!fallbackHeading) {
+        return;
+      }
 
-    const offset = isFullscreen ? 96 : 132
-    const targetTop = fallbackHeading.getBoundingClientRect().top + window.scrollY - offset
-    window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
-    setActiveHeading(fallbackHeading.id || anchorId)
-  }, [isFullscreen])
+      const offset = isFullscreen ? 96 : 132;
+      const targetTop = fallbackHeading.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+      setActiveHeading(fallbackHeading.id || anchorId);
+    },
+    [isFullscreen]
+  );
 
   const applyWidth = (value: ReadingWidth) => {
-    setContentWidth(value)
-    setReadingWidth(value)
-  }
+    setContentWidth(value);
+    setReadingWidth(value);
+  };
 
   if (isLoading) {
     return (
       <div className="content-shell flex animate-fade-in justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600"></div>
       </div>
-    )
+    );
   }
 
   if (error || !document) {
@@ -513,11 +523,13 @@ export default function CustomerDocumentPage() {
           }
         />
       </div>
-    )
+    );
   }
 
   return (
-    <div className={`${isFullscreen ? 'min-h-screen bg-white py-6 dark:bg-slate-950' : 'page-stack'} animate-fade-in`}>
+    <div
+      className={`${isFullscreen ? 'min-h-screen bg-white py-6 dark:bg-slate-950' : 'page-stack'} animate-fade-in`}
+    >
       <FullscreenTopBar
         isFullscreen={isFullscreen}
         documentTitle={document.title}
@@ -554,9 +566,7 @@ export default function CustomerDocumentPage() {
           <div className="border-b border-slate-200 p-6 dark:border-slate-800">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="page-title text-slate-900 dark:text-slate-100">
-                  {document.title}
-                </h1>
+                <h1 className="page-title text-slate-900 dark:text-slate-100">{document.title}</h1>
                 {document.description && (
                   <p className="body-copy mt-2 dark:text-slate-300">{document.description}</p>
                 )}
@@ -612,8 +622,8 @@ export default function CustomerDocumentPage() {
                 <p className="helper-copy mb-3 uppercase tracking-[0.18em]">Contents</p>
                 <div className="space-y-1">
                   {tocSections.map((section) => {
-                    const anchorId = section.anchorId || `heading-${section.index}`
-                    const isActive = activeHeading === anchorId
+                    const anchorId = section.anchorId || `heading-${section.index}`;
+                    const isActive = activeHeading === anchorId;
                     return (
                       <button
                         key={section.id}
@@ -628,7 +638,7 @@ export default function CustomerDocumentPage() {
                       >
                         {section.text}
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -653,7 +663,10 @@ export default function CustomerDocumentPage() {
               ) : null}
 
               <div className="min-w-0 flex-1">
-                <div className={`${documentPaperClass} rounded-2xl`} data-testid="customer-document-paper">
+                <div
+                  className={`${documentPaperClass} rounded-2xl`}
+                  data-testid="customer-document-paper"
+                >
                   <div
                     ref={contentRef}
                     id="document-content-area"
@@ -676,7 +689,7 @@ export default function CustomerDocumentPage() {
               feedbackContent={inlineFeedbackContent}
               validationError={
                 inlineFeedbackError ||
-                (inlineFeedbackPopup.show ? feedbackMutation.error?.message ?? '' : '')
+                (inlineFeedbackPopup.show ? (feedbackMutation.error?.message ?? '') : '')
               }
               isSubmitting={feedbackMutation.isPending}
               topOffset={isFullscreen ? 76 : 0}
@@ -749,9 +762,7 @@ export default function CustomerDocumentPage() {
                     to={`/portal/documents/${related.id}`}
                     className="surface-card-hover block rounded-2xl p-4"
                   >
-                    <h3 className="card-title line-clamp-2 dark:text-slate-100">
-                      {related.title}
-                    </h3>
+                    <h3 className="card-title line-clamp-2 dark:text-slate-100">{related.title}</h3>
                     {related.description && (
                       <p className="body-copy mt-1 line-clamp-2 dark:text-slate-400">
                         {related.description}
@@ -774,12 +785,10 @@ export default function CustomerDocumentPage() {
 
         <div className="surface-card rounded-2xl">
           <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
-            <h2 className="section-title dark:text-slate-100">
-              Submit Feedback
-            </h2>
+            <h2 className="section-title dark:text-slate-100">Submit Feedback</h2>
             <p className="body-copy dark:text-slate-400">
-              Have a question or suggestion about this document? Let us know. You can also
-              highlight text above and send feedback directly on the selected passage.
+              Have a question or suggestion about this document? Let us know. You can also highlight
+              text above and send feedback directly on the selected passage.
             </p>
           </div>
           <div className="p-6">
@@ -790,7 +799,8 @@ export default function CustomerDocumentPage() {
                   Thank you for your feedback!
                 </h3>
                 <p className="body-copy mt-2 dark:text-slate-400">
-                  We started a conversation thread for this feedback so you can continue with the team.
+                  Your feedback was sent to the team. We’ll respond in your feedback history when
+                  needed.
                 </p>
                 <div className="mt-4 flex justify-center gap-4">
                   <button
@@ -811,9 +821,6 @@ export default function CustomerDocumentPage() {
                   <Link to="/portal/feedback" className="btn-secondary table-action-btn">
                     View my feedback
                   </Link>
-                  <Link to="/portal/support" className="btn-secondary table-action-btn">
-                    View support tickets
-                  </Link>
                 </div>
               </div>
             ) : (
@@ -828,9 +835,7 @@ export default function CustomerDocumentPage() {
 
         <div className="surface-card flex items-center justify-between rounded-2xl px-6 py-5">
           <div>
-            <h2 className="section-title dark:text-slate-100">
-              Need more help?
-            </h2>
+            <h2 className="section-title dark:text-slate-100">Need more help?</h2>
             <p className="body-copy dark:text-slate-400">
               Open a support ticket with this document's context pre-filled.
             </p>
@@ -845,5 +850,5 @@ export default function CustomerDocumentPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

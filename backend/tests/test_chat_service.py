@@ -7,6 +7,8 @@ from app.errors import DomainError
 from app.models import (
     Chat,
     ChatMessage,
+    Notification,
+    NotificationType,
     ChatParticipant,
     ChatParticipantRole,
     ChatType,
@@ -290,3 +292,79 @@ class TestReadReceipts:
         db.refresh(participant)
         # Should have updated to a new (or equal) timestamp
         assert participant.last_read_at >= first_read
+
+
+class TestChatNotifications:
+    def test_direct_chat_message_creates_notification_for_other_internal_participant(
+        self,
+        db,
+        svc,
+        editor_a,
+        editor_b,
+    ):
+        chat = svc.create_direct_chat(editor_a, editor_b.id)
+
+        svc.send_message(chat.id, editor_a, "Can you review the release notes?")
+
+        notification = (
+            db.query(Notification)
+            .filter(Notification.user_id == editor_b.id)
+            .order_by(Notification.id.desc())
+            .first()
+        )
+        assert notification is not None
+        assert notification.type == NotificationType.SYSTEM
+        assert notification.title == f"New message from {editor_a.full_name}"
+        assert notification.message == "Can you review the release notes?"
+        assert notification.link == f"/chat?id={chat.id}"
+
+    def test_muted_chat_participant_does_not_receive_notification(
+        self,
+        db,
+        svc,
+        editor_a,
+        editor_b,
+    ):
+        chat = svc.create_direct_chat(editor_a, editor_b.id)
+        participant = (
+            db.query(ChatParticipant)
+            .filter_by(chat_id=chat.id, user_id=editor_b.id)
+            .first()
+        )
+        assert participant is not None
+        participant.is_muted = True
+        db.commit()
+
+        svc.send_message(chat.id, editor_a, "Muted users should not get a bell notification")
+
+        notification = (
+            db.query(Notification)
+            .filter(Notification.user_id == editor_b.id, Notification.link == f"/chat?id={chat.id}")
+            .first()
+        )
+        assert notification is None
+
+    def test_customer_portal_participants_do_not_receive_internal_chat_notifications(
+        self,
+        db,
+        svc,
+        editor_a,
+        tenant,
+    ):
+        customer = create_user(
+            db,
+            username="portal_customer",
+            full_name="Portal Customer",
+            role=UserRole.CUSTOMER,
+            tenant_id=tenant.id,
+        )
+        chat = svc.create_direct_chat(editor_a, customer.id)
+
+        svc.send_message(chat.id, editor_a, "This should surface via unread chat state, not internal notifications")
+
+        notification = (
+            db.query(Notification)
+            .filter(Notification.user_id == customer.id, Notification.link == f"/chat?id={chat.id}")
+            .first()
+        )
+        assert notification is None

@@ -27,6 +27,7 @@ interface FeedbackResponseDialogProps {
   onClose: () => void
   onRespond: (response: string) => void
   onUpdateStatus: (status: FeedbackStatus) => void
+  onEscalate?: () => void
   isLoading: boolean
 }
 
@@ -58,6 +59,7 @@ export default function FeedbackResponseDialog({
   onClose,
   onRespond,
   onUpdateStatus,
+  onEscalate,
   isLoading,
 }: FeedbackResponseDialogProps) {
   const [response, setResponse] = useState(feedback.response || '')
@@ -241,6 +243,16 @@ export default function FeedbackResponseDialog({
           </div>
 
         <div className="flex items-center gap-3">
+          {!feedback.ticket_id && onEscalate ? (
+            <button
+              type="button"
+              onClick={onEscalate}
+              disabled={isLoading}
+              className="btn-secondary disabled:opacity-50"
+            >
+              Escalate to Support
+            </button>
+          ) : null}
           {feedback.ticket_id ? (
             <Link
               to={`/support?ticket=${feedback.ticket_id}`}

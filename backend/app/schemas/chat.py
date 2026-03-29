@@ -211,6 +211,10 @@ class SupportTicketResponse(BaseModel):
     updated_at: datetime
     resolved_at: Optional[datetime] = None
     customer_full_name: Optional[str] = None
+    last_customer_message_at: Optional[datetime] = None
+    has_unread_activity: bool = False
+    awaiting_agent_reply: bool = False
+    needs_attention: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -225,6 +229,13 @@ class SupportTicketListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SupportTicketSummaryResponse(BaseModel):
+    unread_count: int = 0
+    customer_reply_count: int = 0
+    needs_attention_count: int = 0
+    nav_badge_count: int = 0
 
 
 class SendTicketMessageRequest(BaseModel):

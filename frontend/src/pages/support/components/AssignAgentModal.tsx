@@ -26,6 +26,8 @@ export function AssignAgentModal({ ticketId, onClose }: AssignAgentModalProps) {
       api.assignSupportAgent(ticketId, { agent_id: agentId, is_primary: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supportTicket', ticketId] })
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
       onClose()
     },
   })

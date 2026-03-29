@@ -20,7 +20,7 @@ import {
   removeNotification,
   setNotificationReadState,
 } from '@/lib/notificationsCache'
-import type { Notification, NotificationListResponse, NotificationType } from '@/types'
+import type { Notification, NotificationListResponse } from '@/types'
 
 const BELL_NOTIFICATIONS_LIMIT = 20
 
@@ -172,8 +172,12 @@ export default function NotificationBell() {
     navigate(link)
   }
 
-  const getNotificationIcon = (type: NotificationType) => {
-    switch (type) {
+  const getNotificationIcon = (notification: Pick<Notification, 'type' | 'link'>) => {
+    if (notification.type === 'system' && notification.link?.startsWith('/chat')) {
+      return <MessageSquare className="w-4 h-4 text-indigo-500" />
+    }
+
+    switch (notification.type) {
       case 'comment_added':
       case 'comment_reply':
         return <MessageSquare className="w-4 h-4 text-sky-500" />
@@ -318,7 +322,7 @@ export default function NotificationBell() {
                   }`}
                 >
                   <div className="flex-shrink-0 mt-0.5">
-                    {getNotificationIcon(notification.type)}
+                    {getNotificationIcon(notification)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm ${notification.is_read ? 'text-slate-700 dark:text-slate-200' : 'font-medium text-slate-900 dark:text-slate-100'}`}>

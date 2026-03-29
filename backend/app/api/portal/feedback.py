@@ -91,14 +91,16 @@ async def submit_feedback(
     db.add(feedback)
     db.flush()
 
-    ticket = SupportTicketService(db).get_or_create_feedback_ticket(feedback)
+    support_service = SupportTicketService(db)
+    support_service.notify_feedback_received(feedback=feedback, customer=current_user)
+    db.commit()
     db.refresh(feedback)
 
     return FeedbackResponse(
         id=feedback.id,
         document_id=feedback.document_id,
         document_title=document.title,
-        ticket_id=ticket.id,
+        ticket_id=None,
         feedback_type=feedback.feedback_type,
         content=feedback.content,
         anchor_text=feedback.anchor_text,
@@ -122,7 +124,10 @@ async def list_my_feedback(
     """
     List all feedback submitted by the current customer.
     """
-    query = db.query(Feedback).filter(Feedback.user_id == current_user.id)
+    query = db.query(Feedback).filter(
+        Feedback.user_id == current_user.id,
+        Feedback.is_helpful.is_(None),
+    )
 
     if status:
         query = query.filter(Feedback.status == status)
@@ -196,6 +201,7 @@ async def get_feedback_detail(
         .filter(
             Feedback.id == feedback_id,
             Feedback.user_id == current_user.id,
+            Feedback.is_helpful.is_(None),
         )
         .first()
     )
@@ -311,6 +317,7 @@ async def create_chat_from_feedback(
     feedback = db.query(Feedback).filter(
         Feedback.id == feedback_id,
         Feedback.user_id == current_user.id,
+        Feedback.is_helpful.is_(None),
     ).first()
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")

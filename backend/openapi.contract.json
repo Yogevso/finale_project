@@ -691,8 +691,8 @@
           "expires_in_days": {
             "anyOf": [
               {
-                "maximum": 365,
-                "minimum": 1,
+                "maximum": 365.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -729,7 +729,7 @@
         "type": "object"
       },
       "ApiKeyCreatedResponse": {
-        "description": "Returned only on creation — contains the full key (never shown again).",
+        "description": "Returned only on creation \u2014 contains the full key (never shown again).",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -1419,14 +1419,14 @@
             "type": "string"
           },
           "threshold": {
-            "maximum": 1000000,
-            "minimum": 1,
+            "maximum": 1000000.0,
+            "minimum": 1.0,
             "title": "Threshold",
             "type": "integer"
           },
           "window_minutes": {
-            "maximum": 10080,
-            "minimum": 1,
+            "maximum": 10080.0,
+            "minimum": 1.0,
             "title": "Window Minutes",
             "type": "integer"
           }
@@ -4037,8 +4037,8 @@
         "description": "Content production analytics response",
         "properties": {
           "approval_rate": {
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Approval Rate",
             "type": "number"
           },
@@ -5649,14 +5649,14 @@
         "description": "Engagement analytics response",
         "properties": {
           "avg_reading_progress": {
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Avg Reading Progress",
             "type": "number"
           },
           "completion_rate": {
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Completion Rate",
             "type": "number"
           },
@@ -5780,8 +5780,8 @@
           },
           "guardrail_threshold": {
             "default": 10,
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Guardrail Threshold",
             "type": "integer"
           },
@@ -5805,8 +5805,8 @@
           },
           "traffic_percentage": {
             "default": 100,
-            "maximum": 100,
-            "minimum": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
             "title": "Traffic Percentage",
             "type": "integer"
           },
@@ -5859,7 +5859,7 @@
           },
           "sample_size": {
             "default": 0,
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Sample Size",
             "type": "integer"
           },
@@ -6231,8 +6231,8 @@
           },
           "rollout_percentage": {
             "default": 100,
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Rollout Percentage",
             "type": "integer"
           },
@@ -6333,8 +6333,8 @@
             "$ref": "#/components/schemas/TimeGranularity"
           },
           "helpfulness_rate": {
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Helpfulness Rate",
             "type": "number"
           },
@@ -7624,8 +7624,8 @@
             "title": "Comment"
           },
           "score": {
-            "maximum": 10,
-            "minimum": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
             "title": "Score",
             "type": "integer"
           }
@@ -8004,6 +8004,14 @@
             "title": "Title",
             "type": "string"
           },
+          "toc_items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PortalDocumentTocItem"
+            },
+            "title": "Toc Items",
+            "type": "array"
+          },
           "topic": {
             "anyOf": [
               {
@@ -8263,6 +8271,62 @@
           "updated_at"
         ],
         "title": "PortalDocumentSummary",
+        "type": "object"
+      },
+      "PortalDocumentTocItem": {
+        "description": "Stored reader outline item for portal consumers.",
+        "properties": {
+          "anchor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "level": {
+            "default": 1,
+            "title": "Level",
+            "type": "integer"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page End"
+          },
+          "page_start": {
+            "default": 1,
+            "title": "Page Start",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PortalDocumentTocItem",
         "type": "object"
       },
       "PortalFacetsResponse": {
@@ -9345,7 +9409,7 @@
         "type": "object"
       },
       "PublicRegistrationRequest": {
-        "description": "AF-009: Public self-registration schema — no role or tenant_id fields.\n\nExternal API payloads must not carry server-owned authority fields.",
+        "description": "AF-009: Public self-registration schema \u2014 no role or tenant_id fields.\n\nExternal API payloads must not carry server-owned authority fields.",
         "properties": {
           "email": {
             "format": "email",
@@ -9462,7 +9526,7 @@
             "title": "Platform"
           },
           "score": {
-            "default": 0,
+            "default": 0.0,
             "title": "Score",
             "type": "number"
           },
@@ -10547,7 +10611,7 @@
             "type": "integer"
           },
           "relevance_score": {
-            "default": 0,
+            "default": 0.0,
             "title": "Relevance Score",
             "type": "number"
           },
@@ -11151,6 +11215,11 @@
             "title": "Assignments",
             "type": "array"
           },
+          "awaiting_agent_reply": {
+            "default": false,
+            "title": "Awaiting Agent Reply",
+            "type": "boolean"
+          },
           "category": {
             "anyOf": [
               {
@@ -11193,9 +11262,26 @@
             ],
             "title": "Feedback Id"
           },
+          "has_unread_activity": {
+            "default": false,
+            "title": "Has Unread Activity",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "last_customer_message_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Customer Message At"
           },
           "messages": {
             "default": [],
@@ -11204,6 +11290,11 @@
             },
             "title": "Messages",
             "type": "array"
+          },
+          "needs_attention": {
+            "default": false,
+            "title": "Needs Attention",
+            "type": "boolean"
           },
           "priority": {
             "$ref": "#/components/schemas/SupportTicketPriority"
@@ -11393,6 +11484,11 @@
       },
       "SupportTicketResponse": {
         "properties": {
+          "awaiting_agent_reply": {
+            "default": false,
+            "title": "Awaiting Agent Reply",
+            "type": "boolean"
+          },
           "category": {
             "anyOf": [
               {
@@ -11435,9 +11531,31 @@
             ],
             "title": "Feedback Id"
           },
+          "has_unread_activity": {
+            "default": false,
+            "title": "Has Unread Activity",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "last_customer_message_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Customer Message At"
+          },
+          "needs_attention": {
+            "default": false,
+            "title": "Needs Attention",
+            "type": "boolean"
           },
           "priority": {
             "$ref": "#/components/schemas/SupportTicketPriority"
@@ -11494,6 +11612,32 @@
         ],
         "title": "SupportTicketStatus",
         "type": "string"
+      },
+      "SupportTicketSummaryResponse": {
+        "properties": {
+          "customer_reply_count": {
+            "default": 0,
+            "title": "Customer Reply Count",
+            "type": "integer"
+          },
+          "nav_badge_count": {
+            "default": 0,
+            "title": "Nav Badge Count",
+            "type": "integer"
+          },
+          "needs_attention_count": {
+            "default": 0,
+            "title": "Needs Attention Count",
+            "type": "integer"
+          },
+          "unread_count": {
+            "default": 0,
+            "title": "Unread Count",
+            "type": "integer"
+          }
+        },
+        "title": "SupportTicketSummaryResponse",
+        "type": "object"
       },
       "SupportTicketUpdate": {
         "properties": {
@@ -11600,8 +11744,8 @@
           },
           "auto_archive_after_value": {
             "default": 12,
-            "maximum": 1200,
-            "minimum": 1,
+            "maximum": 1200.0,
+            "minimum": 1.0,
             "title": "Auto Archive After Value",
             "type": "integer"
           },
@@ -11744,8 +11888,8 @@
           },
           "port": {
             "default": 587,
-            "maximum": 65535,
-            "minimum": 1,
+            "maximum": 65535.0,
+            "minimum": 1.0,
             "title": "Port",
             "type": "integer"
           },
@@ -12196,8 +12340,8 @@
             "type": "integer"
           },
           "health_score": {
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Health Score",
             "type": "number"
           },
@@ -12932,7 +13076,7 @@
         "type": "object"
       },
       "UserCreate": {
-        "description": "User creation schema (admin use — includes role and tenant_id).",
+        "description": "User creation schema (admin use \u2014 includes role and tenant_id).",
         "properties": {
           "email": {
             "format": "email",
@@ -12980,6 +13124,123 @@
           "password"
         ],
         "title": "UserCreate",
+        "type": "object"
+      },
+      "UserOnboardingStateResponse": {
+        "properties": {
+          "checklist_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checklist Completed At"
+          },
+          "checklist_version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Checklist Version",
+            "type": "integer"
+          },
+          "completed_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Completed Steps",
+            "type": "array"
+          },
+          "guide_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide Seen At"
+          },
+          "guide_version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Guide Version",
+            "type": "integer"
+          }
+        },
+        "title": "UserOnboardingStateResponse",
+        "type": "object"
+      },
+      "UserOnboardingStateUpdateRequest": {
+        "properties": {
+          "checklist_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checklist Completed At"
+          },
+          "checklist_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checklist Version"
+          },
+          "completed_steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Steps"
+          },
+          "guide_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide Seen At"
+          },
+          "guide_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guide Version"
+          }
+        },
+        "title": "UserOnboardingStateUpdateRequest",
         "type": "object"
       },
       "UserResponse": {
@@ -14046,9 +14307,21 @@
       "app__schemas__portal__FeedbackCreate": {
         "description": "Schema for submitting feedback",
         "properties": {
+          "anchor_text": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Text"
+          },
           "content": {
             "maxLength": 5000,
-            "minLength": 10,
+            "minLength": 3,
             "title": "Content",
             "type": "string"
           },
@@ -14071,6 +14344,17 @@
       "app__schemas__portal__FeedbackResponse": {
         "description": "Feedback with status and response",
         "properties": {
+          "anchor_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Text"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -15529,7 +15813,7 @@
         ]
       },
       "put": {
-        "description": "Update branding for a tenant — stored in Tenant.settings JSON.",
+        "description": "Update branding for a tenant \u2014 stored in Tenant.settings JSON.",
         "operationId": "update_tenant_branding_api_v1_admin_tenants__tenant_id__branding_put",
         "parameters": [
           {
@@ -15741,7 +16025,7 @@
         ]
       },
       "post": {
-        "description": "Initiate domain verification — returns a DNS TXT record token.",
+        "description": "Initiate domain verification \u2014 returns a DNS TXT record token.",
         "operationId": "create_domain_verification_api_v1_admin_tenants__tenant_id__domains_post",
         "parameters": [
           {
@@ -16178,7 +16462,7 @@
     },
     "/api/v1/admin/tenants/{tenant_id}/suspend": {
       "post": {
-        "description": "Suspend a tenant — all their users get 403.",
+        "description": "Suspend a tenant \u2014 all their users get 403.",
         "operationId": "suspend_tenant_api_v1_admin_tenants__tenant_id__suspend_post",
         "parameters": [
           {
@@ -18841,7 +19125,7 @@
     },
     "/api/v1/auth/permissions-matrix": {
       "get": {
-        "description": "Return the role→permissions matrix so the frontend can align UI guards.",
+        "description": "Return the role\u2192permissions matrix so the frontend can align UI guards.",
         "operationId": "get_permissions_matrix_api_v1_auth_permissions_matrix_get",
         "responses": {
           "200": {
@@ -19179,7 +19463,7 @@
     },
     "/api/v1/changelog": {
       "get": {
-        "description": "List changelog entries (management — includes unpublished drafts).",
+        "description": "List changelog entries (management \u2014 includes unpublished drafts).",
         "operationId": "list_changelog_api_v1_changelog_get",
         "parameters": [
           {
@@ -23266,7 +23550,7 @@
             "schema": {
               "default": 0.8,
               "description": "Similarity threshold",
-              "maximum": 1,
+              "maximum": 1.0,
               "minimum": 0.5,
               "title": "Threshold",
               "type": "number"
@@ -27332,7 +27616,7 @@
     },
     "/api/v1/gdpr/deletion": {
       "post": {
-        "description": "Request account data deletion (GDPR Article 17 — right to erasure).",
+        "description": "Request account data deletion (GDPR Article 17 \u2014 right to erasure).",
         "operationId": "create_deletion_request_api_v1_gdpr_deletion_post",
         "requestBody": {
           "content": {
@@ -27379,7 +27663,7 @@
     },
     "/api/v1/gdpr/deletion/{request_id}/execute": {
       "post": {
-        "description": "Execute an approved data deletion — anonymizes user data.",
+        "description": "Execute an approved data deletion \u2014 anonymizes user data.",
         "operationId": "run_deletion_api_v1_gdpr_deletion__request_id__execute_post",
         "parameters": [
           {
@@ -30045,7 +30329,7 @@
     },
     "/api/v1/portal/support/tickets/{ticket_id}": {
       "get": {
-        "description": "Get ticket detail with messages — internal notes excluded (X1-073).",
+        "description": "Get ticket detail with messages \u2014 internal notes excluded (X1-073).",
         "operationId": "get_my_ticket_api_v1_portal_support_tickets__ticket_id__get",
         "parameters": [
           {
@@ -31759,7 +32043,7 @@
     },
     "/api/v1/search/analytics": {
       "get": {
-        "description": "Get search analytics — top queries, zero-result queries, click-through.",
+        "description": "Get search analytics \u2014 top queries, zero-result queries, click-through.",
         "operationId": "get_search_analytics_api_v1_search_analytics_get",
         "parameters": [
           {
@@ -32445,6 +32729,33 @@
           }
         ],
         "summary": "Create From Feedback",
+        "tags": [
+          "Support"
+        ]
+      }
+    },
+    "/api/v1/support/tickets/summary": {
+      "get": {
+        "description": "Get aggregate support activity counts for navigation and queue summaries.",
+        "operationId": "get_ticket_summary_api_v1_support_tickets_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportTicketSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Ticket Summary",
         "tags": [
           "Support"
         ]
@@ -33708,6 +34019,76 @@
           }
         ],
         "summary": "Update My Notification Preferences",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/onboarding": {
+      "get": {
+        "operationId": "get_my_onboarding_state_api_v1_users_me_onboarding_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOnboardingStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get My Onboarding State",
+        "tags": [
+          "Users"
+        ]
+      },
+      "patch": {
+        "operationId": "update_my_onboarding_state_api_v1_users_me_onboarding_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserOnboardingStateUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOnboardingStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Update My Onboarding State",
         "tags": [
           "Users"
         ]

@@ -113,7 +113,7 @@ export default function MyFeedbackPage() {
       <PageHeader
         eyebrow="Customer Portal"
         title="My Feedback"
-        subtitle="Track feedback submissions and continue longer conversations in Support."
+        subtitle="Track feedback submissions and responses from the team."
       />
 
       <div className="surface-card rounded-2xl p-4">
@@ -322,7 +322,7 @@ export default function MyFeedbackPage() {
               {selectedFeedback.ticket_id ? (
                 <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/40">
                   <p className="body-copy text-slate-900 dark:text-slate-100">
-                    This feedback is now part of a live support conversation.
+                    This feedback was escalated into a support conversation.
                   </p>
                   <Link
                     to={`/portal/support?ticket=${selectedFeedback.ticket_id}`}
