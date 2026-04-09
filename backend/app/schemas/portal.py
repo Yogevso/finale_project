@@ -116,13 +116,15 @@ class PortalFacetsResponse(BaseModel):
 
 # ============ Feedback Schemas ============
 
+PORTAL_FEEDBACK_MIN_LENGTH = 3
+
 
 class FeedbackCreate(BaseModel):
     """Schema for submitting feedback"""
 
     document_id: int
     feedback_type: FeedbackType = FeedbackType.OTHER
-    content: str = Field(..., min_length=10, max_length=5000)
+    content: str = Field(..., min_length=PORTAL_FEEDBACK_MIN_LENGTH, max_length=5000)
     anchor_text: Optional[str] = Field(default=None, max_length=1000)
 
 

@@ -1,14 +1,14 @@
 /**
  * Hook to get total unread chat message count across all chats.
- * Used by Layout to show badge on Chat nav item.
+ * Used by navigation shells to show badge on chat nav items.
  */
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
-export function useChatUnreadCount(): number {
+export function useChatUnreadCount(scope: 'internal' | 'portal' = 'internal'): number {
   const { data } = useQuery({
-    queryKey: ['chats'],
-    queryFn: () => api.getChats(),
+    queryKey: [scope, 'chats'],
+    queryFn: () => (scope === 'portal' ? api.getPortalChats() : api.getChats()),
     refetchInterval: 30000,
     staleTime: 10000,
   })

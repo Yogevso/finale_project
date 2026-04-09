@@ -24,12 +24,23 @@ env/
 *.swp
 *.swo
 
-# SQLite database files (will be mounted as volume)
-data/*.db
-data/*.db-wal
-data/*.db-shm
+# Data directory (mounted as volume at runtime)
+data/
 temp/
 tmp_pytest/
+
+# Coverage & test reports
+htmlcov/
+.coverage
+coverage.xml
+*.txt
+!requirements*.txt
+
+# Misc build artifacts
+.hypothesis/
+*.log
+pip-audit.ignore
+openapi.contract.json
 
 # Tests (not needed in production image)
 tests/

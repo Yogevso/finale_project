@@ -18,9 +18,11 @@ from app.models import (
     ChatParticipantRole,
     ChatType,
     Document,
+    NotificationType,
     User,
     UserRole,
 )
+from app.services.notification_service import NotificationService
 
 
 class ChatService:
@@ -28,6 +30,65 @@ class ChatService:
         self.db = db
         self.core_db = core_db or db
         self._access_policy = DocumentAccessPolicy()
+        self.notification_service = NotificationService(db, chat_db=db)
+
+    @staticmethod
+    def _message_preview(content: str, limit: int = 160) -> str:
+        condensed = " ".join((content or "").split())
+        if len(condensed) <= limit:
+            return condensed
+        return condensed[: limit - 1].rstrip() + "..."
+
+    @staticmethod
+    def _chat_link(chat_id: int) -> str:
+        return f"/chat?id={chat_id}"
+
+    def _notify_message_recipients(
+        self,
+        *,
+        chat: Chat,
+        sender: User,
+        preview: str,
+    ) -> None:
+        recipients = (
+            self.db.query(ChatParticipant)
+            .filter(
+                ChatParticipant.chat_id == chat.id,
+                ChatParticipant.user_id != sender.id,
+                ChatParticipant.is_muted.is_(False),
+            )
+            .all()
+        )
+        if not recipients:
+            return
+
+        recipient_users = {
+            user.id: user
+            for user in self.core_db.query(User).filter(
+                User.id.in_([participant.user_id for participant in recipients])
+            )
+        }
+        sender_name = sender.full_name or sender.username
+        chat_name = chat.name or "group chat"
+        for participant in recipients:
+            recipient = recipient_users.get(participant.user_id)
+            if recipient is None or recipient.role == UserRole.CUSTOMER:
+                continue
+
+            if chat.type == ChatType.GROUP:
+                title = f"New message in {chat_name}"
+                message = f"{sender_name}: {preview}" if preview else sender_name
+            else:
+                title = f"New message from {sender_name}"
+                message = preview or sender_name
+
+            self.notification_service.create_notification(
+                user_id=recipient.id,
+                notification_type=NotificationType.SYSTEM,
+                title=title,
+                message=message,
+                link=self._chat_link(chat.id),
+            )
 
     # ------------------------------------------------------------------
     # Chat creation
@@ -262,7 +323,7 @@ class ChatService:
 
     def send_message(self, chat_id: int, sender: User, content: str, *, context_json: str | None = None) -> ChatMessage:
         """Send a message in a chat (X1-006)."""
-        self._get_chat_with_permission(chat_id, sender)
+        chat = self._get_chat_with_permission(chat_id, sender)
         content = content.strip()
         if not content:
             raise ValidationError("Message content cannot be empty")
@@ -282,6 +343,11 @@ class ChatService:
 
         # Update chat's last_message_at for sorting
         self.db.query(Chat).filter(Chat.id == chat_id).update({"last_message_at": datetime.utcnow()})
+        self._notify_message_recipients(
+            chat=chat,
+            sender=sender,
+            preview=self._message_preview(content),
+        )
 
         self.db.commit()
         self.db.refresh(msg)
@@ -297,7 +363,7 @@ class ChatService:
         file_mime_type: str,
     ) -> ChatMessage:
         """Send a file/image message in a chat."""
-        self._get_chat_with_permission(chat_id, sender)
+        chat = self._get_chat_with_permission(chat_id, sender)
 
         msg = ChatMessage(
             chat_id=chat_id,
@@ -311,6 +377,11 @@ class ChatService:
         )
         self.db.add(msg)
         self.db.query(Chat).filter(Chat.id == chat_id).update({"last_message_at": datetime.utcnow()})
+        self._notify_message_recipients(
+            chat=chat,
+            sender=sender,
+            preview=self._message_preview(f"Shared file: {file_name}"),
+        )
         self.db.commit()
         self.db.refresh(msg)
         return msg

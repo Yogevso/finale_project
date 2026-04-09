@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
-from app.models import Feedback, User
+from app.models import Feedback, FeedbackStatus, FeedbackType, User
 from app.services.permissions import Permission
 
 
@@ -27,17 +27,14 @@ class SubmitFeedbackTool(BaseTool):
 
     async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
         rating = max(1, min(5, params["rating"]))
-        comment = params.get("comment", "")
-        # Store the numeric rating in the comment field since the model
-        # only has `is_helpful` (boolean).  Format: "[Rating: N/5] comment"
-        stored_comment = f"[Rating: {rating}/5] {comment}".strip()
+        comment = (params.get("comment") or "").strip()
         fb = Feedback(
             user_id=user.id,
             document_id=params["document_id"],
-            feedback_type="suggestion",
-            status="pending",
-            content=stored_comment,
-            comment=stored_comment,
+            feedback_type=FeedbackType.OTHER,
+            status=FeedbackStatus.PENDING,
+            content=comment or "Feedback submitted",
+            comment=comment or None,
             is_helpful=rating >= 4,
         )
         db.add(fb)

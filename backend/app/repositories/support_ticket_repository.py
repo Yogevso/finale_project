@@ -18,6 +18,27 @@ from app.repositories.base import BaseRepository
 class SupportTicketRepository(BaseRepository):
     """Support ticket persistence/query access."""
 
+    def query_visible_to_user(
+        self,
+        current_user: User,
+        *,
+        status_filter: SupportTicketStatus | None = None,
+    ):
+        query = self.db.query(SupportTicket).options(joinedload(SupportTicket.customer))
+
+        if current_user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
+            query = query.filter(SupportTicket.customer_id == current_user.id)
+        elif current_user.role != UserRole.SYSTEM_ADMIN:
+            if current_user.tenant_id is None:
+                query = query.filter(SupportTicket.id == -1)
+            else:
+                query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
+
+        if status_filter:
+            query = query.filter(SupportTicket.status == status_filter)
+
+        return query
+
     def get_by_id(self, ticket_id: int) -> SupportTicket | None:
         return self.db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
 
@@ -44,19 +65,7 @@ class SupportTicketRepository(BaseRepository):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[SupportTicket], int]:
-        query = self.db.query(SupportTicket).options(joinedload(SupportTicket.customer))
-
-        if current_user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
-            query = query.filter(SupportTicket.customer_id == current_user.id)
-        elif current_user.role != UserRole.SYSTEM_ADMIN:
-            if current_user.tenant_id is None:
-                query = query.filter(SupportTicket.id == -1)
-            else:
-                query = query.filter(SupportTicket.tenant_id == current_user.tenant_id)
-
-        if status_filter:
-            query = query.filter(SupportTicket.status == status_filter)
-
+        query = self.query_visible_to_user(current_user, status_filter=status_filter)
         total = query.count()
         items = (
             query.order_by(SupportTicket.updated_at.desc())
@@ -65,6 +74,18 @@ class SupportTicketRepository(BaseRepository):
             .all()
         )
         return items, total
+
+    def list_all_visible_to_user(
+        self,
+        current_user: User,
+        *,
+        status_filter: SupportTicketStatus | None = None,
+    ) -> list[SupportTicket]:
+        return (
+            self.query_visible_to_user(current_user, status_filter=status_filter)
+            .order_by(SupportTicket.updated_at.desc())
+            .all()
+        )
 
     def get_message(self, ticket_id: int, message_id: int) -> SupportTicketMessage | None:
         return (

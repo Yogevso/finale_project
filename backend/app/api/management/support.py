@@ -25,6 +25,7 @@ from app.schemas.chat import (
     SupportTicketListResponse,
     SupportTicketMessageResponse,
     SupportTicketResponse,
+    SupportTicketSummaryResponse,
     SupportTicketUpdate,
 )
 from app.security import get_current_active_user
@@ -34,7 +35,8 @@ from app.ws.manager import chat_manager
 router = APIRouter()
 
 
-def _ticket_to_response(t) -> SupportTicketResponse:
+def _ticket_to_response(t, indicators: dict[str, object] | None = None) -> SupportTicketResponse:
+    indicators = indicators or {}
     return SupportTicketResponse(
         id=t.id,
         customer_id=t.customer_id,
@@ -48,6 +50,10 @@ def _ticket_to_response(t) -> SupportTicketResponse:
         updated_at=t.updated_at,
         resolved_at=t.resolved_at,
         customer_full_name=t.customer.full_name if t.customer else None,
+        last_customer_message_at=indicators.get("last_customer_message_at"),
+        has_unread_activity=bool(indicators.get("has_unread_activity", False)),
+        awaiting_agent_reply=bool(indicators.get("awaiting_agent_reply", False)),
+        needs_attention=bool(indicators.get("needs_attention", False)),
     )
 
 
@@ -68,12 +74,22 @@ def list_tickets(
 ):
     """List support tickets visible to the current user."""
     tickets, total = svc.list_tickets(current_user, status_filter=status_filter, page=page, page_size=page_size)
+    indicators = svc.get_ticket_activity_map(current_user, tickets)
     return SupportTicketListResponse(
-        items=[_ticket_to_response(t) for t in tickets],
+        items=[_ticket_to_response(t, indicators.get(t.id)) for t in tickets],
         total=total,
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/support/tickets/summary", response_model=SupportTicketSummaryResponse)
+def get_ticket_summary(
+    current_user: User = Depends(require_internal_user),
+    svc = Depends(get_support_ticket_service),
+):
+    """Get aggregate support activity counts for navigation and queue summaries."""
+    return SupportTicketSummaryResponse(**svc.get_ticket_summary(current_user))
 
 
 @router.post("/support/tickets", response_model=SupportTicketResponse, status_code=status.HTTP_201_CREATED)
@@ -113,6 +129,7 @@ def get_ticket(
 ):
     """Get ticket details with messages and assignments."""
     ticket = svc.get_ticket(ticket_id, current_user)
+    indicators = svc.get_ticket_activity_map(current_user, [ticket]).get(ticket.id, {})
     return SupportTicketDetailResponse(
         id=ticket.id,
         customer_id=ticket.customer_id,
@@ -126,6 +143,10 @@ def get_ticket(
         updated_at=ticket.updated_at,
         resolved_at=ticket.resolved_at,
         customer_full_name=ticket.customer.full_name if ticket.customer else None,
+        last_customer_message_at=indicators.get("last_customer_message_at"),
+        has_unread_activity=bool(indicators.get("has_unread_activity", False)),
+        awaiting_agent_reply=bool(indicators.get("awaiting_agent_reply", False)),
+        needs_attention=bool(indicators.get("needs_attention", False)),
         messages=[_msg_to_response(m) for m in ticket.messages],
         assignments=[
             SupportTicketAssignmentResponse(

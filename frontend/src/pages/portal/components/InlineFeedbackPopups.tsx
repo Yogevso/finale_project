@@ -1,32 +1,33 @@
-import { Loader2, MessageSquarePlus, Send, X } from 'lucide-react'
+import { Loader2, MessageSquarePlus, Send, X } from 'lucide-react';
+import { COMMUNICATION_INPUT_LIMITS, COMMUNICATION_INPUT_MIN_LENGTHS } from '@/lib/uiInputRules';
 
 export interface SelectionPopupState {
-  show: boolean
-  x: number
-  y: number
-  text: string
+  show: boolean;
+  x: number;
+  y: number;
+  text: string;
 }
 
 export interface InlineFeedbackPopupState {
-  show: boolean
-  x: number
-  y: number
-  text: string
+  show: boolean;
+  x: number;
+  y: number;
+  text: string;
 }
 
 interface InlineFeedbackPopupsProps {
-  selectionPopup: SelectionPopupState
-  feedbackPopup: InlineFeedbackPopupState
-  feedbackType: 'question' | 'suggestion' | 'issue' | 'other'
-  feedbackContent: string
-  validationError: string
-  isSubmitting: boolean
-  topOffset?: number
-  onOpenFeedbackForm: () => void
-  onCloseFeedbackPopup: () => void
-  onFeedbackTypeChange: (value: 'question' | 'suggestion' | 'issue' | 'other') => void
-  onFeedbackContentChange: (value: string) => void
-  onSubmitFeedback: () => void
+  selectionPopup: SelectionPopupState;
+  feedbackPopup: InlineFeedbackPopupState;
+  feedbackType: 'question' | 'suggestion' | 'issue' | 'other';
+  feedbackContent: string;
+  validationError: string;
+  isSubmitting: boolean;
+  topOffset?: number;
+  onOpenFeedbackForm: () => void;
+  onCloseFeedbackPopup: () => void;
+  onFeedbackTypeChange: (value: 'question' | 'suggestion' | 'issue' | 'other') => void;
+  onFeedbackContentChange: (value: string) => void;
+  onSubmitFeedback: () => void;
 }
 
 const feedbackTypeOptions = [
@@ -34,7 +35,7 @@ const feedbackTypeOptions = [
   { value: 'suggestion', label: 'Suggestion' },
   { value: 'issue', label: 'Issue' },
   { value: 'other', label: 'Other' },
-] as const
+] as const;
 
 export function InlineFeedbackPopups({
   selectionPopup,
@@ -50,6 +51,8 @@ export function InlineFeedbackPopups({
   onFeedbackContentChange,
   onSubmitFeedback,
 }: InlineFeedbackPopupsProps) {
+  const trimmedFeedbackLength = feedbackContent.trim().length;
+
   return (
     <>
       {selectionPopup.show && !feedbackPopup.show ? (
@@ -109,7 +112,7 @@ export function InlineFeedbackPopups({
                   value={feedbackType}
                   onChange={(event) =>
                     onFeedbackTypeChange(
-                      event.target.value as 'question' | 'suggestion' | 'issue' | 'other',
+                      event.target.value as 'question' | 'suggestion' | 'issue' | 'other'
                     )
                   }
                   className="select-field w-full"
@@ -132,13 +135,20 @@ export function InlineFeedbackPopups({
                   rows={4}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                      onSubmitFeedback()
+                      onSubmitFeedback();
                     }
                     if (event.key === 'Escape') {
-                      onCloseFeedbackPopup()
+                      onCloseFeedbackPopup();
                     }
                   }}
                 />
+                <p className="mt-2 text-xs text-slate-500">
+                  {trimmedFeedbackLength < COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent
+                    ? `Minimum ${COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent} characters required (${
+                        COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent - trimmedFeedbackLength
+                      } more needed)`
+                    : `${feedbackContent.length}/${COMMUNICATION_INPUT_LIMITS.feedbackContent} characters`}
+                </p>
               </label>
 
               {validationError ? (
@@ -160,7 +170,7 @@ export function InlineFeedbackPopups({
                   <button
                     type="button"
                     onClick={onSubmitFeedback}
-                    disabled={isSubmitting || feedbackContent.trim().length < 10}
+                    disabled={isSubmitting}
                     className="btn-warning table-action-btn flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmitting ? (
@@ -186,5 +196,5 @@ export function InlineFeedbackPopups({
         </div>
       ) : null}
     </>
-  )
+  );
 }

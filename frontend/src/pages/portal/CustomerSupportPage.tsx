@@ -51,7 +51,7 @@ function renderSourceBadge(feedbackId: number | null) {
   if (feedbackId) {
     return (
       <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">
-        Feedback conversation
+        Escalated from feedback
       </span>
     )
   }
@@ -121,7 +121,7 @@ export default function CustomerSupportPage() {
         <PageHeader
           eyebrow="Customer Portal"
           title="Support"
-          subtitle="Track support tickets and feedback conversations with our team."
+          subtitle="Track support tickets and escalated feedback conversations with our team."
         />
         <MessageSkeleton rows={4} />
       </div>
@@ -134,7 +134,7 @@ export default function CustomerSupportPage() {
         <PageHeader
           eyebrow="Customer Portal"
           title="Support"
-          subtitle="Track support tickets and feedback conversations with our team."
+          subtitle="Track support tickets and escalated feedback conversations with our team."
         />
         <ErrorState
           title="Ticket could not be loaded"
@@ -166,7 +166,7 @@ export default function CustomerSupportPage() {
       <PageHeader
         eyebrow="Customer Portal"
         title="Support"
-        subtitle="Track support tickets and feedback conversations with our team."
+        subtitle="Track support tickets and escalated feedback conversations with our team."
         actions={
           <button
             onClick={() => setShowCreate(true)}
@@ -385,10 +385,10 @@ function CustomerTicketView({
       {ticket.feedback_id ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/40">
           <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
-            Feedback conversation
+            Escalated from feedback
           </p>
           <p className="mt-1 text-sm text-violet-700 dark:text-violet-200">
-            This support thread started from your feedback and now continues here.
+            This support thread started from your feedback and was escalated into Support.
           </p>
           <Link
             to={`/portal/feedback?feedback=${ticket.feedback_id}`}

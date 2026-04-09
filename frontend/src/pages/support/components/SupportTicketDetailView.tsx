@@ -63,10 +63,10 @@ export function SupportTicketDetailView({
         <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/80 p-4 dark:border-violet-900/60 dark:bg-violet-950/20">
           <div>
             <p className="text-sm font-semibold text-violet-900 dark:text-violet-100">
-              Feedback conversation
+              Escalated from feedback
             </p>
             <p className="mt-1 text-sm text-violet-700 dark:text-violet-200">
-              This support thread started from customer feedback and now continues in Support.
+              This support thread was escalated from customer feedback and now continues in Support.
             </p>
           </div>
           <Link

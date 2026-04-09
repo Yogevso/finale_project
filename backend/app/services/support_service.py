@@ -6,7 +6,7 @@ import io
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
 from pathlib import Path
 from typing import Optional
@@ -20,6 +20,7 @@ from app.models import (
     Comment,
     Document,
     Feedback,
+    Notification,
     NotificationType,
     SupportTicket,
     SupportTicketAssignment,
@@ -60,6 +61,13 @@ _CUSTOMER_TRANSITIONS: dict[SupportTicketStatus, set[SupportTicketStatus]] = {
     SupportTicketStatus.RESOLVED: {SupportTicketStatus.CLOSED, SupportTicketStatus.OPEN},
     SupportTicketStatus.CLOSED: set(),
 }
+
+_SUPPORT_NOTIFICATION_TYPES: tuple[NotificationType, ...] = (
+    NotificationType.TICKET_NEW_CUSTOMER_MSG,
+    NotificationType.TICKET_HANDOFF,
+    NotificationType.TICKET_MENTION,
+)
+_SUPPORT_NEEDS_ATTENTION_WINDOW = timedelta(hours=24)
 
 
 def _allowed_transitions(user: User) -> dict[SupportTicketStatus, set[SupportTicketStatus]]:
@@ -124,6 +132,14 @@ class SupportTicketService:
     def _customer_ticket_link(ticket_id: int) -> str:
         return f"{settings.BASE_URL}/portal/support?ticket={ticket_id}"
 
+    @staticmethod
+    def _feedback_management_link(feedback_id: int) -> str:
+        return f"/admin/feedback?feedback={feedback_id}"
+
+    @staticmethod
+    def _feedback_customer_link(feedback_id: int) -> str:
+        return f"/portal/feedback?feedback={feedback_id}"
+
     def _feedback_ticket_subject(self, feedback: Feedback) -> str:
         document_title: str | None = None
         if getattr(feedback, "document", None) is not None and feedback.document is not None:
@@ -182,8 +198,8 @@ class SupportTicketService:
     def _list_feedback_notification_recipients(
         self,
         *,
-        ticket: SupportTicket,
         feedback: Feedback,
+        tenant_id: int | None,
         exclude_user_id: int | None = None,
     ) -> list[User]:
         recipients: dict[int, User] = {}
@@ -196,17 +212,54 @@ class SupportTicketService:
                 continue
             if user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
                 continue
-            if user.role != UserRole.SYSTEM_ADMIN and user.tenant_id != ticket.tenant_id:
+            if user.role != UserRole.SYSTEM_ADMIN and tenant_id is not None and user.tenant_id != tenant_id:
                 continue
             recipients[user.id] = user
 
-        for user in self._list_support_notification_recipients(
-            ticket,
+        for user in self.user_repository.list_active_by_roles(
+            [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER],
+            tenant_id=tenant_id,
             exclude_user_id=exclude_user_id,
         ):
             recipients[user.id] = user
 
         return list(recipients.values())
+
+    def notify_feedback_received(
+        self,
+        *,
+        feedback: Feedback,
+        customer: User,
+    ) -> None:
+        document_title = self._feedback_document_title(feedback)
+        type_label = feedback.feedback_type.value.replace("_", " ")
+        recipients = self._list_feedback_notification_recipients(
+            feedback=feedback,
+            tenant_id=customer.tenant_id,
+            exclude_user_id=customer.id,
+        )
+        for recipient in recipients:
+            self.notification_service.create_notification(
+                user_id=recipient.id,
+                notification_type=NotificationType.FEEDBACK_RECEIVED,
+                title=f"New feedback on \"{document_title}\"",
+                message=f"{customer.full_name} submitted {type_label} feedback.",
+                link=self._feedback_management_link(feedback.id),
+            )
+
+    def notify_feedback_responded(
+        self,
+        *,
+        feedback: Feedback,
+        agent: User,
+    ) -> None:
+        self.notification_service.create_notification(
+            user_id=feedback.user_id,
+            notification_type=NotificationType.FEEDBACK_RESPONDED,
+            title="New response to your feedback",
+            message=f"{agent.full_name} replied about \"{self._feedback_document_title(feedback)}\".",
+            link=self._feedback_customer_link(feedback.id),
+        )
 
     def _queue_email(
         self,
@@ -268,26 +321,6 @@ class SupportTicketService:
         ticket: SupportTicket,
         customer: User,
     ) -> None:
-        if ticket.feedback_id:
-            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
-            if feedback is not None:
-                document_title = self._feedback_document_title(feedback)
-                type_label = feedback.feedback_type.value.replace("_", " ")
-                recipients = self._list_feedback_notification_recipients(
-                    ticket=ticket,
-                    feedback=feedback,
-                    exclude_user_id=customer.id,
-                )
-                for recipient in recipients:
-                    self.notification_service.create_notification(
-                        user_id=recipient.id,
-                        notification_type=NotificationType.FEEDBACK_RECEIVED,
-                        title=f"New feedback on \"{document_title}\"",
-                        message=f"{customer.full_name} submitted {type_label} feedback.",
-                        link=f"/support?ticket={ticket.id}",
-                    )
-                return
-
         for recipient in self._list_support_notification_recipients(
             ticket,
             exclude_user_id=customer.id,
@@ -366,18 +399,6 @@ class SupportTicketService:
         ticket: SupportTicket,
         agent: User,
     ) -> None:
-        if ticket.feedback_id:
-            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
-            if feedback is not None:
-                self.notification_service.create_notification(
-                    user_id=ticket.customer_id,
-                    notification_type=NotificationType.FEEDBACK_RESPONDED,
-                    title="New response to your feedback",
-                    message=f"{agent.full_name} replied about \"{self._feedback_document_title(feedback)}\".",
-                    link=f"/portal/support?ticket={ticket.id}",
-                )
-                return
-
         self.notification_service.create_notification(
             user_id=ticket.customer_id,
             notification_type=NotificationType.SYSTEM,
@@ -626,11 +647,19 @@ class SupportTicketService:
 
     def create_ticket_from_feedback(self, customer: User, feedback_id: int) -> SupportTicket:
         """Create a support ticket from an existing feedback item (X1-067)."""
-        fb = self.db.query(Feedback).filter(
-            Feedback.id == feedback_id, Feedback.user_id == customer.id
-        ).first()
+        fb = self.db.query(Feedback).filter(Feedback.id == feedback_id).first()
         if not fb:
             raise NotFoundError("Feedback not found")
+
+        if customer.role in (UserRole.CUSTOMER, UserRole.VIEWER):
+            if fb.user_id != customer.id:
+                raise PermissionDeniedError("Access denied")
+        elif customer.role != UserRole.SYSTEM_ADMIN:
+            customer_record = fb.user or self.user_repository.get_by_id(fb.user_id)
+            if customer_record is None:
+                raise NotFoundError("Customer not found")
+            if customer.tenant_id is None or customer_record.tenant_id != customer.tenant_id:
+                raise PermissionDeniedError("Access denied")
 
         return self.get_or_create_feedback_ticket(fb)
 
@@ -658,6 +687,100 @@ class SupportTicketService:
         if not excerpt:
             return feedback.content
         return f'Selected text: "{excerpt}"\n\n{feedback.content}'
+
+    def get_ticket_activity_map(
+        self,
+        current_user: User,
+        tickets: list[SupportTicket],
+    ) -> dict[int, dict[str, object]]:
+        if not tickets:
+            return {}
+
+        ticket_ids = [ticket.id for ticket in tickets]
+        public_messages = (
+            self.db.query(SupportTicketMessage)
+            .filter(
+                SupportTicketMessage.ticket_id.in_(ticket_ids),
+                SupportTicketMessage.is_internal_note.is_(False),
+            )
+            .order_by(SupportTicketMessage.ticket_id.asc(), SupportTicketMessage.created_at.asc())
+            .all()
+        )
+
+        message_state: dict[int, dict[str, object]] = {
+            ticket_id: {
+                "last_customer_message_at": None,
+                "latest_sender_type": None,
+            }
+            for ticket_id in ticket_ids
+        }
+        for message in public_messages:
+            state = message_state.setdefault(
+                message.ticket_id,
+                {"last_customer_message_at": None, "latest_sender_type": None},
+            )
+            if message.sender_type == "customer":
+                state["last_customer_message_at"] = message.created_at
+            state["latest_sender_type"] = message.sender_type
+
+        ticket_links = {f"/support?ticket={ticket_id}": ticket_id for ticket_id in ticket_ids}
+        unread_ticket_ids = {
+            ticket_links[link]
+            for (link,) in self.chat_db.query(Notification.link)
+            .filter(
+                Notification.user_id == current_user.id,
+                Notification.is_read.is_(False),
+                Notification.type.in_(list(_SUPPORT_NOTIFICATION_TYPES)),
+                Notification.link.in_(list(ticket_links.keys())),
+            )
+            .all()
+            if link in ticket_links
+        }
+
+        now = datetime.utcnow()
+        indicators: dict[int, dict[str, object]] = {}
+        for ticket in tickets:
+            state = message_state.get(ticket.id, {})
+            last_customer_message_at = state.get("last_customer_message_at")
+            latest_sender_type = state.get("latest_sender_type")
+            awaiting_agent_reply = (
+                latest_sender_type == "customer" and ticket.status != SupportTicketStatus.CLOSED
+            )
+            needs_attention = (
+                ticket.status in (SupportTicketStatus.OPEN, SupportTicketStatus.IN_PROGRESS)
+                and isinstance(last_customer_message_at, datetime)
+                and (now - last_customer_message_at) <= _SUPPORT_NEEDS_ATTENTION_WINDOW
+            )
+            indicators[ticket.id] = {
+                "has_unread_activity": ticket.id in unread_ticket_ids,
+                "awaiting_agent_reply": awaiting_agent_reply,
+                "needs_attention": needs_attention,
+                "last_customer_message_at": last_customer_message_at,
+            }
+
+        return indicators
+
+    def get_ticket_summary(self, current_user: User) -> dict[str, int]:
+        tickets = self.ticket_repository.list_all_visible_to_user(current_user)
+        indicators = self.get_ticket_activity_map(current_user, tickets)
+
+        unread_ticket_ids = {
+            ticket_id for ticket_id, item in indicators.items() if bool(item["has_unread_activity"])
+        }
+        customer_reply_ticket_ids = {
+            ticket_id for ticket_id, item in indicators.items() if bool(item["awaiting_agent_reply"])
+        }
+        needs_attention_ticket_ids = {
+            ticket_id for ticket_id, item in indicators.items() if bool(item["needs_attention"])
+        }
+        nav_ticket_ids = unread_ticket_ids | customer_reply_ticket_ids | needs_attention_ticket_ids
+
+        return {
+            "unread_count": len(unread_ticket_ids),
+            "customer_reply_count": len(customer_reply_ticket_ids),
+            "needs_attention_count": len(needs_attention_ticket_ids),
+            "nav_badge_count": len(nav_ticket_ids),
+        }
 
     # ------------------------------------------------------------------
     # Ticket queries
@@ -990,25 +1113,6 @@ class SupportTicketService:
         self, ticket: SupportTicket, customer: User
     ) -> None:
         """Create notifications for the responsible internal recipients (X1-087)."""
-        if ticket.feedback_id:
-            feedback = self.db.query(Feedback).filter(Feedback.id == ticket.feedback_id).first()
-            if feedback is not None:
-                document_title = self._feedback_document_title(feedback)
-                recipients = self._list_feedback_notification_recipients(
-                    ticket=ticket,
-                    feedback=feedback,
-                    exclude_user_id=customer.id,
-                )
-                for recipient in recipients:
-                    self.notification_service.create_notification(
-                        user_id=recipient.id,
-                        notification_type=NotificationType.FEEDBACK_RECEIVED,
-                        title=f"New customer reply on \"{document_title}\"",
-                        message=f"{customer.full_name} added more detail to the feedback conversation.",
-                        link=f"/support?ticket={ticket.id}",
-                    )
-                return
-
         for recipient in self._list_support_notification_recipients(
             ticket,
             exclude_user_id=customer.id,

@@ -165,6 +165,15 @@ def _feedback_internal_guard(current_user: User = Depends(get_current_active_use
     return current_user
 
 
+def _customer_feedback_query(db: Session):
+    """Return only support-style customer feedback entries.
+
+    Helpful/not-helpful engagement ratings reuse the same table but should not
+    appear in the customer feedback queue.
+    """
+    return db.query(Feedback).filter(Feedback.is_helpful.is_(None))
+
+
 # ========== List All Feedback ==========
 @router.get("", response_model=FeedbackListManagementResponse)
 async def list_all_feedback(
@@ -184,7 +193,7 @@ async def list_all_feedback(
     (unless user is system admin who can see all).
     """
     # Get all feedback first, then filter by visibility
-    query = db.query(Feedback).options(
+    query = _customer_feedback_query(db).options(
         joinedload(Feedback.user),
         joinedload(Feedback.document),
         joinedload(Feedback.responder),
@@ -297,7 +306,7 @@ async def get_feedback(
     Get feedback details with contributor-based visibility.
     """
     feedback = (
-        db.query(Feedback)
+        _customer_feedback_query(db)
         .options(
             joinedload(Feedback.user),
             joinedload(Feedback.document),
@@ -361,7 +370,7 @@ async def respond_to_feedback(
     support_service = SupportTicketService(db, chat_db=chat_db)
 
     feedback = (
-        db.query(Feedback)
+        _customer_feedback_query(db)
         .options(
             joinedload(Feedback.user),
             joinedload(Feedback.document),
@@ -380,20 +389,18 @@ async def respond_to_feedback(
             detail="You don't have permission to respond to this feedback",
         )
 
-    ticket = support_service.get_or_create_feedback_ticket(feedback)
-
-    # Persist legacy feedback summary fields while the real conversation lives on the ticket.
     feedback.response = data.response
     feedback.responded_by = current_user.id
     feedback.responded_at = datetime.utcnow()
     feedback.status = FeedbackStatus.RESPONDED
 
-    support_service.send_message(ticket.id, current_user, data.response)
+    support_service.notify_feedback_responded(feedback=feedback, agent=current_user)
+    db.commit()
     db.refresh(feedback)
 
     # Reload with responder
     feedback = (
-        db.query(Feedback)
+        _customer_feedback_query(db)
         .options(
             joinedload(Feedback.user),
             joinedload(Feedback.document),
@@ -419,7 +426,7 @@ async def respond_to_feedback(
         user_email=feedback.user.email if feedback.user else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
-        ticket_id=ticket.id,
+        ticket_id=_feedback_ticket_map(db, [feedback.id]).get(feedback.id),
         feedback_type=feedback.feedback_type,
         status=feedback.status,
         content=feedback.content,
@@ -507,28 +514,43 @@ async def get_feedback_stats(
     """
     total = db.query(func.count(Feedback.id)).scalar() or 0
     pending = (
-        db.query(func.count(Feedback.id)).filter(Feedback.status == FeedbackStatus.PENDING).scalar()
+        _customer_feedback_query(db)
+        .with_entities(func.count(Feedback.id))
+        .filter(Feedback.status == FeedbackStatus.PENDING)
+        .scalar()
         or 0
     )
     responded = (
-        db.query(func.count(Feedback.id))
+        _customer_feedback_query(db)
+        .with_entities(func.count(Feedback.id))
         .filter(Feedback.status == FeedbackStatus.RESPONDED)
         .scalar()
         or 0
     )
     closed = (
-        db.query(func.count(Feedback.id)).filter(Feedback.status == FeedbackStatus.CLOSED).scalar()
+        _customer_feedback_query(db)
+        .with_entities(func.count(Feedback.id))
+        .filter(Feedback.status == FeedbackStatus.CLOSED)
+        .scalar()
         or 0
     )
 
     # By type
     by_type = {}
     for ft in FeedbackType:
-        count = db.query(func.count(Feedback.id)).filter(Feedback.feedback_type == ft).scalar() or 0
+        count = (
+            _customer_feedback_query(db)
+            .with_entities(func.count(Feedback.id))
+            .filter(Feedback.feedback_type == ft)
+            .scalar()
+            or 0
+        )
         by_type[ft.value] = count
 
     return {
-        "total": total,
+        "total": (
+            _customer_feedback_query(db).with_entities(func.count(Feedback.id)).scalar() or 0
+        ),
         "pending": pending,
         "responded": responded,
         "closed": closed,

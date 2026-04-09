@@ -136,6 +136,10 @@ class TestCreateTicketFromFeedback:
         ticket2 = svc.create_ticket_from_feedback(customer, feedback.id)
         assert ticket1.id == ticket2.id
 
+    def test_internal_agent_can_create_ticket_from_feedback(self, svc, agent, feedback):
+        ticket = svc.create_ticket_from_feedback(agent, feedback.id)
+        assert ticket.feedback_id == feedback.id
+
     def test_feedback_not_found_raises_404(self, svc, customer):
         with pytest.raises(DomainError) as exc:
             svc.create_ticket_from_feedback(customer, 99999)
@@ -316,6 +320,25 @@ class TestCustomerIsolation:
 
 
 class TestSupportNotifications:
+    def test_support_summary_counts_distinct_tickets_needing_attention(
+        self,
+        svc,
+        customer,
+        agent,
+    ):
+        ticket = svc.create_ticket(customer, "Need help", "Original issue")
+
+        summary = svc.get_ticket_summary(agent)
+
+        assert summary["unread_count"] == 1
+        assert summary["customer_reply_count"] == 1
+        assert summary["needs_attention_count"] == 1
+        assert summary["nav_badge_count"] == 1
+        indicators = svc.get_ticket_activity_map(agent, [ticket])[ticket.id]
+        assert indicators["has_unread_activity"] is True
+        assert indicators["awaiting_agent_reply"] is True
+        assert indicators["needs_attention"] is True
+
     def test_agent_reply_creates_customer_notification_and_email(
         self,
         svc,
@@ -416,7 +439,7 @@ class TestSupportNotifications:
         assert notifications[-1].title == f"New message on ticket #{ticket.id}"
         assert notifications[-1].link == f"/support?ticket={ticket.id}"
 
-    def test_feedback_follow_up_notifies_contributors_when_ticket_has_no_assignments(
+    def test_feedback_follow_up_notifies_support_queue_when_ticket_has_no_assignments(
         self,
         db,
         svc,
@@ -447,7 +470,7 @@ class TestSupportNotifications:
             svc.db.query(Notification)
             .filter(
                 Notification.user_id == agent.id,
-                Notification.type == NotificationType.FEEDBACK_RECEIVED,
+                Notification.type == NotificationType.TICKET_NEW_CUSTOMER_MSG,
             )
             .count()
         )
@@ -458,13 +481,13 @@ class TestSupportNotifications:
             svc.db.query(Notification)
             .filter(
                 Notification.user_id == agent.id,
-                Notification.type == NotificationType.FEEDBACK_RECEIVED,
+                Notification.type == NotificationType.TICKET_NEW_CUSTOMER_MSG,
             )
             .order_by(Notification.id.asc())
             .all()
         )
         assert len(notifications) == count_before + 1
-        assert notifications[-1].title == 'New customer reply on "Feedback Follow-up Guide"'
+        assert notifications[-1].title == f"New message on ticket #{ticket.id}"
         assert notifications[-1].link == f"/support?ticket={ticket.id}"
 
     def test_handoff_creates_target_agent_notification(

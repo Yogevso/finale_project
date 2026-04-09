@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import type { FeedbackDetailResponse, FeedbackStatus, FeedbackType } from '@/types'
 import FeedbackResponseDialog from '@/components/FeedbackResponseDialog'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 const statusConfig: Record<FeedbackStatus, { label: string; icon: React.ReactNode; className: string }> = {
   pending: {
@@ -74,6 +75,7 @@ export default function FeedbackPage() {
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackDetailResponse | null>(null)
   const [page, setPage] = useState(1)
   const queryClient = useQueryClient()
+  const toast = useToast()
   const selectedFeedbackId = Number(searchParams.get('feedback') || '')
 
   const openFeedback = (feedback: FeedbackDetailResponse) => {
@@ -147,11 +149,30 @@ export default function FeedbackPage() {
     },
   })
 
+  const escalateMutation = useMutation({
+    mutationFn: (feedbackId: number) => api.createSupportTicketFromFeedback(feedbackId),
+    onSuccess: (ticket, feedbackId) => {
+      queryClient.invalidateQueries({ queryKey: ['feedback-management'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
+      setSelectedFeedback((current) =>
+        current && current.id === feedbackId ? { ...current, ticket_id: ticket.id } : current,
+      )
+      toast.success('Escalated to Support')
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        'Failed to escalate feedback',
+        extractApiErrorMessage(error, 'Please try again.'),
+      )
+    },
+  })
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Customer Feedback"
-        subtitle="Review customer feedback and continue longer conversations in Support."
+        subtitle="Review customer feedback and escalate specific items to Support when needed."
       />
 
       {/* Stats Cards */}
@@ -442,7 +463,12 @@ export default function FeedbackPage() {
           onUpdateStatus={(status) =>
             updateStatusMutation.mutate({ id: selectedFeedback.id, status })
           }
-          isLoading={respondMutation.isPending || updateStatusMutation.isPending}
+          onEscalate={() => escalateMutation.mutate(selectedFeedback.id)}
+          isLoading={
+            respondMutation.isPending ||
+            updateStatusMutation.isPending ||
+            escalateMutation.isPending
+          }
         />
       )}
     </div>

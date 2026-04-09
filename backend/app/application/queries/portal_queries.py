@@ -459,6 +459,7 @@ class PortalDocumentsQueryHandler:
             self.db.query(Feedback)
             .filter(
                 Feedback.user_id == query.current_user.id,
+                Feedback.is_helpful.is_(None),
                 Feedback.status == FeedbackStatus.PENDING,
             )
             .count()
@@ -467,6 +468,7 @@ class PortalDocumentsQueryHandler:
             self.db.query(Feedback)
             .filter(
                 Feedback.user_id == query.current_user.id,
+                Feedback.is_helpful.is_(None),
                 Feedback.status == FeedbackStatus.RESPONDED,
             )
             .count()

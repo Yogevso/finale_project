@@ -31,12 +31,16 @@ import {
   setNotificationReadState,
 } from '@/lib/notificationsCache'
 import { useToast } from '@/lib/toast'
-import type { Notification, NotificationListResponse, NotificationType } from '@/types'
+import type { Notification, NotificationListResponse } from '@/types'
 
 const NOTIFICATIONS_PAGE_SIZE = 20
 
-const getNotificationIcon = (type: NotificationType) => {
-  switch (type) {
+const getNotificationIcon = (notification: Pick<Notification, 'type' | 'link'>) => {
+  if (notification.type === 'system' && notification.link?.startsWith('/chat')) {
+    return <MessageSquare className="w-4 h-4 text-indigo-500" />
+  }
+
+  switch (notification.type) {
     case 'comment_added':
     case 'comment_reply':
       return <MessageSquare className="w-4 h-4 text-sky-500" />
@@ -332,7 +336,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="admin-table-cell">
                     <div className="flex items-start gap-3">
-                      <div className="pt-0.5 text-base">{getNotificationIcon(notification.type)}</div>
+                      <div className="pt-0.5 text-base">{getNotificationIcon(notification)}</div>
                       <div className="min-w-0">
                         <p
                           className={`text-sm ${

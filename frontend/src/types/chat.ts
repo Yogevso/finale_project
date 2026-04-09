@@ -117,6 +117,10 @@ export interface SupportTicket {
   updated_at: string
   resolved_at: string | null
   customer_full_name: string | null
+  last_customer_message_at?: string | null
+  has_unread_activity?: boolean
+  awaiting_agent_reply?: boolean
+  needs_attention?: boolean
 }
 
 export interface SupportTicketMessage {
@@ -153,6 +157,13 @@ export interface SupportTicketListResponse {
   total: number
   page: number
   page_size: number
+}
+
+export interface SupportTicketSummary {
+  unread_count: number
+  customer_reply_count: number
+  needs_attention_count: number
+  nav_badge_count: number
 }
 
 export interface SupportTicketCreate {

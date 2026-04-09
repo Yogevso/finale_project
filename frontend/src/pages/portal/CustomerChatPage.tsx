@@ -167,7 +167,7 @@ export default function CustomerChatPage() {
       <PageHeader
         eyebrow="Customer Portal"
         title="Messages"
-        subtitle="Direct conversations with your team. Support tickets and feedback conversations stay in Support."
+        subtitle="Direct conversations with your team. Support tickets and escalated feedback conversations stay in Support."
       />
 
       <div className="surface-card flex flex-1 overflow-hidden rounded-2xl">
