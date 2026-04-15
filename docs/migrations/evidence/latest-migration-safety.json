@@ -1,24 +1,88 @@
 {
-  "generated_at": "2026-02-27T22:34:19.937263+00:00",
+  "generated_at": "2026-04-15T17:36:23.888901+00:00",
   "backend_dir": "backend",
-  "head_revision": "20260227_0006",
+  "head_revision": "20260328_0003",
   "high_risk_revisions": [
     "20260223_0002",
     "20260224_0003",
     "20260227_0004",
     "20260227_0005",
-    "20260227_0006"
+    "20260227_0006",
+    "20260301_0007",
+    "20260301_0008",
+    "20260301_0009",
+    "20260308_0010",
+    "20260308_0011",
+    "20260308_0012",
+    "20260308_0013",
+    "20260308_0014",
+    "20260308_0016",
+    "20260309_0017",
+    "20260309_0018",
+    "20260310_0019",
+    "20260311_0020",
+    "20260314_0021",
+    "20260314_0022",
+    "20260314_0023",
+    "20260315_0024",
+    "20260316_0025",
+    "20260316_0030",
+    "20260316_0035",
+    "20260317_0037",
+    "20260322_0001",
+    "20260326_0002",
+    "20260327_0001",
+    "20260328_0001",
+    "20260328_0002",
+    "20260328_0003",
+    "9fa05242e3a9",
+    "af003_attach_snap",
+    "ah008_chat_unification",
+    "c13_doc_tenant_not_null",
+    "wave_ab_001"
   ],
   "preflight": {
     "passed": true,
-    "head_revision": "20260227_0006",
-    "revision_count": 6,
+    "head_revision": "20260328_0003",
+    "revision_count": 44,
     "high_risk_revisions": [
       "20260223_0002",
       "20260224_0003",
       "20260227_0004",
       "20260227_0005",
-      "20260227_0006"
+      "20260227_0006",
+      "20260301_0007",
+      "20260301_0008",
+      "20260301_0009",
+      "20260308_0010",
+      "20260308_0011",
+      "20260308_0012",
+      "20260308_0013",
+      "20260308_0014",
+      "20260308_0016",
+      "20260309_0017",
+      "20260309_0018",
+      "20260310_0019",
+      "20260311_0020",
+      "20260314_0021",
+      "20260314_0022",
+      "20260314_0023",
+      "20260315_0024",
+      "20260316_0025",
+      "20260316_0030",
+      "20260316_0035",
+      "20260317_0037",
+      "20260322_0001",
+      "20260326_0002",
+      "20260327_0001",
+      "20260328_0001",
+      "20260328_0002",
+      "20260328_0003",
+      "9fa05242e3a9",
+      "af003_attach_snap",
+      "ah008_chat_unification",
+      "c13_doc_tenant_not_null",
+      "wave_ab_001"
     ],
     "checks": [
       {
@@ -39,67 +103,47 @@
       {
         "name": "single-head",
         "passed": true,
-        "details": "heads=['20260227_0006']"
+        "details": "heads=['20260328_0003']"
       },
       {
         "name": "has-managed-revisions",
         "passed": true,
-        "details": "count=6"
+        "details": "count=44"
       },
       {
         "name": "unique-revision-ids",
         "passed": true,
-        "details": "unique=6 total=6"
+        "details": "unique=44 total=44"
       },
       {
         "name": "high-risk-migrations-detected",
         "passed": true,
-        "details": "5 revisions: ['20260223_0002', '20260224_0003', '20260227_0004', '20260227_0005', '20260227_0006']"
+        "details": "37 revisions: ['20260223_0002', '20260224_0003', '20260227_0004', '20260227_0005', '20260227_0006', '20260301_0007', '20260301_0008', '20260301_0009', '20260308_0010', '20260308_0011', '20260308_0012', '20260308_0013', '20260308_0014', '20260308_0016', '20260309_0017', '20260309_0018', '20260310_0019', '20260311_0020', '20260314_0021', '20260314_0022', '20260314_0023', '20260315_0024', '20260316_0025', '20260316_0030', '20260316_0035', '20260317_0037', '20260322_0001', '20260326_0002', '20260327_0001', '20260328_0001', '20260328_0002', '20260328_0003', '9fa05242e3a9', 'af003_attach_snap', 'ah008_chat_unification', 'c13_doc_tenant_not_null', 'wave_ab_001']"
       }
     ]
   },
   "dry_run": {
-    "passed": true,
+    "passed": false,
     "sql_path": "docs/migrations/evidence/latest-dry-run.sql",
-    "sql_line_count": 547,
-    "details": "Dry-run upgrade and schema SQL dump succeeded."
+    "sql_line_count": 0,
+    "details": "Dry-run failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
   },
   "rollback_probe": {
-    "passed": true,
-    "revision_after_upgrade": "20260227_0006",
-    "revision_after_downgrade": "20260227_0005",
-    "revision_after_reupgrade": "20260227_0006",
-    "details": "Rollback probe succeeded."
+    "passed": false,
+    "revision_after_upgrade": "",
+    "revision_after_downgrade": null,
+    "revision_after_reupgrade": "",
+    "details": "Rollback probe failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
   },
   "post_assertions": {
-    "passed": true,
+    "passed": false,
     "checks": [
       {
-        "name": "table:document_number_sequences",
-        "passed": true,
-        "details": "present"
-      },
-      {
-        "name": "table:domain_event_outbox",
-        "passed": true,
-        "details": "present"
-      },
-      {
-        "name": "table:idempotency_keys",
-        "passed": true,
-        "details": "present"
-      },
-      {
-        "name": "column:documents.row_version",
-        "passed": true,
-        "details": "present"
-      },
-      {
-        "name": "column:versions.row_version",
-        "passed": true,
-        "details": "present"
+        "name": "upgrade-head-before-assertions",
+        "passed": false,
+        "details": "failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
       }
     ]
   },
-  "overall_passed": true
+  "overall_passed": false
 }
