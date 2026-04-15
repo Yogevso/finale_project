@@ -294,28 +294,29 @@ export default function FeedbackPage() {
             />
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Customer
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Document
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Content
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Date
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">
                   Actions
                 </th>
               </tr>
@@ -323,47 +324,45 @@ export default function FeedbackPage() {
             <tbody className="bg-white divide-y divide-slate-200">
               {data.items.map((feedback) => (
                 <tr key={feedback.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4">
-                    <div className={`flex items-center gap-2 ${typeConfig[feedback.feedback_type].className}`}>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className={`flex items-center gap-1.5 ${typeConfig[feedback.feedback_type].className}`}>
                       {typeConfig[feedback.feedback_type].icon}
                       <span className="text-sm font-medium">
                         {typeConfig[feedback.feedback_type].label}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <div className="text-sm">
-                      <div className="card-title flex items-center gap-1">
-                        <User className="w-3 h-3" />
+                      <div className="card-title flex items-center gap-1 whitespace-nowrap">
+                        <User className="w-3 h-3 flex-shrink-0" />
                         {feedback.user_name}
                       </div>
                       {feedback.tenant_name && (
-                        <div className="helper-copy mt-1 flex items-center gap-1">
-                          <Building2 className="w-3 h-3" />
+                        <div className="helper-copy mt-0.5 flex items-center gap-1 whitespace-nowrap">
+                          <Building2 className="w-3 h-3 flex-shrink-0" />
                           {feedback.tenant_name}
                         </div>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <Link
                       to={`/documents/${feedback.document_id}/fullscreen`}
                       className="flex items-center gap-1 text-sm text-sky-600 hover:text-sky-700"
                     >
-                      <FileText className="w-3 h-3" />
-                      {feedback.document_title.length > 30
-                        ? `${feedback.document_title.slice(0, 30)}...`
-                        : feedback.document_title}
+                      <FileText className="w-3 h-3 flex-shrink-0" />
+                      <span className="max-w-[10rem] truncate">
+                        {feedback.document_title}
+                      </span>
                     </Link>
                   </td>
-                  <td className="px-6 py-4 max-w-xs">
-                    <p className="body-copy truncate">
-                      {feedback.content.length > 50
-                        ? `${feedback.content.slice(0, 50)}...`
-                        : feedback.content}
+                  <td className="px-4 py-3">
+                    <p className="body-copy max-w-[14rem] truncate">
+                      {feedback.content}
                     </p>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`pill flex items-center gap-1 ${
                         statusConfig[feedback.status].className
@@ -373,11 +372,11 @@ export default function FeedbackPage() {
                       {statusConfig[feedback.status].label}
                     </span>
                   </td>
-                  <td className="px-6 py-4 body-copy">
+                  <td className="px-4 py-3 body-copy whitespace-nowrap">
                     {new Date(feedback.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => openFeedback(feedback)}
@@ -389,8 +388,9 @@ export default function FeedbackPage() {
                         <Link
                           to={`/support?ticket=${feedback.ticket_id}`}
                           className="btn-secondary table-action-btn"
+                          title="Open Support Conversation"
                         >
-                          Open Support Conversation
+                          Support
                         </Link>
                       ) : null}
                       {feedback.status === 'pending' && (
@@ -422,6 +422,7 @@ export default function FeedbackPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
 
         {/* Pagination */}
