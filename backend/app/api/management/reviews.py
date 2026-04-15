@@ -222,7 +222,7 @@ async def submit_for_review(
         document_aggregate.ensure_submittable_for_review()
     document_aggregate.ensure_audience_ready_for_submit()
 
-    # Check for existing pending review
+    # Cancel any existing pending review so we can resubmit
     existing = (
         db.query(ReviewRequest)
         .filter(
@@ -234,7 +234,8 @@ async def submit_for_review(
         .first()
     )
     if existing:
-        raise ConflictError("This document already has a pending review")
+        existing.status = ReviewStatus.CANCELLED
+        db.flush()
 
     # Validate explicit version or attach latest version automatically
     version_id = _resolve_review_version_id(

@@ -200,6 +200,17 @@ def update_ticket(
     return _ticket_to_response(ticket)
 
 
+@router.delete("/support/tickets/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ticket(
+    ticket_id: int,
+    current_user: User = Depends(require_manager),
+    svc = Depends(get_support_ticket_service),
+):
+    """Delete a closed support ticket. Requires manager-level access."""
+    svc.delete_ticket(ticket_id, current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ---- Messages ----
 
 

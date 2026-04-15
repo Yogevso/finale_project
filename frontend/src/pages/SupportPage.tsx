@@ -3,9 +3,26 @@ import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
 import { SupportTicketDetailView, SupportTicketsList } from '@/pages/support/components'
 import { useSupportPageController } from '@/pages/support/hooks'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { extractApiErrorMessage, useToast } from '@/lib/toast'
 
 export default function SupportPage() {
   const controller = useSupportPageController()
+  const queryClient = useQueryClient()
+  const toast = useToast()
+
+  const deleteMutation = useMutation({
+    mutationFn: (ticketId: number) => api.deleteSupportTicket(ticketId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] })
+      queryClient.invalidateQueries({ queryKey: ['supportTicketSummary'] })
+      toast.success('Ticket deleted')
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to delete ticket', extractApiErrorMessage(error, 'Please try again.'))
+    },
+  })
 
   if (controller.activeTicketId && controller.ticketQuery.isLoading) {
     return (
@@ -59,6 +76,7 @@ export default function SupportPage() {
         statusFilter={controller.statusFilter}
         onStatusFilterChange={controller.setStatusFilter}
         onOpenTicket={controller.setActiveTicketId}
+        onDeleteTicket={(id) => deleteMutation.mutate(id)}
       />
     </div>
   )

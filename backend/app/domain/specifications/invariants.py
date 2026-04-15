@@ -20,15 +20,17 @@ from app.models import (
 
 
 class DocumentDraftStatusSpec:
-    """Document must be in draft status to enter review submission flow."""
+    """Document must be in a submittable status to enter review submission flow."""
+
+    _SUBMITTABLE = {DocumentStatus.DRAFT, DocumentStatus.PENDING_REVIEW, DocumentStatus.APPROVED}
 
     def is_satisfied_by(self, document: Document) -> bool:
-        return document.status == DocumentStatus.DRAFT
+        return document.status in self._SUBMITTABLE
 
     def assert_satisfied(self, document: Document) -> None:
         if not self.is_satisfied_by(document):
             raise InvalidStateError(
-                "Document must be in draft status to submit for review. "
+                "Document must be in draft, pending-review, or approved status to submit for review. "
                 f"Current status: {document.status.value}"
             )
 

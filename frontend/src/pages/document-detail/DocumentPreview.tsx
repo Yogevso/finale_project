@@ -22,7 +22,7 @@ import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas'
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar'
 import { SectionEditPopup } from '@/pages/document-detail/components/SectionEditPopup'
 import { TocPanel } from '@/pages/document-detail/components/TocPanel'
-import { useContentEditingFlow } from '@/pages/document-detail/hooks/useContentEditingFlow'
+import { useContentEditingFlow, type RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow'
 import { useInlineComments } from '@/pages/document-detail/hooks/useInlineComments'
 import { usePreviewProgress } from '@/pages/document-detail/hooks/usePreviewProgress'
 import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewShortcuts'
@@ -70,6 +70,7 @@ export function DocumentPreview({
   contentEditRequestToken = 0,
   onToggleFullscreen,
   highlightAnchor,
+  onRemovedSectionsChange,
 }: {
   documentId: number
   attachments: Attachment[]
@@ -84,6 +85,7 @@ export function DocumentPreview({
   contentEditRequestToken?: number
   onToggleFullscreen?: () => void
   highlightAnchor?: string
+  onRemovedSectionsChange?: (sections: RemovedSection[], restore: (s: RemovedSection) => void, clear: () => void) => void
 }) {
   const { user } = useAuth()
   const [htmlContent, setHtmlContent] = useState<string | null>(null)
@@ -271,6 +273,10 @@ export function DocumentPreview({
     handleCloseSectionEdit,
     handleBackToChooser,
     handleSaveSection,
+    handleDeleteSection,
+    removedSections,
+    handleRestoreSection,
+    clearRemovedSections,
   } = useContentEditingFlow({
     documentId,
     isEditor,
@@ -282,6 +288,11 @@ export function DocumentPreview({
     applyProcessedHtml,
     onRequireInlineContent: () => setSelectedAttachment(null),
   })
+
+  // Expose removed sections to parent
+  useEffect(() => {
+    onRemovedSectionsChange?.(removedSections, handleRestoreSection, clearRemovedSections)
+  }, [removedSections, handleRestoreSection, clearRemovedSections, onRemovedSectionsChange])
 
   const { previewScrollProgress, handleScroll } = usePreviewProgress({
     documentId,
@@ -376,6 +387,9 @@ export function DocumentPreview({
         const withContent = versionsResponse.items.filter((version) =>
           Boolean(getUsableVersionContent(version.content)),
         )
+        const latestVersion = withContent.sort(
+          (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+        )[0]
         const publishedVersion = withContent
           .filter((version) => version.is_published)
           .sort(
@@ -383,26 +397,23 @@ export function DocumentPreview({
               new Date(right.published_at || right.created_at).getTime() -
               new Date(left.published_at || left.created_at).getTime(),
           )[0]
-        const latestVersion = withContent.sort(
-          (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-        )[0]
-        let versionToShow = publishedVersion || latestVersion
+        let versionToShow = latestVersion || publishedVersion
 
         if (!versionToShow && versionsResponse.items.length > 0) {
           const prioritizedIds = [
             ...new Set([
+              ...versionsResponse.items
+                .sort(
+                  (left, right) =>
+                    new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+                )
+                .map((version) => version.id),
               ...versionsResponse.items
                 .filter((version) => version.is_published)
                 .sort(
                   (left, right) =>
                     new Date(right.published_at || right.created_at).getTime() -
                     new Date(left.published_at || left.created_at).getTime(),
-                )
-                .map((version) => version.id),
-              ...versionsResponse.items
-                .sort(
-                  (left, right) =>
-                    new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
                 )
                 .map((version) => version.id),
             ]),
@@ -653,6 +664,8 @@ export function DocumentPreview({
               sectionLinkBasePath={sectionLinkBasePath}
               onSectionClick={handleReaderTocClick}
               onEditSection={handleStartEditingSection}
+              onDeleteSection={handleDeleteSection}
+              onAddSectionAfter={handleChooseAddSection}
             />
 
             <PreviewCanvas

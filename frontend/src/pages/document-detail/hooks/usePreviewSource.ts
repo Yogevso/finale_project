@@ -62,12 +62,12 @@ export function usePreviewSource({
     }
   }, [previewableAttachments, selectedAttachment, setSelectedAttachment])
 
-  const previewSource: PreviewSourceKind = readerHtmlContent
-    ? 'reader'
-    : inlineContent
-      ? 'inline'
+  const previewSource: PreviewSourceKind = inlineContent
+    ? 'inline'
+    : readerHtmlContent
+      ? 'reader'
       : 'none'
-  const activeHtmlContent = readerHtmlContent || inlineContent
+  const activeHtmlContent = inlineContent || readerHtmlContent
   const showingReaderView = selectedAttachment !== null && previewSource === 'reader'
   const shouldRenderHtmlPreview = activeHtmlContent !== null
   const previewState = useMemo(

@@ -55,6 +55,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   const isTemplateMode = saveAsTemplate
   const hasDuplicates = !isTemplateMode && duplicateMatches.length > 0
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false)
+  const [step, setStep] = useState<1 | 2>(1)
 
   const clearFieldError = (field: keyof typeof fieldErrors) => {
     if (!fieldErrors[field]) {
@@ -80,6 +81,21 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
     setError('')
   }
 
+  const handleContinueToEditor = () => {
+    const errors: Record<string, string> = {}
+    if (!isTemplateMode && !formData.title.trim()) {
+      errors.title = 'Title is required'
+    }
+    if (!isTemplateMode && !formData.platform?.trim()) {
+      errors.platform = 'Platform is required'
+    }
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors((prev) => ({ ...prev, ...errors }))
+      return
+    }
+    setStep(2)
+  }
+
   const handlePresetApply = (presetId: (typeof audiencePresets)[number]['id']) => {
     setFormData((previous) => {
       const nextAudience = applyAudiencePreset(
@@ -99,22 +115,38 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="modal-overlay z-50 flex items-center justify-center p-4">
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Create Document" className="modal-content w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <div className={`modal-overlay z-50 flex items-center justify-center ${step === 1 ? 'p-4' : 'p-0'}`}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="Create Document" className={`modal-content w-full flex flex-col ${step === 1 ? 'max-w-xl max-h-[90vh]' : 'h-screen max-h-screen rounded-none'}`}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h2 className="section-title text-xl">Create Document</h2>
-          <button type="button" onClick={confirmClose} className="btn-icon h-9 w-9 text-slate-500 hover:bg-slate-100" aria-label="Close create document dialog">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {step === 2 && (
+              <button type="button" onClick={() => setStep(1)} className="btn-icon h-8 w-8 text-slate-500 hover:bg-slate-100" aria-label="Back to details">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              </button>
+            )}
+            <h2 className="section-title text-xl">{step === 1 ? 'Document Details' : 'Write Content'}</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
+              <span className={step === 1 ? 'font-medium text-slate-700' : 'text-slate-400'}>Details</span>
+              <span className="mx-1 text-slate-300">—</span>
+              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+              <span className={step === 2 ? 'font-medium text-slate-700' : 'text-slate-400'}>Content</span>
+            </div>
+            <button type="button" onClick={confirmClose} className="btn-icon h-9 w-9 text-slate-500 hover:bg-slate-100" aria-label="Close create document dialog">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-auto">
           {error && (
             <div className="alert-danger mx-4 mt-4">{error}</div>
           )}
 
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-80 p-4 border-r border-slate-200 overflow-y-auto space-y-4 surface-muted">
+          {step === 1 ? (
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {!isTemplateMode ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
                   <div>
@@ -505,12 +537,12 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                 </div>
               ) : null}
             </div>
-
-            <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
+          ) : (
+            <div className="flex-1 flex flex-col min-h-0 p-4">
               <p className="mb-2 block text-sm font-medium text-slate-700">
                 Content <span className="text-slate-400 font-normal">(start typing your document)</span>
               </p>
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-0 overflow-auto">
                 <RichTextEditor
                   content={formData.content || ''}
                   onChange={(html) => setFormData({ ...formData, content: html })}
@@ -520,21 +552,32 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                 />
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end gap-3 p-4 border-t border-slate-200 surface-muted">
-            <button type="button" onClick={confirmClose} className="btn-ghost table-action-btn">
-              Cancel
+            <button type="button" onClick={step === 2 ? () => setStep(1) : confirmClose} className="btn-ghost table-action-btn">
+              {step === 2 ? 'Back' : 'Cancel'}
             </button>
-            <SubmitButton
-              type="submit"
-              isLoading={createMutation.isPending}
-              loadingText={isTemplateMode ? 'Saving...' : 'Creating...'}
-              disabled={hasDuplicates && !duplicateAcknowledged}
-              className="table-action-btn flex items-center gap-2"
-            >
-              {isTemplateMode ? 'Save Template' : 'Create & Continue Editing'}
-            </SubmitButton>
+            {step === 1 ? (
+              <button
+                type="button"
+                onClick={handleContinueToEditor}
+                disabled={hasDuplicates && !duplicateAcknowledged}
+                className="btn-primary table-action-btn"
+              >
+                Continue to Editor
+              </button>
+            ) : (
+              <SubmitButton
+                type="submit"
+                isLoading={createMutation.isPending}
+                loadingText={isTemplateMode ? 'Saving...' : 'Creating...'}
+                disabled={hasDuplicates && !duplicateAcknowledged}
+                className="table-action-btn flex items-center gap-2"
+              >
+                {isTemplateMode ? 'Save Template' : 'Create & Continue Editing'}
+              </SubmitButton>
+            )}
           </div>
         </form>
       </div>

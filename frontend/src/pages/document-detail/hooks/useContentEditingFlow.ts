@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   createInitialContentEditingMachineState,
@@ -17,6 +17,13 @@ import {
   type SectionEditTarget,
   type TocSection,
 } from '@/pages/document-detail/helpers/previewHelpers'
+
+export interface RemovedSection {
+  id: string
+  text: string
+  html: string
+  removedAt: string
+}
 
 interface UseContentEditingFlowParams {
   documentId: number
@@ -286,6 +293,7 @@ export function useContentEditingFlow({
   onRequireInlineContent,
 }: UseContentEditingFlowParams) {
   const queryClient = useQueryClient()
+  const [removedSections, setRemovedSections] = useState<RemovedSection[]>([])
   const [editingFlowState, dispatchEditingFlow] = useReducer(
     transitionContentEditingMachineState,
     undefined,
@@ -540,6 +548,74 @@ export function useContentEditingFlow({
     [activeHtmlContent, applyProcessedHtml, documentId, editingSection, queryClient, sections],
   )
 
+  const handleDeleteSection = useCallback(
+    async (section: TocSection) => {
+      const sectionIndex = sections.findIndex((s) => s.id === section.id)
+      if (sectionIndex < 0) return
+
+      // Store in removed sections before deleting
+      setRemovedSections((prev) => [
+        ...prev,
+        {
+          id: section.id,
+          text: section.text,
+          html: section.html,
+          removedAt: new Date().toISOString(),
+        },
+      ])
+
+      const remaining = sections.filter((_, idx) => idx !== sectionIndex)
+      const newFullHtml = remaining.map((s) => s.html).join('\n')
+
+      const changesSummary =
+        `Section removed: "${section.text}"\n\n` +
+        `--- Removed content ---\n${section.html.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
+          section.html.length > 500 ? '...' : ''
+        }`
+
+      await api.createVersion(documentId, {
+        content: newFullHtml,
+        changes_summary: changesSummary,
+      })
+
+      applyProcessedHtml(newFullHtml)
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.bff.documentDetailBundle(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
+    },
+    [applyProcessedHtml, documentId, queryClient, sections],
+  )
+
+  const handleRestoreSection = useCallback(
+    async (removedSection: RemovedSection) => {
+      // Append the restored section at the end of the current content
+      const currentHtml = sections.map((s) => s.html).join('\n')
+      const newFullHtml = currentHtml + '\n' + removedSection.html
+
+      const changesSummary = `Section restored: "${removedSection.text}"`
+
+      await api.createVersion(documentId, {
+        content: newFullHtml,
+        changes_summary: changesSummary,
+      })
+
+      applyProcessedHtml(newFullHtml)
+      setRemovedSections((prev) => prev.filter((s) => s.id !== removedSection.id))
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.bff.documentDetailBundle(documentId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
+    },
+    [applyProcessedHtml, documentId, queryClient, sections],
+  )
+
+  const clearRemovedSections = useCallback(() => {
+    setRemovedSections([])
+  }, [])
+
   return {
     showContentEditChooser,
     editingSection,
@@ -551,5 +627,9 @@ export function useContentEditingFlow({
     handleCloseSectionEdit,
     handleBackToChooser,
     handleSaveSection,
+    handleDeleteSection,
+    removedSections,
+    handleRestoreSection,
+    clearRemovedSections,
   }
 }

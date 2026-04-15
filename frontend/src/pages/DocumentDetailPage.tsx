@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Joyride from 'react-joyride'
 import { DocumentPreview } from '@/pages/document-detail/DocumentPreview'
@@ -8,7 +8,11 @@ import { DocumentHeaderCard } from '@/pages/document-detail/components/DocumentH
 import { DocumentTabs } from '@/pages/document-detail/components/DocumentTabs'
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
 import { ReviewSubmitModal } from '@/pages/document-detail/components/ReviewSubmitModal'
+import { HelpPanel } from '@/pages/document-detail/components/HelpPanel'
+import { RemovedSectionsPanel } from '@/pages/document-detail/components/RemovedSectionsPanel'
 import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState'
+import type { RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow'
+import { api } from '@/lib/api'
 import EngagementBar from '@/components/EngagementBar'
 import { useTour } from '@/hooks/useTour'
 import { documentDetailTour } from '@/lib/tour'
@@ -21,7 +25,11 @@ const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
 export default function DocumentDetailPage() {
   const tour = useTour('document-detail', documentDetailTour)
   const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null)
-  const [pendingPrint, setPendingPrint] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const [showRemovedSections, setShowRemovedSections] = useState(false)
+  const [removedSections, setRemovedSections] = useState<RemovedSection[]>([])
+  const restoreSectionRef = useRef<(s: RemovedSection) => void>(() => {})
+  const clearRemovedSectionsRef = useRef<() => void>(() => {})
   const [searchParams] = useSearchParams()
   const highlightText = searchParams.get('highlight') || undefined
   const {
@@ -76,39 +84,36 @@ export default function DocumentDetailPage() {
     removeCompany,
     isRemovingCompany,
     isSubmittingReview,
+    pendingReviewId,
+    cancelReview,
+    isCancellingReview,
   } = useDocumentDetailPageState()
 
   useEffect(() => {
     setReadingTimeMinutes(null)
   }, [documentId])
 
+  const handleRemovedSectionsChange = useCallback(
+    (sections: RemovedSection[], restore: (s: RemovedSection) => void, clear: () => void) => {
+      setRemovedSections(sections)
+      restoreSectionRef.current = restore
+      clearRemovedSectionsRef.current = clear
+    },
+    [],
+  )
+
+  // Clear removed sections storage when status becomes approved
+  const prevStatusRef = useRef(document?.status)
   useEffect(() => {
-    if (!pendingPrint || activeTab !== 'preview') {
-      return
+    if (document?.status === 'approved' && prevStatusRef.current !== 'approved') {
+      clearRemovedSectionsRef.current()
     }
-
-    const timer = window.setTimeout(() => {
-      window.print()
-      setPendingPrint(false)
-    }, 0)
-
-    return () => window.clearTimeout(timer)
-  }, [activeTab, pendingPrint])
+    prevStatusRef.current = document?.status
+  }, [document?.status])
 
   const tabCounts = {
     versions: document?.versions_count ?? 0,
     attachments: document?.attachments_count ?? attachments.length,
-  }
-
-  const handlePrint = () => {
-    if (activeTab === 'preview') {
-      window.print()
-      return
-    }
-
-    if (setActiveTab('preview')) {
-      setPendingPrint(true)
-    }
   }
 
   if (isLoading) {
@@ -130,6 +135,20 @@ export default function DocumentDetailPage() {
       </div>
     )
   }
+
+  const sourceFileType = (() => {
+    const first = attachments[0]
+    if (!first) return 'other' as const
+    const mime = first.mime_type?.toLowerCase() ?? ''
+    const name = first.original_filename?.toLowerCase() ?? ''
+    if (mime.includes('presentation') || mime.includes('powerpoint') || name.endsWith('.pptx') || name.endsWith('.ppt'))
+      return 'ppt' as const
+    if (mime.includes('word') || mime.includes('msword') || name.endsWith('.docx') || name.endsWith('.doc'))
+      return 'word' as const
+    if (mime === 'application/pdf' || name.endsWith('.pdf'))
+      return 'pdf' as const
+    return 'other' as const
+  })()
 
   return (
     <div
@@ -172,15 +191,44 @@ export default function DocumentDetailPage() {
           documentStatus={document.status}
           activeTab={activeTab}
           isEditing={isEditing}
+          sourceFileType={sourceFileType}
           onBackToDocuments={navigateToDocuments}
           onEnterFullscreen={navigateToFullscreen}
           onExitFullscreen={navigateToDetail}
-          onPrint={handlePrint}
+          onGenerateTranscript={() => window.print()}
           onExportCalendar={document.due_date ? exportCalendar : undefined}
           onOpenSubmitReview={openSubmitReview}
+          onCancelReview={pendingReviewId ? () => cancelReview() : undefined}
+          isCancellingReview={isCancellingReview}
           onEditAction={handleEditAction}
           onArchive={handleArchive}
           onRestore={handleRestore}
+          onDownloadAs={(format) => {
+            const formatMap: Record<string, 'pdf' | 'docx' | 'pptx'> = {
+              pdf: 'pdf',
+              word: 'docx',
+              ppt: 'pptx',
+            }
+            const apiFormat = formatMap[format]
+            if (!apiFormat) return
+            void (async () => {
+              try {
+                const blob = await api.exportDocument(documentId, apiFormat)
+                const url = URL.createObjectURL(blob)
+                const link = Object.assign(window.document.createElement('a'), {
+                  href: url,
+                  download: `${document.title || 'document'}.${apiFormat}`,
+                })
+                link.click()
+                URL.revokeObjectURL(url)
+              } catch {
+                console.error('Export failed')
+              }
+            })()
+          }}
+          onHelp={() => setShowHelp(true)}
+          removedSectionsCount={removedSections.length}
+          onShowRemovedSections={() => setShowRemovedSections(true)}
         />
 
         <EngagementBar
@@ -205,6 +253,7 @@ export default function DocumentDetailPage() {
             contentEditRequestToken={contentEditRequestToken}
             onToggleFullscreen={isFullscreen ? navigateToDetail : navigateToFullscreen}
             highlightAnchor={highlightText}
+            onRemovedSectionsChange={handleRemovedSectionsChange}
           />
         )}
 
@@ -272,6 +321,7 @@ export default function DocumentDetailPage() {
 
         <ReviewSubmitModal
           isOpen={showSubmitReview}
+          documentId={documentId}
           documentTitle={document.title}
           message={submitMessage}
           onMessageChange={setSubmitMessage}
@@ -280,6 +330,20 @@ export default function DocumentDetailPage() {
           isSubmitting={isSubmittingReview}
           errorMessage={submitReviewErrorMessage}
         />
+
+        {showHelp && (
+          <HelpPanel isEditor={isEditor} onClose={() => setShowHelp(false)} />
+        )}
+
+        {showRemovedSections && (
+          <RemovedSectionsPanel
+            removedSections={removedSections}
+            onRestore={(section) => {
+              restoreSectionRef.current(section)
+            }}
+            onClose={() => setShowRemovedSections(false)}
+          />
+        )}
       </div>
     </div>
   )

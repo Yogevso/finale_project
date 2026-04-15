@@ -34,12 +34,9 @@ def _published_document_ids_subquery(db: Session):
 
 
 def _viewer_published_documents_query(db: Session):
-    published_doc_ids = _published_document_ids_subquery(db)
     return db.query(Document).filter(
-        Document.status == DocumentStatus.ACTIVE,
         Document.visibility == DocumentVisibility.PUBLIC,
         Document.deleted_at.is_(None),
-        Document.id.in_(db.query(published_doc_ids.c.document_id)),
     )
 
 

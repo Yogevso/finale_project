@@ -1,5 +1,6 @@
 """Document Management API Routes"""
 
+import io
 import logging
 import os
 import re
@@ -21,6 +22,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -87,7 +89,11 @@ from app.schemas import (
 from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
 from app.services.permissions import Permission
+from app.services.version_service import VersionService
+from app.dependencies.services import get_version_service
 from app.utils.html_to_docx import html_to_docx_bytes
+from app.utils.html_to_pdf import html_to_pdf_bytes
+from app.utils.html_to_pptx import html_to_pptx_bytes
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -303,6 +309,71 @@ def generate_word_attachment(
         convert_to_html=False,
     )
     return attachment
+
+
+_EXPORT_FORMAT_MAP = {
+    "pdf": {
+        "converter": lambda html, title: html_to_pdf_bytes(html, title),
+        "content_type": "application/pdf",
+        "extension": ".pdf",
+    },
+    "docx": {
+        "converter": lambda html, _title: html_to_docx_bytes(html),
+        "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "extension": ".docx",
+    },
+    "pptx": {
+        "converter": lambda html, title: html_to_pptx_bytes(html, title),
+        "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "extension": ".pptx",
+    },
+}
+
+
+@router.get("/documents/{document_id}/export")
+def export_document(
+    document_id: int,
+    format: str = Query(..., pattern="^(pdf|docx|pptx)$", description="Export format"),
+    current_user: User = Depends(require_internal_user),
+    document_service: DocumentService = Depends(get_document_service),
+    version_service: VersionService = Depends(get_version_service),
+):
+    """
+    Export the current document content as PDF, Word, or PowerPoint.
+    Converts the latest version HTML into the requested format.
+    """
+    document = document_service.get_document(document_id)
+    document_service._verify_access(document)
+
+    # Get the latest version content
+    versions = version_service.get_versions(document_id, current_user)
+    if not versions:
+        raise HTTPException(status_code=404, detail="No versions found for this document")
+
+    latest = max(versions, key=lambda v: v["version_number"])
+    html_content = latest.get("content") or ""
+    if not html_content:
+        raise HTTPException(status_code=404, detail="Document has no content to export")
+
+    fmt = _EXPORT_FORMAT_MAP[format]
+    safe_title = re.sub(r'[\\/:*?"<>|]', "_", document.title or "Document")
+
+    try:
+        file_bytes = fmt["converter"](html_content, safe_title)
+    except Exception as exc:
+        logger.error("Export conversion failed for doc %d format %s: %s", document_id, format, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to convert document to {format}")
+
+    filename = f"{safe_title}{fmt['extension']}"
+
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=fmt["content_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(file_bytes)),
+        },
+    )
 
 
 @router.get("/documents", response_model=DocumentListResponse)

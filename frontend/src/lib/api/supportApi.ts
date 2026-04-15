@@ -96,6 +96,10 @@ export const SupportApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       await this.client.delete(`/support/tickets/${ticketId}/assign/${agentId}`)
     }
 
+    async deleteSupportTicket(ticketId: number): Promise<void> {
+      await this.client.delete(`/support/tickets/${ticketId}`)
+    }
+
     async handoffTicket(ticketId: number, targetAgentId: number, note = ''): Promise<SupportTicketAssignment> {
       const { data } = await this.client.post<SupportTicketAssignment>(
         `/support/tickets/${ticketId}/handoff`,

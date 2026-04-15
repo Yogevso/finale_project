@@ -183,7 +183,7 @@ export function useDocumentsPageController() {
   }, [showDeleted])
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => documentsUseCases.deleteDocument(id),
+    mutationFn: ({ id, ifMatch }: { id: number; ifMatch?: string }) => documentsUseCases.deleteDocument(id, ifMatch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       toast.success('Document moved to recovery window')
@@ -199,7 +199,7 @@ export function useDocumentsPageController() {
   })
 
   const restoreDeletedMutation = useMutation({
-    mutationFn: (id: number) => documentsUseCases.restoreDeletedDocument(id),
+    mutationFn: ({ id, ifMatch }: { id: number; ifMatch?: string }) => documentsUseCases.restoreDeletedDocument(id, ifMatch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       toast.success('Document restored')
@@ -211,7 +211,7 @@ export function useDocumentsPageController() {
   })
 
   const purgeMutation = useMutation({
-    mutationFn: (id: number) => documentsUseCases.purgeDocument(id),
+    mutationFn: ({ id, ifMatch }: { id: number; ifMatch?: string }) => documentsUseCases.purgeDocument(id, ifMatch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
       toast.success('Document permanently deleted')
@@ -223,7 +223,7 @@ export function useDocumentsPageController() {
   })
 
   const archiveMutation = useMutation({
-    mutationFn: (id: number) => documentsUseCases.archiveDocument(id),
+    mutationFn: ({ id, ifMatch }: { id: number; ifMatch?: string }) => documentsUseCases.archiveDocument(id, ifMatch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     },
@@ -234,7 +234,7 @@ export function useDocumentsPageController() {
   })
 
   const restoreMutation = useMutation({
-    mutationFn: (id: number) => documentsUseCases.restoreDocument(id),
+    mutationFn: ({ id, ifMatch }: { id: number; ifMatch?: string }) => documentsUseCases.restoreDocument(id, ifMatch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
     },
@@ -334,7 +334,7 @@ export function useDocumentsPageController() {
     setPage(1)
   }
 
-  const handleDelete = (id: number, title: string) => {
+  const handleDelete = (id: number, title: string, etag?: string) => {
     if (!isManager) {
       return
     }
@@ -343,25 +343,25 @@ export function useDocumentsPageController() {
         `Move "${title}" to the recovery window? It will disappear from normal views immediately and stay recoverable for 30 days.`,
       )
     ) {
-      deleteMutation.mutate(id)
+      deleteMutation.mutate({ id, ifMatch: etag })
     }
   }
 
-  const handleRestoreDeleted = (id: number, title: string) => {
+  const handleRestoreDeleted = (id: number, title: string, etag?: string) => {
     if (!isAdmin) {
       return
     }
     if (confirm(`Restore "${title}" to the normal documents list?`)) {
-      restoreDeletedMutation.mutate(id)
+      restoreDeletedMutation.mutate({ id, ifMatch: etag })
     }
   }
 
-  const handlePurgeDeleted = (id: number, title: string) => {
+  const handlePurgeDeleted = (id: number, title: string, etag?: string) => {
     if (!isAdmin) {
       return
     }
     if (confirm(`Permanently delete "${title}"? This cannot be undone.`)) {
-      purgeMutation.mutate(id)
+      purgeMutation.mutate({ id, ifMatch: etag })
     }
   }
 
@@ -369,18 +369,19 @@ export function useDocumentsPageController() {
     id: number,
     title: string,
     currentStatus: DocumentStatus,
+    etag?: string,
   ) => {
     if (!isManager) {
       return
     }
 
     if (currentStatus === 'archived') {
-      restoreMutation.mutate(id)
+      restoreMutation.mutate({ id, ifMatch: etag })
       return
     }
 
     if (confirm(`Archive "${title}"? You can restore it later from the archived view.`)) {
-      archiveMutation.mutate(id)
+      archiveMutation.mutate({ id, ifMatch: etag })
     }
   }
 

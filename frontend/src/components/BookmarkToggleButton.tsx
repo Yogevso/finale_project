@@ -75,7 +75,7 @@ export default function BookmarkToggleButton({
     >
       <span key={isBookmarked ? 'saved' : 'unsaved'} className="motion-enter-scale inline-flex items-center gap-2">
         <Star className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
-        {showLabel ? <span>{isBookmarked ? 'Saved' : 'Save'}</span> : null}
+        {showLabel ? <span>{isBookmarked ? 'In My Activities' : 'Add to My Activities'}</span> : null}
       </span>
     </button>
   )

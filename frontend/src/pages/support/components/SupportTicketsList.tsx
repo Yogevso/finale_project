@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { Filter, MessageSquareText } from 'lucide-react'
+import { Filter, MessageSquareText, Trash2 } from 'lucide-react'
 
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -18,6 +18,7 @@ interface SupportTicketsListProps {
   statusFilter: SupportTicketStatus | ''
   onStatusFilterChange: (value: SupportTicketStatus | '') => void
   onOpenTicket: (ticketId: number) => void
+  onDeleteTicket?: (ticketId: number) => void
 }
 
 export function SupportTicketsList({
@@ -29,6 +30,7 @@ export function SupportTicketsList({
   statusFilter,
   onStatusFilterChange,
   onOpenTicket,
+  onDeleteTicket,
 }: SupportTicketsListProps) {
   return (
     <div className="mx-4 space-y-4">
@@ -108,8 +110,9 @@ export function SupportTicketsList({
             { header: 'Priority' },
             { header: 'Status' },
             { header: 'Created' },
+            { header: '' },
           ]}
-          gridTemplateColumns="minmax(5rem, 0.55fr) minmax(16rem, 1.8fr) minmax(12rem, 1.2fr) minmax(8rem, 0.8fr) minmax(8rem, 0.8fr) minmax(10rem, 0.9fr)"
+          gridTemplateColumns="minmax(5rem, 0.55fr) minmax(16rem, 1.8fr) minmax(12rem, 1.2fr) minmax(8rem, 0.8fr) minmax(8rem, 0.8fr) minmax(10rem, 0.9fr) minmax(4rem, 0.4fr)"
           estimateRowHeight={68}
           rowKey={(ticket) => ticket.id}
           onRowClick={(ticket) => onOpenTicket(ticket.id)}
@@ -168,6 +171,24 @@ export function SupportTicketsList({
               </div>
               <div className="admin-table-cell text-xs text-slate-500 dark:text-slate-400">
                 {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+              </div>
+              <div className="admin-table-cell flex items-center justify-center">
+                {ticket.status === 'closed' && onDeleteTicket ? (
+                  <button
+                    type="button"
+                    title="Delete closed ticket"
+                    aria-label={`Delete ticket #${ticket.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (confirm(`Delete ticket #${ticket.id}? This cannot be undone.`)) {
+                        onDeleteTicket(ticket.id)
+                      }
+                    }}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
               </div>
             </>
           )}

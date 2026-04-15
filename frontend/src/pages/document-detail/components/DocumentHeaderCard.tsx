@@ -8,15 +8,22 @@ import {
   CalendarDays,
   CheckCircle,
   Clock,
+  Download,
+  FileText,
+  HelpCircle,
   Maximize2,
   Minimize2,
-  Printer,
   RotateCcw,
   Send,
+  Trash2,
+  XCircle,
 } from 'lucide-react'
+import { useState } from 'react'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
 
 type HeaderTab = 'preview' | 'details' | 'versions' | 'attachments' | 'comments'
+
+type SourceFileType = 'word' | 'pdf' | 'ppt' | 'other'
 
 interface DocumentHeaderCardProps {
   documentId: number
@@ -30,15 +37,22 @@ interface DocumentHeaderCardProps {
   documentStatus: DocumentStatus
   activeTab: HeaderTab
   isEditing: boolean
+  sourceFileType?: SourceFileType
   onBackToDocuments: () => void
   onEnterFullscreen: () => void
   onExitFullscreen: () => void
-  onPrint: () => void
+  onGenerateTranscript?: () => void
   onExportCalendar?: () => void
   onOpenSubmitReview: () => void
+  onCancelReview?: () => void
+  isCancellingReview?: boolean
   onEditAction: () => void
   onArchive: () => void
   onRestore: () => void
+  onDownloadAs?: (format: 'word' | 'pdf' | 'ppt') => void
+  onHelp?: () => void
+  removedSectionsCount?: number
+  onShowRemovedSections?: () => void
 }
 
 export function DocumentHeaderCard({
@@ -53,24 +67,36 @@ export function DocumentHeaderCard({
   documentStatus,
   activeTab,
   isEditing,
+  sourceFileType = 'other',
   onBackToDocuments,
   onEnterFullscreen,
   onExitFullscreen,
-  onPrint,
+  onGenerateTranscript,
   onExportCalendar,
   onOpenSubmitReview,
+  onCancelReview,
+  isCancellingReview,
   onEditAction,
   onArchive,
   onRestore,
+  onDownloadAs,
+  onHelp,
+  removedSectionsCount = 0,
+  onShowRemovedSections,
 }: DocumentHeaderCardProps) {
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+
   const resolvedDocumentTitle = getDocumentDisplayTitle(documentTitle)
   const headerActionClassName =
     'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20'
   const headerStatusClassName =
     'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 text-white/90'
 
+  const showWordDownload = sourceFileType === 'word' || sourceFileType === 'pdf'
+  const showPptDownload = sourceFileType === 'ppt'
+
   return (
-    <div className="document-detail-header-card overflow-hidden rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg">
+    <div className="document-detail-header-card sticky top-0 z-30 overflow-hidden rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg">
       <div className="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-start md:justify-between md:px-8 md:py-6">
         <div>
           <button
@@ -117,15 +143,68 @@ export function DocumentHeaderCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onPrint}
-            className={headerActionClassName}
-            title="Print document"
-          >
-            <Printer className="w-4 h-4" />
-            Print
-          </button>
+          {onGenerateTranscript && (
+            <button
+              type="button"
+              onClick={onGenerateTranscript}
+              className={headerActionClassName}
+              title="Generate transcript"
+            >
+              <FileText className="w-4 h-4" />
+              Generate Transcript
+            </button>
+          )}
+
+          {onDownloadAs && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowDownloadMenu((p) => !p)}
+                className={headerActionClassName}
+                title="Download options"
+              >
+                <Download className="w-4 h-4" />
+                Download
+              </button>
+              {showDownloadMenu && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setShowDownloadMenu(false)}
+                    aria-label="Close download menu"
+                  />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                    <button
+                      type="button"
+                      onClick={() => { setShowDownloadMenu(false); onDownloadAs('pdf') }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                    >
+                      PDF
+                    </button>
+                    {showWordDownload && (
+                      <button
+                        type="button"
+                        onClick={() => { setShowDownloadMenu(false); onDownloadAs('word') }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                      >
+                        Word (.docx)
+                      </button>
+                    )}
+                    {showPptDownload && (
+                      <button
+                        type="button"
+                        onClick={() => { setShowDownloadMenu(false); onDownloadAs('ppt') }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                      >
+                        PowerPoint (.pptx)
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {dueDate && onExportCalendar ? (
             <button
@@ -139,7 +218,7 @@ export function DocumentHeaderCard({
             </button>
           ) : null}
 
-          {!isFullscreen ? (
+          {!isFullscreen && (
             <button
               type="button"
               onClick={onEnterFullscreen}
@@ -149,28 +228,24 @@ export function DocumentHeaderCard({
               <Maximize2 className="w-4 h-4" />
               Fullscreen
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onExitFullscreen}
-              className={headerActionClassName}
-              title="Toggle fullscreen (F)"
-            >
-              <Minimize2 className="w-4 h-4" />
-              Exit Fullscreen
-            </button>
           )}
 
           {isEditor ? (
             <>
-              {documentStatus === 'draft' || documentStatus === 'active' ? (
+              {documentStatus !== 'archived' ? (
                 <button
                   type="button"
                   onClick={onOpenSubmitReview}
                   className="btn-secondary table-action-btn border-white/60 bg-white text-sky-900 hover:border-white hover:bg-slate-100"
                 >
                   <Send className="w-4 h-4" />
-                  {documentStatus === 'active' ? 'Submit Draft for Review' : 'Submit for Review'}
+                  {documentStatus === 'rejected' || documentStatus === 'pending_review'
+                    ? 'Resubmit for Review'
+                    : documentStatus === 'active'
+                      ? 'Submit Draft for Review'
+                      : documentStatus === 'approved'
+                        ? 'Submit New Review'
+                        : 'Submit for Review'}
                 </button>
               ) : null}
               {documentStatus === 'pending_review' ? (
@@ -178,6 +253,17 @@ export function DocumentHeaderCard({
                   <Clock className="w-4 h-4" />
                   Pending Review
                 </span>
+              ) : null}
+              {documentStatus === 'pending_review' && onCancelReview ? (
+                <button
+                  type="button"
+                  onClick={onCancelReview}
+                  disabled={isCancellingReview}
+                  className="table-action-btn inline-flex items-center gap-2 rounded-full border border-rose-300/40 bg-rose-500/20 text-white transition-colors hover:bg-rose-500/40 disabled:opacity-50"
+                >
+                  <XCircle className="w-4 h-4" />
+                  {isCancellingReview ? 'Cancelling...' : 'Cancel Review'}
+                </button>
               ) : null}
               {documentStatus === 'approved' ? (
                 <span className={headerStatusClassName}>
@@ -190,11 +276,11 @@ export function DocumentHeaderCard({
                   ? isEditing
                     ? 'Cancel Details'
                     : 'Edit Details'
-                  : 'Edit Content'}
+                  : 'Edit Document'}
               </button>
               <button
                 type="button"
-                onClick={documentStatus === 'archived' ? onRestore : onArchive}
+                onClick={documentStatus === 'archived' ? onRestore : (onShowRemovedSections ?? onArchive)}
                 className={headerActionClassName}
               >
                 {documentStatus === 'archived' ? (
@@ -204,13 +290,30 @@ export function DocumentHeaderCard({
                   </>
                 ) : (
                   <>
-                    <Archive className="w-4 h-4" />
-                    Archive
+                    <Trash2 className="w-4 h-4" />
+                    Removed Sections
+                    {removedSectionsCount > 0 && (
+                      <span className="ml-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/25 px-1 text-xs font-bold">
+                        {removedSectionsCount}
+                      </span>
+                    )}
                   </>
                 )}
               </button>
             </>
           ) : null}
+
+          {onHelp && (
+            <button
+              type="button"
+              onClick={onHelp}
+              className={headerActionClassName}
+              title="Help"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Help
+            </button>
+          )}
         </div>
       </div>
     </div>
