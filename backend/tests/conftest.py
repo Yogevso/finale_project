@@ -177,11 +177,7 @@ def system_email_runtime_isolation():
 @pytest.fixture(autouse=True)
 def company_cache_isolation():
     """Clear the module-level company lookup cache between tests."""
-    from app.services.document_service import _company_cache
-
-    _company_cache.clear(reset_metrics=True)
     yield
-    _company_cache.clear(reset_metrics=True)
 
 
 @pytest.fixture(autouse=True)
