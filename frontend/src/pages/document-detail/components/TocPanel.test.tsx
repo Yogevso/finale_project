@@ -74,7 +74,10 @@ describe('TocPanel', () => {
     const user = userEvent.setup()
     renderTocPanel()
 
-    await user.click(screen.getAllByTitle('Copy link to section')[0]!)
+    // Open the three-dot menu for the first section
+    await user.click(screen.getAllByTitle('Section actions')[0]!)
+    // Click "Copy Link" in the dropdown
+    await user.click(screen.getByText('Copy Link'))
 
     const expectedUrl = new URL('/documents/42/fullscreen#intro', window.location.origin).toString()
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(expectedUrl)
@@ -87,7 +90,10 @@ describe('TocPanel', () => {
     const user = userEvent.setup()
     renderTocPanel()
 
-    await user.click(screen.getAllByTitle('Copy link to section')[0]!)
+    // Open the three-dot menu for the first section
+    await user.click(screen.getAllByTitle('Section actions')[0]!)
+    // Click "Copy Link" in the dropdown
+    await user.click(screen.getByText('Copy Link'))
 
     expect(toastErrorMock).toHaveBeenCalledWith('Failed to copy section link')
     expect(toastSuccessMock).not.toHaveBeenCalled()

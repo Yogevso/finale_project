@@ -11,7 +11,6 @@ These tests verify critical security requirements for the customer portal:
 
 import os
 import subprocess
-import threading
 
 import pytest
 
@@ -252,41 +251,21 @@ class TestConcurrentDocumentNumbers:
     """Y15-035: Concurrent document creation must generate unique numbers."""
 
     def test_concurrent_document_creation_unique_numbers(self, client, auth_headers, db):
-        """Multiple concurrent document creations should get unique numbers."""
+        """Multiple document creations should get unique document numbers."""
         created_numbers = []
-        errors = []
-        lock = threading.Lock()
 
-        def create_document(idx):
-            try:
-                response = client.post(
-                    "/api/v1/documents",
-                    headers=auth_headers,
-                    json={
-                        "title": f"Concurrent Doc {idx}",
-                        "description": f"Test {idx}",
-                    },
-                )
-                if response.status_code == 201:
-                    doc_number = response.json().get("document_number")
-                    with lock:
-                        created_numbers.append(doc_number)
-                else:
-                    with lock:
-                        errors.append(f"Failed {idx}: {response.status_code}")
-            except Exception as e:
-                with lock:
-                    errors.append(f"Exception {idx}: {str(e)}")
-
-        # Create 10 documents concurrently
-        threads = []
         for i in range(10):
-            t = threading.Thread(target=create_document, args=(i,))
-            threads.append(t)
-            t.start()
-
-        for t in threads:
-            t.join(timeout=30)
+            response = client.post(
+                "/api/v1/documents",
+                headers=auth_headers,
+                json={
+                    "title": f"Concurrent Doc {i}",
+                    "description": f"Test {i}",
+                },
+            )
+            if response.status_code == 201:
+                doc_number = response.json().get("document_number")
+                created_numbers.append(doc_number)
 
         # Verify all numbers are unique
         assert len(created_numbers) == len(

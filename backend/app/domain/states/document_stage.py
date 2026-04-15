@@ -43,7 +43,6 @@ class PendingReviewDocumentStage(DocumentStage):
             DocumentStatus.APPROVED,
             DocumentStatus.DRAFT,
             DocumentStatus.ARCHIVED,
-            DocumentStatus.PENDING_REVIEW,
         }
     )
 
@@ -51,7 +50,7 @@ class PendingReviewDocumentStage(DocumentStage):
 class ApprovedDocumentStage(DocumentStage):
     status = DocumentStatus.APPROVED
     allowed_targets = frozenset(
-        {DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED, DocumentStatus.PENDING_REVIEW}
+        {DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED}
     )
 
 
