@@ -1,9 +1,9 @@
 """Shared imports and primitives for model modules."""
 
-import enum
-from datetime import datetime
+import enum  # noqa: F401
+from datetime import datetime  # noqa: F401
 
-from sqlalchemy import (
+from sqlalchemy import (  # noqa: F401
     JSON,
     Boolean,
     Column,
@@ -19,10 +19,9 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
 )
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Enum as SQLEnum  # noqa: F401
+from sqlalchemy.orm import relationship  # noqa: F401
 
-from app.db import Base
-from app.db.bases import AnalyticsBase, ChatBase
-from app.utils.concurrency import build_resource_etag
-
+from app.db import Base  # noqa: F401
+from app.db.bases import AnalyticsBase, ChatBase  # noqa: F401
+from app.utils.concurrency import build_resource_etag  # noqa: F401

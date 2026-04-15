@@ -45,8 +45,7 @@ class PolicyExplanation:
     def message(self) -> str:
         """Compact human-facing message with stable reason code."""
         return (
-            f"{self.summary} "
-            f"(reason_code={self.reason_code}; reason={self.reason_description})"
+            f"{self.summary} " f"(reason_code={self.reason_code}; reason={self.reason_description})"
         )
 
     def to_http_headers(self) -> dict[str, str]:
@@ -89,4 +88,3 @@ class PolicyExplanation:
 def explain_decision(decision: AuthorizationDecision, *, summary: str) -> PolicyExplanation:
     """Create a policy explanation object for an authorization decision."""
     return PolicyExplanation.from_decision(decision, summary=summary)
-

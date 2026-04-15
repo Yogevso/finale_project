@@ -29,8 +29,6 @@ from app.models import (
     UserRole,
     Version,
 )
-from app.services.audit_helper import write_audit_log
-from app.services.notification_service import NotificationService
 from app.schemas import (
     ApprovalPolicyCheck,
     AudienceDiff,
@@ -43,6 +41,8 @@ from app.schemas import (
     ReviewSubmit,
 )
 from app.security import get_current_active_user
+from app.services.audit_helper import write_audit_log
+from app.services.notification_service import NotificationService
 from app.services.permissions import Permission, has_permission
 from app.services.review_sla_service import ReviewSlaService
 
@@ -279,16 +279,13 @@ async def submit_for_review(
     )
 
     # Create notifications for reviewers (editors, managers, admins)
-    reviewers = (
-        db.query(User)
-        .filter(
-            and_(
-                User.id != current_user.id,
-                User.is_active.is_(True),
-                User.role.in_(
-                    [UserRole.EDITOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]
-                ),
-            )
+    reviewers = db.query(User).filter(
+        and_(
+            User.id != current_user.id,
+            User.is_active.is_(True),
+            User.role.in_(
+                [UserRole.EDITOR, UserRole.MANAGER, UserRole.ADMIN, UserRole.SYSTEM_ADMIN]
+            ),
         )
     )
     if current_user.role != UserRole.SYSTEM_ADMIN:
@@ -513,39 +510,47 @@ async def pre_approve_policy(
 
     # Check 1: Review is pending
     is_pending = review.status == ReviewStatus.PENDING
-    checks.append(ApprovalPolicyCheck(
-        id="review_pending",
-        label="Review is pending",
-        passed=is_pending,
-        message=None if is_pending else f"Review status is {review.status.value}, not pending",
-    ))
+    checks.append(
+        ApprovalPolicyCheck(
+            id="review_pending",
+            label="Review is pending",
+            passed=is_pending,
+            message=None if is_pending else f"Review status is {review.status.value}, not pending",
+        )
+    )
 
     # Check 2: User can review documents
     can_review = can_review_documents(current_user)
-    checks.append(ApprovalPolicyCheck(
-        id="user_can_review",
-        label="User has review permissions",
-        passed=can_review,
-        message=None if can_review else "User does not have permission to review documents",
-    ))
+    checks.append(
+        ApprovalPolicyCheck(
+            id="user_can_review",
+            label="User has review permissions",
+            passed=can_review,
+            message=None if can_review else "User does not have permission to review documents",
+        )
+    )
 
     # Check 3: User cannot approve own submission
     not_own_submission = review.submitted_by != current_user.id
-    checks.append(ApprovalPolicyCheck(
-        id="not_own_submission",
-        label="Not own submission",
-        passed=not_own_submission,
-        message=None if not_own_submission else "Cannot approve your own submission",
-    ))
+    checks.append(
+        ApprovalPolicyCheck(
+            id="not_own_submission",
+            label="Not own submission",
+            passed=not_own_submission,
+            message=None if not_own_submission else "Cannot approve your own submission",
+        )
+    )
 
     # Check 4: User can approve this review (based on role)
     user_can_approve = can_approve(current_user, review) if is_pending else False
-    checks.append(ApprovalPolicyCheck(
-        id="user_can_approve",
-        label="User can approve this review",
-        passed=user_can_approve,
-        message=None if user_can_approve else "User role cannot approve this submission",
-    ))
+    checks.append(
+        ApprovalPolicyCheck(
+            id="user_can_approve",
+            label="User can approve this review",
+            passed=user_can_approve,
+            message=None if user_can_approve else "User role cannot approve this submission",
+        )
+    )
 
     # Check 5: Audience configuration is valid
     try:
@@ -556,12 +561,14 @@ async def pre_approve_policy(
         audience_valid = False
         audience_message = str(e.message)
 
-    checks.append(ApprovalPolicyCheck(
-        id="audience_valid",
-        label="Audience configuration valid",
-        passed=audience_valid,
-        message=audience_message,
-    ))
+    checks.append(
+        ApprovalPolicyCheck(
+            id="audience_valid",
+            label="Audience configuration valid",
+            passed=audience_valid,
+            message=audience_message,
+        )
+    )
 
     # Check for audience drift
     if review.audience_visibility_snapshot:

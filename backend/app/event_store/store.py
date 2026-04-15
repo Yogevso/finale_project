@@ -1,4 +1,4 @@
-﻿"""Minimal append-only event store primitives for pilot use-cases."""
+"""Minimal append-only event store primitives for pilot use-cases."""
 
 from __future__ import annotations
 

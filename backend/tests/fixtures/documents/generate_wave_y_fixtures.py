@@ -181,7 +181,9 @@ def _write_pptx_fixture(path: Path) -> None:
                     70,
                     [
                         _make_paragraph("Appendix details"),
-                        _make_paragraph({"text": "Fallback titles", "italic": True}, " are still usable."),
+                        _make_paragraph(
+                            {"text": "Fallback titles", "italic": True}, " are still usable."
+                        ),
                     ],
                     name="Appendix",
                 ),
@@ -239,7 +241,7 @@ def _write_pptx_fixture(path: Path) -> None:
             "_rels/.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 '<Relationship Id="rId1" '
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
@@ -254,7 +256,7 @@ def _write_pptx_fixture(path: Path) -> None:
             "docProps/core.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<cp:coreProperties '
+                "<cp:coreProperties "
                 'xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/'
                 'core-properties" '
                 'xmlns:dc="http://purl.org/dc/elements/1.1/" '
@@ -274,7 +276,7 @@ def _write_pptx_fixture(path: Path) -> None:
             "ppt/presentation.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:presentation '
+                "<p:presentation "
                 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
                 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
                 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
@@ -286,7 +288,7 @@ def _write_pptx_fixture(path: Path) -> None:
             "ppt/_rels/presentation.xml.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 f"{presentation_relationships}"
                 "</Relationships>"
@@ -340,7 +342,7 @@ def _write_empty_pptx_fixture(path: Path) -> None:
             "_rels/.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 '<Relationship Id="rId1" '
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
@@ -355,7 +357,7 @@ def _write_empty_pptx_fixture(path: Path) -> None:
             "docProps/core.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<cp:coreProperties '
+                "<cp:coreProperties "
                 'xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/'
                 'core-properties" '
                 'xmlns:dc="http://purl.org/dc/elements/1.1/" '
@@ -371,7 +373,7 @@ def _write_empty_pptx_fixture(path: Path) -> None:
             "ppt/presentation.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:presentation '
+                "<p:presentation "
                 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
                 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
                 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
@@ -383,7 +385,7 @@ def _write_empty_pptx_fixture(path: Path) -> None:
             "ppt/_rels/presentation.xml.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
             ),
         )
@@ -405,7 +407,7 @@ def _relationships_xml(relationships: list[tuple[str, str, str]]) -> str:
     )
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships '
+        "<Relationships "
         'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
         f"{items}"
         "</Relationships>"
@@ -515,10 +517,7 @@ def _make_run(run: str | dict[str, object]) -> str:
     if run.get("italic"):
         attributes.append(' i="1"')
 
-    return (
-        f'<a:r><a:rPr{"".join(attributes)}/>'
-        f'<a:t>{html.escape(str(run["text"]))}</a:t></a:r>'
-    )
+    return f'<a:r><a:rPr{"".join(attributes)}/>' f'<a:t>{html.escape(str(run["text"]))}</a:t></a:r>'
 
 
 def main() -> None:

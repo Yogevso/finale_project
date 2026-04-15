@@ -121,9 +121,7 @@ def test_assignment_outbox_retry_uses_assignment_policy_over_retry_delay_overrid
     monkeypatch.setattr(settings, "ASSIGNMENT_JOB_RETRY_BACKOFF_MULTIPLIER", 2.0)
     monkeypatch.setattr(settings, "ASSIGNMENT_JOB_RETRY_JITTER_RATIO", 0.0)
 
-    failing_dispatcher = InProcessDomainEventDispatcher(
-        suppress_handler_exceptions=False
-    )
+    failing_dispatcher = InProcessDomainEventDispatcher(suppress_handler_exceptions=False)
 
     def _always_fail_assignment_event(_event: CompanyAssignmentsUpdated) -> None:
         raise RuntimeError("forced assignment event failure")
@@ -157,9 +155,7 @@ def test_assignment_outbox_retry_uses_assignment_policy_over_retry_delay_overrid
 
 def test_outbox_worker_dispatches_and_marks_processed(db):
     recorded: list[DocumentPublished] = []
-    handler_dispatcher = InProcessDomainEventDispatcher(
-        suppress_handler_exceptions=False
-    )
+    handler_dispatcher = InProcessDomainEventDispatcher(suppress_handler_exceptions=False)
     handler_dispatcher.register(DocumentPublished, lambda event: recorded.append(event))
 
     outbox_dispatcher = build_outbox_event_dispatcher(db)
@@ -192,9 +188,7 @@ def test_outbox_worker_dispatches_and_marks_processed(db):
 
 
 def test_outbox_worker_retries_then_marks_failed(db):
-    failing_dispatcher = InProcessDomainEventDispatcher(
-        suppress_handler_exceptions=False
-    )
+    failing_dispatcher = InProcessDomainEventDispatcher(suppress_handler_exceptions=False)
 
     def _always_fail(_event: CommentCreated) -> None:
         raise RuntimeError("forced handler failure")
@@ -293,9 +287,7 @@ def test_assignment_event_dead_letter_emits_admin_notification(db, monkeypatch):
     db.add(admin_user)
     db.commit()
 
-    failing_dispatcher = InProcessDomainEventDispatcher(
-        suppress_handler_exceptions=False
-    )
+    failing_dispatcher = InProcessDomainEventDispatcher(suppress_handler_exceptions=False)
 
     def _always_fail_assignment_event(_event: CompanyAssignmentsUpdated) -> None:
         raise RuntimeError("forced assignment event failure")

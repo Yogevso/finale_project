@@ -59,7 +59,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Process request
         try:
             response = await call_next(request)
-        except Exception as exc:  # policy: LOSSY — response tracing should not mask the original request outcome
+        except (
+            Exception
+        ) as exc:  # policy: LOSSY — response tracing should not mask the original request outcome
             # Log exception with user/tenant context (Y15-027)
             duration_ms = (time.time() - start_time) * 1000
             logger.error(

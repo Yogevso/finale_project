@@ -22,4 +22,3 @@ class StoragePort(Protocol):
 
     def exists(self, storage_key: str) -> bool:
         """Check if storage key exists."""
-

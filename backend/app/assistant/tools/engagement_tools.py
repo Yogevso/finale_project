@@ -30,11 +30,15 @@ class BookmarkDocumentTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc_id = params["document_id"]
-        existing = db.query(Bookmark).filter(
-            Bookmark.user_id == user.id, Bookmark.document_id == doc_id
-        ).first()
+        existing = (
+            db.query(Bookmark)
+            .filter(Bookmark.user_id == user.id, Bookmark.document_id == doc_id)
+            .first()
+        )
         if existing:
             return {"success": True, "result": "Document is already bookmarked."}
         doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -61,10 +65,14 @@ class RemoveBookmarkTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
-        bm = db.query(Bookmark).filter(
-            Bookmark.user_id == user.id, Bookmark.document_id == params["document_id"]
-        ).first()
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
+        bm = (
+            db.query(Bookmark)
+            .filter(Bookmark.user_id == user.id, Bookmark.document_id == params["document_id"])
+            .first()
+        )
         if not bm:
             return {"success": True, "result": "That document is not in your bookmarks."}
         db.delete(bm)
@@ -84,7 +92,9 @@ class ListMyBookmarksTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         bookmarks = (
             db.query(Bookmark)
@@ -115,11 +125,15 @@ class WatchDocumentTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc_id = params["document_id"]
-        existing = db.query(DocumentWatcher).filter(
-            DocumentWatcher.user_id == user.id, DocumentWatcher.document_id == doc_id
-        ).first()
+        existing = (
+            db.query(DocumentWatcher)
+            .filter(DocumentWatcher.user_id == user.id, DocumentWatcher.document_id == doc_id)
+            .first()
+        )
         if existing:
             return {"success": True, "result": "You are already watching this document."}
         doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -131,7 +145,10 @@ class WatchDocumentTool(BaseTool):
         watcher = DocumentWatcher(user_id=user.id, document_id=doc_id)
         db.add(watcher)
         db.commit()
-        return {"success": True, "result": f"Now watching '{doc.title}' — you'll be notified of changes."}
+        return {
+            "success": True,
+            "result": f"Now watching '{doc.title}' — you'll be notified of changes.",
+        }
 
 
 class UnwatchDocumentTool(BaseTool):
@@ -146,10 +163,17 @@ class UnwatchDocumentTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
-        w = db.query(DocumentWatcher).filter(
-            DocumentWatcher.user_id == user.id, DocumentWatcher.document_id == params["document_id"]
-        ).first()
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
+        w = (
+            db.query(DocumentWatcher)
+            .filter(
+                DocumentWatcher.user_id == user.id,
+                DocumentWatcher.document_id == params["document_id"],
+            )
+            .first()
+        )
         if not w:
             return {"success": True, "result": "You are not watching that document."}
         db.delete(w)
@@ -169,7 +193,9 @@ class GetMyWatchedDocumentsTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         watchers = (
             db.query(DocumentWatcher)
@@ -194,23 +220,39 @@ class GetReadingProgressTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "document_id": {"type": "integer", "description": "Specific document ID (omit for all)"},
-            "limit": {"type": "integer", "description": "Max results when listing all (default 20)"},
+            "document_id": {
+                "type": "integer",
+                "description": "Specific document ID (omit for all)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max results when listing all (default 20)",
+            },
         },
         "required": [],
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc_id = params.get("document_id")
         if doc_id:
-            rp = db.query(ReadingProgress).filter(
-                ReadingProgress.user_id == user.id, ReadingProgress.document_id == doc_id
-            ).first()
+            rp = (
+                db.query(ReadingProgress)
+                .filter(ReadingProgress.user_id == user.id, ReadingProgress.document_id == doc_id)
+                .first()
+            )
             if not rp:
-                return {"success": True, "result": f"No reading progress recorded for document {doc_id}."}
+                return {
+                    "success": True,
+                    "result": f"No reading progress recorded for document {doc_id}.",
+                }
             status = "completed" if rp.completed_at else f"{rp.progress_percent}%"
-            return {"success": True, "result": f"Document {doc_id}: {status} (last read {rp.last_read_at:%Y-%m-%d %H:%M})."}
+            return {
+                "success": True,
+                "result": f"Document {doc_id}: {status} (last read {rp.last_read_at:%Y-%m-%d %H:%M}).",
+            }
         # All progress
         limit = min(params.get("limit", 20), 50)
         records = (
@@ -244,7 +286,9 @@ class UpdateReadingProgressTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc_id = params["document_id"]
         pct = max(0, min(100, params["progress_percent"]))
         doc = db.query(Document).filter(Document.id == doc_id).first()
@@ -253,9 +297,11 @@ class UpdateReadingProgressTool(BaseTool):
         # AE-009: Tenant isolation — prevent cross-tenant reading progress updates
         if tenant_id is not None and doc.tenant_id != tenant_id:
             return {"success": False, "result": f"Document {doc_id} not found."}
-        rp = db.query(ReadingProgress).filter(
-            ReadingProgress.user_id == user.id, ReadingProgress.document_id == doc_id
-        ).first()
+        rp = (
+            db.query(ReadingProgress)
+            .filter(ReadingProgress.user_id == user.id, ReadingProgress.document_id == doc_id)
+            .first()
+        )
         now = datetime.utcnow()
         if rp:
             rp.progress_percent = pct
@@ -273,4 +319,7 @@ class UpdateReadingProgressTool(BaseTool):
             db.add(rp)
         db.commit()
         status = "Complete!" if pct >= 100 else f"{pct}%"
-        return {"success": True, "result": f"Reading progress for '{doc.title}' updated to {status}."}
+        return {
+            "success": True,
+            "result": f"Reading progress for '{doc.title}' updated to {status}.",
+        }

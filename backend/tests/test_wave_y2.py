@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import pytest
 from sqlalchemy import text
 
 from app.models import (
@@ -14,12 +13,12 @@ from app.models import (
     DocumentVisibility,
     Version,
 )
-from tests.factories import create_document, create_user
-
+from tests.factories import create_document
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _login_headers(client, username: str, password: str = "testpass123") -> dict:
     resp = client.post("/api/v1/auth/login", json={"username": username, "password": password})
@@ -33,10 +32,12 @@ def _ensure_fts_table(db):
         text("SELECT name FROM sqlite_master WHERE type='table' AND name='documents_fts'")
     ).fetchone()
     if not existing:
-        db.execute(text(
-            "CREATE VIRTUAL TABLE documents_fts USING fts5("
-            "title, description, category, tags, tenant_id UNINDEXED, visibility UNINDEXED, status UNINDEXED)"
-        ))
+        db.execute(
+            text(
+                "CREATE VIRTUAL TABLE documents_fts USING fts5("
+                "title, description, category, tags, tenant_id UNINDEXED, visibility UNINDEXED, status UNINDEXED)"
+            )
+        )
         db.commit()
 
 
@@ -57,8 +58,12 @@ def _sync_fts(db, doc: Document):
             "cat": doc.category or "",
             "tags": doc.tags or "",
             "tenant_id": str(doc.tenant_id or ""),
-            "visibility": doc.visibility.value if getattr(doc.visibility, "value", None) else (doc.visibility or ""),
-            "status": doc.status.value if getattr(doc.status, "value", None) else (doc.status or ""),
+            "visibility": doc.visibility.value
+            if getattr(doc.visibility, "value", None)
+            else (doc.visibility or ""),
+            "status": doc.status.value
+            if getattr(doc.status, "value", None)
+            else (doc.status or ""),
         },
     )
     db.commit()
@@ -67,6 +72,7 @@ def _sync_fts(db, doc: Document):
 # ---------------------------------------------------------------------------
 # Y2-021: Search ranking integration test
 # ---------------------------------------------------------------------------
+
 
 class TestSearchRanking:
     """Create documents with specific titles/tags, search, verify result order."""
@@ -135,6 +141,7 @@ class TestSearchRanking:
 # ---------------------------------------------------------------------------
 # Y2-022: Sitemap generation integration test
 # ---------------------------------------------------------------------------
+
 
 class TestSitemapGeneration:
     """Publish a document, request /sitemap.xml, verify URL present; unpublish, verify removed."""
@@ -205,6 +212,7 @@ class TestSitemapGeneration:
 # Y2-023: Broken link detection integration test
 # ---------------------------------------------------------------------------
 
+
 class TestBrokenLinkDetection:
     """Create document with broken internal link, run scan, verify report generated."""
 
@@ -238,9 +246,7 @@ class TestBrokenLinkDetection:
         assert data["broken_links_found"] >= 1
 
         # Verify report exists for our document
-        reports = db.query(BrokenLinkReport).filter(
-            BrokenLinkReport.document_id == doc.id
-        ).all()
+        reports = db.query(BrokenLinkReport).filter(BrokenLinkReport.document_id == doc.id).all()
         assert len(reports) >= 1
         report = reports[0]
         assert report.reason == "target_not_found"
@@ -281,9 +287,7 @@ class TestBrokenLinkDetection:
         client.post("/api/v1/broken-links/scan", headers=admin_headers)
 
         # Verify no broken report for source doc linking to the valid target
-        reports = db.query(BrokenLinkReport).filter(
-            BrokenLinkReport.document_id == source.id
-        ).all()
+        reports = db.query(BrokenLinkReport).filter(BrokenLinkReport.document_id == source.id).all()
         broken_urls = [r.broken_url for r in reports]
         assert not any(str(target.id) in url for url in broken_urls)
 

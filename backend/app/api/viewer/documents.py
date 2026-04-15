@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
-from app.models import Attachment, Comment, Document, DocumentStatus, DocumentVisibility, Version
+from app.models import Attachment, Comment, Document, DocumentVisibility, Version
 from app.schemas import (
     AttachmentResponse,
     CommentResponse,
@@ -101,7 +101,8 @@ def list_published_documents(
         _escaped = search.replace("%", r"\%").replace("_", r"\_")
         search_term = f"%{_escaped}%"
         query = query.filter(
-            (Document.title.ilike(search_term, escape="\\")) | (Document.description.ilike(search_term, escape="\\"))
+            (Document.title.ilike(search_term, escape="\\"))
+            | (Document.description.ilike(search_term, escape="\\"))
         )
 
     # Filter by category
@@ -257,17 +258,27 @@ def _stream_public_attachment(
             storage = get_storage_backend()
             pdf_stream = storage.download(pdf_artifact.storage_key)
             att = db.query(Attachment).filter_by(id=attachment_id).first()
-            base_name = (att.original_filename or "document").rsplit(".", 1)[0] if att else "document"
+            base_name = (
+                (att.original_filename or "document").rsplit(".", 1)[0] if att else "document"
+            )
             return StreamingResponse(
                 content=pdf_stream,
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=inline),
+                    "Content-Disposition": build_content_disposition(
+                        f"{base_name}.pdf", inline=inline
+                    ),
                     **_audience_policy_headers(DocumentVisibility.PUBLIC),
                 },
             )
-        except Exception:  # policy: LOSSY — PDF preview is optional; serve original attachment instead
-            logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
+        except (
+            Exception
+        ):  # policy: LOSSY — PDF preview is optional; serve original attachment instead
+            logger.debug(
+                "PDF conversion unavailable for attachment %s, serving original",
+                attachment_id,
+                exc_info=True,
+            )
 
     attachment, content_stream = AttachmentService.open_original_stream(
         db,

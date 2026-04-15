@@ -29,13 +29,11 @@ class ListMyChatsTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 15), 50)
-        participations = (
-            db.query(ChatParticipant)
-            .filter(ChatParticipant.user_id == user.id)
-            .all()
-        )
+        participations = db.query(ChatParticipant).filter(ChatParticipant.user_id == user.id).all()
         chat_ids = [p.chat_id for p in participations]
         if not chat_ids:
             return {"success": True, "result": "You have no chats."}
@@ -48,9 +46,15 @@ class ListMyChatsTool(BaseTool):
         )
         lines = [f"{len(chats)} chat(s):"]
         for c in chats:
-            pcount = db.query(func.count(ChatParticipant.id)).filter(ChatParticipant.chat_id == c.id).scalar()
+            pcount = (
+                db.query(func.count(ChatParticipant.id))
+                .filter(ChatParticipant.chat_id == c.id)
+                .scalar()
+            )
             label = c.name or f"DM (chat #{c.id})"
-            last = c.last_message_at.strftime("%Y-%m-%d %H:%M") if c.last_message_at else "no messages"
+            last = (
+                c.last_message_at.strftime("%Y-%m-%d %H:%M") if c.last_message_at else "no messages"
+            )
             lines.append(f"- [{c.id}] {label} ({c.type.value}, {pcount} members, last: {last})")
         return {"success": True, "result": "\n".join(lines)}
 
@@ -68,12 +72,16 @@ class GetChatMessagesTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         chat_id = params["chat_id"]
         # Verify the user is a participant
-        is_member = db.query(ChatParticipant).filter(
-            ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id
-        ).first()
+        is_member = (
+            db.query(ChatParticipant)
+            .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id)
+            .first()
+        )
         if not is_member:
             return {"success": False, "result": "You are not a member of this chat."}
         limit = min(params.get("limit", 20), 50)
@@ -111,11 +119,15 @@ class SendChatMessageTool(BaseTool):
     required_permission = Permission.ADD_COMMENTS
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         chat_id = params["chat_id"]
-        is_member = db.query(ChatParticipant).filter(
-            ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id
-        ).first()
+        is_member = (
+            db.query(ChatParticipant)
+            .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id)
+            .first()
+        )
         if not is_member:
             return {"success": False, "result": "You are not a member of this chat."}
         msg = ChatMessage(
@@ -138,7 +150,11 @@ class SearchChatMessagesTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search keyword or phrase", "maxLength": 500},
+            "query": {
+                "type": "string",
+                "description": "Search keyword or phrase",
+                "maxLength": 500,
+            },
             "chat_id": {"type": "integer", "description": "Limit to a specific chat (optional)"},
             "limit": {"type": "integer", "description": "Max results (default 15)"},
         },
@@ -146,13 +162,15 @@ class SearchChatMessagesTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         query = params["query"]
         limit = min(params.get("limit", 15), 50)
         # Get user's chats
         my_chat_ids = [
-            p.chat_id for p in
-            db.query(ChatParticipant).filter(ChatParticipant.user_id == user.id).all()
+            p.chat_id
+            for p in db.query(ChatParticipant).filter(ChatParticipant.user_id == user.id).all()
         ]
         if not my_chat_ids:
             return {"success": True, "result": "You have no chats to search."}
@@ -174,7 +192,9 @@ class SearchChatMessagesTool(BaseTool):
             sender = db.query(User).filter(User.id == m.sender_id).first()
             sender_name = sender.full_name if sender else "Unknown"
             preview = m.content[:150] + ("..." if len(m.content) > 150 else "")
-            lines.append(f"- [chat #{m.chat_id}, {m.created_at:%Y-%m-%d %H:%M}] {sender_name}: {preview}")
+            lines.append(
+                f"- [chat #{m.chat_id}, {m.created_at:%Y-%m-%d %H:%M}] {sender_name}: {preview}"
+            )
         return {"success": True, "result": "\n".join(lines)}
 
 
@@ -190,11 +210,15 @@ class GetChatParticipantsTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         chat_id = params["chat_id"]
-        is_member = db.query(ChatParticipant).filter(
-            ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id
-        ).first()
+        is_member = (
+            db.query(ChatParticipant)
+            .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id)
+            .first()
+        )
         if not is_member:
             return {"success": False, "result": "You are not a member of this chat."}
         participants = db.query(ChatParticipant).filter(ChatParticipant.chat_id == chat_id).all()
@@ -217,12 +241,10 @@ class GetUnreadChatsTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
-        participations = (
-            db.query(ChatParticipant)
-            .filter(ChatParticipant.user_id == user.id)
-            .all()
-        )
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
+        participations = db.query(ChatParticipant).filter(ChatParticipant.user_id == user.id).all()
         if not participations:
             return {"success": True, "result": "You have no chats."}
         unread = []
@@ -240,7 +262,10 @@ class GetUnreadChatsTool(BaseTool):
                 unread.append(f"- [{p.chat_id}] {label}: {count} new message(s)")
         if not unread:
             return {"success": True, "result": "All chats are up to date — no unread messages."}
-        return {"success": True, "result": f"{len(unread)} chat(s) with unread messages:\n" + "\n".join(unread)}
+        return {
+            "success": True,
+            "result": f"{len(unread)} chat(s) with unread messages:\n" + "\n".join(unread),
+        }
 
 
 class MarkChatReadTool(BaseTool):
@@ -255,12 +280,17 @@ class MarkChatReadTool(BaseTool):
     }
     required_permission = Permission.ADD_COMMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from datetime import datetime as dt
+
         chat_id = params["chat_id"]
-        p = db.query(ChatParticipant).filter(
-            ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id
-        ).first()
+        p = (
+            db.query(ChatParticipant)
+            .filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id == user.id)
+            .first()
+        )
         if not p:
             return {"success": False, "result": "You are not a member of this chat."}
         p.last_read_at = dt.utcnow()

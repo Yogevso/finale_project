@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import Comment, Document, User
-from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -28,26 +27,37 @@ class ListDocumentCommentsTool(BaseTool):
         "type": "object",
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID"},
-            "include_resolved": {"type": "boolean", "description": "Include resolved comments (default false)"},
+            "include_resolved": {
+                "type": "boolean",
+                "description": "Include resolved comments (default false)",
+            },
         },
         "required": ["document_id"],
     }
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         query = db.query(Comment).filter(
             Comment.document_id == doc_id,
             Comment.parent_id.is_(None),  # top-level only
         )
         if not params.get("include_resolved"):
-            query = query.filter(Comment.is_resolved == False)
+            query = query.filter(Comment.is_resolved is False)
 
         comments = query.order_by(Comment.created_at.desc()).all()
         if not comments:
@@ -64,7 +74,14 @@ class ListDocumentCommentsTool(BaseTool):
         )
         for r in replies:
             user_ids.add(r.user_id)
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         reply_map: dict[int, list] = {}
         for r in replies:
@@ -87,7 +104,9 @@ class ListDocumentCommentsTool(BaseTool):
 
 class AddCommentTool(BaseTool):
     name = "add_comment"
-    description = "Add a comment to a document. Can reply to an existing comment by providing parent_id."
+    description = (
+        "Add a comment to a document. Can reply to an existing comment by providing parent_id."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -100,12 +119,20 @@ class AddCommentTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         content = params.get("content", "").strip()
         if not content:
@@ -140,7 +167,11 @@ class ResolveCommentTool(BaseTool):
     required_role = "EDITOR"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         comment = db.query(Comment).filter(Comment.id == params["comment_id"]).first()
         if not comment:
@@ -149,7 +180,11 @@ class ResolveCommentTool(BaseTool):
         # Verify document access
         doc = _check_doc_access(comment.document_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "You don't have access to this document."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "You don't have access to this document.",
+            }
 
         comment.is_resolved = True
         db.commit()

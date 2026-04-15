@@ -22,4 +22,3 @@ class NotificationsContextAPI:
             .order_by(Notification.created_at.desc())
             .all()
         )
-

@@ -29,8 +29,16 @@ class SearchAuditLogsTool(BaseTool):
         "type": "object",
         "properties": {
             "user_id": {"type": "integer", "description": "Filter by user ID"},
-            "action_type": {"type": "string", "description": "Filter by action type", "maxLength": 100},
-            "from_date": {"type": "string", "description": "Start date (ISO format, e.g. 2025-01-01)", "maxLength": 50},
+            "action_type": {
+                "type": "string",
+                "description": "Filter by action type",
+                "maxLength": 100,
+            },
+            "from_date": {
+                "type": "string",
+                "description": "Start date (ISO format, e.g. 2025-01-01)",
+                "maxLength": 50,
+            },
             "to_date": {"type": "string", "description": "End date (ISO format)", "maxLength": 50},
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
@@ -41,7 +49,11 @@ class SearchAuditLogsTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 100)
         query = db.query(AuditLog).order_by(AuditLog.created_at.desc())
@@ -52,12 +64,16 @@ class SearchAuditLogsTool(BaseTool):
             query = query.filter(AuditLog.action == params["action_type"])
         if params.get("from_date"):
             try:
-                query = query.filter(AuditLog.created_at >= datetime.fromisoformat(params["from_date"]))
+                query = query.filter(
+                    AuditLog.created_at >= datetime.fromisoformat(params["from_date"])
+                )
             except ValueError:
                 pass
         if params.get("to_date"):
             try:
-                query = query.filter(AuditLog.created_at <= datetime.fromisoformat(params["to_date"]))
+                query = query.filter(
+                    AuditLog.created_at <= datetime.fromisoformat(params["to_date"])
+                )
             except ValueError:
                 pass
 
@@ -65,15 +81,22 @@ class SearchAuditLogsTool(BaseTool):
         if not logs:
             return {"success": True, "result": "No audit logs found matching your criteria."}
 
-        user_ids = {l.user_id for l in logs if l.user_id}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        user_ids = {entry.user_id for entry in logs if entry.user_id}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [f"**Audit Logs** ({len(logs)} entries)\n"]
-        for l in logs:
-            who = users.get(l.user_id, f"User #{l.user_id}")
-            action = l.action.value if hasattr(l.action, "value") else str(l.action)
-            date = l.created_at.strftime("%Y-%m-%d %H:%M") if l.created_at else "N/A"
-            details = str(l.details)[:100] if l.details else ""
+        for entry in logs:
+            who = users.get(entry.user_id, f"User #{entry.user_id}")
+            action = entry.action.value if hasattr(entry.action, "value") else str(entry.action)
+            date = entry.created_at.strftime("%Y-%m-%d %H:%M") if entry.created_at else "N/A"
+            details = str(entry.details)[:100] if entry.details else ""
             lines.append(f"- [{date}] **{who}** — {action}{f': {details}' if details else ''}")
 
         return {"success": True, "result": "\n".join(lines)}
@@ -95,7 +118,11 @@ class GetUserActivityTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         target_id = params["user_id"]
         limit = min(params.get("limit", 20), 100)
@@ -114,10 +141,10 @@ class GetUserActivityTool(BaseTool):
         )
 
         lines = [f"**Activity for {name}** ({len(logs)} recent actions)\n"]
-        for l in logs:
-            action = l.action.value if hasattr(l.action, "value") else str(l.action)
-            date = l.created_at.strftime("%Y-%m-%d %H:%M") if l.created_at else "N/A"
-            details = str(l.details)[:100] if l.details else ""
+        for entry in logs:
+            action = entry.action.value if hasattr(entry.action, "value") else str(entry.action)
+            date = entry.created_at.strftime("%Y-%m-%d %H:%M") if entry.created_at else "N/A"
+            details = str(entry.details)[:100] if entry.details else ""
             lines.append(f"- [{date}] {action}{f': {details}' if details else ''}")
 
         if not logs:

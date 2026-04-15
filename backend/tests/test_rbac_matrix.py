@@ -18,7 +18,6 @@ from app.application.policies.access_policies import (
 )
 from app.models import UserRole
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

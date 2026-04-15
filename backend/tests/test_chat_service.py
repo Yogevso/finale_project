@@ -3,15 +3,10 @@
 import pytest
 
 from app.errors import DomainError
-
 from app.models import (
-    Chat,
-    ChatMessage,
+    ChatParticipant,
     Notification,
     NotificationType,
-    ChatParticipant,
-    ChatParticipantRole,
-    ChatType,
     UserRole,
 )
 from app.services.chat_service import ChatService
@@ -31,40 +26,55 @@ def tenant_b(db):
 @pytest.fixture
 def editor_a(db, tenant):
     return create_user(
-        db, username="editor_a", full_name="Editor A",
-        role=UserRole.EDITOR, tenant_id=tenant.id,
+        db,
+        username="editor_a",
+        full_name="Editor A",
+        role=UserRole.EDITOR,
+        tenant_id=tenant.id,
     )
 
 
 @pytest.fixture
 def editor_b(db, tenant):
     return create_user(
-        db, username="editor_b", full_name="Editor B",
-        role=UserRole.EDITOR, tenant_id=tenant.id,
+        db,
+        username="editor_b",
+        full_name="Editor B",
+        role=UserRole.EDITOR,
+        tenant_id=tenant.id,
     )
 
 
 @pytest.fixture
 def editor_c(db, tenant):
     return create_user(
-        db, username="editor_c", full_name="Editor C",
-        role=UserRole.EDITOR, tenant_id=tenant.id,
+        db,
+        username="editor_c",
+        full_name="Editor C",
+        role=UserRole.EDITOR,
+        tenant_id=tenant.id,
     )
 
 
 @pytest.fixture
 def foreign_customer(db, tenant_b):
     return create_user(
-        db, username="foreign_cust", full_name="Foreign Customer",
-        role=UserRole.CUSTOMER, tenant_id=tenant_b.id,
+        db,
+        username="foreign_cust",
+        full_name="Foreign Customer",
+        role=UserRole.CUSTOMER,
+        tenant_id=tenant_b.id,
     )
 
 
 @pytest.fixture
 def foreign_system_admin(db, tenant_b):
     return create_user(
-        db, username="foreign_sysadmin", full_name="Foreign System Admin",
-        role=UserRole.SYSTEM_ADMIN, tenant_id=tenant_b.id,
+        db,
+        username="foreign_sysadmin",
+        full_name="Foreign System Admin",
+        role=UserRole.SYSTEM_ADMIN,
+        tenant_id=tenant_b.id,
     )
 
 
@@ -76,6 +86,7 @@ def svc(db):
 # =====================================================================
 # X1-049: create_direct_chat deduplication
 # =====================================================================
+
 
 class TestDirectChatDeduplication:
     """X1-049: Verify same chat returned for A→B and B→A."""
@@ -106,6 +117,7 @@ class TestDirectChatDeduplication:
 # =====================================================================
 # X1-050: Group chat permissions
 # =====================================================================
+
 
 class TestGroupChatPermissions:
     """X1-050: Only owner can delete, admin can add members."""
@@ -140,9 +152,7 @@ class TestGroupChatPermissions:
     def test_owner_can_remove_member(self, svc, editor_a, editor_b):
         chat = svc.create_group_chat(editor_a, "Test Group", [editor_b.id])
         svc.remove_participant(chat.id, editor_a, editor_b.id)
-        remaining = (
-            svc.db.query(ChatParticipant).filter_by(chat_id=chat.id).all()
-        )
+        remaining = svc.db.query(ChatParticipant).filter_by(chat_id=chat.id).all()
         assert len(remaining) == 1
         assert remaining[0].user_id == editor_a.id
 
@@ -151,14 +161,18 @@ class TestGroupChatPermissions:
 # X1-051: Tenant isolation
 # =====================================================================
 
+
 class TestChatTenantIsolation:
     """X1-051: User cannot access chat from different tenant."""
 
     def test_cross_tenant_customer_blocked(self, svc, foreign_customer, editor_a):
         """Non-participant from different tenant gets 404 (hides existence)."""
         customer_same = create_user(
-            svc.db, username="cust_same", full_name="Same Tenant Customer",
-            role=UserRole.CUSTOMER, tenant_id=foreign_customer.tenant_id,
+            svc.db,
+            username="cust_same",
+            full_name="Same Tenant Customer",
+            role=UserRole.CUSTOMER,
+            tenant_id=foreign_customer.tenant_id,
         )
         chat = svc.create_direct_chat(foreign_customer, customer_same.id)
         with pytest.raises(DomainError) as exc:
@@ -190,6 +204,7 @@ class TestChatTenantIsolation:
 # =====================================================================
 # X1-052: Message pagination
 # =====================================================================
+
 
 class TestMessagePagination:
     """X1-052: Create 100 messages, verify pagination works correctly."""
@@ -224,9 +239,7 @@ class TestMessagePagination:
             svc.send_message(chat.id, editor_a, f"Message {i}")
 
         page1 = svc.get_chat_history(chat.id, editor_a, limit=50)
-        page2 = svc.get_chat_history(
-            chat.id, editor_a, before_id=page1[-1].id, limit=50
-        )
+        page2 = svc.get_chat_history(chat.id, editor_a, before_id=page1[-1].id, limit=50)
         page1_ids = {m.id for m in page1}
         page2_ids = {m.id for m in page2}
         assert page1_ids.isdisjoint(page2_ids)
@@ -244,6 +257,7 @@ class TestMessagePagination:
 # X1-053: Read receipts
 # =====================================================================
 
+
 class TestReadReceipts:
     """X1-053: Mark as read, verify last_read_at updated."""
 
@@ -252,9 +266,7 @@ class TestReadReceipts:
         svc.send_message(chat.id, editor_a, "Hello")
 
         participant = (
-            db.query(ChatParticipant)
-            .filter_by(chat_id=chat.id, user_id=editor_b.id)
-            .first()
+            db.query(ChatParticipant).filter_by(chat_id=chat.id, user_id=editor_b.id).first()
         )
         assert participant.last_read_at is None
 
@@ -282,9 +294,7 @@ class TestReadReceipts:
         chat = svc.create_direct_chat(editor_a, editor_b.id)
         svc.mark_as_read(chat.id, editor_b)
         participant = (
-            db.query(ChatParticipant)
-            .filter_by(chat_id=chat.id, user_id=editor_b.id)
-            .first()
+            db.query(ChatParticipant).filter_by(chat_id=chat.id, user_id=editor_b.id).first()
         )
         first_read = participant.last_read_at
 
@@ -327,9 +337,7 @@ class TestChatNotifications:
     ):
         chat = svc.create_direct_chat(editor_a, editor_b.id)
         participant = (
-            db.query(ChatParticipant)
-            .filter_by(chat_id=chat.id, user_id=editor_b.id)
-            .first()
+            db.query(ChatParticipant).filter_by(chat_id=chat.id, user_id=editor_b.id).first()
         )
         assert participant is not None
         participant.is_muted = True
@@ -360,7 +368,11 @@ class TestChatNotifications:
         )
         chat = svc.create_direct_chat(editor_a, customer.id)
 
-        svc.send_message(chat.id, editor_a, "This should surface via unread chat state, not internal notifications")
+        svc.send_message(
+            chat.id,
+            editor_a,
+            "This should surface via unread chat state, not internal notifications",
+        )
 
         notification = (
             db.query(Notification)

@@ -30,7 +30,7 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     assign_response = client.post(
         f"/api/v1/documents/{document_id}/assign-companies",
-        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f'"{etag}"'},
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert assign_response.status_code == 200
@@ -38,14 +38,14 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     remove_response = client.delete(
         f"/api/v1/documents/{document_id}/assign-companies/{test_tenant_2.id}",
-        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f'"{etag}"'},
     )
     assert remove_response.status_code == 200
     etag = remove_response.headers["ETag"].strip('"')
 
     visibility_response = client.put(
         f"/api/v1/documents/{document_id}",
-        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f'"{etag}"'},
         json={
             "visibility": "internal",
             "reason": "Reduce external audience after review",
@@ -56,7 +56,7 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     archive_response = client.post(
         f"/api/v1/documents/{document_id}/archive",
-        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f'"{etag}"'},
     )
     assert archive_response.status_code == 200
     archived_document = db.query(Document).filter(Document.id == document_id).first()
@@ -65,7 +65,7 @@ def test_audience_audit_paths_emit_valid_taxonomy_values(
 
     restore_response = client.post(
         f"/api/v1/documents/{document_id}/restore",
-        headers={**system_admin_headers, "If-Match": f"\"{etag}\""},
+        headers={**system_admin_headers, "If-Match": f'"{etag}"'},
     )
     assert restore_response.status_code == 200
 

@@ -10,14 +10,12 @@ Tests that encode fundamental system guarantees:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
     Comment,
-    Document,
     DocumentStatus,
     DocumentVisibility,
     User,
@@ -28,8 +26,8 @@ from app.models import (
 )
 from tests.factories.domain import create_document, create_tenant, create_user, persist
 
-
 # ── Helpers ────────────────────────────────────────────────────────
+
 
 def _make_published_doc(db: Session, *, created_by: int, tenant_id: int | None = None):
     doc = create_document(
@@ -39,35 +37,42 @@ def _make_published_doc(db: Session, *, created_by: int, tenant_id: int | None =
         status=DocumentStatus.PUBLISHED,
         visibility=DocumentVisibility.PUBLIC,
     )
-    v = persist(db, Version(
-        document_id=doc.id,
-        version_number=1,
-        semantic_version="1.0.0",
-        bump_type=VersionBumpType.PATCH,
-        content="<p>Public content</p>",
-        changes_summary="Initial",
-        is_published=True,
-        published_at=datetime.utcnow(),
-        published_by=created_by,
-        created_by=created_by,
-        audience_visibility_snapshot="public",
-        audience_company_ids_snapshot="[]",
-    ))
+    v = persist(
+        db,
+        Version(
+            document_id=doc.id,
+            version_number=1,
+            semantic_version="1.0.0",
+            bump_type=VersionBumpType.PATCH,
+            content="<p>Public content</p>",
+            changes_summary="Initial",
+            is_published=True,
+            published_at=datetime.utcnow(),
+            published_by=created_by,
+            created_by=created_by,
+            audience_visibility_snapshot="public",
+            audience_company_ids_snapshot="[]",
+        ),
+    )
     return doc, v
 
 
 # ── Self-registration invariant ───────────────────────────────────
 
+
 class TestSelfRegistrationInvariant:
     """Self-registered users MUST receive CUSTOMER role only."""
 
     def test_registration_assigns_customer_role(self, client, db):
-        resp = client.post("/api/v1/auth/register", json={
-            "email": "newuser@invariant-test.com",
-            "username": "invariant_user",
-            "full_name": "Invariant Tester",
-            "password": "SecurePass123!",
-        })
+        resp = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "newuser@invariant-test.com",
+                "username": "invariant_user",
+                "full_name": "Invariant Tester",
+                "password": "SecurePass123!",
+            },
+        )
         # Whether registration succeeds or has email-verification required,
         # the created user should be CUSTOMER
         if resp.status_code in (200, 201):
@@ -78,22 +83,26 @@ class TestSelfRegistrationInvariant:
 
 # ── Comment privacy invariant ─────────────────────────────────────
 
+
 class TestCommentPrivacyInvariant:
     """Internal-only comments must not be returned for customer-role users."""
 
     def test_internal_comment_invisible_to_customer(self, db, client):
         tenant = create_tenant(db)
         editor = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
-        customer = create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
+        create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
         doc, _v = _make_published_doc(db, created_by=editor.id, tenant_id=tenant.id)
 
         # Add internal (private) comment
-        internal_comment = persist(db, Comment(
-            document_id=doc.id,
-            user_id=editor.id,
-            content="Internal review note — not for customers",
-            is_private=True,
-        ))
+        internal_comment = persist(
+            db,
+            Comment(
+                document_id=doc.id,
+                user_id=editor.id,
+                content="Internal review note — not for customers",
+                is_private=True,
+            ),
+        )
         assert internal_comment.id is not None
 
         # Verify the comment exists in DB
@@ -106,17 +115,21 @@ class TestCommentPrivacyInvariant:
 
 # ── Revoked session invariant ─────────────────────────────────────
 
+
 class TestRevokedSessionInvariant:
     """A revoked UserSession must not be accepted for authentication."""
 
     def test_revoked_session_has_revoked_at_set(self, db):
         user = create_user(db, role=UserRole.EDITOR)
-        session = persist(db, UserSession(
-            user_id=user.id,
-            session_token_hash="abc123deadbeef" * 2,
-            ip_address="127.0.0.1",
-            user_agent="test-agent",
-        ))
+        session = persist(
+            db,
+            UserSession(
+                user_id=user.id,
+                session_token_hash="abc123deadbeef" * 2,
+                ip_address="127.0.0.1",
+                user_agent="test-agent",
+            ),
+        )
         assert session.revoked_at is None
 
         # Revoke
@@ -129,6 +142,7 @@ class TestRevokedSessionInvariant:
 
 
 # ── Published snapshot immutability ───────────────────────────────
+
 
 class TestPublishedSnapshotImmutability:
     """Once a version is published with an audience snapshot, the snapshot must not change."""
@@ -155,6 +169,7 @@ class TestPublishedSnapshotImmutability:
 
 
 # ── Portal revocation invariant ───────────────────────────────────
+
 
 class TestPortalRevocationInvariant:
     """When a company's access is revoked, their portal documents should become inaccessible."""

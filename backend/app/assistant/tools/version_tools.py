@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import difflib
 import logging
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -13,7 +12,10 @@ from app.assistant.rag.chunker import DocumentChunker
 from app.assistant.tools.base import BaseTool
 from app.container import AppContainer
 from app.models import (
-    AuditLog, ActionType, Document, ReviewRequest, User, UserRole, Version,
+    Document,
+    ReviewRequest,
+    User,
+    Version,
 )
 from app.services.permissions import Permission
 
@@ -38,19 +40,30 @@ class CompareVersionsTool(BaseTool):
         "properties": {
             "document_id": {"type": "integer", "description": "The document ID"},
             "version_1": {"type": "integer", "description": "First version number (older)"},
-            "version_2": {"type": "integer", "description": "Second version number (newer, defaults to latest)"},
+            "version_2": {
+                "type": "integer",
+                "description": "Second version number (newer, defaults to latest)",
+            },
         },
         "required": ["document_id"],
     }
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         versions = (
             db.query(Version)
@@ -59,7 +72,11 @@ class CompareVersionsTool(BaseTool):
             .all()
         )
         if len(versions) < 2:
-            return {"success": False, "result": "", "error": "This document has fewer than 2 versions."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "This document has fewer than 2 versions.",
+            }
 
         v1_num = params.get("version_1") or versions[0].version_number
         v2_num = params.get("version_2") or versions[-1].version_number
@@ -69,18 +86,27 @@ class CompareVersionsTool(BaseTool):
 
         if not v1 or not v2:
             avail = ", ".join(str(v.version_number) for v in versions)
-            return {"success": False, "result": "", "error": f"Version not found. Available: {avail}"}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Version not found. Available: {avail}",
+            }
 
         text1 = DocumentChunker.strip_html(v1.content or "")
         text2 = DocumentChunker.strip_html(v2.content or "")
 
-        diff = list(difflib.unified_diff(
-            text1.splitlines(), text2.splitlines(),
-            fromfile=f"v{v1_num}", tofile=f"v{v2_num}", lineterm="",
-        ))
+        diff = list(
+            difflib.unified_diff(
+                text1.splitlines(),
+                text2.splitlines(),
+                fromfile=f"v{v1_num}",
+                tofile=f"v{v2_num}",
+                lineterm="",
+            )
+        )
 
-        additions = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
-        deletions = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        additions = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
+        deletions = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
 
         diff_summary = "\n".join(diff[:80])
         result = (
@@ -109,14 +135,22 @@ class GetDocumentHistoryTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         limit = min(params.get("limit") or 10, 50)
 
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         versions = (
             db.query(Version)
@@ -129,7 +163,14 @@ class GetDocumentHistoryTool(BaseTool):
             return {"success": True, "result": f"No versions found for document '{doc.title}'."}
 
         user_ids = {v.created_by for v in versions if v.created_by}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [f"**Version History: '{doc.title}'** ({len(versions)} versions)\n"]
         for v in versions:
@@ -164,18 +205,26 @@ class PublishDocumentTool(BaseTool):
     confirm_before_execute = True
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         version_id = params.get("version_id")
         if not version_id:
             latest = (
                 db.query(Version)
-                .filter(Version.document_id == doc_id, Version.is_published == False)
+                .filter(Version.document_id == doc_id, Version.is_published is False)
                 .order_by(Version.version_number.desc())
                 .first()
             )
@@ -183,18 +232,24 @@ class PublishDocumentTool(BaseTool):
                 return {"success": False, "result": "", "error": "No unpublished versions found."}
             version_id = latest.id
 
-        version = db.query(Version).filter(Version.id == version_id, Version.document_id == doc_id).first()
+        version = (
+            db.query(Version)
+            .filter(Version.id == version_id, Version.document_id == doc_id)
+            .first()
+        )
         if not version:
             return {"success": False, "result": "", "error": "Version not found."}
         if version.is_published:
-            return {"success": True, "result": f"Version {version.version_number} is already published."}
+            return {
+                "success": True,
+                "result": f"Version {version.version_number} is already published.",
+            }
 
         # AE-001: Route through PublishApprovedVersionCommandHandler (same pipeline
         # the API uses) — enforces review approval status, state machine checks,
         # and PUBLISH_DOCUMENT permission.  Replaces direct is_published = True.
         from app.application.commands.version_commands import (
             PublishApprovedVersionCommand,
-            PublishApprovedVersionCommandErrorCode,
         )
 
         container = AppContainer()
@@ -209,7 +264,10 @@ class PublishDocumentTool(BaseTool):
             err = result.error
             return {"success": False, "result": "", "error": err.message}
 
-        return {"success": True, "result": f"Version {version.version_number} of '{doc.title}' has been published."}
+        return {
+            "success": True,
+            "result": f"Version {version.version_number} of '{doc.title}' has been published.",
+        }
 
 
 class GetDocumentWorkflowTool(BaseTool):
@@ -228,12 +286,20 @@ class GetDocumentWorkflowTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         reviews = (
             db.query(ReviewRequest)
@@ -249,7 +315,14 @@ class GetDocumentWorkflowTool(BaseTool):
                 user_ids.add(r.submitted_by)
             if r.reviewed_by:
                 user_ids.add(r.reviewed_by)
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [
             f"**Workflow Status: '{doc.title}'**\n",
@@ -263,7 +336,12 @@ class GetDocumentWorkflowTool(BaseTool):
             for r in reviews:
                 submitter = users.get(r.submitted_by, "Unknown")
                 reviewer = users.get(r.reviewed_by, "Unassigned") if r.reviewed_by else "Unassigned"
-                status_icon = {"PENDING": "Pending", "APPROVED": "Approved", "REJECTED": "Rejected", "CANCELLED": "Cancelled"}.get(r.status.value, "Unknown")
+                status_icon = {
+                    "PENDING": "Pending",
+                    "APPROVED": "Approved",
+                    "REJECTED": "Rejected",
+                    "CANCELLED": "Cancelled",
+                }.get(r.status.value, "Unknown")
                 date = r.submitted_at.strftime("%Y-%m-%d %H:%M") if r.submitted_at else "N/A"
                 line = f"- **{status_icon}** | Submitted by {submitter} -> {reviewer} | {date}"
                 if r.review_comments:

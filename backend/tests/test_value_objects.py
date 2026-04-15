@@ -14,17 +14,13 @@ def test_document_number_formats_with_padded_suffix():
 
 
 def test_document_number_extract_sequence_suffix_for_matching_prefix():
-    suffix = DocumentNumber.extract_sequence_suffix(
-        "DOC-20260227-0042", "DOC-20260227"
-    )
+    suffix = DocumentNumber.extract_sequence_suffix("DOC-20260227-0042", "DOC-20260227")
 
     assert suffix == 42
 
 
 def test_document_number_extract_sequence_suffix_rejects_non_numeric_suffix():
-    suffix = DocumentNumber.extract_sequence_suffix(
-        "DOC-20260227-ABCD", "DOC-20260227"
-    )
+    suffix = DocumentNumber.extract_sequence_suffix("DOC-20260227-ABCD", "DOC-20260227")
 
     assert suffix is None
 
@@ -73,4 +69,3 @@ def test_topic_slug_normalize_uses_lookup_aliases():
 def test_topic_slug_from_raw_returns_none_for_blank_values():
     assert TopicSlug.from_raw(None) is None
     assert TopicSlug.from_raw("   ") is None
-

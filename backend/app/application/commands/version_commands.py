@@ -90,7 +90,9 @@ class PublishApprovedVersionCommandHandler:
             command.current_user,
         )
 
-    def _publish(self, context: CommandContext[PublishApprovedVersionCommand], result: dict) -> None:
+    def _publish(
+        self, context: CommandContext[PublishApprovedVersionCommand], result: dict
+    ) -> None:
         _ = (context, result)
 
     def execute(

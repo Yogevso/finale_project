@@ -10,12 +10,50 @@ import bleach
 
 # Allowed tags for rich-text content (matches frontend htmlSanitizer.ts allowlist)
 ALLOWED_TAGS = [
-    "a", "article", "b", "blockquote", "br", "caption", "code",
-    "col", "colgroup", "del", "details", "div", "em", "figure",
-    "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "hr",
-    "i", "img", "li", "ol", "p", "pre", "s", "section", "span",
-    "strong", "sub", "summary", "sup", "table", "tbody", "td",
-    "tfoot", "th", "thead", "tr", "u", "ul",
+    "a",
+    "article",
+    "b",
+    "blockquote",
+    "br",
+    "caption",
+    "code",
+    "col",
+    "colgroup",
+    "del",
+    "details",
+    "div",
+    "em",
+    "figure",
+    "figcaption",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "i",
+    "img",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "s",
+    "section",
+    "span",
+    "strong",
+    "sub",
+    "summary",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
+    "u",
+    "ul",
 ]
 
 ALLOWED_ATTRIBUTES = {
@@ -80,54 +118,54 @@ def escape_html(value: str) -> str:
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize a filename to prevent path traversal and other issues.
-    
+
     Removes or replaces dangerous characters while preserving the basic filename.
     """
     if not filename:
         return "unnamed"
-    
+
     # Remove path separators and null bytes
     filename = filename.replace("/", "_").replace("\\", "_").replace("\x00", "")
-    
+
     # Remove leading dots (hidden files on Unix)
     filename = filename.lstrip(".")
-    
+
     # Remove or replace other dangerous characters
     filename = re.sub(r'[<>:"|?*]', "_", filename)
-    
+
     # Limit length
     if len(filename) > 255:
         # Preserve extension
         name, ext = filename.rsplit(".", 1) if "." in filename else (filename, "")
         max_name_len = 255 - len(ext) - 1 if ext else 255
         filename = name[:max_name_len] + ("." + ext if ext else "")
-    
+
     return filename or "unnamed"
 
 
 def validate_storage_reference(storage_ref: str) -> bool:
     """
     Validate a storage reference to prevent path traversal attacks.
-    
+
     Returns True if the reference is safe, False otherwise.
     """
     if not storage_ref:
         return False
-    
+
     # Check for path traversal attempts
     if ".." in storage_ref:
         return False
-    
+
     # Check for absolute paths
     if storage_ref.startswith("/") or storage_ref.startswith("\\"):
         return False
-    
+
     # Check for Windows drive letters
     if len(storage_ref) > 1 and storage_ref[1] == ":":
         return False
-    
+
     # Check for null bytes
     if "\x00" in storage_ref:
         return False
-    
+
     return True

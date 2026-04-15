@@ -15,7 +15,6 @@ from app.api.management import (
     assistant,
     attachments,
     audience_governance,
-    gdpr,
     auth,
     broken_links,
     canned_responses,
@@ -29,13 +28,14 @@ from app.api.management import (
     engagement,
     experimentation,
     feedback,
+    gdpr,
     invitations,
     notifications,
     permission_debugger,
     rbac,
     reviews,
-    snapshot_diff,
     search,
+    snapshot_diff,
     support,
     system_settings,
     tenants,
@@ -81,35 +81,57 @@ class FastAPIRouterRegistry:
             RouterRegistration(engagement.router, prefix=self._api_prefix, tags=("Engagement",)),
             RouterRegistration(tenants.router, prefix=self._api_prefix, tags=("Tenants",)),
             RouterRegistration(users.router, prefix=self._api_prefix, tags=("Users",)),
-            RouterRegistration(notifications.router, prefix=self._api_prefix, tags=("Notifications",)),
+            RouterRegistration(
+                notifications.router, prefix=self._api_prefix, tags=("Notifications",)
+            ),
             RouterRegistration(companies.router, prefix=self._api_prefix, tags=("Companies",)),
-            RouterRegistration(company_maintenance.router, prefix=self._api_prefix, tags=("Company Maintenance",)),
+            RouterRegistration(
+                company_maintenance.router, prefix=self._api_prefix, tags=("Company Maintenance",)
+            ),
             RouterRegistration(reviews.router, prefix=self._api_prefix, tags=("Reviews",)),
             RouterRegistration(feedback.router, prefix=self._api_prefix, tags=("Feedback",)),
             RouterRegistration(invitations.router, prefix=self._api_prefix, tags=("Invitations",)),
             RouterRegistration(analytics.router, prefix=self._api_prefix, tags=("Analytics",)),
-            RouterRegistration(broken_links.router, prefix=self._api_prefix, tags=("Broken Links",)),
+            RouterRegistration(
+                broken_links.router, prefix=self._api_prefix, tags=("Broken Links",)
+            ),
             RouterRegistration(changelog.router, prefix=self._api_prefix, tags=("Changelog",)),
-            RouterRegistration(announcements.router, prefix=self._api_prefix, tags=("Announcements",)),
+            RouterRegistration(
+                announcements.router, prefix=self._api_prefix, tags=("Announcements",)
+            ),
             RouterRegistration(
                 audience_governance.router,
                 prefix=self._api_prefix,
                 tags=("Audience Governance",),
             ),
-            RouterRegistration(collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)),
+            RouterRegistration(
+                collaboration.router, prefix=self._api_prefix, tags=("Collaboration",)
+            ),
             RouterRegistration(chat.router, prefix=self._api_prefix, tags=("Chat",)),
             RouterRegistration(support.router, prefix=self._api_prefix, tags=("Support",)),
-            RouterRegistration(canned_responses.router, prefix=self._api_prefix, tags=("Canned Responses",)),
+            RouterRegistration(
+                canned_responses.router, prefix=self._api_prefix, tags=("Canned Responses",)
+            ),
             # WebSocket endpoints (no prefix — paths already include /ws/)
             RouterRegistration(chat_ws.router, tags=("WebSocket",)),
             RouterRegistration(support_ws.router, tags=("WebSocket",)),
-            RouterRegistration(system_settings.router, prefix=self._api_prefix, tags=("System Settings",)),
+            RouterRegistration(
+                system_settings.router, prefix=self._api_prefix, tags=("System Settings",)
+            ),
             RouterRegistration(rbac.router, prefix=self._api_prefix, tags=("RBAC",)),
-            RouterRegistration(admin_ops.router, prefix=self._api_prefix, tags=("Admin Operations",)),
-            RouterRegistration(permission_debugger.router, prefix=self._api_prefix, tags=("Permission Debugger",)),
-            RouterRegistration(snapshot_diff.router, prefix=self._api_prefix, tags=("Snapshot Diff",)),
+            RouterRegistration(
+                admin_ops.router, prefix=self._api_prefix, tags=("Admin Operations",)
+            ),
+            RouterRegistration(
+                permission_debugger.router, prefix=self._api_prefix, tags=("Permission Debugger",)
+            ),
+            RouterRegistration(
+                snapshot_diff.router, prefix=self._api_prefix, tags=("Snapshot Diff",)
+            ),
             RouterRegistration(gdpr.router, prefix=self._api_prefix, tags=("GDPR & Compliance",)),
-            RouterRegistration(experimentation.router, prefix=self._api_prefix, tags=("Experimentation",)),
+            RouterRegistration(
+                experimentation.router, prefix=self._api_prefix, tags=("Experimentation",)
+            ),
             RouterRegistration(assistant.router, prefix=self._api_prefix, tags=("Assistant",)),
             RouterRegistration(bff_documents.router, prefix=self._api_prefix, tags=("BFF",)),
             # Viewer Portal (public, no auth required)

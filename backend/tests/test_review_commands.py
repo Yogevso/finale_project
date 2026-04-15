@@ -132,9 +132,7 @@ def test_approve_review_blocks_stale_concurrent_overwrite(tmp_path):
             handler_two._execute_command(context_two)
 
         stored_review = (
-            verifier_session.query(ReviewRequest)
-            .filter(ReviewRequest.id == review_id)
-            .first()
+            verifier_session.query(ReviewRequest).filter(ReviewRequest.id == review_id).first()
         )
         assert stored_review is not None
         assert stored_review.status == ReviewStatus.APPROVED

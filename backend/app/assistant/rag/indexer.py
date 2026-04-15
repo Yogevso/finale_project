@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.assistant.rag.chunker import DocumentChunker
 from app.assistant.rag.embeddings import OllamaEmbeddings
 from app.assistant.rag.vector_store import VectorStore
-from app.config import settings
 from app.models import Document, DocumentStatus, Version
 
 logger = logging.getLogger(__name__)
@@ -69,14 +68,18 @@ class DocumentIndexer:
         texts = [c.text for c in chunks]
         try:
             embeddings = await self._embeddings.embed_batch(texts)
-        except Exception:  # policy: DEGRADED — indexing errors should surface as warnings without crashing callers
+        except (
+            Exception
+        ):  # policy: DEGRADED — indexing errors should surface as warnings without crashing callers
             logger.exception("Failed to generate embeddings for document %d", document_id)
             return 0
 
         if len(embeddings) != len(chunks):
             logger.error(
                 "Embedding count mismatch for doc %d: %d chunks, %d embeddings",
-                document_id, len(chunks), len(embeddings),
+                document_id,
+                len(chunks),
+                len(embeddings),
             )
             return 0
 
@@ -89,7 +92,9 @@ class DocumentIndexer:
             }
             for c in chunks
         ]
-        stored = self._store.add_chunks(document_id, title, chunk_dicts, embeddings, tenant_id=tenant_id)
+        stored = self._store.add_chunks(
+            document_id, title, chunk_dicts, embeddings, tenant_id=tenant_id
+        )
         return stored
 
     async def ensure_ready(self) -> None:
@@ -139,7 +144,9 @@ class DocumentIndexer:
                 if count > 0:
                     indexed += 1
                     total_chunks += count
-            except Exception as exc:  # policy: LOSSY — per-document indexing failure should not abort the batch
+            except (
+                Exception
+            ) as exc:  # policy: LOSSY — per-document indexing failure should not abort the batch
                 logger.exception("Failed to index document %d", document_id)
                 errors.append(f"Document {document_id} ({title}): {exc}")
 

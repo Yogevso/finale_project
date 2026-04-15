@@ -15,7 +15,6 @@ from app.models import (
     UserRole,
 )
 
-
 # ========== Chat Schemas ==========
 
 
@@ -104,12 +103,23 @@ class CreateGroupChatRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=10000)
-    context_json: Optional[str] = Field(None, max_length=5000, description="AH-009: context card metadata (document title, section, anchor, comment type)")
+    context_json: Optional[str] = Field(
+        None,
+        max_length=5000,
+        description="AH-009: context card metadata (document title, section, anchor, comment type)",
+    )
 
     # FIX-026e: Validate context_json is well-formed JSON with known keys
     _ALLOWED_CONTEXT_KEYS = {
-        "document_id", "document_title", "section", "section_id",
-        "anchor", "comment_type", "version_id", "page", "highlight",
+        "document_id",
+        "document_title",
+        "section",
+        "section_id",
+        "anchor",
+        "comment_type",
+        "version_id",
+        "page",
+        "highlight",
     }
 
     @field_validator("context_json")
@@ -119,8 +129,8 @@ class SendMessageRequest(BaseModel):
             return v
         try:
             parsed = json.loads(v)
-        except (json.JSONDecodeError, TypeError):
-            raise ValueError("context_json must be valid JSON")
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError("context_json must be valid JSON") from exc
         if not isinstance(parsed, dict):
             raise ValueError("context_json must be a JSON object")
         unknown = set(parsed.keys()) - cls._ALLOWED_CONTEXT_KEYS
@@ -131,8 +141,11 @@ class SendMessageRequest(BaseModel):
 
 class CreateDocumentChatRequest(BaseModel):
     """AH-008: Create or return existing chat scoped to a document."""
+
     document_id: int = Field(..., description="Document to scope the chat to")
-    participant_ids: List[int] = Field(default_factory=list, description="Extra user IDs to include (authors auto-added)")
+    participant_ids: List[int] = Field(
+        default_factory=list, description="Extra user IDs to include (authors auto-added)"
+    )
 
 
 class AddParticipantRequest(BaseModel):

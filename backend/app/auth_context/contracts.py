@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +31,9 @@ class AccessTokenContract:
     sid: str | None = None
 
     @classmethod
-    def from_user(cls, user: User, *, session_identifier: str | None = None) -> "AccessTokenContract":
+    def from_user(
+        cls, user: User, *, session_identifier: str | None = None
+    ) -> "AccessTokenContract":
         return cls(
             sub=str(user.id),
             username=user.username,

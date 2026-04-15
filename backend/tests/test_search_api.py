@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.exc import OperationalError
 
-from app.config import settings
 from app.application.queries.search_queries import SearchQueryHandler
+from app.config import settings
 from app.models import Document, DocumentStatus, SearchAnalytics, Tenant
 
 
@@ -106,7 +106,9 @@ class TestSearch:
         assert "Date Filter Recent Doc" in titles
         assert "Date Filter Old Doc" not in titles
 
-    def test_search_is_tenant_scoped_for_non_system_admin(self, client, auth_headers, db, test_user):
+    def test_search_is_tenant_scoped_for_non_system_admin(
+        self, client, auth_headers, db, test_user
+    ):
         """Non-system-admin search should not return cross-tenant documents."""
         tenant_one = Tenant(
             name="Tenant One",

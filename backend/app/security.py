@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.auth_context import ACCESS_TOKEN_TYPE
 from app.auth_context.passwords import (
     get_password_hash as _get_password_hash,
 )
@@ -18,7 +19,6 @@ from app.auth_context.refresh_token_service import (
     RefreshTokenService,
 )
 from app.auth_context.session_tokens import hash_session_identifier, revoke_session_if_inactive
-from app.auth_context import ACCESS_TOKEN_TYPE
 from app.auth_context.token_service import TokenService
 from app.config import settings
 from app.db import get_db
@@ -116,7 +116,9 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_current_active_user(
+    current_user=Depends(get_current_user), db: Session = Depends(get_db)
+):
     """Dependency to get current active user"""
     from app.models import Tenant, UserRole
     from app.services.permissions import evaluate_role_membership
@@ -163,8 +165,9 @@ async def get_current_active_user(current_user=Depends(get_current_user), db: Se
 
     # Inject tenant context for request-scoped tenant isolation
     from app.middleware.tenant_context import inject_tenant_context
+
     inject_tenant_context(current_user)
-    
+
     return current_user
 
 

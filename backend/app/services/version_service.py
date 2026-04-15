@@ -16,7 +16,6 @@ from app.errors import (
     InvalidStateError,
     NotFoundError,
     PermissionDeniedError,
-    ValidationError,
 )
 from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
@@ -37,9 +36,9 @@ from app.services.audit_helper import write_audit_log
 from app.services.base_service import SessionService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
+from app.services.uow import UnitOfWork
 from app.services.version_publication_service import VersionPublicationService
 from app.services.version_scheduling_service import VersionSchedulingService
-from app.services.uow import UnitOfWork
 from app.utils.concurrency import ensure_if_match_matches
 
 logger = logging.getLogger(__name__)
@@ -239,7 +238,9 @@ class VersionService(SessionService):
             document=document,
             notification_type=NotificationType.DOCUMENT_UPDATED,
             title_builder=lambda _user: f"{actor_display_name} mentioned you in a document draft",
-            message_builder=lambda _user: f"{document.title}: {preview_text}" if preview_text else document.title,
+            message_builder=lambda _user: f"{document.title}: {preview_text}"
+            if preview_text
+            else document.title,
             link=f"/documents/{document.id}?tab=versions&version={version.id}",
         )
 
@@ -247,6 +248,7 @@ class VersionService(SessionService):
     def _schedule_pdf_export_generation(attachment_ids: list[int]) -> None:
         """AH-006: Enqueue durable PDF export jobs for portal/viewer downloads."""
         from app.services.conversion_jobs import enqueue_pdf_export
+
         enqueue_pdf_export(attachment_ids)
 
     def _notify_version_watchers(
@@ -472,29 +474,35 @@ class VersionService(SessionService):
         except (NotFoundError, PermissionDeniedError):
             version_exists = False
 
-        checks.append({
-            "id": "version_exists",
-            "label": "Version exists",
-            "passed": version_exists,
-            "message": None if version_exists else "Version not found",
-        })
+        checks.append(
+            {
+                "id": "version_exists",
+                "label": "Version exists",
+                "passed": version_exists,
+                "message": None if version_exists else "Version not found",
+            }
+        )
 
         # Check 2: Not already published
         if version:
             not_published = not version.is_published
-            checks.append({
-                "id": "not_already_published",
-                "label": "Not already published",
-                "passed": not_published,
-                "message": None if not_published else "Version is already published",
-            })
+            checks.append(
+                {
+                    "id": "not_already_published",
+                    "label": "Not already published",
+                    "passed": not_published,
+                    "message": None if not_published else "Version is already published",
+                }
+            )
         else:
-            checks.append({
-                "id": "not_already_published",
-                "label": "Not already published",
-                "passed": False,
-                "message": "Cannot check - version not found",
-            })
+            checks.append(
+                {
+                    "id": "not_already_published",
+                    "label": "Not already published",
+                    "passed": False,
+                    "message": "Cannot check - version not found",
+                }
+            )
 
         # Check 3: User has permission to publish
         can_publish = current_user.role in [
@@ -502,12 +510,14 @@ class VersionService(SessionService):
             UserRole.ADMIN,
             UserRole.MANAGER,
         ]
-        checks.append({
-            "id": "user_can_publish",
-            "label": "User can publish",
-            "passed": can_publish,
-            "message": None if can_publish else "Only admins and managers can publish versions",
-        })
+        checks.append(
+            {
+                "id": "user_can_publish",
+                "label": "User can publish",
+                "passed": can_publish,
+                "message": None if can_publish else "Only admins and managers can publish versions",
+            }
+        )
 
         # Check 4: Review is approved
         if version:
@@ -526,52 +536,61 @@ class VersionService(SessionService):
             else:
                 review_message = None
 
-            checks.append({
-                "id": "review_approved",
-                "label": "Review approved",
-                "passed": review_approved,
-                "message": review_message,
-            })
+            checks.append(
+                {
+                    "id": "review_approved",
+                    "label": "Review approved",
+                    "passed": review_approved,
+                    "message": review_message,
+                }
+            )
         else:
-            checks.append({
-                "id": "review_approved",
-                "label": "Review approved",
-                "passed": False,
-                "message": "Cannot check - version not found",
-            })
+            checks.append(
+                {
+                    "id": "review_approved",
+                    "label": "Review approved",
+                    "passed": False,
+                    "message": "Cannot check - version not found",
+                }
+            )
 
         # Check 5: Audience readiness (company visibility requires at least one company assignment)
         if document:
             if document.visibility == DocumentVisibility.COMPANY:
                 has_company_assignments = (
-                    document.assigned_companies is not None
-                    and len(document.assigned_companies) > 0
+                    document.assigned_companies is not None and len(document.assigned_companies) > 0
                 )
-                checks.append({
-                    "id": "audience_ready",
-                    "label": "Audience configured",
-                    "passed": has_company_assignments,
-                    "message": (
-                        None
-                        if has_company_assignments
-                        else "Company visibility requires at least one company assignment"
-                    ),
-                })
+                checks.append(
+                    {
+                        "id": "audience_ready",
+                        "label": "Audience configured",
+                        "passed": has_company_assignments,
+                        "message": (
+                            None
+                            if has_company_assignments
+                            else "Company visibility requires at least one company assignment"
+                        ),
+                    }
+                )
             else:
                 # Internal or public visibility doesn't need company assignments
-                checks.append({
+                checks.append(
+                    {
+                        "id": "audience_ready",
+                        "label": "Audience configured",
+                        "passed": True,
+                        "message": None,
+                    }
+                )
+        else:
+            checks.append(
+                {
                     "id": "audience_ready",
                     "label": "Audience configured",
-                    "passed": True,
-                    "message": None,
-                })
-        else:
-            checks.append({
-                "id": "audience_ready",
-                "label": "Audience configured",
-                "passed": False,
-                "message": "Cannot check - document not found",
-            })
+                    "passed": False,
+                    "message": "Cannot check - document not found",
+                }
+            )
 
         # Overall readiness
         ready = all(check["passed"] for check in checks)
@@ -613,7 +632,7 @@ class VersionService(SessionService):
         - All company IDs in the snapshot must still exist
         - Visibility value must be valid
         """
-        from app.models import ActionType, AudienceEventType, DocumentVisibility, Tenant
+        from app.models import DocumentVisibility, Tenant
 
         if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN]:
             raise PermissionDeniedError("Only admins can restore audience state")
@@ -684,10 +703,14 @@ class VersionService(SessionService):
                         "old_company_ids": old_company_ids,
                         "new_company_ids": [c.id for c in valid_companies],
                         "added_company_ids": [
-                            cid for cid in [c.id for c in valid_companies] if cid not in old_company_ids
+                            cid
+                            for cid in [c.id for c in valid_companies]
+                            if cid not in old_company_ids
                         ],
                         "removed_company_ids": [
-                            cid for cid in old_company_ids if cid not in [c.id for c in valid_companies]
+                            cid
+                            for cid in old_company_ids
+                            if cid not in [c.id for c in valid_companies]
                         ],
                     },
                     sort_keys=True,

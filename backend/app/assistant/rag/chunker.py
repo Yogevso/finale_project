@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from io import StringIO
 
@@ -13,6 +13,7 @@ from app.config import settings
 @dataclass
 class Chunk:
     """A single chunk of document text with metadata."""
+
     text: str
     chunk_index: int
     section: str | None = None
@@ -132,7 +133,9 @@ class DocumentChunker:
 
         if len(text) <= chars_per_chunk:
             section = sections[0][0] if sections else None
-            return [Chunk(text=text, chunk_index=0, section=section, char_start=0, char_end=len(text))]
+            return [
+                Chunk(text=text, chunk_index=0, section=section, char_start=0, char_end=len(text))
+            ]
 
         # Split into sentences
         sentences = re.split(r"(?<=[.!?])\s+|\n{2,}", text)
@@ -147,13 +150,15 @@ class DocumentChunker:
             if current_text and len(current_text) + len(sentence) + 1 > chars_per_chunk:
                 # Find which section this chunk belongs to
                 section = self._find_section(current_start, sections)
-                chunks.append(Chunk(
-                    text=current_text.strip(),
-                    chunk_index=len(chunks),
-                    section=section,
-                    char_start=current_start,
-                    char_end=current_start + len(current_text),
-                ))
+                chunks.append(
+                    Chunk(
+                        text=current_text.strip(),
+                        chunk_index=len(chunks),
+                        section=section,
+                        char_start=current_start,
+                        char_end=current_start + len(current_text),
+                    )
+                )
                 # Overlap: keep last chars_overlap characters
                 if chars_overlap > 0 and len(current_text) > chars_overlap:
                     overlap_text = current_text[-chars_overlap:]
@@ -172,13 +177,15 @@ class DocumentChunker:
         # Last chunk
         if current_text.strip():
             section = self._find_section(current_start, sections)
-            chunks.append(Chunk(
-                text=current_text.strip(),
-                chunk_index=len(chunks),
-                section=section,
-                char_start=current_start,
-                char_end=current_start + len(current_text),
-            ))
+            chunks.append(
+                Chunk(
+                    text=current_text.strip(),
+                    chunk_index=len(chunks),
+                    section=section,
+                    char_start=current_start,
+                    char_end=current_start + len(current_text),
+                )
+            )
 
         return chunks
 

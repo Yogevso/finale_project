@@ -9,6 +9,7 @@ review workflow, and version history must tag edits as
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,11 +19,9 @@ from app.assistant.document_access import (
     resolve_assistant_visible_version,
 )
 from app.assistant.tools.base import BaseTool
-from app.models import ActionType, Document, DocumentStatus, DocumentVisibility, Topic, User
+from app.models import ActionType, Document, DocumentStatus, DocumentVisibility, User
 from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
-
-from datetime import datetime, timedelta
 
 
 class SearchDocumentsTool(BaseTool):
@@ -44,7 +43,9 @@ class SearchDocumentsTool(BaseTool):
     }
     required_permission = Permission.VIEW_INTERNAL_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         q = params["query"]
         limit = min(params.get("limit", 10), 50)
 
@@ -78,7 +79,9 @@ class GetDocumentTool(BaseTool):
     }
     required_permission = Permission.VIEW_INTERNAL_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
@@ -104,6 +107,7 @@ class GetDocumentTool(BaseTool):
         )
         if version and version.content:
             from app.assistant.rag.chunker import DocumentChunker
+
             text = DocumentChunker.strip_html(version.content).strip()
             if text:
                 preview = text[:2000]
@@ -120,7 +124,9 @@ class GetDocumentTool(BaseTool):
 
 class CreateDocumentTool(BaseTool):
     name = "create_document"
-    description = "Create a new document with a title and optional topic. Returns the new document's ID."
+    description = (
+        "Create a new document with a title and optional topic. Returns the new document's ID."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -136,9 +142,11 @@ class CreateDocumentTool(BaseTool):
     }
     required_permission = Permission.CREATE_DOCUMENT
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
-        from datetime import datetime
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         import uuid
+        from datetime import datetime
 
         # Use UUID suffix to avoid race conditions from count()-based numbering
         unique_suffix = uuid.uuid4().hex[:8].upper()
@@ -160,7 +168,10 @@ class CreateDocumentTool(BaseTool):
         )
         db.commit()
         db.refresh(doc)
-        return {"success": True, "result": f"Document created — ID: {doc.id}, title: '{doc.title}'."}
+        return {
+            "success": True,
+            "result": f"Document created — ID: {doc.id}, title: '{doc.title}'.",
+        }
 
 
 class EditDocumentTool(BaseTool):
@@ -173,13 +184,19 @@ class EditDocumentTool(BaseTool):
             "title": {"type": "string", "description": "New title (optional)", "maxLength": 500},
             # AE-003: "status" removed — status transitions must only happen
             # through the document state machine (review → approve → publish).
-            "topic": {"type": "string", "description": "New topic slug (optional)", "maxLength": 100},
+            "topic": {
+                "type": "string",
+                "description": "New topic slug (optional)",
+                "maxLength": 100,
+            },
         },
         "required": ["document_id"],
     }
     required_permission = Permission.EDIT_DOCUMENT
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
@@ -228,7 +245,9 @@ class DeleteDocumentTool(BaseTool):
     required_permission = Permission.DELETE_DOCUMENT
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
@@ -245,7 +264,10 @@ class DeleteDocumentTool(BaseTool):
         )
         db.delete(doc)
         db.commit()
-        return {"success": True, "result": f"Document '{title}' (ID: {params['document_id']}) deleted."}
+        return {
+            "success": True,
+            "result": f"Document '{title}' (ID: {params['document_id']}) deleted.",
+        }
 
 
 class GetDocumentsByStatusTool(BaseTool):
@@ -268,7 +290,9 @@ class GetDocumentsByStatusTool(BaseTool):
     }
     required_role = "VIEWER"
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         status_map = {
             "draft": DocumentStatus.DRAFT,
             "pending_review": DocumentStatus.PENDING_REVIEW,
@@ -278,7 +302,11 @@ class GetDocumentsByStatusTool(BaseTool):
         }
         status_val = status_map.get(params["status"])
         if not status_val:
-            return {"success": False, "result": "", "error": f"Invalid status. Use: {', '.join(status_map)}"}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Invalid status. Use: {', '.join(status_map)}",
+            }
 
         limit = min(params.get("limit", 20), 50)
         query = db.query(Document).filter(Document.status == status_val)
@@ -287,7 +315,10 @@ class GetDocumentsByStatusTool(BaseTool):
         docs = query.order_by(Document.updated_at.desc()).limit(limit).all()
 
         if not docs:
-            return {"success": True, "result": f"No documents found with status '{params['status']}'."}
+            return {
+                "success": True,
+                "result": f"No documents found with status '{params['status']}'.",
+            }
 
         lines = [f"**Documents with status '{params['status']}'** ({len(docs)} found)\n"]
         for d in docs:
@@ -309,7 +340,9 @@ class GetRecentDocumentsTool(BaseTool):
     }
     required_role = "VIEWER"
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 10), 50)
         days = min(params.get("days", 7), 365)
         cutoff = datetime.utcnow() - timedelta(days=days)

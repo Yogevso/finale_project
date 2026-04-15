@@ -45,7 +45,9 @@ def convert_word_to_html_fallback(content: bytes) -> str:
             if not text:
                 continue
 
-            style_name = (paragraph.style.name if paragraph.style and paragraph.style.name else "").lower()
+            style_name = (
+                paragraph.style.name if paragraph.style and paragraph.style.name else ""
+            ).lower()
             escaped_text = html.escape(text)
             if "heading 1" in style_name or "title" in style_name:
                 html_parts.append(f"<h1>{escaped_text}</h1>")
@@ -57,7 +59,9 @@ def convert_word_to_html_fallback(content: bytes) -> str:
                 html_parts.append(f"<p>{escaped_text}</p>")
 
         return "\n".join(html_parts) if html_parts else "<p>No content found.</p>"
-    except Exception as exc:  # policy: DEGRADED — conversion falls back to a safe HTML error fragment
+    except (
+        Exception
+    ) as exc:  # policy: DEGRADED — conversion falls back to a safe HTML error fragment
         logger.error("Word fallback conversion error: %s", exc)
         return f"<p>Error converting Word document: {html.escape(str(exc))}</p>"
 

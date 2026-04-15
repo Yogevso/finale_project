@@ -47,9 +47,7 @@ def _sign_download_ticket(user_id: int, document_id: int, attachment_id: int, ts
     return hmac.new(settings.SECRET_KEY.encode(), msg, hashlib.sha256).hexdigest()
 
 
-def _verify_download_ticket(
-    ticket: str, document_id: int, attachment_id: int, db: Session
-) -> User:
+def _verify_download_ticket(ticket: str, document_id: int, attachment_id: int, db: Session) -> User:
     """Validate a signed download ticket and return the authenticated user."""
     try:
         parts = ticket.split(":")
@@ -128,6 +126,7 @@ def get_pdf_export_status(
 ):
     """Check PDF export generation status for an attachment."""
     from app.models import AttachmentConversionJob
+
     job = (
         db.query(AttachmentConversionJob)
         .filter(

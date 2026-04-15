@@ -120,7 +120,9 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
 
         try:
             payload = json.loads(raw_json)
-        except Exception:  # policy: DEGRADED — invalid stored TOC payload falls back to an empty structure
+        except (
+            Exception
+        ):  # policy: DEGRADED — invalid stored TOC payload falls back to an empty structure
             logger.warning("Invalid reader_toc_json for attachment %s", attachment.id)
             return {}
 
@@ -211,7 +213,8 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
         return wrapper.convert_document_to_reader_artifact(
             result.docx_bytes,
             _DOCX_READER_MIME_TYPE,
-            (attachment.original_filename or attachment.filename or "document").rsplit(".", 1)[0] + ".docx",
+            (attachment.original_filename or attachment.filename or "document").rsplit(".", 1)[0]
+            + ".docx",
         )
 
     @classmethod
@@ -323,7 +326,9 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
                 synchronize_session="fetch",
             )
             if not claimed and not force:
-                logger.info("Reader artifact already processing for attachment %s, skipping", attachment_id)
+                logger.info(
+                    "Reader artifact already processing for attachment %s, skipping", attachment_id
+                )
                 return
 
             db.refresh(reader_artifact)
@@ -352,9 +357,7 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
                 reader_artifact.content_text = None
                 reader_artifact.content_json = None
                 reader_artifact.source = None
-                reader_artifact.error = (
-                    artifact_error or "Failed to generate Reader View artifact"
-                )
+                reader_artifact.error = artifact_error or "Failed to generate Reader View artifact"
                 reader_artifact.generated_at = datetime.utcnow()
                 cls._apply_reader_artifact_to_attachment(attachment, reader_artifact)
                 db.commit()

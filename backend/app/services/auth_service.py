@@ -74,7 +74,9 @@ class AuthService(SessionService):
         q = self.db.query(User).filter(User.id == user_id)
         try:
             dialect = self.db.get_bind().dialect.name
-        except Exception:  # policy: DEGRADED — dialect lookup failure falls back to SQLite-safe locking behavior
+        except (
+            Exception
+        ):  # policy: DEGRADED — dialect lookup failure falls back to SQLite-safe locking behavior
             dialect = "sqlite"
         if dialect != "sqlite":
             q = q.with_for_update()
@@ -344,7 +346,7 @@ class AuthService(SessionService):
         )
         if len(active_sessions) >= max_sessions:
             # revoke oldest sessions to stay within the limit
-            for old_session in active_sessions[max_sessions - 1:]:
+            for old_session in active_sessions[max_sessions - 1 :]:
                 old_session.revoked_at = now
 
         self.db.add(
@@ -429,7 +431,9 @@ class AuthService(SessionService):
         )
         self.db.commit()
 
-        return TokenResponse(access_token=access_token, refresh_token=new_refresh_token, token_type="bearer")
+        return TokenResponse(
+            access_token=access_token, refresh_token=new_refresh_token, token_type="bearer"
+        )
 
     def revoke_all_user_sessions(self, user_id: int, *, commit: bool = True) -> None:
         """Invalidate refresh tokens and revoke all active sessions for a user."""

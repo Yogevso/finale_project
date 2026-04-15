@@ -294,4 +294,3 @@ class TestViewerCategories:
         response = client.get("/api/v1/viewer/categories")
         # May or may not be implemented
         assert response.status_code in [200, 404]
-

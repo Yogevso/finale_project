@@ -34,12 +34,10 @@ def test_document_workflow_normalizes_new_version_candidate_status():
     workflow = DocumentWorkflow()
 
     assert (
-        workflow.normalize_for_new_version_candidate(DocumentStatus.ACTIVE)
-        == DocumentStatus.ACTIVE
+        workflow.normalize_for_new_version_candidate(DocumentStatus.ACTIVE) == DocumentStatus.ACTIVE
     )
     assert (
-        workflow.normalize_for_new_version_candidate(DocumentStatus.DRAFT)
-        == DocumentStatus.DRAFT
+        workflow.normalize_for_new_version_candidate(DocumentStatus.DRAFT) == DocumentStatus.DRAFT
     )
     assert (
         workflow.normalize_for_new_version_candidate(DocumentStatus.APPROVED)

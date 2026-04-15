@@ -253,7 +253,14 @@ async def get_or_create_document_chat(
     Customers can chat with internal users related to the document they
     are viewing.  If no chat exists, one is created with the document author.
     """
-    from app.models import Chat, ChatParticipant, ChatParticipantRole, ChatType, ChatMessageType, ChatMessage
+    from app.models import (
+        Chat,
+        ChatMessage,
+        ChatMessageType,
+        ChatParticipant,
+        ChatParticipantRole,
+        ChatType,
+    )
 
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document or document.status != DocumentStatus.ACTIVE:
@@ -284,17 +291,25 @@ async def get_or_create_document_chat(
     db.flush()
 
     # Add customer as owner
-    db.add(ChatParticipant(chat_id=chat.id, user_id=current_user.id, role=ChatParticipantRole.OWNER))
+    db.add(
+        ChatParticipant(chat_id=chat.id, user_id=current_user.id, role=ChatParticipantRole.OWNER)
+    )
     # Add document author as member
     if document.created_by and document.created_by != current_user.id:
-        db.add(ChatParticipant(chat_id=chat.id, user_id=document.created_by, role=ChatParticipantRole.MEMBER))
+        db.add(
+            ChatParticipant(
+                chat_id=chat.id, user_id=document.created_by, role=ChatParticipantRole.MEMBER
+            )
+        )
 
-    db.add(ChatMessage(
-        chat_id=chat.id,
-        sender_id=current_user.id,
-        content=f"Customer started a conversation about \"{document.title}\"",
-        message_type=ChatMessageType.SYSTEM,
-    ))
+    db.add(
+        ChatMessage(
+            chat_id=chat.id,
+            sender_id=current_user.id,
+            content=f'Customer started a conversation about "{document.title}"',
+            message_type=ChatMessageType.SYSTEM,
+        )
+    )
 
     db.commit()
     db.refresh(chat)
@@ -312,13 +327,24 @@ async def create_chat_from_feedback(
     If the feedback already has a linked chat, returns it. Otherwise creates
     a new document-scoped chat with the feedback content as the first message.
     """
-    from app.models import Chat, ChatParticipant, ChatParticipantRole, ChatType, ChatMessageType, ChatMessage
+    from app.models import (
+        Chat,
+        ChatMessage,
+        ChatMessageType,
+        ChatParticipant,
+        ChatParticipantRole,
+        ChatType,
+    )
 
-    feedback = db.query(Feedback).filter(
-        Feedback.id == feedback_id,
-        Feedback.user_id == current_user.id,
-        Feedback.is_helpful.is_(None),
-    ).first()
+    feedback = (
+        db.query(Feedback)
+        .filter(
+            Feedback.id == feedback_id,
+            Feedback.user_id == current_user.id,
+            Feedback.is_helpful.is_(None),
+        )
+        .first()
+    )
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
 
@@ -348,27 +374,41 @@ async def create_chat_from_feedback(
     db.add(chat)
     db.flush()
 
-    db.add(ChatParticipant(chat_id=chat.id, user_id=current_user.id, role=ChatParticipantRole.OWNER))
+    db.add(
+        ChatParticipant(chat_id=chat.id, user_id=current_user.id, role=ChatParticipantRole.OWNER)
+    )
     if feedback.responded_by and feedback.responded_by != current_user.id:
-        db.add(ChatParticipant(chat_id=chat.id, user_id=feedback.responded_by, role=ChatParticipantRole.MEMBER))
+        db.add(
+            ChatParticipant(
+                chat_id=chat.id, user_id=feedback.responded_by, role=ChatParticipantRole.MEMBER
+            )
+        )
     elif document and document.created_by and document.created_by != current_user.id:
-        db.add(ChatParticipant(chat_id=chat.id, user_id=document.created_by, role=ChatParticipantRole.MEMBER))
+        db.add(
+            ChatParticipant(
+                chat_id=chat.id, user_id=document.created_by, role=ChatParticipantRole.MEMBER
+            )
+        )
 
     # Seed chat with original feedback content
-    db.add(ChatMessage(
-        chat_id=chat.id,
-        sender_id=current_user.id,
-        content=feedback.content,
-        message_type=ChatMessageType.USER,
-    ))
+    db.add(
+        ChatMessage(
+            chat_id=chat.id,
+            sender_id=current_user.id,
+            content=feedback.content,
+            message_type=ChatMessageType.USER,
+        )
+    )
     # If there was a response, add it too
     if feedback.response:
-        db.add(ChatMessage(
-            chat_id=chat.id,
-            sender_id=feedback.responded_by,
-            content=feedback.response,
-            message_type=ChatMessageType.USER,
-        ))
+        db.add(
+            ChatMessage(
+                chat_id=chat.id,
+                sender_id=feedback.responded_by,
+                content=feedback.response,
+                message_type=ChatMessageType.USER,
+            )
+        )
 
     db.commit()
     db.refresh(chat)

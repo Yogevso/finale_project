@@ -1,4 +1,4 @@
-﻿"""Event-store primitives and selective event-sourcing pilot modules."""
+"""Event-store primitives and selective event-sourcing pilot modules."""
 
 from app.event_store.review_workflow_pilot import (
     REVIEW_EVENT_APPROVED,

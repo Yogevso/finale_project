@@ -46,7 +46,9 @@ async def parse_support_message_request(
             payload.get("is_internal_note"),
             field_name="is_internal_note",
         )
-    elif "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+    elif (
+        "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type
+    ):
         form = await request.form()
         content = str(form.get("content") or "")
         is_internal_note = _coerce_bool(

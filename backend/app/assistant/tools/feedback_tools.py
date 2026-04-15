@@ -25,7 +25,9 @@ class SubmitFeedbackTool(BaseTool):
     }
     required_permission = Permission.SUBMIT_FEEDBACK
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         rating = max(1, min(5, params["rating"]))
         comment = (params.get("comment") or "").strip()
         fb = Feedback(
@@ -55,7 +57,9 @@ class GetMyFeedbackTool(BaseTool):
     }
     required_permission = Permission.SUBMIT_FEEDBACK
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         fbs = (
             db.query(Feedback)
             .filter(Feedback.user_id == user.id)

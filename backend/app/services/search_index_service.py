@@ -153,7 +153,9 @@ class SearchIndexSyncService:
             self._ensure_index_exists()
             self._rebuild_index_contents()
             count = (
-                self.db.execute(text("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL")).scalar()
+                self.db.execute(
+                    text("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL")
+                ).scalar()
                 or 0
             )
             logger.info("FTS5 search index rebuilt - %d documents indexed", count)

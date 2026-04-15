@@ -2,7 +2,6 @@
 
 from app.db import Base
 from app.db.bases import AnalyticsBase, ChatBase
-
 from app.models.assistant import (
     AssistantConversation,
     AssistantMessage,

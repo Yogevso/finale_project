@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,10 +14,17 @@ from sqlalchemy.orm import Session
 from app.application.contexts.portal.api import PortalContextAPI
 from app.application.queries.dependencies import get_portal_documents_query_handler
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
+from app.db import get_db
 from app.dependencies.permissions import require_customer
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
-from app.db import get_db
-from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, ReadingProgress, User
+from app.models import (
+    Attachment,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+    ReadingProgress,
+    User,
+)
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
@@ -74,7 +81,11 @@ def _customer_can_still_access(
     if doc_visibility == DocumentVisibility.COMPANY:
         # Conservative: allow if the user's tenant matches the doc's tenant.
         # Full access checks are done when the user actually opens the document.
-        return user.tenant_id is not None and doc_tenant_id is not None and user.tenant_id == doc_tenant_id
+        return (
+            user.tenant_id is not None
+            and doc_tenant_id is not None
+            and user.tenant_id == doc_tenant_id
+        )
     return False
 
 
@@ -85,9 +96,7 @@ def _get_customer_progress_document_or_404(
     current_user: User,
 ) -> Document:
     document = (
-        db.query(Document)
-        .filter(Document.id == document_id, Document.deleted_at.is_(None))
-        .first()
+        db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     )
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -107,6 +116,7 @@ def _get_customer_progress_document_or_404(
             return document
 
     raise HTTPException(status_code=404, detail="Document not found")
+
 
 @router.get("/documents", response_model=PortalDocumentListResponse)
 async def list_customer_documents(
@@ -198,9 +208,7 @@ async def download_customer_attachment(
     """Stream-download an attachment through the portal's own access checks."""
     db: Session = portal_documents_query_handler.db
     doc = (
-        db.query(Document)
-        .filter(Document.id == document_id, Document.deleted_at.is_(None))
-        .first()
+        db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -236,14 +244,25 @@ async def download_customer_attachment(
                 content=pdf_stream,
                 media_type="application/pdf",
                 headers={
-                    "Content-Disposition": build_content_disposition(f"{base_name}.pdf", inline=False),
+                    "Content-Disposition": build_content_disposition(
+                        f"{base_name}.pdf", inline=False
+                    ),
                 },
             )
-        except Exception:  # policy: LOSSY — PDF preview is optional; serve original attachment instead
-            logger.debug("PDF conversion unavailable for attachment %s, serving original", attachment_id, exc_info=True)
+        except (
+            Exception
+        ):  # policy: LOSSY — PDF preview is optional; serve original attachment instead
+            logger.debug(
+                "PDF conversion unavailable for attachment %s, serving original",
+                attachment_id,
+                exc_info=True,
+            )
 
     attachment, content_stream = AttachmentService.open_original_stream(
-        db, document_id, attachment_id, current_user=current_user,
+        db,
+        document_id,
+        attachment_id,
+        current_user=current_user,
     )
     filename = attachment.original_filename or attachment.filename or "download"
     embed = ExternalEmbedPolicySpec.for_document(doc)
@@ -372,8 +391,15 @@ async def get_recently_viewed(
 ):
     """Return recently viewed documents for the current user."""
     rows = (
-        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url,
-                 Document.status, Document.visibility, Document.tenant_id)
+        db.query(
+            ReadingProgress,
+            Document.title,
+            Document.category,
+            Document.thumbnail_url,
+            Document.status,
+            Document.visibility,
+            Document.tenant_id,
+        )
         .join(Document, ReadingProgress.document_id == Document.id)
         .filter(ReadingProgress.user_id == current_user.id)
         .order_by(ReadingProgress.last_read_at.desc())
@@ -385,14 +411,16 @@ async def get_recently_viewed(
     for rp, title, category, thumb, doc_status, doc_vis, doc_tenant_id in rows:
         if not _customer_can_still_access(doc_status, doc_vis, doc_tenant_id, current_user):
             continue
-        results.append({
-            "document_id": rp.document_id,
-            "title": title,
-            "category": category,
-            "thumbnail_url": thumb,
-            "progress_percent": rp.progress_percent,
-            "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
-        })
+        results.append(
+            {
+                "document_id": rp.document_id,
+                "title": title,
+                "category": category,
+                "thumbnail_url": thumb,
+                "progress_percent": rp.progress_percent,
+                "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
+            }
+        )
     return results
 
 
@@ -404,8 +432,15 @@ async def get_continue_reading(
 ):
     """Return documents the user started but hasn't finished (progress < 100%)."""
     rows = (
-        db.query(ReadingProgress, Document.title, Document.category, Document.thumbnail_url,
-                 Document.status, Document.visibility, Document.tenant_id)
+        db.query(
+            ReadingProgress,
+            Document.title,
+            Document.category,
+            Document.thumbnail_url,
+            Document.status,
+            Document.visibility,
+            Document.tenant_id,
+        )
         .join(Document, ReadingProgress.document_id == Document.id)
         .filter(
             ReadingProgress.user_id == current_user.id,
@@ -421,14 +456,16 @@ async def get_continue_reading(
     for rp, title, category, thumb, doc_status, doc_vis, doc_tenant_id in rows:
         if not _customer_can_still_access(doc_status, doc_vis, doc_tenant_id, current_user):
             continue
-        results.append({
-            "document_id": rp.document_id,
-            "title": title,
-            "category": category,
-            "thumbnail_url": thumb,
-            "progress_percent": rp.progress_percent,
-            "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
-        })
+        results.append(
+            {
+                "document_id": rp.document_id,
+                "title": title,
+                "category": category,
+                "thumbnail_url": thumb,
+                "progress_percent": rp.progress_percent,
+                "last_read_at": rp.last_read_at.isoformat() if rp.last_read_at else None,
+            }
+        )
     return results
 
 

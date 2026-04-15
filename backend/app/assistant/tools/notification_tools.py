@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 class GetMyNotificationsTool(BaseTool):
     name = "get_my_notifications"
-    description = "List your recent notifications including mentions, review requests, and system alerts."
+    description = (
+        "List your recent notifications including mentions, review requests, and system alerts."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -27,13 +29,17 @@ class GetMyNotificationsTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 100)
         query = db.query(Notification).filter(Notification.user_id == user.id)
 
         if params.get("unread_only"):
-            query = query.filter(Notification.is_read == False)
+            query = query.filter(Notification.is_read is False)
 
         notifs = query.order_by(Notification.created_at.desc()).limit(limit).all()
 
@@ -72,7 +78,11 @@ class MarkNotificationsReadTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         now = datetime.utcnow()
         ids = params.get("notification_ids")
@@ -80,13 +90,17 @@ class MarkNotificationsReadTool(BaseTool):
 
         query = db.query(Notification).filter(
             Notification.user_id == user.id,
-            Notification.is_read == False,
+            Notification.is_read is False,
         )
 
         if not mark_all and ids:
             query = query.filter(Notification.id.in_(ids))
         elif not mark_all:
-            return {"success": False, "result": "", "error": "Provide notification_ids or set mark_all=true."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Provide notification_ids or set mark_all=true.",
+            }
 
         count = 0
         for n in query.all():

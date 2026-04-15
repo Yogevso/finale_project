@@ -327,8 +327,7 @@ class TestDocumentState:
         assert "write" in data["permissions"]
         events = get_use_case_telemetry_sink().snapshot()
         assert any(
-            event.use_case_id == "collab.verify_collaboration_access"
-            and event.outcome == "success"
+            event.use_case_id == "collab.verify_collaboration_access" and event.outcome == "success"
             for event in events
         )
 
@@ -353,9 +352,7 @@ class TestDocumentState:
         assert data["document_id"] == test_document.id
         assert data["permissions"] == ["read"]
 
-    def test_verify_collaboration_access_rejects_cross_tenant_system_admin_token(
-        self, client, db
-    ):
+    def test_verify_collaboration_access_rejects_cross_tenant_system_admin_token(self, client, db):
         scenario = create_collaboration_access_scenario(db)
         foreign_system_admin = User(
             email="collab-verify-sysadmin@example.com",
@@ -404,8 +401,7 @@ class TestCollaborationSessions:
         assert data["document_id"] == test_document.id
         events = get_use_case_telemetry_sink().snapshot()
         assert any(
-            event.use_case_id == "collab.start_collaboration_session"
-            and event.outcome == "success"
+            event.use_case_id == "collab.start_collaboration_session" and event.outcome == "success"
             for event in events
         )
 

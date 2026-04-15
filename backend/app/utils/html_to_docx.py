@@ -24,7 +24,9 @@ def _html2docx_document(html: str) -> Any:
             parser = HTML2Docx()
             doc = parser.parse_html_string(html)
             return doc
-        except Exception as exc:  # policy: BOUNDARY — HTML-to-DOCX conversion exposes a stable runtime error
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — HTML-to-DOCX conversion exposes a stable runtime error
             raise RuntimeError("html2docx conversion failed") from exc
 
 

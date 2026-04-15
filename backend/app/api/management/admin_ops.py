@@ -11,12 +11,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 from urllib.parse import urlparse, urlunparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.dependencies.tenant import TenantContext, get_tenant_context, require_system_admin
+from app.dependencies.tenant import TenantContext, require_system_admin
 from app.models import (
     ActionType,
     AdminAction,
@@ -33,7 +33,6 @@ from app.models import (
     User,
     UserRole,
 )
-from app.services.audit_helper import write_audit_log
 from app.schemas.admin_ops import (
     AdminActionCreate,
     AdminActionResponse,
@@ -63,6 +62,7 @@ from app.schemas.admin_ops import (
     TenantQuotaUpdate,
     TenantSuspendRequest,
 )
+from app.services.audit_helper import write_audit_log
 
 router = APIRouter()
 
@@ -252,7 +252,9 @@ def create_admin_action(
     requester = db.query(User).filter(User.id == action.requested_by).first()
     return AdminActionResponse(
         id=action.id,
-        action_type=action.action_type.value if hasattr(action.action_type, "value") else str(action.action_type),
+        action_type=action.action_type.value
+        if hasattr(action.action_type, "value")
+        else str(action.action_type),
         status=action.status.value if hasattr(action.status, "value") else str(action.status),
         payload=action.payload,
         reason=action.reason,
@@ -281,12 +283,20 @@ def list_admin_actions(
     result = []
     for a in actions:
         requester = db.query(User).filter(User.id == a.requested_by).first()
-        reviewer = db.query(User).filter(User.id == a.reviewed_by).first() if a.reviewed_by else None
-        target = db.query(Tenant).filter(Tenant.id == a.target_tenant_id).first() if a.target_tenant_id else None
+        reviewer = (
+            db.query(User).filter(User.id == a.reviewed_by).first() if a.reviewed_by else None
+        )
+        target = (
+            db.query(Tenant).filter(Tenant.id == a.target_tenant_id).first()
+            if a.target_tenant_id
+            else None
+        )
         result.append(
             AdminActionResponse(
                 id=a.id,
-                action_type=a.action_type.value if hasattr(a.action_type, "value") else str(a.action_type),
+                action_type=a.action_type.value
+                if hasattr(a.action_type, "value")
+                else str(a.action_type),
                 status=a.status.value if hasattr(a.status, "value") else str(a.status),
                 payload=a.payload,
                 reason=a.reason,
@@ -341,7 +351,9 @@ def review_admin_action(
     reviewer = db.query(User).filter(User.id == action.reviewed_by).first()
     return AdminActionResponse(
         id=action.id,
-        action_type=action.action_type.value if hasattr(action.action_type, "value") else str(action.action_type),
+        action_type=action.action_type.value
+        if hasattr(action.action_type, "value")
+        else str(action.action_type),
         status=action.status.value if hasattr(action.status, "value") else str(action.status),
         payload=action.payload,
         reason=action.reason,
@@ -507,11 +519,9 @@ def get_config_flags(
 ):
     """Return current state of all global config-based feature flags (read-only)."""
     from app.feature_flags import BackendFeatureFlag, get_backend_feature_flags
+
     flags = get_backend_feature_flags()
-    return {
-        member.value: flags.is_enabled(member)
-        for member in BackendFeatureFlag
-    }
+    return {member.value: flags.is_enabled(member) for member in BackendFeatureFlag}
 
 
 @router.put("/admin/tenants/{tenant_id}/features", response_model=list[FeatureFlagResponse])
@@ -552,7 +562,10 @@ def update_tenant_features(
         user_id=tenant_ctx.user_id,
         action=ActionType.UPDATE,
         event="feature_flags_updated",
-        details={"tenant_id": tenant_id, "flags": [{"key": b.feature_key, "enabled": b.enabled} for b in body]},
+        details={
+            "tenant_id": tenant_id,
+            "flags": [{"key": b.feature_key, "enabled": b.enabled} for b in body],
+        },
     )
     db.commit()
     return [
@@ -588,6 +601,7 @@ def get_system_status(
     # Database check with latency
     try:
         from sqlalchemy import text as sa_text
+
         t0 = time.perf_counter()
         db.execute(sa_text("SELECT 1"))
         db_ms = round((time.perf_counter() - t0) * 1000, 1)
@@ -595,16 +609,24 @@ def get_system_status(
         user_count = db.execute(sa_text("SELECT COUNT(*) FROM users")).scalar() or 0
         tenant_count = db.execute(sa_text("SELECT COUNT(*) FROM tenants")).scalar() or 0
         doc_count = db.execute(sa_text("SELECT COUNT(*) FROM documents")).scalar() or 0
-        services.append(ServiceStatus(
-            name="database",
-            status=db_status,
-            latency_ms=db_ms,
-            details=f"{user_count} users, {tenant_count} tenants, {doc_count} documents",
-        ))
-    except Exception as exc:  # policy: DEGRADED — admin diagnostics should surface degraded status, not crash
-        services.append(ServiceStatus(
-            name="database", status="down", details=f"Connection failed: {exc}",
-        ))
+        services.append(
+            ServiceStatus(
+                name="database",
+                status=db_status,
+                latency_ms=db_ms,
+                details=f"{user_count} users, {tenant_count} tenants, {doc_count} documents",
+            )
+        )
+    except (
+        Exception
+    ) as exc:  # policy: DEGRADED — admin diagnostics should surface degraded status, not crash
+        services.append(
+            ServiceStatus(
+                name="database",
+                status="down",
+                details=f"Connection failed: {exc}",
+            )
+        )
 
     # Storage check
     upload_dir = os.environ.get("UPLOAD_DIR", "data/uploads")
@@ -612,26 +634,37 @@ def get_system_status(
         try:
             files = os.listdir(upload_dir)
             total_files = len(files)
-            services.append(ServiceStatus(
-                name="storage", status="healthy",
-                details=f"Upload dir OK — {total_files} files",
-            ))
+            services.append(
+                ServiceStatus(
+                    name="storage",
+                    status="healthy",
+                    details=f"Upload dir OK — {total_files} files",
+                )
+            )
         except OSError as exc:
-            services.append(ServiceStatus(
-                name="storage", status="degraded",
-                details=f"Upload dir exists but unreadable: {exc}",
-            ))
+            services.append(
+                ServiceStatus(
+                    name="storage",
+                    status="degraded",
+                    details=f"Upload dir exists but unreadable: {exc}",
+                )
+            )
     else:
-        services.append(ServiceStatus(
-            name="storage", status="degraded",
-            details=f"Upload directory missing: {upload_dir}",
-        ))
+        services.append(
+            ServiceStatus(
+                name="storage",
+                status="degraded",
+                details=f"Upload directory missing: {upload_dir}",
+            )
+        )
 
     # Collab-server check
     try:
         import json
         import urllib.request
+
         from app.config import settings as _cfg
+
         collab_url = _cfg.COLLAB_SERVER_URL
         last_error: Exception | None = None
         for health_url in _collab_health_urls(collab_url):
@@ -651,34 +684,48 @@ def get_system_status(
                         detail_parts.append(f"{active_docs} docs / {total_connections} conns")
                     if saturation:
                         detail_parts.append(f"saturation={saturation}")
-                    if isinstance(top_document, dict) and top_document.get("documentId") is not None:
+                    if (
+                        isinstance(top_document, dict)
+                        and top_document.get("documentId") is not None
+                    ):
                         detail_parts.append(
                             f"hot={top_document['documentId']}:{top_document.get('totalConnections', 0)}"
                         )
-                    services.append(ServiceStatus(
-                        name="collab-server",
-                        status="healthy" if collab_payload.get("status") == "healthy" else "degraded",
-                        latency_ms=collab_ms,
-                        details=", ".join(detail_parts),
-                    ))
+                    services.append(
+                        ServiceStatus(
+                            name="collab-server",
+                            status="healthy"
+                            if collab_payload.get("status") == "healthy"
+                            else "degraded",
+                            latency_ms=collab_ms,
+                            details=", ".join(detail_parts),
+                        )
+                    )
                     break
-            except Exception as exc:
+            except Exception as exc:  # policy: RETRYABLE — retry collab health probe
                 last_error = exc
         else:
             raise last_error or RuntimeError("Collab server health probe failed")
     except Exception:  # policy: LOSSY — collab is optional; report degraded
-        services.append(ServiceStatus(
-            name="collab-server", status="degraded",
-            details="Collab server unreachable — real-time editing may be unavailable",
-        ))
+        services.append(
+            ServiceStatus(
+                name="collab-server",
+                status="degraded",
+                details="Collab server unreachable — real-time editing may be unavailable",
+            )
+        )
 
     # Backend self (always healthy if we got here)
     from app.config import settings as app_settings
+
     uptime_info = f"v{app_settings.APP_VERSION}, env={app_settings.APP_ENV}"
-    services.append(ServiceStatus(
-        name="backend", status="healthy",
-        details=uptime_info,
-    ))
+    services.append(
+        ServiceStatus(
+            name="backend",
+            status="healthy",
+            details=uptime_info,
+        )
+    )
 
     overall = "healthy"
     if any(s.status == "down" for s in services):
@@ -1044,7 +1091,7 @@ def get_tenant_quota(
     db: Session = Depends(get_db),
 ):
     """Read quota and current usage for a tenant."""
-    tenant = _get_tenant_or_404(db, tenant_id)
+    _get_tenant_or_404(db, tenant_id)
     quota = db.query(TenantQuota).filter(TenantQuota.tenant_id == tenant_id).first()
 
     current_users = db.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 0
@@ -1081,7 +1128,11 @@ def update_tenant_quota(
         )
         db.add(quota)
 
-    old = {"max_users": quota.max_users, "max_documents": quota.max_documents, "max_storage_mb": quota.max_storage_mb}
+    old = {
+        "max_users": quota.max_users,
+        "max_documents": quota.max_documents,
+        "max_storage_mb": quota.max_storage_mb,
+    }
     if body.max_users is not None:
         quota.max_users = body.max_users
     if body.max_documents is not None:
@@ -1098,14 +1149,20 @@ def update_tenant_quota(
         details={
             "tenant_id": tenant_id,
             "before": old,
-            "after": {"max_users": quota.max_users, "max_documents": quota.max_documents, "max_storage_mb": quota.max_storage_mb},
+            "after": {
+                "max_users": quota.max_users,
+                "max_documents": quota.max_documents,
+                "max_storage_mb": quota.max_storage_mb,
+            },
         },
     )
     db.commit()
     db.refresh(quota)
 
     current_users = db.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 0
-    current_docs = db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
+    current_docs = (
+        db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
+    )
 
     return TenantQuotaResponse(
         tenant_id=tenant_id,
@@ -1144,11 +1201,20 @@ def export_tenant_data(
             "contact_email": tenant.contact_email,
         },
         "users": [
-            {"username": u.username, "email": u.email, "role": u.role.value if hasattr(u.role, "value") else str(u.role), "is_active": u.is_active}
+            {
+                "username": u.username,
+                "email": u.email,
+                "role": u.role.value if hasattr(u.role, "value") else str(u.role),
+                "is_active": u.is_active,
+            }
             for u in users
         ],
         "documents": [
-            {"title": d.title, "status": d.status.value if hasattr(d.status, "value") else str(d.status), "category": d.category}
+            {
+                "title": d.title,
+                "status": d.status.value if hasattr(d.status, "value") else str(d.status),
+                "category": d.category,
+            }
             for d in documents
         ],
     }
@@ -1217,7 +1283,11 @@ def create_maintenance_window(
         user_id=tenant_ctx.user_id,
         action=ActionType.CREATE,
         event="maintenance_window_created",
-        details={"title": body.title, "start": body.scheduled_start.isoformat(), "end": body.scheduled_end.isoformat()},
+        details={
+            "title": body.title,
+            "start": body.scheduled_start.isoformat(),
+            "end": body.scheduled_end.isoformat(),
+        },
     )
     db.commit()
     db.refresh(mw)

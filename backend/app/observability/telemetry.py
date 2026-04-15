@@ -127,4 +127,3 @@ class UseCaseTimer:
 
     def duration_ms(self) -> float:
         return (perf_counter() - self.start_perf_counter) * 1000
-

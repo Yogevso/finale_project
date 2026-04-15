@@ -27,7 +27,9 @@ def _reset_manager_state() -> None:
     chat_manager._user_connections.clear()
 
 
-def test_chat_websocket_registers_authenticated_user(client, db, auth_headers, test_user, test_manager):
+def test_chat_websocket_registers_authenticated_user(
+    client, db, auth_headers, test_user, test_manager
+):
     _reset_manager_state()
     chat = ChatService(db).create_direct_chat(test_user, test_manager.id)
     token = _bearer_token(auth_headers)
@@ -41,7 +43,9 @@ def test_chat_websocket_registers_authenticated_user(client, db, auth_headers, t
     assert _wait_for(lambda: not chat_manager.is_user_online(test_user.id))
 
 
-def test_support_websocket_registers_authenticated_agent(client, db, manager_headers, test_user, test_manager):
+def test_support_websocket_registers_authenticated_agent(
+    client, db, manager_headers, test_user, test_manager
+):
     _reset_manager_state()
     ticket = SupportTicket(
         customer_id=test_user.id,
@@ -58,7 +62,9 @@ def test_support_websocket_registers_authenticated_agent(client, db, manager_hea
     with client.websocket_connect("/ws/support") as websocket:
         websocket.send_text(json.dumps({"event": "authenticate", "data": {"token": token}}))
 
-        assert _wait_for(lambda: test_manager.id in chat_manager.get_online_users_in_ticket(ticket.id))
+        assert _wait_for(
+            lambda: test_manager.id in chat_manager.get_online_users_in_ticket(ticket.id)
+        )
         assert chat_manager.is_user_online(test_manager.id) is True
 
     assert _wait_for(lambda: not chat_manager.is_user_online(test_manager.id))

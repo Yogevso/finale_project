@@ -63,9 +63,7 @@ def _seed_benchmark_dataset(
 
     for index in range(BENCHMARK_DOCUMENT_COUNT):
         document_id = max_existing_id + index + 1
-        visibility = (
-            DocumentVisibility.COMPANY if index % 5 == 0 else DocumentVisibility.INTERNAL
-        )
+        visibility = DocumentVisibility.COMPANY if index % 5 == 0 else DocumentVisibility.INTERNAL
         if visibility == DocumentVisibility.COMPANY:
             company_document_ids.append(document_id)
 

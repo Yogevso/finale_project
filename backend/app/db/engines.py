@@ -7,7 +7,7 @@ they fall back to the main DATABASE_URL for backward compatibility.
 
 import logging
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.pool import Pool
 
 from app.config import settings
@@ -54,6 +54,7 @@ def _build_engine(url: str, *, echo: bool, pool_size: int = 10, max_overflow: in
 # Pool-level event listeners (applied globally to all pools)
 # ---------------------------------------------------------------------------
 
+
 @event.listens_for(Pool, "checkout")
 def _ping_connection_on_checkout(dbapi_conn, connection_record, connection_proxy):
     """Validate connection is alive before handing to application."""
@@ -90,11 +91,15 @@ _chat_url = _resolve_url(settings.CHAT_DATABASE_URL, _core_url)
 core_engine = _build_engine(_core_url, echo=settings.SQL_ECHO, pool_size=10, max_overflow=20)
 analytics_engine = _build_engine(
     _analytics_url,
-    echo=settings.ANALYTICS_SQL_ECHO if settings.ANALYTICS_SQL_ECHO is not None else settings.SQL_ECHO,
-    pool_size=5, max_overflow=10,
+    echo=settings.ANALYTICS_SQL_ECHO
+    if settings.ANALYTICS_SQL_ECHO is not None
+    else settings.SQL_ECHO,
+    pool_size=5,
+    max_overflow=10,
 )
 chat_engine = _build_engine(
     _chat_url,
     echo=settings.CHAT_SQL_ECHO if settings.CHAT_SQL_ECHO is not None else settings.SQL_ECHO,
-    pool_size=8, max_overflow=15,
+    pool_size=8,
+    max_overflow=15,
 )

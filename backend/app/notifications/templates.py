@@ -164,9 +164,7 @@ class InvitationTemplate:
         safe_inviter_name = escape_html(inviter_name)
         safe_accept_url = escape_html(self.accept_url)
         message_html = (
-            f"<p>&ldquo;{escape_html(invitation_message)}&rdquo;</p>"
-            if invitation_message
-            else ""
+            f"<p>&ldquo;{escape_html(invitation_message)}&rdquo;</p>" if invitation_message else ""
         )
         body_html = (
             f"<p>{safe_inviter_name} has invited you to join Documentation Platform.</p>"
@@ -174,9 +172,7 @@ class InvitationTemplate:
             f"<p><a href='{safe_accept_url}'>Accept Invitation</a></p>"
             f"<p>This invitation expires in {self.expires_days} days.</p>"
         )
-        message_text = (
-            f"\"{invitation_message}\"\n\n" if invitation_message else ""
-        )
+        message_text = f'"{invitation_message}"\n\n' if invitation_message else ""
         text = (
             f"{inviter_name} has invited you to join Documentation Platform.\n\n"
             f"{message_text}"

@@ -18,7 +18,9 @@ class GetSiteSettingsTool(BaseTool):
     parameters = {"type": "object", "properties": {}, "required": []}
     required_permission = Permission.SYSTEM_SETTINGS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         rows = db.query(SystemSetting).all()
         if not rows:
             return {"success": True, "result": "No site settings configured."}
@@ -41,7 +43,9 @@ class UpdateSiteSettingTool(BaseTool):
     }
     required_permission = Permission.SYSTEM_SETTINGS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         row = db.query(SystemSetting).filter(SystemSetting.key == params["key"]).first()
         if row:
             row.value = params["value"]
@@ -65,7 +69,11 @@ class CreateAnnouncementTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "message": {"type": "string", "description": "Announcement message text", "maxLength": 2000},
+            "message": {
+                "type": "string",
+                "description": "Announcement message text",
+                "maxLength": 2000,
+            },
             "type": {
                 "type": "string",
                 "description": "Announcement type (default: info)",
@@ -76,7 +84,9 @@ class CreateAnnouncementTool(BaseTool):
     }
     required_permission = Permission.SYSTEM_SETTINGS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         ann = Announcement(
             message=params["message"],
             type=params.get("type", "info"),
@@ -101,7 +111,9 @@ class ListAnnouncementsTool(BaseTool):
     parameters = {"type": "object", "properties": {}, "required": []}
     required_permission = Permission.SYSTEM_SETTINGS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         anns = db.query(Announcement).filter(Announcement.active.is_(True)).all()
         if not anns:
             return {"success": True, "result": "No active announcements."}
@@ -117,7 +129,9 @@ class ListTopicsTool(BaseTool):
     parameters = {"type": "object", "properties": {}, "required": []}
     required_permission = Permission.VIEW_INTERNAL_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         topics = db.query(Topic).order_by(Topic.name).all()
         if not topics:
             return {"success": True, "result": "No topics configured."}
@@ -134,17 +148,31 @@ class CreateTopicTool(BaseTool):
         "type": "object",
         "properties": {
             "name": {"type": "string", "description": "Topic name", "maxLength": 255},
-            "slug": {"type": "string", "description": "URL-friendly slug (optional, auto-generated)", "maxLength": 100},
-            "description": {"type": "string", "description": "Topic description (optional)", "maxLength": 1000},
+            "slug": {
+                "type": "string",
+                "description": "URL-friendly slug (optional, auto-generated)",
+                "maxLength": 100,
+            },
+            "description": {
+                "type": "string",
+                "description": "Topic description (optional)",
+                "maxLength": 1000,
+            },
         },
         "required": ["name"],
     }
     required_permission = Permission.SYSTEM_SETTINGS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         slug = params.get("slug") or params["name"].lower().replace(" ", "-")
         if db.query(Topic).filter(Topic.slug == slug).first():
-            return {"success": False, "result": "", "error": f"Topic with slug '{slug}' already exists."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Topic with slug '{slug}' already exists.",
+            }
 
         topic = Topic(name=params["name"], slug=slug, description=params.get("description"))
         db.add(topic)

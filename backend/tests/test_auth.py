@@ -914,7 +914,9 @@ def test_login_anomaly_detection_records_security_event(client, test_user, db, m
     assert test_user.last_login_user_agent == "BrowserA/1.0"
     assert (
         db.query(SecurityEvent)
-        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .filter(
+            SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login"
+        )
         .count()
         == 0
     )
@@ -927,7 +929,9 @@ def test_login_anomaly_detection_records_security_event(client, test_user, db, m
     assert second_login.status_code == 200
     assert (
         db.query(SecurityEvent)
-        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .filter(
+            SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login"
+        )
         .count()
         == 0
     )
@@ -941,7 +945,9 @@ def test_login_anomaly_detection_records_security_event(client, test_user, db, m
 
     events = (
         db.query(SecurityEvent)
-        .filter(SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login")
+        .filter(
+            SecurityEvent.user_id == test_user.id, SecurityEvent.event_type == "new_device_login"
+        )
         .all()
     )
     assert len(events) == 1

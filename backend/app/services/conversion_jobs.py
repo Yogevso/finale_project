@@ -47,7 +47,9 @@ CONVERSION_WORKER_NAME = "conversion"
 
 def _default_retry_policy() -> RetryPolicy:
     base_delay = max(0, int(os.getenv("CONVERSION_JOB_RETRY_DELAY_SECONDS", "30")))
-    max_delay = max(base_delay * 10, int(os.getenv("CONVERSION_JOB_MAX_RETRY_DELAY_SECONDS", "300")))
+    max_delay = max(
+        base_delay * 10, int(os.getenv("CONVERSION_JOB_MAX_RETRY_DELAY_SECONDS", "300"))
+    )
     multiplier = max(
         1.0,
         float(os.getenv("CONVERSION_JOB_RETRY_BACKOFF_MULTIPLIER", "2.0")),
@@ -110,7 +112,9 @@ def _load_reader_artifact_status(
     return artifact.status, artifact.error
 
 
-def _recover_stale_processing_jobs(db: Session, now: datetime, job_type: str = JOB_TYPE_READER_HTML) -> int:
+def _recover_stale_processing_jobs(
+    db: Session, now: datetime, job_type: str = JOB_TYPE_READER_HTML
+) -> int:
     stale_before = now - timedelta(seconds=PROCESSING_TIMEOUT_SECONDS)
     stale_jobs = (
         db.query(AttachmentConversionJob)
@@ -144,7 +148,9 @@ def _recover_stale_processing_jobs(db: Session, now: datetime, job_type: str = J
     return recovered_count
 
 
-def _claim_job_by_id(db: Session, job_id: int, now: datetime, job_type: str = JOB_TYPE_READER_HTML) -> bool:
+def _claim_job_by_id(
+    db: Session, job_id: int, now: datetime, job_type: str = JOB_TYPE_READER_HTML
+) -> bool:
     updated = (
         db.query(AttachmentConversionJob)
         .filter(
@@ -233,7 +239,11 @@ def process_conversion_job(
                 db.rollback()
             if not claimed_ok:
                 return AsyncJobDisposition.SKIPPED
-            job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
+            job = (
+                db.query(AttachmentConversionJob)
+                .filter(AttachmentConversionJob.id == job_id)
+                .first()
+            )
             if not job:
                 return AsyncJobDisposition.SKIPPED
 
@@ -533,7 +543,9 @@ def _execute_pdf_export(attachment_id: int, db: Session) -> None:
         db.add(existing)
 
     import io
+
     from app.services.attachment_service.common import get_storage_backend
+
     storage = get_storage_backend()
     storage.upload(io.BytesIO(pdf_bytes), f"pdf_export/{attachment_id}.pdf", "application/pdf")
 
@@ -564,7 +576,11 @@ def process_pdf_export_job(
                 db.rollback()
             if not claimed_ok:
                 return AsyncJobDisposition.SKIPPED
-            job = db.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
+            job = (
+                db.query(AttachmentConversionJob)
+                .filter(AttachmentConversionJob.id == job_id)
+                .first()
+            )
             if not job:
                 return AsyncJobDisposition.SKIPPED
 
@@ -681,10 +697,13 @@ def process_all_pending_batch(
 ) -> AsyncJobBatchReport:
     """Process both conversion and PDF export jobs in one batch cycle."""
     conv_report = process_pending_jobs_batch(
-        batch_size=batch_size, force=force, retry_policy=retry_policy,
+        batch_size=batch_size,
+        force=force,
+        retry_policy=retry_policy,
     )
     pdf_report = process_pending_pdf_export_batch(
-        batch_size=batch_size, retry_policy=retry_policy,
+        batch_size=batch_size,
+        retry_policy=retry_policy,
     )
     combined = AsyncJobBatchReport(worker_name=CONVERSION_WORKER_NAME)
     combined.attempted = conv_report.attempted + pdf_report.attempted

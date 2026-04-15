@@ -96,7 +96,9 @@ class SessionManager(CollaborationManagerBase):
             details=json.dumps(
                 {
                     "username": current_user.username,
-                    "duration_seconds": int((session.ended_at - session.started_at).total_seconds()),
+                    "duration_seconds": int(
+                        (session.ended_at - session.started_at).total_seconds()
+                    ),
                     "edits_count": edits_count,
                 }
             ),
@@ -209,9 +211,7 @@ class SessionManager(CollaborationManagerBase):
         total = query.count()
         activities = query.offset(offset).limit(limit).all()
         user_ids = list({activity.user_id for activity in activities})
-        user_map = {
-            user.id: user.username for user in self.user_repository.list_by_ids(user_ids)
-        }
+        user_map = {user.id: user.username for user in self.user_repository.list_by_ids(user_ids)}
 
         payload_activities: list[dict[str, object]] = []
         for activity in activities:

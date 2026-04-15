@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
@@ -27,13 +26,18 @@ class GetMySessionsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "include_revoked": {"type": "boolean", "description": "Include revoked sessions (default false)"},
+            "include_revoked": {
+                "type": "boolean",
+                "description": "Include revoked sessions (default false)",
+            },
         },
         "required": [],
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         q = db.query(UserSession).filter(UserSession.user_id == user.id)
         if not params.get("include_revoked", False):
             q = q.filter(UserSession.revoked_at.is_(None))
@@ -64,12 +68,19 @@ class RevokeSessionTool(BaseTool):
     required_permission = Permission.VIEW_PUBLIC_DOCS
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from datetime import datetime as dt
-        s = db.query(UserSession).filter(
-            UserSession.id == params["session_id"],
-            UserSession.user_id == user.id,
-        ).first()
+
+        s = (
+            db.query(UserSession)
+            .filter(
+                UserSession.id == params["session_id"],
+                UserSession.user_id == user.id,
+            )
+            .first()
+        )
         if not s:
             return {"success": False, "result": "Session not found or does not belong to you."}
         if s.revoked_at:
@@ -82,12 +93,17 @@ class RevokeSessionTool(BaseTool):
             details=f"Revoked session #{s.id} via AI assistant",
         )
         db.commit()
-        return {"success": True, "result": f"Session #{s.id} revoked. That device will need to log in again."}
+        return {
+            "success": True,
+            "result": f"Session #{s.id} revoked. That device will need to log in again.",
+        }
 
 
 class GetMySecurityEventsTool(BaseTool):
     name = "get_my_security_events"
-    description = "View recent security events for your account (login attempts, password changes, etc.)."
+    description = (
+        "View recent security events for your account (login attempts, password changes, etc.)."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -97,7 +113,9 @@ class GetMySecurityEventsTool(BaseTool):
     }
     required_permission = Permission.VIEW_PUBLIC_DOCS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         events = (
             db.query(SecurityEvent)
@@ -111,8 +129,7 @@ class GetMySecurityEventsTool(BaseTool):
         lines = [f"{len(events)} recent security event(s):"]
         for e in events:
             lines.append(
-                f"- [{e.created_at:%Y-%m-%d %H:%M}] {e.event_type} — "
-                f"IP: {e.ip_address or '?'}"
+                f"- [{e.created_at:%Y-%m-%d %H:%M}] {e.event_type} — " f"IP: {e.ip_address or '?'}"
             )
         return {"success": True, "result": "\n".join(lines)}
 
@@ -124,7 +141,11 @@ class GetSecurityEventsAdminTool(BaseTool):
         "type": "object",
         "properties": {
             "user_id": {"type": "integer", "description": "Filter by user ID (optional)"},
-            "event_type": {"type": "string", "description": "Filter by event type (optional)", "maxLength": 100},
+            "event_type": {
+                "type": "string",
+                "description": "Filter by event type (optional)",
+                "maxLength": 100,
+            },
             "limit": {"type": "integer", "description": "Max results (default 25)"},
         },
         "required": [],
@@ -132,7 +153,9 @@ class GetSecurityEventsAdminTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 25), 100)
         q = db.query(SecurityEvent)
         if params.get("user_id"):
@@ -159,14 +182,20 @@ class GetInvitationStatusTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "status": {"type": "string", "description": "Filter: pending, accepted, expired, cancelled (optional)", "maxLength": 50},
+            "status": {
+                "type": "string",
+                "description": "Filter: pending, accepted, expired, cancelled (optional)",
+                "maxLength": 50,
+            },
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],
     }
     required_permission = Permission.MANAGE_USERS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         q = db.query(Invitation)
         if tenant_id:
@@ -176,7 +205,10 @@ class GetInvitationStatusTool(BaseTool):
                 st = InvitationStatus(params["status"])
                 q = q.filter(Invitation.status == st)
             except ValueError:
-                return {"success": False, "result": f"Invalid status. Use: pending, accepted, expired, cancelled."}
+                return {
+                    "success": False,
+                    "result": "Invalid status. Use: pending, accepted, expired, cancelled.",
+                }
         invitations = q.order_by(Invitation.created_at.desc()).limit(limit).all()
         if not invitations:
             return {"success": True, "result": "No invitations found."}
@@ -205,7 +237,9 @@ class CancelInvitationTool(BaseTool):
     required_permission = Permission.MANAGE_USERS
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         inv = db.query(Invitation).filter(Invitation.id == params["invitation_id"]).first()
         if not inv:
             return {"success": False, "result": "Invitation not found."}
@@ -213,7 +247,10 @@ class CancelInvitationTool(BaseTool):
         if tenant_id is not None and inv.tenant_id != tenant_id:
             return {"success": False, "result": "Invitation not found."}
         if inv.status != InvitationStatus.PENDING:
-            return {"success": False, "result": f"Cannot cancel — invitation is already '{inv.status.value}'."}
+            return {
+                "success": False,
+                "result": f"Cannot cancel — invitation is already '{inv.status.value}'.",
+            }
         inv.status = InvitationStatus.CANCELLED
         # AE-005: Audit trail for AI-initiated invitation cancellation
         write_audit_log(

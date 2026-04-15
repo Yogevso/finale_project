@@ -4,19 +4,15 @@ These tests verify the security fixes introduced in Wave AD remain intact.
 """
 
 import pytest
+
 from app.models import (
     ChangelogEntry,
     Comment,
-    Document,
     DocumentStatus,
     DocumentVisibility,
-    Tenant,
-    User,
     UserRole,
-    UserSession,
 )
 from tests.factories import create_document, create_tenant, create_user
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -105,7 +101,7 @@ class TestAD020RevokedSession:
 
     def test_revoked_session_rejected(self, client, db, default_tenant):
         """After logout (session revocation), the old token must fail."""
-        user = create_user(
+        create_user(
             db,
             username="revoke_user",
             email="revoke@test.com",
@@ -148,7 +144,7 @@ class TestAD021PrivateComments:
             tenant_id=tenant.id,
             is_active=True,
         )
-        customer = create_user(
+        create_user(
             db,
             username="comment_cust",
             email="ccust@test.com",
@@ -198,7 +194,7 @@ class TestAD021PrivateComments:
             tenant_id=tenant.id,
             is_active=True,
         )
-        customer = create_user(
+        create_user(
             db,
             username="c2cust",
             email="c2cust@test.com",
@@ -235,7 +231,7 @@ class TestAD022CompanyScoping:
     def test_admin_sees_only_own_tenant(self, client, db):
         t1 = create_tenant(db, name="TenantA", slug="tenant-a")
         t2 = create_tenant(db, name="TenantB", slug="tenant-b")
-        admin = create_user(
+        create_user(
             db,
             username="scoped_admin",
             email="scoped@a.com",
@@ -255,7 +251,7 @@ class TestAD022CompanyScoping:
     def test_system_admin_sees_all_tenants(self, client, db):
         t1 = create_tenant(db, name="TenantC", slug="tenant-c")
         t2 = create_tenant(db, name="TenantD", slug="tenant-d")
-        sa = create_user(
+        create_user(
             db,
             username="sa_scope",
             email="sa@scope.com",
@@ -321,7 +317,9 @@ class TestAD023ChangelogDefault:
         db.add(draft)
         db.commit()
 
-        r = client.get("/api/v1/changelog", params={"published_only": "false"}, headers=admin_headers)
+        r = client.get(
+            "/api/v1/changelog", params={"published_only": "false"}, headers=admin_headers
+        )
         assert r.status_code == 200
         titles = [e["title"] for e in r.json()["items"]]
         assert "Draft Entry" in titles
@@ -373,7 +371,7 @@ class TestAD025ConcurrentSessions:
 
         max_sessions = settings.MAX_CONCURRENT_SESSIONS  # default 5
 
-        user = create_user(
+        create_user(
             db,
             username="session_user",
             email="session@test.com",
@@ -394,9 +392,7 @@ class TestAD025ConcurrentSessions:
         assert r.status_code == 401, "Oldest session should have been revoked"
 
         # The latest token should still work
-        r = client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens[-1]}"}
-        )
+        r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {tokens[-1]}"})
         assert r.status_code == 200, "Newest session should still be valid"
 
 
@@ -421,13 +417,14 @@ class TestADLoginCookie:
         )
         assert r.status_code == 200
         # TestClient exposes cookies set on the response
-        cookies = r.cookies
         # The refresh_token cookie is path-scoped to /api/v1/auth/refresh
         # so it may or may not show in r.cookies depending on client path.
         # At minimum, the Set-Cookie header must be present.
-        set_cookie_headers = r.headers.get_list("set-cookie") if hasattr(r.headers, "get_list") else [
-            v for k, v in r.headers.items() if k.lower() == "set-cookie"
-        ]
+        set_cookie_headers = (
+            r.headers.get_list("set-cookie")
+            if hasattr(r.headers, "get_list")
+            else [v for k, v in r.headers.items() if k.lower() == "set-cookie"]
+        )
         cookie_str = "; ".join(set_cookie_headers)
         assert "refresh_token" in cookie_str, "Login response must set refresh_token cookie"
         assert "httponly" in cookie_str.lower(), "Refresh cookie must be httpOnly"

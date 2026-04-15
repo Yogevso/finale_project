@@ -65,9 +65,9 @@ def _schema_for_path(
 
         current = _resolve_schema(properties[segment], components)
         if is_array_segment:
-            assert current.get("type") == "array", (
-                f"Contract path '{field_path}' expects array segment '{segment}'"
-            )
+            assert (
+                current.get("type") == "array"
+            ), f"Contract path '{field_path}' expects array segment '{segment}'"
             assert "items" in current, f"Contract path '{field_path}' missing items schema"
             current = current["items"]
 
@@ -145,9 +145,9 @@ def test_audience_contract_endpoints_match_backend_openapi(endpoint_contract: di
 
     response_schema = response.get("content", {}).get("application/json", {}).get("schema")
     assert isinstance(response_schema, dict), f"Missing JSON schema for {method} {path}"
-    assert response_schema.get("$ref") == f"#/components/schemas/{expected_schema_name}", (
-        f"Unexpected response schema for {method} {path}"
-    )
+    assert (
+        response_schema.get("$ref") == f"#/components/schemas/{expected_schema_name}"
+    ), f"Unexpected response schema for {method} {path}"
 
     resolved_response_schema = _resolve_schema(response_schema, components)
     for required_path in required_paths:

@@ -15,7 +15,11 @@ class DocumentWorkflow:
     def model() -> WorkflowModel[DocumentStatus]:
         statuses = tuple(DocumentStatus)
         transitions = {
-            status: tuple(candidate for candidate in statuses if candidate in document_stage_for(status).allowed_targets)
+            status: tuple(
+                candidate
+                for candidate in statuses
+                if candidate in document_stage_for(status).allowed_targets
+            )
             for status in statuses
         }
         return WorkflowModel(
@@ -32,8 +36,7 @@ class DocumentWorkflow:
         if self.can_transition(current, target):
             return target
         raise InvalidStateError(
-            "Invalid document status transition: "
-            f"{current.value} -> {target.value}"
+            "Invalid document status transition: " f"{current.value} -> {target.value}"
         )
 
     def normalize_for_new_version_candidate(self, current: DocumentStatus) -> DocumentStatus:

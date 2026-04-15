@@ -60,4 +60,3 @@ def test_companies_bulk_assignment_fuzz_inputs_never_return_500(
     )
 
     assert response.status_code in {200, 400, 403, 404, 409, 422, 428}
-

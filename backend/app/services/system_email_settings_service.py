@@ -75,9 +75,7 @@ class SystemEmailSettingsService:
     @classmethod
     def load_runtime_override(cls, db: Session) -> ResolvedEmailSettings:
         stored_settings, _metadata = cls.get_effective_settings(db)
-        cls._runtime_override = (
-            stored_settings if stored_settings.source == "database" else None
-        )
+        cls._runtime_override = stored_settings if stored_settings.source == "database" else None
         return cls.active_runtime_settings()
 
     @classmethod
@@ -241,7 +239,7 @@ class SystemEmailSettingsService:
         encryption_key = cls._derive_subkey(master_key, b"enc")
         mac_key = cls._derive_subkey(master_key, b"mac")
         stream = cls._keystream(encryption_key, nonce, len(plaintext))
-        ciphertext = bytes(left ^ right for left, right in zip(plaintext, stream))
+        ciphertext = bytes(left ^ right for left, right in zip(plaintext, stream, strict=False))
         tag = hmac.new(mac_key, nonce + ciphertext, hashlib.sha256).digest()
         token = base64.urlsafe_b64encode(nonce + tag + ciphertext).decode("utf-8")
         return f"{_ENCRYPTED_PREFIX}{token}"
@@ -256,7 +254,7 @@ class SystemEmailSettingsService:
         if not raw_value.startswith(_ENCRYPTED_PREFIX):
             return raw_value
 
-        encoded_token = raw_value[len(_ENCRYPTED_PREFIX):].encode("utf-8")
+        encoded_token = raw_value[len(_ENCRYPTED_PREFIX) :].encode("utf-8")
         try:
             token = base64.urlsafe_b64decode(encoded_token)
         except Exception as exc:  # policy: BOUNDARY — malformed admin setting should fail closed
@@ -276,7 +274,7 @@ class SystemEmailSettingsService:
                 continue
             encryption_key = cls._derive_subkey(master_key, b"enc")
             stream = cls._keystream(encryption_key, nonce, len(ciphertext))
-            plaintext = bytes(left ^ right for left, right in zip(ciphertext, stream))
+            plaintext = bytes(left ^ right for left, right in zip(ciphertext, stream, strict=False))
             try:
                 return plaintext.decode("utf-8")
             except UnicodeDecodeError as exc:

@@ -7,8 +7,6 @@ endpoint has the correct dependency attached.
 
 from __future__ import annotations
 
-import pytest
-from fastapi import Depends
 from fastapi.routing import APIRoute
 
 from app.app_factory import create_app
@@ -184,15 +182,13 @@ class TestAllProtectedRoutesHaveAuth:
 
         # Allow public/*, viewer/*, health routes to be unauthenticated (by design)
         unprotected = [
-            r for r in unprotected
-            if "/public/" not in r
-            and "/health" not in r
-            and "/viewer/" not in r
+            r
+            for r in unprotected
+            if "/public/" not in r and "/health" not in r and "/viewer/" not in r
         ]
 
-        assert unprotected == [], (
-            f"Routes without auth protection:\n" +
-            "\n".join(f"  - {r}" for r in unprotected)
+        assert unprotected == [], "Routes without auth protection:\n" + "\n".join(
+            f"  - {r}" for r in unprotected
         )
 
 
@@ -209,9 +205,8 @@ class TestManagementRoutesRequireElevatedAuth:
                     methods = ",".join(route.methods or [])
                     missing.append(f"{methods} {path}")
 
-        assert missing == [], (
-            f"Admin routes without auth:\n" +
-            "\n".join(f"  - {r}" for r in missing)
+        assert missing == [], "Admin routes without auth:\n" + "\n".join(
+            f"  - {r}" for r in missing
         )
 
 
@@ -228,9 +223,8 @@ class TestPortalRoutesRequireCustomerAuth:
                     methods = ",".join(route.methods or [])
                     missing.append(f"{methods} {path}")
 
-        assert missing == [], (
-            f"Portal routes without auth:\n" +
-            "\n".join(f"  - {r}" for r in missing)
+        assert missing == [], "Portal routes without auth:\n" + "\n".join(
+            f"  - {r}" for r in missing
         )
 
 
@@ -247,15 +241,15 @@ class TestPublicRoutesAreOpen:
                 over_protected.append(f"{methods} {path}")
 
         # All public routes should be open
-        assert over_protected == [], (
-            f"Public routes that unexpectedly require auth:\n" +
-            "\n".join(f"  - {r}" for r in over_protected)
+        assert over_protected == [], "Public routes that unexpectedly require auth:\n" + "\n".join(
+            f"  - {r}" for r in over_protected
         )
 
 
 # ---------------------------------------------------------------------------
 # H-23: Role-specific auth parity tests
 # ---------------------------------------------------------------------------
+
 
 class TestVersionRoutesRequireEditor:
     """Version endpoints must require editor or higher (H-17)."""
@@ -266,14 +260,18 @@ class TestVersionRoutesRequireEditor:
         allowed = {"editor", "manager", "admin", "system_admin", "permission"}
         for route in routes:
             # Viewer/public version routes are intentionally unauthenticated
-            if "/versions" in route.path and route.path not in PUBLIC_ALLOWLIST and "/viewer/" not in route.path and "/public/" not in route.path:
+            if (
+                "/versions" in route.path
+                and route.path not in PUBLIC_ALLOWLIST
+                and "/viewer/" not in route.path
+                and "/public/" not in route.path
+            ):
                 level = _get_route_auth_level(route)
                 if level not in allowed:
                     methods = ",".join(route.methods or [])
                     bad.append(f"{methods} {route.path} → {level}")
-        assert bad == [], (
-            "Version routes should require editor+:\n"
-            + "\n".join(f"  - {r}" for r in bad)
+        assert bad == [], "Version routes should require editor+:\n" + "\n".join(
+            f"  - {r}" for r in bad
         )
 
 
@@ -287,18 +285,19 @@ class TestFeedbackRoutesRequireManager:
         for route in routes:
             # Engagement feedback (submit) and portal feedback are different
             # from management feedback — they allow any authenticated user.
-            if ("/feedback" in route.path
+            if (
+                "/feedback" in route.path
                 and "/portal/" not in route.path
                 and "/engagement/" not in route.path
                 and "/viewer/" not in route.path
-                and route.path not in PUBLIC_ALLOWLIST):
+                and route.path not in PUBLIC_ALLOWLIST
+            ):
                 level = _get_route_auth_level(route)
                 if level not in allowed:
                     methods = ",".join(route.methods or [])
                     bad.append(f"{methods} {route.path} → {level}")
-        assert bad == [], (
-            "Feedback routes should require manager+:\n"
-            + "\n".join(f"  - {r}" for r in bad)
+        assert bad == [], "Feedback routes should require manager+:\n" + "\n".join(
+            f"  - {r}" for r in bad
         )
 
 
@@ -311,9 +310,7 @@ class TestSearchAnalyticsRequiresAdmin:
         for route in routes:
             if route.path == "/api/v1/search/analytics":
                 level = _get_route_auth_level(route)
-                assert level in allowed, (
-                    f"Search analytics requires admin-level auth, got: {level}"
-                )
+                assert level in allowed, f"Search analytics requires admin-level auth, got: {level}"
 
 
 class TestCompanyRoutesRequireAdmin:
@@ -329,7 +326,6 @@ class TestCompanyRoutesRequireAdmin:
                 if level not in allowed:
                     methods = ",".join(route.methods or [])
                     bad.append(f"{methods} {route.path} → {level}")
-        assert bad == [], (
-            "Company routes should require admin+:\n"
-            + "\n".join(f"  - {r}" for r in bad)
+        assert bad == [], "Company routes should require admin+:\n" + "\n".join(
+            f"  - {r}" for r in bad
         )

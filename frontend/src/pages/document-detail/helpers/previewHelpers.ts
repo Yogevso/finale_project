@@ -1,6 +1,9 @@
 import { getDomParser } from '@/env/dom'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
+import type { SectionEditMode } from '@/lib/draftRecovery'
 import type { AttachmentOutlineItem } from '@/types'
+
+export type { SectionEditMode }
 
 export interface TocSection {
   id: string

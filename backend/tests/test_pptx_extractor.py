@@ -87,7 +87,7 @@ def _write_pptx(
             "_rels/.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 '<Relationship Id="rId1" '
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
@@ -102,7 +102,7 @@ def _write_pptx(
             "docProps/core.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<cp:coreProperties '
+                "<cp:coreProperties "
                 'xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/'
                 'core-properties" '
                 'xmlns:dc="http://purl.org/dc/elements/1.1/" '
@@ -121,7 +121,7 @@ def _write_pptx(
             "ppt/presentation.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:presentation '
+                "<p:presentation "
                 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
                 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
                 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
@@ -133,7 +133,7 @@ def _write_pptx(
             "ppt/_rels/presentation.xml.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 f"{presentation_relationships}"
                 "</Relationships>"
@@ -181,7 +181,7 @@ def _relationships_xml(relationships: list[tuple[str, str, str]]) -> str:
     )
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<Relationships '
+        "<Relationships "
         'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
         f"{items}"
         "</Relationships>"
@@ -208,7 +208,7 @@ def _write_ratio_bomb_pptx(path: Path, *, repeat_count: int = 2_000_000) -> None
             "_rels/.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 '<Relationship Id="rId1" '
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
@@ -220,7 +220,7 @@ def _write_ratio_bomb_pptx(path: Path, *, repeat_count: int = 2_000_000) -> None
             "ppt/presentation.xml",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:presentation '
+                "<p:presentation "
                 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
                 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
                 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
@@ -334,10 +334,7 @@ def _make_run(run: str | dict[str, object]) -> str:
     if run.get("italic"):
         attributes.append(' i="1"')
 
-    return (
-        f'<a:r><a:rPr{"".join(attributes)}/>'
-        f'<a:t>{html.escape(str(run["text"]))}</a:t></a:r>'
-    )
+    return f'<a:r><a:rPr{"".join(attributes)}/>' f'<a:t>{html.escape(str(run["text"]))}</a:t></a:r>'
 
 
 def test_extract_pptx_returns_ready_result_for_valid_presentation(tmp_path):
@@ -398,7 +395,10 @@ def test_extract_pptx_renders_titles_text_boxes_bullets_images_and_notes(tmp_pat
         _make_shape(10, [_make_paragraph("Welcome")], placeholder_type="title", name="Title"),
         _make_shape(
             20,
-            [_make_paragraph("Overview paragraph"), _make_paragraph({"text": "Italic detail", "italic": True})],
+            [
+                _make_paragraph("Overview paragraph"),
+                _make_paragraph({"text": "Italic detail", "italic": True}),
+            ],
             placeholder_type="body",
             name="Body",
         ),
@@ -612,7 +612,7 @@ def test_extract_pptx_renders_wave_y_rich_fixture_file():
     assert "Quarterly readiness review" in result.html
     assert (
         '<ul class="slide-bullets"><li>DOCX uploads now extract cleanly</li>'
-        '<li><strong>PowerPoint decks</strong> render as vertical slides'
+        "<li><strong>PowerPoint decks</strong> render as vertical slides"
         "<ul><li>Warnings surface only when needed</li></ul></li></ul>"
     ) in result.html
     assert 'alt="Architecture snapshot" loading="lazy"' in result.html
@@ -624,15 +624,14 @@ def test_extract_pptx_renders_wave_y_rich_fixture_file():
     ) in result.html
     assert (
         '<ol class="slide-bullets"><li>Upload the DOCX fixture</li>'
-        '<li>Verify table rendering</li><li>Confirm image lightbox<ol>'
+        "<li>Verify table rendering</li><li>Confirm image lightbox<ol>"
         "<li>Inspect mobile scroll behavior</li></ol></li></ol>"
     ) in result.html
     assert 'alt="Checklist illustration" loading="lazy"' in result.html
     assert (
-        '<section class="pptx-slide" id="slide-3" data-slide-number="3" '
-        'aria-label="Slide 3">'
+        '<section class="pptx-slide" id="slide-3" data-slide-number="3" ' 'aria-label="Slide 3">'
     ) in result.html
-    assert "<h2 id=\"slide-3-title\">Slide 3</h2>" in result.html
+    assert '<h2 id="slide-3-title">Slide 3</h2>' in result.html
     assert "<em>Fallback titles</em> are still usable." in result.html
     assert result.warnings == []
     assert result.confidence == 1.0

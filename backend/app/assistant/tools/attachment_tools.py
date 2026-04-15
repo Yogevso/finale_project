@@ -33,12 +33,20 @@ class ListAttachmentsTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         attachments = (
             db.query(Attachment)
@@ -50,7 +58,14 @@ class ListAttachmentsTool(BaseTool):
             return {"success": True, "result": f"No attachments found for '{doc.title}'."}
 
         user_ids = {a.uploaded_by for a in attachments if a.uploaded_by}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [f"**Attachments for '{doc.title}'** ({len(attachments)} files)\n"]
         for a in attachments:
@@ -79,12 +94,20 @@ class GetAttachmentInfoTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         attachment = (
             db.query(Attachment)
@@ -101,10 +124,12 @@ class GetAttachmentInfoTool(BaseTool):
                 uploader_name = u.full_name or u.email
 
         size_kb = (attachment.file_size or 0) / 1024
-        date = attachment.uploaded_at.strftime("%Y-%m-%d %H:%M") if attachment.uploaded_at else "N/A"
+        date = (
+            attachment.uploaded_at.strftime("%Y-%m-%d %H:%M") if attachment.uploaded_at else "N/A"
+        )
 
         lines = [
-            f"**Attachment Details**\n",
+            "**Attachment Details**\n",
             f"- **Filename:** {attachment.original_filename}",
             f"- **Type:** {attachment.mime_type}",
             f"- **Size:** {size_kb:.1f} KB",

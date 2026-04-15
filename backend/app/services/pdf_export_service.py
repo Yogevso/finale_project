@@ -59,9 +59,7 @@ def render_html_to_pdf(html: str, *, title: str = "Document") -> bytes:
         story = fitz.Story(html)
         writer = fitz.DocumentWriter(io.BytesIO())
 
-        content_rect = fitz.Rect(
-            _MARGIN, _MARGIN, _PAGE_WIDTH - _MARGIN, _PAGE_HEIGHT - _MARGIN
-        )
+        content_rect = fitz.Rect(_MARGIN, _MARGIN, _PAGE_WIDTH - _MARGIN, _PAGE_HEIGHT - _MARGIN)
 
         more = True
         while more:
@@ -79,7 +77,9 @@ def render_html_to_pdf(html: str, *, title: str = "Document") -> bytes:
 
         # Fallback: re-open and save
         return _fallback_render(html, title)
-    except Exception as exc:  # policy: BOUNDARY — renderer returns a stable empty-result contract on failure
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — renderer returns a stable empty-result contract on failure
         logger.exception("PDF render failed: %s", exc)
         return b""
 

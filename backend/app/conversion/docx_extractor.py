@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
-from defusedxml.ElementTree import ParseError as _XMLParseError
 from xml.etree.ElementTree import Element as _Element  # type-only; no parsing
 
+from defusedxml.ElementTree import ParseError as _XMLParseError
+from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
 from docx import Document
 from PIL import Image
 
@@ -262,8 +262,7 @@ class DocxExtractor:
         paragraphs = self._extract_paragraphs(parsed_document)
         heading_positions = self._extract_headings(paragraphs)
         heading_lookup = {
-            id(paragraphs[index]): heading
-            for index, heading in heading_positions.items()
+            id(paragraphs[index]): heading for index, heading in heading_positions.items()
         }
         headings = list(heading_positions.values())
         table_blocks = self._extract_tables(parsed_document.body_blocks)
@@ -384,7 +383,9 @@ class DocxExtractor:
             if not style_id or not style_label:
                 continue
 
-            style_num_id, style_ilvl = self._extract_style_list_metadata(style, style_id, style_label)
+            style_num_id, style_ilvl = self._extract_style_list_metadata(
+                style, style_id, style_label
+            )
             style_definitions[style_id] = StyleDefinition(
                 name=style_label,
                 list_num_id=style_num_id,
@@ -445,7 +446,9 @@ class DocxExtractor:
                 continue
             if target_mode == "external":
                 continue
-            relationships[relationship_id] = self._resolve_archive_target(WORD_DOCUMENT_PATH, target)
+            relationships[relationship_id] = self._resolve_archive_target(
+                WORD_DOCUMENT_PATH, target
+            )
         return relationships
 
     def _parse_document_body(
@@ -659,7 +662,7 @@ class DocxExtractor:
         self,
         blocks: list[BodyBlock],
         *,
-            heading_lookup: dict[int, HeadingItem],
+        heading_lookup: dict[int, HeadingItem],
     ) -> list[IRNode]:
         children: list[IRNode] = []
         index = 0
@@ -722,10 +725,7 @@ class DocxExtractor:
         )
 
     def _build_list_ir(self, list_blocks: list[ListBlock]) -> list[IRNode]:
-        return [
-            self._build_list_block_ir(block, root=True)
-            for block in list_blocks
-        ]
+        return [self._build_list_block_ir(block, root=True) for block in list_blocks]
 
     def _build_list_block_ir(self, block: ListBlock, *, root: bool = False) -> IRNode:
         styles = {"classes": ["extracted-list"]} if root else {}
@@ -747,12 +747,8 @@ class DocxExtractor:
         header_rows = table.rows[:1] if table.has_header_row and table.rows else []
         body_rows = table.rows[1:] if header_rows else table.rows
         rows = [
-            self._build_table_row_ir(row, section="thead", header=True)
-            for row in header_rows
-        ] + [
-            self._build_table_row_ir(row, section="tbody", header=False)
-            for row in body_rows
-        ]
+            self._build_table_row_ir(row, section="thead", header=True) for row in header_rows
+        ] + [self._build_table_row_ir(row, section="tbody", header=False) for row in body_rows]
         return IRNode(
             type="table",
             styles={
@@ -867,8 +863,7 @@ class DocxExtractor:
                 continue
 
             if block.items and (
-                paragraph.num_id != block.num_id
-                or bool(paragraph.is_ordered_list) != block.ordered
+                paragraph.num_id != block.num_id or bool(paragraph.is_ordered_list) != block.ordered
             ):
                 break
 
@@ -1300,7 +1295,9 @@ class DocxExtractor:
                 image_bytes,
                 max_size=MAX_EMBEDDED_IMAGE_SIZE,
             )
-        except Exception:  # policy: LOSSY — image compression fallback should preserve extraction output
+        except (
+            Exception
+        ):  # policy: LOSSY — image compression fallback should preserve extraction output
             logger.warning("Falling back to original image bytes after compression failure")
             return image_bytes, content_type
 
@@ -1308,7 +1305,9 @@ class DocxExtractor:
         return sum(1 for block in blocks if block.kind == "image" and block.image is not None)
 
     def _count_images_in_table(self, table: TableBlock) -> int:
-        return sum(self._count_images_in_blocks(cell.blocks) for row in table.rows for cell in row.cells)
+        return sum(
+            self._count_images_in_blocks(cell.blocks) for row in table.rows for cell in row.cells
+        )
 
     def _extract_style_list_metadata(
         self,

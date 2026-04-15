@@ -15,7 +15,7 @@ from typing import List, NamedTuple
 
 from sqlalchemy.orm import Session
 
-from app.models import BrokenLinkReport, Document, DocumentStatus, Version
+from app.models import BrokenLinkReport, Document, DocumentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -80,19 +80,13 @@ def scan_broken_links(db: Session, *, batch_size: int = 50) -> int:
     Clears previous reports and rescans. Returns the number of broken links found.
     """
     # Get all published versions with content
-    published_docs = (
-        db.query(Document)
-        .filter(Document.status == DocumentStatus.ACTIVE)
-        .all()
-    )
+    published_docs = db.query(Document).filter(Document.status == DocumentStatus.ACTIVE).all()
 
     # Build a set of all active document IDs for fast lookups
     active_doc_ids: set[int] = {d.id for d in published_docs}
 
     # Also load archived/draft IDs to distinguish "not found" from "not accessible"
-    all_doc_ids: set[int] = set(
-        row[0] for row in db.query(Document.id).all()
-    )
+    all_doc_ids: set[int] = set(row[0] for row in db.query(Document.id).all())
 
     # Clear old reports
     db.query(BrokenLinkReport).delete()
@@ -126,17 +120,22 @@ def scan_broken_links(db: Session, *, batch_size: int = 50) -> int:
             else:
                 continue  # Link is valid
 
-            db.add(BrokenLinkReport(
-                document_id=doc.id,
-                version_id=latest_version.id,
-                broken_url=link.url[:1000],
-                link_text=link.text[:500] if link.text else None,
-                reason=reason,
-                scanned_at=now,
-            ))
+            db.add(
+                BrokenLinkReport(
+                    document_id=doc.id,
+                    version_id=latest_version.id,
+                    broken_url=link.url[:1000],
+                    link_text=link.text[:500] if link.text else None,
+                    reason=reason,
+                    scanned_at=now,
+                )
+            )
             broken_count += 1
 
     db.commit()
-    logger.info("Broken link scan complete: %d broken links found across %d documents",
-                broken_count, len(published_docs))
+    logger.info(
+        "Broken link scan complete: %d broken links found across %d documents",
+        broken_count,
+        len(published_docs),
+    )
     return broken_count

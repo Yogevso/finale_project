@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
-import re
 
 
 def _validate_password_complexity(v: str) -> str:

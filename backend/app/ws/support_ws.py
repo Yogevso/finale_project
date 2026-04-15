@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from time import monotonic
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.container import build_container
@@ -75,15 +75,16 @@ async def support_websocket(
     # Get ticket IDs visible to this user
     if user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
         ticket_ids = [
-            t.id for t in db.query(SupportTicket.id).filter(SupportTicket.customer_id == user.id).all()
+            t.id
+            for t in db.query(SupportTicket.id).filter(SupportTicket.customer_id == user.id).all()
         ]
     else:
         # Agents see assigned tickets
         assigned = [
             a.ticket_id
-            for a in db.query(SupportTicketAssignment.ticket_id).filter(
-                SupportTicketAssignment.agent_id == user.id
-            ).all()
+            for a in db.query(SupportTicketAssignment.ticket_id)
+            .filter(SupportTicketAssignment.agent_id == user.id)
+            .all()
         ]
         # Also include unassigned tickets in their tenant
         unassigned = [
@@ -170,11 +171,16 @@ async def _handle_typing(user: User, data: dict) -> None:
     if not ticket_id:
         return
 
-    await chat_manager.broadcast_to_ticket(ticket_id, "agent_typing", {
-        "ticket_id": ticket_id,
-        "user_id": user.id,
-        "username": user.full_name,
-    }, exclude_user=user.id)
+    await chat_manager.broadcast_to_ticket(
+        ticket_id,
+        "agent_typing",
+        {
+            "ticket_id": ticket_id,
+            "user_id": user.id,
+            "username": user.full_name,
+        },
+        exclude_user=user.id,
+    )
 
 
 async def _handle_join_ticket(websocket: WebSocket, user: User, data: dict, db: Session) -> None:
@@ -191,7 +197,10 @@ async def _handle_join_ticket(websocket: WebSocket, user: User, data: dict, db: 
     has_access = (
         user.role == UserRole.SYSTEM_ADMIN
         or ticket.customer_id == user.id
-        or (ticket.tenant_id == user.tenant_id and user.role not in (UserRole.CUSTOMER, UserRole.VIEWER))
+        or (
+            ticket.tenant_id == user.tenant_id
+            and user.role not in (UserRole.CUSTOMER, UserRole.VIEWER)
+        )
     )
     if has_access:
         if ticket_id not in chat_manager._support_connections:
@@ -200,10 +209,14 @@ async def _handle_join_ticket(websocket: WebSocket, user: User, data: dict, db: 
 
         # Broadcast updated viewers list to all in room (X1-100)
         viewer_ids = chat_manager.get_online_users_in_ticket(ticket_id)
-        await chat_manager.broadcast_to_ticket(ticket_id, "viewers_update", {
-            "ticket_id": ticket_id,
-            "viewer_ids": viewer_ids,
-        })
+        await chat_manager.broadcast_to_ticket(
+            ticket_id,
+            "viewers_update",
+            {
+                "ticket_id": ticket_id,
+                "viewer_ids": viewer_ids,
+            },
+        )
 
 
 async def _send_error(websocket: WebSocket, message: str) -> None:

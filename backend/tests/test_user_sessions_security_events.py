@@ -3,7 +3,14 @@
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.models import Invitation, InvitationStatus, PasswordReset, SecurityEvent, UserRole, UserSession
+from app.models import (
+    Invitation,
+    InvitationStatus,
+    PasswordReset,
+    SecurityEvent,
+    UserRole,
+    UserSession,
+)
 from app.ws.auth import authenticate_ws
 from tests.factories.domain import create_user
 
@@ -75,7 +82,9 @@ def test_inactive_session_is_revoked_on_authenticated_request(client, test_user,
     )
     assert session is not None
 
-    session.last_active_at = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS + 1)
+    session.last_active_at = datetime.utcnow() - timedelta(
+        days=settings.SESSION_INACTIVITY_DAYS + 1
+    )
     db.commit()
 
     me_response = client.get("/api/v1/auth/me", headers=auth_headers)
@@ -96,7 +105,9 @@ def test_websocket_auth_revokes_inactive_session(client, test_user, db):
     )
     assert session is not None
 
-    session.last_active_at = datetime.utcnow() - timedelta(days=settings.SESSION_INACTIVITY_DAYS + 1)
+    session.last_active_at = datetime.utcnow() - timedelta(
+        days=settings.SESSION_INACTIVITY_DAYS + 1
+    )
     db.commit()
 
     assert authenticate_ws(access_token, db) is None

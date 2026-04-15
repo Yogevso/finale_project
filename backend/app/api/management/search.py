@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.application.policies.access_policies import AnalyticsAccessPolicy
 from app.application.queries.dependencies import get_search_query_handler
 from app.application.queries.search_queries import (
     ListSavedSearchesQuery,
@@ -20,9 +21,8 @@ from app.application.queries.search_queries import (
     SearchQueryHandler,
 )
 from app.db import get_analytics_db, get_db
-from app.models import Document, SavedSearch, SearchAnalytics, User, UserRole
 from app.dependencies.permissions import require_any_role, require_internal_user
-from app.application.policies.access_policies import AnalyticsAccessPolicy
+from app.models import Document, SavedSearch, SearchAnalytics, User, UserRole
 
 _analytics_policy = AnalyticsAccessPolicy()
 
@@ -109,12 +109,14 @@ def search_documents(
 
     # Log search analytics (fire-and-forget)
     try:
-        analytics_db.add(SearchAnalytics(
-            query=q[:500],
-            user_id=current_user.id,
-            tenant_id=current_user.tenant_id,
-            results_count=result.total,
-        ))
+        analytics_db.add(
+            SearchAnalytics(
+                query=q[:500],
+                user_id=current_user.id,
+                tenant_id=current_user.tenant_id,
+                results_count=result.total,
+            )
+        )
         analytics_db.commit()
     except Exception:  # policy: LOSSY — analytics logging must not block search responses
         logger.debug("Failed to log search analytics", exc_info=True)
@@ -222,9 +224,11 @@ def record_search_click(
     """Record that a user clicked a search result."""
     # M-39: Verify the document belongs to the caller's tenant to prevent
     # cross-tenant analytics poisoning via arbitrary document_id.
-    doc = core_db.query(Document.id, Document.tenant_id).filter(
-        Document.id == body.document_id
-    ).first()
+    doc = (
+        core_db.query(Document.id, Document.tenant_id)
+        .filter(Document.id == body.document_id)
+        .first()
+    )
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if (
@@ -234,13 +238,15 @@ def record_search_click(
     ):
         raise HTTPException(status_code=404, detail="Document not found")
 
-    db.add(SearchAnalytics(
-        query=body.query[:500],
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-        results_count=0,
-        clicked_document_id=body.document_id,
-    ))
+    db.add(
+        SearchAnalytics(
+            query=body.query[:500],
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            results_count=0,
+            clicked_document_id=body.document_id,
+        )
+    )
     db.commit()
     return {"ok": True}
 
@@ -249,19 +255,18 @@ def record_search_click(
 def get_search_analytics(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_analytics_db),
-    current_user: User = Depends(require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])),
+    current_user: User = Depends(
+        require_any_role([UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])
+    ),
 ):
     """Get search analytics — top queries, zero-result queries, click-through."""
     since = datetime.utcnow() - timedelta(days=days)
 
     # Only count search events (results_count > 0 or results_count == 0 means a search event)
     # Click events have clicked_document_id set
-    search_events = (
-        db.query(SearchAnalytics)
-        .filter(
-            SearchAnalytics.created_at >= since,
-            SearchAnalytics.clicked_document_id.is_(None),
-        )
+    search_events = db.query(SearchAnalytics).filter(
+        SearchAnalytics.created_at >= since,
+        SearchAnalytics.clicked_document_id.is_(None),
     )
 
     # Tenant scoping for non-system-admins (M-29: delegated to AnalyticsAccessPolicy)
@@ -296,12 +301,9 @@ def get_search_analytics(
 
     # Click-through rate
     total_searches = search_events.count()
-    click_query = (
-        db.query(SearchAnalytics)
-        .filter(
-            SearchAnalytics.created_at >= since,
-            SearchAnalytics.clicked_document_id.isnot(None),
-        )
+    click_query = db.query(SearchAnalytics).filter(
+        SearchAnalytics.created_at >= since,
+        SearchAnalytics.clicked_document_id.isnot(None),
     )
     if _analytics_policy.is_tenant_scoped(current_user):
         click_query = click_query.filter(SearchAnalytics.tenant_id == current_user.tenant_id)

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
+from app.application.policies.access_policies import FeedbackAccessPolicy
 from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_internal_user, require_manager
 from app.models import (
@@ -26,7 +27,6 @@ from app.models import (
     Version,
 )
 from app.security import get_current_active_user
-from app.application.policies.access_policies import FeedbackAccessPolicy
 from app.services.support_service import SupportTicketService
 
 _feedback_policy = FeedbackAccessPolicy()
@@ -271,7 +271,9 @@ async def list_all_feedback(
                 document_number=fb.document.document_number if fb.document else "",
                 user_id=fb.user_id,
                 user_name=fb.user.full_name if fb.user else "Unknown",
-                user_email=fb.user.email if fb.user and _feedback_policy.can_see_email(current_user) else "",
+                user_email=fb.user.email
+                if fb.user and _feedback_policy.can_see_email(current_user)
+                else "",
                 tenant_id=fb.user.tenant_id if fb.user else None,
                 tenant_name=tenant.name if tenant else None,
                 ticket_id=ticket_ids.get(fb.id),
@@ -339,7 +341,9 @@ async def get_feedback(
         document_number=feedback.document.document_number if feedback.document else "",
         user_id=feedback.user_id,
         user_name=feedback.user.full_name if feedback.user else "Unknown",
-        user_email=feedback.user.email if feedback.user and _feedback_policy.can_see_email(current_user) else "",
+        user_email=feedback.user.email
+        if feedback.user and _feedback_policy.can_see_email(current_user)
+        else "",
         tenant_id=feedback.user.tenant_id if feedback.user else None,
         tenant_name=tenant.name if tenant else None,
         ticket_id=_feedback_ticket_map(db, [feedback.id]).get(feedback.id),
@@ -512,7 +516,7 @@ async def get_feedback_stats(
     """
     Get feedback statistics summary.
     """
-    total = db.query(func.count(Feedback.id)).scalar() or 0
+    db.query(func.count(Feedback.id)).scalar() or 0
     pending = (
         _customer_feedback_query(db)
         .with_entities(func.count(Feedback.id))

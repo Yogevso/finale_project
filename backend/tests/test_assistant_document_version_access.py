@@ -288,7 +288,9 @@ def test_reindex_all_indexes_latest_version_for_internal_semantic_search(db):
         chunker=MagicMock(),
     )
 
-    with patch.object(indexer, "index_document", new=AsyncMock(return_value=2)) as mock_index_document:
+    with patch.object(
+        indexer, "index_document", new=AsyncMock(return_value=2)
+    ) as mock_index_document:
         stats = _run(indexer.reindex_all(db))
 
     assert stats["documents_indexed"] == 1

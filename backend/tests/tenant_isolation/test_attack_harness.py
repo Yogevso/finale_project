@@ -238,13 +238,14 @@ def _generate_attack_patterns(
     )
 
 
-ATTACK_PATTERNS: tuple[TenantAttackPattern, ...] = (
-    _generate_attack_patterns(category="read", definitions=READ_ENDPOINT_DEFINITIONS)
-    + _generate_attack_patterns(category="write", definitions=WRITE_ENDPOINT_DEFINITIONS)
+ATTACK_PATTERNS: tuple[TenantAttackPattern, ...] = _generate_attack_patterns(
+    category="read", definitions=READ_ENDPOINT_DEFINITIONS
+) + _generate_attack_patterns(category="write", definitions=WRITE_ENDPOINT_DEFINITIONS)
+
+
+@pytest.mark.parametrize(
+    "pattern", ATTACK_PATTERNS, ids=[pattern.name for pattern in ATTACK_PATTERNS]
 )
-
-
-@pytest.mark.parametrize("pattern", ATTACK_PATTERNS, ids=[pattern.name for pattern in ATTACK_PATTERNS])
 def test_cross_tenant_attack_harness_denies_protected_endpoints(
     client,
     tenant_isolation_scenario,
@@ -257,4 +258,3 @@ def test_cross_tenant_attack_harness_denies_protected_endpoints(
     )
     [case] = build_attack_cases(tenant_isolation_scenario, [pattern])
     harness.run_case(case)
-

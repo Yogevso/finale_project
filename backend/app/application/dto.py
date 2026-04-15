@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.models import User, UserRole
 from app.application.policies.access_policies import safe_user_role
+from app.models import User, UserRole
 
 
 @dataclass(frozen=True, slots=True)

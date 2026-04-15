@@ -7,7 +7,9 @@ from app.services.chat_service import ChatService
 from tests.factories import create_user
 
 
-def test_customer_can_list_and_reply_to_existing_chat(client, db, test_tenant, customer_headers, test_customer):
+def test_customer_can_list_and_reply_to_existing_chat(
+    client, db, test_tenant, customer_headers, test_customer
+):
     internal_user = create_user(
         db,
         email="portal-chat-editor@example.com",
@@ -46,7 +48,9 @@ def test_customer_can_list_and_reply_to_existing_chat(client, db, test_tenant, c
     assert send_payload["sender_id"] == test_customer.id
     assert send_payload["content"] == "Customer follow-up"
 
-    history_response = client.get(f"/api/v1/portal/chats/{chat.id}/messages", headers=customer_headers)
+    history_response = client.get(
+        f"/api/v1/portal/chats/{chat.id}/messages", headers=customer_headers
+    )
     assert history_response.status_code == 200
     history_payload = history_response.json()
     assert history_payload["items"][0]["content"] == "Customer follow-up"
@@ -78,7 +82,9 @@ def test_customer_cannot_access_foreign_chat(client, db, test_tenant_2, customer
     assert response.status_code == 404
 
 
-def test_customer_can_mark_portal_chat_as_read(client, db, test_tenant, customer_headers, test_customer):
+def test_customer_can_mark_portal_chat_as_read(
+    client, db, test_tenant, customer_headers, test_customer
+):
     internal_user = create_user(
         db,
         email="portal-chat-manager@example.com",

@@ -118,7 +118,9 @@ class TestInvitationTenantAssignment:
 
         assert existing_user_response.status_code == 400
         assert duplicate_pending_response.status_code == 400
-        assert existing_user_response.json()["detail"] == duplicate_pending_response.json()["detail"]
+        assert (
+            existing_user_response.json()["detail"] == duplicate_pending_response.json()["detail"]
+        )
 
     def test_create_invitation_stores_hashed_token_and_sanitized_message(
         self,

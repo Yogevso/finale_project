@@ -64,7 +64,9 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
     result = PdfConversionResult()
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as exc:  # policy: FAIL_FAST — invalid PDF input returns a stable conversion error
+    except (
+        Exception
+    ) as exc:  # policy: FAIL_FAST — invalid PDF input returns a stable conversion error
         result.error = f"Failed to open PDF: {exc}"
         return result
 
@@ -113,9 +115,7 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
         if not text_found and ocr_enabled:
             ocr_text = _ocr_page(page, page_idx, result.warnings)
             if ocr_text:
-                page_blocks.append(
-                    _ExtractedBlock(kind="text", text=ocr_text, font_size=11.0)
-                )
+                page_blocks.append(_ExtractedBlock(kind="text", text=ocr_text, font_size=11.0))
 
         # --- images ---
         for img_info in page.get_images(full=True):
@@ -130,7 +130,9 @@ def convert_pdf_to_docx(pdf_bytes: bytes) -> PdfConversionResult:
                             image_ext=base_image.get("ext", "png"),
                         )
                     )
-            except Exception as exc:  # policy: LOSSY — image extraction failure should not abort page conversion
+            except (
+                Exception
+            ) as exc:  # policy: LOSSY — image extraction failure should not abort page conversion
                 result.warnings.append(f"Page {page_idx + 1}: image extraction failed: {exc}")
 
         blocks_by_page.append(page_blocks)
@@ -183,7 +185,9 @@ def _add_image_block(
         para = docx_doc.add_paragraph()
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         para.add_run().add_picture(stream, width=Inches(_MAX_IMG_WIDTH_IN))
-    except Exception as exc:  # policy: LOSSY — image embedding failure should not abort page conversion
+    except (
+        Exception
+    ) as exc:  # policy: LOSSY — image embedding failure should not abort page conversion
         warnings.append(f"Page {page_idx + 1}: failed to embed image: {exc}")
 
 
@@ -191,10 +195,12 @@ def _add_image_block(
 # AH-004: OCR helpers (behind FEATURE_FLAG_PDF_OCR)
 # ---------------------------------------------------------------------------
 
+
 def _is_ocr_enabled() -> bool:
     """Check if OCR is enabled via feature flag."""
     try:
         from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
+
         return is_backend_feature_enabled(BackendFeatureFlag.PDF_OCR)
     except Exception:  # policy: DEGRADED — OCR feature-flag lookup failure disables OCR safely
         return False
@@ -211,7 +217,9 @@ def _ocr_page(page, page_idx: int, warnings: list[str]) -> str:
 
         pix = page.get_pixmap(dpi=_OCR_DPI)
         if pix.width * pix.height > _OCR_MAX_PIXELS:
-            warnings.append(f"Page {page_idx + 1}: OCR skipped, page image too large ({pix.width}x{pix.height})")
+            warnings.append(
+                f"Page {page_idx + 1}: OCR skipped, page image too large ({pix.width}x{pix.height})"
+            )
             return ""
         img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         text = pytesseract.image_to_string(img).strip()

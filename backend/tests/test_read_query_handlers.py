@@ -133,7 +133,9 @@ def test_portal_query_handler_prefers_published_version_in_list(db, test_admin, 
     assert item.version == 1
 
 
-def test_portal_query_handler_dashboard_counts_visible_docs(db, test_admin, test_customer, test_tenant_2):
+def test_portal_query_handler_dashboard_counts_visible_docs(
+    db, test_admin, test_customer, test_tenant_2
+):
     public_doc = Document(
         title="Portal Handler Public",
         document_number=f"DOC-PHP-{uuid4().hex[:6].upper()}",
@@ -165,14 +167,16 @@ def test_portal_query_handler_dashboard_counts_visible_docs(db, test_admin, test
     hidden_company_doc.assigned_companies.append(test_tenant_2)
 
     for doc in [public_doc, company_doc, hidden_company_doc]:
-        db.add(Version(
-            document_id=doc.id,
-            version_number=1,
-            content="Published",
-            is_published=True,
-            published_at=datetime.utcnow(),
-            created_by=test_admin.id,
-        ))
+        db.add(
+            Version(
+                document_id=doc.id,
+                version_number=1,
+                content="Published",
+                is_published=True,
+                published_at=datetime.utcnow(),
+                created_by=test_admin.id,
+            )
+        )
     db.commit()
 
     db.add_all(

@@ -32,7 +32,9 @@ def test_document_conversion_pipeline_selects_legacy_word_strategy_for_doc(monke
 def test_document_conversion_pipeline_selects_docx_extractor(monkeypatch):
     monkeypatch.setattr(
         "app.conversion.document_strategies.DocxExtractor.extract_bytes",
-        lambda _self, _content: SimpleNamespace(status="ready", html="<article>docx-html</article>"),
+        lambda _self, _content: SimpleNamespace(
+            status="ready", html="<article>docx-html</article>"
+        ),
     )
     pipeline = DocumentConversionPipeline()
 
@@ -170,6 +172,7 @@ def test_document_conversion_pipeline_returns_none_when_strategy_has_no_reader_o
     pipeline = DocumentConversionPipeline()
 
     from app.conversion import document_pipeline as _dp_mod
+
     _dp_logger = _dp_mod.logger
     _dp_logger.disabled = False
     _dp_logger.addHandler(caplog.handler)

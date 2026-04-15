@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_chat_db, get_db
 from app.dependencies.permissions import require_internal_user
-from app.models import User, ChatMessage, ChatParticipant
+from app.models import User
 
 CHAT_UPLOAD_DIR = Path("data/uploads/chat")
 CHAT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,7 +29,7 @@ ALLOWED_FILE_TYPES = ALLOWED_IMAGE_TYPES | {
     "text/plain",
     "text/csv",
 }
-from app.schemas.chat import (
+from app.schemas.chat import (  # noqa: E402
     AddParticipantRequest,
     ChatDetailResponse,
     ChatEligibleUserResponse,
@@ -46,12 +46,14 @@ from app.schemas.chat import (
     UpdateChatRequest,
     UpdateParticipantRoleRequest,
 )
-from app.services.chat_service import ChatService
+from app.services.chat_service import ChatService  # noqa: E402
 
 router = APIRouter()
 
 
-def _get_chat_service(chat_db: Session = Depends(get_chat_db), db: Session = Depends(get_db)) -> ChatService:
+def _get_chat_service(
+    chat_db: Session = Depends(get_chat_db), db: Session = Depends(get_db)
+) -> ChatService:
     return ChatService(chat_db, core_db=db)
 
 
@@ -111,11 +113,7 @@ def list_chat_eligible_users(
             )
         )
 
-    users = (
-        query.order_by(User.full_name.asc(), User.id.asc())
-        .limit(50)
-        .all()
-    )
+    users = query.order_by(User.full_name.asc(), User.id.asc()).limit(50).all()
     return [
         ChatEligibleUserResponse(
             id=user.id,
@@ -139,13 +137,15 @@ def list_my_chats(
     all_items = svc.get_user_chats(current_user)
     total = len(all_items)
     offset = (page - 1) * page_size
-    page_items = all_items[offset:offset + page_size]
+    page_items = all_items[offset : offset + page_size]
     return ChatListResponse(
         items=[
             ChatListItem(
                 chat=ChatResponse.model_validate(i["chat"]),
                 display_name=i["display_name"],
-                last_message=_msg_to_response(i["last_message"], svc.core_db) if i["last_message"] else None,
+                last_message=_msg_to_response(i["last_message"], svc.core_db)
+                if i["last_message"]
+                else None,
                 unread_count=i["unread_count"],
                 is_muted=i["is_muted"],
             )
@@ -189,9 +189,7 @@ def create_document_chat(
 
     Automatically adds the document's author(s) as participants.
     """
-    chat = svc.create_document_chat(
-        current_user, body.document_id, body.participant_ids
-    )
+    chat = svc.create_document_chat(current_user, body.document_id, body.participant_ids)
     return ChatResponse.model_validate(chat)
 
 
@@ -245,7 +243,11 @@ def get_messages(
     )
 
 
-@router.post("/chats/{chat_id}/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/chats/{chat_id}/messages",
+    response_model=ChatMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def send_message(
     chat_id: int,
     body: SendMessageRequest,
@@ -257,7 +259,11 @@ def send_message(
     return _msg_to_response(msg, svc.core_db)
 
 
-@router.post("/chats/{chat_id}/messages/upload", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/chats/{chat_id}/messages/upload",
+    response_model=ChatMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_chat_file(
     chat_id: int,
     file: UploadFile = File(...),
@@ -317,7 +323,11 @@ def download_chat_file(
 # ---- Participants ----
 
 
-@router.post("/chats/{chat_id}/participants", response_model=ChatParticipantResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/chats/{chat_id}/participants",
+    response_model=ChatParticipantResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_participant(
     chat_id: int,
     body: AddParticipantRequest,

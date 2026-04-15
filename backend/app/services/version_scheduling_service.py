@@ -183,8 +183,8 @@ class VersionSchedulingService:
             document = version.document
 
             try:
-                audience_visibility_snapshot, audience_company_ids_snapshot = _snapshot_document_audience(
-                    document
+                audience_visibility_snapshot, audience_company_ids_snapshot = (
+                    _snapshot_document_audience(document)
                 )
                 current_company_ids = (
                     json.loads(audience_company_ids_snapshot)
@@ -197,8 +197,16 @@ class VersionSchedulingService:
                     else []
                 )
                 audience_diff = {
-                    "added": [company_id for company_id in current_company_ids if company_id not in original_ids],
-                    "removed": [company_id for company_id in original_ids if company_id not in current_company_ids],
+                    "added": [
+                        company_id
+                        for company_id in current_company_ids
+                        if company_id not in original_ids
+                    ],
+                    "removed": [
+                        company_id
+                        for company_id in original_ids
+                        if company_id not in current_company_ids
+                    ],
                 }
 
                 if audience_diff["added"] or audience_diff["removed"]:
@@ -312,7 +320,9 @@ class VersionSchedulingService:
                     document.id,
                     version.id,
                 )
-            except Exception as exc:  # policy: COMPENSATING — record error, skip item, continue batch
+            except (
+                Exception
+            ) as exc:  # policy: COMPENSATING — record error, skip item, continue batch
                 report["errors"].append(
                     {
                         "version_id": version.id,

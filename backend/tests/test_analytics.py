@@ -1,4 +1,5 @@
 """Unit tests for Analytics API"""
+
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -537,7 +538,9 @@ class TestExportCSV:
         response = client.get("/api/v1/analytics/export/csv", headers=admin_headers)
         assert response.status_code == 422
 
-    def test_export_csv_invalid_report_returns_client_error(self, client: TestClient, admin_headers):
+    def test_export_csv_invalid_report_returns_client_error(
+        self, client: TestClient, admin_headers
+    ):
         """Unknown report should return explicit client error status."""
         response = client.get(
             "/api/v1/analytics/export/csv",
@@ -577,6 +580,7 @@ class TestAnalyticsServiceScope:
     def test_analytics_service_requires_explicit_scope(self, db):
         with pytest.raises(ValueError, match="explicit scope"):
             AnalyticsService(db)
+
 
 class TestAnalyticsDataIntegrity:
     """Tests for analytics data accuracy"""

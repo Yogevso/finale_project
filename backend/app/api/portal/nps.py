@@ -6,12 +6,11 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_analytics_db
-from app.models import NpsSurvey, User, UserRole
 from app.dependencies.permissions import require_customer
+from app.models import NpsSurvey, User, UserRole
 from app.security import get_current_active_user
 from app.utils.sanitization import sanitize_html_content
 
@@ -59,7 +58,9 @@ async def submit_nps(
         .first()
     )
     if recent is not None:
-        raise HTTPException(status_code=429, detail="NPS survey already submitted within the last 90 days")
+        raise HTTPException(
+            status_code=429, detail="NPS survey already submitted within the last 90 days"
+        )
 
     # M-32: Sanitize comment to prevent stored XSS
     survey = NpsSurvey(

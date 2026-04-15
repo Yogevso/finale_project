@@ -37,11 +37,12 @@ from app.models import (
     ImpersonationSession,
     Invitation,
     InvitationStatus,
+    MaintenanceWindow,
     Notification,
     NotificationType,
     PasswordReset,
-    ReadingProgress,
     RbacPolicy,
+    ReadingProgress,
     ReviewRequest,
     ReviewStatus,
     SavedSearch,
@@ -53,11 +54,10 @@ from app.models import (
     Tenant,
     TenantQuota,
     User,
-    UserSession,
     UserRole,
+    UserSession,
     Version,
     WebhookRegistration,
-    MaintenanceWindow,
     document_company_assignments,
 )
 from app.repositories import UserRepository
@@ -187,7 +187,10 @@ class UsersContextAPI:
                 "review submissions",
                 db.query(ReviewRequest.id).filter(ReviewRequest.submitted_by == user.id),
             ),
-            ("support tickets", db.query(SupportTicket.id).filter(SupportTicket.customer_id == user.id)),
+            (
+                "support tickets",
+                db.query(SupportTicket.id).filter(SupportTicket.customer_id == user.id),
+            ),
             (
                 "support messages",
                 db.query(SupportTicketMessage.id).filter(SupportTicketMessage.sender_id == user.id),
@@ -209,7 +212,10 @@ class UsersContextAPI:
                 "chat participation",
                 chat_db.query(ChatParticipant.id).filter(ChatParticipant.user_id == user.id),
             ),
-            ("chat messages", chat_db.query(ChatMessage.id).filter(ChatMessage.sender_id == user.id)),
+            (
+                "chat messages",
+                chat_db.query(ChatMessage.id).filter(ChatMessage.sender_id == user.id),
+            ),
         ]
         for label, query in chat_blocker_checks:
             if query.first() is not None:
@@ -287,9 +293,9 @@ class UsersContextAPI:
         db.query(ExperimentAssignment).filter(ExperimentAssignment.user_id == user.id).delete(
             synchronize_session=False
         )
-        db.query(ImpersonationSession).filter(
-            ImpersonationSession.admin_user_id == user.id
-        ).delete(synchronize_session=False)
+        db.query(ImpersonationSession).filter(ImpersonationSession.admin_user_id == user.id).delete(
+            synchronize_session=False
+        )
         db.query(WebhookRegistration).filter(WebhookRegistration.created_by == user.id).update(
             {WebhookRegistration.created_by: replacement_user_id},
             synchronize_session=False,
@@ -298,16 +304,16 @@ class UsersContextAPI:
             {MaintenanceWindow.created_by: replacement_user_id},
             synchronize_session=False,
         )
-        db.query(UserSession).filter(UserSession.user_id == user.id).delete(synchronize_session=False)
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete(
+            synchronize_session=False
+        )
         db.query(PasswordReset).filter(PasswordReset.user_id == user.id).delete(
             synchronize_session=False
         )
         db.query(SavedSearch).filter(SavedSearch.user_id == user.id).delete(
             synchronize_session=False
         )
-        db.query(Bookmark).filter(Bookmark.user_id == user.id).delete(
-            synchronize_session=False
-        )
+        db.query(Bookmark).filter(Bookmark.user_id == user.id).delete(synchronize_session=False)
         db.query(DocumentWatcher).filter(DocumentWatcher.user_id == user.id).delete(
             synchronize_session=False
         )
@@ -331,9 +337,9 @@ class UsersContextAPI:
         chat_db.query(AssistantConversation).filter(
             AssistantConversation.user_id == user_id
         ).delete(synchronize_session=False)
-        chat_db.query(CollaborationSession).filter(
-            CollaborationSession.user_id == user_id
-        ).delete(synchronize_session=False)
+        chat_db.query(CollaborationSession).filter(CollaborationSession.user_id == user_id).delete(
+            synchronize_session=False
+        )
         chat_db.query(CollaborationActivity).filter(
             CollaborationActivity.user_id == user_id
         ).delete(synchronize_session=False)
@@ -415,7 +421,9 @@ class UsersContextAPI:
                 f"You cannot create users with role '{user_data.role.value}'"
             )
 
-        target_tenant_id = user_data.tenant_id if user_data.tenant_id is not None else tenant_ctx.tenant_id
+        target_tenant_id = (
+            user_data.tenant_id if user_data.tenant_id is not None else tenant_ctx.tenant_id
+        )
 
         if user_data.role == UserRole.CUSTOMER and not target_tenant_id:
             raise ValidationError("Customers must be assigned to a company")
@@ -495,9 +503,7 @@ class UsersContextAPI:
         is_admin = current_user.role in [UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]
         tenant_id_provided = "tenant_id" in user_data.model_fields_set
         has_privileged_update = (
-            user_data.role is not None
-            or user_data.is_active is not None
-            or tenant_id_provided
+            user_data.role is not None or user_data.is_active is not None or tenant_id_provided
         )
 
         old_role = user.role
@@ -510,7 +516,11 @@ class UsersContextAPI:
         if has_privileged_update and not is_admin:
             raise self._admin_access_required()
 
-        if not is_self and not tenant_ctx.is_system_admin and user.tenant_id != tenant_ctx.tenant_id:
+        if (
+            not is_self
+            and not tenant_ctx.is_system_admin
+            and user.tenant_id != tenant_ctx.tenant_id
+        ):
             raise NotFoundError("User not found")
 
         if is_admin and not is_self and not self._can_manage_role(current_user.role, user.role):
@@ -625,7 +635,9 @@ class UsersContextAPI:
 
         if user.role != old_role:
             should_revoke_sessions = True
-            is_demotion = self.ROLE_HIERARCHY.get(user.role, 0) < self.ROLE_HIERARCHY.get(old_role, 0)
+            is_demotion = self.ROLE_HIERARCHY.get(user.role, 0) < self.ROLE_HIERARCHY.get(
+                old_role, 0
+            )
             if is_demotion:
                 self._cancel_pending_reviews_for_user(user=user, db=db)
 
@@ -742,7 +754,9 @@ class UsersContextAPI:
         try:
             self._purge_hard_delete_chat_dependencies(user_id=user_id, chat_db=chat_db)
             chat_db.commit()
-        except Exception:  # policy: BOUNDARY — hard delete succeeded in core DB; chat cleanup is best-effort
+        except (
+            Exception
+        ):  # policy: BOUNDARY — hard delete succeeded in core DB; chat cleanup is best-effort
             chat_db.rollback()
             logger.exception("Failed to purge chat-side data for hard-deleted user_id=%s", user_id)
 
@@ -842,7 +856,10 @@ class UsersContextAPI:
             "company_slug": None,
         }
         if user.tenant_id:
-            tenant = getattr(user, "tenant", None) or db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            tenant = (
+                getattr(user, "tenant", None)
+                or db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
+            )
             if tenant:
                 payload["company_name"] = tenant.name
                 payload["company_slug"] = tenant.slug

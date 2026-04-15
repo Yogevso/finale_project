@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
+import { FullscreenTopBar } from './FullscreenTopBar'
 
 describe('FullscreenTopBar', () => {
   it('renders exit and width controls in reading mode', async () => {

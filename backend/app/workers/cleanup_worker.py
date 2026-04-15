@@ -33,8 +33,8 @@ from app.models import (
     ActionType,
     AssistantConversation,
     ChatMessage,
-    CollaborationSnapshot,
     CollaborationSession,
+    CollaborationSnapshot,
     Document,
     DocumentStatus,
     IdempotencyKeyRecord,
@@ -67,7 +67,9 @@ def _column_exists(db, table: str, column: str) -> bool:
 
 def _document_model_columns_available(db) -> bool:
     required_columns = {"audience_version"}
-    existing_columns = {existing["name"] for existing in sa.inspect(db.bind).get_columns("documents")}
+    existing_columns = {
+        existing["name"] for existing in sa.inspect(db.bind).get_columns("documents")
+    }
     return required_columns.issubset(existing_columns)
 
 
@@ -76,8 +78,7 @@ def purge_expired_sessions(cutoff: datetime, *, dry_run: bool = False) -> int:
     db = SessionLocal()
     try:
         query = db.query(UserSession).filter(
-            (UserSession.revoked_at.isnot(None))
-            | (UserSession.last_active_at < cutoff)
+            (UserSession.revoked_at.isnot(None)) | (UserSession.last_active_at < cutoff)
         )
         count = query.count()
         if not dry_run and count:
@@ -96,10 +97,7 @@ def purge_expired_password_resets(now: datetime, *, dry_run: bool = False) -> in
         grace_cutoff = now - timedelta(days=EXPIRED_RESET_GRACE_DAYS)
         query = db.query(PasswordReset).filter(
             (PasswordReset.expires_at < now)
-            & (
-                (PasswordReset.used_at.isnot(None))
-                | (PasswordReset.expires_at < grace_cutoff)
-            )
+            & ((PasswordReset.used_at.isnot(None)) | (PasswordReset.expires_at < grace_cutoff))
         )
         count = query.count()
         if not dry_run and count:
@@ -115,9 +113,7 @@ def purge_stale_idempotency_records(cutoff: datetime, *, dry_run: bool = False) 
     """Delete idempotency records older than TTL."""
     db = SessionLocal()
     try:
-        query = db.query(IdempotencyKeyRecord).filter(
-            IdempotencyKeyRecord.created_at < cutoff
-        )
+        query = db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.created_at < cutoff)
         count = query.count()
         if not dry_run and count:
             query.delete(synchronize_session=False)
@@ -142,7 +138,9 @@ def _purge_analytics(model, cutoff: datetime, *, dry_run: bool = False, label: s
         if not dry_run and count:
             query.delete(synchronize_session=False)
             db.commit()
-        logger.info("Purged %d %s records (dry_run=%s)", count, label or model.__tablename__, dry_run)
+        logger.info(
+            "Purged %d %s records (dry_run=%s)", count, label or model.__tablename__, dry_run
+        )
         return count
     finally:
         db.close()
@@ -262,9 +260,13 @@ def auto_archive_published_documents(now: datetime, *, dry_run: bool = False) ->
             and _column_exists(db, "documents", "row_version")
             and _column_exists(db, "versions", "published_at")
         ):
-            logger.info("Skipped document auto-archive; required retention columns are not present yet")
+            logger.info(
+                "Skipped document auto-archive; required retention columns are not present yet"
+            )
             return 0
-        lifecycle_settings, _metadata = SystemDocumentLifecycleSettingsService.get_effective_settings(db)
+        lifecycle_settings, _metadata = (
+            SystemDocumentLifecycleSettingsService.get_effective_settings(db)
+        )
         cutoff = lifecycle_settings.archive_cutoff(now)
         if cutoff is None:
             logger.info("Skipped document auto-archive; policy is disabled")
@@ -295,7 +297,10 @@ def auto_archive_published_documents(now: datetime, *, dry_run: bool = False) ->
         )
         count = len(rows)
         if not dry_run and rows:
-            from app.projections import invalidate_portal_audience_cache, invalidate_search_audience_cache
+            from app.projections import (
+                invalidate_portal_audience_cache,
+                invalidate_search_audience_cache,
+            )
 
             archived_document_ids: list[int] = []
             search_index = SearchIndexSyncService(db)
@@ -361,7 +366,10 @@ def purge_expired_collab_snapshots(now: datetime, *, dry_run: bool = False) -> i
         query = db.query(CollaborationSnapshot).filter(
             CollaborationSnapshot.is_pinned.is_(False),
             (
-                (CollaborationSnapshot.expires_at.isnot(None) & (CollaborationSnapshot.expires_at < now))
+                (
+                    CollaborationSnapshot.expires_at.isnot(None)
+                    & (CollaborationSnapshot.expires_at < now)
+                )
                 | (CollaborationSnapshot.created_at < cutoff)
             ),
         )
@@ -412,7 +420,9 @@ def run_cleanup(*, dry_run: bool = False) -> dict[str, int]:
 
     if settings.RETENTION_ASSISTANT_CONVERSATIONS_DAYS > 0:
         cutoff = now - timedelta(days=settings.RETENTION_ASSISTANT_CONVERSATIONS_DAYS)
-        result["assistant_conversations"] = purge_old_assistant_conversations(cutoff, dry_run=dry_run)
+        result["assistant_conversations"] = purge_old_assistant_conversations(
+            cutoff, dry_run=dry_run
+        )
 
     result["auto_archived_documents"] = auto_archive_published_documents(now, dry_run=dry_run)
     result["deleted_documents"] = purge_soft_deleted_documents(now, dry_run=dry_run)

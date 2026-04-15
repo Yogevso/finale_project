@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import uuid
 from pathlib import Path
 
@@ -58,11 +57,11 @@ class AssistantFileHandler:
 
         data = await file.read()
         if len(data) > MAX_FILE_SIZE:
-            raise ValueError(
-                f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB."
-            )
+            raise ValueError(f"File too large. Max size: {MAX_FILE_SIZE // (1024 * 1024)}MB.")
         try:
-            scan_upload_bytes(data, original, ALLOWED_EXTENSIONS.get(ext, "application/octet-stream"))
+            scan_upload_bytes(
+                data, original, ALLOWED_EXTENSIONS.get(ext, "application/octet-stream")
+            )
         except (MalwareDetectedError, MalwareScannerUnavailableError) as exc:
             raise ValueError(str(exc)) from exc
 
@@ -107,7 +106,9 @@ class AssistantFileHandler:
             if ext == ".pptx":
                 return self._extract_pptx(data)
 
-        except Exception as exc:  # policy: BOUNDARY — file handler wraps extractor failures consistently
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — file handler wraps extractor failures consistently
             logger.warning("Text extraction failed for %s: %s", path, exc)
             return None
         return None

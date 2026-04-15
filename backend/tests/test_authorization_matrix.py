@@ -65,20 +65,29 @@ _ALL_ROLES = [
 
 # ── Build parametrized IDs ──────────────────────────────────────────────
 
+
 def _cases_for_allowed():
     """Generate cases for each role at or above min_role."""
     for method, url, min_role, desc, _ in MATRIX:
         if min_role == UserRole.CUSTOMER:
             # Customer-only endpoints: ONLY customer should pass
             yield pytest.param(
-                method, url, UserRole.CUSTOMER, "customer1", "customer123",
+                method,
+                url,
+                UserRole.CUSTOMER,
+                "customer1",
+                "customer123",
                 id=f"ALLOW-{desc}-customer",
             )
         else:
             for role, uname, pw in _ALL_ROLES:
                 if ROLE_RANK[role] >= ROLE_RANK[min_role]:
                     yield pytest.param(
-                        method, url, role, uname, pw,
+                        method,
+                        url,
+                        role,
+                        uname,
+                        pw,
                         id=f"ALLOW-{desc}-{role.value}",
                     )
 
@@ -90,14 +99,22 @@ def _cases_for_denied():
             # Customer-only: all internal roles should be denied
             for role, uname, pw in _INTERNAL_ROLES:
                 yield pytest.param(
-                    method, url, role, uname, pw,
+                    method,
+                    url,
+                    role,
+                    uname,
+                    pw,
                     id=f"DENY-{desc}-{role.value}",
                 )
         else:
             for role, uname, pw in _ALL_ROLES:
                 if ROLE_RANK[role] < ROLE_RANK[min_role]:
                     yield pytest.param(
-                        method, url, role, uname, pw,
+                        method,
+                        url,
+                        role,
+                        uname,
+                        pw,
                         id=f"DENY-{desc}-{role.value}",
                     )
 
@@ -132,11 +149,12 @@ def matrix_env(db, client):
     tenant = create_tenant(db, name="Matrix Tenant", slug="matrix-tenant")
     users = {}
     for role, uname, pw in _ALL_ROLES:
-        u = create_user(db, username=uname, plain_password=pw, role=role,
-                        tenant_id=tenant.id)
+        u = create_user(db, username=uname, plain_password=pw, role=role, tenant_id=tenant.id)
         users[role] = u
     doc = create_document(
-        db, created_by=users[UserRole.EDITOR].id, tenant_id=tenant.id,
+        db,
+        created_by=users[UserRole.EDITOR].id,
+        tenant_id=tenant.id,
         title="Auth Matrix Doc",
     )
     return {"tenant": tenant, "users": users, "doc": doc}
@@ -148,35 +166,31 @@ def _resolve_url(url_template: str, matrix_env: dict) -> str:
 
 # ── Tests ───────────────────────────────────────────────────────────────
 
+
 class TestAuthorizationMatrixAllowed:
     """Roles at or above the minimum should NOT receive 403."""
 
     @pytest.mark.parametrize("method,url,role,uname,pw", list(_cases_for_allowed()))
-    def test_allowed_role_not_forbidden(
-        self, client, matrix_env, method, url, role, uname, pw
-    ):
+    def test_allowed_role_not_forbidden(self, client, matrix_env, method, url, role, uname, pw):
         headers = _login(client, uname, pw)
         resolved = _resolve_url(url, matrix_env)
         code = _make_request(client, method, resolved, headers)
         # Anything other than 401/403 means the authz layer let us through.
-        assert code not in (401, 403), (
-            f"{role.value} should access {method} {resolved} but got {code}"
-        )
+        assert code not in (
+            401,
+            403,
+        ), f"{role.value} should access {method} {resolved} but got {code}"
 
 
 class TestAuthorizationMatrixDenied:
     """Roles below the minimum should receive 403."""
 
     @pytest.mark.parametrize("method,url,role,uname,pw", list(_cases_for_denied()))
-    def test_denied_role_forbidden(
-        self, client, matrix_env, method, url, role, uname, pw
-    ):
+    def test_denied_role_forbidden(self, client, matrix_env, method, url, role, uname, pw):
         headers = _login(client, uname, pw)
         resolved = _resolve_url(url, matrix_env)
         code = _make_request(client, method, resolved, headers)
-        assert code in (403,), (
-            f"{role.value} should be denied {method} {resolved} but got {code}"
-        )
+        assert code in (403,), f"{role.value} should be denied {method} {resolved} but got {code}"
 
 
 class TestUnauthenticatedRejected:
@@ -189,6 +203,7 @@ class TestUnauthenticatedRejected:
     def test_no_auth_returns_401_or_403(self, client, matrix_env, method, url):
         resolved = _resolve_url(url, matrix_env)
         code = _make_request(client, method, resolved, headers={})
-        assert code in (401, 403), (
-            f"Unauthenticated {method} {resolved} → expected 401/403, got {code}"
-        )
+        assert code in (
+            401,
+            403,
+        ), f"Unauthenticated {method} {resolved} → expected 401/403, got {code}"

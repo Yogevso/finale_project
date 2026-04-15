@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
@@ -21,12 +21,9 @@ from app.db import get_analytics_db, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context, require_system_admin
 from app.models import (
     ActionType,
-    AuditLog,
     DataRequest,
     DataRequestStatus,
     DataRequestType,
-    User,
-    UserRole,
 )
 from app.schemas.gdpr import (
     AuditIntegrityResult,
@@ -183,7 +180,7 @@ def run_deletion(
     analytics_db: Session = Depends(get_analytics_db),
 ):
     """Execute an approved data deletion — anonymizes user data."""
-    result = execute_data_deletion(db, request_id, analytics_db=analytics_db)
+    execute_data_deletion(db, request_id, analytics_db=analytics_db)
     req = db.query(DataRequest).filter(DataRequest.id == request_id).first()
     return DataDeletionResponse(
         id=req.id,

@@ -131,4 +131,3 @@ def test_invitation_factory_builds_pending_invitation():
     assert invitation.message == "Welcome"
     assert invitation.expires_at == expires_at
     assert invitation.status == InvitationStatus.PENDING
-

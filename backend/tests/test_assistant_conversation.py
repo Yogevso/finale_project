@@ -1,17 +1,17 @@
 """Tests for the AI assistant conversation manager — CRUD + message history."""
 
 import json
+
 import pytest
-from datetime import datetime
 
 from app.assistant.conversation import ConversationManager
-from app.models import AssistantConversation, AssistantMessage, UserRole
+from app.models import UserRole
 from tests.factories import create_user
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def conv_user(db):
@@ -36,6 +36,7 @@ def mgr(db):
 # ---------------------------------------------------------------------------
 # Conversation CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestConversationCRUD:
     def test_create_conversation(self, mgr, conv_user):
@@ -115,7 +116,7 @@ class TestConversationCRUD:
         conv = mgr.create_conversation(conv_user.id, None, "Old Title")
         updated = mgr.update_title(
             conv.id,
-            '<b>Renamed</b> <script>alert(1)</script> Chat',
+            "<b>Renamed</b> <script>alert(1)</script> Chat",
         )
         assert updated is not None
         assert updated.title == "Renamed Chat"
@@ -124,6 +125,7 @@ class TestConversationCRUD:
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
+
 
 class TestMessages:
     def test_add_and_get_messages(self, mgr, conv_user):
@@ -147,8 +149,11 @@ class TestMessages:
     def test_add_message_with_tool_result(self, mgr, conv_user):
         conv = mgr.create_conversation(conv_user.id, None, "Chat")
         msg = mgr.add_message(
-            conv.id, "tool", "Found 5 users",
-            tool_call_id="tc1", tool_name="list_users",
+            conv.id,
+            "tool",
+            "Found 5 users",
+            tool_call_id="tc1",
+            tool_name="list_users",
         )
         assert msg.tool_call_id == "tc1"
         assert msg.tool_name == "list_users"
@@ -171,6 +176,7 @@ class TestMessages:
 # ---------------------------------------------------------------------------
 # Message history building
 # ---------------------------------------------------------------------------
+
 
 class TestBuildMessageHistory:
     def test_basic_history(self, mgr, conv_user):
@@ -205,6 +211,7 @@ class TestBuildMessageHistory:
 # ---------------------------------------------------------------------------
 # Title generation
 # ---------------------------------------------------------------------------
+
 
 class TestTitleGeneration:
     def test_short_message(self):

@@ -65,4 +65,3 @@ class TopicSlug:
                 return cls(canonical)
 
         return cls(slugified)
-

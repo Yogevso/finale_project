@@ -179,15 +179,11 @@ def test_analytics_query_handler_delegates_to_service():
 
     assert handler.execute_overview(AnalyticsOverviewQuery(start, end))["kind"] == "overview"
     assert handler.execute_recent_activity(RecentActivityQuery(limit=5)) == [{"limit": 5}]
-    assert (
-        handler.execute_engagement(EngagementAnalyticsQuery(start, end))["kind"] == "engagement"
-    )
+    assert handler.execute_engagement(EngagementAnalyticsQuery(start, end))["kind"] == "engagement"
     assert handler.execute_top_documents(TopDocumentsQuery(start, end, limit=3))["limit"] == 3
     assert handler.execute_user_analytics(UserAnalyticsQuery(start, end))["kind"] == "users"
     assert handler.execute_content_analytics(ContentAnalyticsQuery(start, end))["kind"] == "content"
     assert (
         handler.execute_feedback_analytics(FeedbackAnalyticsQuery(start, end))["kind"] == "feedback"
     )
-    assert (
-        handler.execute_tenant_analytics(TenantAnalyticsQuery(start, end))["kind"] == "tenants"
-    )
+    assert handler.execute_tenant_analytics(TenantAnalyticsQuery(start, end))["kind"] == "tenants"

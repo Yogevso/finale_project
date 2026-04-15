@@ -58,4 +58,3 @@ class VersionRepository(BaseRepository):
             .order_by(Version.version_number.desc())
             .first()
         )
-

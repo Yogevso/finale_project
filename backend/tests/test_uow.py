@@ -43,4 +43,3 @@ def test_uow_allows_explicit_rollback(db):
 
     persisted = db.query(User).filter(User.username == "uow_manual_rb").first()
     assert persisted is None
-

@@ -11,7 +11,6 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth_context.refresh_token_service import RefreshTokenService
 from app.db import get_db
 from app.dependencies.permissions import require_admin, require_system_admin
 from app.models import (
@@ -50,6 +49,7 @@ def _decode_documents_cursor(cursor: str) -> tuple[datetime, int]:
         return datetime.fromisoformat(updated_at_raw), int(document_id_raw)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid cursor format") from exc
+
 
 def _enforce_tenant_scope(current_user: User, company_id: int) -> None:
     """Non-system-admins can only access their own tenant's company."""
@@ -266,9 +266,11 @@ async def create_company(
     db.add(company)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Company with this slug already exists")
+        raise HTTPException(
+            status_code=400, detail="Company with this slug already exists"
+        ) from exc
     db.refresh(company)
 
     return CompanyResponse(
@@ -370,14 +372,8 @@ async def update_company(
 
     # Detect deactivation event
     was_active = company.is_active
-    is_deactivating = (
-        company_data.is_active is False
-        and was_active is True
-    )
-    is_reactivating = (
-        company_data.is_active is True
-        and was_active is False
-    )
+    is_deactivating = company_data.is_active is False and was_active is True
+    is_reactivating = company_data.is_active is True and was_active is False
 
     # Update fields
     update_data = company_data.model_dump(exclude_unset=True)
@@ -390,42 +386,66 @@ async def update_company(
     invalidated_tokens = 0
     if is_deactivating:
         # Cancel all pending invitations for this company
-        cancelled_invitations = db.query(Invitation).filter(
-            Invitation.tenant_id == company_id,
-            Invitation.status == InvitationStatus.PENDING,
-        ).update({"status": InvitationStatus.CANCELLED})
+        cancelled_invitations = (
+            db.query(Invitation)
+            .filter(
+                Invitation.tenant_id == company_id,
+                Invitation.status == InvitationStatus.PENDING,
+            )
+            .update({"status": InvitationStatus.CANCELLED})
+        )
 
         # FIX-016: Revoke all active sessions for users in this company
         company_user_ids = db.query(User.id).filter(User.tenant_id == company_id).subquery()
         now = datetime.utcnow()
-        revoked_sessions = db.query(UserSession).filter(
-            UserSession.user_id.in_(company_user_ids),
-            UserSession.revoked_at.is_(None),
-        ).update({"revoked_at": now}, synchronize_session=False)
+        revoked_sessions = (
+            db.query(UserSession)
+            .filter(
+                UserSession.user_id.in_(company_user_ids),
+                UserSession.revoked_at.is_(None),
+            )
+            .update({"revoked_at": now}, synchronize_session=False)
+        )
 
         # FIX-016: Invalidate all refresh tokens for users in this company
-        invalidated_tokens = db.query(PasswordReset).filter(
-            PasswordReset.user_id.in_(company_user_ids),
-            PasswordReset.used_at.is_(None),
-        ).update({"used_at": now}, synchronize_session=False)
+        invalidated_tokens = (
+            db.query(PasswordReset)
+            .filter(
+                PasswordReset.user_id.in_(company_user_ids),
+                PasswordReset.used_at.is_(None),
+            )
+            .update({"used_at": now}, synchronize_session=False)
+        )
 
     # Company reactivation events - log and validate state
     reactivation_info = None
     if is_reactivating:
         # Count active and inactive users for this company
-        active_users = db.query(User).filter(
-            User.tenant_id == company_id,
-            User.is_active.is_(True),
-        ).count()
-        inactive_users = db.query(User).filter(
-            User.tenant_id == company_id,
-            User.is_active.is_(False),
-        ).count()
+        active_users = (
+            db.query(User)
+            .filter(
+                User.tenant_id == company_id,
+                User.is_active.is_(True),
+            )
+            .count()
+        )
+        inactive_users = (
+            db.query(User)
+            .filter(
+                User.tenant_id == company_id,
+                User.is_active.is_(False),
+            )
+            .count()
+        )
         # Get count of cancelled invitations that could be re-sent
-        cancelled_invite_count = db.query(Invitation).filter(
-            Invitation.tenant_id == company_id,
-            Invitation.status == InvitationStatus.CANCELLED,
-        ).count()
+        cancelled_invite_count = (
+            db.query(Invitation)
+            .filter(
+                Invitation.tenant_id == company_id,
+                Invitation.status == InvitationStatus.CANCELLED,
+            )
+            .count()
+        )
         reactivation_info = {
             "active_users": active_users,
             "inactive_users": inactive_users,
@@ -445,7 +465,9 @@ async def update_company(
         response.headers["X-Company-Event"] = "reactivated"
         response.headers["X-Active-Users"] = str(reactivation_info["active_users"])
         response.headers["X-Inactive-Users"] = str(reactivation_info["inactive_users"])
-        response.headers["X-Cancelled-Invitations"] = str(reactivation_info["cancelled_invitations"])
+        response.headers["X-Cancelled-Invitations"] = str(
+            reactivation_info["cancelled_invitations"]
+        )
 
     stats = get_company_stats(db, company_id)
 
@@ -489,32 +511,47 @@ async def delete_company(
     # Y15-016: Only SYSTEM_ADMIN can delete other companies
     # Regular ADMINs should only manage their own company
     if current_user.role != UserRole.SYSTEM_ADMIN:
-        raise HTTPException(status_code=403, detail="Only system administrators can delete companies")
+        raise HTTPException(
+            status_code=403, detail="Only system administrators can delete companies"
+        )
 
     # Company deactivation cascade events:
     # 1. Cancel all pending invitations for this company
-    cancelled_invitations = db.query(Invitation).filter(
-        Invitation.tenant_id == company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).update({"status": InvitationStatus.CANCELLED})
+    cancelled_invitations = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+        .update({"status": InvitationStatus.CANCELLED})
+    )
 
     # 2. Revoke all active sessions for users in this company
     company_user_ids = db.query(User.id).filter(User.tenant_id == company_id).subquery()
-    revoked_sessions = db.query(UserSession).filter(
-        UserSession.user_id.in_(company_user_ids),
-        UserSession.revoked_at.is_(None),
-    ).update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+    revoked_sessions = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id.in_(company_user_ids),
+            UserSession.revoked_at.is_(None),
+        )
+        .update({"revoked_at": datetime.utcnow()}, synchronize_session=False)
+    )
 
     # 3. Invalidate all refresh tokens for users in this company
     now = datetime.utcnow()
-    invalidated_tokens = db.query(PasswordReset).filter(
-        PasswordReset.user_id.in_(company_user_ids),
-        PasswordReset.used_at.is_(None),
-    ).update({"used_at": now}, synchronize_session=False)
+    invalidated_tokens = (
+        db.query(PasswordReset)
+        .filter(
+            PasswordReset.user_id.in_(company_user_ids),
+            PasswordReset.used_at.is_(None),
+        )
+        .update({"used_at": now}, synchronize_session=False)
+    )
 
     # Y15-024: Clean up orphaned company assignments from documents
     # Remove this company from document assignee lists to prevent ghost assignments
     from app.models import document_company_assignments
+
     removed_assignments = db.execute(
         document_company_assignments.delete().where(
             document_company_assignments.c.tenant_id == company_id
@@ -709,7 +746,9 @@ async def list_company_documents(
             )
         )
 
-    ordered = query.order_by(Document.updated_at.desc(), Document.id.desc()).limit(per_page + 1).all()
+    ordered = (
+        query.order_by(Document.updated_at.desc(), Document.id.desc()).limit(per_page + 1).all()
+    )
     has_more = len(ordered) > per_page
     documents = ordered[:per_page]
     next_cursor = None
@@ -759,18 +798,10 @@ async def get_audience_blockers(
     _enforce_tenant_scope(current_user, company_id)
 
     # Get documents assigned to this company
-    assigned_docs = (
-        db.query(Document)
-        .filter(Document.assigned_companies.any(id=company_id))
-        .all()
-    )
+    assigned_docs = db.query(Document).filter(Document.assigned_companies.any(id=company_id)).all()
 
     # Get documents owned by this company
-    owned_docs = (
-        db.query(Document)
-        .filter(Document.tenant_id == company_id)
-        .all()
-    )
+    owned_docs = db.query(Document).filter(Document.tenant_id == company_id).all()
 
     # Get users in this company
     users = db.query(User).filter(User.tenant_id == company_id).all()

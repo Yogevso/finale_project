@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import (
-    AuditLog, Document, DocumentStatus, User, UserRole,
+    AuditLog,
+    Document,
+    DocumentStatus,
+    User,
+    UserRole,
 )
 from app.services.permissions import Permission
 
@@ -31,8 +35,7 @@ def _period_cutoff(period: str) -> datetime:
 class GetPlatformAnalyticsTool(BaseTool):
     name = "get_platform_analytics"
     description = (
-        "Get platform overview analytics including total users, documents, "
-        "and activity trends."
+        "Get platform overview analytics including total users, documents, " "and activity trends."
     )
     parameters = {
         "type": "object",
@@ -50,7 +53,11 @@ class GetPlatformAnalyticsTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         period = params.get("period", "week")
         cutoff = _period_cutoff(period)
@@ -59,18 +66,18 @@ class GetPlatformAnalyticsTool(BaseTool):
         active_users = (
             db.query(func.count(func.distinct(AuditLog.user_id)))
             .filter(AuditLog.created_at >= cutoff)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         total_docs = db.query(func.count(Document.id)).scalar() or 0
         published_docs = (
             db.query(func.count(Document.id))
             .filter(Document.status == DocumentStatus.ACTIVE)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         recent_actions = (
-            db.query(func.count(AuditLog.id))
-            .filter(AuditLog.created_at >= cutoff)
-            .scalar() or 0
+            db.query(func.count(AuditLog.id)).filter(AuditLog.created_at >= cutoff).scalar() or 0
         )
 
         result = (
@@ -86,9 +93,7 @@ class GetPlatformAnalyticsTool(BaseTool):
 
 class GetEngagementAnalyticsTool(BaseTool):
     name = "get_engagement_analytics"
-    description = (
-        "Get user engagement metrics including most active users and popular documents."
-    )
+    description = "Get user engagement metrics including most active users and popular documents."
     parameters = {
         "type": "object",
         "properties": {
@@ -102,7 +107,11 @@ class GetEngagementAnalyticsTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         period = params.get("period", "week")
         limit = min(params.get("limit", 5), 20)
@@ -119,7 +128,14 @@ class GetEngagementAnalyticsTool(BaseTool):
         )
 
         user_ids = [uid for uid, _ in top_users]
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [f"**Engagement Analytics** (last {period})\n", "**Most Active Users:**"]
         for uid, cnt in top_users:
@@ -136,7 +152,11 @@ class GetEngagementAnalyticsTool(BaseTool):
         )
 
         doc_ids = [did for did, _ in top_docs]
-        docs = {d.id: d.title for d in db.query(Document).filter(Document.id.in_(doc_ids)).all()} if doc_ids else {}
+        docs = (
+            {d.id: d.title for d in db.query(Document).filter(Document.id.in_(doc_ids)).all()}
+            if doc_ids
+            else {}
+        )
 
         lines.append("\n**Most Active Documents:**")
         for did, cnt in top_docs:
@@ -160,15 +180,17 @@ class GetContentAnalyticsTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 10), 50)
 
         # Documents by status
         status_counts = (
-            db.query(Document.status, func.count(Document.id))
-            .group_by(Document.status)
-            .all()
+            db.query(Document.status, func.count(Document.id)).group_by(Document.status).all()
         )
 
         # Top authors by document count
@@ -181,7 +203,14 @@ class GetContentAnalyticsTool(BaseTool):
         )
 
         author_ids = [aid for aid, _ in top_authors]
-        authors = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(author_ids)).all()} if author_ids else {}
+        authors = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(author_ids)).all()
+            }
+            if author_ids
+            else {}
+        )
 
         lines = ["**Content Analytics**\n", "**Documents by Status:**"]
         for status, cnt in status_counts:

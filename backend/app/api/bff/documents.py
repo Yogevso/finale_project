@@ -247,7 +247,11 @@ def get_document_detail_page_bundle(
     except Exception:  # policy: LOSSY — optional section, page still usable
         logger.exception("BFF: failed to load review history for document %s", document_id)
         review_history = ReviewListResponse(
-            items=[], total=0, page=1, per_page=20, has_more=False,
+            items=[],
+            total=0,
+            page=1,
+            per_page=20,
+            has_more=False,
         )
         partial_errors.append("review_history")
 

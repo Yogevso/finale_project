@@ -25,6 +25,7 @@ def _get_session():
     if _session_factory_override is not None:
         return _session_factory_override()
     from app.db import AnalyticsSessionLocal
+
     return AnalyticsSessionLocal()
 
 
@@ -40,7 +41,9 @@ def write_audit_log(**kwargs) -> None:
     try:
         session.add(AuditLog(**kwargs))
         session.commit()
-    except Exception:  # policy: LOSSY — analytics-side audit writes must not block the primary transaction
+    except (
+        Exception
+    ):  # policy: LOSSY — analytics-side audit writes must not block the primary transaction
         session.rollback()
         logger.warning("Failed to write audit log entry", exc_info=True)
     finally:
@@ -59,7 +62,9 @@ def write_security_event(**kwargs) -> None:
     try:
         session.add(SecurityEvent(**kwargs))
         session.commit()
-    except Exception:  # policy: LOSSY — analytics-side security writes must not block the primary transaction
+    except (
+        Exception
+    ):  # policy: LOSSY — analytics-side security writes must not block the primary transaction
         session.rollback()
         logger.warning("Failed to write security event", exc_info=True)
     finally:

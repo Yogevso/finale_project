@@ -1,10 +1,10 @@
 """Tests for the AI assistant tool registry — registration, lookup, parameter sanitization."""
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-from app.assistant.schemas import ToolResult
+import pytest
+
 from app.assistant.tools.base import BaseTool
 from app.assistant.tools.registry import ToolRegistry
 from app.models import UserRole
@@ -18,6 +18,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 # Helpers — minimal concrete tool for testing
 # ---------------------------------------------------------------------------
+
 
 class _DummyTool(BaseTool):
     name = "dummy_tool"
@@ -71,6 +72,7 @@ def _make_user(role: UserRole = UserRole.EDITOR, tenant_id: int | None = 1) -> M
 # Registration
 # ---------------------------------------------------------------------------
 
+
 class TestToolRegistration:
     def test_register_tool(self):
         reg = ToolRegistry()
@@ -97,6 +99,7 @@ class TestToolRegistration:
 # ---------------------------------------------------------------------------
 # Permission filtering
 # ---------------------------------------------------------------------------
+
 
 class TestToolPermissions:
     def test_editor_sees_dummy_not_admin_tool(self):
@@ -149,6 +152,7 @@ class TestToolPermissions:
 # Execution
 # ---------------------------------------------------------------------------
 
+
 class TestToolExecution:
     def test_execute_unknown_tool(self):
         reg = ToolRegistry()
@@ -185,6 +189,7 @@ class TestToolExecution:
 # ---------------------------------------------------------------------------
 # Parameter sanitization
 # ---------------------------------------------------------------------------
+
 
 class TestSanitizeParams:
     def test_null_string_to_none(self):

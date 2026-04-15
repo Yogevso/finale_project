@@ -162,4 +162,3 @@ def test_duplicate_bulk_company_assignment_replays_response(
     assert second.status_code == 200
     assert second.headers.get("x-idempotent-replay") == "true"
     assert second.json() == first.json()
-

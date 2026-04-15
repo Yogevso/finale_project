@@ -54,4 +54,3 @@ def resolve_request_tracing(
         trace_id=trace_id,
         request_id=generate_request_id(),
     )
-

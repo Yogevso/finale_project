@@ -36,7 +36,9 @@ def _get_redis_client():
             )
             _redis_client.ping()
             logger.info("Rate limiter using Redis backend")
-        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
+        except (
+            Exception
+        ):  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis unavailable — falling back to in-memory rate limiting")
             _redis_client = None
     return _redis_client
@@ -118,7 +120,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             expired = [
                 client_key
                 for client_key, info in self.clients.items()
-                if current_time - info.window_start > max(1, int(info.window_seconds or self.window_seconds))
+                if current_time - info.window_start
+                > max(1, int(info.window_seconds or self.window_seconds))
             ]
             for client_key in expired:
                 del self.clients[client_key]
@@ -171,8 +174,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         Returns:
             (is_limited, remaining_requests, reset_time)
         """
-        resolved_limit = max(1, int(max_requests if max_requests is not None else self.max_requests))
-        resolved_window = max(1, int(window_seconds if window_seconds is not None else self.window_seconds))
+        resolved_limit = max(
+            1, int(max_requests if max_requests is not None else self.max_requests)
+        )
+        resolved_window = max(
+            1, int(window_seconds if window_seconds is not None else self.window_seconds)
+        )
         bucket_key = f"rl:{scope}:{client_ip}"
 
         rclient = _get_redis_client()
@@ -203,7 +210,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
             remaining = limit - count
             return False, remaining, reset_time
-        except Exception:  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
+        except (
+            Exception
+        ):  # policy: DEGRADED — Redis rate-limit backend may fall back to in-memory safely
             logger.warning("Redis rate-limit error — falling back to in-memory")
             return False, limit - 1, int(time.time()) + window
 

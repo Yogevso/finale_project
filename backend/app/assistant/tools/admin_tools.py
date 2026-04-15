@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from sqlalchemy import func
@@ -13,7 +12,6 @@ from app.models import (
     ActionType,
     AdminAction,
     AdminActionStatus,
-    AdminActionType,
     Attachment,
     Document,
     FeatureFlag,
@@ -28,8 +26,8 @@ from app.models import (
 from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
-
 # --- Feature Flags ---
+
 
 class ListFeatureFlagsTool(BaseTool):
     name = "list_feature_flags"
@@ -44,9 +42,16 @@ class ListFeatureFlagsTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tid = params["tenant_id"]
-        flags = db.query(FeatureFlag).filter(FeatureFlag.tenant_id == tid).order_by(FeatureFlag.feature_key).all()
+        flags = (
+            db.query(FeatureFlag)
+            .filter(FeatureFlag.tenant_id == tid)
+            .order_by(FeatureFlag.feature_key)
+            .all()
+        )
         if not flags:
             return {"success": True, "result": f"No feature flags configured for tenant {tid}."}
         lines = [f"{len(flags)} feature flag(s) for tenant {tid}:"]
@@ -63,7 +68,11 @@ class ToggleFeatureFlagTool(BaseTool):
         "type": "object",
         "properties": {
             "tenant_id": {"type": "integer", "description": "Tenant ID"},
-            "feature_key": {"type": "string", "description": "Feature flag key name", "maxLength": 255},
+            "feature_key": {
+                "type": "string",
+                "description": "Feature flag key name",
+                "maxLength": 255,
+            },
             "enabled": {"type": "boolean", "description": "True to enable, False to disable"},
         },
         "required": ["tenant_id", "feature_key", "enabled"],
@@ -72,13 +81,17 @@ class ToggleFeatureFlagTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tid = params["tenant_id"]
         key = params["feature_key"]
         enabled = params["enabled"]
-        flag = db.query(FeatureFlag).filter(
-            FeatureFlag.tenant_id == tid, FeatureFlag.feature_key == key
-        ).first()
+        flag = (
+            db.query(FeatureFlag)
+            .filter(FeatureFlag.tenant_id == tid, FeatureFlag.feature_key == key)
+            .first()
+        )
         if not flag:
             flag = FeatureFlag(tenant_id=tid, feature_key=key, enabled=enabled, updated_by=user.id)
             db.add(flag)
@@ -99,21 +112,28 @@ class ToggleFeatureFlagTool(BaseTool):
 
 # --- Maintenance Windows ---
 
+
 class ListMaintenanceWindowsTool(BaseTool):
     name = "list_maintenance_windows"
     description = "List upcoming or active maintenance windows (sysadmin only)."
     parameters = {
         "type": "object",
         "properties": {
-            "include_past": {"type": "boolean", "description": "Include past windows (default false)"},
+            "include_past": {
+                "type": "boolean",
+                "description": "Include past windows (default false)",
+            },
         },
         "required": [],
     }
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from datetime import datetime as dt
+
         q = db.query(MaintenanceWindow)
         if not params.get("include_past", False):
             q = q.filter(MaintenanceWindow.scheduled_end >= dt.utcnow())
@@ -137,11 +157,30 @@ class CreateMaintenanceWindowTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "title": {"type": "string", "description": "Title of the maintenance window", "maxLength": 255},
-            "description": {"type": "string", "description": "Details about the maintenance", "maxLength": 2000},
-            "scheduled_start": {"type": "string", "description": "Start time (ISO 8601, e.g. 2025-01-15T02:00:00)", "maxLength": 50},
-            "scheduled_end": {"type": "string", "description": "End time (ISO 8601)", "maxLength": 50},
-            "is_read_only": {"type": "boolean", "description": "Put system in read-only mode (default true)"},
+            "title": {
+                "type": "string",
+                "description": "Title of the maintenance window",
+                "maxLength": 255,
+            },
+            "description": {
+                "type": "string",
+                "description": "Details about the maintenance",
+                "maxLength": 2000,
+            },
+            "scheduled_start": {
+                "type": "string",
+                "description": "Start time (ISO 8601, e.g. 2025-01-15T02:00:00)",
+                "maxLength": 50,
+            },
+            "scheduled_end": {
+                "type": "string",
+                "description": "End time (ISO 8601)",
+                "maxLength": 50,
+            },
+            "is_read_only": {
+                "type": "boolean",
+                "description": "Put system in read-only mode (default true)",
+            },
         },
         "required": ["title", "scheduled_start", "scheduled_end"],
     }
@@ -149,8 +188,11 @@ class CreateMaintenanceWindowTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from datetime import datetime as dt
+
         start = dt.fromisoformat(params["scheduled_start"])
         end = dt.fromisoformat(params["scheduled_end"])
         if end <= start:
@@ -172,10 +214,14 @@ class CreateMaintenanceWindowTool(BaseTool):
         )
         db.commit()
         db.refresh(mw)
-        return {"success": True, "result": f"Maintenance window '{mw.title}' scheduled (ID: {mw.id})."}
+        return {
+            "success": True,
+            "result": f"Maintenance window '{mw.title}' scheduled (ID: {mw.id}).",
+        }
 
 
 # --- Tenant Quotas ---
+
 
 class GetTenantQuotaTool(BaseTool):
     name = "get_tenant_quota"
@@ -190,7 +236,9 @@ class GetTenantQuotaTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tid = params["tenant_id"]
         quota = db.query(TenantQuota).filter(TenantQuota.tenant_id == tid).first()
         tenant = db.query(Tenant).filter(Tenant.id == tid).first()
@@ -198,8 +246,16 @@ class GetTenantQuotaTool(BaseTool):
             return {"success": False, "result": f"Tenant {tid} not found."}
         # Get current usage
         user_count = db.query(func.count(User.id)).filter(User.tenant_id == tid).scalar() or 0
-        doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == tid).scalar() or 0
-        storage = db.query(func.sum(Attachment.file_size)).join(Document).filter(Document.tenant_id == tid).scalar() or 0
+        doc_count = (
+            db.query(func.count(Document.id)).filter(Document.tenant_id == tid).scalar() or 0
+        )
+        storage = (
+            db.query(func.sum(Attachment.file_size))
+            .join(Document)
+            .filter(Document.tenant_id == tid)
+            .scalar()
+            or 0
+        )
         storage_mb = round(storage / (1024 * 1024), 1)
         if not quota:
             return {
@@ -231,8 +287,14 @@ class UpdateTenantQuotaTool(BaseTool):
         "properties": {
             "tenant_id": {"type": "integer", "description": "Tenant ID"},
             "max_users": {"type": "integer", "description": "Max users (null for unlimited)"},
-            "max_documents": {"type": "integer", "description": "Max documents (null for unlimited)"},
-            "max_storage_mb": {"type": "integer", "description": "Max storage in MB (null for unlimited)"},
+            "max_documents": {
+                "type": "integer",
+                "description": "Max documents (null for unlimited)",
+            },
+            "max_storage_mb": {
+                "type": "integer",
+                "description": "Max storage in MB (null for unlimited)",
+            },
         },
         "required": ["tenant_id"],
     }
@@ -240,7 +302,9 @@ class UpdateTenantQuotaTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tid = params["tenant_id"]
         quota = db.query(TenantQuota).filter(TenantQuota.tenant_id == tid).first()
         if not quota:
@@ -265,13 +329,17 @@ class UpdateTenantQuotaTool(BaseTool):
 
 # --- Impersonation Sessions ---
 
+
 class ListImpersonationSessionsTool(BaseTool):
     name = "list_impersonation_sessions"
     description = "List recent impersonation sessions (sysadmin auditing)."
     parameters = {
         "type": "object",
         "properties": {
-            "active_only": {"type": "boolean", "description": "Show only active sessions (default false)"},
+            "active_only": {
+                "type": "boolean",
+                "description": "Show only active sessions (default false)",
+            },
             "limit": {"type": "integer", "description": "Max results (default 10)"},
         },
         "required": [],
@@ -279,7 +347,9 @@ class ListImpersonationSessionsTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 10), 50)
         q = db.query(ImpersonationSession)
         if params.get("active_only", False):
@@ -293,12 +363,21 @@ class ListImpersonationSessionsTool(BaseTool):
             tenant = db.query(Tenant).filter(Tenant.id == s.target_tenant_id).first()
             admin_name = admin.full_name if admin else f"User#{s.admin_user_id}"
             tenant_name = tenant.name if tenant else f"Tenant#{s.target_tenant_id}"
-            status = "ACTIVE" if s.is_active else f"ended {s.ended_at:%Y-%m-%d %H:%M}" if s.ended_at else "ended"
-            lines.append(f"- [{s.id}] {admin_name} → {tenant_name} ({status}, started {s.started_at:%Y-%m-%d %H:%M})")
+            status = (
+                "ACTIVE"
+                if s.is_active
+                else f"ended {s.ended_at:%Y-%m-%d %H:%M}"
+                if s.ended_at
+                else "ended"
+            )
+            lines.append(
+                f"- [{s.id}] {admin_name} → {tenant_name} ({status}, started {s.started_at:%Y-%m-%d %H:%M})"
+            )
         return {"success": True, "result": "\n".join(lines)}
 
 
 # --- Admin Actions (Approval Queue) ---
+
 
 class ListAdminActionsTool(BaseTool):
     name = "list_admin_actions"
@@ -306,7 +385,10 @@ class ListAdminActionsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "status": {"type": "string", "description": "Filter by status: pending, approved, rejected, executed, cancelled"},
+            "status": {
+                "type": "string",
+                "description": "Filter by status: pending, approved, rejected, executed, cancelled",
+            },
             "limit": {"type": "integer", "description": "Max results (default 10)"},
         },
         "required": [],
@@ -314,7 +396,9 @@ class ListAdminActionsTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 10), 50)
         q = db.query(AdminAction)
         status_filter = params.get("status")
@@ -323,7 +407,10 @@ class ListAdminActionsTool(BaseTool):
                 st = AdminActionStatus(status_filter)
                 q = q.filter(AdminAction.status == st)
             except ValueError:
-                return {"success": False, "result": f"Invalid status '{status_filter}'. Use: pending, approved, rejected, executed, cancelled."}
+                return {
+                    "success": False,
+                    "result": f"Invalid status '{status_filter}'. Use: pending, approved, rejected, executed, cancelled.",
+                }
         actions = q.order_by(AdminAction.created_at.desc()).limit(limit).all()
         if not actions:
             return {"success": True, "result": "No admin actions found."}
@@ -331,13 +418,17 @@ class ListAdminActionsTool(BaseTool):
         for a in actions:
             requester = db.query(User).filter(User.id == a.requested_by).first()
             req_name = requester.full_name if requester else f"User#{a.requested_by}"
-            lines.append(f"- [{a.id}] {a.action_type.value} — {a.status.value} (by {req_name}, {a.created_at:%Y-%m-%d})")
+            lines.append(
+                f"- [{a.id}] {a.action_type.value} — {a.status.value} (by {req_name}, {a.created_at:%Y-%m-%d})"
+            )
         return {"success": True, "result": "\n".join(lines)}
 
 
 class ReviewAdminActionTool(BaseTool):
     name = "review_admin_action"
-    description = "Approve or reject a pending admin action (requires different sysadmin than requester)."
+    description = (
+        "Approve or reject a pending admin action (requires different sysadmin than requester)."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -351,13 +442,19 @@ class ReviewAdminActionTool(BaseTool):
     required_role = UserRole.SYSTEM_ADMIN
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from datetime import datetime as dt
+
         action = db.query(AdminAction).filter(AdminAction.id == params["action_id"]).first()
         if not action:
             return {"success": False, "result": "Admin action not found."}
         if action.status != AdminActionStatus.PENDING:
-            return {"success": False, "result": f"Action is already '{action.status.value}', cannot review."}
+            return {
+                "success": False,
+                "result": f"Action is already '{action.status.value}', cannot review.",
+            }
         if action.requested_by == user.id:
             return {"success": False, "result": "You cannot review your own action request."}
         decision = params["decision"].lower()
@@ -382,9 +479,12 @@ class ReviewAdminActionTool(BaseTool):
 
 # --- Platform Overview ---
 
+
 class GetPlatformOverviewTool(BaseTool):
     name = "get_platform_overview"
-    description = "Get a high-level overview of the platform: total tenants, users, documents, storage."
+    description = (
+        "Get a high-level overview of the platform: total tenants, users, documents, storage."
+    )
     parameters = {
         "type": "object",
         "properties": {},
@@ -393,15 +493,25 @@ class GetPlatformOverviewTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tenants = db.query(func.count(Tenant.id)).scalar() or 0
         users = db.query(func.count(User.id)).scalar() or 0
         active_users = db.query(func.count(User.id)).filter(User.is_active.is_(True)).scalar() or 0
         docs = db.query(func.count(Document.id)).scalar() or 0
         storage = db.query(func.sum(Attachment.file_size)).scalar() or 0
         storage_mb = round(storage / (1024 * 1024), 1)
-        active_sessions = db.query(func.count(UserSession.id)).filter(UserSession.revoked_at.is_(None)).scalar() or 0
-        active_mw = db.query(func.count(MaintenanceWindow.id)).filter(MaintenanceWindow.is_active.is_(True)).scalar() or 0
+        active_sessions = (
+            db.query(func.count(UserSession.id)).filter(UserSession.revoked_at.is_(None)).scalar()
+            or 0
+        )
+        active_mw = (
+            db.query(func.count(MaintenanceWindow.id))
+            .filter(MaintenanceWindow.is_active.is_(True))
+            .scalar()
+            or 0
+        )
         return {
             "success": True,
             "result": (
@@ -429,18 +539,37 @@ class GetTenantSummaryTool(BaseTool):
     required_permission = Permission.SYSTEM_SETTINGS
     required_role = UserRole.SYSTEM_ADMIN
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         tid = params["tenant_id"]
         tenant = db.query(Tenant).filter(Tenant.id == tid).first()
         if not tenant:
             return {"success": False, "result": f"Tenant {tid} not found."}
         user_count = db.query(func.count(User.id)).filter(User.tenant_id == tid).scalar() or 0
-        active_users = db.query(func.count(User.id)).filter(User.tenant_id == tid, User.is_active.is_(True)).scalar() or 0
-        doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == tid).scalar() or 0
-        storage = db.query(func.sum(Attachment.file_size)).join(Document).filter(Document.tenant_id == tid).scalar() or 0
+        active_users = (
+            db.query(func.count(User.id))
+            .filter(User.tenant_id == tid, User.is_active.is_(True))
+            .scalar()
+            or 0
+        )
+        doc_count = (
+            db.query(func.count(Document.id)).filter(Document.tenant_id == tid).scalar() or 0
+        )
+        storage = (
+            db.query(func.sum(Attachment.file_size))
+            .join(Document)
+            .filter(Document.tenant_id == tid)
+            .scalar()
+            or 0
+        )
         storage_mb = round(storage / (1024 * 1024), 1)
         flags = db.query(FeatureFlag).filter(FeatureFlag.tenant_id == tid).all()
-        flag_str = ", ".join(f"{f.feature_key}={'on' if f.enabled else 'off'}" for f in flags) if flags else "none"
+        flag_str = (
+            ", ".join(f"{f.feature_key}={'on' if f.enabled else 'off'}" for f in flags)
+            if flags
+            else "none"
+        )
         quota = db.query(TenantQuota).filter(TenantQuota.tenant_id == tid).first()
         quota_str = "unlimited"
         if quota:

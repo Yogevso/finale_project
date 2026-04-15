@@ -22,7 +22,8 @@ import json
 from datetime import datetime
 from time import monotonic
 
-from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import HTTPException as FastAPIHTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_chat_db, get_db
@@ -73,7 +74,9 @@ async def chat_websocket(
     # Get all chat IDs this user participates in (X1-020)
     chat_ids = [
         p.chat_id
-        for p in chat_db.query(ChatParticipant.chat_id).filter(ChatParticipant.user_id == user.id).all()
+        for p in chat_db.query(ChatParticipant.chat_id)
+        .filter(ChatParticipant.user_id == user.id)
+        .all()
     ]
 
     await chat_manager.connect_chat(websocket, user.id, chat_ids)
@@ -124,7 +127,9 @@ async def chat_websocket(
         chat_manager.disconnect(websocket, user.id)
 
 
-async def _handle_send_message(websocket: WebSocket, user: User, data: dict, chat_db: Session, core_db: Session) -> None:
+async def _handle_send_message(
+    websocket: WebSocket, user: User, data: dict, chat_db: Session, core_db: Session
+) -> None:
     """Process send_message event and broadcast to participants (X1-021)."""
     chat_id = data.get("chat_id")
     content = (data.get("content") or "").strip()
@@ -141,15 +146,19 @@ async def _handle_send_message(websocket: WebSocket, user: User, data: dict, cha
         return
 
     # Broadcast to all participants (X1-021)
-    await chat_manager.broadcast_to_chat(chat_id, "new_message", {
-        "id": msg.id,
-        "chat_id": msg.chat_id,
-        "sender_id": msg.sender_id,
-        "sender_full_name": user.full_name,
-        "content": msg.content,
-        "message_type": msg.message_type.value,
-        "created_at": msg.created_at.isoformat(),
-    })
+    await chat_manager.broadcast_to_chat(
+        chat_id,
+        "new_message",
+        {
+            "id": msg.id,
+            "chat_id": msg.chat_id,
+            "sender_id": msg.sender_id,
+            "sender_full_name": user.full_name,
+            "content": msg.content,
+            "message_type": msg.message_type.value,
+            "created_at": msg.created_at.isoformat(),
+        },
+    )
 
 
 async def _handle_typing(user: User, data: dict) -> None:
@@ -158,11 +167,16 @@ async def _handle_typing(user: User, data: dict) -> None:
     if not chat_id:
         return
 
-    await chat_manager.broadcast_to_chat(chat_id, "user_typing", {
-        "chat_id": chat_id,
-        "user_id": user.id,
-        "username": user.full_name,
-    }, exclude_user=user.id)
+    await chat_manager.broadcast_to_chat(
+        chat_id,
+        "user_typing",
+        {
+            "chat_id": chat_id,
+            "user_id": user.id,
+            "username": user.full_name,
+        },
+        exclude_user=user.id,
+    )
 
 
 async def _handle_mark_read(user: User, data: dict, chat_db: Session) -> None:
@@ -171,15 +185,20 @@ async def _handle_mark_read(user: User, data: dict, chat_db: Session) -> None:
     if not chat_id:
         return
 
-    chat_db.query(ChatParticipant).filter_by(
-        chat_id=chat_id, user_id=user.id
-    ).update({"last_read_at": datetime.utcnow()})
+    chat_db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user.id).update(
+        {"last_read_at": datetime.utcnow()}
+    )
     chat_db.commit()
 
-    await chat_manager.broadcast_to_chat(chat_id, "message_read", {
-        "chat_id": chat_id,
-        "user_id": user.id,
-    }, exclude_user=user.id)
+    await chat_manager.broadcast_to_chat(
+        chat_id,
+        "message_read",
+        {
+            "chat_id": chat_id,
+            "user_id": user.id,
+        },
+        exclude_user=user.id,
+    )
 
 
 async def _handle_join_chat(websocket: WebSocket, user: User, data: dict, chat_db: Session) -> None:

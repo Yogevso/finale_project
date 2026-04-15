@@ -15,7 +15,11 @@ class ReviewWorkflow:
     def model() -> WorkflowModel[ReviewStatus]:
         statuses = tuple(ReviewStatus)
         transitions = {
-            status: tuple(candidate for candidate in statuses if candidate in review_stage_for(status).allowed_targets)
+            status: tuple(
+                candidate
+                for candidate in statuses
+                if candidate in review_stage_for(status).allowed_targets
+            )
             for status in statuses
         }
         return WorkflowModel(
@@ -32,6 +36,5 @@ class ReviewWorkflow:
         if self.can_transition(current, target):
             return target
         raise ConflictError(
-            "Invalid review status transition: "
-            f"{current.value} -> {target.value}"
+            "Invalid review status transition: " f"{current.value} -> {target.value}"
         )

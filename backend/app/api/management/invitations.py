@@ -11,8 +11,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from app.auth_context.invitation_tokens import hash_invitation_token
 from app.application.policies import InvitationPolicy
+from app.auth_context.invitation_tokens import hash_invitation_token
 from app.config import settings
 from app.db import SessionLocal, get_db
 from app.dependencies.tenant import TenantContext, get_tenant_context
@@ -120,7 +120,7 @@ def _persist_invitation_delivery(invitation_id: int, result: EmailSendResult) ->
         invitation.email_last_sender_email = result.sender_email
         invitation.email_last_sender_name = result.sender_name
         db.commit()
-    except Exception:
+    except Exception:  # policy: LOSSY — metadata persistence is best-effort
         db.rollback()
         logger.exception(
             "Failed to persist invitation email delivery metadata for invitation %s",
@@ -391,10 +391,14 @@ def list_invitations(
     inviters = user_repository.list_by_ids(inviter_ids)
     inviter_map = {user.id: user for user in inviters}
     tenant_ids = sorted({inv.tenant_id for inv in invitations if inv.tenant_id is not None})
-    tenant_map = {
-        tenant.id: tenant.name
-        for tenant in db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
-    } if tenant_ids else {}
+    tenant_map = (
+        {
+            tenant.id: tenant.name
+            for tenant in db.query(Tenant).filter(Tenant.id.in_(tenant_ids)).all()
+        }
+        if tenant_ids
+        else {}
+    )
 
     items = []
     for inv in invitations:
@@ -446,7 +450,9 @@ def get_invitation(
     )
 
 
-@router.get("/invitations/{invitation_id}/email-preview", response_model=InvitationEmailPreviewResponse)
+@router.get(
+    "/invitations/{invitation_id}/email-preview", response_model=InvitationEmailPreviewResponse
+)
 def get_invitation_email_preview(
     invitation_id: int,
     current_user: User = Depends(get_current_active_user),

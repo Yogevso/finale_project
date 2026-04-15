@@ -90,7 +90,9 @@ class Chat(ChatBase):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    participants = relationship("ChatParticipant", back_populates="chat", cascade="all, delete-orphan")
+    participants = relationship(
+        "ChatParticipant", back_populates="chat", cascade="all, delete-orphan"
+    )
     messages = relationship("ChatMessage", back_populates="chat", cascade="all, delete-orphan")
 
 
@@ -98,12 +100,12 @@ class ChatParticipant(ChatBase):
     """Participant in a chat."""
 
     __tablename__ = "chat_participants"
-    __table_args__ = (
-        UniqueConstraint("chat_id", "user_id", name="uq_chat_participant"),
-    )
+    __table_args__ = (UniqueConstraint("chat_id", "user_id", name="uq_chat_participant"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_id = Column(
+        Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     user_id = Column(Integer, nullable=False, index=True)
     role = Column(SQLEnum(ChatParticipantRole), default=ChatParticipantRole.MEMBER, nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -117,12 +119,12 @@ class ChatMessage(ChatBase):
     """Message in a chat."""
 
     __tablename__ = "chat_messages"
-    __table_args__ = (
-        Index("ix_chat_messages_chat_created", "chat_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_chat_messages_chat_created", "chat_id", "created_at"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    chat_id = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True)
+    chat_id = Column(
+        Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sender_id = Column(Integer, nullable=False, index=True)
     content = Column(Text, nullable=False)
     message_type = Column(SQLEnum(ChatMessageType), default=ChatMessageType.TEXT, nullable=False)

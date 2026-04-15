@@ -7,7 +7,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -225,9 +235,7 @@ def create_user(
     created_user = db.query(User).filter(User.id == payload["id"]).first()
     if created_user is not None:
         verification_token = auth_service.issue_email_verification_token(created_user)
-        verification_url = (
-            f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
-        )
+        verification_url = f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
         background_tasks.add_task(
             _send_email_verification_task,
             created_user.email,
@@ -275,7 +283,15 @@ def update_my_profile(
     db.refresh(current_user)
 
     # M-45: Audit trail for self-profile edits
-    changed = [f for f, v in [("full_name", payload.full_name), ("timezone", payload.timezone), ("locale", payload.locale)] if v is not None]
+    changed = [
+        f
+        for f, v in [
+            ("full_name", payload.full_name),
+            ("timezone", payload.timezone),
+            ("locale", payload.locale),
+        ]
+        if v is not None
+    ]
     write_audit_log(
         user_id=current_user.id,
         action=ActionType.UPDATE,
@@ -365,7 +381,7 @@ def upload_my_avatar(
         )
 
     sigs = _AVATAR_MAGIC.get(file.content_type, [])
-    if not any(file_bytes[:len(s)] == s for s in sigs):
+    if not any(file_bytes[: len(s)] == s for s in sigs):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File content does not match declared image type",
@@ -383,7 +399,9 @@ def upload_my_avatar(
             output_stream = io.BytesIO()
             resized.save(output_stream, format="JPEG", quality=90)
             output_stream.seek(0)
-    except Exception as exc:  # policy: BOUNDARY — translate admin side-effects into stable API errors
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — translate admin side-effects into stable API errors
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid avatar image",

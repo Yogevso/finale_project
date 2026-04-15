@@ -88,4 +88,3 @@ def test_command_and_query_bus_emit_use_case_telemetry():
     assert events[0].use_case_id == "command.telemetrycommand"
     assert events[1].use_case_id == "query.telemetryquery"
     assert all(event.outcome == "success" for event in events)
-

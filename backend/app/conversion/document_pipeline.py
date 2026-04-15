@@ -111,6 +111,7 @@ class DocumentConversionPipeline:
         )
         return None
 
+
 _document_conversion_pipeline = DocumentConversionPipeline()
 
 

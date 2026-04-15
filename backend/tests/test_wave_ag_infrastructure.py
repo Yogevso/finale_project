@@ -11,32 +11,20 @@ AG-021: admin list users uses eager loading (query count)
 from __future__ import annotations
 
 import ast
-import importlib
 import json
-import re
-import zipfile
 from datetime import datetime, timedelta
-from io import BytesIO
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-from sqlalchemy.orm import Session
 
 from app.models import (
-    Document,
     DocumentStatus,
     DocumentVisibility,
-    IdempotencyKeyRecord,
     PasswordReset,
-    User,
     UserRole,
     UserSession,
     Version,
     VersionBumpType,
 )
-from tests.factories.domain import create_document, create_tenant, create_user, persist
-
+from tests.factories.domain import create_document, create_user, persist
 
 # ══════════════════════════════════════════════════════════════════
 # AG-016: Verify only PyJWT imported (no python-jose imports remain)
@@ -65,9 +53,8 @@ class TestAG016NoPythonJoseImports:
                     if node.module and "jose" in node.module:
                         violations.append(f"{py_file.relative_to(app_dir)}:{node.lineno}")
 
-        assert violations == [], (
-            f"python-jose imports found in production code:\n"
-            + "\n".join(f"  - {v}" for v in violations)
+        assert violations == [], "python-jose imports found in production code:\n" + "\n".join(
+            f"  - {v}" for v in violations
         )
 
     def test_pyjwt_is_usable(self):
@@ -98,9 +85,9 @@ class TestAG017CollabUrlSingleSource:
         root = Path(__file__).resolve().parent.parent.parent
         for dc_file in ("docker-compose.yml", "docker-compose.prod.yml"):
             content = (root / dc_file).read_text()
-            assert "VITE_COLLAB_WS_URL" not in content, (
-                f"{dc_file} still uses deprecated VITE_COLLAB_WS_URL"
-            )
+            assert (
+                "VITE_COLLAB_WS_URL" not in content
+            ), f"{dc_file} still uses deprecated VITE_COLLAB_WS_URL"
 
     def test_dev_compose_allows_loopback_frontend_origins(self):
         """Development compose should allow both localhost and 127.0.0.1 frontend origins."""
@@ -248,9 +235,9 @@ class TestAG017CollabUrlSingleSource:
         """Production compose should support image-based rollout and loopback frontend exposure."""
         root = Path(__file__).resolve().parent.parent.parent
         content = (root / "docker-compose.prod.yml").read_text()
-        assert 'image: ${BACKEND_IMAGE:-portal-backend:local}' in content
-        assert 'image: ${FRONTEND_IMAGE:-portal-frontend:local}' in content
-        assert 'image: ${COLLAB_SERVER_IMAGE:-portal-collab-server:local}' in content
+        assert "image: ${BACKEND_IMAGE:-portal-backend:local}" in content
+        assert "image: ${FRONTEND_IMAGE:-portal-frontend:local}" in content
+        assert "image: ${COLLAB_SERVER_IMAGE:-portal-collab-server:local}" in content
         assert '- "127.0.0.1:8080:8080"' in content
         assert '- "443:443"' not in content
         assert '- "127.0.0.1:8003:8003"' in content
@@ -270,7 +257,10 @@ class TestAG017CollabUrlSingleSource:
         """Security summary should report the collab dependency scan result."""
         root = Path(__file__).resolve().parent.parent.parent
         content = (root / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
-        assert "needs: [dependency-scan-backend, dependency-scan-frontend, dependency-scan-collab, codeql-analysis, secret-scan]" in content
+        assert (
+            "needs: [dependency-scan-backend, dependency-scan-frontend, dependency-scan-collab, codeql-analysis, secret-scan]"
+            in content
+        )
         assert "Collaboration Dependencies" in content
 
     def test_dependabot_covers_collab_server(self):
@@ -293,7 +283,9 @@ class TestAG022TechDebtBudget:
     def test_architecture_fitness_runs_exception_policy_check(self):
         root = Path(__file__).resolve().parent.parent.parent
         workflow = (root / ".github" / "workflows" / "architecture-fitness.yml").read_text()
-        assert "python scripts/architecture_checks/check_exception_policy_annotations.py" in workflow
+        assert (
+            "python scripts/architecture_checks/check_exception_policy_annotations.py" in workflow
+        )
 
 
 class TestAG023PythonDependencyGovernance:
@@ -354,8 +346,14 @@ class TestAG023PythonDependencyGovernance:
         content = (root / ".github" / "workflows" / "security.yml").read_text(encoding="utf-8")
 
         assert "safety check -r requirements.txt" in content
-        assert "pip-audit -r requirements.txt --format json --output pip-audit-runtime-report.json" in content
-        assert "pip-audit -r requirements-dev.txt --format json --output pip-audit-dev-report.json" in content
+        assert (
+            "pip-audit -r requirements.txt --format json --output pip-audit-runtime-report.json"
+            in content
+        )
+        assert (
+            "pip-audit -r requirements-dev.txt --format json --output pip-audit-dev-report.json"
+            in content
+        )
         assert "pip-audit.ignore" in content
         assert "backend/pip-audit-runtime-report.json" in content
         assert "backend/pip-audit-dev-report.json" in content
@@ -456,7 +454,9 @@ class TestAG025CollaborationSloCoverage:
 
     def test_slo_registry_includes_collaboration_use_cases(self):
         root = Path(__file__).resolve().parent.parent.parent
-        payload = json.loads((root / "docs" / "slo" / "use-case-slos.json").read_text(encoding="utf-8-sig"))
+        payload = json.loads(
+            (root / "docs" / "slo" / "use-case-slos.json").read_text(encoding="utf-8-sig")
+        )
 
         use_case_ids = {item["use_case_id"] for item in payload["use_case_slos"]}
         assert "collab.start_collaboration_session" in use_case_ids
@@ -474,7 +474,7 @@ class TestAG018EmailRetry:
 
     def test_email_retries_on_smtp_connect_error(self):
         """Verify email service is configured for 3 retry attempts."""
-        from app.services.email_service import EmailService, EMAIL_MAX_ATTEMPTS
+        from app.services.email_service import EMAIL_MAX_ATTEMPTS, EmailService
 
         svc = EmailService()
         svc.enabled = True
@@ -532,13 +532,14 @@ class TestAG019CleanupWorker:
         cutoff = datetime.utcnow() - timedelta(days=30)
 
         # Count sessions that would be purged
-        to_purge = db.query(UserSession).filter(
-            (UserSession.user_id == user.id)
-            & (
-                (UserSession.revoked_at.isnot(None))
-                | (UserSession.last_active_at < cutoff)
+        to_purge = (
+            db.query(UserSession)
+            .filter(
+                (UserSession.user_id == user.id)
+                & ((UserSession.revoked_at.isnot(None)) | (UserSession.last_active_at < cutoff))
             )
-        ).count()
+            .count()
+        )
 
         assert to_purge >= 2  # revoked + stale
 
@@ -565,14 +566,15 @@ class TestAG019CleanupWorker:
         now = datetime.utcnow()
         grace_cutoff = now - timedelta(days=7)
 
-        to_purge = db.query(PasswordReset).filter(
-            (PasswordReset.user_id == user.id)
-            & (PasswordReset.expires_at < now)
-            & (
-                (PasswordReset.used_at.isnot(None))
-                | (PasswordReset.expires_at < grace_cutoff)
+        to_purge = (
+            db.query(PasswordReset)
+            .filter(
+                (PasswordReset.user_id == user.id)
+                & (PasswordReset.expires_at < now)
+                & ((PasswordReset.used_at.isnot(None)) | (PasswordReset.expires_at < grace_cutoff))
             )
-        ).count()
+            .count()
+        )
 
         assert to_purge >= 1  # expired_used
 
@@ -606,23 +608,30 @@ class TestAG020ScheduledPublish:
         )
 
         # Create version with scheduled_publish_at in the past (due)
-        v = persist(db, Version(
-            document_id=doc.id,
-            version_number=1,
-            semantic_version="1.0.0",
-            bump_type=VersionBumpType.PATCH,
-            content="<p>Scheduled content</p>",
-            changes_summary="Scheduled publish test",
-            is_published=False,
-            created_by=user.id,
-            scheduled_publish_at=datetime.utcnow() - timedelta(minutes=5),
-        ))
+        v = persist(
+            db,
+            Version(
+                document_id=doc.id,
+                version_number=1,
+                semantic_version="1.0.0",
+                bump_type=VersionBumpType.PATCH,
+                content="<p>Scheduled content</p>",
+                changes_summary="Scheduled publish test",
+                is_published=False,
+                created_by=user.id,
+                scheduled_publish_at=datetime.utcnow() - timedelta(minutes=5),
+            ),
+        )
 
         # Query for due versions
-        due = db.query(Version).filter(
-            Version.scheduled_publish_at <= datetime.utcnow(),
-            Version.is_published.is_(False),
-        ).all()
+        due = (
+            db.query(Version)
+            .filter(
+                Version.scheduled_publish_at <= datetime.utcnow(),
+                Version.is_published.is_(False),
+            )
+            .all()
+        )
 
         assert len(due) >= 1
         assert any(ver.id == v.id for ver in due)
@@ -645,6 +654,7 @@ class TestAG021EagerLoading:
     def test_user_repository_uses_joinedload(self):
         """Verify the user repository source imports and uses joinedload."""
         import inspect
+
         from app.repositories.user_repository import UserRepository
 
         source = inspect.getsource(UserRepository)

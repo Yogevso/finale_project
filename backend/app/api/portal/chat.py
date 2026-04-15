@@ -23,7 +23,9 @@ from app.services.chat_service import ChatService
 router = APIRouter(prefix="/portal/chats", tags=["Customer Chat"])
 
 
-def _get_chat_service(chat_db: Session = Depends(get_chat_db), db: Session = Depends(get_db)) -> ChatService:
+def _get_chat_service(
+    chat_db: Session = Depends(get_chat_db), db: Session = Depends(get_db)
+) -> ChatService:
     return ChatService(chat_db, core_db=db)
 
 
@@ -47,7 +49,11 @@ def _msg_to_response(msg, db: Session) -> ChatMessageResponse:
 
 
 def _participant_to_response(participant, db: Session) -> ChatParticipantResponse:
-    user = db.query(User).filter(User.id == participant.user_id).first() if participant.user_id else None
+    user = (
+        db.query(User).filter(User.id == participant.user_id).first()
+        if participant.user_id
+        else None
+    )
     return ChatParticipantResponse(
         id=participant.id,
         user_id=participant.user_id,
@@ -70,13 +76,15 @@ def list_my_chats(
     all_items = svc.get_user_chats(current_user)
     total = len(all_items)
     offset = (page - 1) * page_size
-    page_items = all_items[offset:offset + page_size]
+    page_items = all_items[offset : offset + page_size]
     return ChatListResponse(
         items=[
             ChatListItem(
                 chat=ChatResponse.model_validate(item["chat"]),
                 display_name=item["display_name"],
-                last_message=_msg_to_response(item["last_message"], svc.core_db) if item["last_message"] else None,
+                last_message=_msg_to_response(item["last_message"], svc.core_db)
+                if item["last_message"]
+                else None,
                 unread_count=item["unread_count"],
                 is_muted=item["is_muted"],
             )
@@ -106,7 +114,9 @@ def get_chat(
         last_message_at=chat.last_message_at,
         created_at=chat.created_at,
         updated_at=chat.updated_at,
-        participants=[_participant_to_response(participant, svc.core_db) for participant in chat.participants],
+        participants=[
+            _participant_to_response(participant, svc.core_db) for participant in chat.participants
+        ],
     )
 
 
@@ -126,7 +136,9 @@ def get_messages(
     )
 
 
-@router.post("/{chat_id}/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{chat_id}/messages", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED
+)
 def send_message(
     chat_id: int,
     body: SendMessageRequest,

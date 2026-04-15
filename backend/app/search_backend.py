@@ -51,4 +51,3 @@ def resolve_search_backend_mode(
     if requested_mode == SearchBackendMode.POSTGRES_TSV and dialect_name != "postgresql":
         return SearchBackendMode.PORTABLE_LIKE
     return requested_mode
-

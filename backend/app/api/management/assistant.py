@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 import json
 import logging
+from contextlib import suppress
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -180,7 +180,7 @@ async def chat(
             status_code=503,
             detail="AI assistant is currently busy. Please try again shortly.",
             headers={"Retry-After": str(max(exc.retry_after_seconds, 1))},
-        )
+        ) from exc
 
     engine = _build_engine(chat_db, user)
     tenant_id = None if user.role == UserRole.SYSTEM_ADMIN else user.tenant_id
@@ -425,7 +425,7 @@ async def upload_file(
     try:
         record = await handler.save_upload(file, user.id, db)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "file_id": record.id,
         "filename": record.original_filename,

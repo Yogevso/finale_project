@@ -8,15 +8,16 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.adapters import CollaborationContractAdapter
+from app.auth_context import CollaborationAuthService
 from app.collaboration.dependencies import get_collab_state_manager
 from app.collaboration.state_manager import CollabStateManager
 from app.db import get_db
 from app.dependencies.services import get_collaboration_auth_service, get_collaboration_service
 from app.models import Document, User
 from app.observability import UseCaseTimer
-from app.services.collaboration_service import CollaborationService
 from app.security import get_current_active_user
-from app.auth_context import CollaborationAuthService
+from app.services.collaboration_service import CollaborationService
+
 from .telemetry import record_collaboration_telemetry
 
 router = APIRouter()
@@ -96,7 +97,9 @@ async def get_document_state(
             content=state,
             media_type="application/octet-stream",
         )
-    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
         error_type = type(exc).__name__
         raise
     finally:
@@ -133,7 +136,9 @@ async def save_document_state(
         )
         outcome = "success"
         return payload
-    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
         error_type = type(exc).__name__
         raise
     finally:
@@ -266,7 +271,9 @@ async def verify_collaboration_access(
             tenant_id=user.tenant_id,
             permissions=permissions,
         )
-    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
         error_type = type(exc).__name__
         raise
     finally:

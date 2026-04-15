@@ -21,8 +21,7 @@ class DocumentStage:
         if self.can_transition_to(target):
             return target
         raise InvalidStateError(
-            "Invalid document status transition: "
-            f"{self.status.value} -> {target.value}"
+            "Invalid document status transition: " f"{self.status.value} -> {target.value}"
         )
 
     def normalize_for_new_version_candidate(self) -> DocumentStatus:
@@ -40,13 +39,20 @@ class DraftDocumentStage(DocumentStage):
 class PendingReviewDocumentStage(DocumentStage):
     status = DocumentStatus.PENDING_REVIEW
     allowed_targets = frozenset(
-        {DocumentStatus.APPROVED, DocumentStatus.DRAFT, DocumentStatus.ARCHIVED, DocumentStatus.PENDING_REVIEW}
+        {
+            DocumentStatus.APPROVED,
+            DocumentStatus.DRAFT,
+            DocumentStatus.ARCHIVED,
+            DocumentStatus.PENDING_REVIEW,
+        }
     )
 
 
 class ApprovedDocumentStage(DocumentStage):
     status = DocumentStatus.APPROVED
-    allowed_targets = frozenset({DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED, DocumentStatus.PENDING_REVIEW})
+    allowed_targets = frozenset(
+        {DocumentStatus.ACTIVE, DocumentStatus.ARCHIVED, DocumentStatus.PENDING_REVIEW}
+    )
 
 
 class ActiveDocumentStage(DocumentStage):

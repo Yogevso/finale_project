@@ -5,4 +5,3 @@ from app.infrastructure.adapters.collaboration.sqlalchemy_collaboration_state_ad
 )
 
 __all__ = ["SqlAlchemyCollaborationStateAdapter"]
-

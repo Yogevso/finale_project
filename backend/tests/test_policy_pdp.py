@@ -57,4 +57,3 @@ def test_manage_user_decision_enforces_role_boundaries(db, test_manager):
 
     assert decision.allowed is False
     assert decision.reason_code == "target_role_not_manageable"
-

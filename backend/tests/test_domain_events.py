@@ -297,11 +297,7 @@ def test_comment_chat_bridge_is_idempotent(db):
     assert len(participants) == 2
 
     context_json = build_comment_chat_bridge_context_json(event)
-    messages = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.context_json == context_json)
-        .all()
-    )
+    messages = db.query(ChatMessage).filter(ChatMessage.context_json == context_json).all()
     assert len(messages) == 1
     assert "Please review this section" in messages[0].content
     assert "[View in document](" in messages[0].content

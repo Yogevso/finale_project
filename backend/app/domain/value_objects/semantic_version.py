@@ -57,4 +57,3 @@ class SemanticVersion:
         if value == "minor":
             return self.bump_minor()
         return self.bump_patch()
-

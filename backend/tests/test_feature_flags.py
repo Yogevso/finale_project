@@ -140,7 +140,9 @@ def test_production_accepts_explicit_enabled_default_feature_flags():
 
 
 def test_production_rejects_rate_limiting_without_redis():
-    with pytest.raises(RuntimeError, match="Production requires REDIS_URL when RATE_LIMIT_ENABLED is True"):
+    with pytest.raises(
+        RuntimeError, match="Production requires REDIS_URL when RATE_LIMIT_ENABLED is True"
+    ):
         Settings(
             _env_file=None,
             APP_ENV="production",
@@ -188,7 +190,9 @@ def test_production_rejects_auto_search_backend_mode():
 
 
 def test_production_rejects_sqlite_search_mode_for_postgres_database():
-    with pytest.raises(RuntimeError, match="SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL"):
+    with pytest.raises(
+        RuntimeError, match="SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL"
+    ):
         Settings(
             _env_file=None,
             APP_ENV="production",

@@ -47,7 +47,9 @@ class AdminAction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     action_type = Column(SQLEnum(AdminActionType), nullable=False, index=True)
-    status = Column(SQLEnum(AdminActionStatus), default=AdminActionStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        SQLEnum(AdminActionStatus), default=AdminActionStatus.PENDING, nullable=False, index=True
+    )
     payload = Column(Text, nullable=False)
     reason = Column(Text, nullable=True)
     requested_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -67,9 +69,7 @@ class TenantQuota(Base):
     """Configurable quotas per tenant."""
 
     __tablename__ = "tenant_quotas"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", name="uq_tenant_quota"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_tenant_quota"),)
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -88,9 +88,7 @@ class FeatureFlag(Base):
     """Per-tenant feature flags with rollout targeting."""
 
     __tablename__ = "feature_flags"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "feature_key", name="uq_tenant_feature"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "feature_key", name="uq_tenant_feature"),)
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -156,7 +154,9 @@ class DataRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     request_type = Column(SQLEnum(DataRequestType), nullable=False, index=True)
-    status = Column(SQLEnum(DataRequestStatus), default=DataRequestStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        SQLEnum(DataRequestStatus), default=DataRequestStatus.PENDING, nullable=False, index=True
+    )
     reason = Column(Text, nullable=False)
     admin_comment = Column(Text, nullable=True)
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)

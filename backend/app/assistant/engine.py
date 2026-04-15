@@ -22,7 +22,7 @@ from app.assistant.prompts import (
 from app.assistant.schemas import ToolCall, ToolResult
 from app.assistant.tools.registry import ToolRegistry
 from app.config import settings
-from app.models import ActionType, User, UserRole
+from app.models import ActionType, User
 from app.services.audit_helper import write_audit_log
 
 logger = logging.getLogger(__name__)
@@ -34,97 +34,150 @@ logger = logging.getLogger(__name__)
 
 _TOOL_GROUPS: dict[str, list[str]] = {
     "users": [
-        "list_users", "get_user", "create_user", "deactivate_user",
+        "list_users",
+        "get_user",
+        "create_user",
+        "deactivate_user",
         "change_user_role",
     ],
     "documents": [
-        "search_documents", "get_document", "create_document",
-        "edit_document", "delete_document", "search_public_documents",
-        "get_document_content", "get_documents_by_status", "get_recent_documents",
+        "search_documents",
+        "get_document",
+        "create_document",
+        "edit_document",
+        "delete_document",
+        "search_public_documents",
+        "get_document_content",
+        "get_documents_by_status",
+        "get_recent_documents",
     ],
     "settings": [
-        "get_site_settings", "update_site_setting",
+        "get_site_settings",
+        "update_site_setting",
     ],
     "announcements": [
-        "create_announcement", "list_announcements",
+        "create_announcement",
+        "list_announcements",
     ],
     "topics": [
-        "list_topics", "create_topic",
+        "list_topics",
+        "create_topic",
     ],
     "tenants": [
-        "list_tenants", "get_tenant", "update_tenant",
+        "list_tenants",
+        "get_tenant",
+        "update_tenant",
     ],
     "support": [
-        "create_support_ticket", "list_my_tickets", "get_ticket_details",
+        "create_support_ticket",
+        "list_my_tickets",
+        "get_ticket_details",
     ],
     "feedback": [
-        "submit_feedback", "get_my_feedback",
+        "submit_feedback",
+        "get_my_feedback",
     ],
     "info": [
-        "get_my_profile", "get_my_permissions", "get_help",
+        "get_my_profile",
+        "get_my_permissions",
+        "get_help",
     ],
     "rag": [
-        "semantic_search", "summarize_document", "ask_about_document",
+        "semantic_search",
+        "summarize_document",
+        "ask_about_document",
     ],
     "files": [
-        "analyze_uploaded_file", "compare_files",
+        "analyze_uploaded_file",
+        "compare_files",
     ],
     "versions": [
-        "compare_versions", "get_document_history", "publish_document",
+        "compare_versions",
+        "get_document_history",
+        "publish_document",
         "get_document_workflow",
-        "list_scheduled_publishes", "get_version_details",
-        "get_document_version_stats", "cancel_scheduled_publish",
+        "list_scheduled_publishes",
+        "get_version_details",
+        "get_document_version_stats",
+        "cancel_scheduled_publish",
         "list_unpublished_versions",
     ],
     "attachments": [
-        "list_attachments", "get_attachment_info",
-        "search_attachments", "get_attachment_stats",
+        "list_attachments",
+        "get_attachment_info",
+        "search_attachments",
+        "get_attachment_stats",
         "get_largest_attachments",
     ],
     "analytics": [
-        "get_platform_analytics", "get_engagement_analytics",
+        "get_platform_analytics",
+        "get_engagement_analytics",
         "get_content_analytics",
     ],
     "audit": [
-        "search_audit_logs", "get_user_activity",
+        "search_audit_logs",
+        "get_user_activity",
     ],
     "notifications": [
-        "get_my_notifications", "mark_notifications_read",
+        "get_my_notifications",
+        "mark_notifications_read",
     ],
     "comments": [
-        "list_document_comments", "add_comment", "resolve_comment",
+        "list_document_comments",
+        "add_comment",
+        "resolve_comment",
     ],
     "reviews": [
-        "submit_review", "list_pending_reviews",
+        "submit_review",
+        "list_pending_reviews",
     ],
     "invitations": [
-        "create_invitation", "list_invitations",
+        "create_invitation",
+        "list_invitations",
     ],
     "collaboration": [
-        "get_active_collaborators", "get_collaboration_history",
+        "get_active_collaborators",
+        "get_collaboration_history",
     ],
     "engagement": [
-        "bookmark_document", "remove_bookmark", "list_my_bookmarks",
-        "watch_document", "unwatch_document", "get_my_watched_documents",
-        "get_reading_progress", "update_reading_progress",
+        "bookmark_document",
+        "remove_bookmark",
+        "list_my_bookmarks",
+        "watch_document",
+        "unwatch_document",
+        "get_my_watched_documents",
+        "get_reading_progress",
+        "update_reading_progress",
     ],
     "chat": [
-        "list_my_chats", "get_chat_messages", "send_chat_message",
-        "search_chat_messages", "get_chat_participants",
-        "get_unread_chats", "mark_chat_read",
+        "list_my_chats",
+        "get_chat_messages",
+        "send_chat_message",
+        "search_chat_messages",
+        "get_chat_participants",
+        "get_unread_chats",
+        "mark_chat_read",
     ],
     "admin": [
-        "list_feature_flags", "toggle_feature_flag",
-        "list_maintenance_windows", "create_maintenance_window",
-        "get_tenant_quota", "update_tenant_quota",
-        "list_impersonation_sessions", "list_admin_actions",
-        "review_admin_action", "get_platform_overview",
+        "list_feature_flags",
+        "toggle_feature_flag",
+        "list_maintenance_windows",
+        "create_maintenance_window",
+        "get_tenant_quota",
+        "update_tenant_quota",
+        "list_impersonation_sessions",
+        "list_admin_actions",
+        "review_admin_action",
+        "get_platform_overview",
         "get_tenant_summary",
     ],
     "security": [
-        "get_my_sessions", "revoke_session",
-        "get_my_security_events", "get_security_events_admin",
-        "get_invitation_status", "cancel_invitation",
+        "get_my_sessions",
+        "revoke_session",
+        "get_my_security_events",
+        "get_security_events_admin",
+        "get_invitation_status",
+        "cancel_invitation",
     ],
 }
 
@@ -187,17 +240,12 @@ def _build_untrusted_reference_message(
 ) -> dict[str, str]:
     return {
         "role": "user",
-        "content": (
-            f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n"
-            f"{header}\n"
-            f"{body}\n"
-            f"{footer}"
-        ),
+        "content": (f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n" f"{header}\n" f"{body}\n" f"{footer}"),
     }
 
 
 def _stream_text_chunks(text: str, *, chunk_size: int = 40) -> list[str]:
-    return [text[idx:idx + chunk_size] for idx in range(0, len(text), chunk_size)] or [text]
+    return [text[idx : idx + chunk_size] for idx in range(0, len(text), chunk_size)] or [text]
 
 
 def _tool_result_content(result: ToolResult) -> str:
@@ -224,10 +272,12 @@ def _build_all_tools_failed_response(results: list[ToolResult]) -> str:
     ]
     for result in results[:4]:
         lines.append(f"- `{result.name}`: {result.error or 'Tool failed.'}")
-    lines.extend([
-        "",
-        "Retry the request, simplify it, or attach the document/file you want me to use for grounding.",
-    ])
+    lines.extend(
+        [
+            "",
+            "Retry the request, simplify it, or attach the document/file you want me to use for grounding.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -311,32 +361,84 @@ _KEYWORD_MAP: list[tuple[re.Pattern[str], list[str]]] = [
     (re.compile(r"ticket|support|issue|bug|problem", re.I), ["support"]),
     (re.compile(r"feedback|review|rating|suggest", re.I), ["feedback"]),
     (re.compile(r"profile|who am i|permission|what can i|help|\bme\b", re.I), ["info"]),
-    (re.compile(r"search content|summarize|summary|what does .* say|tell me about|explain document|ask about|semantic|meaning|find in doc", re.I), ["rag", "documents"]),
-    (re.compile(r"upload|attached|uploaded file|analyze file|compare file|file analysis", re.I), ["files"]),
-    (re.compile(r"version|history|changes|diff|publish|draft|pending|workflow|review status|approval", re.I), ["versions", "documents"]),
+    (
+        re.compile(
+            r"search content|summarize|summary|what does .* say|tell me about|explain document|ask about|semantic|meaning|find in doc",
+            re.I,
+        ),
+        ["rag", "documents"],
+    ),
+    (
+        re.compile(r"upload|attached|uploaded file|analyze file|compare file|file analysis", re.I),
+        ["files"],
+    ),
+    (
+        re.compile(
+            r"version|history|changes|diff|publish|draft|pending|workflow|review status|approval",
+            re.I,
+        ),
+        ["versions", "documents"],
+    ),
     (re.compile(r"attachment|attached file|download file", re.I), ["attachments", "documents"]),
     (re.compile(r"recent|latest|this week|today|new doc|updated", re.I), ["documents"]),
-    (re.compile(r"analytics|statistic|metric|dashboard|usage|engagement|platform stats", re.I), ["analytics"]),
+    (
+        re.compile(r"analytics|statistic|metric|dashboard|usage|engagement|platform stats", re.I),
+        ["analytics"],
+    ),
     (re.compile(r"audit|log|trail|action history|who did", re.I), ["audit"]),
     (re.compile(r"notification|notify|alert|unread|inbox", re.I), ["notifications"]),
-    (re.compile(r"comment|reply|thread|remark|resolve comment|discussion", re.I), ["comments", "documents"]),
-    (re.compile(r"review|approve|reject|pending review|submit review", re.I), ["reviews", "versions"]),
+    (
+        re.compile(r"comment|reply|thread|remark|resolve comment|discussion", re.I),
+        ["comments", "documents"],
+    ),
+    (
+        re.compile(r"review|approve|reject|pending review|submit review", re.I),
+        ["reviews", "versions"],
+    ),
     (re.compile(r"invit|onboard|invite user|send invitation", re.I), ["invitations"]),
-    (re.compile(r"collaborat|who is editing|active editor|real.?time|working on", re.I), ["collaboration", "documents"]),
+    (
+        re.compile(r"collaborat|who is editing|active editor|real.?time|working on", re.I),
+        ["collaboration", "documents"],
+    ),
     (re.compile(r"bookmark|saved|save for later|favorites?|reading list", re.I), ["engagement"]),
     (re.compile(r"watch|follow|unwatch|unfollow|notify me|track doc", re.I), ["engagement"]),
-    (re.compile(r"reading progress|how far|completed|finished reading|resume", re.I), ["engagement"]),
-    (re.compile(r"\bchat\b|message|DM|direct message|group chat|conversation|send.*message|unread", re.I), ["chat"]),
+    (
+        re.compile(r"reading progress|how far|completed|finished reading|resume", re.I),
+        ["engagement"],
+    ),
+    (
+        re.compile(
+            r"\bchat\b|message|DM|direct message|group chat|conversation|send.*message|unread", re.I
+        ),
+        ["chat"],
+    ),
     (re.compile(r"feature flag|toggle feature|enable feature|disable feature", re.I), ["admin"]),
     (re.compile(r"maintenance|maintenance window|downtime|read.only mode", re.I), ["admin"]),
     (re.compile(r"quota|storage limit|user limit|tenant limit", re.I), ["admin"]),
     (re.compile(r"impersonat|admin action|approval queue|platform overview", re.I), ["admin"]),
-    (re.compile(r"tenant\s+summary|summary\s+of\s+tenant|tenant\s+overview|tenant\s+details", re.I), ["admin", "tenants"]),
+    (
+        re.compile(
+            r"tenant\s+summary|summary\s+of\s+tenant|tenant\s+overview|tenant\s+details", re.I
+        ),
+        ["admin", "tenants"],
+    ),
     (re.compile(r"session|active session|device|logged in|revoke|log.?out", re.I), ["security"]),
     (re.compile(r"security event|login attempt|suspicious|anomal", re.I), ["security"]),
-    (re.compile(r"invitation status|pending invitation|cancel invitation|expired invit", re.I), ["security", "invitations"]),
-    (re.compile(r"scheduled publish|schedule|publish.*later|unpublished|draft version|version detail|version stat", re.I), ["versions"]),
-    (re.compile(r"attachment stat|largest file|search attach|file size|storage usage", re.I), ["attachments"]),
+    (
+        re.compile(r"invitation status|pending invitation|cancel invitation|expired invit", re.I),
+        ["security", "invitations"],
+    ),
+    (
+        re.compile(
+            r"scheduled publish|schedule|publish.*later|unpublished|draft version|version detail|version stat",
+            re.I,
+        ),
+        ["versions"],
+    ),
+    (
+        re.compile(r"attachment stat|largest file|search attach|file size|storage usage", re.I),
+        ["attachments"],
+    ),
 ]
 
 
@@ -363,10 +465,7 @@ def _select_relevant_tools(
         allowed.update(_TOOL_GROUPS.get(group, []))
 
     # Filter tools
-    selected = [
-        t for t in all_tools
-        if t.get("function", {}).get("name", "") in allowed
-    ]
+    selected = [t for t in all_tools if t.get("function", {}).get("name", "") in allowed]
     return selected if selected else all_tools
 
 
@@ -382,6 +481,7 @@ async def _select_relevant_tools_hybrid(
 
     # 2. Embedding-based selection (semantic)
     from app.assistant.tool_router import embedding_route
+
     embedding_names = await embedding_route(message, all_tools, top_k=8)
 
     # 3. Merge: keyword hits get priority, then embedding hits fill remaining slots
@@ -406,10 +506,7 @@ async def _select_relevant_tools_hybrid(
                 ordered.append(n)
         merged = set(ordered[:max_tools])
 
-    selected = [
-        t for t in all_tools
-        if t.get("function", {}).get("name", "") in merged
-    ]
+    selected = [t for t in all_tools if t.get("function", {}).get("name", "") in merged]
     return selected if selected else all_tools
 
 
@@ -470,7 +567,9 @@ class AssistantEngine:
         all_tools = self._registry.get_ollama_tools(user)
         # Smart routing: hybrid keyword + embedding selection
         try:
-            relevant_tools = await _select_relevant_tools_hybrid(message, all_tools) if all_tools else []
+            relevant_tools = (
+                await _select_relevant_tools_hybrid(message, all_tools) if all_tools else []
+            )
         except Exception:  # policy: LOSSY — tool routing can fall back to simpler selection
             logger.warning("Hybrid routing failed, falling back to keyword-only", exc_info=True)
             relevant_tools = _select_relevant_tools(message, all_tools) if all_tools else []
@@ -507,6 +606,7 @@ class AssistantEngine:
 
         # Resolve document IDs: from request, from conversation context, or from @mentions
         import json as _json
+
         effective_doc_ids = document_ids
         if not effective_doc_ids and conv.context_document_ids:
             try:
@@ -526,15 +626,17 @@ class AssistantEngine:
                 document_ids=effective_doc_ids,
             )
             if resolved_docs:
-                messages.append({
-                    "role": "user",
-                    "content": (
-                    f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n"
-                    "The user has selected the following document reference material. "
-                    "Use this content to answer their question directly. "
-                    "Do NOT call get_document — it only returns metadata."
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n"
+                            "The user has selected the following document reference material. "
+                            "Use this content to answer their question directly. "
+                            "Do NOT call get_document — it only returns metadata."
+                        ),
+                    }
+                )
             effective_doc_ids = [doc.id for doc in resolved_docs]
             for doc in resolved_docs:
                 version = resolve_assistant_visible_version(
@@ -556,8 +658,9 @@ class AssistantEngine:
         elif "@" in message:
             # Fallback: resolve @mentions from message text
             import re as _re
-            from app.models import Document
+
             from app.assistant.rag.chunker import DocumentChunker
+            from app.models import Document
 
             # Match @word or @"multi word title"
             mention_pattern = _re.findall(r'@"([^"]{1,60})"|@(\w+)', message)
@@ -568,36 +671,46 @@ class AssistantEngine:
                     mention_clean = mention.strip()
                     if not mention_clean:
                         continue
-                    query = db.query(Document).filter(
-                        Document.title.ilike(f"%{mention_clean}%")
-                    )
+                    query = db.query(Document).filter(Document.title.ilike(f"%{mention_clean}%"))
                     if tenant_id is not None:
                         query = query.filter(Document.tenant_id == tenant_id)
                     doc = query.first()
                     if doc:
                         from app.application.policies.access_policies import DocumentAccessPolicy
+
                         _policy = DocumentAccessPolicy()
                         if not _policy.can_view_document(user, doc):
                             logger.warning(
                                 "User %d denied @mention access to document %d (%s)",
-                                user.id, doc.id, doc.title,
+                                user.id,
+                                doc.id,
+                                doc.title,
                             )
                             continue
                         resolved_docs.append(doc)
-                        logger.info("Resolved @mention '%s' to document id=%d title='%s'", mention_clean, doc.id, doc.title)
+                        logger.info(
+                            "Resolved @mention '%s' to document id=%d title='%s'",
+                            mention_clean,
+                            doc.id,
+                            doc.title,
+                        )
                     else:
-                        logger.info("Could not resolve @mention '%s' to any document", mention_clean)
+                        logger.info(
+                            "Could not resolve @mention '%s' to any document", mention_clean
+                        )
 
                 if resolved_docs:
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n"
-                            "The user referenced the following document(s) with @ in their message. "
-                            "Use this content to answer their question directly. "
-                            "Do NOT call get_document — it only returns metadata."
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"{_UNTRUSTED_REFERENCE_PREAMBLE}\n\n"
+                                "The user referenced the following document(s) with @ in their message. "
+                                "Use this content to answer their question directly. "
+                                "Do NOT call get_document — it only returns metadata."
+                            ),
+                        }
+                    )
                     for doc in resolved_docs:
                         version = resolve_assistant_visible_version(
                             db,
@@ -631,7 +744,9 @@ class AssistantEngine:
             relevant_tools = []
             # Replace compact tool prompt with full system prompt for better answers
             messages[0] = {"role": "system", "content": build_system_prompt(user, tenant_id)}
-            logger.info("Document content injected — skipping tool-calling, streaming direct response")
+            logger.info(
+                "Document content injected — skipping tool-calling, streaming direct response"
+            )
         if not relevant_tools:
             # No tools → stream with compact prompt
             try:
@@ -651,11 +766,20 @@ class AssistantEngine:
                         yield {"event": "token", "data": token}
                     # Last chunk contains token counts
                     if chunk.get("done"):
-                        total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get("eval_count", 0)
-                self._conv.add_message(conv.id, "assistant", full_text, token_count=total_tokens or None)
-            except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
+                        total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get(
+                            "eval_count", 0
+                        )
+                self._conv.add_message(
+                    conv.id, "assistant", full_text, token_count=total_tokens or None
+                )
+            except (
+                Exception
+            ):  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                 logger.exception("Ollama streaming request failed")
-                yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
+                yield {
+                    "event": "error",
+                    "data": {"message": "AI service is temporarily unavailable."},
+                }
                 return
         else:
             max_iters = settings.ASSISTANT_MAX_TOOL_ITERATIONS
@@ -668,12 +792,19 @@ class AssistantEngine:
                         tools=relevant_tools,
                         temperature=settings.ASSISTANT_TOOL_TEMPERATURE,
                         max_tokens=512,  # Tool decisions are short
-                        num_ctx=4096,    # Small context = fast inference
+                        num_ctx=4096,  # Small context = fast inference
                     )
-                    total_tokens += response.get("prompt_eval_count", 0) + response.get("eval_count", 0)
-                except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
+                    total_tokens += response.get("prompt_eval_count", 0) + response.get(
+                        "eval_count", 0
+                    )
+                except (
+                    Exception
+                ):  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                     logger.exception("Ollama request failed")
-                    yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
+                    yield {
+                        "event": "error",
+                        "data": {"message": "AI service is temporarily unavailable."},
+                    }
                     return
 
                 resp_message = response.get("message", {})
@@ -730,13 +861,19 @@ class AssistantEngine:
                     messages.append(tool_msg)
                     executed_results.append((tc.name, skip_msg))
                     self._conv.add_message(
-                        conv.id, "tool", skip_msg,
-                        tool_call_id=tc.id, tool_name=tc.name,
+                        conv.id,
+                        "tool",
+                        skip_msg,
+                        tool_call_id=tc.id,
+                        tool_name=tc.name,
                     )
 
                 # Execute remaining tools in parallel when multiple
                 if len(exec_calls) > 1:
-                    yield {"event": "thinking", "data": {"status": f"Running {len(exec_calls)} tools in parallel…"}}
+                    yield {
+                        "event": "thinking",
+                        "data": {"status": f"Running {len(exec_calls)} tools in parallel…"},
+                    }
                     for tc in exec_calls:
                         yield {
                             "event": "tool_call",
@@ -745,7 +882,11 @@ class AssistantEngine:
 
                     async def _run_tool(tc: ToolCall) -> ToolResult:
                         result = await self._registry.execute_tool(
-                            tc.name, user, tenant_id, tc.arguments, db,
+                            tc.name,
+                            user,
+                            tenant_id,
+                            tc.arguments,
+                            db,
                         )
                         result.tool_call_id = tc.id
                         return result
@@ -754,7 +895,7 @@ class AssistantEngine:
                         *[_run_tool(tc) for tc in exec_calls],
                         return_exceptions=True,
                     )
-                    for tc, item in zip(exec_calls, results):
+                    for tc, item in zip(exec_calls, results, strict=False):
                         if isinstance(item, Exception):
                             logger.exception(
                                 "Parallel tool execution failed for %s",
@@ -780,8 +921,11 @@ class AssistantEngine:
                         messages.append(tool_msg)
                         executed_results.append((tc.name, tool_msg["content"]))
                         self._conv.add_message(
-                            conv.id, "tool", tool_msg["content"],
-                            tool_call_id=tc.id, tool_name=tc.name,
+                            conv.id,
+                            "tool",
+                            tool_msg["content"],
+                            tool_call_id=tc.id,
+                            tool_name=tc.name,
                         )
                 elif exec_calls:
                     # Single tool — sequential execution
@@ -793,7 +937,11 @@ class AssistantEngine:
                     }
 
                     result = await self._registry.execute_tool(
-                        tc.name, user, tenant_id, tc.arguments, db,
+                        tc.name,
+                        user,
+                        tenant_id,
+                        tc.arguments,
+                        db,
                     )
                     result.tool_call_id = tc.id
                     self._log_tool_use(db, user, tc, result)
@@ -813,8 +961,11 @@ class AssistantEngine:
                     messages.append(tool_msg)
                     executed_results.append((tc.name, tool_msg["content"]))
                     self._conv.add_message(
-                        conv.id, "tool", tool_msg["content"],
-                        tool_call_id=tc.id, tool_name=tc.name,
+                        conv.id,
+                        "tool",
+                        tool_msg["content"],
+                        tool_call_id=tc.id,
+                        tool_name=tc.name,
                     )
 
                 if confirm_calls and not exec_calls:
@@ -830,8 +981,11 @@ class AssistantEngine:
                     )
                     break
 
-                if exec_calls and not confirm_calls and executed_tool_results and all(
-                    not result.success for result in executed_tool_results
+                if (
+                    exec_calls
+                    and not confirm_calls
+                    and executed_tool_results
+                    and all(not result.success for result in executed_tool_results)
                 ):
                     failure_text = _build_all_tools_failed_response(executed_tool_results)
                     for chunk_text in _stream_text_chunks(failure_text):
@@ -846,21 +1000,32 @@ class AssistantEngine:
                     break
 
                 tool_results_text = "\n\n".join(
-                    f"<tool_output name=\"{name}\">\n{content}\n</tool_output>"
+                    f'<tool_output name="{name}">\n{content}\n</tool_output>'
                     for name, content in executed_results
                 )
 
                 summary_messages = [
-                    {"role": "system", "content": build_tool_result_summary_prompt(user, tenant_id)},
+                    {
+                        "role": "system",
+                        "content": build_tool_result_summary_prompt(user, tenant_id),
+                    },
                     {"role": "user", "content": message},
-                    {"role": "assistant", "content": f"I called the tools. Here are the results:\n\n{tool_results_text}"},
-                    {"role": "user", "content": "Now present those results to me in a clear format."},
+                    {
+                        "role": "assistant",
+                        "content": f"I called the tools. Here are the results:\n\n{tool_results_text}",
+                    },
+                    {
+                        "role": "user",
+                        "content": "Now present those results to me in a clear format.",
+                    },
                 ]
 
                 yield {"event": "thinking", "data": {"status": "Preparing response…"}}
                 try:
                     full_text = ""
-                    llm_summary_messages = _fit_messages_to_context_window(summary_messages, num_ctx=8192)
+                    llm_summary_messages = _fit_messages_to_context_window(
+                        summary_messages, num_ctx=8192
+                    )
                     async for chunk in self._ollama.chat_stream(
                         messages=llm_summary_messages,
                         tools=None,
@@ -873,11 +1038,20 @@ class AssistantEngine:
                             full_text += token
                             yield {"event": "token", "data": token}
                         if chunk.get("done"):
-                            total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get("eval_count", 0)
-                    self._conv.add_message(conv.id, "assistant", full_text, token_count=total_tokens or None)
-                except Exception:  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
+                            total_tokens += chunk.get("prompt_eval_count", 0) + chunk.get(
+                                "eval_count", 0
+                            )
+                    self._conv.add_message(
+                        conv.id, "assistant", full_text, token_count=total_tokens or None
+                    )
+                except (
+                    Exception
+                ):  # policy: BOUNDARY — AI backend failure becomes a stable user-facing error
                     logger.exception("Ollama streaming summary failed")
-                    yield {"event": "error", "data": {"message": "AI service is temporarily unavailable."}}
+                    yield {
+                        "event": "error",
+                        "data": {"message": "AI service is temporarily unavailable."},
+                    }
                     return
                 break
             else:
@@ -910,13 +1084,12 @@ class AssistantEngine:
             await self._conv.auto_summarize_if_needed(conv.id, self._ollama)
         except Exception:  # policy: LOSSY — summarization is background optimization
             logger.debug("Auto-summarization skipped", exc_info=True)
+
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
 
-    async def _generate_suggestions(
-        self, user_message: str, conversation_id: int
-    ) -> list[str]:
+    async def _generate_suggestions(self, user_message: str, conversation_id: int) -> list[str]:
         """Generate 2-3 contextual follow-up question suggestions."""
         try:
             response = await self._ollama.chat(
@@ -970,7 +1143,7 @@ class AssistantEngine:
             )
             if not isinstance(response, dict):
                 return None
-            title = response.get("message", {}).get("content", "").strip().strip('"\'')
+            title = response.get("message", {}).get("content", "").strip().strip("\"'")
             if title and len(title) > 2:
                 # Truncate if somehow too long
                 if len(title) > 80:
@@ -983,20 +1156,25 @@ class AssistantEngine:
 
     @staticmethod
     def _log_tool_use(
-        db: Session, user: User, tc: ToolCall, result: ToolResult,
+        db: Session,
+        user: User,
+        tc: ToolCall,
+        result: ToolResult,
     ) -> None:
         """Write an audit-log entry for every tool invocation."""
         try:
             write_audit_log(
                 user_id=user.id,
                 action=ActionType.SYSTEM,
-                details=json.dumps({
-                    "source": "assistant",
-                    "tool": tc.name,
-                    "arguments": tc.arguments,
-                    "success": result.success,
-                    "result_preview": (result.result or "")[:1000],
-                }),
+                details=json.dumps(
+                    {
+                        "source": "assistant",
+                        "tool": tc.name,
+                        "arguments": tc.arguments,
+                        "success": result.success,
+                        "result_preview": (result.result or "")[:1000],
+                    }
+                ),
             )
         except Exception:  # policy: LOSSY — audit logging must not block tool execution
             logger.warning("Failed to write audit log for tool %s", tc.name, exc_info=True)

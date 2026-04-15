@@ -106,7 +106,9 @@ class DistributedRateLimitService:
             allowed = int(result[0]) == 1
             retry_after = max(int(result[1]), 0)
             return allowed, retry_after
-        except Exception:  # policy: DEGRADED — Redis distributed limiter may fall back to in-memory safely
+        except (
+            Exception
+        ):  # policy: DEGRADED — Redis distributed limiter may fall back to in-memory safely
             logger.warning("Redis distributed rate-limit failed, falling back to in-memory")
             return cls._memory_check_and_record(
                 key,
@@ -129,9 +131,7 @@ class DistributedRateLimitService:
                 bucket.requests.popleft()
 
             if len(bucket.requests) >= max_requests:
-                retry_after = int(
-                    math.ceil((bucket.requests[0] + window_seconds) - now)
-                )
+                retry_after = int(math.ceil((bucket.requests[0] + window_seconds) - now))
                 return False, max(retry_after, 1)
 
             bucket.requests.append(now)

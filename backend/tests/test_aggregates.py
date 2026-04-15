@@ -98,8 +98,12 @@ def test_review_aggregate_approve_updates_state():
 def test_review_aggregate_blocks_outdated_version_approval():
     review = ReviewRequest(document_id=1, version_id=4, submitted_by=2, status=ReviewStatus.PENDING)
     aggregate = ReviewAggregate(review)
-    review_version = Version(id=4, document_id=1, version_number=4, created_by=2, is_published=False)
-    latest_version = Version(id=5, document_id=1, version_number=5, created_by=2, is_published=False)
+    review_version = Version(
+        id=4, document_id=1, version_number=4, created_by=2, is_published=False
+    )
+    latest_version = Version(
+        id=5, document_id=1, version_number=5, created_by=2, is_published=False
+    )
 
     with pytest.raises(ConflictError, match="outdated review"):
         aggregate.ensure_approvable_version(

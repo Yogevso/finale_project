@@ -26,7 +26,9 @@ class SupportTicket(Base):
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     subject = Column(String(500), nullable=False)
-    status = Column(SQLEnum(SupportTicketStatus), default=SupportTicketStatus.OPEN, nullable=False, index=True)
+    status = Column(
+        SQLEnum(SupportTicketStatus), default=SupportTicketStatus.OPEN, nullable=False, index=True
+    )
     priority = Column(
         SQLEnum(SupportTicketPriority),
         default=SupportTicketPriority.NORMAL,
@@ -43,20 +45,24 @@ class SupportTicket(Base):
     customer = relationship("User", foreign_keys=[customer_id])
     tenant = relationship("Tenant")
     feedback = relationship("Feedback")
-    messages = relationship("SupportTicketMessage", back_populates="ticket", cascade="all, delete-orphan")
-    assignments = relationship("SupportTicketAssignment", back_populates="ticket", cascade="all, delete-orphan")
+    messages = relationship(
+        "SupportTicketMessage", back_populates="ticket", cascade="all, delete-orphan"
+    )
+    assignments = relationship(
+        "SupportTicketAssignment", back_populates="ticket", cascade="all, delete-orphan"
+    )
 
 
 class SupportTicketMessage(Base):
     """Message in a support ticket conversation."""
 
     __tablename__ = "support_ticket_messages"
-    __table_args__ = (
-        Index("ix_support_messages_ticket_created", "ticket_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_support_messages_ticket_created", "ticket_id", "created_at"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticket_id = Column(
+        Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     sender_type = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
@@ -75,12 +81,12 @@ class SupportTicketAssignment(Base):
     """Agent assignment to a support ticket."""
 
     __tablename__ = "support_ticket_assignments"
-    __table_args__ = (
-        UniqueConstraint("ticket_id", "agent_id", name="uq_ticket_assignment"),
-    )
+    __table_args__ = (UniqueConstraint("ticket_id", "agent_id", name="uq_ticket_assignment"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    ticket_id = Column(
+        Integer, ForeignKey("support_tickets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_primary = Column(Boolean, default=False, nullable=False)

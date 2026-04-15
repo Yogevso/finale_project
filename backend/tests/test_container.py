@@ -4,9 +4,6 @@ import pytest
 from fastapi import FastAPI
 from starlette.requests import Request
 
-from app.application.contexts.documents.api import DocumentsContextAPI
-from app.application.contexts.portal.api import PortalContextAPI
-from app.application.contexts.users.api import UsersContextAPI
 from app.app_factory import create_app
 from app.application.commands.dependencies import (
     get_approve_review_command_handler,
@@ -16,6 +13,9 @@ from app.application.commands.dependencies import (
     get_publish_approved_version_command_handler,
     get_update_document_command_handler,
 )
+from app.application.contexts.documents.api import DocumentsContextAPI
+from app.application.contexts.portal.api import PortalContextAPI
+from app.application.contexts.users.api import UsersContextAPI
 from app.application.interfaces.dependencies import (
     get_assign_company_set_use_case,
     get_publish_approved_version_use_case,
@@ -88,7 +88,9 @@ def test_service_dependency_providers_resolve_via_container(db, test_user):
     assert get_collaboration_service(db=db, container=container) is not None
     assert get_document_service(db=db, tenant_ctx=tenant_ctx, container=container) is not None
     assert get_support_ticket_service(db=db, chat_db=db, container=container) is not None
-    assert isinstance(get_document_conversion_service(container=container), DocumentConversionPipeline)
+    assert isinstance(
+        get_document_conversion_service(container=container), DocumentConversionPipeline
+    )
 
 
 def test_documents_context_api_uses_injected_container(db, test_user):

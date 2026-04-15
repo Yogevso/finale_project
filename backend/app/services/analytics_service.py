@@ -29,7 +29,12 @@ class AnalyticsService(
 ):
     """Service facade for analytics modules with tenant-aware context."""
 
-    def __init__(self, db: Session, tenant_ctx: Optional[TenantContext] = None, analytics_db: Session | None = None):
+    def __init__(
+        self,
+        db: Session,
+        tenant_ctx: Optional[TenantContext] = None,
+        analytics_db: Session | None = None,
+    ):
         super().__init__(db)
         if tenant_ctx is None:
             raise ValueError(

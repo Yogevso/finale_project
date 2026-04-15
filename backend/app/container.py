@@ -267,9 +267,13 @@ class AppContainer:
         tenant_ctx: TenantContext,
         analytics_db: Session | None = None,
     ) -> AnalyticsQueryHandler:
-        return AnalyticsQueryHandler(self.analytics_service(db, tenant_ctx, analytics_db=analytics_db))
+        return AnalyticsQueryHandler(
+            self.analytics_service(db, tenant_ctx, analytics_db=analytics_db)
+        )
 
-    def system_analytics_query_handler(self, db: Session, analytics_db: Session | None = None) -> AnalyticsQueryHandler:
+    def system_analytics_query_handler(
+        self, db: Session, analytics_db: Session | None = None
+    ) -> AnalyticsQueryHandler:
         return AnalyticsQueryHandler(
             self.analytics_service(
                 db,

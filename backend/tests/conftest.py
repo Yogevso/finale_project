@@ -12,10 +12,12 @@
 import sys
 import types
 
+
 def _make_stub(name: str) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__path__ = []  # make it a "package"
     return mod
+
 
 if "chromadb" not in sys.modules:
     _chromadb = _make_stub("chromadb")
@@ -24,11 +26,13 @@ if "chromadb" not in sys.modules:
     class _FakeSettings:
         def __init__(self, **kw):
             pass
+
     _config = _make_stub("chromadb.config")
     _config.Settings = _FakeSettings  # type: ignore[attr-defined]
 
     class _FakeClientAPI:
         """Duck-typed stand-in for chromadb.ClientAPI."""
+
         pass
 
     _chromadb.ClientAPI = _FakeClientAPI  # type: ignore[attr-defined]
@@ -49,9 +53,7 @@ if "chromadb" not in sys.modules:
         sys.modules.setdefault(_name, _mod)
 
 import asyncio
-import os
 import shutil
-import tempfile
 import warnings
 from pathlib import Path
 from uuid import uuid4
@@ -74,13 +76,21 @@ settings.APP_ENV = "testing"
 # the full 1400+ test suite (every create_user + login fixture benefits).
 # ---------------------------------------------------------------------------
 from passlib.context import CryptContext as _CryptContext
+
 import app.auth_context.passwords as _pwd_mod
 
 _pwd_mod.pwd_context = _CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=4)
 
-from app.db import Base, get_db, get_analytics_db, get_chat_db
+from app.db import Base, get_analytics_db, get_chat_db, get_db
 from app.db.bases import AnalyticsBase, ChatBase
-from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, ReviewStatus, UserRole, Version
+from app.models import (
+    DocumentStatus,
+    DocumentVisibility,
+    ReviewRequest,
+    ReviewStatus,
+    UserRole,
+    Version,
+)
 from app.projections import reset_projection_cache
 from tests.factories import create_document, create_tenant, create_user
 from tests.tenant_isolation.harness import TenantIsolationScenario
@@ -167,10 +177,7 @@ def system_email_runtime_isolation():
 @pytest.fixture(autouse=True)
 def company_cache_isolation():
     """Clear the module-level company lookup cache between tests."""
-    from app.services.document_service import _company_cache
-    _company_cache.clear(reset_metrics=True)
     yield
-    _company_cache.clear(reset_metrics=True)
 
 
 @pytest.fixture(autouse=True)
@@ -208,11 +215,13 @@ def auth_rate_limit_isolation():
     """Reset auth rate-limit buckets between tests to prevent cross-test pollution."""
     from app.services.auth_rate_limit_service import AuthRateLimitService
     from app.services.distributed_rate_limit_service import DistributedRateLimitService
+
     AuthRateLimitService.reset()
     DistributedRateLimitService.reset()
     # Also clear the general middleware's per-IP buckets so auth-path limits
     # don't carry over between tests that enable RATE_LIMIT_ENABLED.
     from app.middleware.rate_limit import RateLimitMiddleware
+
     # Walk the built middleware_stack chain (not .app) to find the live instance.
     _app = getattr(_shared_test_client.app, "middleware_stack", None)
     while _app is not None:
@@ -690,7 +699,7 @@ def tenant_isolation_scenario(db):
     db.add(review)
 
     # H-23: Feedback isolation seed
-    from app.models import Feedback, FeedbackType, FeedbackStatus, SearchAnalytics
+    from app.models import Feedback, FeedbackStatus, FeedbackType, SearchAnalytics
 
     feedback = Feedback(
         document_id=document.id,
@@ -771,7 +780,9 @@ def pytest_sessionfinish(session, exitstatus):
         outcome.get_result()
     except PermissionError as exc:
         message = str(exc)
-        if "[WinError 5]" in message and ("\\temp\\pytest" in message or "\\tmp_pytest\\" in message):
+        if "[WinError 5]" in message and (
+            "\\temp\\pytest" in message or "\\tmp_pytest\\" in message
+        ):
             warnings.warn(
                 f"Suppressed pytest temp cleanup permission error: {message}",
                 RuntimeWarning,

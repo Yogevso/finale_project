@@ -312,9 +312,7 @@ async def get_document_if_accessible(
             return document
     """
     document = (
-        db.query(Document)
-        .filter(Document.id == document_id, Document.deleted_at.is_(None))
-        .first()
+        db.query(Document).filter(Document.id == document_id, Document.deleted_at.is_(None)).first()
     )
 
     if not document:

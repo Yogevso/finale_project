@@ -8,16 +8,12 @@ uploaded afterwards.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
-
-import pytest
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.services.published_attachment_resolver import (
     is_attachment_in_published_snapshot,
     resolve_published_attachment_ids,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — lightweight ORM stand-ins so we don't depend on a live DB for

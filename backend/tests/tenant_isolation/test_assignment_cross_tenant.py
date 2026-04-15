@@ -90,4 +90,3 @@ def test_tenant_manager_cannot_bulk_assign_foreign_company_to_owned_document(cli
 
     # 409 Conflict is acceptable — idempotency middleware may reject the request
     assert response.status_code in {403, 404, 409}
-

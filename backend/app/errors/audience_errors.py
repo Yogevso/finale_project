@@ -165,4 +165,3 @@ AUDIENCE_ERROR_CATALOG: Final[tuple[AudienceErrorDefinition, ...]] = (
 AUDIENCE_ERROR_BY_SLUG: Final[dict[str, AudienceErrorDefinition]] = {
     item.slug: item for item in AUDIENCE_ERROR_CATALOG
 }
-

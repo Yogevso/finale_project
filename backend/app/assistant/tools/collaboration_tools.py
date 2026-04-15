@@ -33,26 +33,44 @@ class GetActiveCollaboratorsTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         sessions = (
             db.query(CollaborationSession)
             .filter(
                 CollaborationSession.document_id == doc_id,
-                CollaborationSession.is_active == True,
+                CollaborationSession.is_active is True,
             )
             .all()
         )
         if not sessions:
-            return {"success": True, "result": f"No active collaborators on '{doc.title}' right now."}
+            return {
+                "success": True,
+                "result": f"No active collaborators on '{doc.title}' right now.",
+            }
 
         user_ids = {s.user_id for s in sessions}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
         lines = [f"**Active collaborators on '{doc.title}'** ({len(sessions)})\n"]
         for s in sessions:
@@ -78,12 +96,20 @@ class GetCollaborationHistoryTool(BaseTool):
     required_role = "VIEWER"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params["document_id"]
         doc = _check_doc_access(doc_id, tenant_id, db)
         if not doc:
-            return {"success": False, "result": "", "error": "Document not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Document not found or you don't have access.",
+            }
 
         limit = min(params.get("limit", 20), 50)
         activities = (
@@ -94,12 +120,24 @@ class GetCollaborationHistoryTool(BaseTool):
             .all()
         )
         if not activities:
-            return {"success": True, "result": f"No collaboration activity found for '{doc.title}'."}
+            return {
+                "success": True,
+                "result": f"No collaboration activity found for '{doc.title}'.",
+            }
 
         user_ids = {a.user_id for a in activities}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(user_ids)).all()
+            }
+            if user_ids
+            else {}
+        )
 
-        lines = [f"**Collaboration history for '{doc.title}'** (last {len(activities)} activities)\n"]
+        lines = [
+            f"**Collaboration history for '{doc.title}'** (last {len(activities)} activities)\n"
+        ]
         for a in activities:
             name = users.get(a.user_id, "Unknown")
             date = a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "N/A"

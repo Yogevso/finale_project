@@ -11,9 +11,10 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
-from defusedxml.ElementTree import ParseError as _XMLParseError
 from xml.etree.ElementTree import Element as _Element  # type-only; no parsing
+
+from defusedxml.ElementTree import ParseError as _XMLParseError
+from defusedxml.ElementTree import fromstring as _safe_xml_fromstring
 
 from app.conversion.archive_safety import UnsafeArchiveError, validate_ooxml_zip_archive
 from app.conversion.html_generator import ir_to_html
@@ -233,7 +234,9 @@ class PptxExtractor:
         result = ExtractionResult(
             status="ready",
             html=html_content,
-            title=self._resolve_document_title(parsed_presentation.metadata, parsed_presentation.slides),
+            title=self._resolve_document_title(
+                parsed_presentation.metadata, parsed_presentation.slides
+            ),
             headings=headings,
             slides=[slide.summary for slide in parsed_presentation.slides],
             metadata=parsed_presentation.metadata,
@@ -371,7 +374,10 @@ class PptxExtractor:
                         continue
 
                     placeholder_type = self._shape_placeholder_type(node)
-                    if placeholder_type in {"ctrTitle", "title"} and not self._has_visible_text_runs(
+                    if placeholder_type in {
+                        "ctrTitle",
+                        "title",
+                    } and not self._has_visible_text_runs(
                         title_runs,
                     ):
                         title_runs = self._flatten_paragraphs(paragraphs)
@@ -480,10 +486,7 @@ class PptxExtractor:
 
         image_bytes = archive.read(archive_path)
         content_type = self._image_content_type(archive_path)
-        data_url = (
-            f"data:{content_type};base64,"
-            f"{base64.b64encode(image_bytes).decode('ascii')}"
-        )
+        data_url = f"data:{content_type};base64," f"{base64.b64encode(image_bytes).decode('ascii')}"
         return SlideImage(alt=alt, src=data_url, missing=False)
 
     def _parse_notes_paragraphs(
@@ -517,7 +520,9 @@ class PptxExtractor:
         return self._truncate_notes(paragraphs)
 
     def _truncate_notes(self, paragraphs: list[SlideParagraph]) -> list[SlideParagraph]:
-        note_text = "\n\n".join(paragraph.text.strip() for paragraph in paragraphs if paragraph.text.strip())
+        note_text = "\n\n".join(
+            paragraph.text.strip() for paragraph in paragraphs if paragraph.text.strip()
+        )
         if len(note_text) <= MAX_NOTES_LENGTH:
             return paragraphs
 
@@ -583,10 +588,7 @@ class PptxExtractor:
             type="document",
             styles={"classes": ["pptx-presentation"]},
             attributes={"tag": "div", "data-slide-count": total_slides},
-            children=[
-                self._build_slide_ir(slide, total_slides=total_slides)
-                for slide in slides
-            ],
+            children=[self._build_slide_ir(slide, total_slides=total_slides) for slide in slides],
         )
 
     def _build_slide_ir(self, slide: ParsedSlide, *, total_slides: int) -> IRNode:
@@ -819,7 +821,9 @@ class PptxExtractor:
     def _verify(self, result: ExtractionResult) -> list[ExtractionWarning]:
         warnings: list[ExtractionWarning] = []
         if not result.slides:
-            warnings.append(ExtractionWarning(code="NO_CONTENT", message="Presentation has no slides"))
+            warnings.append(
+                ExtractionWarning(code="NO_CONTENT", message="Presentation has no slides")
+            )
 
         missing_image_count = result.html.count("[Image")
         if missing_image_count > 0:

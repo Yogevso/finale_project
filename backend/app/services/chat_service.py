@@ -115,8 +115,7 @@ class ChatService:
         )
         dedup_query = dedup_query.filter(Chat.tenant_id == user_a.tenant_id)
         existing = (
-            dedup_query
-            .group_by(Chat.id)
+            dedup_query.group_by(Chat.id)
             .having(
                 and_(
                     func.sum(case((ChatParticipant.user_id == user_a.id, 1), else_=0)) > 0,
@@ -157,7 +156,11 @@ class ChatService:
         # Validate all participants exist and are in the same tenant
         participants = (
             self.core_db.query(User)
-            .filter(User.id.in_(participant_ids), User.tenant_id == creator.tenant_id, User.is_active.is_(True))
+            .filter(
+                User.id.in_(participant_ids),
+                User.tenant_id == creator.tenant_id,
+                User.is_active.is_(True),
+            )
             .all()
         )
         valid_ids = {p.id for p in participants}
@@ -175,24 +178,32 @@ class ChatService:
         self.db.flush()
 
         # Creator is always owner
-        self.db.add(ChatParticipant(chat_id=chat.id, user_id=creator.id, role=ChatParticipantRole.OWNER))
+        self.db.add(
+            ChatParticipant(chat_id=chat.id, user_id=creator.id, role=ChatParticipantRole.OWNER)
+        )
         for uid in valid_ids:
             if uid != creator.id:
-                self.db.add(ChatParticipant(chat_id=chat.id, user_id=uid, role=ChatParticipantRole.MEMBER))
+                self.db.add(
+                    ChatParticipant(chat_id=chat.id, user_id=uid, role=ChatParticipantRole.MEMBER)
+                )
 
         # System message
-        self.db.add(ChatMessage(
-            chat_id=chat.id,
-            sender_id=creator.id,
-            content=f"{creator.full_name} created the group \"{name.strip()}\"",
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat.id,
+                sender_id=creator.id,
+                content=f'{creator.full_name} created the group "{name.strip()}"',
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
 
         self.db.commit()
         self.db.refresh(chat)
         return chat
 
-    def create_document_chat(self, creator: User, document_id: int, extra_participant_ids: list[int] | None = None) -> Chat:
+    def create_document_chat(
+        self, creator: User, document_id: int, extra_participant_ids: list[int] | None = None
+    ) -> Chat:
         """AH-008: Create or return existing chat scoped to a document.
 
         Automatically adds the document's author as a participant.
@@ -216,11 +227,17 @@ class ChatService:
             # Ensure creator is a participant
             is_participant = (
                 self.db.query(ChatParticipant)
-                .filter(ChatParticipant.chat_id == existing.id, ChatParticipant.user_id == creator.id)
+                .filter(
+                    ChatParticipant.chat_id == existing.id, ChatParticipant.user_id == creator.id
+                )
                 .first()
             )
             if not is_participant:
-                self.db.add(ChatParticipant(chat_id=existing.id, user_id=creator.id, role=ChatParticipantRole.MEMBER))
+                self.db.add(
+                    ChatParticipant(
+                        chat_id=existing.id, user_id=creator.id, role=ChatParticipantRole.MEMBER
+                    )
+                )
                 self.db.commit()
                 self.db.refresh(existing)
             return existing
@@ -246,12 +263,14 @@ class ChatService:
             role = ChatParticipantRole.OWNER if uid == creator.id else ChatParticipantRole.MEMBER
             self.db.add(ChatParticipant(chat_id=chat.id, user_id=uid, role=role))
 
-        self.db.add(ChatMessage(
-            chat_id=chat.id,
-            sender_id=creator.id,
-            content=f"Started a discussion about \"{doc.title}\"",
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat.id,
+                sender_id=creator.id,
+                content=f'Started a discussion about "{doc.title}"',
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
 
         self.db.commit()
         self.db.refresh(chat)
@@ -267,24 +286,34 @@ class ChatService:
         if chat.type != ChatType.GROUP:
             raise ValidationError("Cannot add participants to direct chats")
 
-        target = self.core_db.query(User).filter(User.id == user_id, User.tenant_id == chat.tenant_id).first()
+        target = (
+            self.core_db.query(User)
+            .filter(User.id == user_id, User.tenant_id == chat.tenant_id)
+            .first()
+        )
         if not target:
             raise NotFoundError("User not found")
 
-        existing = self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
+        existing = (
+            self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
+        )
         if existing:
             raise ValidationError("User is already a participant")
 
-        participant = ChatParticipant(chat_id=chat_id, user_id=user_id, role=ChatParticipantRole.MEMBER)
+        participant = ChatParticipant(
+            chat_id=chat_id, user_id=user_id, role=ChatParticipantRole.MEMBER
+        )
         self.db.add(participant)
 
         # System message
-        self.db.add(ChatMessage(
-            chat_id=chat_id,
-            sender_id=current_user.id,
-            content=f"{current_user.full_name} added {target.full_name} to the group",
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat_id,
+                sender_id=current_user.id,
+                content=f"{current_user.full_name} added {target.full_name} to the group",
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
 
         self.db.commit()
         self.db.refresh(participant)
@@ -296,7 +325,9 @@ class ChatService:
         if chat.type != ChatType.GROUP:
             raise ValidationError("Cannot remove participants from direct chats")
 
-        participant = self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
+        participant = (
+            self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user_id).first()
+        )
         if not participant:
             raise NotFoundError("Participant not found")
 
@@ -306,12 +337,14 @@ class ChatService:
         target = self.core_db.query(User).filter(User.id == user_id).first()
         self.db.delete(participant)
 
-        self.db.add(ChatMessage(
-            chat_id=chat_id,
-            sender_id=current_user.id,
-            content=f"{current_user.full_name} removed {target.full_name if target else 'a user'} from the group",
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat_id,
+                sender_id=current_user.id,
+                content=f"{current_user.full_name} removed {target.full_name if target else 'a user'} from the group",
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
         self.db.commit()
 
     # ------------------------------------------------------------------
@@ -321,7 +354,9 @@ class ChatService:
     # AD-018: maximum allowed chat message length (characters)
     MAX_MESSAGE_LENGTH = 5000
 
-    def send_message(self, chat_id: int, sender: User, content: str, *, context_json: str | None = None) -> ChatMessage:
+    def send_message(
+        self, chat_id: int, sender: User, content: str, *, context_json: str | None = None
+    ) -> ChatMessage:
         """Send a message in a chat (X1-006)."""
         chat = self._get_chat_with_permission(chat_id, sender)
         content = content.strip()
@@ -342,7 +377,9 @@ class ChatService:
         self.db.add(msg)
 
         # Update chat's last_message_at for sorting
-        self.db.query(Chat).filter(Chat.id == chat_id).update({"last_message_at": datetime.utcnow()})
+        self.db.query(Chat).filter(Chat.id == chat_id).update(
+            {"last_message_at": datetime.utcnow()}
+        )
         self._notify_message_recipients(
             chat=chat,
             sender=sender,
@@ -376,7 +413,9 @@ class ChatService:
             file_mime_type=file_mime_type,
         )
         self.db.add(msg)
-        self.db.query(Chat).filter(Chat.id == chat_id).update({"last_message_at": datetime.utcnow()})
+        self.db.query(Chat).filter(Chat.id == chat_id).update(
+            {"last_message_at": datetime.utcnow()}
+        )
         self._notify_message_recipients(
             chat=chat,
             sender=sender,
@@ -392,9 +431,8 @@ class ChatService:
         """Get paginated message history for a chat (X1-010)."""
         self._get_chat_with_permission(chat_id, current_user)
 
-        query = (
-            self.db.query(ChatMessage)
-            .filter(ChatMessage.chat_id == chat_id, ChatMessage.deleted_at.is_(None))
+        query = self.db.query(ChatMessage).filter(
+            ChatMessage.chat_id == chat_id, ChatMessage.deleted_at.is_(None)
         )
         if before_id:
             query = query.filter(ChatMessage.id < before_id)
@@ -465,13 +503,15 @@ class ChatService:
                 else:
                     display_name = "Unknown"
 
-            results.append({
-                "chat": chat,
-                "display_name": display_name,
-                "last_message": last_msg,
-                "unread_count": unread,
-                "is_muted": p.is_muted,
-            })
+            results.append(
+                {
+                    "chat": chat,
+                    "display_name": display_name,
+                    "last_message": last_msg,
+                    "unread_count": unread,
+                    "is_muted": p.is_muted,
+                }
+            )
 
         # Sort by last activity
         results.sort(key=lambda r: r["chat"].last_message_at or r["chat"].created_at, reverse=True)
@@ -486,17 +526,16 @@ class ChatService:
         chat = self._get_chat_with_permission(chat_id, current_user)
 
         # M-21: Defence-in-depth tenant re-check before destructive operation
-        if (
-            current_user.role != UserRole.SYSTEM_ADMIN
-            and chat.tenant_id != current_user.tenant_id
-        ):
+        if current_user.role != UserRole.SYSTEM_ADMIN and chat.tenant_id != current_user.tenant_id:
             raise NotFoundError("Chat not found")
 
         if chat.type == ChatType.GROUP:
             # Only owner can delete group chats
-            owner = self.db.query(ChatParticipant).filter_by(
-                chat_id=chat_id, user_id=current_user.id, role=ChatParticipantRole.OWNER
-            ).first()
+            owner = (
+                self.db.query(ChatParticipant)
+                .filter_by(chat_id=chat_id, user_id=current_user.id, role=ChatParticipantRole.OWNER)
+                .first()
+            )
             if not owner and current_user.role != UserRole.SYSTEM_ADMIN:
                 raise PermissionDeniedError("Only the group owner can delete this chat")
 
@@ -506,9 +545,9 @@ class ChatService:
     def mark_as_read(self, chat_id: int, current_user: User) -> None:
         """Mark chat as read up to latest message (X1-017)."""
         self._get_chat_with_permission(chat_id, current_user)
-        self.db.query(ChatParticipant).filter_by(
-            chat_id=chat_id, user_id=current_user.id
-        ).update({"last_read_at": datetime.utcnow()})
+        self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=current_user.id).update(
+            {"last_read_at": datetime.utcnow()}
+        )
         self.db.commit()
 
     def search_messages(
@@ -535,8 +574,8 @@ class ChatService:
         """Search messages across all chats the user participates in."""
         # Get all chat IDs this user participates in
         chat_ids = [
-            row[0] for row in
-            self.db.query(ChatParticipant.chat_id)
+            row[0]
+            for row in self.db.query(ChatParticipant.chat_id)
             .filter(ChatParticipant.user_id == current_user.id)
             .all()
         ]
@@ -562,12 +601,14 @@ class ChatService:
             raise ValidationError("Cannot rename direct chats")
         old_name = chat.name
         chat.name = name.strip()
-        self.db.add(ChatMessage(
-            chat_id=chat_id,
-            sender_id=current_user.id,
-            content=f'{current_user.full_name} renamed the group from "{old_name}" to "{name.strip()}"',
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat_id,
+                sender_id=current_user.id,
+                content=f'{current_user.full_name} renamed the group from "{old_name}" to "{name.strip()}"',
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
         self.db.commit()
         self.db.refresh(chat)
         return chat
@@ -575,9 +616,11 @@ class ChatService:
     def toggle_mute(self, chat_id: int, current_user: User) -> bool:
         """Toggle mute status for a chat participant (X1-025)."""
         self._get_chat_with_permission(chat_id, current_user)
-        participant = self.db.query(ChatParticipant).filter_by(
-            chat_id=chat_id, user_id=current_user.id
-        ).first()
+        participant = (
+            self.db.query(ChatParticipant)
+            .filter_by(chat_id=chat_id, user_id=current_user.id)
+            .first()
+        )
         if not participant:
             raise NotFoundError("Not a participant")
         participant.is_muted = not participant.is_muted
@@ -592,9 +635,11 @@ class ChatService:
         if chat.type != ChatType.GROUP:
             raise ValidationError("Cannot change roles in direct chats")
 
-        participant = self.db.query(ChatParticipant).filter_by(
-            chat_id=chat_id, user_id=target_user_id
-        ).first()
+        participant = (
+            self.db.query(ChatParticipant)
+            .filter_by(chat_id=chat_id, user_id=target_user_id)
+            .first()
+        )
         if not participant:
             raise NotFoundError("Participant not found")
         if participant.role == ChatParticipantRole.OWNER:
@@ -604,12 +649,14 @@ class ChatService:
 
         participant.role = new_role
         target = self.core_db.query(User).filter(User.id == target_user_id).first()
-        self.db.add(ChatMessage(
-            chat_id=chat_id,
-            sender_id=current_user.id,
-            content=f'{current_user.full_name} changed {target.full_name if target else "a user"}\'s role to {new_role.value}',
-            message_type=ChatMessageType.SYSTEM,
-        ))
+        self.db.add(
+            ChatMessage(
+                chat_id=chat_id,
+                sender_id=current_user.id,
+                content=f'{current_user.full_name} changed {target.full_name if target else "a user"}\'s role to {new_role.value}',
+                message_type=ChatMessageType.SYSTEM,
+            )
+        )
         self.db.commit()
         self.db.refresh(participant)
         return participant
@@ -635,9 +682,9 @@ class ChatService:
             raise NotFoundError("Chat not found")
 
         # Participation check
-        participant = self.db.query(ChatParticipant).filter_by(
-            chat_id=chat_id, user_id=user.id
-        ).first()
+        participant = (
+            self.db.query(ChatParticipant).filter_by(chat_id=chat_id, user_id=user.id).first()
+        )
         if not participant and user.role != UserRole.SYSTEM_ADMIN:
             raise PermissionDeniedError("You are not a participant in this chat")
 

@@ -19,6 +19,7 @@ COLLECTION_NAME = "document_chunks"
 @dataclass
 class SearchResult:
     """A single search result from the vector store."""
+
     document_id: int
     document_title: str
     chunk_text: str
@@ -147,7 +148,9 @@ class VectorStore:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
-        except Exception:  # policy: DEGRADED — vector query failure falls back to empty semantic results
+        except (
+            Exception
+        ):  # policy: DEGRADED — vector query failure falls back to empty semantic results
             logger.exception("ChromaDB query failed")
             return []
 
@@ -160,19 +163,21 @@ class VectorStore:
         metadatas = results["metadatas"][0] if results.get("metadatas") else [{}] * len(ids)
         distances = results["distances"][0] if results.get("distances") else [1.0] * len(ids)
 
-        for doc_text, meta, distance in zip(documents, metadatas, distances):
+        for doc_text, meta, distance in zip(documents, metadatas, distances, strict=False):
             # ChromaDB cosine distance: 0 = identical, 2 = opposite. Convert to similarity.
             score = 1.0 - (distance / 2.0)
             if score < threshold:
                 continue
-            search_results.append(SearchResult(
-                document_id=meta.get("document_id", 0),
-                document_title=meta.get("document_title", ""),
-                chunk_text=doc_text,
-                section=meta.get("section") or None,
-                score=round(score, 4),
-                chunk_index=meta.get("chunk_index", 0),
-            ))
+            search_results.append(
+                SearchResult(
+                    document_id=meta.get("document_id", 0),
+                    document_title=meta.get("document_title", ""),
+                    chunk_text=doc_text,
+                    section=meta.get("section") or None,
+                    score=round(score, 4),
+                    chunk_index=meta.get("chunk_index", 0),
+                )
+            )
 
         return search_results
 
@@ -190,7 +195,9 @@ class VectorStore:
                 count = len(existing["ids"])
                 logger.info("Removed %d chunks for document %d", count, doc_id)
                 return count
-        except Exception:  # policy: DEGRADED — vector delete failure should not crash higher-level cleanup
+        except (
+            Exception
+        ):  # policy: DEGRADED — vector delete failure should not crash higher-level cleanup
             logger.exception("Failed to delete chunks for document %d", doc_id)
         return 0
 
@@ -209,6 +216,8 @@ class VectorStore:
                     "status": "ready",
                 }
             return {"total_chunks": 0, "total_documents": 0, "status": "empty"}
-        except Exception:  # policy: DEGRADED — vector stats failure should report an error status instead
+        except (
+            Exception
+        ):  # policy: DEGRADED — vector stats failure should report an error status instead
             logger.exception("Failed to get vector store stats")
             return {"total_chunks": 0, "total_documents": 0, "status": "error"}

@@ -5,7 +5,6 @@ Verifies that public, portal, and management document responses
 all include the canonical audience-related fields.
 """
 
-
 # Canonical fields that must appear in ALL document list responses
 CANONICAL_LIST_FIELDS = {
     "id",
@@ -99,9 +98,7 @@ class TestManagementAudienceProjectionParity:
             assert field in item, f"Management list missing field: {field}"
 
     def test_management_detail_canonical_fields(self, client, auth_headers, public_document):
-        response = client.get(
-            f"/api/v1/documents/{public_document.id}", headers=auth_headers
-        )
+        response = client.get(f"/api/v1/documents/{public_document.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         for field in CANONICAL_DETAIL_FIELDS:

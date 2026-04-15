@@ -1,7 +1,6 @@
 """Experimentation, growth, webhook, and API-key models."""
 
 from app.models._shared import (
-    AnalyticsBase,
     Base,
     Boolean,
     Column,
@@ -27,7 +26,9 @@ class Experiment(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     feature_flag_key = Column(String(100), nullable=True, index=True)
-    status = Column(SQLEnum(ExperimentStatus), default=ExperimentStatus.DRAFT, nullable=False, index=True)
+    status = Column(
+        SQLEnum(ExperimentStatus), default=ExperimentStatus.DRAFT, nullable=False, index=True
+    )
     variants = Column(Text, nullable=False, default='["control","treatment"]')
     traffic_percentage = Column(Integer, default=100, nullable=False)
     primary_metric = Column(String(100), nullable=True)
@@ -43,19 +44,21 @@ class Experiment(Base):
 
     tenant = relationship("Tenant")
     creator = relationship("User")
-    assignments = relationship("ExperimentAssignment", back_populates="experiment", cascade="all, delete-orphan")
+    assignments = relationship(
+        "ExperimentAssignment", back_populates="experiment", cascade="all, delete-orphan"
+    )
 
 
 class ExperimentAssignment(Base):
     """Deterministic user-to-variant assignment for an experiment."""
 
     __tablename__ = "experiment_assignments"
-    __table_args__ = (
-        UniqueConstraint("experiment_id", "user_id", name="uq_experiment_user"),
-    )
+    __table_args__ = (UniqueConstraint("experiment_id", "user_id", name="uq_experiment_user"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True)
+    experiment_id = Column(
+        Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     variant = Column(String(100), nullable=False)
     assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -70,7 +73,9 @@ class ExperimentMetricSnapshot(Base):
     __tablename__ = "experiment_metric_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True)
+    experiment_id = Column(
+        Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     variant = Column(String(100), nullable=False)
     metric_name = Column(String(100), nullable=False)
     metric_value = Column(String(50), nullable=False)
@@ -95,7 +100,9 @@ class WebhookRegistration(Base):
 
     tenant = relationship("Tenant")
     creator = relationship("User")
-    deliveries = relationship("WebhookDelivery", back_populates="webhook", cascade="all, delete-orphan")
+    deliveries = relationship(
+        "WebhookDelivery", back_populates="webhook", cascade="all, delete-orphan"
+    )
 
 
 class WebhookDelivery(Base):
@@ -104,7 +111,12 @@ class WebhookDelivery(Base):
     __tablename__ = "webhook_deliveries"
 
     id = Column(Integer, primary_key=True, index=True)
-    webhook_id = Column(Integer, ForeignKey("webhook_registrations.id", ondelete="CASCADE"), nullable=False, index=True)
+    webhook_id = Column(
+        Integer,
+        ForeignKey("webhook_registrations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     event_type = Column(String(120), nullable=False)
     payload_json = Column(Text, nullable=False)
     response_status = Column(Integer, nullable=True)

@@ -1,4 +1,4 @@
-﻿"""Tests for selective event-sourcing review workflow pilot."""
+"""Tests for selective event-sourcing review workflow pilot."""
 
 import pytest
 

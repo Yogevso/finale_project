@@ -3,4 +3,3 @@
 from app.application.contexts.documents.api import DocumentsContextAPI
 
 __all__ = ["DocumentsContextAPI"]
-

@@ -42,9 +42,7 @@ _SHARING_RULES: dict[DocumentVisibility, frozenset[SharingAction]] = {
     DocumentVisibility.INTERNAL: frozenset(
         {SharingAction.DIRECT_LINK, SharingAction.COPY_LINK, SharingAction.EMAIL_LINK}
     ),
-    DocumentVisibility.COMPANY: frozenset(
-        {SharingAction.DIRECT_LINK, SharingAction.COPY_LINK}
-    ),
+    DocumentVisibility.COMPANY: frozenset({SharingAction.DIRECT_LINK, SharingAction.COPY_LINK}),
 }
 
 _EMBED_RULES: dict[DocumentVisibility, frozenset[EmbedAction]] = {
