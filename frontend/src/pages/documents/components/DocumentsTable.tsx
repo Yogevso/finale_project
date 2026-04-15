@@ -27,10 +27,10 @@ type DocumentsTableProps = {
   selectedDocumentIds: number[]
   onToggleDocumentSelection: (documentId: number) => void
   onToggleAllVisibleDocuments: () => void
-  onArchiveOrRestore: (id: number, title: string, status: DocumentStatus) => void
-  onDelete: (id: number, title: string) => void
-  onRestoreDeleted: (id: number, title: string) => void
-  onPurgeDeleted: (id: number, title: string) => void
+  onArchiveOrRestore: (id: number, title: string, status: DocumentStatus, etag?: string) => void
+  onDelete: (id: number, title: string, etag?: string) => void
+  onRestoreDeleted: (id: number, title: string, etag?: string) => void
+  onPurgeDeleted: (id: number, title: string, etag?: string) => void
   onVisibilityChange: (change: VisibilityChangeRequest) => void
   onPageChange: (nextPage: number) => void
 }
@@ -63,7 +63,7 @@ export function DocumentsTable({
       <div className="admin-table-scroll">
         <table className="admin-table" aria-label="Documents list">
           <caption className="sr-only">
-            Documents list showing title, status, visibility, category, and document actions.
+            Documents list showing title, status, visibility, and document actions.
           </caption>
           <thead className="admin-table-head">
             <tr>
@@ -80,7 +80,6 @@ export function DocumentsTable({
               <th className="w-[40%]">Document</th>
               <th className="w-[12%]">Status</th>
               <th>Visibility</th>
-              <th>Category</th>
               <th>Created</th>
               <th className="text-right">Actions</th>
             </tr>
@@ -88,7 +87,7 @@ export function DocumentsTable({
           <tbody>
             {isLoading ? (
               <tr className="admin-table-row">
-                <td colSpan={canSelectRows ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={canSelectRows ? 6 : 5} className="px-5 py-10 text-center text-slate-500">
                   <div className="space-y-3">
                     <Skeleton className="mx-auto h-4 w-48" />
                     <Skeleton className="mx-auto h-4 w-40" />
@@ -98,7 +97,7 @@ export function DocumentsTable({
               </tr>
             ) : data?.items.length === 0 ? (
               <tr className="admin-table-row">
-                <td colSpan={canSelectRows ? 7 : 6} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={canSelectRows ? 6 : 5} className="px-5 py-10 text-center text-slate-500">
                   <div className="flex flex-col items-center gap-2">
                     <FileQuestion className="w-8 h-8 text-slate-300" />
                     <span>No documents found</span>
@@ -252,7 +251,6 @@ export function DocumentsTable({
                         )
                       })()}
                     </td>
-                    <td className="admin-table-cell text-slate-500">{doc.category || '-'}</td>
                     <td className="admin-table-cell whitespace-nowrap text-slate-500">
                       {new Date(doc.created_at).toLocaleDateString()}
                     </td>
@@ -262,7 +260,7 @@ export function DocumentsTable({
                           <div className="flex items-center justify-end gap-3">
                             <button
                               type="button"
-                              onClick={() => onRestoreDeleted(doc.id, documentTitle)}
+                              onClick={() => onRestoreDeleted(doc.id, documentTitle, doc.etag)}
                               aria-label={`Restore ${documentTitle}`}
                               className="text-xs font-semibold uppercase tracking-wide text-emerald-600 hover:text-emerald-700"
                             >
@@ -270,7 +268,7 @@ export function DocumentsTable({
                             </button>
                             <button
                               type="button"
-                              onClick={() => onPurgeDeleted(doc.id, documentTitle)}
+                              onClick={() => onPurgeDeleted(doc.id, documentTitle, doc.etag)}
                               aria-label={`Permanently delete ${documentTitle}`}
                               className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
                             >
@@ -282,9 +280,23 @@ export function DocumentsTable({
                         )
                       ) : isManager ? (
                         <div className="flex items-center justify-end gap-3">
+                          <Link
+                            to={`/documents/${doc.id}`}
+                            aria-label={`Edit ${documentTitle}`}
+                            className="text-xs font-semibold uppercase tracking-wide text-sky-600 hover:text-sky-700"
+                          >
+                            Edit
+                          </Link>
+                          <Link
+                            to={`/documents/${doc.id}/fullscreen`}
+                            aria-label={`View transcript of ${documentTitle}`}
+                            className="text-xs font-semibold uppercase tracking-wide text-slate-600 hover:text-slate-700"
+                          >
+                            Transcript
+                          </Link>
                           <button
                             type="button"
-                            onClick={() => onArchiveOrRestore(doc.id, documentTitle, doc.status)}
+                            onClick={() => onArchiveOrRestore(doc.id, documentTitle, doc.status, doc.etag)}
                             aria-label={`${doc.status === 'archived' ? 'Restore' : 'Archive'} ${documentTitle}`}
                             className={`text-xs font-semibold uppercase tracking-wide ${
                               doc.status === 'archived'
@@ -296,7 +308,7 @@ export function DocumentsTable({
                           </button>
                           <button
                             type="button"
-                            onClick={() => onDelete(doc.id, documentTitle)}
+                            onClick={() => onDelete(doc.id, documentTitle, doc.etag)}
                             aria-label={`Delete ${documentTitle}`}
                             className="text-xs font-semibold uppercase tracking-wide text-rose-600 hover:text-rose-700"
                           >

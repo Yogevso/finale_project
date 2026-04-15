@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import Joyride from 'react-joyride'
-import { Upload } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import PageHeader from '@/components/PageHeader'
@@ -118,24 +117,14 @@ export default function DocumentsPage() {
         meta={pageHeaderMeta}
         actions={
           controller.isEditor && !controller.showDeleted ? (
-            <>
-              <button
-                type="button"
-                onClick={() => controller.setShowUploadModal(true)}
-                className="btn-secondary table-action-btn"
-              >
-                <Upload className="h-4 w-4" />
-                Upload File
-              </button>
-              <button
-                type="button"
-                onClick={() => controller.setShowCreateModal(true)}
-                className="btn-primary table-action-btn"
-                data-tour="documents-create-button"
-              >
-                + New Document
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => controller.setShowQuickStartModal(true)}
+              className="btn-primary table-action-btn"
+              data-tour="documents-create-button"
+            >
+              + New Document
+            </button>
           ) : undefined
         }
       />

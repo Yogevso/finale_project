@@ -129,28 +129,33 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       return mapDocumentDto(data)
     }
 
-    async deleteDocument(id: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}`)
+    async deleteDocument(id: number, ifMatch?: string): Promise<MessageResponse> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
+      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}`, { headers })
       return mapMessageResponseDto(data)
     }
 
-    async restoreDeletedDocument(id: number): Promise<Document> {
-      const { data } = await this.client.post<DocumentDto>(`/documents/${id}/restore-deleted`)
+    async restoreDeletedDocument(id: number, ifMatch?: string): Promise<Document> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
+      const { data } = await this.client.post<DocumentDto>(`/documents/${id}/restore-deleted`, null, { headers })
       return mapDocumentDto(data)
     }
 
-    async purgeDocument(id: number): Promise<MessageResponse> {
-      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}/purge`)
+    async purgeDocument(id: number, ifMatch?: string): Promise<MessageResponse> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
+      const { data } = await this.client.delete<MessageResponseDto>(`/documents/${id}/purge`, { headers })
       return mapMessageResponseDto(data)
     }
 
-    async archiveDocument(id: number): Promise<DocumentArchiveResult> {
-      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/archive`)
+    async archiveDocument(id: number, ifMatch?: string): Promise<DocumentArchiveResult> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
+      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/archive`, null, { headers })
       return data
     }
 
-    async restoreDocument(id: number): Promise<DocumentArchiveResult> {
-      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/restore`)
+    async restoreDocument(id: number, ifMatch?: string): Promise<DocumentArchiveResult> {
+      const headers = ifMatch ? { 'If-Match': ifMatch } : undefined
+      const { data } = await this.client.post<DocumentArchiveResult>(`/documents/${id}/restore`, null, { headers })
       return data
     }
 
@@ -163,6 +168,14 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       const { data } = await this.client.post(`/documents/${documentId}/generate-word`, {
         html_content: htmlContent,
         filename,
+      })
+      return data
+    }
+
+    async exportDocument(documentId: number, format: 'pdf' | 'docx' | 'pptx'): Promise<Blob> {
+      const { data } = await this.client.get<Blob>(`/documents/${documentId}/export`, {
+        params: { format },
+        responseType: 'blob',
       })
       return data
     }

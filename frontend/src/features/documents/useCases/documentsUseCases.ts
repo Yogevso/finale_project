@@ -232,24 +232,24 @@ export function createDocumentsUseCases(client: DocumentsUseCasesClient = api) {
       return client.getDeletedDocuments(params)
     },
 
-    deleteDocument(documentId: number): Promise<MessageResponse> {
-      return client.deleteDocument(documentId)
+    deleteDocument(documentId: number, ifMatch?: string): Promise<MessageResponse> {
+      return client.deleteDocument(documentId, ifMatch)
     },
 
-    restoreDeletedDocument(documentId: number): Promise<Document> {
-      return client.restoreDeletedDocument(documentId)
+    restoreDeletedDocument(documentId: number, ifMatch?: string): Promise<Document> {
+      return client.restoreDeletedDocument(documentId, ifMatch)
     },
 
-    purgeDocument(documentId: number): Promise<MessageResponse> {
-      return client.purgeDocument(documentId)
+    purgeDocument(documentId: number, ifMatch?: string): Promise<MessageResponse> {
+      return client.purgeDocument(documentId, ifMatch)
     },
 
-    archiveDocument(documentId: number) {
-      return client.archiveDocument(documentId)
+    archiveDocument(documentId: number, ifMatch?: string) {
+      return client.archiveDocument(documentId, ifMatch)
     },
 
-    restoreDocument(documentId: number) {
-      return client.restoreDocument(documentId)
+    restoreDocument(documentId: number, ifMatch?: string) {
+      return client.restoreDocument(documentId, ifMatch)
     },
 
     getDocumentCalendarExport(documentId: number) {
