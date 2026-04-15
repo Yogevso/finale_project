@@ -866,6 +866,16 @@ class SupportTicketService:
         self.db.refresh(ticket)
         return ticket
 
+    def delete_ticket(self, ticket_id: int, current_user: User) -> None:
+        """Delete a closed ticket. Only managers/admins can delete, and only if ticket is closed."""
+        ticket = self.ticket_repository.get_by_id(ticket_id)
+        if not ticket:
+            raise NotFoundError("Ticket not found")
+        if ticket.status != SupportTicketStatus.CLOSED:
+            raise ValidationError("Only closed tickets can be deleted")
+        self.db.delete(ticket)
+        self.db.commit()
+
     # ------------------------------------------------------------------
     # Messages
     # ------------------------------------------------------------------
