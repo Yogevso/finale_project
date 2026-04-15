@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine3.20@sha256:3bc9a4c4cc25cfde1e8f946341c85f333c36517aafda829b4bb7e785e9b5995c AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine3.20@sha256:3bc9a4c4cc25cfde1e8f946341c85f333c36517aafda829b4bb7e785e9b5995c AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 

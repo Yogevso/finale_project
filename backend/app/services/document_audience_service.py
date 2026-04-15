@@ -255,9 +255,7 @@ class DocumentAudienceService:
 
         companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
         company_by_id = {company.id: company for company in companies}
-        missing_ids = [
-            company_id for company_id in company_ids if company_id not in company_by_id
-        ]
+        missing_ids = [company_id for company_id in company_ids if company_id not in company_by_id]
         if missing_ids:
             raise ValidationError(
                 "Some company IDs are invalid",

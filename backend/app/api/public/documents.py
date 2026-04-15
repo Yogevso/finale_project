@@ -171,9 +171,9 @@ def list_public_documents(
         .subquery()
     )
 
-    query = query.join(
-        latest_published, Document.id == latest_published.c.document_id
-    ).add_columns(latest_published.c.published_at, latest_published.c.version_number)
+    query = query.join(latest_published, Document.id == latest_published.c.document_id).add_columns(
+        latest_published.c.published_at, latest_published.c.version_number
+    )
 
     # Get total count
     total = query.count()
