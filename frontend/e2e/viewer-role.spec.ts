@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * INTERNAL VIEWER Role Tests
@@ -28,15 +29,7 @@ import { test, expect, Page } from '@playwright/test';
 const VIEWER = { username: 'viewer', password: 'viewer123' };
 
 async function loginAsViewer(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', VIEWER.username);
-  await page.fill('input#password', VIEWER.password);
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  await loginByApi(page, VIEWER, /\/(dashboard|documents)/, '/dashboard');
 }
 
 async function openPublishedDocument(page: Page): Promise<boolean> {

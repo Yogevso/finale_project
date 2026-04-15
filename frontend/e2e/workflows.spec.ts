@@ -1,17 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
+
+const ADMIN = { username: 'admin', password: 'admin123' };
 
 // Helper to login as admin
 async function loginAsAdmin(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', 'admin');
-  await page.fill('input#password', 'admin123');
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  // Give extra time for redirect
-  await page.waitForTimeout(2000);
+  await loginByApi(page, ADMIN, /\/(dashboard|documents)/, '/dashboard');
 }
 
 // =====================================================

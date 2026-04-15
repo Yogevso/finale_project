@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 /**
  * Cross-Role Permission Boundary Tests
@@ -38,16 +39,18 @@ const ROLES = {
   customer: { username: 'customer1', password: 'customer123' }
 };
 
+const ROLE_LANDING: Record<keyof typeof ROLES, { expected: RegExp; landing: string }> = {
+  system_admin: { expected: /\/(dashboard|documents)/, landing: '/dashboard' },
+  admin: { expected: /\/(dashboard|documents)/, landing: '/dashboard' },
+  manager: { expected: /\/(dashboard|documents)/, landing: '/dashboard' },
+  editor: { expected: /\/(dashboard|documents)/, landing: '/dashboard' },
+  viewer: { expected: /\/(dashboard|documents)/, landing: '/dashboard' },
+  customer: { expected: /\/(portal|dashboard)/, landing: '/portal' },
+};
+
 async function loginAs(page: Page, role: keyof typeof ROLES) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', ROLES[role].username);
-  await page.fill('input#password', ROLES[role].password);
-  await page.click('button[type="submit"]');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
+  const { expected, landing } = ROLE_LANDING[role];
+  await loginByApi(page, ROLES[role], expected, landing);
 }
 
 test.describe('Cross-Role Permission Boundaries', () => {
