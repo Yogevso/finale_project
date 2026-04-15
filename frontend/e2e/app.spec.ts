@@ -225,7 +225,7 @@ test.describe('Accessibility', () => {
     await expect(page.locator('input#password')).toBeFocused();
 
     await page.keyboard.press('Tab');
-    // Remember me checkbox comes before submit
+    // Two tabs needed: one for "Remember me" checkbox, one to reach submit
     await page.keyboard.press('Tab');
     await expect(page.locator('button[type="submit"]')).toBeFocused();
   });
