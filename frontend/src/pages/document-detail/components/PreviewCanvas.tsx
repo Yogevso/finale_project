@@ -288,7 +288,7 @@ export function PreviewCanvas({
 
       <div
         ref={previewPaneRef}
-        className="document-preview-scroll-region flex-1 relative overflow-y-auto overflow-x-hidden document-preview-pane"
+        className="document-preview-scroll-region flex-1 relative overflow-y-auto overflow-x-auto document-preview-pane"
         onScroll={onScroll}
       >
         <div className="document-reading-progress sticky top-0 z-10 h-[3px]" aria-hidden="true">

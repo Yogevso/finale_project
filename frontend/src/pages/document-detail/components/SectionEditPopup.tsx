@@ -118,7 +118,7 @@ export function SectionEditPopup({
   const { containerRef: dialogRef } = useFocusTrap<HTMLDivElement>(onClose)
   const [editingFrame, setEditingFrame] = useState(initialEditingFrame)
   const [isSaving, setIsSaving] = useState(false)
-  const [submitForReview, setSubmitForReview] = useState(true)
+  const [submitForReview, setSubmitForReview] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [baselineHtml, setBaselineHtml] = useState(initialEditingFrame.editorHtml)
   const [comparisonHtml, setComparisonHtml] = useState<string | null>(null)

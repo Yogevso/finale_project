@@ -434,10 +434,81 @@ export function clearHighlights(container: HTMLElement) {
   })
 }
 
+/**
+ * Detect whether an <ol> looks like a table-of-contents list.
+ * TOC lists typically have items ending with page numbers (e.g. "Changes 40").
+ */
+function looksLikeTocList(ol: Element): boolean {
+  const items = ol.querySelectorAll('li')
+  if (items.length === 0) return false
+  let pageNumberCount = 0
+  items.forEach((li) => {
+    // Only check direct text, ignoring nested lists
+    const text = (li.childNodes[0]?.textContent || '').trim()
+    if (/\d{1,4}\s*$/.test(text)) {
+      pageNumberCount++
+    }
+  })
+  return pageNumberCount >= items.length * 0.4
+}
+
+/**
+ * Remove inline table of contents from the parsed document.
+ * Matches a "Contents" heading/paragraph followed by consecutive <ol> TOC lists.
+ */
+function removeInlineToc(doc: Document): void {
+  const root = doc.body.firstElementChild?.classList.contains('docx-document')
+    ? doc.body.firstElementChild
+    : doc.body
+
+  const children = Array.from(root.children) as HTMLElement[]
+  for (let i = 0; i < children.length; i++) {
+    const el = children[i]
+    const text = el.textContent?.trim().toLowerCase() || ''
+
+    // Match "Contents" heading (h1-h6) or paragraph — text may be wrapped in bold/italic
+    const isContentsHeading =
+      (/^h[1-6]$/.test(el.tagName.toLowerCase()) || el.tagName.toLowerCase() === 'p') &&
+      /^\s*contents\s*$/i.test(text)
+
+    if (!isContentsHeading) continue
+
+    // Found "Contents" — remove it and all consecutive TOC elements after it
+    const toRemove: HTMLElement[] = [el]
+    for (let j = i + 1; j < children.length; j++) {
+      const next = children[j]
+      const tag = next.tagName.toLowerCase()
+      if (tag === 'ol' && looksLikeTocList(next)) {
+        toRemove.push(next)
+      } else if (tag === 'p' && !next.textContent?.trim()) {
+        // Skip empty paragraphs between TOC lists
+        toRemove.push(next)
+      } else if (tag === 'p' && /\d{1,4}\s*$/.test(next.textContent?.trim() || '')) {
+        // Standalone TOC entry paragraph ending with page number
+        toRemove.push(next)
+      } else {
+        break
+      }
+    }
+
+    // Only remove if we found at least one TOC list after the heading
+    if (toRemove.length > 1) {
+      toRemove.forEach((node) => node.remove())
+    }
+    break
+  }
+}
+
 export function processHtmlIntoSections(html: string): { html: string; sections: TocSection[] } {
   const sanitizedHtml = sanitizeHtmlForPreview(html)
   const parser = getDomParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
+
+  // Remove inline table of contents from the document body.
+  // The TOC is typically a heading/paragraph containing "Contents" followed by
+  // ordered lists whose items end with page numbers (e.g. "40", "41").
+  removeInlineToc(doc)
+
   const sections: TocSection[] = []
   const rootElement = doc.body.firstElementChild
   const elements = resolveSectionElements(doc)

@@ -185,7 +185,7 @@ export function useDocumentDetailPageState() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.deleteDocument(documentId),
+    mutationFn: () => api.deleteDocument(documentId, document?.etag),
     onSuccess: () => {
       navigate('/documents')
     },
@@ -200,7 +200,7 @@ export function useDocumentDetailPageState() {
   })
 
   const archiveMutation = useMutation({
-    mutationFn: () => api.archiveDocument(documentId),
+    mutationFn: () => api.archiveDocument(documentId, document?.etag),
     onSuccess: () => {
       invalidateDocumentDetailState()
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
@@ -211,7 +211,7 @@ export function useDocumentDetailPageState() {
   })
 
   const restoreMutation = useMutation({
-    mutationFn: () => api.restoreDocument(documentId),
+    mutationFn: () => api.restoreDocument(documentId, document?.etag),
     onSuccess: () => {
       invalidateDocumentDetailState()
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.all })
@@ -262,6 +262,22 @@ export function useDocumentDetailPageState() {
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
       setShowSubmitReview(false)
       setSubmitMessage('')
+    },
+  })
+
+  const pendingReviewId = useMemo(
+    () => reviewHistoryItems.find((r) => r.status === 'pending')?.id ?? null,
+    [reviewHistoryItems],
+  )
+
+  const cancelReviewMutation = useMutation({
+    mutationFn: () => {
+      if (!pendingReviewId) throw new Error('No pending review to cancel')
+      return api.cancelReview(pendingReviewId)
+    },
+    onSuccess: () => {
+      invalidateDocumentDetailState()
+      queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
     },
   })
 
@@ -584,5 +600,8 @@ export function useDocumentDetailPageState() {
     removeCompany: removeCompanyMutation.mutate,
     isRemovingCompany: removeCompanyMutation.isPending,
     isSubmittingReview: submitReviewMutation.isPending,
+    pendingReviewId,
+    cancelReview: cancelReviewMutation.mutate,
+    isCancellingReview: cancelReviewMutation.isPending,
   }
 }
