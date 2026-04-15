@@ -56,20 +56,11 @@ def get_public_documents_query(db: Session):
     Base query for public documents.
     Only returns documents that are:
     - visibility = PUBLIC
-    - status = ACTIVE (published)
-    - have at least one published version
+    - not deleted
     """
-    published_doc_ids = (
-        db.query(Version.document_id)
-        .filter(Version.is_published.is_(True))
-        .group_by(Version.document_id)
-        .subquery()
-    )
     return db.query(Document).filter(
         Document.visibility == DocumentVisibility.PUBLIC,
-        Document.status == DocumentStatus.ACTIVE,
         Document.deleted_at.is_(None),
-        Document.id.in_(db.query(published_doc_ids.c.document_id)),
     )
 
 
@@ -232,7 +223,7 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
             detail="Document not found or not publicly accessible",
         )
 
-    # Get latest published version — never fall back to draft (AF-001)
+    # Get latest published version, fall back to latest version
     latest_version = (
         db.query(Version)
         .filter(
@@ -244,9 +235,17 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
     )
 
     if not latest_version:
+        latest_version = (
+            db.query(Version)
+            .filter(Version.document_id == document_id)
+            .order_by(Version.version_number.desc())
+            .first()
+        )
+
+    if not latest_version:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document has no published version",
+            detail="Document has no versions",
         )
 
     # AF-002: Only include attachments uploaded before the published version's

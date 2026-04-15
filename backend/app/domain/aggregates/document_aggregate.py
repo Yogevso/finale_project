@@ -99,6 +99,9 @@ class DocumentAggregate:
             return
         if self._reconcile_to_active_if_published():
             return
+        if self.document.status in (DocumentStatus.PENDING_REVIEW, DocumentStatus.APPROVED):
+            self.document.status = DocumentStatus.PENDING_REVIEW
+            return
         self.transition_to_pending_review()
 
     def finalize_review_approval(self) -> None:
