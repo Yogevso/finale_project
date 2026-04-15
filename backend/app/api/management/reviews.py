@@ -234,7 +234,10 @@ async def submit_for_review(
         .first()
     )
     if existing:
-        raise ConflictError("Document already has a pending review submission")
+        raise ConflictError(
+            "Document already has a pending review submission. "
+            "Please cancel or complete the existing review before submitting again."
+        )
 
     # Validate explicit version or attach latest version automatically
     version_id = _resolve_review_version_id(

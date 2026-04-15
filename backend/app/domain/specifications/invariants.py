@@ -30,7 +30,7 @@ class DocumentDraftStatusSpec:
     def assert_satisfied(self, document: Document) -> None:
         if not self.is_satisfied_by(document):
             raise InvalidStateError(
-                "Document must be in draft status to submit for review. "
+                "Document must be in draft status (or pending-review/approved) to submit for review. "
                 f"Current status: {document.status.value}"
             )
 
