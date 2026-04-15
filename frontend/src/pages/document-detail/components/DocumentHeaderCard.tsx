@@ -3,7 +3,6 @@ import { formatDueDate } from '@/lib/documentDueDates'
 import { getDocumentDisplayTitle } from '@/lib/documentDisplay'
 import {
   AlertTriangle,
-  Archive,
   ArrowLeft,
   CalendarDays,
   CheckCircle,
@@ -12,7 +11,6 @@ import {
   FileText,
   HelpCircle,
   Maximize2,
-  Minimize2,
   RotateCcw,
   Send,
   Trash2,
@@ -70,7 +68,7 @@ export function DocumentHeaderCard({
   sourceFileType = 'other',
   onBackToDocuments,
   onEnterFullscreen,
-  onExitFullscreen,
+  onExitFullscreen: _onExitFullscreen,
   onGenerateTranscript,
   onExportCalendar,
   onOpenSubmitReview,
@@ -239,7 +237,7 @@ export function DocumentHeaderCard({
                   className="btn-secondary table-action-btn border-white/60 bg-white text-sky-900 hover:border-white hover:bg-slate-100"
                 >
                   <Send className="w-4 h-4" />
-                  {documentStatus === 'rejected' || documentStatus === 'pending_review'
+                  {documentStatus === 'pending_review'
                     ? 'Resubmit for Review'
                     : documentStatus === 'active'
                       ? 'Submit Draft for Review'

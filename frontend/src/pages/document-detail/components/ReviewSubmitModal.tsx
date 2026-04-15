@@ -54,8 +54,8 @@ export function ReviewSubmitModal({
         const latest = sorted[0]
         const published = sorted.find((v) => v.is_published)
 
-        setLatestHtml(latest ? getUsableVersionContent(latest) : null)
-        setPublishedHtml(published && published.id !== latest?.id ? getUsableVersionContent(published) : null)
+        setLatestHtml(latest ? getUsableVersionContent(latest.content) : null)
+        setPublishedHtml(published && published.id !== latest?.id ? getUsableVersionContent(published.content) : null)
       } catch {
         // silently fail — diff is optional
       } finally {

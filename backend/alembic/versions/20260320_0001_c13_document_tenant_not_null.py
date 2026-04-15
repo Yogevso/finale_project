@@ -26,6 +26,9 @@ def _recreate_audit_triggers(bind):
     """Recreate audit_logs immutability triggers after SQLite batch ops."""
     if bind.dialect.name != "sqlite":
         return
+    inspector = sa.inspect(bind)
+    if "audit_logs" not in inspector.get_table_names():
+        return
     bind.execute(sa.text(
         "CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update "
         "BEFORE UPDATE ON audit_logs BEGIN "

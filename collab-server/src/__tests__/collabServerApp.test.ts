@@ -8,6 +8,7 @@ import {
 import { verifyCollabToken as verifyCollabTokenFn } from '../auth.js';
 import { saveDocument as saveDocumentFn } from '../persistence.js';
 import { jest } from '@jest/globals';
+import type { CollaborationPermission } from '../authContext/contracts.js';
 
 describe('CollabServerApp config and runtime composition', () => {
   it('resolves defaults from environment when variables are missing', () => {
@@ -103,7 +104,7 @@ describe('CollabServerApp config and runtime composition', () => {
   it('clears the warning after a later successful save', async () => {
     const broadcastStateless = jest.fn();
     const saveDocument = jest
-      .fn()
+      .fn<(...args: unknown[]) => Promise<{ success: boolean; error?: string }>>()
       .mockResolvedValueOnce({ success: false, error: 'backend timeout' })
       .mockResolvedValueOnce({ success: true });
     const app = new CollabServerApp({
@@ -151,7 +152,7 @@ describe('CollabServerApp config and runtime composition', () => {
             color: '#123456',
             traceId: 'trace-123',
           },
-          permissions: ['read', 'write'],
+          permissions: ['read', 'write'] as CollaborationPermission[],
         })),
         verifyCollaborationAccess: jest.fn(async () => ({
           success: false,
@@ -189,11 +190,11 @@ describe('CollabServerApp config and runtime composition', () => {
             color: '#123456',
             traceId: 'trace-123',
           },
-          permissions: ['read', 'write'],
+          permissions: ['read', 'write'] as CollaborationPermission[],
         })),
         verifyCollaborationAccess: jest.fn(async () => ({
           success: true,
-          permissions: ['read'],
+          permissions: ['read'] as CollaborationPermission[],
         })),
         canWrite: canWrite as any,
         registerDocumentConnectionAuth,
@@ -246,7 +247,7 @@ describe('CollabServerApp config and runtime composition', () => {
       runtimeOverrides: {
         extractDocumentId: jest.fn(() => '123'),
         verifyCollabToken: jest
-          .fn()
+          .fn<(token: string, documentId: string) => ReturnType<typeof verifyCollabTokenFn>>()
           .mockImplementation((token: string) => ({
             success: true,
             user: {
@@ -257,11 +258,11 @@ describe('CollabServerApp config and runtime composition', () => {
               color: '#123456',
               traceId: `trace-${token}`,
             },
-            permissions: ['read', 'write'],
+            permissions: ['read', 'write'] as CollaborationPermission[],
           })),
         verifyCollaborationAccess: jest.fn(async () => ({
           success: true,
-          permissions: ['read', 'write'],
+          permissions: ['read', 'write'] as CollaborationPermission[],
         })),
         registerDocumentConnectionAuth,
         unregisterDocumentConnectionAuth,
