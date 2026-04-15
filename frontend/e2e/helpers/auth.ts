@@ -29,6 +29,31 @@ function parseRetryAfterSeconds(headers: Record<string, string>, body: unknown):
   return 2;
 }
 
+const onboardingDismissed = new Set<string>();
+
+async function dismissOnboarding(page: Page, credentials: Credentials, payload: TokenPayload): Promise<void> {
+  if (onboardingDismissed.has(credentials.username)) {
+    return;
+  }
+  try {
+    await page.request.patch('/api/v1/users/me/onboarding', {
+      data: {
+        guide_version: 1,
+        guide_seen_at: new Date().toISOString(),
+      },
+      headers: {
+        ...E2E_BYPASS_HEADERS,
+        Authorization: `Bearer ${payload.access_token}`,
+      },
+      failOnStatusCode: false,
+      timeout: 5000,
+    });
+    onboardingDismissed.add(credentials.username);
+  } catch {
+    // Non-critical — tests may still work if modal doesn't appear
+  }
+}
+
 async function requestTokens(page: Page, credentials: Credentials): Promise<TokenPayload> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     let response;
@@ -101,6 +126,7 @@ export async function loginByApi(
     }
 
     await applyTokens(page, payload);
+    await dismissOnboarding(page, credentials, payload);
     await page.goto(landingPath, { waitUntil: 'domcontentloaded' });
     await page.waitForURL(
       /\/(login|dashboard|documents|portal|reviews|users|admin|settings|companies|notifications|audit)/,

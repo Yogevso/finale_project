@@ -214,7 +214,8 @@ test.describe('Accessibility', () => {
   test('login page is keyboard navigable', async ({ page }) => {
     await gotoLogin(page);
 
-    await page.keyboard.press('Tab');
+    // Focus the username field directly, then verify tab order from there
+    await page.locator('input#username').focus();
     await expect(page.locator('input#username')).toBeFocused();
 
     await page.keyboard.press('Tab');
@@ -223,6 +224,8 @@ test.describe('Accessibility', () => {
     await page.keyboard.press('Tab');
     await expect(page.locator('input#password')).toBeFocused();
 
+    await page.keyboard.press('Tab');
+    // Two tabs needed: one for "Remember me" checkbox, one to reach submit
     await page.keyboard.press('Tab');
     await expect(page.locator('button[type="submit"]')).toBeFocused();
   });

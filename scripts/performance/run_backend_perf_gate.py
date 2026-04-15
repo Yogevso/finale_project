@@ -59,8 +59,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     temp_root = BACKEND_DIR / ".tmp" / "perf-gate"
-    junit_file = args.junit_file or temp_root / "backend-perf-gate.xml"
-    report_file = args.report_file or temp_root / "backend-perf-gate.json"
+    junit_file = args.junit_file.resolve() if args.junit_file else temp_root / "backend-perf-gate.xml"
+    report_file = args.report_file.resolve() if args.report_file else temp_root / "backend-perf-gate.json"
 
     junit_file.parent.mkdir(parents=True, exist_ok=True)
     report_file.parent.mkdir(parents=True, exist_ok=True)

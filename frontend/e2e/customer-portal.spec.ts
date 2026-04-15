@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { loginByApi } from './helpers/auth';
 
 // Customer test credentials (from seed data)
 const CUSTOMER = { username: 'customer1', password: 'customer123' };
@@ -6,30 +7,12 @@ const ADMIN = { username: 'admin', password: 'admin123' };
 
 // Helper to login as customer
 async function loginAsCustomer(page: Page, credentials = CUSTOMER) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', credentials.username);
-  await page.fill('input#password', credentials.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/portal|dashboard|documents/, { timeout: 15000 }).catch(() => {});
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
+  await loginByApi(page, credentials, /\/(portal|dashboard)/, '/portal');
 }
 
 // Helper to login as admin
 async function loginAsAdmin(page: Page) {
-  await page.addInitScript(() => {
-    window.sessionStorage.setItem('viewer_landed', '1');
-  });
-  await page.goto('/login');
-  await page.fill('input#username', ADMIN.username);
-  await page.fill('input#password', ADMIN.password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/dashboard|documents/, { timeout: 15000 }).catch(() => {});
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
+  await loginByApi(page, ADMIN, /\/(dashboard|documents)/, '/dashboard');
 }
 
 // =====================================================
