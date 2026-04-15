@@ -206,7 +206,7 @@ export function TocPanel({
               <p className="body-copy px-2 py-2">No TOC available</p>
             ) : (
               <ul className="space-y-0.5">
-                {visibleSections.map(({ section: item, number: sectionNumber, visible }, visualIdx) => {
+                {visibleSections.map(({ section: item, number: sectionNumber, visible }) => {
                   if (!visible) return null
                   const anchorId = item.anchorId || `heading-${item.index}`
                   const pageStart = resolveSectionPageStart(item)

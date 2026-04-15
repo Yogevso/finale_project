@@ -89,7 +89,13 @@ def _build_alembic_config(backend_dir: Path, *, database_url: str | None = None)
 
 
 def _bootstrap_baseline_schema(backend_dir: Path, *, database_url: str) -> None:
-    """Bootstrap schema metadata for migration probes in mixed-init environments."""
+    """Bootstrap schema metadata for migration probes in mixed-init environments.
+
+    Creates all tables from the current ORM models and stamps the database at
+    the head revision so that ``alembic upgrade head`` becomes a no-op.  This
+    avoids conflicts where migrations try to add columns/constraints that
+    ``create_all`` has already created.
+    """
     backend_path = str(backend_dir)
     inserted = False
     if backend_path not in sys.path:
@@ -99,12 +105,20 @@ def _bootstrap_baseline_schema(backend_dir: Path, *, database_url: str) -> None:
     try:
         import app.models  # noqa: F401
         from app.db import Base
+        from app.db.bases import AnalyticsBase, ChatBase
 
         engine = create_engine(database_url, poolclass=NullPool)
         try:
             Base.metadata.create_all(bind=engine)
+            AnalyticsBase.metadata.create_all(bind=engine)
+            ChatBase.metadata.create_all(bind=engine)
         finally:
             engine.dispose()
+
+        # Stamp at head so that ``upgrade head`` is a no-op — the ORM
+        # ``create_all`` already materialised the full current schema.
+        cfg = _build_alembic_config(backend_dir, database_url=database_url)
+        command.stamp(cfg, "head")
     finally:
         if inserted:
             try:

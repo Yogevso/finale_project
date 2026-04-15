@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-15T17:36:23.888901+00:00",
+  "generated_at": "2026-04-15T17:46:42.022580+00:00",
   "backend_dir": "backend",
   "head_revision": "20260328_0003",
   "high_risk_revisions": [
@@ -123,27 +123,47 @@
     ]
   },
   "dry_run": {
-    "passed": false,
+    "passed": true,
     "sql_path": "docs/migrations/evidence/latest-dry-run.sql",
-    "sql_line_count": 0,
-    "details": "Dry-run failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+    "sql_line_count": 1136,
+    "details": "Dry-run upgrade and schema SQL dump succeeded."
   },
   "rollback_probe": {
-    "passed": false,
-    "revision_after_upgrade": "",
-    "revision_after_downgrade": null,
-    "revision_after_reupgrade": "",
-    "details": "Rollback probe failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+    "passed": true,
+    "revision_after_upgrade": "20260328_0003",
+    "revision_after_downgrade": "20260328_0002",
+    "revision_after_reupgrade": "20260328_0003",
+    "details": "Rollback probe succeeded."
   },
   "post_assertions": {
-    "passed": false,
+    "passed": true,
     "checks": [
       {
-        "name": "upgrade-head-before-assertions",
-        "passed": false,
-        "details": "failed: (sqlite3.OperationalError) no such table: main.audit_logs\n[SQL: CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs are immutable \u2014 UPDATE not allowed'); END]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
+        "name": "table:document_number_sequences",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "table:domain_event_outbox",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "table:idempotency_keys",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "column:documents.row_version",
+        "passed": true,
+        "details": "present"
+      },
+      {
+        "name": "column:versions.row_version",
+        "passed": true,
+        "details": "present"
       }
     ]
   },
-  "overall_passed": false
+  "overall_passed": true
 }
