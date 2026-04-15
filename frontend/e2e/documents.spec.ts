@@ -167,7 +167,7 @@ test.describe('Search Functionality', () => {
     await expect(statusSummary).toBeVisible();
     await statusSummary.click();
 
-    await page.getByRole('button', { name: 'Published' }).click();
+    await page.getByRole('menuitemradio', { name: 'Published' }).click();
     await expect(statusSummary).toContainText(/Status:\s*Published/i);
   });
 });
