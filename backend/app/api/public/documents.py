@@ -22,6 +22,7 @@ from app.domain.specifications.audience_policies import (
 from app.models import (
     Attachment,
     Document,
+    DocumentStatus,
     DocumentVisibility,
     Platform,
     Topic,
@@ -64,10 +65,12 @@ def get_public_documents_query(db: Session):
     """
     Base query for public documents.
     Only returns documents that are:
+    - status = ACTIVE
     - visibility = PUBLIC
     - not deleted
     """
     return db.query(Document).filter(
+        Document.status == DocumentStatus.ACTIVE,
         Document.visibility == DocumentVisibility.PUBLIC,
         Document.deleted_at.is_(None),
     )
@@ -168,7 +171,7 @@ def list_public_documents(
         .subquery()
     )
 
-    query = query.outerjoin(
+    query = query.join(
         latest_published, Document.id == latest_published.c.document_id
     ).add_columns(latest_published.c.published_at, latest_published.c.version_number)
 
@@ -245,7 +248,7 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
             detail="Document not found or not publicly accessible",
         )
 
-    # Get latest published version, fall back to latest version
+    # Get latest published version
     latest_version = (
         db.query(Version)
         .filter(
@@ -257,17 +260,9 @@ def get_public_document(document_id: int, response: Response, db: Session = Depe
     )
 
     if not latest_version:
-        latest_version = (
-            db.query(Version)
-            .filter(Version.document_id == document_id)
-            .order_by(Version.version_number.desc())
-            .first()
-        )
-
-    if not latest_version:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document has no versions",
+            detail="Document has no published version",
         )
 
     # AF-002: Only include attachments uploaded before the published version's

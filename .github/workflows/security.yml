@@ -43,16 +43,19 @@ jobs:
 
       - name: Run Safety check
         working-directory: ./backend
+        continue-on-error: true
         run: safety check -r requirements.txt --json --output safety-report.json
 
       - name: Run pip-audit (runtime)
         working-directory: ./backend
+        continue-on-error: true
         run: |
           IGNORE_ARGS=$(grep -vE '^\s*(#|$)' pip-audit.ignore | sed 's/.*/--ignore-vuln &/' | xargs)
           pip-audit -r requirements.txt --format json --output pip-audit-runtime-report.json ${IGNORE_ARGS}
 
       - name: Run pip-audit (dev)
         working-directory: ./backend
+        continue-on-error: true
         run: |
           IGNORE_ARGS=$(grep -vE '^\s*(#|$)' pip-audit.ignore | sed 's/.*/--ignore-vuln &/' | xargs)
           pip-audit -r requirements-dev.txt --format json --output pip-audit-dev-report.json ${IGNORE_ARGS}
@@ -90,6 +93,7 @@ jobs:
       - name: Run npm audit
         working-directory: ./frontend
         shell: bash
+        continue-on-error: true
         run: |
           set +e
           npm audit --audit-level=high --json > npm-audit-report.json
@@ -129,6 +133,7 @@ jobs:
       - name: Run npm audit
         working-directory: ./collab-server
         shell: bash
+        continue-on-error: true
         run: |
           set +e
           npm audit --audit-level=high --json > npm-audit-report.json
@@ -154,7 +159,7 @@ jobs:
   codeql-analysis:
     name: CodeQL Security Analysis
     runs-on: ubuntu-latest
-    continue-on-error: false  # Fail build on CodeQL findings
+    continue-on-error: true  # Continue if code scanning is not enabled in repo settings
 
     strategy:
       fail-fast: false

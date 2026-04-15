@@ -252,9 +252,11 @@ class DocumentAudienceService:
             return []
 
         self._enforce_assignment_tenant_scope(company_ids)
-        snapshots_by_id = self.lookup_company_snapshots(company_ids)
+
+        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
+        company_by_id = {company.id: company for company in companies}
         missing_ids = [
-            company_id for company_id in company_ids if company_id not in snapshots_by_id
+            company_id for company_id in company_ids if company_id not in company_by_id
         ]
         if missing_ids:
             raise ValidationError(
@@ -263,7 +265,7 @@ class DocumentAudienceService:
             )
 
         inactive_ids = [
-            company_id for company_id in company_ids if not snapshots_by_id[company_id].is_active
+            company_id for company_id in company_ids if not company_by_id[company_id].is_active
         ]
         if inactive_ids:
             raise ValidationError(
@@ -271,16 +273,6 @@ class DocumentAudienceService:
                 error_code=AudienceErrorCode.AUDIENCE_008.value,
             )
 
-        companies = self.db.query(Tenant).filter(Tenant.id.in_(company_ids)).all()
-        company_by_id = {company.id: company for company in companies}
-        missing_object_ids = [
-            company_id for company_id in company_ids if company_id not in company_by_id
-        ]
-        if missing_object_ids:
-            raise ValidationError(
-                "Some company IDs are invalid",
-                error_code=AudienceErrorCode.AUDIENCE_002.value,
-            )
         return [company_by_id[company_id] for company_id in company_ids]
 
     def reconcile_active_companies(
