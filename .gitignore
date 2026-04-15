@@ -117,3 +117,6 @@ run-wave-y.sh
 
 # Temp files
 tmp_*
+
+# Docker build cache
+.dockerbuild/
