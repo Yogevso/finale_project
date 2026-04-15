@@ -365,13 +365,12 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/perf-gate.db
           RATE_LIMIT_ENABLED: "false"
-          CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+          CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
           COLLAB_SERVER_URL: http://127.0.0.1:8002
           SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8000 > ../perf-backend.log 2>&1 &
-          sleep 5
-          curl -f http://127.0.0.1:8000/health || exit 1
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/health && break || sleep 2; done || exit 1
 
       - name: Start collaboration server for protocol gate
         working-directory: ./collab-server
@@ -385,8 +384,7 @@ jobs:
         run: |
           npm run build
           npm start > ../collab-perf.log 2>&1 &
-          sleep 5
-          curl -f http://127.0.0.1:8003/health || exit 1
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8003/health && break || sleep 2; done || exit 1
 
       - name: Run protocol-faithful collaboration perf gate
         working-directory: ./frontend
@@ -462,7 +460,25 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: python seed_data.py
+
+      - name: Rebuild search index
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
+        run: |
+          python -c "
+          from app.db import SessionLocal
+          from app.services.search_index_service import SearchIndexSyncService
+          db = SessionLocal()
+          SearchIndexSyncService(db).rebuild_index()
+          db.commit()
+          db.close()
+          "
 
       - name: Start backend server
         working-directory: ./backend
@@ -471,19 +487,21 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
           RATE_LIMIT_ENABLED: "false"
-          CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+          CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
           npm run dev &
-          sleep 10
-          curl -f http://localhost:3000 || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run Core E2E tests (auth, documents, app)
+        env:
+          PW_SKIP_WEBSERVER: '1'
+          BASE_URL: 'http://localhost:3000'
         run: npx playwright test e2e/app.spec.ts e2e/documents.spec.ts --reporter=github
 
   # ============================================
@@ -547,7 +565,25 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: python seed_data.py
+
+      - name: Rebuild search index
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
+        run: |
+          python -c "
+          from app.db import SessionLocal
+          from app.services.search_index_service import SearchIndexSyncService
+          db = SessionLocal()
+          SearchIndexSyncService(db).rebuild_index()
+          db.commit()
+          db.close()
+          "
 
       - name: Start backend server
         working-directory: ./backend
@@ -556,19 +592,21 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
           RATE_LIMIT_ENABLED: "false"
-          CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+          CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
           npm run dev &
-          sleep 10
-          curl -f http://localhost:3000 || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run E2E tests - ${{ matrix.spec }}
+        env:
+          PW_SKIP_WEBSERVER: '1'
+          BASE_URL: 'http://localhost:3000'
         run: npx playwright test e2e/${{ matrix.spec }} --reporter=github
 
   # ============================================
@@ -639,7 +677,25 @@ jobs:
           APP_ENV: testing
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: python seed_data.py
+
+      - name: Rebuild search index
+        working-directory: ./backend
+        env:
+          APP_ENV: testing
+          SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: sqlite:///./data/test.db
+          SEARCH_BACKEND_MODE: sqlite_fts5
+        run: |
+          python -c "
+          from app.db import SessionLocal
+          from app.services.search_index_service import SearchIndexSyncService
+          db = SessionLocal()
+          SearchIndexSyncService(db).rebuild_index()
+          db.commit()
+          db.close()
+          "
 
       - name: Start backend server
         working-directory: ./backend
@@ -648,19 +704,21 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci
           DATABASE_URL: sqlite:///./data/test.db
           RATE_LIMIT_ENABLED: "false"
-          CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+          CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
+          SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
           npm run dev &
-          sleep 10
-          curl -f http://localhost:3000 || exit 1
+          for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run E2E tests - ${{ matrix.spec }}
+        env:
+          PW_SKIP_WEBSERVER: '1'
+          BASE_URL: 'http://localhost:3000'
         run: npx playwright test e2e/${{ matrix.spec }} --reporter=github
 
   # ============================================
