@@ -32,7 +32,9 @@ class Comment(Base):
     __tablename__ = "comments"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     parent_id = Column(Integer, ForeignKey("comments.id"), nullable=True, index=True)
     content = Column(Text, nullable=False)
@@ -121,7 +123,9 @@ class Bookmark(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="bookmarks")
@@ -138,7 +142,9 @@ class DocumentWatcher(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="watched_documents")
@@ -152,9 +158,13 @@ class Feedback(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     feedback_type = Column(SQLEnum(FeedbackType), default=FeedbackType.OTHER, nullable=False)
-    status = Column(SQLEnum(FeedbackStatus), default=FeedbackStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        SQLEnum(FeedbackStatus), default=FeedbackStatus.PENDING, nullable=False, index=True
+    )
     content = Column(Text, nullable=False)
     anchor_text = Column(Text, nullable=True)
     response = Column(Text, nullable=True)
@@ -176,7 +186,9 @@ class ReadingProgress(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     progress_percent = Column(Integer, default=0, nullable=False)
     last_read_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
@@ -192,7 +204,9 @@ class ReviewRequest(Base):
     __tablename__ = "review_requests"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version_id = Column(Integer, ForeignKey("versions.id"), nullable=True)
     submitted_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -225,7 +239,9 @@ class Invitation(Base):
     role = Column(SQLEnum(UserRole), default=UserRole.CUSTOMER, nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     invited_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    status = Column(SQLEnum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False, index=True)
+    status = Column(
+        SQLEnum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False, index=True
+    )
     message = Column(Text, nullable=True)
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime, nullable=True)

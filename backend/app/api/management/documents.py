@@ -66,7 +66,7 @@ from app.dependencies.permissions import (
     require_manager,
     require_permission,
 )
-from app.dependencies.services import get_document_service
+from app.dependencies.services import get_document_service, get_version_service
 from app.errors import InvalidStateError, NotFoundError, PermissionDeniedError, ValidationError
 from app.errors.audience_errors import AudienceErrorCode
 from app.models import DocumentStatus, DocumentVisibility, Tenant, User, UserRole
@@ -90,7 +90,6 @@ from app.services.attachment_service import AttachmentService
 from app.services.document_service import DocumentService
 from app.services.permissions import Permission
 from app.services.version_service import VersionService
-from app.dependencies.services import get_version_service
 from app.utils.html_to_docx import html_to_docx_bytes
 from app.utils.html_to_pdf import html_to_pdf_bytes
 from app.utils.html_to_pptx import html_to_pptx_bytes
@@ -99,12 +98,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 AUDIENCE_ASSIGNMENT_SCHEMA_VERSION = settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 PDF_UPLOAD_MIME_TYPE = "application/pdf"
-DOCX_UPLOAD_MIME_TYPE = (
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
-PPTX_UPLOAD_MIME_TYPE = (
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-)
+DOCX_UPLOAD_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PPTX_UPLOAD_MIME_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 PDF_CONVERSION_TARGETS = {"docx", "pptx"}
 
 
@@ -145,9 +140,7 @@ def _build_generated_pdf_working_attachment(
 
     result = convert_pdf_to_pptx(pdf_bytes)
     if result.error or not result.pptx_bytes:
-        raise ValidationError(
-            f"Failed to convert PDF to PPTX: {result.error or 'empty output'}"
-        )
+        raise ValidationError(f"Failed to convert PDF to PPTX: {result.error or 'empty output'}")
     return result.pptx_bytes, f"{base_name}.pptx", PPTX_UPLOAD_MIME_TYPE
 
 
@@ -166,9 +159,7 @@ def _build_document_calendar_export(*, document: object, due_date: date) -> str:
     document_number = getattr(document, "document_number", None)
     document_id = getattr(document, "id", None)
     escaped_title = _escape_ical_text(str(document_title))
-    escaped_description = _escape_ical_text(
-        f"{document_number or 'Document'} due date"
-    )
+    escaped_description = _escape_ical_text(f"{document_number or 'Document'} due date")
     uid = f"document-due-{document_id or 'unknown'}@finale-project"
     dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     start = due_date.strftime("%Y%m%d")
@@ -246,7 +237,7 @@ def _apply_company_set_update(
     assigned_count = result.value
     updated_document = document_service.get_document(document_id)
     if updated_document:
-        response.headers["ETag"] = f"\"{updated_document.etag}\""
+        response.headers["ETag"] = f'"{updated_document.etag}"'
     response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
     return MessageResponse(message=success_message.format(assigned_count=assigned_count))
 
@@ -360,9 +351,11 @@ def export_document(
 
     try:
         file_bytes = fmt["converter"](html_content, safe_title)
-    except Exception as exc:
+    except Exception as exc:  # policy: BOUNDARY — surface conversion errors as HTTP 500
         logger.error("Export conversion failed for doc %d format %s: %s", document_id, format, exc)
-        raise HTTPException(status_code=500, detail=f"Failed to convert document to {format}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to convert document to {format}"
+        ) from exc
 
     filename = f"{safe_title}{fmt['extension']}"
 
@@ -385,10 +378,18 @@ def list_documents(
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search in title, description, tags"),
     company_id: Optional[int] = Query(None, description="Filter by assigned company"),
-    date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
+    date_from: Optional[date] = Query(
+        None, description="Filter documents created on or after date"
+    ),
     date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
-    sort_by: Optional[str] = Query(None, pattern="^(title|created_at|updated_at|status|category)$", description="Sort field: title, created_at, updated_at, status, category"),
-    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"),
+    sort_by: Optional[str] = Query(
+        None,
+        pattern="^(title|created_at|updated_at|status|category)$",
+        description="Sort field: title, created_at, updated_at, status, category",
+    ),
+    sort_order: Optional[str] = Query(
+        "desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"
+    ),
     current_user: User = Depends(require_internal_user),
     list_documents_query_handler: ListDocumentsQueryHandler = Depends(
         get_list_documents_query_handler
@@ -442,10 +443,18 @@ def list_deleted_documents(
     category: Optional[str] = Query(None, description="Filter by category"),
     search: Optional[str] = Query(None, description="Search in title, description, tags"),
     company_id: Optional[int] = Query(None, description="Filter by assigned company"),
-    date_from: Optional[date] = Query(None, description="Filter documents created on or after date"),
+    date_from: Optional[date] = Query(
+        None, description="Filter documents created on or after date"
+    ),
     date_to: Optional[date] = Query(None, description="Filter documents created on or before date"),
-    sort_by: Optional[str] = Query(None, pattern="^(title|created_at|updated_at|status|category)$", description="Sort field: title, created_at, updated_at, status, category"),
-    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"),
+    sort_by: Optional[str] = Query(
+        None,
+        pattern="^(title|created_at|updated_at|status|category)$",
+        description="Sort field: title, created_at, updated_at, status, category",
+    ),
+    sort_order: Optional[str] = Query(
+        "desc", pattern="^(asc|desc)$", description="Sort direction: asc or desc"
+    ),
     current_user: User = Depends(require_admin),
     document_service: DocumentService = Depends(get_document_service),
 ):
@@ -555,7 +564,7 @@ def get_document(
     if result.is_err:
         raise NotFoundError(result.error.message)
     document = result.value
-    response.headers["ETag"] = f"\"{document.etag}\""
+    response.headers["ETag"] = f'"{document.etag}"'
     return document
 
 
@@ -636,7 +645,7 @@ def update_document(
             raise ValidationError(result.error.message, error_code=result.error.error_code)
         raise HTTPException(status_code=500, detail="Unexpected document-update command error")
     document = result.value
-    response.headers["ETag"] = f"\"{document.etag}\""
+    response.headers["ETag"] = f'"{document.etag}"'
     return document
 
 
@@ -678,7 +687,9 @@ def restore_deleted_document(
 ):
     """Restore a deleted document from the recovery window. Admin-only."""
     try:
-        return document_service.restore_deleted_document(document_id, current_user, if_match=if_match)
+        return document_service.restore_deleted_document(
+            document_id, current_user, if_match=if_match
+        )
     except NotFoundError:
         raise
     except InvalidStateError as e:
@@ -749,7 +760,9 @@ async def upload_document(
         PPTX_UPLOAD_MIME_TYPE,
     }
     allowed_extensions = {".docx", ".pptx"}
-    is_pdf_upload = _is_pdf_upload(content_type=normalized_content_type, filename=normalized_filename)
+    is_pdf_upload = _is_pdf_upload(
+        content_type=normalized_content_type, filename=normalized_filename
+    )
     normalized_pdf_conversion_target = _normalize_pdf_conversion_target(pdf_conversion_target)
     if is_pdf_upload and normalized_pdf_conversion_target is None:
         raise ValidationError("PDF uploads require pdf_conversion_target of docx or pptx")
@@ -1023,7 +1036,7 @@ def remove_company_assignment(
     document = document_service.get_document(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    response.headers["ETag"] = f"\"{document.etag}\""
+    response.headers["ETag"] = f'"{document.etag}"'
     response.headers["X-API-Schema-Version"] = AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
 
     return MessageResponse(message=f"Removed {company.name} from document")

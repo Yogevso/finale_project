@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ── AB-001: Feature Flag Targeting ────────────────────────────────
 
 
@@ -247,6 +246,7 @@ class ApiKeyResponse(BaseModel):
 
 class ApiKeyCreatedResponse(ApiKeyResponse):
     """Returned only on creation — contains the full key (never shown again)."""
+
     full_key: str
 
 

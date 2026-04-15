@@ -59,9 +59,9 @@ def test_support_ws_send_message_sanitizes_before_storage_and_broadcast(db, monk
 
     malicious_content = (
         '<img src="https://example.com/pixel.png" onerror="alert(1)">'
-        '<script>alert(2)</script>'
+        "<script>alert(2)</script>"
         '<a href="javascript:alert(3)">bad</a>'
-        '<p>Hello</p>'
+        "<p>Hello</p>"
     )
 
     _run(
@@ -74,11 +74,12 @@ def test_support_ws_send_message_sanitizes_before_storage_and_broadcast(db, monk
     )
 
     stored_message = (
-        db.query(SupportTicketMessage)
-        .filter(SupportTicketMessage.ticket_id == ticket.id)
-        .one()
+        db.query(SupportTicketMessage).filter(SupportTicketMessage.ticket_id == ticket.id).one()
     )
-    assert stored_message.content == '<img src="https://example.com/pixel.png">alert(2)<a>bad</a><p>Hello</p>'
+    assert (
+        stored_message.content
+        == '<img src="https://example.com/pixel.png">alert(2)<a>bad</a><p>Hello</p>'
+    )
     assert "<script" not in stored_message.content
     assert "onerror" not in stored_message.content
     assert "javascript:" not in stored_message.content
@@ -132,9 +133,7 @@ def test_support_ws_rejects_message_that_becomes_empty_after_sanitization(db):
     )
 
     assert (
-        db.query(SupportTicketMessage)
-        .filter(SupportTicketMessage.ticket_id == ticket.id)
-        .count()
+        db.query(SupportTicketMessage).filter(SupportTicketMessage.ticket_id == ticket.id).count()
         == 0
     )
     assert len(websocket.sent) == 1

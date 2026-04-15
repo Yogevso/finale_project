@@ -95,14 +95,21 @@ class OllamaClient:
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                resp = await client.post(f"{self._base_url}/api/chat", json=payload, headers=headers)
+                resp = await client.post(
+                    f"{self._base_url}/api/chat", json=payload, headers=headers
+                )
                 resp.raise_for_status()
                 return resp.json()
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
                 last_exc = exc
                 if attempt < _MAX_RETRIES:
-                    wait = _RETRY_BACKOFF * (2 ** attempt)
-                    logger.warning("Ollama chat attempt %d failed (%s), retrying in %.1fs", attempt + 1, exc, wait)
+                    wait = _RETRY_BACKOFF * (2**attempt)
+                    logger.warning(
+                        "Ollama chat attempt %d failed (%s), retrying in %.1fs",
+                        attempt + 1,
+                        exc,
+                        wait,
+                    )
                     await asyncio.sleep(wait)
         raise last_exc  # type: ignore[misc]
 

@@ -46,7 +46,7 @@ def build_comment_chat_bridge_context_json(event: CommentChatBridgeRequested) ->
 def build_comment_chat_bridge_message(document: Document, comment: Comment) -> str:
     """Render the synthetic direct-chat message for a document comment."""
 
-    lines = [f'Comment on **{document.title}**']
+    lines = [f"Comment on **{document.title}**"]
 
     if comment.anchor_text:
         snippet = comment.anchor_text.strip()[:120]
@@ -239,11 +239,7 @@ class NotificationEmailEventHandlers:
         notified_users: set[int],
     ) -> None:
         author_id = event.document_author_id
-        if (
-            not author_id
-            or author_id == event.commenter_user_id
-            or author_id in notified_users
-        ):
+        if not author_id or author_id == event.commenter_user_id or author_id in notified_users:
             return
 
         author = self.user_repository.get_by_id(author_id)

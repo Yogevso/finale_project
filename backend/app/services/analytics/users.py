@@ -55,14 +55,11 @@ class AnalyticsUsersMixin:
         ]
 
         # Two-step query: aggregate AuditLog from analytics DB, then enrich with User from core DB
-        agg_query = (
-            self.analytics_db.query(
-                AuditLog.user_id.label("user_id"),
-                func.count(AuditLog.id).label("count"),
-                func.max(AuditLog.created_at).label("last_active"),
-            )
-            .filter(AuditLog.created_at.between(start_dt, end_dt))
-        )
+        agg_query = self.analytics_db.query(
+            AuditLog.user_id.label("user_id"),
+            func.count(AuditLog.id).label("count"),
+            func.max(AuditLog.created_at).label("last_active"),
+        ).filter(AuditLog.created_at.between(start_dt, end_dt))
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             tenant_user_ids = [
                 row[0]

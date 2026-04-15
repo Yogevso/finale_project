@@ -73,7 +73,9 @@ class PolicyDecisionPoint:
         except ValueError:
             return None
 
-    def _validate_user(self, user: Optional[User], action: str) -> tuple[Optional[UserRole], Optional[AuthorizationDecision]]:
+    def _validate_user(
+        self, user: Optional[User], action: str
+    ) -> tuple[Optional[UserRole], Optional[AuthorizationDecision]]:
         if user is None:
             return None, AuthorizationDecision.deny(action, "missing_subject")
         if not user.is_active:
@@ -111,7 +113,9 @@ class PolicyDecisionPoint:
             metadata={"permission": permission_name, "role": role.value},
         )
 
-    def any_permission(self, user: Optional[User], permissions: Sequence[object]) -> AuthorizationDecision:
+    def any_permission(
+        self, user: Optional[User], permissions: Sequence[object]
+    ) -> AuthorizationDecision:
         action = "any_permission"
         if not permissions:
             return AuthorizationDecision.deny(action, "missing_permissions")
@@ -140,7 +144,9 @@ class PolicyDecisionPoint:
             },
         )
 
-    def role_membership(self, user: Optional[User], roles: Sequence[UserRole]) -> AuthorizationDecision:
+    def role_membership(
+        self, user: Optional[User], roles: Sequence[UserRole]
+    ) -> AuthorizationDecision:
         action = "role_membership"
         role, denied = self._validate_user(user, action)
         if denied:
@@ -192,9 +198,7 @@ class PolicyDecisionPoint:
         return self.role_membership(user, [UserRole.SYSTEM_ADMIN, UserRole.ADMIN])
 
     def manager_or_above(self, user: Optional[User]) -> AuthorizationDecision:
-        return self.role_membership(
-            user, [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]
-        )
+        return self.role_membership(user, [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER])
 
     def editor_or_above(self, user: Optional[User]) -> AuthorizationDecision:
         return self.role_membership(
@@ -215,7 +219,9 @@ class PolicyDecisionPoint:
         if document is None:
             return AuthorizationDecision.deny(action, "document_missing")
 
-        resolved_access = access_type if access_type in {"view", "edit", "delete", "publish"} else "view"
+        resolved_access = (
+            access_type if access_type in {"view", "edit", "delete", "publish"} else "view"
+        )
         if resolved_access == "view":
             allowed = self._document_policy.can_view_document(user, document)
             if allowed:
@@ -350,4 +356,3 @@ class PolicyDecisionPoint:
             "role_not_allowed",
             metadata={"role": current_role.value},
         )
-

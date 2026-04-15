@@ -38,13 +38,13 @@ class SubmitReviewTool(BaseTool):
     confirm_before_execute = True
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
-        review = (
-            db.query(ReviewRequest)
-            .filter(ReviewRequest.id == params["review_id"])
-            .first()
-        )
+        review = db.query(ReviewRequest).filter(ReviewRequest.id == params["review_id"]).first()
         if not review:
             return {"success": False, "result": "", "error": "Review request not found."}
 
@@ -61,12 +61,20 @@ class SubmitReviewTool(BaseTool):
 
         # Verify document access via tenant
         if tenant_id is not None:
-            doc = db.query(Document).filter(
-                Document.id == review.document_id,
-                Document.tenant_id == tenant_id,
-            ).first()
+            doc = (
+                db.query(Document)
+                .filter(
+                    Document.id == review.document_id,
+                    Document.tenant_id == tenant_id,
+                )
+                .first()
+            )
             if not doc:
-                return {"success": False, "result": "", "error": "Document not found in your tenant."}
+                return {
+                    "success": False,
+                    "result": "",
+                    "error": "Document not found in your tenant.",
+                }
 
         decision = params["decision"]
 
@@ -138,7 +146,11 @@ class ListPendingReviewsTool(BaseTool):
     required_role = "EDITOR"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         reviews = (
@@ -156,8 +168,19 @@ class ListPendingReviewsTool(BaseTool):
 
         doc_ids = {r.document_id for r in reviews}
         submitter_ids = {r.submitted_by for r in reviews}
-        docs = {d.id: d.title for d in db.query(Document).filter(Document.id.in_(doc_ids)).all()} if doc_ids else {}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(submitter_ids)).all()} if submitter_ids else {}
+        docs = (
+            {d.id: d.title for d in db.query(Document).filter(Document.id.in_(doc_ids)).all()}
+            if doc_ids
+            else {}
+        )
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(submitter_ids)).all()
+            }
+            if submitter_ids
+            else {}
+        )
 
         lines = [f"**Pending Reviews** ({len(reviews)})\n"]
         for r in reviews:

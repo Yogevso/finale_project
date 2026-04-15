@@ -23,11 +23,12 @@ from app.models._shared import (
 )
 from app.models.enums import DocumentStatus, DocumentVisibility, UserRole, VersionBumpType
 
-
 document_company_assignments = Table(
     "document_company_assignments",
     Base.metadata,
-    Column("document_id", Integer, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "document_id", Integer, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    ),
     Column("tenant_id", Integer, ForeignKey("tenants.id"), primary_key=True),
     Column("assigned_at", DateTime, default=datetime.utcnow),
     Column("assigned_by", Integer, ForeignKey("users.id")),
@@ -250,14 +251,20 @@ class Document(Base):
 
     tenant = relationship("Tenant", back_populates="documents")
     created_by_user = relationship("User", back_populates="documents", foreign_keys=[created_by])
-    deleted_by_user = relationship("User", foreign_keys=[deleted_by], back_populates="deleted_documents")
+    deleted_by_user = relationship(
+        "User", foreign_keys=[deleted_by], back_populates="deleted_documents"
+    )
     platform_ref = relationship("Platform", back_populates="documents")
     parent = relationship("Document", remote_side=[id], backref="children")
     versions = relationship("Version", back_populates="document", cascade="all, delete-orphan")
-    attachments = relationship("Attachment", back_populates="document", cascade="all, delete-orphan")
+    attachments = relationship(
+        "Attachment", back_populates="document", cascade="all, delete-orphan"
+    )
     comments = relationship("Comment", back_populates="document", cascade="all, delete-orphan")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
-    watchers = relationship("DocumentWatcher", back_populates="document", cascade="all, delete-orphan")
+    watchers = relationship(
+        "DocumentWatcher", back_populates="document", cascade="all, delete-orphan"
+    )
     feedbacks = relationship("Feedback", back_populates="document", cascade="all, delete-orphan")
     reading_progress = relationship(
         "ReadingProgress",
@@ -293,7 +300,9 @@ class Version(Base):
     __tablename__ = "versions"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version_number = Column(Integer, nullable=False)
     semantic_version = Column(String(32), nullable=True, index=True)
     bump_type = Column(SQLEnum(VersionBumpType), default=VersionBumpType.PATCH, nullable=False)
@@ -327,7 +336,9 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     file_size = Column(Integer, nullable=False)
@@ -354,7 +365,9 @@ class Attachment(Base):
 
     document = relationship("Document", back_populates="attachments")
     uploaded_by_user = relationship("User")
-    artifacts = relationship("AttachmentArtifact", back_populates="attachment", cascade="all, delete-orphan")
+    artifacts = relationship(
+        "AttachmentArtifact", back_populates="attachment", cascade="all, delete-orphan"
+    )
     conversion_jobs = relationship(
         "AttachmentConversionJob",
         back_populates="attachment",
@@ -436,7 +449,9 @@ class BrokenLinkReport(Base):
     __tablename__ = "broken_link_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     version_id = Column(Integer, ForeignKey("versions.id", ondelete="CASCADE"), nullable=False)
     broken_url = Column(String(1000), nullable=False)
     link_text = Column(String(500), nullable=True)

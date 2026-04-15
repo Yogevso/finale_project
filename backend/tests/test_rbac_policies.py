@@ -17,7 +17,6 @@ def _clean_dynamic_permissions():
 
 
 def test_rbac_policy_update_publishes_dynamic_permissions(client, test_user, system_admin_headers):
-
     payload = {
         "policies": [
             {
@@ -48,7 +47,9 @@ def test_auth_me_uses_effective_dynamic_permissions(
         ],
         "confirm_password": "sysadmin123",
     }
-    update_response = client.put("/api/v1/rbac/policies", headers=system_admin_headers, json=payload)
+    update_response = client.put(
+        "/api/v1/rbac/policies", headers=system_admin_headers, json=payload
+    )
     assert update_response.status_code == 200
 
     me_response = client.get("/api/v1/auth/me", headers=auth_headers)
@@ -72,11 +73,15 @@ def test_rbac_policy_update_rejects_removing_required_role_permissions(
         "confirm_password": "sysadmin123",
     }
 
-    update_response = client.put("/api/v1/rbac/policies", headers=system_admin_headers, json=payload)
+    update_response = client.put(
+        "/api/v1/rbac/policies", headers=system_admin_headers, json=payload
+    )
     assert update_response.status_code == 422
     detail = update_response.json()["detail"]
     assert detail["message"] == "RBAC policy invariant violation"
-    assert any("editor: cannot remove required [view_public_docs]" in item for item in detail["violations"])
+    assert any(
+        "editor: cannot remove required [view_public_docs]" in item for item in detail["violations"]
+    )
 
     assert get_user_permissions(test_user) != set()
     assert has_permission(test_user, Permission.VIEW_PUBLIC_DOCS)

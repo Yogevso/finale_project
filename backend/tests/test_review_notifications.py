@@ -53,9 +53,7 @@ def test_submit_for_review_notifies_same_tenant_reviewers_only(
 
     assert response.status_code in [200, 201]
     notifications = (
-        db.query(Notification)
-        .filter(Notification.type == NotificationType.REVIEW_SUBMITTED)
-        .all()
+        db.query(Notification).filter(Notification.type == NotificationType.REVIEW_SUBMITTED).all()
     )
     notified_ids = {notification.user_id for notification in notifications}
     assert notified_ids == {peer_editor.id, peer_manager.id}

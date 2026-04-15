@@ -16,4 +16,3 @@ class CollaborationStatePort(Protocol):
 
     def clear_document_state(self, document_id: int) -> bool:
         """Remove persisted Yjs state for a document."""
-

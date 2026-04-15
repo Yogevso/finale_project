@@ -24,4 +24,3 @@ def get_storage_port() -> StoragePort:
 def get_collaboration_state_port(db: Session) -> CollaborationStatePort:
     """Resolve default collaboration state persistence port."""
     return SqlAlchemyCollaborationStateAdapter(db)
-

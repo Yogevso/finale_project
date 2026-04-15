@@ -212,8 +212,7 @@ def _build_permission_capability(permission: Permission) -> PermissionCapability
 
 
 _PERMISSION_CAPABILITIES: dict[Permission, PermissionCapability] = {
-    permission: _build_permission_capability(permission)
-    for permission in Permission
+    permission: _build_permission_capability(permission) for permission in Permission
 }
 
 
@@ -265,7 +264,9 @@ def evaluate_any_permission(
     return _with_capability_metadata(decision, capability.name)
 
 
-def evaluate_role_membership(user: Optional[User], roles: Sequence[UserRole]) -> AuthorizationDecision:
+def evaluate_role_membership(
+    user: Optional[User], roles: Sequence[UserRole]
+) -> AuthorizationDecision:
     """Return structured decision for role membership checks."""
     capability = RoleCapability(
         name="CanMatchRoleMembership",

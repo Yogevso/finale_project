@@ -108,7 +108,9 @@ class TestCompanyDocumentSemantics:
         assigned_doc.assigned_companies.append(test_tenant)
         db.commit()
 
-        response = client.get(f"/api/v1/companies/{test_tenant.id}/documents", headers=system_admin_headers)
+        response = client.get(
+            f"/api/v1/companies/{test_tenant.id}/documents", headers=system_admin_headers
+        )
         assert response.status_code == 200
         payload = response.json()
         titles = [item["title"] for item in payload["items"]]
@@ -166,16 +168,18 @@ class TestCompanyDocumentSemantics:
 
         # H-23: Portal filter requires at least one published version
         for doc in [public_doc, assigned_active_doc]:
-            db.add(Version(
-                document_id=doc.id,
-                version_number=1,
-                content="published content",
-                changes_summary="Initial",
-                created_by=test_admin.id,
-                is_published=True,
-                semantic_version="1.0.0",
-                bump_type="MAJOR",
-            ))
+            db.add(
+                Version(
+                    document_id=doc.id,
+                    version_number=1,
+                    content="published content",
+                    changes_summary="Initial",
+                    created_by=test_admin.id,
+                    is_published=True,
+                    semantic_version="1.0.0",
+                    bump_type="MAJOR",
+                )
+            )
 
         assigned_active_doc.assigned_companies.append(test_tenant)
         assigned_draft_doc.assigned_companies.append(test_tenant)
@@ -186,7 +190,9 @@ class TestCompanyDocumentSemantics:
         assert portal_response.status_code == 200
         portal_total = portal_response.json()["total"]
 
-        company_response = client.get(f"/api/v1/companies/{test_tenant.id}", headers=system_admin_headers)
+        company_response = client.get(
+            f"/api/v1/companies/{test_tenant.id}", headers=system_admin_headers
+        )
         assert company_response.status_code == 200
         company_payload = company_response.json()
 

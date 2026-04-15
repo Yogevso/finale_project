@@ -80,7 +80,7 @@ def test_document_published_template_renders_expected_message():
 def test_invitation_template_sanitizes_html_fields():
     template = InvitationTemplate(
         accept_url="http://localhost/invite?token=test",
-        inviter_name='<b>Alice</b>',
+        inviter_name="<b>Alice</b>",
         message='<script>alert("x")</script><b>Hello</b> team',
     )
 

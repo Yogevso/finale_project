@@ -24,9 +24,9 @@ class TestPortalDownloadUrlParity:
         from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 
         source = inspect.getsource(PortalDocumentsQueryHandler.execute_get_attachment)
-        assert "/api/v1/portal/documents/" in source, (
-            "download_url should point to /api/v1/portal/ not /api/v1/documents/"
-        )
-        assert "/api/v1/documents/" not in source, (
-            "download_url should no longer point to /api/v1/documents/ (management route)"
-        )
+        assert (
+            "/api/v1/portal/documents/" in source
+        ), "download_url should point to /api/v1/portal/ not /api/v1/documents/"
+        assert (
+            "/api/v1/documents/" not in source
+        ), "download_url should no longer point to /api/v1/documents/ (management route)"

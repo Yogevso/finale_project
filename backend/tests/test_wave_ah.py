@@ -1,7 +1,4 @@
 """Wave AH Tests: New Features - PDF upload/conversion, chat, tooling."""
-import io
-import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestPdfUploadConversion:
@@ -9,8 +6,9 @@ class TestPdfUploadConversion:
 
     def test_pdf_to_docx_conversion_basic(self):
         """Verify PDF bytes are converted to DOCX with text preserved."""
-        from app.conversion.pdf_to_docx import convert_pdf_to_docx
         import fitz
+
+        from app.conversion.pdf_to_docx import convert_pdf_to_docx
 
         # Create minimal PDF in memory
         doc = fitz.open()
@@ -29,8 +27,7 @@ class TestPdfUploadConversion:
 
     def test_pdf_converter_strategy_exists(self):
         """PdfConverterStrategy class exists and can be instantiated."""
-        from app.conversion.document_strategies import PdfConverterStrategy
-        from app.conversion.document_strategies import WordConverterStrategy
+        from app.conversion.document_strategies import PdfConverterStrategy, WordConverterStrategy
 
         word_strategy = WordConverterStrategy()
         pdf_strategy = PdfConverterStrategy(word_strategy=word_strategy)
@@ -63,8 +60,9 @@ class TestDocumentScopedChat:
 
     def test_chat_model_has_document_id(self):
         """Chat model has document_id column."""
-        from app.models import Chat
         from sqlalchemy import inspect
+
+        from app.models import Chat
 
         mapper = inspect(Chat)
         column_names = [c.key for c in mapper.columns]
@@ -72,8 +70,9 @@ class TestDocumentScopedChat:
 
     def test_chat_message_has_context_json(self):
         """ChatMessage model has context_json column."""
-        from app.models import ChatMessage
         from sqlalchemy import inspect
+
+        from app.models import ChatMessage
 
         mapper = inspect(ChatMessage)
         column_names = [c.key for c in mapper.columns]

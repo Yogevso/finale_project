@@ -37,7 +37,10 @@ def test_assignment_endpoints_emit_schema_version_header(
         headers=system_admin_headers,
     )
     assert get_response.status_code == 200
-    assert get_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    assert (
+        get_response.headers.get("X-API-Schema-Version")
+        == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    )
 
     assign_response = client.post(
         f"/api/v1/documents/{document_id}/assign-companies",
@@ -45,7 +48,10 @@ def test_assignment_endpoints_emit_schema_version_header(
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert assign_response.status_code == 200
-    assert assign_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    assert (
+        assign_response.headers.get("X-API-Schema-Version")
+        == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    )
 
     next_etag = assign_response.headers["ETag"]
     bulk_response = client.put(
@@ -58,7 +64,10 @@ def test_assignment_endpoints_emit_schema_version_header(
         json={"company_ids": [test_tenant.id, test_tenant_2.id]},
     )
     assert bulk_response.status_code == 200
-    assert bulk_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    assert (
+        bulk_response.headers.get("X-API-Schema-Version")
+        == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    )
 
     next_etag = bulk_response.headers["ETag"]
     remove_response = client.delete(
@@ -66,7 +75,9 @@ def test_assignment_endpoints_emit_schema_version_header(
         headers={**system_admin_headers, "If-Match": next_etag},
     )
     assert remove_response.status_code == 200
-    assert remove_response.headers.get("X-API-Schema-Version") == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    assert (
+        remove_response.headers.get("X-API-Schema-Version")
+        == settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION
+    )
 
     assert SEMVER_PATTERN.match(settings.AUDIENCE_ASSIGNMENT_SCHEMA_VERSION)
-

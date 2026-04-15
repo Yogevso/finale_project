@@ -9,10 +9,12 @@ import logging
 from pathlib import Path
 
 from app.config import settings
-from app.infrastructure.db import run_lightweight_migrations, run_managed_migrations
 
 # Re-export Base classes
 from app.db.bases import AnalyticsBase, Base, ChatBase, CoreBase  # noqa: F401
+
+# Re-export FastAPI dependencies
+from app.db.dependencies import get_analytics_db, get_chat_db, get_core_db, get_db  # noqa: F401
 
 # Re-export engines
 from app.db.engines import analytics_engine, chat_engine, core_engine  # noqa: F401
@@ -24,9 +26,7 @@ from app.db.sessions import (  # noqa: F401
     CoreSessionLocal,
     SessionLocal,
 )
-
-# Re-export FastAPI dependencies
-from app.db.dependencies import get_analytics_db, get_chat_db, get_core_db, get_db  # noqa: F401
+from app.infrastructure.db import run_lightweight_migrations, run_managed_migrations
 
 # Backward compatibility — old code uses ``engine`` directly
 engine = core_engine

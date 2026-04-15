@@ -39,7 +39,9 @@ def _create_document(
     return doc
 
 
-def _create_pending_invitation(db, *, tenant_id: int, invited_by: int, email_prefix: str) -> Invitation:
+def _create_pending_invitation(
+    db, *, tenant_id: int, invited_by: int, email_prefix: str
+) -> Invitation:
     invitation = Invitation(
         email=f"{email_prefix}-{uuid.uuid4().hex[:8]}@example.com",
         token=f"token-{uuid.uuid4().hex}",
@@ -159,7 +161,9 @@ def test_rename_propagation_detects_slug_conflict(
     system_admin_headers,
 ):
     tenant = create_tenant(db, name="Rename Source", slug=f"rename-source-{uuid.uuid4().hex[:6]}")
-    conflicting = create_tenant(db, name="Rename Conflict", slug=f"rename-conflict-{uuid.uuid4().hex[:6]}")
+    conflicting = create_tenant(
+        db, name="Rename Conflict", slug=f"rename-conflict-{uuid.uuid4().hex[:6]}"
+    )
 
     response = client.get(
         f"/api/v1/companies/maintenance/rename-propagation/{tenant.id}",

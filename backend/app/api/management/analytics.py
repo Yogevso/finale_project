@@ -1,7 +1,7 @@
 """Analytics API Endpoints"""
 
-from datetime import date, timedelta
 import logging
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -27,11 +27,9 @@ from app.dependencies.permissions import (
     require_manager,
     require_system_admin,
 )
-from app.dependencies.services import get_analytics_service
-from app.dependencies.services import get_document_service
+from app.dependencies.services import get_analytics_service, get_document_service
 from app.legacy_wrappers import AnalyticsServiceStranglerWrapper
 from app.models import User
-from app.services.document_service import DocumentService
 from app.plugins.exporters import get_analytics_export_plugin_registry
 from app.schemas.analytics import (
     AnalyticsOverview,
@@ -44,6 +42,7 @@ from app.schemas.analytics import (
     TopDocuments,
     UserAnalytics,
 )
+from app.services.document_service import DocumentService
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 logger = logging.getLogger(__name__)
@@ -385,7 +384,9 @@ def export_csv(
         )
     except HTTPException:
         raise
-    except Exception as exc:  # policy: BOUNDARY — translate exporter failures into stable API errors
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — translate exporter failures into stable API errors
         logger.exception("Analytics export failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

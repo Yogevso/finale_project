@@ -18,16 +18,29 @@ class SearchAttachmentsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search by filename keyword", "maxLength": 255},
-            "mime_type": {"type": "string", "description": "Filter by MIME type prefix (e.g. 'image/', 'application/pdf')", "maxLength": 255},
-            "document_id": {"type": "integer", "description": "Limit to a specific document (optional)"},
+            "query": {
+                "type": "string",
+                "description": "Search by filename keyword",
+                "maxLength": 255,
+            },
+            "mime_type": {
+                "type": "string",
+                "description": "Filter by MIME type prefix (e.g. 'image/', 'application/pdf')",
+                "maxLength": 255,
+            },
+            "document_id": {
+                "type": "integer",
+                "description": "Limit to a specific document (optional)",
+            },
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],
     }
     required_permission = Permission.DOWNLOAD_ATTACHMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         q = db.query(Attachment)
         if tenant_id:
@@ -57,13 +70,18 @@ class GetAttachmentStatsTool(BaseTool):
     parameters = {
         "type": "object",
         "properties": {
-            "document_id": {"type": "integer", "description": "Specific document (optional, omit for tenant-wide)"},
+            "document_id": {
+                "type": "integer",
+                "description": "Specific document (optional, omit for tenant-wide)",
+            },
         },
         "required": [],
     }
     required_permission = Permission.DOWNLOAD_ATTACHMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         q = db.query(Attachment)
         scope = "platform"
         if params.get("document_id"):
@@ -110,7 +128,9 @@ class GetLargestAttachmentsTool(BaseTool):
     }
     required_permission = Permission.DOWNLOAD_ATTACHMENTS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 10), 50)
         q = db.query(Attachment)
         if tenant_id:

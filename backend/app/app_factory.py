@@ -174,7 +174,9 @@ class FastAPIAppFactory:
             )
             with app.state.runtime_init_lock:
                 if app.state.runtime_initialized:
-                    logger.info("Runtime database initialization already completed; skipping repeat init")
+                    logger.info(
+                        "Runtime database initialization already completed; skipping repeat init"
+                    )
                 else:
                     init_db()
                     app.state.runtime_initialized = True
@@ -192,7 +194,9 @@ class FastAPIAppFactory:
                     SystemEmailSettingsService.load_runtime_override(db)
                 finally:
                     db.close()
-            except Exception as exc:  # policy: DEGRADED - optional startup integration should not block boot
+            except (
+                Exception
+            ) as exc:  # policy: DEGRADED - optional startup integration should not block boot
                 logger.warning("RBAC/email runtime startup sync skipped: %s", exc)
 
             # Pre-warm the Ollama model so the first request is fast
@@ -205,7 +209,9 @@ class FastAPIAppFactory:
                         model=settings.ASSISTANT_MODEL,
                     )
                     asyncio.create_task(ollama.warmup())
-                except Exception as exc:  # policy: DEGRADED - optional startup integration should not block boot
+                except (
+                    Exception
+                ) as exc:  # policy: DEGRADED - optional startup integration should not block boot
                     logger.warning("Ollama warmup skipped: %s", exc)
 
             yield

@@ -34,7 +34,9 @@ class SystemSettingsService:
     @staticmethod
     def upsert_settings(db: Session, settings: Dict[str, Any], updated_by: int | None) -> None:
         existing_rows = db.query(SystemSetting).all()
-        managed_rows = [row for row in existing_rows if not row.key.startswith(_INTERNAL_KEY_PREFIX)]
+        managed_rows = [
+            row for row in existing_rows if not row.key.startswith(_INTERNAL_KEY_PREFIX)
+        ]
         existing_keys = {row.key for row in managed_rows}
         incoming_keys = set(settings.keys())
 

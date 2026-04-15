@@ -62,10 +62,14 @@ def test_direct_chat_api_masks_cross_tenant_user_enumeration_like_missing_user(
 
     assert cross_tenant_response.status_code == 404
     assert missing_user_response.status_code == 404
-    assert cross_tenant_response.json() == missing_user_response.json() == {
-        "detail": "User not found",
-        "error_code": "not_found",
-    }
+    assert (
+        cross_tenant_response.json()
+        == missing_user_response.json()
+        == {
+            "detail": "User not found",
+            "error_code": "not_found",
+        }
+    )
     assert db.query(Chat).count() == 0
 
 
@@ -123,7 +127,9 @@ def test_viewer_can_list_chat_targets_but_customer_cannot(
         is_active=True,
     )
 
-    viewer_response = client.get("/api/v1/chats/eligible-users?search=viewer", headers=viewer_auth_headers)
+    viewer_response = client.get(
+        "/api/v1/chats/eligible-users?search=viewer", headers=viewer_auth_headers
+    )
     customer_response = client.get("/api/v1/chats/eligible-users", headers=customer_headers)
 
     assert viewer_response.status_code == 200

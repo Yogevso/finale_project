@@ -4,11 +4,11 @@ These tests use the FastAPI test client and mock the Ollama LLM backend
 so they can run without a real Ollama service.
 """
 
-import io
-import json
 import asyncio
+import io
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.management.assistant import _stream_assistant_events
 from app.assistant.ollama_client import OllamaClient
@@ -18,10 +18,10 @@ from app.services.assistant_capacity_service import AssistantCapacityExceeded
 from app.services.distributed_rate_limit_service import DistributedRateLimitService
 from tests.factories import create_user
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def sysadmin(db):
@@ -72,9 +72,10 @@ def viewer_headers(client, viewer_user):
 # /assistant/health
 # ---------------------------------------------------------------------------
 
+
 class TestAssistantHealth:
     def test_health_when_enabled(self, client, sysadmin_headers):
-        with patch.object(OllamaClient, 'is_healthy', return_value=True):
+        with patch.object(OllamaClient, "is_healthy", return_value=True):
             resp = client.get("/api/v1/assistant/health", headers=sysadmin_headers)
         assert resp.status_code == 200
         data = resp.json()
@@ -84,7 +85,7 @@ class TestAssistantHealth:
         assert data["capacity"]["embedding"]["active"] == 0
 
     def test_health_when_ollama_down(self, client, sysadmin_headers):
-        with patch.object(OllamaClient, 'is_healthy', return_value=False):
+        with patch.object(OllamaClient, "is_healthy", return_value=False):
             resp = client.get("/api/v1/assistant/health", headers=sysadmin_headers)
         assert resp.status_code == 200
         assert resp.json()["status"] == "unavailable"
@@ -97,6 +98,7 @@ class TestAssistantHealth:
 # ---------------------------------------------------------------------------
 # /assistant/tools
 # ---------------------------------------------------------------------------
+
 
 class TestAssistantTools:
     def test_list_tools_for_sysadmin(self, client, sysadmin_headers):
@@ -137,6 +139,7 @@ class TestAssistantTools:
 # ---------------------------------------------------------------------------
 # /assistant/conversations CRUD
 # ---------------------------------------------------------------------------
+
 
 class TestConversationsCRUD:
     def test_create_conversation(self, client, sysadmin_headers):
@@ -211,7 +214,7 @@ class TestConversationsCRUD:
         resp = client.patch(
             f"/api/v1/assistant/conversations/{conv_id}",
             headers=sysadmin_headers,
-            params={"title": '<script>alert(1)</script><b>Renamed</b> Chat'},
+            params={"title": "<script>alert(1)</script><b>Renamed</b> Chat"},
         )
 
         assert resp.status_code == 200
@@ -251,6 +254,7 @@ class TestConversationsCRUD:
 # /assistant/chat — SSE streaming
 # ---------------------------------------------------------------------------
 
+
 class TestAssistantChat:
     def test_chat_requires_auth(self, client):
         resp = client.post(
@@ -268,9 +272,7 @@ class TestAssistantChat:
         assert resp.status_code == 422
 
     @pytest.mark.parametrize("field_name", ["file_ids", "document_ids"])
-    def test_chat_rejects_more_than_three_context_ids(
-        self, client, sysadmin_headers, field_name
-    ):
+    def test_chat_rejects_more_than_three_context_ids(self, client, sysadmin_headers, field_name):
         payload = {"message": "Hello", field_name: [1, 2, 3, 4]}
 
         resp = client.post(
@@ -283,11 +285,18 @@ class TestAssistantChat:
 
     def test_chat_returns_sse_stream(self, client, sysadmin_headers):
         """Chat endpoint should return SSE content type."""
+
         async def mock_chat_stream(**kwargs):
             yield {"message": {"content": "Hi"}}
 
-        with patch.object(OllamaClient, 'chat_stream', side_effect=mock_chat_stream), \
-             patch.object(OllamaClient, 'chat', return_value={"message": {"content": "Hi", "tool_calls": None}}):
+        with (
+            patch.object(OllamaClient, "chat_stream", side_effect=mock_chat_stream),
+            patch.object(
+                OllamaClient,
+                "chat",
+                return_value={"message": {"content": "Hi", "tool_calls": None}},
+            ),
+        ):
             resp = client.post(
                 "/api/v1/assistant/chat",
                 json={"message": "Hello"},
@@ -304,7 +313,9 @@ class TestAssistantChat:
 
         DistributedRateLimitService.reset()
         monkeypatch.setattr(settings, "ASSISTANT_RATE_LIMIT_PER_MINUTE", 1)
-        monkeypatch.setattr("app.api.management.assistant._build_engine", lambda *_args: StubEngine())
+        monkeypatch.setattr(
+            "app.api.management.assistant._build_engine", lambda *_args: StubEngine()
+        )
 
         first = client.post(
             "/api/v1/assistant/chat",
@@ -321,7 +332,9 @@ class TestAssistantChat:
         assert second.status_code == 429
         assert second.headers["Retry-After"] == "60"
 
-    def test_chat_returns_503_when_capacity_is_exhausted(self, client, sysadmin_headers, monkeypatch):
+    def test_chat_returns_503_when_capacity_is_exhausted(
+        self, client, sysadmin_headers, monkeypatch
+    ):
         async def reject_chat_slot():
             raise AssistantCapacityExceeded(
                 lane="chat",
@@ -329,7 +342,9 @@ class TestAssistantChat:
                 retry_after_seconds=7,
             )
 
-        monkeypatch.setattr("app.api.management.assistant.acquire_assistant_chat_slot", reject_chat_slot)
+        monkeypatch.setattr(
+            "app.api.management.assistant.acquire_assistant_chat_slot", reject_chat_slot
+        )
 
         response = client.post(
             "/api/v1/assistant/chat",

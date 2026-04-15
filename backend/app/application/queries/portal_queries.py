@@ -14,7 +14,6 @@ from app.feature_flags import BackendFeatureFlag, is_backend_feature_enabled
 from app.models import (
     Attachment,
     Document,
-    DocumentStatus,
     DocumentVisibility,
     Feedback,
     FeedbackStatus,
@@ -29,9 +28,9 @@ from app.schemas.portal import (
     PortalAttachment,
     PortalDashboardStats,
     PortalDocumentDetail,
-    PortalDocumentTocItem,
     PortalDocumentListResponse,
     PortalDocumentSummary,
+    PortalDocumentTocItem,
     PortalFacetsResponse,
 )
 from app.services.attachment_service import AttachmentService
@@ -129,6 +128,7 @@ class PortalDocumentsQueryHandler:
     def _ensure_customer_document_access(self, document: Document, user: User) -> None:
         """AF-005: Delegate to the central DocumentAccessPolicy."""
         from app.application.policies.access_policies import DocumentAccessPolicy
+
         policy = DocumentAccessPolicy()
         if not policy.can_view_document(user, document):
             raise NotFoundError("Document not found")
@@ -138,9 +138,7 @@ class PortalDocumentsQueryHandler:
         base = self._customer_visibility_spec(user).apply(repository.query(), Document)
         # H-23: Only include documents that have at least one published version
         published_doc_ids = (
-            self.db.query(Version.document_id)
-            .filter(Version.is_published.is_(True))
-            .subquery()
+            self.db.query(Version.document_id).filter(Version.is_published.is_(True)).subquery()
         )
         return base.filter(Document.id.in_(published_doc_ids), Document.deleted_at.is_(None))
 
@@ -188,7 +186,9 @@ class PortalDocumentsQueryHandler:
             if query.topic:
                 docs_query = docs_query.filter(Document.topic == query.topic)
             if query.platform:
-                docs_query = docs_query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == query.platform)
+                docs_query = docs_query.join(Platform, Document.platform_id == Platform.id).filter(
+                    Platform.name == query.platform
+                )
             if query.date_from:
                 docs_query = docs_query.filter(Document.updated_at >= query.date_from)
             if query.date_to:
@@ -572,11 +572,7 @@ class PortalDocumentsQueryHandler:
         base_query = self._customer_documents_query(query.current_user)
         base_query = base_query.filter(Document.id != query.document_id)
 
-        source_tags = {
-            t.strip().lower()
-            for t in (source.tags or "").split(",")
-            if t.strip()
-        }
+        source_tags = {t.strip().lower() for t in (source.tags or "").split(",") if t.strip()}
 
         # Score candidates by shared attributes
         candidates = base_query.all()
@@ -590,11 +586,7 @@ class PortalDocumentsQueryHandler:
             if source.platform_name and doc.platform_name == source.platform_name:
                 score += 1.5
             if source_tags:
-                doc_tags = {
-                    t.strip().lower()
-                    for t in (doc.tags or "").split(",")
-                    if t.strip()
-                }
+                doc_tags = {t.strip().lower() for t in (doc.tags or "").split(",") if t.strip()}
                 overlap = len(source_tags & doc_tags)
                 score += overlap * 1.0
             if score > 0:

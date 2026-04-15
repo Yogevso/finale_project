@@ -19,7 +19,14 @@ from app.domain.specifications.audience_policies import (
     ExternalEmbedPolicySpec,
     LinkSharingPolicySpec,
 )
-from app.models import Attachment, Document, DocumentStatus, DocumentVisibility, Platform, Topic, Version
+from app.models import (
+    Attachment,
+    Document,
+    DocumentVisibility,
+    Platform,
+    Topic,
+    Version,
+)
 from app.schemas.public import (
     PublicAttachmentInfo,
     PublicCategoriesResponse,
@@ -46,7 +53,9 @@ _PUBLIC_DETAIL_MAX_AGE = 300  # 5 minutes
 
 def _set_public_cache_headers(response: Response, *, max_age: int, etag: str | None = None) -> None:
     """Set Cache-Control and optional ETag on public responses."""
-    response.headers["Cache-Control"] = f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
+    response.headers["Cache-Control"] = (
+        f"public, max-age={max_age}, stale-while-revalidate={max_age * 2}"
+    )
     if etag:
         response.headers["ETag"] = f'"{etag}"'
 
@@ -95,8 +104,14 @@ def list_public_documents(
     topic: Optional[str] = Query(None, description="Filter by topic"),
     platform: Optional[str] = Query(None, description="Filter by platform"),
     search: Optional[str] = Query(None, max_length=500, description="Search in title/description"),
-    sort_by: Optional[str] = Query("created_at", pattern="^(title|created_at|updated_at)$", description="Sort field: title, created_at, updated_at"),
-    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$", description="Sort order (asc/desc)"),
+    sort_by: Optional[str] = Query(
+        "created_at",
+        pattern="^(title|created_at|updated_at)$",
+        description="Sort field: title, created_at, updated_at",
+    ),
+    sort_order: Optional[str] = Query(
+        "desc", pattern="^(asc|desc)$", description="Sort order (asc/desc)"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -117,14 +132,21 @@ def list_public_documents(
     if topic:
         query = _apply_topic_filter(query, db, topic)
     if platform:
-        query = query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == platform)
+        query = query.join(Platform, Document.platform_id == Platform.id).filter(
+            Platform.name == platform
+        )
 
     # Apply search filter
     if search:
         # M-36: Escape SQL wildcards to prevent injection
         _escaped = search.replace("%", r"\%").replace("_", r"\_")
         search_term = f"%{_escaped}%"
-        platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term, escape="\\")).subquery()
+        platform_subq = (
+            db.query(Document.id)
+            .join(Platform, Document.platform_id == Platform.id)
+            .filter(Platform.name.ilike(search_term, escape="\\"))
+            .subquery()
+        )
         query = query.filter(
             or_(
                 Document.title.ilike(search_term, escape="\\"),
@@ -450,10 +472,17 @@ def search_public_documents(
     if topic:
         query = _apply_topic_filter(query, db, topic)
     if platform:
-        query = query.join(Platform, Document.platform_id == Platform.id).filter(Platform.name == platform)
+        query = query.join(Platform, Document.platform_id == Platform.id).filter(
+            Platform.name == platform
+        )
 
     # Search in document fields
-    platform_subq = db.query(Document.id).join(Platform, Document.platform_id == Platform.id).filter(Platform.name.ilike(search_term, escape="\\")).subquery()
+    platform_subq = (
+        db.query(Document.id)
+        .join(Platform, Document.platform_id == Platform.id)
+        .filter(Platform.name.ilike(search_term, escape="\\"))
+        .subquery()
+    )
     query = query.filter(
         or_(
             Document.title.ilike(search_term, escape="\\"),
@@ -586,9 +615,7 @@ def get_public_stats(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 _SITEMAP_XML_HEADER = '<?xml version="1.0" encoding="UTF-8"?>\n'
-_SITEMAP_URLSET_OPEN = (
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-)
+_SITEMAP_URLSET_OPEN = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 _SITEMAP_URLSET_CLOSE = "</urlset>\n"
 
 
@@ -662,7 +689,13 @@ def get_public_rss_feed(
 
     docs = (
         get_public_documents_query(db)
-        .with_entities(Document.id, Document.title, Document.description, Document.updated_at, Document.category)
+        .with_entities(
+            Document.id,
+            Document.title,
+            Document.description,
+            Document.updated_at,
+            Document.category,
+        )
         .order_by(Document.updated_at.desc())
         .limit(limit)
         .all()

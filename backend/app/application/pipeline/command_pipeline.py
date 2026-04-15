@@ -196,6 +196,8 @@ class CommandPipeline(Generic[CommandT, ResultT]):
                     metadata=_emit("success"),
                 ),
             )
-        except Exception as exc:  # policy: BOUNDARY — pipeline converts unexpected command failures consistently
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — pipeline converts unexpected command failures consistently
             _emit("failure", error_type=type(exc).__name__)
             raise

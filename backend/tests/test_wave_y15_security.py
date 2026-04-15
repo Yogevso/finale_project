@@ -12,15 +12,11 @@ These tests verify critical security requirements for the customer portal:
 import os
 import subprocess
 import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
-from unittest import mock
 
 import pytest
 
-from app.config import Settings, settings
-from app.models import Document, User, UserRole, UserSession, Attachment, Comment
+from app.config import Settings
+from app.models import Attachment, Comment, Document, User, UserRole
 from app.security import create_access_token, get_password_hash
 
 
@@ -38,12 +34,13 @@ class TestJWTSecretValidation:
                 DATABASE_URL="sqlite:///test.db",
                 APP_ENV="production",
             )
-            
+
     def test_short_secret_warns_in_dev(self, monkeypatch, caplog):
         """Short SECRET_KEY should emit warning in development."""
         import logging
+
         caplog.set_level(logging.WARNING)
-        
+
         # Create settings with short secret in dev mode
         test_settings = Settings(
             SECRET_KEY="short",
@@ -87,9 +84,7 @@ class TestRevokedTokenSecurity:
             pytest.skip("Sessions endpoint not available")
 
         sessions = sessions_response.json().get("items", [])
-        current_session = next(
-            (s for s in sessions if s.get("is_current")), None
-        )
+        current_session = next((s for s in sessions if s.get("is_current")), None)
 
         if current_session:
             # Revoke all other sessions (can't revoke current via endpoint)
@@ -105,9 +100,7 @@ class TestRevokedTokenSecurity:
             second_headers = {"Authorization": f"Bearer {second_token}"}
 
             # Get the session ID from the second login
-            second_sessions = client.get(
-                "/api/v1/users/me/sessions", headers=second_headers
-            )
+            second_sessions = client.get("/api/v1/users/me/sessions", headers=second_headers)
             if second_sessions.status_code == 200:
                 for sess in second_sessions.json().get("items", []):
                     if not sess.get("is_current"):
@@ -296,8 +289,9 @@ class TestConcurrentDocumentNumbers:
             t.join(timeout=30)
 
         # Verify all numbers are unique
-        assert len(created_numbers) == len(set(created_numbers)), \
-            f"Duplicate document numbers found: {created_numbers}"
+        assert len(created_numbers) == len(
+            set(created_numbers)
+        ), f"Duplicate document numbers found: {created_numbers}"
 
         # Clean up - optional, as test db is usually reset
         for num in created_numbers:
@@ -317,7 +311,7 @@ class TestConcurrentCommentOrdering:
         self, client, auth_headers, test_document, db
     ):
         """Multiple replies to same comment should maintain parent linkage.
-        
+
         Note: SQLite with single-threaded test client has limitations for
         true concurrency testing. This test verifies that the reply ordering
         mechanism works correctly at the application level.
@@ -347,8 +341,9 @@ class TestConcurrentCommentOrdering:
                 created_comments.append(response.json()["id"])
 
         # All replies should have been created
-        assert len(created_comments) >= 4, \
-            f"Expected at least 4 replies, got {len(created_comments)}"
+        assert (
+            len(created_comments) >= 4
+        ), f"Expected at least 4 replies, got {len(created_comments)}"
 
         # Verify all comments are properly linked to parent
         for comment_id in created_comments:
@@ -381,9 +376,7 @@ class TestStorageDBConsistency:
         # For now, verify the pattern exists in the delete handler
 
         # Get the document first
-        get_response = client.get(
-            f"/api/v1/documents/{doc_id}", headers=auth_headers
-        )
+        get_response = client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers)
         if get_response.status_code != 200:
             pytest.skip("Cannot access document for test")
 
@@ -397,9 +390,7 @@ class TestStorageDBConsistency:
 class TestContainerSecurity:
     """Y15-039: Backend container must run as non-root user."""
 
-    @pytest.mark.skipif(
-        os.name == "nt", reason="Docker commands differ on Windows"
-    )
+    @pytest.mark.skipif(os.name == "nt", reason="Docker commands differ on Windows")
     def test_backend_container_non_root_user(self):
         """Backend container should run as non-root user."""
         try:
@@ -424,8 +415,11 @@ class TestContainerSecurity:
             if inspect_result.returncode == 0:
                 user = inspect_result.stdout.strip()
                 # User should not be empty (root) or "root" or "0"
-                assert user and user not in ("", "root", "0"), \
-                    f"Container runs as root user: {user}"
+                assert user and user not in (
+                    "",
+                    "root",
+                    "0",
+                ), f"Container runs as root user: {user}"
         except subprocess.TimeoutExpired:
             pytest.skip("Docker command timed out")
         except FileNotFoundError:

@@ -132,9 +132,7 @@ def _render_image(node: IRNode) -> str:
     caption_html = ""
     if caption:
         caption_attr = _render_class_attr(caption_classes)
-        caption_html = (
-            f"<figcaption{caption_attr}>{html.escape(caption, quote=True)}</figcaption>"
-        )
+        caption_html = f"<figcaption{caption_attr}>{html.escape(caption, quote=True)}</figcaption>"
 
     if node.attributes.get("missing") or not src:
         placeholder_attr = _render_class_attr(placeholder_classes)

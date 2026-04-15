@@ -7,7 +7,14 @@ import io
 import json
 from datetime import datetime, timedelta
 
-from app.models import ActionType, AudienceEventType, AuditLog, Document, DocumentStatus, DocumentVisibility
+from app.models import (
+    ActionType,
+    AudienceEventType,
+    AuditLog,
+    Document,
+    DocumentStatus,
+    DocumentVisibility,
+)
 from app.utils.audience_audit_signing import verify_payload_signature
 
 
@@ -19,7 +26,12 @@ def _create_document_with_visibility(
     visibility: str,
     company_ids: list[int] | None = None,
 ) -> dict:
-    payload = {"title": title, "status": "draft", "visibility": visibility, "platform": "Core Platform"}
+    payload = {
+        "title": title,
+        "status": "draft",
+        "visibility": visibility,
+        "platform": "Core Platform",
+    }
     if company_ids is not None:
         payload["company_ids"] = company_ids
     response = client.post("/api/v1/documents", headers=headers, json=payload)

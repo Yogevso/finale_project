@@ -14,7 +14,6 @@ from PIL import Image
 from pptx import Presentation
 from pptx.util import Emu
 
-
 _PAGE_RENDER_DPI = 144
 
 
@@ -34,7 +33,9 @@ def convert_pdf_to_pptx(pdf_bytes: bytes) -> PdfToPptxConversionResult:
     result = PdfToPptxConversionResult()
     try:
         pdf = fitz.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as exc:  # policy: FAIL_FAST — invalid PDF input returns a stable conversion error
+    except (
+        Exception
+    ) as exc:  # policy: FAIL_FAST — invalid PDF input returns a stable conversion error
         result.error = f"Failed to open PDF: {exc}"
         return result
 
@@ -54,7 +55,9 @@ def convert_pdf_to_pptx(pdf_bytes: bytes) -> PdfToPptxConversionResult:
         try:
             pix = page.get_pixmap(dpi=_PAGE_RENDER_DPI, alpha=False)
             image_bytes = pix.tobytes("png")
-        except Exception as exc:  # policy: FAIL_FAST — page render failure aborts conversion cleanly
+        except (
+            Exception
+        ) as exc:  # policy: FAIL_FAST — page render failure aborts conversion cleanly
             result.error = f"Failed to render PDF page {page_idx + 1}: {exc}"
             pdf.close()
             return result
@@ -69,7 +72,9 @@ def convert_pdf_to_pptx(pdf_bytes: bytes) -> PdfToPptxConversionResult:
                 warnings=result.warnings,
                 page_idx=page_idx,
             )
-        except Exception as exc:  # policy: FAIL_FAST — generated slide deck must be structurally valid
+        except (
+            Exception
+        ) as exc:  # policy: FAIL_FAST — generated slide deck must be structurally valid
             result.error = f"Failed to build PPTX slide for PDF page {page_idx + 1}: {exc}"
             pdf.close()
             return result
@@ -114,6 +119,8 @@ def _add_page_image_to_slide(
             width=picture_width,
             height=picture_height,
         )
-    except Exception as exc:  # policy: FAIL_FAST — slide image placement must succeed or conversion fails
+    except (
+        Exception
+    ) as exc:  # policy: FAIL_FAST — slide image placement must succeed or conversion fails
         warnings.append(f"Page {page_idx + 1}: failed to place rendered image on slide: {exc}")
         raise

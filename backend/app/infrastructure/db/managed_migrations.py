@@ -44,7 +44,9 @@ def run_managed_migrations(
     try:
         command.upgrade(config, "head")
         return True
-    except Exception as exc:  # policy: DEGRADED — managed migrations can fall back to lightweight bootstrap
+    except (
+        Exception
+    ) as exc:  # policy: DEGRADED — managed migrations can fall back to lightweight bootstrap
         logger.warning(
             "Managed migration upgrade failed; continuing with lightweight fallback: %s",
             exc,

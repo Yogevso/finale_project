@@ -8,6 +8,7 @@ from app.application.commands.version_commands import (
     PublishApprovedVersionCommandErrorCode,
     PublishApprovedVersionCommandHandler,
 )
+from app.dependencies.permissions import require_editor, require_manager, require_system_admin
 from app.dependencies.services import get_version_service
 from app.errors import (
     ConflictError,
@@ -16,7 +17,6 @@ from app.errors import (
     PermissionDeniedError,
     ValidationError,
 )
-from app.dependencies.permissions import require_editor, require_manager, require_system_admin
 from app.models import User
 from app.schemas import (
     CancelScheduledPublishResponse,

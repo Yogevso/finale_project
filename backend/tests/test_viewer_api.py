@@ -535,4 +535,3 @@ class TestViewerAttachments:
         assert download_response.status_code == 200
         assert "attachment;" in download_response.headers["content-disposition"]
         assert download_response.content == file_bytes
-

@@ -22,7 +22,10 @@ class TestDuplicateAudienceCarryOver:
         )
         # Simulate carry-over logic inline (same as service code)
         parent_visibility = DocumentVisibility.PUBLIC
-        if data.visibility == DocumentVisibility.INTERNAL and parent_visibility != DocumentVisibility.INTERNAL:
+        if (
+            data.visibility == DocumentVisibility.INTERNAL
+            and parent_visibility != DocumentVisibility.INTERNAL
+        ):
             data = data.model_copy(update={"visibility": parent_visibility})
         assert data.visibility == DocumentVisibility.PUBLIC
 
@@ -36,7 +39,10 @@ class TestDuplicateAudienceCarryOver:
         )
         parent_visibility = DocumentVisibility.PUBLIC
         # Only carry over if child is INTERNAL (the default)
-        if data.visibility == DocumentVisibility.INTERNAL and parent_visibility != DocumentVisibility.INTERNAL:
+        if (
+            data.visibility == DocumentVisibility.INTERNAL
+            and parent_visibility != DocumentVisibility.INTERNAL
+        ):
             data = data.model_copy(update={"visibility": parent_visibility})
         assert data.visibility == DocumentVisibility.COMPANY
 

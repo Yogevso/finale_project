@@ -15,8 +15,8 @@ from app.application.queries.portal_queries import (
     RelatedDocumentsQuery,
     SearchPortalDocumentsQuery,
 )
-from app.errors import PermissionDeniedError
 from app.domain.specifications import RoleAccessSpec
+from app.errors import PermissionDeniedError
 from app.models import User
 
 

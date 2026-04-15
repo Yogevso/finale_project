@@ -14,7 +14,9 @@ def test_assign_companies_not_found_uses_domain_error_mapping(client, system_adm
     assert payload["error_code"] == "not_found"
 
 
-def test_assign_companies_invalid_set_uses_domain_error_mapping(client, system_admin_headers, sample_document):
+def test_assign_companies_invalid_set_uses_domain_error_mapping(
+    client, system_admin_headers, sample_document
+):
     response = client.post(
         f"/api/v1/documents/{sample_document['id']}/assign-companies",
         headers=system_admin_headers,
@@ -27,7 +29,9 @@ def test_assign_companies_invalid_set_uses_domain_error_mapping(client, system_a
     assert payload["error_code"] == "invalid_company_set"
 
 
-def test_publish_version_conflict_uses_domain_error_mapping(client, system_admin_headers, sample_document):
+def test_publish_version_conflict_uses_domain_error_mapping(
+    client, system_admin_headers, sample_document
+):
     create_resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/versions",
         headers=system_admin_headers,
@@ -45,4 +49,3 @@ def test_publish_version_conflict_uses_domain_error_mapping(client, system_admin
     payload = publish_resp.json()
     assert payload["detail"] == "Cannot publish without an approved review for this version"
     assert payload["error_code"] == "conflict"
-

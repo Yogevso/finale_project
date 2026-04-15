@@ -7,7 +7,7 @@ from tests.factories import create_document, create_tenant, create_user
 
 def test_extract_mentions_strips_html_and_deduplicates_usernames():
     mentions = NotificationService.extract_mentions(
-        '<p>Hello <strong>@target_user</strong></p><p>@target_user and @second.user</p>'
+        "<p>Hello <strong>@target_user</strong></p><p>@target_user and @second.user</p>"
     )
 
     assert mentions == ["target_user", "second.user"]

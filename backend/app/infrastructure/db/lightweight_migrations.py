@@ -98,9 +98,15 @@ def _ensure_document_columns(conn: Connection) -> None:
             """
         )
     )
-    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_platform_id ON documents (platform_id)"))
-    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_by ON documents (deleted_by)"))
-    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_at ON documents (deleted_at)"))
+    conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_documents_platform_id ON documents (platform_id)")
+    )
+    conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_by ON documents (deleted_by)")
+    )
+    conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_documents_deleted_at ON documents (deleted_at)")
+    )
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_purge_at ON documents (purge_at)"))
 
 
@@ -113,7 +119,9 @@ def _sync_document_platform_links(conn: Connection) -> None:
             """
         )
     )
-    unspecified_id = conn.execute(text("SELECT id FROM platforms WHERE slug = 'unspecified' LIMIT 1")).scalar()
+    unspecified_id = conn.execute(
+        text("SELECT id FROM platforms WHERE slug = 'unspecified' LIMIT 1")
+    ).scalar()
 
     platform_names = conn.execute(
         text(
@@ -145,7 +153,9 @@ def _sync_document_platform_links(conn: Connection) -> None:
         base_slug = _slugify(platform_name)
         slug = base_slug
         suffix = 2
-        while conn.execute(text("SELECT 1 FROM platforms WHERE slug = :slug LIMIT 1"), {"slug": slug}).scalar():
+        while conn.execute(
+            text("SELECT 1 FROM platforms WHERE slug = :slug LIMIT 1"), {"slug": slug}
+        ).scalar():
             slug = f"{base_slug}-{suffix}"
             suffix += 1
 
@@ -253,7 +263,9 @@ def _ensure_attachment_columns(conn: Connection) -> None:
         if column_name not in existing_attachment_columns:
             conn.execute(text(ddl))
 
-    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_attachments_storage_key ON attachments (storage_key)"))
+    conn.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_attachments_storage_key ON attachments (storage_key)")
+    )
     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_attachments_sha256 ON attachments (sha256)"))
     for column_name in (
         _legacy_preview_column("status"),
@@ -313,7 +325,9 @@ def _ensure_support_ticket_message_columns(conn: Connection) -> None:
     if support_message_table is None:
         return
 
-    support_message_columns = conn.execute(text("PRAGMA table_info(support_ticket_messages)")).fetchall()
+    support_message_columns = conn.execute(
+        text("PRAGMA table_info(support_ticket_messages)")
+    ).fetchall()
     existing_support_message_columns = {row[1] for row in support_message_columns}
     required_support_message_columns = {
         "file_name": "ALTER TABLE support_ticket_messages ADD COLUMN file_name VARCHAR(255)",
@@ -764,7 +778,10 @@ def _ensure_versions_semantic_columns(conn: Connection) -> None:
         )
     )
 
-    if "semantic_version" in existing_version_columns or "semantic_version" in required_version_columns:
+    if (
+        "semantic_version" in existing_version_columns
+        or "semantic_version" in required_version_columns
+    ):
         conn.execute(
             text(
                 "UPDATE versions "

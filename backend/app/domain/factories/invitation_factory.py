@@ -33,4 +33,3 @@ class InvitationFactory:
             expires_at=expires_at,
             status=status,
         )
-

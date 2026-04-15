@@ -3,4 +3,3 @@
 from app.application.contexts.reviews.api import ReviewsContextAPI
 
 __all__ = ["ReviewsContextAPI"]
-

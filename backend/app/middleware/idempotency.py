@@ -89,7 +89,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         idempotency_key = idempotency_key.strip()
         if not idempotency_key:
-            return JSONResponse(status_code=400, content={"detail": "Idempotency-Key cannot be blank"})
+            return JSONResponse(
+                status_code=400, content={"detail": "Idempotency-Key cannot be blank"}
+            )
 
         body = await request.body()
         request_hash = self._request_hash(request, body)
@@ -114,7 +116,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 if record.request_hash != request_hash:
                     return JSONResponse(
                         status_code=409,
-                        content={"detail": "Idempotency-Key already used with different request payload"},
+                        content={
+                            "detail": "Idempotency-Key already used with different request payload"
+                        },
                     )
 
                 if record.status == "completed" and record.response_status is not None:
@@ -130,11 +134,15 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     return replay
 
                 if record.status == "processing":
-                    started_at = record.processing_started_at or record.updated_at or record.created_at
+                    started_at = (
+                        record.processing_started_at or record.updated_at or record.created_at
+                    )
                     if started_at and started_at > now - self._PROCESSING_TIMEOUT:
                         return JSONResponse(
                             status_code=409,
-                            content={"detail": "Request with this Idempotency-Key is already in progress"},
+                            content={
+                                "detail": "Request with this Idempotency-Key is already in progress"
+                            },
                         )
 
                 record.status = "processing"
@@ -175,7 +183,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         except Exception as exc:  # policy: BOUNDARY — idempotency middleware converts storage errors into stable responses
             update_db = SessionLocal()
             try:
-                record = update_db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.id == record_id).first()
+                record = (
+                    update_db.query(IdempotencyKeyRecord)
+                    .filter(IdempotencyKeyRecord.id == record_id)
+                    .first()
+                )
                 if record:
                     record.status = "failed"
                     record.last_error = str(exc)
@@ -193,7 +205,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         update_db = SessionLocal()
         try:
-            record = update_db.query(IdempotencyKeyRecord).filter(IdempotencyKeyRecord.id == record_id).first()
+            record = (
+                update_db.query(IdempotencyKeyRecord)
+                .filter(IdempotencyKeyRecord.id == record_id)
+                .first()
+            )
             if record:
                 if response.status_code >= 500:
                     record.status = "failed"

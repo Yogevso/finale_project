@@ -14,7 +14,8 @@ A multi-tenant document management platform built for Intel. Internal staff crea
 ### Management Portal (Internal Users)
 
 - **Authentication & Authorization** — JWT + httpOnly cookie sessions, 6-tier RBAC (System Admin → Customer), bcrypt, account lockout, concurrent session limits, timing-safe comparisons
-- **Document Management** — CRUD, rich text editor (TipTap), categorization/tagging, Draft → Active → Archived workflow, bulk upload (PDF/Word), DOCX/PPTX content extraction
+- **Document Management** — CRUD, rich text editor (TipTap) with full formatting toolbar, two-step creation (details → fullscreen editor), categorization/tagging, Draft → Active → Archived workflow, bulk upload (PDF/Word), DOCX/PPTX content extraction, PDF/PPTX export
+- **Document Detail** — Table of contents sidebar, document lifecycle help panel, removed sections management (restore/discard), section-level inline editing
 - **Version Control** — Immutable version history, publish to viewer portal, version comparison, rollback
 - **Review Workflow** — Submit/approve/reject pipeline, audience snapshots with drift detection, stale-company checks at publish time, audience version locking
 - **File Attachments** — Upload PDF, Word, images; S3-compatible storage (AWS S3, MinIO, Azure Blob, local); magic-byte validation; 50 MB default limit
@@ -23,7 +24,7 @@ A multi-tenant document management platform built for Intel. Internal staff crea
 - **AI Assistant** — Self-hosted LLM (Ollama llama3.1:8b), RAG pipeline with ChromaDB, 29 tool-augmented responses, document access policy enforcement on all tools
 - **Chat & Messaging** — Real-time direct and group messaging, reactions, threading, online presence, tenant-scoped
 - **Analytics Dashboard** — Engagement, user, content production, feedback metrics, tenant comparison (System Admin), CSV/PDF export with row limits
-- **Support Desk** — Ticket management with tenant isolation, agent assignment with boundary checks, canned responses
+- **Support Desk** — Ticket management with tenant isolation, agent assignment with boundary checks, canned responses, delete closed tickets (manager-only)
 - **Notifications** — Real-time bell with unread count, email notifications, per-user preferences
 - **Search** — Full-text search (FTS5), autocomplete, faceted filtering, saved searches
 - **User & Company Management** — CRUD, role assignment, tenant-scoped, invitation workflow
@@ -300,7 +301,7 @@ Interactive API docs are available when the backend is running:
 - Real-time collaboration (TipTap + Yjs + Hocuspocus)
 - AI assistant (Ollama + RAG + ChromaDB + tool-augmented chat)
 - Real-time chat & messaging (direct, groups, reactions)
-- DOCX/PPTX content ingestion pipeline
+- DOCX/PPTX content ingestion pipeline and PDF/PPTX export
 - Dark mode, accessibility audit (WCAG), skeleton loading
 - E2E test suites (a11y, performance, responsive, visual, UX)
 - Architecture governance & SLO monitoring

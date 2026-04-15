@@ -48,11 +48,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scheduled-publish executor worker")
     parser.add_argument("--loop", action="store_true", help="Run in a continuous loop")
     parser.add_argument(
-        "--interval", type=int, default=DEFAULT_POLL_INTERVAL,
+        "--interval",
+        type=int,
+        default=DEFAULT_POLL_INTERVAL,
         help="Polling interval in seconds (default: 60)",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=DEFAULT_BATCH_SIZE,
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
         help="Max versions to process per cycle",
     )
     args = parser.parse_args()
@@ -60,7 +64,8 @@ def main() -> None:
     if args.loop:
         logger.info(
             "Starting scheduled-publish worker loop (interval=%ds, batch=%d)",
-            args.interval, args.batch_size,
+            args.interval,
+            args.batch_size,
         )
         while True:
             try:

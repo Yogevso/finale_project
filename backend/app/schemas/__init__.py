@@ -431,6 +431,7 @@ class AttachmentOutlineItem(BaseModel):
     page_end: Optional[int] = None
     anchor_id: Optional[str] = None
 
+
 AttachmentReaderViewResponse.model_rebuild()
 
 
@@ -691,7 +692,9 @@ class DocumentCalendarExportResponse(BaseModel):
 class ForcePublishRequest(BaseModel):
     """Request body for forced publish override."""
 
-    reason: str = Field(..., min_length=10, max_length=1000, description="Admin justification for forced publish")
+    reason: str = Field(
+        ..., min_length=10, max_length=1000, description="Admin justification for forced publish"
+    )
     acknowledge_risks: bool = Field(..., description="Confirm acknowledgment of risks")
 
 

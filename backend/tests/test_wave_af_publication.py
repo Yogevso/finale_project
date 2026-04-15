@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -20,18 +19,16 @@ from app.models import (
     DocumentStatus,
     DocumentVisibility,
     ReadingProgress,
-    Tenant,
-    User,
     UserRole,
     Version,
     VersionBumpType,
 )
-from tests.factories.domain import create_document, create_tenant, create_user, persist
-
+from tests.factories.domain import create_document, create_tenant, create_user
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_published_doc(
     db: Session,
@@ -231,9 +228,7 @@ class TestAF016ReadingProgressAccessCheck:
     def test_reading_progress_excludes_archived_document(self, client, db):
         """AF-016: Archived document should not appear in reading progress."""
         tenant = create_tenant(db)
-        customer = create_user(
-            db, role=UserRole.CUSTOMER, tenant_id=tenant.id
-        )
+        customer = create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
         editor = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
 
         # Create a document that was accessible, create reading progress
@@ -274,9 +269,7 @@ class TestAF016ReadingProgressAccessCheck:
     def test_continue_reading_excludes_internal_document(self, client, db):
         """AF-016: Internal document should not appear in customer's continue reading."""
         tenant = create_tenant(db)
-        customer = create_user(
-            db, role=UserRole.CUSTOMER, tenant_id=tenant.id
-        )
+        customer = create_user(db, role=UserRole.CUSTOMER, tenant_id=tenant.id)
         editor = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
 
         doc = create_document(

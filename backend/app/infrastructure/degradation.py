@@ -159,7 +159,9 @@ def lossy(component: str) -> Callable:
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return fn(*args, **kwargs)
-            except Exception as exc:  # policy: DEGRADED - telemetry probes must not block degraded-mode fallback
+            except (
+                Exception
+            ) as exc:  # policy: DEGRADED - telemetry probes must not block degraded-mode fallback
                 record_degradation(DegradationPolicy.LOSSY, component, exc)
                 return None
 
@@ -167,7 +169,9 @@ def lossy(component: str) -> Callable:
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return await fn(*args, **kwargs)
-            except Exception as exc:  # policy: DEGRADED - telemetry probes must not block degraded-mode fallback
+            except (
+                Exception
+            ) as exc:  # policy: DEGRADED - telemetry probes must not block degraded-mode fallback
                 record_degradation(DegradationPolicy.LOSSY, component, exc)
                 return None
 

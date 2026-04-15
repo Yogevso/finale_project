@@ -75,9 +75,7 @@ class VersionPublicationService:
         self.notify_version_watchers = notify_version_watchers
         self.schedule_pdf_export_generation = schedule_pdf_export_generation
         self.run_publish_audience_validation_gate = run_publish_audience_validation_gate
-        self.is_company_audience_enforcement_enabled = (
-            is_company_audience_enforcement_enabled
-        )
+        self.is_company_audience_enforcement_enabled = is_company_audience_enforcement_enabled
         self.serialize_version = serialize_version
 
     def _capture_attachment_snapshot(
@@ -143,7 +141,9 @@ class VersionPublicationService:
         if current_user.role not in [UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER]:
             raise PermissionDeniedError("Only admins and managers can publish versions")
 
-        company_ids = json.loads(audience_company_ids_snapshot) if audience_company_ids_snapshot else []
+        company_ids = (
+            json.loads(audience_company_ids_snapshot) if audience_company_ids_snapshot else []
+        )
         if company_ids:
             stale_companies = (
                 self.db.query(Tenant)
@@ -198,8 +198,7 @@ class VersionPublicationService:
                 raise
 
             warning_message = (
-                "Audience enforcement disabled: proceeding with advisory warning - "
-                f"{exc}"
+                "Audience enforcement disabled: proceeding with advisory warning - " f"{exc}"
             )
             audience_warnings.append(warning_message)
             logger.warning(

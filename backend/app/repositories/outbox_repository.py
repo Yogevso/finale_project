@@ -14,11 +14,7 @@ class OutboxRepository(BaseRepository):
     """Persistence/query helpers for domain-event outbox entries."""
 
     def get_by_id(self, outbox_id: int) -> DomainEventOutbox | None:
-        return (
-            self.db.query(DomainEventOutbox)
-            .filter(DomainEventOutbox.id == outbox_id)
-            .first()
-        )
+        return self.db.query(DomainEventOutbox).filter(DomainEventOutbox.id == outbox_id).first()
 
     def get_by_event_key(self, event_key: str) -> DomainEventOutbox | None:
         return (

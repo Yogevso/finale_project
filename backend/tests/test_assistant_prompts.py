@@ -25,6 +25,7 @@ def _make_user(role: UserRole = UserRole.EDITOR, username: str = "testuser") -> 
 # build_tool_call_prompt — compact prompt for tool decisions
 # ---------------------------------------------------------------------------
 
+
 class TestBuildToolCallPrompt:
     def test_includes_username(self):
         user = _make_user(username="alice")
@@ -63,6 +64,7 @@ class TestBuildToolCallPrompt:
 # ---------------------------------------------------------------------------
 # build_system_prompt — full prompt for summaries
 # ---------------------------------------------------------------------------
+
 
 class TestBuildSystemPrompt:
     def test_includes_username_and_role(self):

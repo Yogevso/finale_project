@@ -116,7 +116,11 @@ def test_schedule_reader_artifact_generation_queues_background_task(monkeypatch)
         AttachmentService,
         "enqueue_conversion",
         staticmethod(
-            lambda attachment_id, *, db=None, background_tasks=None, force=False: enqueue_calls.append(
+            lambda attachment_id,
+            *,
+            db=None,
+            background_tasks=None,
+            force=False: enqueue_calls.append(
                 {
                     "attachment_id": attachment_id,
                     "db": db,
@@ -124,7 +128,7 @@ def test_schedule_reader_artifact_generation_queues_background_task(monkeypatch)
                     "force": force,
                 }
             )
-        )
+        ),
     )
 
     AttachmentService.schedule_reader_artifact_generation(
@@ -143,14 +147,20 @@ def test_schedule_reader_artifact_generation_queues_background_task(monkeypatch)
     ]
 
 
-def test_schedule_reader_artifact_generation_enqueues_durable_job_without_background_tasks(monkeypatch):
+def test_schedule_reader_artifact_generation_enqueues_durable_job_without_background_tasks(
+    monkeypatch,
+):
     enqueue_calls = []
 
     monkeypatch.setattr(
         AttachmentService,
         "enqueue_conversion",
         staticmethod(
-            lambda attachment_id, *, db=None, background_tasks=None, force=False: enqueue_calls.append(
+            lambda attachment_id,
+            *,
+            db=None,
+            background_tasks=None,
+            force=False: enqueue_calls.append(
                 {
                     "attachment_id": attachment_id,
                     "db": db,
@@ -212,6 +222,7 @@ def test_reader_payload_helpers_normalize_lists_and_invalid_json(caplog):
 
     attachment.reader_toc_json = "{not-json"
     from app.services.attachment_service import reader_view as _rv_mod
+
     _rv_logger = _rv_mod.logger
     _rv_logger.disabled = False
     _rv_logger.addHandler(caplog.handler)
@@ -247,12 +258,18 @@ def test_generate_structured_reader_artifact_dispatches_by_attachment_kind(monke
     monkeypatch.setattr(
         AttachmentService,
         "generate_docx_reader_artifact",
-        staticmethod(lambda content, attachment: docx_calls.append((content, attachment.id)) or {"status": "ready"}),
+        staticmethod(
+            lambda content, attachment: docx_calls.append((content, attachment.id))
+            or {"status": "ready"}
+        ),
     )
     monkeypatch.setattr(
         AttachmentService,
         "generate_pptx_reader_artifact",
-        staticmethod(lambda content, attachment: pptx_calls.append((content, attachment.id)) or {"status": "ready"}),
+        staticmethod(
+            lambda content, attachment: pptx_calls.append((content, attachment.id))
+            or {"status": "ready"}
+        ),
     )
 
     docx_attachment = build_attachment(id=11)
@@ -281,10 +298,13 @@ def test_generate_structured_reader_artifact_dispatches_by_attachment_kind(monke
         AttachmentService._generate_structured_reader_artifact(b"pptx", pptx_attachment)["status"]
         == "ready"
     )
-    assert AttachmentService._generate_structured_reader_artifact(
-        b"legacy",
-        unsupported_attachment,
-    ) is None
+    assert (
+        AttachmentService._generate_structured_reader_artifact(
+            b"legacy",
+            unsupported_attachment,
+        )
+        is None
+    )
 
     assert docx_calls == [(b"docx", 11)]
     assert pptx_calls == [(b"pptx", 12)]
@@ -454,7 +474,9 @@ def test_generate_reader_artifact_stores_structured_payload_for_docx(
                 "error": None,
             }
 
-    monkeypatch.setattr("app.services.attachment_service.reader_view.SessionLocal", local_session_factory)
+    monkeypatch.setattr(
+        "app.services.attachment_service.reader_view.SessionLocal", local_session_factory
+    )
     monkeypatch.setattr(
         AttachmentService,
         "_load_original_bytes_for_attachment",
@@ -717,7 +739,11 @@ def test_get_reader_view_schedules_pending_supported_attachments(
         AttachmentService,
         "schedule_reader_artifact_generation",
         staticmethod(
-            lambda attachment_id, *, db=None, background_tasks=None, force=False: schedule_calls.append(
+            lambda attachment_id,
+            *,
+            db=None,
+            background_tasks=None,
+            force=False: schedule_calls.append(
                 {
                     "attachment_id": attachment_id,
                     "db": db,
@@ -767,7 +793,11 @@ def test_retry_reader_view_generation_resets_ready_payload_before_rescheduling(
         AttachmentService,
         "schedule_reader_artifact_generation",
         staticmethod(
-            lambda attachment_id, *, db=None, background_tasks=None, force=False: schedule_calls.append(
+            lambda attachment_id,
+            *,
+            db=None,
+            background_tasks=None,
+            force=False: schedule_calls.append(
                 {
                     "attachment_id": attachment_id,
                     "db": db,

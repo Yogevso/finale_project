@@ -31,8 +31,7 @@ class ReviewStage:
         if self.can_transition_to(target):
             return target
         raise ConflictError(
-            "Invalid review status transition: "
-            f"{self.status.value} -> {target.value}"
+            "Invalid review status transition: " f"{self.status.value} -> {target.value}"
         )
 
     def ensure_publishable_for_version(self) -> None:

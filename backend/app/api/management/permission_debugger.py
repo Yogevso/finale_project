@@ -80,42 +80,50 @@ def debug_access(
     is_system_admin = role == UserRole.SYSTEM_ADMIN
 
     # Check 1: User active status
-    checks.append(PermissionCheckResult(
-        name="user_is_active",
-        passed=is_active,
-        reason=f"User active={is_active}. Inactive users cannot access documents."
-    ))
+    checks.append(
+        PermissionCheckResult(
+            name="user_is_active",
+            passed=is_active,
+            reason=f"User active={is_active}. Inactive users cannot access documents.",
+        )
+    )
 
     # Check 2: User role classification
-    checks.append(PermissionCheckResult(
-        name="user_role_type",
-        passed=True,  # Informational
-        reason=f"User role={role.value if role else 'None'}. Internal={is_internal}, SystemAdmin={is_system_admin}"
-    ))
+    checks.append(
+        PermissionCheckResult(
+            name="user_role_type",
+            passed=True,  # Informational
+            reason=f"User role={role.value if role else 'None'}. Internal={is_internal}, SystemAdmin={is_system_admin}",
+        )
+    )
 
     # Check 3: Tenant boundary
     same_tenant = False
     if is_system_admin:
         same_tenant = True
-        checks.append(PermissionCheckResult(
-            name="tenant_boundary",
-            passed=True,
-            reason="System admin bypasses tenant boundary."
-        ))
+        checks.append(
+            PermissionCheckResult(
+                name="tenant_boundary", passed=True, reason="System admin bypasses tenant boundary."
+            )
+        )
     elif document.tenant_id and user.tenant_id:
         same_tenant = document.tenant_id == user.tenant_id
-        checks.append(PermissionCheckResult(
-            name="tenant_boundary",
-            passed=same_tenant,
-            reason=f"User tenant_id={user.tenant_id}, Document tenant_id={document.tenant_id}. Match={same_tenant}"
-        ))
+        checks.append(
+            PermissionCheckResult(
+                name="tenant_boundary",
+                passed=same_tenant,
+                reason=f"User tenant_id={user.tenant_id}, Document tenant_id={document.tenant_id}. Match={same_tenant}",
+            )
+        )
     else:
         same_tenant = True
-        checks.append(PermissionCheckResult(
-            name="tenant_boundary",
-            passed=True,
-            reason=f"No strict tenant boundary (user={user.tenant_id}, doc={document.tenant_id})."
-        ))
+        checks.append(
+            PermissionCheckResult(
+                name="tenant_boundary",
+                passed=True,
+                reason=f"No strict tenant boundary (user={user.tenant_id}, doc={document.tenant_id}).",
+            )
+        )
 
     # Check 4: Document visibility
     visibility = document.visibility
@@ -158,11 +166,9 @@ def debug_access(
     else:
         view_reason = f"Unknown visibility={visibility}."
 
-    checks.append(PermissionCheckResult(
-        name="visibility_check",
-        passed=can_view,
-        reason=view_reason
-    ))
+    checks.append(
+        PermissionCheckResult(name="visibility_check", passed=can_view, reason=view_reason)
+    )
 
     # Check 5: Permission-based editing rights
     perms = ROLE_PERMISSIONS.get(role, set()) if role else set()
@@ -171,32 +177,40 @@ def debug_access(
     has_delete = Permission.DELETE_DOCUMENT in perms
     has_publish = Permission.PUBLISH_DOCUMENT in perms
 
-    checks.append(PermissionCheckResult(
-        name="role_permissions",
-        passed=True,  # Informational
-        reason=f"Role {role.value if role else 'None'} permissions: EDIT={has_edit}, DELETE={has_delete}, PUBLISH={has_publish}"
-    ))
+    checks.append(
+        PermissionCheckResult(
+            name="role_permissions",
+            passed=True,  # Informational
+            reason=f"Role {role.value if role else 'None'} permissions: EDIT={has_edit}, DELETE={has_delete}, PUBLISH={has_publish}",
+        )
+    )
 
     # Final access decisions
     can_edit = is_active and has_edit and same_tenant
     can_delete = is_active and has_delete and same_tenant
     can_publish = is_active and has_publish and same_tenant
 
-    checks.append(PermissionCheckResult(
-        name="can_edit_final",
-        passed=can_edit,
-        reason=f"Can edit = active({is_active}) AND has_edit({has_edit}) AND same_tenant({same_tenant}) → {can_edit}"
-    ))
-    checks.append(PermissionCheckResult(
-        name="can_delete_final",
-        passed=can_delete,
-        reason=f"Can delete = active({is_active}) AND has_delete({has_delete}) AND same_tenant({same_tenant}) → {can_delete}"
-    ))
-    checks.append(PermissionCheckResult(
-        name="can_publish_final",
-        passed=can_publish,
-        reason=f"Can publish = active({is_active}) AND has_publish({has_publish}) AND same_tenant({same_tenant}) → {can_publish}"
-    ))
+    checks.append(
+        PermissionCheckResult(
+            name="can_edit_final",
+            passed=can_edit,
+            reason=f"Can edit = active({is_active}) AND has_edit({has_edit}) AND same_tenant({same_tenant}) → {can_edit}",
+        )
+    )
+    checks.append(
+        PermissionCheckResult(
+            name="can_delete_final",
+            passed=can_delete,
+            reason=f"Can delete = active({is_active}) AND has_delete({has_delete}) AND same_tenant({same_tenant}) → {can_delete}",
+        )
+    )
+    checks.append(
+        PermissionCheckResult(
+            name="can_publish_final",
+            passed=can_publish,
+            reason=f"Can publish = active({is_active}) AND has_publish({has_publish}) AND same_tenant({same_tenant}) → {can_publish}",
+        )
+    )
 
     return AccessExplanation(
         user_id=user_id,

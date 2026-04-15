@@ -12,6 +12,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.policies.access_policies import DocumentAccessPolicy
 from app.config import settings
 from app.dependencies.tenant import TenantContext
 from app.domain.aggregates import DocumentAggregate
@@ -36,15 +37,14 @@ from app.models import (
     UserRole,
     Version,
 )
-from app.application.policies.access_policies import DocumentAccessPolicy
 from app.schemas import DocumentCreate, DocumentUpdate
-from app.services.document_audience_service import DocumentAudienceService, _company_cache
-from app.services.document_metadata_service import DocumentMetadataService
+from app.services.audit_helper import write_audit_log
 from app.services.base_service import TenantAwareService
+from app.services.document_audience_service import DocumentAudienceService
+from app.services.document_metadata_service import DocumentMetadataService
 from app.services.notification_service import NotificationService
 from app.services.outbox import build_outbox_event_dispatcher
 from app.services.uow import UnitOfWork
-from app.services.audit_helper import write_audit_log
 from app.utils.audience_audit_signing import sign_payload
 from app.utils.concurrency import ensure_if_match_matches
 
@@ -100,7 +100,10 @@ class DocumentService(TenantAwareService[Document]):
 
     @staticmethod
     def _invalidate_document_projection_caches() -> None:
-        from app.projections import invalidate_portal_audience_cache, invalidate_search_audience_cache
+        from app.projections import (
+            invalidate_portal_audience_cache,
+            invalidate_search_audience_cache,
+        )
 
         invalidate_portal_audience_cache()
         invalidate_search_audience_cache()
@@ -227,12 +230,16 @@ class DocumentService(TenantAwareService[Document]):
         """Create a new document (requires EDITOR role or above)."""
         if user.role not in self._WRITE_ROLES:
             raise PermissionDeniedError("Insufficient permissions to create documents")
-        normalized_company_ids = self.audience_service.normalize_company_ids(document_data.company_ids)
+        normalized_company_ids = self.audience_service.normalize_company_ids(
+            document_data.company_ids
+        )
         self.audience_service.validate_company_visibility_assignment(
             visibility=document_data.visibility,
             company_ids=normalized_company_ids,
         )
-        assigned_companies = self.audience_service.resolve_assigned_companies(normalized_company_ids)
+        assigned_companies = self.audience_service.resolve_assigned_companies(
+            normalized_company_ids
+        )
 
         # Use provided document number or generate one
         if document_data.document_number:
@@ -263,16 +270,23 @@ class DocumentService(TenantAwareService[Document]):
             # Task 193: carry-over audience from parent when duplicating.
             # If the caller didn't explicitly set visibility (left default INTERNAL),
             # inherit from the parent.
-            if document_data.visibility == DocumentVisibility.INTERNAL and parent.visibility != DocumentVisibility.INTERNAL:
-                document_data = document_data.model_copy(
-                    update={"visibility": parent.visibility}
-                )
+            if (
+                document_data.visibility == DocumentVisibility.INTERNAL
+                and parent.visibility != DocumentVisibility.INTERNAL
+            ):
+                document_data = document_data.model_copy(update={"visibility": parent.visibility})
             # Inherit company assignments if the caller didn't specify any.
             if not normalized_company_ids and parent.assigned_companies:
                 parent_company_ids = [c.id for c in parent.assigned_companies]
-                normalized_company_ids = self.audience_service.normalize_company_ids(parent_company_ids)
-                assigned_companies = self.audience_service.resolve_assigned_companies(normalized_company_ids)
-            if document_data.platform_id is None and not (document_data.platform and document_data.platform.strip()):
+                normalized_company_ids = self.audience_service.normalize_company_ids(
+                    parent_company_ids
+                )
+                assigned_companies = self.audience_service.resolve_assigned_companies(
+                    normalized_company_ids
+                )
+            if document_data.platform_id is None and not (
+                document_data.platform and document_data.platform.strip()
+            ):
                 document_data = document_data.model_copy(
                     update={"platform": parent.platform, "platform_id": parent.platform_id}
                 )
@@ -350,10 +364,14 @@ class DocumentService(TenantAwareService[Document]):
                     continue
                 raise
 
-    def get_document(self, document_id: int, *, include_deleted: bool = False) -> Optional[Document]:
+    def get_document(
+        self, document_id: int, *, include_deleted: bool = False
+    ) -> Optional[Document]:
         """Get document by ID with tenant filtering"""
         document = (
-            self._base_query(include_deleted=include_deleted).filter(Document.id == document_id).first()
+            self._base_query(include_deleted=include_deleted)
+            .filter(Document.id == document_id)
+            .first()
         )
         return document
 
@@ -509,7 +527,9 @@ class DocumentService(TenantAwareService[Document]):
 
     def list_tags(self, *, query: str | None = None, limit: int = 20) -> list[str]:
         """Return distinct tenant-scoped tags for autocomplete."""
-        tag_values = self._base_query().with_entities(Document.tags).filter(Document.tags.isnot(None)).all()
+        tag_values = (
+            self._base_query().with_entities(Document.tags).filter(Document.tags.isnot(None)).all()
+        )
         normalized_query = (query or "").strip().lower()
 
         unique_tags: list[str] = []
@@ -543,7 +563,11 @@ class DocumentService(TenantAwareService[Document]):
             return []
 
         matches: list[dict[str, object]] = []
-        documents = self._base_query().with_entities(Document.id, Document.title, Document.document_number).all()
+        documents = (
+            self._base_query()
+            .with_entities(Document.id, Document.title, Document.document_number)
+            .all()
+        )
         for document_id, document_title, document_number in documents:
             candidate_title = self._normalize_title_for_similarity(document_title or "")
             if not candidate_title:
@@ -671,7 +695,9 @@ class DocumentService(TenantAwareService[Document]):
             current_company_ids = old_company_ids.copy()
             has_visibility_update = document_data.visibility is not None
             has_company_assignment_update = document_data.company_ids is not None
-            normalized_company_ids = self.audience_service.normalize_company_ids(document_data.company_ids)
+            normalized_company_ids = self.audience_service.normalize_company_ids(
+                document_data.company_ids
+            )
 
             # Update fields
             if document_data.title is not None:
@@ -705,13 +731,17 @@ class DocumentService(TenantAwareService[Document]):
             if has_visibility_update or has_company_assignment_update:
                 if target_visibility == DocumentVisibility.COMPANY:
                     target_company_ids = (
-                        normalized_company_ids if has_company_assignment_update else current_company_ids
+                        normalized_company_ids
+                        if has_company_assignment_update
+                        else current_company_ids
                     )
                     document_aggregate.ensure_visibility_assignment_invariants(
                         visibility=target_visibility,
                         company_ids=target_company_ids,
                     )
-                    document.assigned_companies = self.audience_service.resolve_assigned_companies(target_company_ids)
+                    document.assigned_companies = self.audience_service.resolve_assigned_companies(
+                        target_company_ids
+                    )
                 elif has_company_assignment_update and normalized_company_ids:
                     document_aggregate.ensure_visibility_assignment_invariants(
                         visibility=target_visibility,
@@ -808,7 +838,9 @@ class DocumentService(TenantAwareService[Document]):
                 details = json.dumps(
                     {
                         "event": "visibility_change",
-                        "from_visibility": previous_visibility.value if previous_visibility else None,
+                        "from_visibility": previous_visibility.value
+                        if previous_visibility
+                        else None,
                         "to_visibility": document.visibility.value if document.visibility else None,
                         "reason": reason,
                     },
@@ -1042,7 +1074,9 @@ class DocumentService(TenantAwareService[Document]):
             document.audience_version = (document.audience_version or 1) + 1
 
             new_company_ids = [company.id for company in assigned_companies]
-            added_company_ids = [company_id for company_id in new_company_ids if company_id not in old_company_ids]
+            added_company_ids = [
+                company_id for company_id in new_company_ids if company_id not in old_company_ids
+            ]
             removed_company_ids = [
                 company_id for company_id in old_company_ids if company_id not in new_company_ids
             ]
@@ -1088,7 +1122,9 @@ class DocumentService(TenantAwareService[Document]):
 
         return len(requested_ids)
 
-    def archive_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
+    def archive_document(
+        self, document_id: int, user: User, *, if_match: str | None = None
+    ) -> dict:
         """
         Soft-delete a document by setting status to ARCHIVED.
 
@@ -1158,7 +1194,9 @@ class DocumentService(TenantAwareService[Document]):
             },
         }
 
-    def restore_document(self, document_id: int, user: User, *, if_match: str | None = None) -> dict:
+    def restore_document(
+        self, document_id: int, user: User, *, if_match: str | None = None
+    ) -> dict:
         """
         Restore a soft-deleted (archived) document.
 
@@ -1248,4 +1286,3 @@ class DocumentService(TenantAwareService[Document]):
             "audience_reconciliation": audience_changes,
             "active_company_ids": [c.id for c in active_companies],
         }
-

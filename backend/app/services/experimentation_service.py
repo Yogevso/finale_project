@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from app.models import (
     ActivationMilestone,
     ApiKey,
-    AuditLog,
-    DomainEventOutbox,
     Experiment,
     ExperimentAssignment,
     ExperimentMetricSnapshot,
@@ -28,7 +25,6 @@ from app.models import (
     WebhookDelivery,
     WebhookRegistration,
 )
-
 
 # ---------------------------------------------------------------------------
 # AB-001: Feature Flag Targeting
@@ -137,7 +133,9 @@ def start_experiment(db: Session, experiment_id: int) -> Experiment:
     return exp
 
 
-def stop_experiment(db: Session, experiment_id: int, winner_variant: str | None = None) -> Experiment:
+def stop_experiment(
+    db: Session, experiment_id: int, winner_variant: str | None = None
+) -> Experiment:
     exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
     if exp is None:
         raise ValueError("Experiment not found")
@@ -149,7 +147,9 @@ def stop_experiment(db: Session, experiment_id: int, winner_variant: str | None 
     return exp
 
 
-def assign_user_to_experiment(db: Session, experiment_id: int, user_id: int) -> ExperimentAssignment:
+def assign_user_to_experiment(
+    db: Session, experiment_id: int, user_id: int
+) -> ExperimentAssignment:
     """Deterministic assignment: hash(experiment_id + user_id) → variant bucket."""
     existing = (
         db.query(ExperimentAssignment)
@@ -188,7 +188,9 @@ def assign_user_to_experiment(db: Session, experiment_id: int, user_id: int) -> 
     return assignment
 
 
-def get_user_assignment(db: Session, experiment_id: int, user_id: int) -> ExperimentAssignment | None:
+def get_user_assignment(
+    db: Session, experiment_id: int, user_id: int
+) -> ExperimentAssignment | None:
     return (
         db.query(ExperimentAssignment)
         .filter(
@@ -277,13 +279,15 @@ def check_guardrails(db: Session, experiment_id: int) -> dict[str, Any]:
             degradation_pct = ((control_val - treatment_val) / abs(control_val)) * 100
 
             if degradation_pct > exp.guardrail_threshold:
-                violations.append({
-                    "metric": metric,
-                    "variant": v,
-                    "control_value": control_val,
-                    "treatment_value": treatment_val,
-                    "degradation_pct": round(degradation_pct, 2),
-                })
+                violations.append(
+                    {
+                        "metric": metric,
+                        "variant": v,
+                        "control_value": control_val,
+                        "treatment_value": treatment_val,
+                        "degradation_pct": round(degradation_pct, 2),
+                    }
+                )
 
     should_halt = len(violations) > 0
     return {"ok": not should_halt, "violations": violations}
@@ -294,7 +298,9 @@ def check_guardrails(db: Session, experiment_id: int) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def kill_experiment(db: Session, experiment_id: int, winner_variant: str | None = None) -> Experiment:
+def kill_experiment(
+    db: Session, experiment_id: int, winner_variant: str | None = None
+) -> Experiment:
     """Immediately end experiment and optionally assign all to winner."""
     return stop_experiment(db, experiment_id, winner_variant)
 
@@ -312,7 +318,9 @@ ONBOARDING_STEPS = [
 ]
 
 
-def record_onboarding_event(db: Session, user_id: int, tenant_id: int, step: str) -> OnboardingEvent:
+def record_onboarding_event(
+    db: Session, user_id: int, tenant_id: int, step: str
+) -> OnboardingEvent:
     evt = OnboardingEvent(user_id=user_id, tenant_id=tenant_id, step=step)
     db.add(evt)
     db.commit()
@@ -320,7 +328,9 @@ def record_onboarding_event(db: Session, user_id: int, tenant_id: int, step: str
     return evt
 
 
-def get_onboarding_funnel(db: Session, tenant_id: int, core_db: Session | None = None) -> list[dict[str, Any]]:
+def get_onboarding_funnel(
+    db: Session, tenant_id: int, core_db: Session | None = None
+) -> list[dict[str, Any]]:
     _core = core_db or db
     total_users = _core.query(func.count(User.id)).filter(User.tenant_id == tenant_id).scalar() or 1
 
@@ -332,11 +342,13 @@ def get_onboarding_funnel(db: Session, tenant_id: int, core_db: Session | None =
             .scalar()
             or 0
         )
-        results.append({
-            "step": step,
-            "count": count,
-            "percentage": round((count / total_users) * 100, 1),
-        })
+        results.append(
+            {
+                "step": step,
+                "count": count,
+                "percentage": round((count / total_users) * 100, 1),
+            }
+        )
     return results
 
 
@@ -353,7 +365,9 @@ MILESTONES = [
 ]
 
 
-def record_milestone(db: Session, user_id: int, tenant_id: int, milestone: str) -> ActivationMilestone | None:
+def record_milestone(
+    db: Session, user_id: int, tenant_id: int, milestone: str
+) -> ActivationMilestone | None:
     existing = (
         db.query(ActivationMilestone)
         .filter(ActivationMilestone.user_id == user_id, ActivationMilestone.milestone == milestone)
@@ -383,18 +397,18 @@ def get_activation_summary(db: Session, tenant_id: int) -> list[dict[str, Any]]:
     summaries = []
     for user in users:
         milestones = (
-            db.query(ActivationMilestone)
-            .filter(ActivationMilestone.user_id == user.id)
-            .all()
+            db.query(ActivationMilestone).filter(ActivationMilestone.user_id == user.id).all()
         )
         completed = [m.milestone for m in milestones]
-        summaries.append({
-            "user_id": user.id,
-            "username": user.username,
-            "milestones_completed": len(completed),
-            "milestones_total": len(MILESTONES),
-            "milestones": completed,
-        })
+        summaries.append(
+            {
+                "user_id": user.id,
+                "username": user.username,
+                "milestones_completed": len(completed),
+                "milestones_total": len(MILESTONES),
+                "milestones": completed,
+            }
+        )
     return summaries
 
 
@@ -408,13 +422,10 @@ def get_retention_cohorts(db: Session, tenant_id: int, weeks: int = 8) -> list[d
     now = datetime.utcnow()
     cutoff = now - timedelta(weeks=weeks)
 
-    users = (
-        db.query(User)
-        .filter(User.tenant_id == tenant_id, User.created_at >= cutoff)
-        .all()
-    )
+    users = db.query(User).filter(User.tenant_id == tenant_id, User.created_at >= cutoff).all()
 
     from collections import defaultdict
+
     cohorts: dict[str, list[int]] = defaultdict(list)
 
     for u in users:
@@ -442,13 +453,17 @@ def get_retention_cohorts(db: Session, tenant_id: int, weeks: int = 8) -> list[d
                 .scalar()
                 or 0
             )
-            retention_by_week[offset] = round((active_count / cohort_size) * 100, 1) if cohort_size else 0
+            retention_by_week[offset] = (
+                round((active_count / cohort_size) * 100, 1) if cohort_size else 0
+            )
 
-        result.append({
-            "cohort_week": week_key,
-            "cohort_size": cohort_size,
-            "retention_by_week": retention_by_week,
-        })
+        result.append(
+            {
+                "cohort_week": week_key,
+                "cohort_size": cohort_size,
+                "retention_by_week": retention_by_week,
+            }
+        )
 
     return result
 
@@ -463,11 +478,7 @@ def get_churn_risk_users(db: Session, tenant_id: int, inactive_days: int = 30) -
     now = datetime.utcnow()
     cutoff = now - timedelta(days=inactive_days)
 
-    all_active = (
-        db.query(User)
-        .filter(User.tenant_id == tenant_id, User.is_active.is_(True))
-        .all()
-    )
+    all_active = db.query(User).filter(User.tenant_id == tenant_id, User.is_active.is_(True)).all()
 
     at_risk = []
     for user in all_active:
@@ -487,14 +498,16 @@ def get_churn_risk_users(db: Session, tenant_id: int, inactive_days: int = 30) -
             else:
                 risk = "low"
 
-            at_risk.append({
-                "user_id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "last_login": last_login,
-                "days_inactive": days_inactive,
-                "risk_level": risk,
-            })
+            at_risk.append(
+                {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "last_login": last_login,
+                    "days_inactive": days_inactive,
+                    "risk_level": risk,
+                }
+            )
 
     return {
         "at_risk_users": at_risk,
@@ -614,7 +627,10 @@ def deliver_webhook_event(
 
 
 def get_webhook_delivery_log(
-    db: Session, webhook_id: int, tenant_id: int, limit: int = 50,
+    db: Session,
+    webhook_id: int,
+    tenant_id: int,
+    limit: int = 50,
 ) -> dict[str, Any]:
     wh = (
         db.query(WebhookRegistration)
@@ -632,7 +648,12 @@ def get_webhook_delivery_log(
         .all()
     )
 
-    total = db.query(func.count(WebhookDelivery.id)).filter(WebhookDelivery.webhook_id == webhook_id).scalar() or 0
+    total = (
+        db.query(func.count(WebhookDelivery.id))
+        .filter(WebhookDelivery.webhook_id == webhook_id)
+        .scalar()
+        or 0
+    )
     successes = (
         db.query(func.count(WebhookDelivery.id))
         .filter(WebhookDelivery.webhook_id == webhook_id, WebhookDelivery.success.is_(True))
@@ -669,7 +690,9 @@ def create_api_key(
         key_prefix=prefix,
         key_hash=key_hash,
         scopes=json.dumps(scopes) if scopes else None,
-        expires_at=(datetime.utcnow() + timedelta(days=expires_in_days)) if expires_in_days else None,
+        expires_at=(datetime.utcnow() + timedelta(days=expires_in_days))
+        if expires_in_days
+        else None,
     )
     db.add(api_key)
     db.commit()
@@ -678,20 +701,11 @@ def create_api_key(
 
 
 def list_api_keys(db: Session, tenant_id: int) -> list[ApiKey]:
-    return (
-        db.query(ApiKey)
-        .filter(ApiKey.tenant_id == tenant_id)
-        .order_by(ApiKey.created_at)
-        .all()
-    )
+    return db.query(ApiKey).filter(ApiKey.tenant_id == tenant_id).order_by(ApiKey.created_at).all()
 
 
 def revoke_api_key(db: Session, key_id: int, tenant_id: int) -> bool:
-    key = (
-        db.query(ApiKey)
-        .filter(ApiKey.id == key_id, ApiKey.tenant_id == tenant_id)
-        .first()
-    )
+    key = db.query(ApiKey).filter(ApiKey.id == key_id, ApiKey.tenant_id == tenant_id).first()
     if key is None:
         return False
     key.is_active = False
@@ -702,11 +716,7 @@ def revoke_api_key(db: Session, key_id: int, tenant_id: int) -> bool:
 def authenticate_api_key(db: Session, raw_key: str) -> ApiKey | None:
     """Validate an API key and return the record if valid."""
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    key = (
-        db.query(ApiKey)
-        .filter(ApiKey.key_hash == key_hash, ApiKey.is_active.is_(True))
-        .first()
-    )
+    key = db.query(ApiKey).filter(ApiKey.key_hash == key_hash, ApiKey.is_active.is_(True)).first()
     if key is None:
         return None
     if key.expires_at and key.expires_at < datetime.utcnow():
@@ -726,12 +736,18 @@ def get_integration_health(db: Session, tenant_id: int) -> dict[str, Any]:
     day_ago = now - timedelta(hours=24)
 
     # Webhook health
-    total_wh = db.query(func.count(WebhookRegistration.id)).filter(
-        WebhookRegistration.tenant_id == tenant_id
-    ).scalar() or 0
-    active_wh = db.query(func.count(WebhookRegistration.id)).filter(
-        WebhookRegistration.tenant_id == tenant_id, WebhookRegistration.is_active.is_(True)
-    ).scalar() or 0
+    total_wh = (
+        db.query(func.count(WebhookRegistration.id))
+        .filter(WebhookRegistration.tenant_id == tenant_id)
+        .scalar()
+        or 0
+    )
+    active_wh = (
+        db.query(func.count(WebhookRegistration.id))
+        .filter(WebhookRegistration.tenant_id == tenant_id, WebhookRegistration.is_active.is_(True))
+        .scalar()
+        or 0
+    )
 
     recent_deliveries = (
         db.query(func.count(WebhookDelivery.id))
@@ -751,18 +767,21 @@ def get_integration_health(db: Session, tenant_id: int) -> dict[str, Any]:
         .scalar()
         or 0
     )
-    wh_success_rate = round((recent_successes / recent_deliveries) * 100, 1) if recent_deliveries else 100.0
+    wh_success_rate = (
+        round((recent_successes / recent_deliveries) * 100, 1) if recent_deliveries else 100.0
+    )
 
     # API key health
     total_keys = db.query(func.count(ApiKey.id)).filter(ApiKey.tenant_id == tenant_id).scalar() or 0
-    active_keys = db.query(func.count(ApiKey.id)).filter(
-        ApiKey.tenant_id == tenant_id, ApiKey.is_active.is_(True)
-    ).scalar() or 0
+    active_keys = (
+        db.query(func.count(ApiKey.id))
+        .filter(ApiKey.tenant_id == tenant_id, ApiKey.is_active.is_(True))
+        .scalar()
+        or 0
+    )
 
     last_used = (
-        db.query(func.max(ApiKey.last_used_at))
-        .filter(ApiKey.tenant_id == tenant_id)
-        .scalar()
+        db.query(func.max(ApiKey.last_used_at)).filter(ApiKey.tenant_id == tenant_id).scalar()
     )
 
     return {

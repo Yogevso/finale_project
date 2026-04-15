@@ -19,7 +19,11 @@ def test_audience_edge_case_factory_creates_expected_visibility_matrix(
     assert edge_cases.company_single_assignment.visibility == DocumentVisibility.COMPANY
     assert edge_cases.company_multi_assignment.visibility == DocumentVisibility.COMPANY
 
-    single_ids = sorted(company.id for company in edge_cases.company_single_assignment.assigned_companies)
-    multi_ids = sorted(company.id for company in edge_cases.company_multi_assignment.assigned_companies)
+    single_ids = sorted(
+        company.id for company in edge_cases.company_single_assignment.assigned_companies
+    )
+    multi_ids = sorted(
+        company.id for company in edge_cases.company_multi_assignment.assigned_companies
+    )
     assert single_ids == [test_tenant.id]
     assert multi_ids == sorted([test_tenant.id, test_tenant_2.id])

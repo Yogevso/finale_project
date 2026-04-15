@@ -54,14 +54,17 @@ def test_tenant_scope_spec_applies_non_system_admin_filter(db, test_user):
 
 def test_tenant_scope_spec_sql_clause_variants(test_user, test_system_admin):
     # Test user with no tenant
-    original_tenant_id = test_user.tenant_id
     test_user.tenant_id = None
-    tenant_clause, tenant_params = TenantScopeSpec.for_user(test_user).sql_clause(column_expr="d.tenant_id")
+    tenant_clause, tenant_params = TenantScopeSpec.for_user(test_user).sql_clause(
+        column_expr="d.tenant_id"
+    )
     assert tenant_clause == "d.tenant_id IS NULL"
     assert tenant_params == {}
 
     test_user.tenant_id = 42
-    tenant_clause, tenant_params = TenantScopeSpec.for_user(test_user).sql_clause(column_expr="d.tenant_id")
+    tenant_clause, tenant_params = TenantScopeSpec.for_user(test_user).sql_clause(
+        column_expr="d.tenant_id"
+    )
     assert tenant_clause == "d.tenant_id = :tenant_id"
     assert tenant_params == {"tenant_id": 42}
 

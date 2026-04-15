@@ -13,17 +13,15 @@ import logging
 import secrets
 import zipfile
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models import (
     ActionType,
-    AuditLog,
     Attachment,
+    AuditLog,
     Bookmark,
     ChatMessage,
     Comment,
@@ -69,7 +67,9 @@ def request_data_export(db: Session, *, user_id: int, reason: str) -> DataReques
     return req
 
 
-def execute_data_export(db: Session, request_id: int, *, analytics_db: Session | None = None) -> bytes:
+def execute_data_export(
+    db: Session, request_id: int, *, analytics_db: Session | None = None
+) -> bytes:
     """Build a ZIP archive containing all user data for a given export request.
 
     Returns the raw ZIP bytes.
@@ -167,8 +167,7 @@ def execute_data_export(db: Session, request_id: int, *, analytics_db: Session |
         # 7. Reading progress
         progress = db.query(ReadingProgress).filter(ReadingProgress.user_id == user.id).all()
         progress_list = [
-            {"document_id": p.document_id, "progress_pct": p.progress_pct}
-            for p in progress
+            {"document_id": p.document_id, "progress_pct": p.progress_pct} for p in progress
         ]
         zf.writestr("reading_progress.json", json.dumps(progress_list, indent=2))
 
@@ -206,7 +205,9 @@ def execute_data_export(db: Session, request_id: int, *, analytics_db: Session |
         sec_list = [
             {
                 "id": e.id,
-                "event_type": e.event_type.value if hasattr(e.event_type, "value") else str(e.event_type),
+                "event_type": e.event_type.value
+                if hasattr(e.event_type, "value")
+                else str(e.event_type),
                 "ip_address": e.ip_address,
                 "user_agent": e.user_agent,
                 "details": e.details,
@@ -238,7 +239,9 @@ def execute_data_export(db: Session, request_id: int, *, analytics_db: Session |
                 "id": m.id,
                 "chat_id": m.chat_id,
                 "content": m.content,
-                "message_type": m.message_type.value if hasattr(m.message_type, "value") else str(m.message_type),
+                "message_type": m.message_type.value
+                if hasattr(m.message_type, "value")
+                else str(m.message_type),
                 "created_at": str(m.created_at),
             }
             for m in chat_msgs
@@ -246,9 +249,9 @@ def execute_data_export(db: Session, request_id: int, *, analytics_db: Session |
         zf.writestr("chat_messages.json", json.dumps(chat_list, indent=2))
 
         # 13. Support ticket messages (AG-015)
-        support_msgs = db.query(SupportTicketMessage).filter(
-            SupportTicketMessage.sender_id == user.id
-        ).all()
+        support_msgs = (
+            db.query(SupportTicketMessage).filter(SupportTicketMessage.sender_id == user.id).all()
+        )
         support_list = [
             {
                 "id": m.id,
@@ -338,7 +341,9 @@ def approve_data_deletion(
     return req
 
 
-def execute_data_deletion(db: Session, request_id: int, *, analytics_db: Session | None = None) -> dict[str, Any]:
+def execute_data_deletion(
+    db: Session, request_id: int, *, analytics_db: Session | None = None
+) -> dict[str, Any]:
     """Anonymize user data while preserving audit trail integrity.
 
     - Replaces PII with 'Deleted User' placeholder

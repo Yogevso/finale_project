@@ -7,7 +7,10 @@ import io
 import pytest
 from fastapi import BackgroundTasks, HTTPException, UploadFile
 
-from app.application.process_managers import DocumentUploadProcessManager, PreviewConversionProcessManager
+from app.application.process_managers import (
+    DocumentUploadProcessManager,
+    PreviewConversionProcessManager,
+)
 from app.models import Document
 from app.services.document_service import DocumentService
 from tests.factories import build_attachment_conversion_job, build_document_create
@@ -17,7 +20,9 @@ def _docx_upload_file(name: str) -> UploadFile:
     return UploadFile(
         filename=name,
         file=io.BytesIO(b"PK\x03\x04minimal-docx-fixture"),
-        headers={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        headers={
+            "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        },
     )
 
 

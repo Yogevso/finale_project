@@ -51,4 +51,3 @@ class Result(Generic[T, E]):
         if self.is_ok:
             raise RuntimeError("Cannot access error of a successful result")
         return cast(E, self._error)
-

@@ -66,7 +66,8 @@ def evaluate_use_case_slo(
     scoped = [
         event
         for event in events
-        if event.use_case_id == definition.use_case_id and _parse_started_at(event.started_at) >= cutoff
+        if event.use_case_id == definition.use_case_id
+        and _parse_started_at(event.started_at) >= cutoff
     ]
 
     sample_count = len(scoped)
@@ -101,4 +102,3 @@ def evaluate_use_case_slos(
         evaluate_use_case_slo(definition=definition, events=events, now=now)
         for definition in definitions
     ]
-

@@ -41,7 +41,7 @@ def ensure_chat_db_sync(db: Session, chat_db: Session | None) -> None:
             return
         try:
             chat_db.commit()
-        except Exception:
+        except Exception:  # policy: LOSSY — chat notification commit is best-effort
             chat_db.rollback()
             logger.exception("Failed to commit chat_db notification writes")
 
@@ -145,9 +145,7 @@ class NotificationService(SessionService):
         excluded_user_ids.add(actor_user.id)
 
         watchers = (
-            self.db.query(DocumentWatcher)
-            .filter(DocumentWatcher.document_id == document.id)
-            .all()
+            self.db.query(DocumentWatcher).filter(DocumentWatcher.document_id == document.id).all()
         )
 
         notified_user_ids: set[int] = set()

@@ -21,9 +21,7 @@ class CommentRepository(BaseRepository):
             .options(
                 joinedload(Comment.user),
                 joinedload(Comment.replies).joinedload(Comment.user),
-                joinedload(Comment.replies)
-                .joinedload(Comment.replies)
-                .joinedload(Comment.user),
+                joinedload(Comment.replies).joinedload(Comment.replies).joinedload(Comment.user),
             )
             .order_by(Comment.created_at.desc())
             .all()
@@ -46,16 +44,14 @@ class CommentRepository(BaseRepository):
             query = query.options(
                 joinedload(Comment.user),
                 joinedload(Comment.replies).joinedload(Comment.user),
-                joinedload(Comment.replies)
-                .joinedload(Comment.replies)
-                .joinedload(Comment.user),
+                joinedload(Comment.replies).joinedload(Comment.replies).joinedload(Comment.user),
             )
         return query.first()
 
     def get_by_id_for_update(self, comment_id: int, document_id: int) -> Comment | None:
         """
         Get a comment with a row-level lock for update (Y15-018).
-        
+
         This prevents race conditions when adding replies to the same parent comment.
         Uses SELECT ... FOR UPDATE on PostgreSQL, no-op on SQLite (uses serializable isolation).
         """

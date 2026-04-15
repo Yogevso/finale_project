@@ -79,7 +79,7 @@ def _write_ratio_bomb_docx(path: Path, *, repeat_count: int = 2_000_000) -> None
             "_rels/.rels",
             (
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships '
+                "<Relationships "
                 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                 '<Relationship Id="rId1" '
                 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
@@ -111,7 +111,7 @@ def test_extract_docx_returns_ready_result_for_simple_document(tmp_path):
     assert result.title == "Wave Y Spec"
     assert result.metadata["title"] == "Wave Y Spec"
     assert result.metadata["author"] == "Codex"
-    assert "<article class=\"docx-document\"" in result.html
+    assert '<article class="docx-document"' in result.html
     assert '<p class="extracted-paragraph">Paragraph extraction works.</p>' in result.html
     assert result.ir is not None
     assert ir_to_html(result.ir) == result.html
@@ -145,13 +145,11 @@ def test_extract_docx_renders_headings_from_word_styles(tmp_path):
     ) in result.html
     assert (
         '<h2 class="extracted-heading extracted-heading-level-2" '
-        'id="heading-implementation-details">Implementation Details</h2>'
-        in result.html
+        'id="heading-implementation-details">Implementation Details</h2>' in result.html
     )
     assert (
         '<h2 class="extracted-heading extracted-heading-level-2" '
-        'id="heading-implementation-details-2">Implementation Details</h2>'
-        in result.html
+        'id="heading-implementation-details-2">Implementation Details</h2>' in result.html
     )
     assert [(heading.id, heading.level, heading.text) for heading in result.headings] == [
         ("heading-project-atlas", 1, "Project Atlas"),
@@ -199,7 +197,7 @@ def test_extract_docx_renders_inline_run_formatting(tmp_path):
     ) in result.html
     assert (
         '<p class="extracted-paragraph">Use <strong>bold</strong>, <em>italic</em>, '
-        '<u>underline</u>, <strong><em>combo</em></strong>, and '
+        "<u>underline</u>, <strong><em>combo</em></strong>, and "
         '<code class="extracted-code">print(&#x27;hi&#x27;)</code>.</p>'
     ) in result.html
 
@@ -262,8 +260,7 @@ def test_extract_docx_renders_tables_with_header_body_and_merged_cells(tmp_path)
     assert result.status == "ready"
     assert (
         '<p class="extracted-paragraph">Before table.</p>'
-        '<div class="table-wrapper"><table class="extracted-table">'
-        in result.html
+        '<div class="table-wrapper"><table class="extracted-table">' in result.html
     )
     assert (
         '<thead><tr><th colspan="2"><p class="extracted-paragraph">Header 1</p>'
@@ -299,7 +296,7 @@ def test_extract_docx_renders_embedded_images_as_base64_figures_in_document_orde
     assert (
         '<p class="extracted-paragraph">Before image.</p>'
         '<figure class="extracted-image"><img '
-        "src=\"data:image/png;base64,"
+        'src="data:image/png;base64,'
     ) in result.html
     assert (
         'alt="Figure 1" loading="lazy" /><figcaption class="extracted-image-caption">'
@@ -371,7 +368,7 @@ def test_extract_docx_ignores_watermark_textboxes_and_vml_textpath_shapes(tmp_pa
     assert result.status == "ready"
     assert '<p class="extracted-paragraph">Actual body content.</p>' in result.html
     assert "[Image unavailable:" not in result.html
-    assert "<figure class=\"extracted-image\">" not in result.html
+    assert '<figure class="extracted-image">' not in result.html
     assert [warning.code for warning in result.warnings] == []
     assert result.confidence == 1.0
 

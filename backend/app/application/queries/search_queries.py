@@ -166,7 +166,11 @@ class SearchQueryHandler:
         * **all other internal roles** – management (PUBLIC + INTERNAL + COMPANY, active only).
         """
         role = user.role.value if hasattr(user.role, "value") else str(user.role)
-        if role == UserRole.SYSTEM_ADMIN.value if hasattr(UserRole.SYSTEM_ADMIN, "value") else role == "system_admin":
+        if (
+            role == UserRole.SYSTEM_ADMIN.value
+            if hasattr(UserRole.SYSTEM_ADMIN, "value")
+            else role == "system_admin"
+        ):
             return None  # system admin sees everything
         if role == (UserRole.CUSTOMER.value if hasattr(UserRole.CUSTOMER, "value") else "customer"):
             return VisibilitySpec.customer_portal(user.tenant_id)
@@ -184,8 +188,12 @@ class SearchQueryHandler:
                 weights = json.loads(setting.value)
                 return {
                     "title": float(weights.get("title", DEFAULT_RELEVANCE_WEIGHTS["title"])),
-                    "description": float(weights.get("description", DEFAULT_RELEVANCE_WEIGHTS["description"])),
-                    "category": float(weights.get("category", DEFAULT_RELEVANCE_WEIGHTS["category"])),
+                    "description": float(
+                        weights.get("description", DEFAULT_RELEVANCE_WEIGHTS["description"])
+                    ),
+                    "category": float(
+                        weights.get("category", DEFAULT_RELEVANCE_WEIGHTS["category"])
+                    ),
                     "tags": float(weights.get("tags", DEFAULT_RELEVANCE_WEIGHTS["tags"])),
                 }
         except (json.JSONDecodeError, ValueError, TypeError, KeyError):
@@ -286,7 +294,10 @@ class SearchQueryHandler:
         if tenant_clause:
             filters.append(tenant_clause)
             params.update(tenant_params)
-        if query.current_user.role != UserRole.SYSTEM_ADMIN and query.current_user.tenant_id is not None:
+        if (
+            query.current_user.role != UserRole.SYSTEM_ADMIN
+            and query.current_user.tenant_id is not None
+        ):
             filters.append("documents_fts.tenant_id = :fts_tenant_id")
             params["fts_tenant_id"] = str(query.current_user.tenant_id)
 
@@ -565,8 +576,10 @@ class SearchQueryHandler:
         # M-38: Escape wildcards in autocomplete query
         escaped_q = escape_sql_wildcards(query.q)
         document_repository = DocumentRepository(self.db)
-        title_query = document_repository.query().with_entities(Document.title).filter(
-            Document.title.ilike(f"%{escaped_q}%", escape="\\")
+        title_query = (
+            document_repository.query()
+            .with_entities(Document.title)
+            .filter(Document.title.ilike(f"%{escaped_q}%", escape="\\"))
         )
         title_query = TenantScopeSpec.for_user(query.current_user).apply(title_query, Document)
         visibility_spec = self._visibility_spec_for_user(query.current_user)
@@ -604,7 +617,9 @@ class SearchQueryHandler:
 
         return {
             "categories": [{"name": c[0] or "Uncategorized", "count": c[1]} for c in categories],
-            "statuses": [{"name": s[0].value if s[0] else "unknown", "count": s[1]} for s in statuses],
+            "statuses": [
+                {"name": s[0].value if s[0] else "unknown", "count": s[1]} for s in statuses
+            ],
         }
 
     def execute_list_saved_searches(self, query: ListSavedSearchesQuery) -> list[SavedSearch]:

@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_user_file(
-    file_id: int, user: User, db: Session,
+    file_id: int,
+    user: User,
+    db: Session,
 ) -> AssistantUploadedFile | None:
     return (
         db.query(AssistantUploadedFile)
@@ -48,18 +50,30 @@ class AnalyzeUploadedFileTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         file_id = params.get("file_id")
         question = params.get("question")
 
         record = _get_user_file(file_id, user, db)
         if not record:
-            return {"success": False, "result": "", "error": "File not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "File not found or you don't have access.",
+            }
 
         text = record.extracted_text
         if not text:
-            return {"success": False, "result": "", "error": f"No text could be extracted from '{record.original_filename}'."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"No text could be extracted from '{record.original_filename}'.",
+            }
 
         truncated = text[:6000]
         client = OllamaClient(
@@ -86,16 +100,20 @@ class AnalyzeUploadedFileTool(BaseTool):
             response = await client.chat([{"role": "user", "content": prompt}])
             answer = response.get("message", {}).get("content", "")
             return {"success": True, "result": answer or "No response generated."}
-        except Exception:  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
+        except (
+            Exception
+        ):  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
             logger.exception("File analysis failed")
-            return {"success": False, "result": "", "error": "File analysis failed. AI service may be busy."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "File analysis failed. AI service may be busy.",
+            }
 
 
 class CompareFilesTool(BaseTool):
     name = "compare_files"
-    description = (
-        "Compare two uploaded files and highlight the key differences between them."
-    )
+    description = "Compare two uploaded files and highlight the key differences between them."
     parameters = {
         "type": "object",
         "properties": {
@@ -106,19 +124,39 @@ class CompareFilesTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         f1 = _get_user_file(params.get("file_id_1"), user, db)
         f2 = _get_user_file(params.get("file_id_2"), user, db)
 
         if not f1:
-            return {"success": False, "result": "", "error": "First file not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "First file not found or you don't have access.",
+            }
         if not f2:
-            return {"success": False, "result": "", "error": "Second file not found or you don't have access."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Second file not found or you don't have access.",
+            }
         if not f1.extracted_text:
-            return {"success": False, "result": "", "error": f"No text from '{f1.original_filename}'."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"No text from '{f1.original_filename}'.",
+            }
         if not f2.extracted_text:
-            return {"success": False, "result": "", "error": f"No text from '{f2.original_filename}'."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"No text from '{f2.original_filename}'.",
+            }
 
         text1 = f1.extracted_text[:4000]
         text2 = f2.extracted_text[:4000]
@@ -138,6 +176,12 @@ class CompareFilesTool(BaseTool):
             response = await client.chat([{"role": "user", "content": prompt}])
             result = response.get("message", {}).get("content", "")
             return {"success": True, "result": result or "No response generated."}
-        except Exception:  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
+        except (
+            Exception
+        ):  # policy: BOUNDARY — tool should return a stable extraction error to the assistant
             logger.exception("File comparison failed")
-            return {"success": False, "result": "", "error": "File comparison failed. AI service may be busy."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "File comparison failed. AI service may be busy.",
+            }

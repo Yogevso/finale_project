@@ -25,12 +25,18 @@ class TestEngagementAudienceSafeguards:
         user.tenant_id = tenant_id
         return user
 
-    def _make_document(self, *, status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.PUBLIC, assigned_company_ids=None):
+    def _make_document(
+        self,
+        *,
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.PUBLIC,
+        assigned_company_ids=None,
+    ):
         doc = MagicMock()
         doc.status = status
         doc.visibility = visibility
         companies = []
-        for cid in (assigned_company_ids or []):
+        for cid in assigned_company_ids or []:
             c = MagicMock()
             c.id = cid
             companies.append(c)
@@ -49,7 +55,9 @@ class TestEngagementAudienceSafeguards:
         from app.api.management.engagement import _get_scoped_document_or_404
 
         user = self._make_user(role=UserRole.CUSTOMER, tenant_id=1)
-        doc = self._make_document(status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.PUBLIC)
+        doc = self._make_document(
+            status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.PUBLIC
+        )
         db = self._mock_db(doc)
         result = _get_scoped_document_or_404(db, 1, user)
         assert result is doc
@@ -58,7 +66,9 @@ class TestEngagementAudienceSafeguards:
         from app.api.management.engagement import _get_scoped_document_or_404
 
         user = self._make_user(role=UserRole.CUSTOMER, tenant_id=1)
-        doc = self._make_document(status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.INTERNAL)
+        doc = self._make_document(
+            status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.INTERNAL
+        )
         db = self._mock_db(doc)
         with pytest.raises(HTTPException) as exc_info:
             _get_scoped_document_or_404(db, 1, user)
@@ -105,7 +115,9 @@ class TestEngagementAudienceSafeguards:
         from app.api.management.engagement import _get_scoped_document_or_404
 
         user = self._make_user(role=UserRole.SYSTEM_ADMIN, tenant_id=None)
-        doc = self._make_document(status=DocumentStatus.DRAFT, visibility=DocumentVisibility.INTERNAL)
+        doc = self._make_document(
+            status=DocumentStatus.DRAFT, visibility=DocumentVisibility.INTERNAL
+        )
         db = self._mock_db(doc)
         result = _get_scoped_document_or_404(db, 1, user)
         assert result is doc

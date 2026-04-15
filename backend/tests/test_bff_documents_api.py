@@ -39,9 +39,7 @@ def test_document_detail_page_bundle_returns_composed_payload(
     assert payload["audience_access_preview"]["is_public"] is False
     assert payload["audience_access_preview"]["includes_internal_users"] is True
     assert len(payload["audience_access_preview"]["target_companies"]) == 1
-    assert (
-        payload["audience_access_preview"]["target_companies"][0]["id"] == scenario.tenant.id
-    )
+    assert payload["audience_access_preview"]["target_companies"][0]["id"] == scenario.tenant.id
     # Audience snapshot fields should be present
     assert "published_visibility_snapshot" in payload["audience_access_preview"]
     assert "published_company_ids_snapshot" in payload["audience_access_preview"]

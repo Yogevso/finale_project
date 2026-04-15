@@ -14,7 +14,12 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.errors import NotFoundError, PermissionDeniedError, ServiceUnavailableError, ValidationError
+from app.errors import (
+    NotFoundError,
+    PermissionDeniedError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from app.models import (
     Attachment,
     Comment,
@@ -50,7 +55,11 @@ logger = logging.getLogger(__name__)
 # H-27: Support ticket state machine — allowed transitions per role category.
 _STAFF_TRANSITIONS: dict[SupportTicketStatus, set[SupportTicketStatus]] = {
     SupportTicketStatus.OPEN: {SupportTicketStatus.IN_PROGRESS, SupportTicketStatus.CLOSED},
-    SupportTicketStatus.IN_PROGRESS: {SupportTicketStatus.RESOLVED, SupportTicketStatus.OPEN, SupportTicketStatus.CLOSED},
+    SupportTicketStatus.IN_PROGRESS: {
+        SupportTicketStatus.RESOLVED,
+        SupportTicketStatus.OPEN,
+        SupportTicketStatus.CLOSED,
+    },
     SupportTicketStatus.RESOLVED: {SupportTicketStatus.CLOSED, SupportTicketStatus.IN_PROGRESS},
     SupportTicketStatus.CLOSED: set(),  # staff cannot reopen closed tickets
 }
@@ -212,7 +221,11 @@ class SupportTicketService:
                 continue
             if user.role in (UserRole.CUSTOMER, UserRole.VIEWER):
                 continue
-            if user.role != UserRole.SYSTEM_ADMIN and tenant_id is not None and user.tenant_id != tenant_id:
+            if (
+                user.role != UserRole.SYSTEM_ADMIN
+                and tenant_id is not None
+                and user.tenant_id != tenant_id
+            ):
                 continue
             recipients[user.id] = user
 
@@ -242,7 +255,7 @@ class SupportTicketService:
             self.notification_service.create_notification(
                 user_id=recipient.id,
                 notification_type=NotificationType.FEEDBACK_RECEIVED,
-                title=f"New feedback on \"{document_title}\"",
+                title=f'New feedback on "{document_title}"',
                 message=f"{customer.full_name} submitted {type_label} feedback.",
                 link=self._feedback_management_link(feedback.id),
             )
@@ -257,7 +270,7 @@ class SupportTicketService:
             user_id=feedback.user_id,
             notification_type=NotificationType.FEEDBACK_RESPONDED,
             title="New response to your feedback",
-            message=f"{agent.full_name} replied about \"{self._feedback_document_title(feedback)}\".",
+            message=f'{agent.full_name} replied about "{self._feedback_document_title(feedback)}".',
             link=self._feedback_customer_link(feedback.id),
         )
 
@@ -329,7 +342,7 @@ class SupportTicketService:
                 user_id=recipient.id,
                 notification_type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
                 title=f"New support ticket #{ticket.id}",
-                message=f"{customer.full_name} opened \"{ticket.subject}\"",
+                message=f'{customer.full_name} opened "{ticket.subject}"',
                 link=f"/support?ticket={ticket.id}",
             )
 
@@ -352,7 +365,7 @@ class SupportTicketService:
                     f"<p><strong>Customer:</strong> {escape(customer.full_name)}</p>"
                     f"<p><strong>Subject:</strong> {ticket_subject}</p>"
                     f"<blockquote>{preview}</blockquote>"
-                    f"<p><a href=\"{ticket_url}\">Open ticket</a></p>"
+                    f'<p><a href="{ticket_url}">Open ticket</a></p>'
                 ),
                 text_content=(
                     f"New support ticket #{ticket.id}\n\n"
@@ -382,7 +395,7 @@ class SupportTicketService:
                     f"<p><strong>Customer:</strong> {escape(customer.full_name)}</p>"
                     f"<p><strong>Subject:</strong> {ticket_subject}</p>"
                     f"<blockquote>{preview}</blockquote>"
-                    f"<p><a href=\"{ticket_url}\">Open ticket</a></p>"
+                    f'<p><a href="{ticket_url}">Open ticket</a></p>'
                 ),
                 text_content=(
                     f"Customer replied on ticket #{ticket.id}\n\n"
@@ -403,7 +416,7 @@ class SupportTicketService:
             user_id=ticket.customer_id,
             notification_type=NotificationType.SYSTEM,
             title=f"New reply on ticket #{ticket.id}",
-            message=f"{agent.full_name} replied to \"{ticket.subject}\".",
+            message=f'{agent.full_name} replied to "{ticket.subject}".',
             link=f"/portal/support?ticket={ticket.id}",
         )
 
@@ -429,7 +442,7 @@ class SupportTicketService:
                 f"<p><strong>Agent:</strong> {escape(agent.full_name)}</p>"
                 f"<p><strong>Subject:</strong> {ticket_subject}</p>"
                 f"<blockquote>{preview}</blockquote>"
-                f"<p><a href=\"{ticket_url}\">View ticket</a></p>"
+                f'<p><a href="{ticket_url}">View ticket</a></p>'
             ),
             text_content=(
                 f"Support replied to ticket #{ticket.id}\n\n"
@@ -458,7 +471,7 @@ class SupportTicketService:
             html_content=(
                 f"<p>Your support ticket <strong>{escape(ticket.subject)}</strong> "
                 f"was marked {escape(status_label)} by {escape(actor.full_name)}.</p>"
-                f"<p><a href=\"{ticket_url}\">View ticket</a></p>"
+                f'<p><a href="{ticket_url}">View ticket</a></p>'
             ),
             text_content=(
                 f"Ticket #{ticket.id} marked {status_label}\n\n"
@@ -534,7 +547,9 @@ class SupportTicketService:
             content = get_storage_backend().download(message.file_storage_key)
         except FileNotFoundError as exc:
             raise NotFoundError("Attachment not found") from exc
-        except Exception as exc:  # policy: BOUNDARY — attachment download failure becomes a stable HTTP error
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — attachment download failure becomes a stable HTTP error
             logger.warning(
                 "Failed to download support attachment %s for message %s: %s",
                 message.file_storage_key,
@@ -607,9 +622,11 @@ class SupportTicketService:
     ) -> SupportTicket:
         """Create a support ticket, optionally linked to feedback (X1-066)."""
         if feedback_id:
-            fb = self.db.query(Feedback).filter(
-                Feedback.id == feedback_id, Feedback.user_id == customer.id
-            ).first()
+            fb = (
+                self.db.query(Feedback)
+                .filter(Feedback.id == feedback_id, Feedback.user_id == customer.id)
+                .first()
+            )
             if not fb:
                 raise NotFoundError("Feedback not found")
 
@@ -627,13 +644,15 @@ class SupportTicketService:
 
         # Initial message
         initial_message_content = sanitize_html_content(content.strip()) or content.strip()
-        self.db.add(SupportTicketMessage(
-            ticket_id=ticket.id,
-            sender_id=customer.id,
-            sender_type="customer",
-            content=initial_message_content,
-            is_internal_note=False,
-        ))
+        self.db.add(
+            SupportTicketMessage(
+                ticket_id=ticket.id,
+                sender_id=customer.id,
+                sender_type="customer",
+                content=initial_message_content,
+                is_internal_note=False,
+            )
+        )
         self._notify_agents_on_new_ticket(ticket=ticket, customer=customer)
 
         self.db.commit()
@@ -768,7 +787,9 @@ class SupportTicketService:
             ticket_id for ticket_id, item in indicators.items() if bool(item["has_unread_activity"])
         }
         customer_reply_ticket_ids = {
-            ticket_id for ticket_id, item in indicators.items() if bool(item["awaiting_agent_reply"])
+            ticket_id
+            for ticket_id, item in indicators.items()
+            if bool(item["awaiting_agent_reply"])
         }
         needs_attention_ticket_ids = {
             ticket_id for ticket_id, item in indicators.items() if bool(item["needs_attention"])
@@ -982,9 +1003,7 @@ class SupportTicketService:
         self.db.refresh(msg)
         return msg
 
-    def get_messages(
-        self, ticket_id: int, current_user: User
-    ) -> list[SupportTicketMessage]:
+    def get_messages(self, ticket_id: int, current_user: User) -> list[SupportTicketMessage]:
         """Get messages for a ticket. Internal notes hidden from customers (X1-071)."""
         ticket = self.ticket_repository.get_by_id(ticket_id)
         if not ticket:
@@ -1087,26 +1106,26 @@ class SupportTicketService:
             self.db.add(assignment)
 
         # Add handoff system message
-        handoff_content = (
-            f"{current_user.full_name} transferred this ticket to {target.full_name}."
-        )
+        handoff_content = f"{current_user.full_name} transferred this ticket to {target.full_name}."
         if note.strip():
             handoff_content += f"\nHandoff note: {note.strip()}"
 
-        self.db.add(SupportTicketMessage(
-            ticket_id=ticket_id,
-            sender_id=current_user.id,
-            sender_type="agent",
-            content=handoff_content,
-            is_internal_note=True,
-        ))
+        self.db.add(
+            SupportTicketMessage(
+                ticket_id=ticket_id,
+                sender_id=current_user.id,
+                sender_type="agent",
+                content=handoff_content,
+                is_internal_note=True,
+            )
+        )
 
         # Notify the target agent
         self.notification_service.create_notification(
             user_id=target_agent_id,
             notification_type=NotificationType.TICKET_HANDOFF,
             title=f"Ticket #{ticket_id} handed off to you",
-            message=f"{current_user.full_name} transferred ticket \"{ticket.subject}\" to you."
+            message=f'{current_user.full_name} transferred ticket "{ticket.subject}" to you.'
             + (f" Note: {note.strip()}" if note.strip() else ""),
             link=f"/support?ticket={ticket_id}",
         )
@@ -1119,9 +1138,7 @@ class SupportTicketService:
     # Notifications helpers (X1-087, X1-101)
     # ------------------------------------------------------------------
 
-    def _notify_agents_on_customer_message(
-        self, ticket: SupportTicket, customer: User
-    ) -> None:
+    def _notify_agents_on_customer_message(self, ticket: SupportTicket, customer: User) -> None:
         """Create notifications for the responsible internal recipients (X1-087)."""
         for recipient in self._list_support_notification_recipients(
             ticket,
@@ -1131,13 +1148,11 @@ class SupportTicketService:
                 user_id=recipient.id,
                 notification_type=NotificationType.TICKET_NEW_CUSTOMER_MSG,
                 title=f"New message on ticket #{ticket.id}",
-                message=f"{customer.full_name} sent a message on \"{ticket.subject}\"",
+                message=f'{customer.full_name} sent a message on "{ticket.subject}"',
                 link=f"/support?ticket={ticket.id}",
             )
 
-    def _notify_mentions_in_note(
-        self, ticket: SupportTicket, sender: User, content: str
-    ) -> None:
+    def _notify_mentions_in_note(self, ticket: SupportTicket, sender: User, content: str) -> None:
         """Parse @mentions in internal notes and notify mentioned agents (X1-101)."""
         usernames = list(dict.fromkeys(MENTION_RE.findall(content)))
         if not usernames:
@@ -1154,7 +1169,7 @@ class SupportTicketService:
                 user_id=u.id,
                 notification_type=NotificationType.TICKET_MENTION,
                 title=f"You were mentioned in ticket #{ticket.id}",
-                message=f"{sender.full_name} mentioned you: \"{content[:120]}\"",
+                message=f'{sender.full_name} mentioned you: "{content[:120]}"',
                 link=f"/support?ticket={ticket.id}",
             )
 

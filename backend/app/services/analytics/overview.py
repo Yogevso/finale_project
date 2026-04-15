@@ -27,7 +27,9 @@ class AnalyticsOverviewMixin:
     """Overview and activity feed analytics."""
 
     def _tenant_scoped_audit_query(self, *, start_dt: datetime, end_dt: datetime):
-        query = self.analytics_db.query(AuditLog).filter(AuditLog.created_at.between(start_dt, end_dt))
+        query = self.analytics_db.query(AuditLog).filter(
+            AuditLog.created_at.between(start_dt, end_dt)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             tenant_doc_ids = [
                 row[0]
@@ -149,7 +151,10 @@ class AnalyticsOverviewMixin:
             details = self._safe_json_loads(row.details)
             from_visibility = str(details.get("from_visibility") or "").lower()
             to_visibility = str(details.get("to_visibility") or "").lower()
-            if from_visibility == DocumentVisibility.INTERNAL.value and to_visibility == DocumentVisibility.PUBLIC.value:
+            if (
+                from_visibility == DocumentVisibility.INTERNAL.value
+                and to_visibility == DocumentVisibility.PUBLIC.value
+            ):
                 exposure_risk_count += 1
 
         churn_query = self._tenant_scoped_audit_query(
@@ -238,14 +243,20 @@ class AnalyticsOverviewMixin:
                 "assignment_churn_90d": 0,
             }
 
-        assigned_docs_query = self.db.query(Document).filter(Document.assigned_companies.any(id=company_id))
+        assigned_docs_query = self.db.query(Document).filter(
+            Document.assigned_companies.any(id=company_id)
+        )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
-            assigned_docs_query = assigned_docs_query.filter(Document.tenant_id == self.tenant_ctx.tenant_id)
+            assigned_docs_query = assigned_docs_query.filter(
+                Document.tenant_id == self.tenant_ctx.tenant_id
+            )
 
         assigned_documents = assigned_docs_query.all()
         assigned_doc_ids = [doc.id for doc in assigned_documents]
 
-        active_document_count = sum(1 for doc in assigned_documents if doc.status == DocumentStatus.ACTIVE)
+        active_document_count = sum(
+            1 for doc in assigned_documents if doc.status == DocumentStatus.ACTIVE
+        )
         company_visible_document_count = sum(
             1 for doc in assigned_documents if doc.visibility == DocumentVisibility.COMPANY
         )
@@ -277,12 +288,9 @@ class AnalyticsOverviewMixin:
             view_count_30d = 0
             download_count_30d = 0
 
-        churn_logs = (
-            self.analytics_db.query(AuditLog)
-            .filter(
-                AuditLog.assignment_diff.isnot(None),
-                AuditLog.created_at.between(ninety_days_ago, now),
-            )
+        churn_logs = self.analytics_db.query(AuditLog).filter(
+            AuditLog.assignment_diff.isnot(None),
+            AuditLog.created_at.between(ninety_days_ago, now),
         )
         if self.tenant_ctx and not self.tenant_ctx.is_system_admin:
             tenant_doc_ids = [
@@ -296,7 +304,9 @@ class AnalyticsOverviewMixin:
         assignment_churn_90d = 0
         for log in churn_logs:
             payload = self._safe_json_loads(log.assignment_diff)
-            touched_ids = set(payload.get("old_company_ids", [])) | set(payload.get("new_company_ids", []))
+            touched_ids = set(payload.get("old_company_ids", [])) | set(
+                payload.get("new_company_ids", [])
+            )
             if company_id in touched_ids:
                 assignment_churn_90d += 1
 
@@ -311,7 +321,9 @@ class AnalyticsOverviewMixin:
             "assignment_churn_90d": assignment_churn_90d,
         }
 
-    def export_audit_logs(self, *, date_from: date | None, date_to: date | None) -> list[dict[str, Any]]:
+    def export_audit_logs(
+        self, *, date_from: date | None, date_to: date | None
+    ) -> list[dict[str, Any]]:
         if date_from is None:
             date_from = date.today() - timedelta(days=30)
         if date_to is None:

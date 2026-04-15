@@ -36,7 +36,9 @@ class CollaborationContractAdapter:
         if "write" in normalized_permissions:
             normalized_permissions.add("read")
 
-        return [permission for permission in ("read", "write") if permission in normalized_permissions]
+        return [
+            permission for permission in ("read", "write") if permission in normalized_permissions
+        ]
 
     def permissions_from_access(self, *, can_view: bool, can_edit: bool) -> list[str]:
         """Build canonical external permissions from domain access decisions."""

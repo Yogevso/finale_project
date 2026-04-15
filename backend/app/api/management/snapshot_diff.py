@@ -5,7 +5,6 @@ Compare current document content vs. last published snapshot.
 """
 
 from difflib import unified_diff
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -55,11 +54,7 @@ async def get_snapshot_diff(
         }
 
     # Get current attachments
-    current_attachments = (
-        db.query(Attachment)
-        .filter(Attachment.document_id == document_id)
-        .all()
-    )
+    current_attachments = db.query(Attachment).filter(Attachment.document_id == document_id).all()
 
     diffs = []
     for attach in current_attachments:
@@ -89,30 +84,38 @@ async def get_snapshot_diff(
         if current_artifact and current_artifact.data:
             try:
                 current_html = current_artifact.data.decode("utf-8", errors="replace")
-            except Exception:  # policy: LOSSY — binary preview fallback keeps diff generation usable
+            except (
+                Exception
+            ):  # policy: LOSSY — binary preview fallback keeps diff generation usable
                 current_html = "[binary data]"
 
         if snapshot_artifact and snapshot_artifact.data:
             try:
                 snapshot_html = snapshot_artifact.data.decode("utf-8", errors="replace")
-            except Exception:  # policy: LOSSY — binary preview fallback keeps diff generation usable
+            except (
+                Exception
+            ):  # policy: LOSSY — binary preview fallback keeps diff generation usable
                 snapshot_html = "[binary data]"
 
         # Generate unified diff
-        diff_lines = list(unified_diff(
-            snapshot_html.splitlines(keepends=True),
-            current_html.splitlines(keepends=True),
-            fromfile=f"published/{attach.filename}",
-            tofile=f"current/{attach.filename}",
-            lineterm="",
-        ))
+        diff_lines = list(
+            unified_diff(
+                snapshot_html.splitlines(keepends=True),
+                current_html.splitlines(keepends=True),
+                fromfile=f"published/{attach.filename}",
+                tofile=f"current/{attach.filename}",
+                lineterm="",
+            )
+        )
 
-        diffs.append({
-            "attachment_id": attach.id,
-            "filename": attach.filename,
-            "has_changes": len(diff_lines) > 0,
-            "diff": "".join(diff_lines) if diff_lines else None,
-        })
+        diffs.append(
+            {
+                "attachment_id": attach.id,
+                "filename": attach.filename,
+                "has_changes": len(diff_lines) > 0,
+                "diff": "".join(diff_lines) if diff_lines else None,
+            }
+        )
 
     return {
         "document_id": document_id,

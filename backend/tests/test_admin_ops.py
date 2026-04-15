@@ -1,16 +1,12 @@
 """Wave Z — Admin Operations Integration Tests (Z-019, Z-020, Z-021)."""
 
-import pytest
-
 from app.models import (
     ActionType,
     AuditLog,
     ImpersonationSession,
-    TenantQuota,
     UserRole,
 )
 from tests.factories import create_document, create_tenant, create_user
-
 
 # ── Z-019: Tenant Impersonation ──────────────────────────────────
 
@@ -62,7 +58,9 @@ class TestTenantImpersonation:
         assert "impersonation_end" in (log.details or "")
 
         # 6. Verify session is no longer active
-        session = db.query(ImpersonationSession).filter(ImpersonationSession.id == session_id).first()
+        session = (
+            db.query(ImpersonationSession).filter(ImpersonationSession.id == session_id).first()
+        )
         assert session is not None
         assert session.is_active is False
         assert session.ended_at is not None
@@ -99,7 +97,7 @@ class TestTenantSuspension:
     def test_suspend_blocks_tenant_user_access(self, client, db, system_admin_headers):
         # Create a tenant + internal user (viewers can access /api/v1/documents)
         tenant = create_tenant(db, name="Suspend Corp", is_active=True)
-        customer = create_user(
+        create_user(
             db,
             email="cust_suspend@example.com",
             username="cust_suspend",
@@ -148,7 +146,7 @@ class TestTenantSuspension:
 
     def test_reactivate_restores_access(self, client, db, system_admin_headers):
         tenant = create_tenant(db, name="Reactivate Corp", is_active=True)
-        customer = create_user(
+        create_user(
             db,
             email="cust_react@example.com",
             username="cust_react",
@@ -163,7 +161,7 @@ class TestTenantSuspension:
             "/api/v1/auth/login",
             json={"username": "cust_react", "password": "pass123"},
         )
-        cust_headers = {"Authorization": f"Bearer " + login_resp.json()["access_token"]}
+        cust_headers = {"Authorization": "Bearer " + login_resp.json()["access_token"]}
 
         # Suspend
         client.post(

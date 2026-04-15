@@ -110,7 +110,9 @@ class AttachmentServiceCommonMixin:
     }
 
     @classmethod
-    def _validate_magic_bytes(cls, content: bytes, original_filename: str, content_type: str) -> None:
+    def _validate_magic_bytes(
+        cls, content: bytes, original_filename: str, content_type: str
+    ) -> None:
         """Reject uploads whose magic bytes contradict the file extension.
 
         Files with a known extension must have matching magic bytes.
@@ -124,7 +126,7 @@ class AttachmentServiceCommonMixin:
             raise ValidationError(
                 f"File too small to be a valid {file_ext} file: {original_filename}"
             )
-        if not any(content[:len(sig)] == sig for sig in sigs):
+        if not any(content[: len(sig)] == sig for sig in sigs):
             raise ValidationError(
                 f"File content does not match extension {file_ext}: {original_filename}"
             )
@@ -155,9 +157,7 @@ class AttachmentServiceCommonMixin:
 
     @staticmethod
     def _next_patch_semver(raw_value: Optional[str], fallback_version_number: int) -> str:
-        return str(
-            SemanticVersion.from_raw(raw_value, fallback_version_number).bump_patch()
-        )
+        return str(SemanticVersion.from_raw(raw_value, fallback_version_number).bump_patch())
 
     @staticmethod
     def _get_artifact_record(
@@ -424,10 +424,7 @@ class AttachmentServiceCommonMixin:
             ".webp",
         }
 
-        if (
-            content_type not in cls.ALLOWED_TYPES
-            and file_ext not in allowed_extensions
-        ):
+        if content_type not in cls.ALLOWED_TYPES and file_ext not in allowed_extensions:
             raise ValidationError(f"File type not allowed: {content_type}")
 
         # Read file content

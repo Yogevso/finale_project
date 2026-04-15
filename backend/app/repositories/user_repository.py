@@ -70,11 +70,15 @@ class UserRepository(BaseRepository):
         return query.order_by(User.created_at.desc()).all()
 
     def count_other_active_system_admins(self, *, exclude_user_id: int) -> int:
-        return self.query().filter(
-            User.role == UserRole.SYSTEM_ADMIN,
-            User.is_active.is_(True),
-            User.id != exclude_user_id,
-        ).count()
+        return (
+            self.query()
+            .filter(
+                User.role == UserRole.SYSTEM_ADMIN,
+                User.is_active.is_(True),
+                User.id != exclude_user_id,
+            )
+            .count()
+        )
 
     def count_other_active_company_admins(
         self,
@@ -82,12 +86,16 @@ class UserRepository(BaseRepository):
         tenant_id: int,
         exclude_user_id: int,
     ) -> int:
-        return self.query().filter(
-            User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
-            User.tenant_id == tenant_id,
-            User.is_active.is_(True),
-            User.id != exclude_user_id,
-        ).count()
+        return (
+            self.query()
+            .filter(
+                User.role.in_([UserRole.ADMIN, UserRole.SYSTEM_ADMIN]),
+                User.tenant_id == tenant_id,
+                User.is_active.is_(True),
+                User.id != exclude_user_id,
+            )
+            .count()
+        )
 
     def list_active_by_roles(
         self,
@@ -119,7 +127,9 @@ class UserRepository(BaseRepository):
         exclude_user_id: int | None = None,
         exclude_user_ids: set[int] | None = None,
     ) -> list[User]:
-        normalized_usernames = list({username.strip().lower() for username in usernames if username.strip()})
+        normalized_usernames = list(
+            {username.strip().lower() for username in usernames if username.strip()}
+        )
         if not normalized_usernames:
             return []
 

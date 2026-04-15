@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -17,7 +16,7 @@ _tool_descriptions: list[str] = []
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors (pure Python, no numpy)."""
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(x * x for x in b))
     if norm_a == 0 or norm_b == 0:
@@ -62,8 +61,8 @@ async def embedding_route(
 
         # Build cache on first call
         if _tool_embeddings is None or len(_tool_names) != len(all_tools):
-            _tool_embeddings, _tool_names, _tool_descriptions = (
-                await _build_tool_embeddings(all_tools)
+            _tool_embeddings, _tool_names, _tool_descriptions = await _build_tool_embeddings(
+                all_tools
             )
 
         embedder = OllamaEmbeddings()
@@ -80,7 +79,9 @@ async def embedding_route(
         selected = {name for name, score in scores[:top_k] if score >= min_score}
         return selected
 
-    except Exception:  # policy: LOSSY — routing heuristics can fall back to the safe default tool set
+    except (
+        Exception
+    ):  # policy: LOSSY — routing heuristics can fall back to the safe default tool set
         logger.warning("Embedding routing failed, returning empty set", exc_info=True)
         return set()
 

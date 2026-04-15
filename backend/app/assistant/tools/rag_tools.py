@@ -52,7 +52,11 @@ class SemanticSearchTool(BaseTool):
     required_role = "EDITOR"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         query = params.get("query", "").strip()
         if not query:
@@ -64,9 +68,14 @@ class SemanticSearchTool(BaseTool):
 
         try:
             query_embedding = await _embeddings.embed_text(query)
-        except Exception:  # policy: BOUNDARY — semantic search failures become tool errors, not crashes
+        except (
+            Exception
+        ):  # policy: BOUNDARY — semantic search failures become tool errors, not crashes
             logger.exception("Failed to embed search query")
-            return {"success": False, "error": "Semantic search is temporarily unavailable (embedding service error)."}
+            return {
+                "success": False,
+                "error": "Semantic search is temporarily unavailable (embedding service error).",
+            }
 
         results = _vector_store.query(
             query_embedding=query_embedding,
@@ -80,12 +89,16 @@ class SemanticSearchTool(BaseTool):
 
         # Filter by user's accessible documents (tenant + visibility policy)
         results = [
-            r for r in results
+            r
+            for r in results
             if _user_can_access_document(user, r.document_id, db, tenant_id=tenant_id)
         ]
 
         if not results:
-            return {"success": True, "result": "No relevant content found within your accessible documents."}
+            return {
+                "success": True,
+                "result": "No relevant content found within your accessible documents.",
+            }
 
         lines = [f"Found {len(results)} relevant passage(s):\n"]
         for i, r in enumerate(results, 1):
@@ -121,7 +134,11 @@ class SummarizeDocumentTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params.get("document_id")
         if not doc_id:
@@ -166,6 +183,7 @@ class SummarizeDocumentTool(BaseTool):
 
         # Use Ollama to summarize
         from app.assistant.ollama_client import OllamaClient
+
         ollama = OllamaClient(settings.OLLAMA_BASE_URL, settings.ASSISTANT_MODEL)
 
         messages = [
@@ -175,7 +193,7 @@ class SummarizeDocumentTool(BaseTool):
             },
             {
                 "role": "user",
-                "content": f"Summarize this document titled \"{doc.title}\":\n\n{text}",
+                "content": f'Summarize this document titled "{doc.title}":\n\n{text}',
             },
         ]
 
@@ -191,9 +209,11 @@ class SummarizeDocumentTool(BaseTool):
                 return {"success": False, "error": "Failed to generate summary."}
             return {
                 "success": True,
-                "result": f"**Summary of \"{doc.title}\":**\n\n{summary}",
+                "result": f'**Summary of "{doc.title}":**\n\n{summary}',
             }
-        except Exception:  # policy: BOUNDARY — summarization failures become tool errors, not crashes
+        except (
+            Exception
+        ):  # policy: BOUNDARY — summarization failures become tool errors, not crashes
             logger.exception("Failed to generate document summary")
             return {"success": False, "error": "Summarization failed. The AI service may be busy."}
 
@@ -222,7 +242,11 @@ class AskAboutDocumentTool(BaseTool):
     }
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         doc_id = params.get("document_id")
         question = params.get("question", "").strip()
@@ -252,6 +276,7 @@ class AskAboutDocumentTool(BaseTool):
 
         # Ask Ollama with context
         from app.assistant.ollama_client import OllamaClient
+
         ollama = OllamaClient(settings.OLLAMA_BASE_URL, settings.ASSISTANT_MODEL)
 
         messages = [
@@ -266,7 +291,7 @@ class AskAboutDocumentTool(BaseTool):
             {
                 "role": "user",
                 "content": (
-                    f"Document: \"{doc.title}\"\n\n"
+                    f'Document: "{doc.title}"\n\n'
                     f"Context from the document:\n{context}\n\n"
                     f"Question: {question}"
                 ),
@@ -284,7 +309,7 @@ class AskAboutDocumentTool(BaseTool):
             if not answer:
                 return {"success": False, "error": "Failed to generate answer."}
 
-            result = f"**Answer about \"{doc.title}\":**\n\n{answer}"
+            result = f'**Answer about "{doc.title}":**\n\n{answer}'
             if sources:
                 result += f"\n\n*Sources: {', '.join(sources)}*"
             return {"success": True, "result": result}

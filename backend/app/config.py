@@ -2,7 +2,6 @@
 
 import logging
 import logging.config
-import sys
 from typing import Optional
 
 from pydantic import field_validator, model_validator
@@ -69,12 +68,12 @@ class Settings(BaseSettings):
     # GDPR Data Retention (days, 0 = keep forever)
     RETENTION_SECURITY_EVENTS_DAYS: int = 365
     RETENTION_SEARCH_ANALYTICS_DAYS: int = 180
-    RETENTION_NPS_SURVEYS_DAYS: int = 730       # 2 years
+    RETENTION_NPS_SURVEYS_DAYS: int = 730  # 2 years
     RETENTION_NOTIFICATIONS_DAYS: int = 90
     RETENTION_RESOLVED_TICKETS_DAYS: int = 730  # 2 years after resolution
     RETENTION_CHAT_MESSAGES_DAYS: int = 365
     RETENTION_ASSISTANT_CONVERSATIONS_DAYS: int = 180
-    RETENTION_COLLAB_SNAPSHOTS_DAYS: int = 90   # Non-pinned only
+    RETENTION_COLLAB_SNAPSHOTS_DAYS: int = 90  # Non-pinned only
     DOCUMENT_DELETE_GRACE_DAYS: int = 30
 
     # CORS — M-14: override via CORS_ORIGINS env var (comma-separated or JSON array)
@@ -90,6 +89,7 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
             import json
+
             try:
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
@@ -161,7 +161,9 @@ class Settings(BaseSettings):
 
     # Redis (optional — used for distributed rate limiting)
     REDIS_URL: Optional[str] = None
-    SEARCH_BACKEND_MODE: str = SearchBackendMode.AUTO.value  # auto | sqlite_fts5 | postgres_tsv | portable_like
+    SEARCH_BACKEND_MODE: str = (
+        SearchBackendMode.AUTO.value
+    )  # auto | sqlite_fts5 | postgres_tsv | portable_like
 
     # RAG (Retrieval-Augmented Generation)
     ASSISTANT_EMBEDDING_MODEL: str = "nomic-embed-text"
@@ -175,7 +177,7 @@ class Settings(BaseSettings):
     def validate_security_settings(self) -> "Settings":
         """Validate security-critical settings on startup."""
         is_production = self.APP_ENV not in ("development", "test", "testing")
-        
+
         # SECRET_KEY validation
         _insecure_patterns = ("insecure", "dev-only", "change-in-production")
         if self.SECRET_KEY == _INSECURE_SECRET_KEY or (
@@ -194,9 +196,7 @@ class Settings(BaseSettings):
                 )
         elif len(self.SECRET_KEY) < 32:
             if is_production:
-                raise RuntimeError(
-                    "SECRET_KEY is too short. Use at least 32 characters."
-                )
+                raise RuntimeError("SECRET_KEY is too short. Use at least 32 characters.")
             else:
                 logging.warning("SECRET_KEY is shorter than recommended (32+ chars).")
 
@@ -237,9 +237,7 @@ class Settings(BaseSettings):
                 )
 
         if is_production and self.RATE_LIMIT_ENABLED and not self.REDIS_URL:
-            raise RuntimeError(
-                "Production requires REDIS_URL when RATE_LIMIT_ENABLED is True."
-            )
+            raise RuntimeError("Production requires REDIS_URL when RATE_LIMIT_ENABLED is True.")
 
         # H-11: Warn when email is disabled — password reset and invitations won't work.
         try:
@@ -261,9 +259,7 @@ class Settings(BaseSettings):
             and configured_search_mode == SearchBackendMode.SQLITE_FTS5
             and database_dialect != "sqlite"
         ):
-            raise RuntimeError(
-                "SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL."
-            )
+            raise RuntimeError("SEARCH_BACKEND_MODE=sqlite_fts5 requires a SQLite DATABASE_URL.")
         if (
             is_production
             and configured_search_mode == SearchBackendMode.POSTGRES_TSV

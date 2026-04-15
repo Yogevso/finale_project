@@ -30,6 +30,8 @@ class SmtpEmailAdapter(EmailPort):
                 html_content=html_content,
                 text_content=text_content,
             )
-        except Exception as exc:  # policy: BOUNDARY — SMTP adapter wraps provider failures consistently
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — SMTP adapter wraps provider failures consistently
             logger.error("SMTP adapter send_email transport failure: %s", exc)
             return False

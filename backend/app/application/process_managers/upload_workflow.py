@@ -110,9 +110,7 @@ class DocumentUploadProcessManager:
                     )
                 release_payload = release_notes_document_data
                 if release_payload.parent_id is None:
-                    release_payload = release_payload.model_copy(
-                        update={"parent_id": document.id}
-                    )
+                    release_payload = release_payload.model_copy(update={"parent_id": document.id})
 
                 step_order.append("create_release_notes_document")
                 release_doc = self.document_service.create_document(
@@ -138,7 +136,9 @@ class DocumentUploadProcessManager:
             )
             self._last_trace = trace
             return UploadWorkflowResult(document=document, trace=trace)
-        except Exception:  # policy: COMPENSATING — upload workflow must roll back partial document creation
+        except (
+            Exception
+        ):  # policy: COMPENSATING — upload workflow must roll back partial document creation
             failed_step = step_order[-1] if step_order else "initialize"
             for created_document_id in reversed(created_document_ids):
                 try:

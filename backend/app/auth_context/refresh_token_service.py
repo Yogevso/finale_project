@@ -81,7 +81,7 @@ class RefreshTokenService:
 
         now = datetime.now(timezone.utc)
         token_prefix = self.extract_token_prefix(refresh_token)
-        
+
         # Use indexed token_prefix for fast lookup instead of scanning all records.
         # Only records matching the prefix are candidates; then verify the full hash.
         refresh_records = (
@@ -96,7 +96,7 @@ class RefreshTokenService:
         for record in refresh_records:
             if verify_password(refresh_token, record.token_hash):
                 return record
-        
+
         # Fallback for legacy tokens without token_prefix (backwards compatibility)
         if not refresh_records:
             legacy_records = (
@@ -111,7 +111,7 @@ class RefreshTokenService:
             for record in legacy_records:
                 if verify_password(refresh_token, record.token_hash):
                     return record
-        
+
         return None
 
     def invalidate_user_tokens(self, user_id: int) -> None:

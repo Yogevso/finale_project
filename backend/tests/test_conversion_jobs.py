@@ -50,7 +50,11 @@ def test_process_pending_jobs_claims_unique_jobs(db, test_user, monkeypatch):
         claimed_job_ids.append((job_id, claimed))
         session = worker_session()
         try:
-            job = session.query(AttachmentConversionJob).filter(AttachmentConversionJob.id == job_id).first()
+            job = (
+                session.query(AttachmentConversionJob)
+                .filter(AttachmentConversionJob.id == job_id)
+                .first()
+            )
             if job:
                 job.status = conversion_jobs.JOB_STATUS_COMPLETED
                 job.finished_at = datetime.utcnow()

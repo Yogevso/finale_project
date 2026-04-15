@@ -36,7 +36,7 @@ CSRF_EXEMPT_PATHS = {
 class CSRFMiddleware(BaseHTTPMiddleware):
     """
     Validates Origin/Referer headers for state-changing requests.
-    
+
     This provides defense-in-depth against CSRF attacks even though
     JWT authentication already mitigates the primary attack vector.
     """
@@ -52,28 +52,26 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 self.allowed_origins.add(parsed.netloc.lower())
             elif origin:  # Handle bare hostnames
                 self.allowed_origins.add(origin.lower())
-        
+
         # Always allow same-origin requests
         base_parsed = urlparse(settings.BASE_URL)
         if base_parsed.netloc:
             self.allowed_origins.add(base_parsed.netloc.lower())
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip validation for safe methods
         if request.method not in STATE_CHANGING_METHODS:
             return await call_next(request)
-        
+
         # Skip validation for exempt paths
         path = request.url.path
         if any(path.startswith(exempt) for exempt in CSRF_EXEMPT_PATHS):
             return await call_next(request)
-        
+
         # Validate Origin or Referer header
         origin = request.headers.get("Origin")
         referer = request.headers.get("Referer")
-        
+
         if not self._is_valid_origin(origin, referer):
             logger.warning(
                 "CSRF validation failed: origin=%s, referer=%s, path=%s, method=%s",
@@ -89,7 +87,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "error_code": "CSRF_VALIDATION_FAILED",
                 },
             )
-        
+
         return await call_next(request)
 
     def _is_valid_origin(self, origin: str | None, referer: str | None) -> bool:
@@ -99,16 +97,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             parsed = urlparse(origin)
             origin_host = parsed.netloc.lower() if parsed.netloc else origin.lower()
             return origin_host in self.allowed_origins
-        
+
         # Fall back to Referer header
         if referer:
             parsed = urlparse(referer)
             referer_host = parsed.netloc.lower() if parsed.netloc else ""
             return referer_host in self.allowed_origins
-        
+
         # No Origin or Referer — H-07: In production, reject requests
         # missing both headers as potential CSRF attempts.
         if settings.APP_ENV.lower() == "production":
             return False
-        
+
         return True  # Allow in development/testing

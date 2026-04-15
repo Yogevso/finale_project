@@ -1,120 +1,5 @@
 """AI assistant tool registry — imports and registers all tools."""
 
-from app.assistant.tools.registry import ToolRegistry, registry
-
-from app.assistant.tools.document_tools import (
-    CreateDocumentTool,
-    DeleteDocumentTool,
-    EditDocumentTool,
-    GetDocumentTool,
-    GetDocumentsByStatusTool,
-    GetRecentDocumentsTool,
-    SearchDocumentsTool,
-)
-from app.assistant.tools.user_tools import (
-    ChangeUserRoleTool,
-    CreateUserTool,
-    DeactivateUserTool,
-    GetUserTool,
-    ListUsersTool,
-)
-from app.assistant.tools.settings_tools import (
-    CreateAnnouncementTool,
-    CreateTopicTool,
-    GetSiteSettingsTool,
-    ListAnnouncementsTool,
-    ListTopicsTool,
-    UpdateSiteSettingTool,
-)
-from app.assistant.tools.tenant_tools import (
-    GetTenantTool,
-    ListTenantsTool,
-    UpdateTenantTool,
-)
-from app.assistant.tools.info_tools import (
-    GetDocumentContentTool,
-    GetHelpTool,
-    GetMyPermissionsTool,
-    GetMyProfileTool,
-    SearchPublicDocumentsTool,
-)
-from app.assistant.tools.support_tools import (
-    CreateSupportTicketTool,
-    GetTicketDetailsTool,
-    ListMyTicketsTool,
-)
-from app.assistant.tools.feedback_tools import (
-    GetMyFeedbackTool,
-    SubmitFeedbackTool,
-)
-from app.assistant.tools.rag_tools import (
-    AskAboutDocumentTool,
-    SemanticSearchTool,
-    SummarizeDocumentTool,
-)
-from app.assistant.tools.file_tools import (
-    AnalyzeUploadedFileTool,
-    CompareFilesTool,
-)
-from app.assistant.tools.version_tools import (
-    CompareVersionsTool,
-    GetDocumentHistoryTool,
-    GetDocumentWorkflowTool,
-    PublishDocumentTool,
-)
-from app.assistant.tools.attachment_tools import (
-    GetAttachmentInfoTool,
-    ListAttachmentsTool,
-)
-from app.assistant.tools.analytics_tools import (
-    GetContentAnalyticsTool,
-    GetEngagementAnalyticsTool,
-    GetPlatformAnalyticsTool,
-)
-from app.assistant.tools.audit_tools import (
-    GetUserActivityTool,
-    SearchAuditLogsTool,
-)
-from app.assistant.tools.notification_tools import (
-    GetMyNotificationsTool,
-    MarkNotificationsReadTool,
-)
-from app.assistant.tools.comment_tools import (
-    AddCommentTool,
-    ListDocumentCommentsTool,
-    ResolveCommentTool,
-)
-from app.assistant.tools.review_tools import (
-    ListPendingReviewsTool,
-    SubmitReviewTool,
-)
-from app.assistant.tools.invitation_tools import (
-    CreateInvitationTool,
-    ListInvitationsTool,
-)
-from app.assistant.tools.collaboration_tools import (
-    GetActiveCollaboratorsTool,
-    GetCollaborationHistoryTool,
-)
-from app.assistant.tools.engagement_tools import (
-    BookmarkDocumentTool,
-    GetMyWatchedDocumentsTool,
-    GetReadingProgressTool,
-    ListMyBookmarksTool,
-    RemoveBookmarkTool,
-    UnwatchDocumentTool,
-    UpdateReadingProgressTool,
-    WatchDocumentTool,
-)
-from app.assistant.tools.chat_tools import (
-    GetChatMessagesTool,
-    GetChatParticipantsTool,
-    GetUnreadChatsTool,
-    ListMyChatsTool,
-    MarkChatReadTool,
-    SearchChatMessagesTool,
-    SendChatMessageTool,
-)
 from app.assistant.tools.admin_tools import (
     CreateMaintenanceWindowTool,
     GetPlatformOverviewTool,
@@ -128,17 +13,93 @@ from app.assistant.tools.admin_tools import (
     ToggleFeatureFlagTool,
     UpdateTenantQuotaTool,
 )
-from app.assistant.tools.version_tools_ext import (
-    CancelScheduledPublishTool,
-    GetDocumentVersionStatsTool,
-    GetVersionDetailsTool,
-    ListScheduledPublishesTool,
-    ListUnpublishedVersionsTool,
+from app.assistant.tools.analytics_tools import (
+    GetContentAnalyticsTool,
+    GetEngagementAnalyticsTool,
+    GetPlatformAnalyticsTool,
+)
+from app.assistant.tools.attachment_tools import (
+    GetAttachmentInfoTool,
+    ListAttachmentsTool,
 )
 from app.assistant.tools.attachment_tools_ext import (
     GetAttachmentStatsTool,
     GetLargestAttachmentsTool,
     SearchAttachmentsTool,
+)
+from app.assistant.tools.audit_tools import (
+    GetUserActivityTool,
+    SearchAuditLogsTool,
+)
+from app.assistant.tools.chat_tools import (
+    GetChatMessagesTool,
+    GetChatParticipantsTool,
+    GetUnreadChatsTool,
+    ListMyChatsTool,
+    MarkChatReadTool,
+    SearchChatMessagesTool,
+    SendChatMessageTool,
+)
+from app.assistant.tools.collaboration_tools import (
+    GetActiveCollaboratorsTool,
+    GetCollaborationHistoryTool,
+)
+from app.assistant.tools.comment_tools import (
+    AddCommentTool,
+    ListDocumentCommentsTool,
+    ResolveCommentTool,
+)
+from app.assistant.tools.document_tools import (
+    CreateDocumentTool,
+    DeleteDocumentTool,
+    EditDocumentTool,
+    GetDocumentsByStatusTool,
+    GetDocumentTool,
+    GetRecentDocumentsTool,
+    SearchDocumentsTool,
+)
+from app.assistant.tools.engagement_tools import (
+    BookmarkDocumentTool,
+    GetMyWatchedDocumentsTool,
+    GetReadingProgressTool,
+    ListMyBookmarksTool,
+    RemoveBookmarkTool,
+    UnwatchDocumentTool,
+    UpdateReadingProgressTool,
+    WatchDocumentTool,
+)
+from app.assistant.tools.feedback_tools import (
+    GetMyFeedbackTool,
+    SubmitFeedbackTool,
+)
+from app.assistant.tools.file_tools import (
+    AnalyzeUploadedFileTool,
+    CompareFilesTool,
+)
+from app.assistant.tools.info_tools import (
+    GetDocumentContentTool,
+    GetHelpTool,
+    GetMyPermissionsTool,
+    GetMyProfileTool,
+    SearchPublicDocumentsTool,
+)
+from app.assistant.tools.invitation_tools import (
+    CreateInvitationTool,
+    ListInvitationsTool,
+)
+from app.assistant.tools.notification_tools import (
+    GetMyNotificationsTool,
+    MarkNotificationsReadTool,
+)
+from app.assistant.tools.rag_tools import (
+    AskAboutDocumentTool,
+    SemanticSearchTool,
+    SummarizeDocumentTool,
+)
+from app.assistant.tools.registry import ToolRegistry, registry
+from app.assistant.tools.review_tools import (
+    ListPendingReviewsTool,
+    SubmitReviewTool,
 )
 from app.assistant.tools.security_tools import (
     CancelInvitationTool,
@@ -147,6 +108,44 @@ from app.assistant.tools.security_tools import (
     GetMySessionsTool,
     GetSecurityEventsAdminTool,
     RevokeSessionTool,
+)
+from app.assistant.tools.settings_tools import (
+    CreateAnnouncementTool,
+    CreateTopicTool,
+    GetSiteSettingsTool,
+    ListAnnouncementsTool,
+    ListTopicsTool,
+    UpdateSiteSettingTool,
+)
+from app.assistant.tools.support_tools import (
+    CreateSupportTicketTool,
+    GetTicketDetailsTool,
+    ListMyTicketsTool,
+)
+from app.assistant.tools.tenant_tools import (
+    GetTenantTool,
+    ListTenantsTool,
+    UpdateTenantTool,
+)
+from app.assistant.tools.user_tools import (
+    ChangeUserRoleTool,
+    CreateUserTool,
+    DeactivateUserTool,
+    GetUserTool,
+    ListUsersTool,
+)
+from app.assistant.tools.version_tools import (
+    CompareVersionsTool,
+    GetDocumentHistoryTool,
+    GetDocumentWorkflowTool,
+    PublishDocumentTool,
+)
+from app.assistant.tools.version_tools_ext import (
+    CancelScheduledPublishTool,
+    GetDocumentVersionStatsTool,
+    GetVersionDetailsTool,
+    ListScheduledPublishesTool,
+    ListUnpublishedVersionsTool,
 )
 
 # -- Register all tools with the singleton registry --

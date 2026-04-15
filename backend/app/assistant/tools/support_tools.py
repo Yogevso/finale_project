@@ -18,7 +18,11 @@ class CreateSupportTicketTool(BaseTool):
         "type": "object",
         "properties": {
             "subject": {"type": "string", "description": "Ticket subject", "maxLength": 255},
-            "description": {"type": "string", "description": "Detailed description of the issue", "maxLength": 5000},
+            "description": {
+                "type": "string",
+                "description": "Detailed description of the issue",
+                "maxLength": 5000,
+            },
             "priority": {
                 "type": "string",
                 "description": "Priority level (default: normal)",
@@ -28,9 +32,15 @@ class CreateSupportTicketTool(BaseTool):
         "required": ["subject", "description"],
     }
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         if tenant_id is None:
-            return {"success": False, "result": "", "error": "Support tickets require a tenant context. Please switch to a tenant-scoped account."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Support tickets require a tenant context. Please switch to a tenant-scoped account.",
+            }
 
         # M-49: Sanitize AI-generated content before storage
         safe_subject = sanitize_html_content(params["subject"]) or params["subject"]
@@ -57,7 +67,10 @@ class CreateSupportTicketTool(BaseTool):
         db.add(msg)
         db.commit()
         db.refresh(ticket)
-        return {"success": True, "result": f"Support ticket created (ID: {ticket.id}, subject: '{ticket.subject}')."}
+        return {
+            "success": True,
+            "result": f"Support ticket created (ID: {ticket.id}, subject: '{ticket.subject}').",
+        }
 
 
 class ListMyTicketsTool(BaseTool):
@@ -76,11 +89,17 @@ class ListMyTicketsTool(BaseTool):
         "required": [],
     }
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         query = db.query(SupportTicket).filter(SupportTicket.customer_id == user.id)
         if params.get("status"):
             query = query.filter(SupportTicket.status == params["status"])
-        tickets = query.order_by(SupportTicket.created_at.desc()).limit(min(params.get("limit", 10), 50)).all()
+        tickets = (
+            query.order_by(SupportTicket.created_at.desc())
+            .limit(min(params.get("limit", 10), 50))
+            .all()
+        )
         if not tickets:
             return {"success": True, "result": "You have no support tickets."}
         lines = [f"{len(tickets)} ticket(s):"]
@@ -100,7 +119,9 @@ class GetTicketDetailsTool(BaseTool):
         "required": ["ticket_id"],
     }
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         ticket = db.query(SupportTicket).filter(SupportTicket.id == params["ticket_id"]).first()
         if ticket is None:
             return {"success": False, "result": "", "error": "Ticket not found."}

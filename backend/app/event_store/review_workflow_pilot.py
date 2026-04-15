@@ -1,4 +1,4 @@
-﻿"""Selective event-sourcing pilot for review workflow transitions.
+"""Selective event-sourcing pilot for review workflow transitions.
 
 The pilot intentionally runs as a shadow path with a feature flag gate so the
 existing relational write path remains source-of-truth and rollback is a config
@@ -77,7 +77,9 @@ def _apply_review_workflow_event(
             state,
             status="pending",
             document_id=int(payload["document_id"]),
-            version_id=int(payload["version_id"]) if payload.get("version_id") is not None else None,
+            version_id=int(payload["version_id"])
+            if payload.get("version_id") is not None
+            else None,
             submitted_by=int(payload["submitted_by"]),
             submitted_at=str(payload.get("submitted_at") or event.occurred_at),
             comments=str(payload["comments"]) if payload.get("comments") is not None else None,
@@ -100,7 +102,9 @@ def _apply_review_workflow_event(
             status=next_status,
             reviewer_id=int(payload["reviewer_id"]),
             reviewed_at=str(payload.get("reviewed_at") or event.occurred_at),
-            comments=str(payload["comments"]) if payload.get("comments") is not None else state.comments,
+            comments=str(payload["comments"])
+            if payload.get("comments") is not None
+            else state.comments,
             event_version=event.stream_version,
         )
 
@@ -159,7 +163,9 @@ class ReviewWorkflowEventSourcingPilot:
                 "submitted_at": submitted_at or _utc_iso_now(),
                 "comments": comments,
             },
-            expected_version=current.event_version if expected_version is None else int(expected_version),
+            expected_version=current.event_version
+            if expected_version is None
+            else int(expected_version),
         )
 
     def append_decision(
@@ -193,7 +199,9 @@ class ReviewWorkflowEventSourcingPilot:
                 "reviewed_at": reviewed_at or _utc_iso_now(),
                 "comments": comments,
             },
-            expected_version=current.event_version if expected_version is None else int(expected_version),
+            expected_version=current.event_version
+            if expected_version is None
+            else int(expected_version),
         )
 
 

@@ -52,7 +52,9 @@ class DocumentConverterStrategy(Protocol):
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         """Convert the request payload to HTML, or return None if unsupported."""
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         """Convert the request payload into a reader-artifact payload when supported."""
 
 
@@ -107,7 +109,9 @@ class WordConverterStrategy:
             return extracted_html
         return self._legacy_module().convert_word_to_html(content)
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         if request.normalized_mime_type != self._docx_mime_type and request.extension != ".docx":
             return None
         return build_reader_artifact_from_extraction_result(
@@ -143,7 +147,9 @@ class PowerPointConverterStrategy:
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         return self._extract_ready_html(self._extractor.extract_bytes(request.content))
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         return build_reader_artifact_from_extraction_result(
             self._extractor.extract_bytes(request.content)
         )
@@ -184,7 +190,9 @@ class TextConverterStrategy:
     def convert_to_html(self, request: DocumentConversionRequest) -> str | None:
         return self._legacy_module().convert_text_to_html(request.content)
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         return None
 
 
@@ -215,7 +223,9 @@ class HtmlPassthroughStrategy:
             raw = request.content.decode("utf-8", errors="replace")
         return strip_dangerous_html_patterns(raw)
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         return None
 
 
@@ -249,7 +259,9 @@ class PdfConverterStrategy:
             or request.extension in self._pdf_extensions
         )
 
-    def _to_docx_request(self, request: DocumentConversionRequest) -> DocumentConversionRequest | None:
+    def _to_docx_request(
+        self, request: DocumentConversionRequest
+    ) -> DocumentConversionRequest | None:
         """Convert PDF bytes to DOCX bytes, return a new request."""
         result = convert_pdf_to_docx(request.content)
         if result.error:
@@ -270,7 +282,9 @@ class PdfConverterStrategy:
             return None
         return self._word.convert_to_html(docx_req)
 
-    def convert_to_reader_artifact(self, request: DocumentConversionRequest) -> dict[str, Any] | None:
+    def convert_to_reader_artifact(
+        self, request: DocumentConversionRequest
+    ) -> dict[str, Any] | None:
         docx_req = self._to_docx_request(request)
         if docx_req is None:
             return None

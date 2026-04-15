@@ -181,7 +181,7 @@ class EmailService:
                 sender_name=config.from_name,
                 error_message=str(last_error),
             )
-        except Exception as exc:
+        except Exception as exc:  # policy: BOUNDARY — email failures surfaced as result
             logger.error("Failed to send email to %s: %s", to_email, exc)
             return EmailSendResult(
                 status="failed",

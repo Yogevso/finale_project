@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
 import io
+import json
 import logging
 import uuid
 from pathlib import Path
@@ -130,7 +130,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                 )
                 storage_path = storage_key
                 logger.info(f"Uploaded attachment to storage: {storage_key}")
-            except Exception as e:  # policy: DEGRADED — storage upload may fall back to local persistence
+            except (
+                Exception
+            ) as e:  # policy: DEGRADED — storage upload may fall back to local persistence
                 logger.error(f"Storage upload failed: {e}")
                 if not settings.ALLOW_LOCAL_STORAGE_FALLBACK:
                     raise StorageError(f"Storage unavailable and fallback disabled: {e}") from e
@@ -160,9 +162,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             storage_path=storage_path,
             storage_key=storage_key,
             sha256=checksum_sha256,
-            reader_html_status=(
-                cls.READER_STATUS_PENDING if supports_reader_artifact else None
-            ),
+            reader_html_status=(cls.READER_STATUS_PENDING if supports_reader_artifact else None),
             uploaded_by=current_user.id,
         )
 
@@ -171,7 +171,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
             db.add(attachment)
             db.commit()
             db.refresh(attachment)
-        except Exception as db_error:  # policy: COMPENSATING — DB failure must clean up orphaned storage artifacts
+        except (
+            Exception
+        ) as db_error:  # policy: COMPENSATING — DB failure must clean up orphaned storage artifacts
             # Clean up orphaned storage file if DB commit fails
             logger.error(f"DB commit failed for attachment, cleaning up storage: {db_error}")
             if reusable_attachment is None:
@@ -180,9 +182,11 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                     storage.delete(storage_path)
                     logger.info(f"Cleaned up orphaned storage file: {storage_path}")
                 except Exception as cleanup_error:  # policy: COMPENSATING — orphan cleanup is best-effort during rollback
-                    logger.warning(f"Failed to clean up storage file {storage_path}: {cleanup_error}")
+                    logger.warning(
+                        f"Failed to clean up storage file {storage_path}: {cleanup_error}"
+                    )
             raise
-        
+
         cls._ensure_artifact_rows(db, attachment, persist=True)
 
         if supports_reader_artifact:
@@ -221,7 +225,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                         )
                     )
                     should_publish_version = document.status == DocumentStatus.ACTIVE
-                    assigned_company_ids = sorted(company.id for company in (document.assigned_companies or []))
+                    assigned_company_ids = sorted(
+                        company.id for company in (document.assigned_companies or [])
+                    )
                     published_attachment_ids_snapshot = json.dumps([attachment.id])
 
                     version = Version(

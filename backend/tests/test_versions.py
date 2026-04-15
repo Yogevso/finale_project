@@ -225,7 +225,10 @@ class TestVersionsAPI:
             headers=system_admin_headers,
         )
         assert publish_resp.status_code == 400
-        assert "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
+        assert (
+            "Company visibility requires at least one assigned company"
+            in publish_resp.json()["detail"]
+        )
 
     def test_publish_returns_advisory_warning_when_audience_enforcement_disabled(
         self,
@@ -383,7 +386,9 @@ class TestVersionsAPI:
         payload = publish_resp.json()
         assert payload["is_published"] is True
         assert payload["warnings"]
-        assert any("safe-mode fallback allowed publish" in warning for warning in payload["warnings"])
+        assert any(
+            "safe-mode fallback allowed publish" in warning for warning in payload["warnings"]
+        )
 
     def test_cannot_modify_published_version(
         self,
@@ -515,9 +520,7 @@ class TestVersionsAPI:
         schedule_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
             headers=headers,
-            json={
-                "scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=30)).isoformat()
-            },
+            json={"scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=30)).isoformat()},
         )
         assert schedule_resp.status_code == 400
         assert "latest review is not approved" in schedule_resp.json()["detail"]
@@ -637,9 +640,7 @@ class TestVersionsAPI:
         schedule_resp = client.post(
             f"/api/v1/documents/{sample_document['id']}/versions/{version_id}/schedule-publish",
             headers=system_admin_headers,
-            json={
-                "scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()
-            },
+            json={"scheduled_publish_at": (datetime.utcnow() + timedelta(minutes=10)).isoformat()},
         )
         assert schedule_resp.status_code == 200
 

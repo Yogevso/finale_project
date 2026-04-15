@@ -129,9 +129,7 @@ class OnboardingEvent(AnalyticsBase):
     """Funnel event for onboarding analytics."""
 
     __tablename__ = "onboarding_events"
-    __table_args__ = (
-        Index("ix_onboarding_user_step", "user_id", "step"),
-    )
+    __table_args__ = (Index("ix_onboarding_user_step", "user_id", "step"),)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
@@ -144,9 +142,7 @@ class ActivationMilestone(AnalyticsBase):
     """Per-user milestone tracking."""
 
     __tablename__ = "activation_milestones"
-    __table_args__ = (
-        UniqueConstraint("user_id", "milestone", name="uq_user_milestone"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "milestone", name="uq_user_milestone"),)
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)

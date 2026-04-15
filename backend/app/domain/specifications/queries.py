@@ -171,7 +171,9 @@ class VisibilitySpec:
                 return False
             if self.company_tenant_id is None:
                 return False
-            return any(company.id == self.company_tenant_id for company in document.assigned_companies)
+            return any(
+                company.id == self.company_tenant_id for company in document.assigned_companies
+            )
 
         return False
 
@@ -224,9 +226,7 @@ class VisibilitySpec:
                 clauses.append(f"{status_col} = :vis_status")
                 params["vis_status"] = status_values[0]
             else:
-                placeholders = ", ".join(
-                    f":vis_status_{i}" for i in range(len(status_values))
-                )
+                placeholders = ", ".join(f":vis_status_{i}" for i in range(len(status_values)))
                 clauses.append(f"{status_col} IN ({placeholders})")
                 for i, v in enumerate(status_values):
                     params[f"vis_status_{i}"] = v

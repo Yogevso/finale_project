@@ -2,7 +2,9 @@
 
 
 class TestCompanyDeactivationAccess:
-    def test_login_denied_for_user_in_inactive_company(self, client, db, test_customer, test_tenant):
+    def test_login_denied_for_user_in_inactive_company(
+        self, client, db, test_customer, test_tenant
+    ):
         test_tenant.is_active = False
         db.commit()
 
@@ -23,7 +25,9 @@ class TestCompanyDeactivationAccess:
         assert response.status_code == 403
         assert response.json()["detail"] == "Company is inactive"
 
-    def test_refresh_token_denied_after_company_deactivation(self, client, db, test_customer, test_tenant):
+    def test_refresh_token_denied_after_company_deactivation(
+        self, client, db, test_customer, test_tenant
+    ):
         login_response = client.post(
             "/api/v1/auth/login",
             json={"username": "customer1", "password": "customer123"},

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_analytics_db, get_db
@@ -24,7 +24,6 @@ from app.schemas.experimentation import (
     ExperimentMetricSnapshotCreate,
     ExperimentMetricSnapshotResponse,
     ExperimentResponse,
-    ExperimentUpdate,
     FeatureFlagTargetingResponse,
     FeatureFlagTargetingUpdate,
     IntegrationHealthResponse,
@@ -32,7 +31,6 @@ from app.schemas.experimentation import (
     OnboardingFunnelResponse,
     RetentionCohortResponse,
     RetentionCohortRow,
-    TechDebtResponse,
     UserActivationSummary,
     WebhookCreate,
     WebhookDeliveryLogResponse,
@@ -215,7 +213,7 @@ def start_experiment_endpoint(
     try:
         exp = start_experiment(db, experiment_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _experiment_to_response(exp)
 
 
@@ -228,7 +226,7 @@ def stop_experiment_endpoint(
     try:
         exp = stop_experiment(db, experiment_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _experiment_to_response(exp)
 
 
@@ -242,7 +240,7 @@ def kill_experiment_endpoint(
     try:
         exp = kill_experiment(db, experiment_id, body.winner_variant)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _experiment_to_response(exp)
 
 
@@ -259,7 +257,7 @@ def assign_user_endpoint(
     try:
         assignment = assign_user_to_experiment(db, experiment_id, user_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ExperimentAssignmentResponse(
         experiment_id=assignment.experiment_id,
         user_id=assignment.user_id,
@@ -367,7 +365,9 @@ def user_milestones_endpoint(
     milestones = get_user_milestones(db, user_id)
     return ActivationMilestoneResponse(
         user_id=user_id,
-        milestones=[{"milestone": m.milestone, "achieved_at": m.achieved_at.isoformat()} for m in milestones],
+        milestones=[
+            {"milestone": m.milestone, "achieved_at": m.achieved_at.isoformat()} for m in milestones
+        ],
     )
 
 
@@ -403,9 +403,7 @@ def retention_cohorts_endpoint(
     db: Session = Depends(get_db),
 ):
     data = get_retention_cohorts(db, tenant_ctx.tenant_id, weeks)
-    return RetentionCohortResponse(
-        cohorts=[RetentionCohortRow(**d) for d in data]
-    )
+    return RetentionCohortResponse(cohorts=[RetentionCohortRow(**d) for d in data])
 
 
 # ╔═══════════════════════════════════════════════════════════════╗
@@ -659,12 +657,28 @@ def api_developer_portal():
         },
         "endpoints": [
             {"method": "GET", "path": "/api/v1/documents", "description": "List documents"},
-            {"method": "GET", "path": "/api/v1/documents/{id}", "description": "Get document detail"},
-            {"method": "POST", "path": "/api/v1/documents/upload", "description": "Upload document"},
+            {
+                "method": "GET",
+                "path": "/api/v1/documents/{id}",
+                "description": "Get document detail",
+            },
+            {
+                "method": "POST",
+                "path": "/api/v1/documents/upload",
+                "description": "Upload document",
+            },
             {"method": "GET", "path": "/api/v1/search", "description": "Search documents"},
             {"method": "GET", "path": "/api/v1/companies", "description": "List companies"},
-            {"method": "GET", "path": "/api/v1/analytics/overview", "description": "Analytics overview"},
-            {"method": "GET", "path": "/api/v1/webhooks", "description": "List registered webhooks"},
+            {
+                "method": "GET",
+                "path": "/api/v1/analytics/overview",
+                "description": "Analytics overview",
+            },
+            {
+                "method": "GET",
+                "path": "/api/v1/webhooks",
+                "description": "List registered webhooks",
+            },
             {"method": "POST", "path": "/api/v1/webhooks", "description": "Register a webhook"},
         ],
         "rate_limits": {"default": "100 requests/minute", "admin": "500 requests/minute"},

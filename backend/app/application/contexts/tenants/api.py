@@ -20,4 +20,3 @@ class TenantsContextAPI:
 
     def list_tenants(self) -> list[Tenant]:
         return self.db.query(Tenant).order_by(Tenant.name.asc()).all()
-

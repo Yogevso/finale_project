@@ -65,9 +65,7 @@ class ConversationManager:
         self._db.refresh(conv)
         return conv
 
-    def get_conversation(
-        self, conversation_id: int, user_id: int
-    ) -> AssistantConversation | None:
+    def get_conversation(self, conversation_id: int, user_id: int) -> AssistantConversation | None:
         """Return conversation only if owned by *user_id*."""
         return (
             self._db.query(AssistantConversation)
@@ -142,9 +140,7 @@ class ConversationManager:
         self._db.refresh(msg)
         return msg
 
-    def get_messages(
-        self, conversation_id: int, limit: int = 100
-    ) -> list[AssistantMessage]:
+    def get_messages(self, conversation_id: int, limit: int = 100) -> list[AssistantMessage]:
         return (
             self._db.query(AssistantMessage)
             .filter(AssistantMessage.conversation_id == conversation_id)
@@ -272,13 +268,16 @@ class ConversationManager:
 
         if ollama_client is None:
             from app.assistant.ollama_client import OllamaClient
+
             ollama_client = OllamaClient()
 
         try:
-            from app.config import settings
             response = await ollama_client.chat(
                 messages=[
-                    {"role": "system", "content": "Summarize this conversation concisely in 2-3 sentences. Focus on what was discussed and what actions were taken."},
+                    {
+                        "role": "system",
+                        "content": "Summarize this conversation concisely in 2-3 sentences. Focus on what was discussed and what actions were taken.",
+                    },
                     {"role": "user", "content": full_text},
                 ],
                 tools=None,
@@ -290,8 +289,17 @@ class ConversationManager:
             if summary and len(summary.strip()) >= 20 and not summary.strip().startswith("Error"):
                 conv.summary = summary.strip()[:1000]
                 self._db.commit()
-                logger.info("Auto-summarized conversation %d (%d messages)", conversation_id, msg_count)
+                logger.info(
+                    "Auto-summarized conversation %d (%d messages)", conversation_id, msg_count
+                )
             else:
-                logger.warning("LLM summary rejected for conversation %d (too short or invalid)", conversation_id)
-        except Exception:  # policy: LOSSY — auto-summary failure should not block normal conversation flow
-            logger.warning("Failed to auto-summarize conversation %d", conversation_id, exc_info=True)
+                logger.warning(
+                    "LLM summary rejected for conversation %d (too short or invalid)",
+                    conversation_id,
+                )
+        except (
+            Exception
+        ):  # policy: LOSSY — auto-summary failure should not block normal conversation flow
+            logger.warning(
+                "Failed to auto-summarize conversation %d", conversation_id, exc_info=True
+            )

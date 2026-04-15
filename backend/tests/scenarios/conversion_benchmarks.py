@@ -47,9 +47,7 @@ def _build_docx_bytes() -> bytes:
     document.add_paragraph(
         "This DOCX fixture exercises the structured reader-artifact conversion path."
     )
-    document.add_paragraph(
-        "It is intentionally small so the benchmark is repeatable inside CI."
-    )
+    document.add_paragraph("It is intentionally small so the benchmark is repeatable inside CI.")
     buffer = BytesIO()
     document.save(buffer)
     return buffer.getvalue()
@@ -59,7 +57,9 @@ def _build_pdf_bytes() -> bytes:
     document = fitz.open()
     page = document.new_page()
     page.insert_text((72, 72), "Performance Benchmark PDF", fontsize=16)
-    page.insert_text((72, 110), "This PDF exercises the PDF export and conversion path.", fontsize=12)
+    page.insert_text(
+        (72, 110), "This PDF exercises the PDF export and conversion path.", fontsize=12
+    )
     pdf_bytes = document.write()
     document.close()
     return pdf_bytes

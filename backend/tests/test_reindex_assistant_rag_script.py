@@ -66,7 +66,9 @@ def test_run_reindex_status_only_skips_rebuild(monkeypatch):
 
     monkeypatch.setattr(reindex_assistant_rag, "SessionLocal", lambda: session)
     monkeypatch.setattr(reindex_assistant_rag, "DocumentIndexer", lambda: _StubIndexer())
-    monkeypatch.setattr(reindex_assistant_rag, "init_db", lambda: calls.setdefault("init_db", 0) or None)
+    monkeypatch.setattr(
+        reindex_assistant_rag, "init_db", lambda: calls.setdefault("init_db", 0) or None
+    )
 
     stats = reindex_assistant_rag.run_reindex(status_only=True)
 

@@ -52,6 +52,7 @@ return {1, 0}
 def _get_redis_client():
     """Reuse the Redis client from the rate-limit middleware if available."""
     from app.middleware.rate_limit import _get_redis_client as _rl_redis
+
     return _rl_redis()
 
 
@@ -133,8 +134,16 @@ class AuthRateLimitService:
     ) -> tuple[bool, int]:
         rclient = _get_redis_client()
         if rclient is not None:
-            return cls._redis_check_allowed(rclient, key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
-        return cls._memory_check_allowed(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+            return cls._redis_check_allowed(
+                rclient,
+                key,
+                max_attempts=max_attempts,
+                window_seconds=window_seconds,
+                lock_seconds=lock_seconds,
+            )
+        return cls._memory_check_allowed(
+            key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds
+        )
 
     @classmethod
     def _redis_check_allowed(
@@ -158,7 +167,12 @@ class AuthRateLimitService:
             return True, 0
         except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis auth rate-limit check failed, falling back to in-memory")
-            return cls._memory_check_allowed(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+            return cls._memory_check_allowed(
+                key,
+                max_attempts=max_attempts,
+                window_seconds=window_seconds,
+                lock_seconds=lock_seconds,
+            )
 
     @classmethod
     def _memory_check_allowed(
@@ -194,8 +208,16 @@ class AuthRateLimitService:
     ) -> int:
         rclient = _get_redis_client()
         if rclient is not None:
-            return cls._redis_record_failure(rclient, key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
-        return cls._memory_record_failure(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+            return cls._redis_record_failure(
+                rclient,
+                key,
+                max_attempts=max_attempts,
+                window_seconds=window_seconds,
+                lock_seconds=lock_seconds,
+            )
+        return cls._memory_record_failure(
+            key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds
+        )
 
     @classmethod
     def _redis_record_failure(
@@ -224,7 +246,12 @@ class AuthRateLimitService:
             return 0
         except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
             logger.warning("Redis auth rate-limit record failed, falling back to in-memory")
-            return cls._memory_record_failure(key, max_attempts=max_attempts, window_seconds=window_seconds, lock_seconds=lock_seconds)
+            return cls._memory_record_failure(
+                key,
+                max_attempts=max_attempts,
+                window_seconds=window_seconds,
+                lock_seconds=lock_seconds,
+            )
 
     @classmethod
     def _memory_record_failure(
@@ -258,8 +285,12 @@ class AuthRateLimitService:
             try:
                 rclient.delete(f"authrl:attempts:{key}", f"authrl:lock:{key}")
                 return
-            except Exception:  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
-                logger.warning("Redis auth rate-limit success record failed, falling back to in-memory")
+            except (
+                Exception
+            ):  # policy: DEGRADED — Redis auth limiter may fall back to in-memory safely
+                logger.warning(
+                    "Redis auth rate-limit success record failed, falling back to in-memory"
+                )
         now_ts = time.time()
         with cls._lock:
             if key in cls._buckets:
@@ -283,7 +314,8 @@ class AuthRateLimitService:
         rclient = _get_redis_client()
         if rclient is not None:
             return cls._redis_check_and_record(
-                rclient, key,
+                rclient,
+                key,
                 max_attempts=max_attempts,
                 window_seconds=window_seconds,
                 lock_seconds=lock_seconds,
@@ -310,8 +342,14 @@ class AuthRateLimitService:
             zkey = f"authrl:attempts:{key}"
             now = time.time()
             result = rclient.eval(
-                _CHECK_AND_RECORD_LUA, 2, lock_key, zkey,
-                now, window_seconds, max_attempts, lock_seconds,
+                _CHECK_AND_RECORD_LUA,
+                2,
+                lock_key,
+                zkey,
+                now,
+                window_seconds,
+                max_attempts,
+                lock_seconds,
             )
             allowed = int(result[0])
             retry_after = int(result[1])

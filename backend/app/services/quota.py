@@ -26,7 +26,9 @@ def check_document_quota(db: Session, tenant_id: int) -> None:
     quota = db.query(TenantQuota).filter(TenantQuota.tenant_id == tenant_id).first()
     if not quota or quota.max_documents is None:
         return
-    current = db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
+    current = (
+        db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
+    )
     if current >= quota.max_documents:
         raise RateLimitExceededError(
             f"Tenant document quota reached ({quota.max_documents}). Contact your administrator."

@@ -31,7 +31,9 @@ def _check_database(db: Session) -> dict[str, Any]:
             "status": "healthy",
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
+    except (
+        Exception
+    ) as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Database health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -63,7 +65,9 @@ def _check_storage() -> dict[str, Any]:
             "bucket": settings.S3_BUCKET,
             "latency_ms": round(latency_ms, 2),
         }
-    except Exception as e:  # policy: DEGRADED — health checks report dependency failure without crashing
+    except (
+        Exception
+    ) as e:  # policy: DEGRADED — health checks report dependency failure without crashing
         logger.error(f"Storage health check failed: {e}")
         return {
             "status": "unhealthy",
@@ -269,6 +273,6 @@ async def detailed_health_check(db: Session = Depends(get_db)):
                     }
                     for component, metrics in degradation_metrics.components.items()
                 },
-            }
+            },
         },
     }

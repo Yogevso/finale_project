@@ -25,14 +25,20 @@ class ListUsersTool(BaseTool):
                 "enum": ["system_admin", "admin", "manager", "editor", "viewer", "customer"],
             },
             "is_active": {"type": "boolean", "description": "Filter by active status"},
-            "search": {"type": "string", "description": "Search by username or email", "maxLength": 255},
+            "search": {
+                "type": "string",
+                "description": "Search by username or email",
+                "maxLength": 255,
+            },
             "limit": {"type": "integer", "description": "Max results (default 20)"},
         },
         "required": [],
     }
     required_permission = Permission.MANAGE_USERS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 100)
         query = db.query(User)
 
@@ -73,7 +79,9 @@ class GetUserTool(BaseTool):
     }
     required_permission = Permission.MANAGE_USERS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         target = db.query(User).filter(User.id == params["user_id"]).first()
         if target is None:
             return {"success": False, "result": "", "error": "User not found."}
@@ -106,22 +114,42 @@ class CreateUserTool(BaseTool):
                 "description": "User role",
                 "enum": ["admin", "manager", "editor", "viewer", "customer"],
             },
-            "password": {"type": "string", "description": "Initial password (min 8 chars)", "maxLength": 100},
+            "password": {
+                "type": "string",
+                "description": "Initial password (min 8 chars)",
+                "maxLength": 100,
+            },
         },
         "required": ["username", "email", "full_name", "role", "password"],
     }
     required_permission = Permission.MANAGE_USERS
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         import re
+
         from app.security import get_password_hash
 
         # M-08: enforce password complexity
         pwd = params["password"]
         if len(pwd) < 8:
-            return {"success": False, "result": "", "error": "Password must be at least 8 characters."}
-        if not re.search(r"[A-Z]", pwd) or not re.search(r"[a-z]", pwd) or not re.search(r"\d", pwd) or not re.search(r"[^A-Za-z0-9]", pwd):
-            return {"success": False, "result": "", "error": "Password must contain uppercase, lowercase, digit, and special character."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "Password must be at least 8 characters.",
+            }
+        if (
+            not re.search(r"[A-Z]", pwd)
+            or not re.search(r"[a-z]", pwd)
+            or not re.search(r"\d", pwd)
+            or not re.search(r"[^A-Za-z0-9]", pwd)
+        ):
+            return {
+                "success": False,
+                "result": "",
+                "error": "Password must contain uppercase, lowercase, digit, and special character.",
+            }
 
         # Prevent creating users with higher privilege
         try:
@@ -132,13 +160,25 @@ class CreateUserTool(BaseTool):
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         target_idx = self._ROLE_HIERARCHY.index(target_role)
         if target_idx > caller_idx:
-            return {"success": False, "result": "", "error": "You cannot create users with a higher role than your own."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "You cannot create users with a higher role than your own.",
+            }
 
         # Check uniqueness
         if db.query(User).filter(User.username == params["username"]).first():
-            return {"success": False, "result": "", "error": f"Username '{params['username']}' already exists."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Username '{params['username']}' already exists.",
+            }
         if db.query(User).filter(User.email == params["email"]).first():
-            return {"success": False, "result": "", "error": f"Email '{params['email']}' already exists."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Email '{params['email']}' already exists.",
+            }
 
         new_user = User(
             username=params["username"],
@@ -158,7 +198,10 @@ class CreateUserTool(BaseTool):
         )
         db.commit()
         db.refresh(new_user)
-        return {"success": True, "result": f"User '{new_user.username}' created (ID: {new_user.id}, role: {new_user.role})."}
+        return {
+            "success": True,
+            "result": f"User '{new_user.username}' created (ID: {new_user.id}, role: {new_user.role}).",
+        }
 
 
 class DeactivateUserTool(BaseTool):
@@ -174,7 +217,9 @@ class DeactivateUserTool(BaseTool):
     required_permission = Permission.MANAGE_USERS
     confirm_before_execute = True
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         target = db.query(User).filter(User.id == params["user_id"]).first()
         if target is None:
             return {"success": False, "result": "", "error": "User not found."}
@@ -191,12 +236,17 @@ class DeactivateUserTool(BaseTool):
             details=f"Deactivated user '{target.username}' (ID: {target.id}) via AI assistant",
         )
         db.commit()
-        return {"success": True, "result": f"User '{target.username}' (ID: {target.id}) has been deactivated."}
+        return {
+            "success": True,
+            "result": f"User '{target.username}' (ID: {target.id}) has been deactivated.",
+        }
 
 
 class ChangeUserRoleTool(BaseTool):
     name = "change_user_role"
-    description = "Change a user's role. Enforces role hierarchy — you cannot promote above your own level."
+    description = (
+        "Change a user's role. Enforces role hierarchy — you cannot promote above your own level."
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -212,7 +262,9 @@ class ChangeUserRoleTool(BaseTool):
     required_permission = Permission.MANAGE_USERS
     _container = build_container()
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         target = db.query(User).filter(User.id == params["user_id"]).first()
         if target is None:
             return {"success": False, "result": "", "error": "User not found."}
@@ -227,7 +279,11 @@ class ChangeUserRoleTool(BaseTool):
         caller_idx = self._ROLE_HIERARCHY.index(caller_role)
         new_role_idx = self._ROLE_HIERARCHY.index(new_role)
         if new_role_idx > caller_idx:
-            return {"success": False, "result": "", "error": "You cannot assign a role higher than your own."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "You cannot assign a role higher than your own.",
+            }
 
         old_role = target.role
         target.role = new_role
@@ -239,4 +295,7 @@ class ChangeUserRoleTool(BaseTool):
             details=f"Changed role for user '{target.username}' from {old_role} to {new_role} via AI assistant",
         )
         db.commit()
-        return {"success": True, "result": f"User '{target.username}' role changed from {old_role} to {new_role}."}
+        return {
+            "success": True,
+            "result": f"User '{target.username}' role changed from {old_role} to {new_role}.",
+        }

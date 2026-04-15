@@ -26,23 +26,20 @@ from app.schemas import (
     PublicRegistrationRequest,
     RefreshTokenRequest,
     TokenResponse,
-    UserCreate,
     UserResponse,
 )
 from app.security import get_current_active_user, get_password_hash
+from app.services.audit_helper import write_audit_log
 from app.services.auth_rate_limit_service import AuthRateLimitService
 from app.services.auth_service import AuthService
 from app.services.collaboration_service import CollaborationService
 from app.services.email_service import email_service
-from app.services.permissions import get_user_permissions
 from app.services.permissions import ROLE_PERMISSIONS as _STATIC_ROLE_PERMISSIONS
-from app.services.audit_helper import write_audit_log
+from app.services.permissions import get_user_permissions
 from app.utils.request_ip import get_client_ip
 
 router = APIRouter()
-_INVITATION_ACCEPT_CONFLICT_DETAIL = (
-    "Unable to accept invitation with the provided account details"
-)
+_INVITATION_ACCEPT_CONFLICT_DETAIL = "Unable to accept invitation with the provided account details"
 
 
 # ========== Invitation Acceptance Schemas ==========
@@ -261,9 +258,7 @@ def forgot_password(
                 "Too many password reset requests. Please try again later.",
                 retry_after,
             )
-        retry_after = AuthRateLimitService.finalize_forgot_password_attempt(
-            client_ip, identifier
-        )
+        retry_after = AuthRateLimitService.finalize_forgot_password_attempt(client_ip, identifier)
         if retry_after > 0:
             return _rate_limited_response(
                 "Too many password reset requests. Please try again later.",
@@ -353,7 +348,9 @@ def logout(
     """
     Logout the current session and clear the refresh cookie.
     """
-    auth_service.logout(current_user.id, session_id=getattr(request.state, "current_session_id", None))
+    auth_service.logout(
+        current_user.id, session_id=getattr(request.state, "current_session_id", None)
+    )
     resp = JSONResponse(content={"message": "Logged out successfully"})
     # AD-004: clear httpOnly refresh cookie
     resp.delete_cookie(key="refresh_token", path="/api/v1/auth/refresh")
@@ -375,9 +372,7 @@ def register(
     """
     user = auth_service.register(user_data)
     verification_token = auth_service.issue_email_verification_token(user)
-    verification_url = (
-        f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
-    )
+    verification_url = f"{settings.BASE_URL}{settings.API_PREFIX}/auth/verify-email?token={quote(verification_token)}"
     background_tasks.add_task(
         _send_email_verification_task,
         user.email,
@@ -649,9 +644,9 @@ def get_collab_token(
     # Get WebSocket URL from config — convert http(s) to ws(s)
     collab_base = settings.COLLAB_SERVER_URL
     if collab_base.startswith("https://"):
-        ws_base = "wss://" + collab_base[len("https://"):]
+        ws_base = "wss://" + collab_base[len("https://") :]
     elif collab_base.startswith("http://"):
-        ws_base = "ws://" + collab_base[len("http://"):]
+        ws_base = "ws://" + collab_base[len("http://") :]
     else:
         ws_base = collab_base
     websocket_url = f"{ws_base.rstrip('/')}/document/{request.document_id}"

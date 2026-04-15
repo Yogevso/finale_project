@@ -1,5 +1,6 @@
 """Comment Service - Business logic for document comments with visibility and threading"""
 
+import logging
 from dataclasses import dataclass
 from typing import List, Optional, Set
 
@@ -28,12 +29,17 @@ from app.services.outbox import build_outbox_event_dispatcher
 @dataclass
 class PaginatedComments:
     """Paginated wrapper for comments list."""
+
     items: List[CommentResponse]
     total: int
     page: int
     page_size: int
     pages: int
-from app.services.uow import UnitOfWork
+
+
+from app.services.uow import UnitOfWork  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 class CommentService(SessionService):
@@ -214,9 +220,7 @@ class CommentService(SessionService):
 
         while pending_parent_ids:
             child_rows = (
-                self.db.query(Comment.id)
-                .filter(Comment.parent_id.in_(pending_parent_ids))
-                .all()
+                self.db.query(Comment.id).filter(Comment.parent_id.in_(pending_parent_ids)).all()
             )
             pending_parent_ids = [row[0] for row in child_rows]
             descendant_ids.extend(pending_parent_ids)
@@ -279,20 +283,18 @@ class CommentService(SessionService):
             pages=pages,
         )
 
-    def get_comment(
-        self, document_id: int, comment_id: int, current_user: User
-    ) -> CommentResponse:
+    def get_comment(self, document_id: int, comment_id: int, current_user: User) -> CommentResponse:
         """Get a specific comment with its replies"""
         # Y15-016: Verify document exists and user has tenant access
         document = self.document_repository.get_by_id(document_id)
         if not document:
             raise NotFoundError("Document not found")
-        
+
         # Tenant isolation: non-system-admins can only access comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
                 raise NotFoundError("Document not found")
-        
+
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
             document_id,
@@ -380,7 +382,9 @@ class CommentService(SessionService):
                 if parent_comment
                 else f"{commenter_name} commented on a document you follow"
             )
-            watcher_message = f"{document.title}: {truncated_content}" if truncated_content else document.title
+            watcher_message = (
+                f"{document.title}: {truncated_content}" if truncated_content else document.title
+            )
             self.notification_service.notify_document_watchers(
                 document=document,
                 actor_user=current_user,
@@ -433,7 +437,6 @@ class CommentService(SessionService):
             chat = chat_svc.create_direct_chat(current_user, doc_author.id)
 
             # Build a contextual auto-message
-            commenter_name = current_user.full_name or current_user.username
             anchor_snippet = ""
             if comment.anchor_text:
                 snippet = comment.anchor_text[:120]
@@ -444,8 +447,9 @@ class CommentService(SessionService):
             # Build the link — when anchor text exists, encode it so the
             # document preview can scroll to and highlight the passage.
             from urllib.parse import quote
+
             if comment.anchor_text:
-                encoded_anchor = quote(comment.anchor_text[:120], safe='')
+                encoded_anchor = quote(comment.anchor_text[:120], safe="")
                 view_link = f"/documents/{document.id}?highlight={encoded_anchor}"
             else:
                 view_link = f"/documents/{document.id}"
@@ -507,12 +511,12 @@ class CommentService(SessionService):
         document = self.document_repository.get_by_id(document_id)
         if not document:
             raise NotFoundError("Document not found")
-        
+
         # Tenant isolation: non-system-admins can only update comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
                 raise NotFoundError("Document not found")
-        
+
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
             document_id,
@@ -566,12 +570,12 @@ class CommentService(SessionService):
         document = self.document_repository.get_by_id(document_id)
         if not document:
             raise NotFoundError("Document not found")
-        
+
         # Tenant isolation: non-system-admins can only delete comments on their tenant's documents
         if current_user.role != UserRole.SYSTEM_ADMIN:
             if document.tenant_id != current_user.tenant_id:
                 raise NotFoundError("Document not found")
-        
+
         comment = self.comment_repository.get_by_id_for_document(comment_id, document_id)
 
         if not comment:
@@ -588,9 +592,7 @@ class CommentService(SessionService):
             self._delete_descendant_comments(comment_id)
             self.db.delete(comment)
 
-    def get_comment_count(
-        self, document_id: int, current_user: Optional[User] = None
-    ) -> dict:
+    def get_comment_count(self, document_id: int, current_user: Optional[User] = None) -> dict:
         """
         Get comment counts for a document.
 

@@ -26,7 +26,7 @@ class StorageBackendAdapter(StoragePort):
     def delete(self, storage_key: str) -> bool:
         try:
             return self._backend.delete(storage_key)
-        except Exception as exc:  # policy: BOUNDARY — storage adapter wraps backend failures consistently
+        except Exception:  # policy: BOUNDARY — storage adapter wraps backend failures consistently
             logger.critical(
                 "STORAGE DELETE FAILED - possible orphaned file: %s",
                 storage_key,
@@ -40,6 +40,8 @@ class StorageBackendAdapter(StoragePort):
     def exists(self, storage_key: str) -> bool:
         try:
             return self._backend.exists(storage_key)
-        except Exception as exc:  # policy: BOUNDARY — storage adapter wraps backend failures consistently
+        except (
+            Exception
+        ) as exc:  # policy: BOUNDARY — storage adapter wraps backend failures consistently
             logger.error("Storage adapter exists failed for key %s: %s", storage_key, exc)
             return False

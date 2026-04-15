@@ -99,9 +99,15 @@ def test_review_submitter_matches_spec_requires_same_submitter():
 
 def test_review_approvable_version_spec_handles_version_invariants():
     spec = ReviewApprovableVersionSpec()
-    review = ReviewRequest(document_id=1, version_id=4, submitted_by=10, status=ReviewStatus.PENDING)
-    review_version = Version(id=4, document_id=1, version_number=4, created_by=10, is_published=False)
-    latest_version = Version(id=5, document_id=1, version_number=5, created_by=10, is_published=False)
+    review = ReviewRequest(
+        document_id=1, version_id=4, submitted_by=10, status=ReviewStatus.PENDING
+    )
+    review_version = Version(
+        id=4, document_id=1, version_number=4, created_by=10, is_published=False
+    )
+    latest_version = Version(
+        id=5, document_id=1, version_number=5, created_by=10, is_published=False
+    )
     published_review_version = Version(
         id=4,
         document_id=1,

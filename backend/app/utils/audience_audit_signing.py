@@ -52,4 +52,3 @@ def verify_payload_signature(payload: dict[str, Any], key_id: str, signature: st
     message = canonicalize_payload(payload).encode("utf-8")
     expected = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
-

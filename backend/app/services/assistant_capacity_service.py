@@ -108,7 +108,9 @@ class AssistantCapacityPermit:
         if self.released:
             return
         object.__setattr__(self, "released", True)
-        self.service._release(self.lane, started_at=self.started_at, queue_wait_ms=self.queue_wait_ms)
+        self.service._release(
+            self.lane, started_at=self.started_at, queue_wait_ms=self.queue_wait_ms
+        )
 
 
 class AssistantCapacityService:

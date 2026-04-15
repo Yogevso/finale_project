@@ -36,9 +36,7 @@ class DocumentNumber:
         return cls(date_key=date_key, sequence=sequence)
 
     @classmethod
-    def for_utc_now(
-        cls, sequence: int, *, now: Optional[datetime] = None
-    ) -> DocumentNumber:
+    def for_utc_now(cls, sequence: int, *, now: Optional[datetime] = None) -> DocumentNumber:
         current = now or datetime.utcnow()
         return cls(date_key=current.strftime("%Y%m%d"), sequence=sequence)
 
@@ -66,4 +64,3 @@ class DocumentNumber:
         if not suffix.isdigit():
             return None
         return int(suffix)
-

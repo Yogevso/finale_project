@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
@@ -81,11 +80,13 @@ def test_managed_migration_existing_versions_table_upgrade_path(tmp_path: Path) 
 
     with engine.connect() as conn:
         conn.execute(text("PRAGMA foreign_keys=OFF"))
-        conn.execute(text(
-            "INSERT INTO versions (id, version_number, document_id, content, changes_summary,"
-            " created_by, bump_type, semantic_version, is_published, row_version, created_at)"
-            " VALUES (1, 2, 1, 'legacy content', 'legacy', 1, 'PATCH', '2.0.0', 0, 1, datetime('now'))"
-        ))
+        conn.execute(
+            text(
+                "INSERT INTO versions (id, version_number, document_id, content, changes_summary,"
+                " created_by, bump_type, semantic_version, is_published, row_version, created_at)"
+                " VALUES (1, 2, 1, 'legacy content', 'legacy', 1, 'PATCH', '2.0.0', 0, 1, datetime('now'))"
+            )
+        )
         conn.execute(text("PRAGMA foreign_keys=ON"))
         conn.commit()
 

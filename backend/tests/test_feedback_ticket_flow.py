@@ -219,7 +219,9 @@ def test_feedback_response_stays_on_feedback_and_customer_can_view_it(
     responded_payload = respond_response.json()
     assert responded_payload["status"] == "responded"
     assert responded_payload["ticket_id"] is None
-    assert responded_payload["response"] == "Thanks. We updated the ticket thread with the next steps."
+    assert (
+        responded_payload["response"] == "Thanks. We updated the ticket thread with the next steps."
+    )
 
     assert (
         db.query(SupportTicket).filter(SupportTicket.feedback_id == feedback_payload["id"]).first()
@@ -233,7 +235,10 @@ def test_feedback_response_stays_on_feedback_and_customer_can_view_it(
     assert portal_feedback_response.status_code == 200
     portal_feedback_payload = portal_feedback_response.json()
     assert portal_feedback_payload["ticket_id"] is None
-    assert portal_feedback_payload["response"] == "Thanks. We updated the ticket thread with the next steps."
+    assert (
+        portal_feedback_payload["response"]
+        == "Thanks. We updated the ticket thread with the next steps."
+    )
 
     customer_notification = (
         db.query(Notification)

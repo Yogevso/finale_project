@@ -26,7 +26,11 @@ def _html_blocks(html: str) -> list[tuple[str, str]]:
     """Parse HTML into (tag, text) blocks for basic rendering."""
     blocks: list[tuple[str, str]] = []
     # Split on heading / paragraph boundaries
-    parts = re.split(r"(<h[1-6][^>]*>.*?</h[1-6]>|<p[^>]*>.*?</p>|<li[^>]*>.*?</li>)", html, flags=re.IGNORECASE | re.DOTALL)
+    parts = re.split(
+        r"(<h[1-6][^>]*>.*?</h[1-6]>|<p[^>]*>.*?</p>|<li[^>]*>.*?</li>)",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     for part in parts:
         part = part.strip()
         if not part:
@@ -65,7 +69,9 @@ def html_to_pdf_bytes(html: str, title: str = "Document") -> bytes:
         "h5": ParagraphStyle("H5Export", parent=styles["Heading5"], fontSize=10, spaceAfter=6),
         "h6": ParagraphStyle("H6Export", parent=styles["Heading6"], fontSize=9, spaceAfter=6),
     }
-    body_style = ParagraphStyle("BodyExport", parent=styles["BodyText"], fontSize=10, spaceAfter=6, leading=14)
+    body_style = ParagraphStyle(
+        "BodyExport", parent=styles["BodyText"], fontSize=10, spaceAfter=6, leading=14
+    )
     li_style = ParagraphStyle("LiExport", parent=body_style, bulletIndent=12, leftIndent=24)
 
     blocks = _html_blocks(safe_html)
@@ -78,7 +84,7 @@ def html_to_pdf_bytes(html: str, title: str = "Document") -> bytes:
             text = f"\u2022  {text}"
         try:
             story.append(Paragraph(text, style))
-        except Exception:
+        except Exception:  # policy: DEGRADED — fallback to sanitised plain text
             # If reportlab can't parse the text, add as plain
             story.append(Paragraph(text.replace("&", "&amp;").replace("<", "&lt;"), body_style))
         story.append(Spacer(1, 4))

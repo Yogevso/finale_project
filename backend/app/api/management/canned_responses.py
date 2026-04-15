@@ -87,7 +87,9 @@ def update_canned_response(
     """Update an existing canned response."""
     cr = (
         db.query(CannedResponse)
-        .filter(CannedResponse.id == response_id, CannedResponse.tenant_id == current_user.tenant_id)
+        .filter(
+            CannedResponse.id == response_id, CannedResponse.tenant_id == current_user.tenant_id
+        )
         .first()
     )
     if not cr:
@@ -112,7 +114,9 @@ def delete_canned_response(
     """Delete a canned response."""
     cr = (
         db.query(CannedResponse)
-        .filter(CannedResponse.id == response_id, CannedResponse.tenant_id == current_user.tenant_id)
+        .filter(
+            CannedResponse.id == response_id, CannedResponse.tenant_id == current_user.tenant_id
+        )
         .first()
     )
     if not cr:

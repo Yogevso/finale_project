@@ -16,4 +16,3 @@ class EmailPort(Protocol):
         text_content: str | None = None,
     ) -> bool:
         """Send an email through the configured transport."""
-

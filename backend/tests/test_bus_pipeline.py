@@ -62,7 +62,9 @@ def test_authorization_middleware_blocks_inactive_current_user():
 
 
 def test_query_bus_adapter_executes_registered_query_and_exposes_trace():
-    bus = QueryBus(middlewares=[ValidationMiddleware(), AuthorizationMiddleware(), TracingMiddleware()])
+    bus = QueryBus(
+        middlewares=[ValidationMiddleware(), AuthorizationMiddleware(), TracingMiddleware()]
+    )
     bus.register(DummyQuery, lambda query: {"value": query.value})
     adapter = QueryBusHandlerAdapter[DummyQuery, dict](bus)
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
+
 from app.api.support_message_utils import (
     parse_support_message_request,
     support_message_to_response,
@@ -20,27 +21,40 @@ from app.schemas.chat import (
 from app.utils.async_tasks import run_async_task
 
 router = APIRouter(prefix="/portal/support", tags=["Customer Support"])
+
+
 @router.get("/tickets", response_model=SupportTicketListResponse)
 def list_my_tickets(
     status_filter: SupportTicketStatus | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_customer),
-    svc = Depends(get_support_ticket_service),
+    svc=Depends(get_support_ticket_service),
 ):
     """List customer's own support tickets (X1-072)."""
-    tickets, total = svc.list_tickets(current_user, status_filter=status_filter, page=page, page_size=page_size)
+    tickets, total = svc.list_tickets(
+        current_user, status_filter=status_filter, page=page, page_size=page_size
+    )
     return SupportTicketListResponse(
         items=[
             SupportTicketResponse(
-                id=t.id, customer_id=t.customer_id, subject=t.subject,
-                status=t.status, priority=t.priority, category=t.category,
-                feedback_id=t.feedback_id, tenant_id=t.tenant_id,
-                created_at=t.created_at, updated_at=t.updated_at, resolved_at=t.resolved_at,
+                id=t.id,
+                customer_id=t.customer_id,
+                subject=t.subject,
+                status=t.status,
+                priority=t.priority,
+                category=t.category,
+                feedback_id=t.feedback_id,
+                tenant_id=t.tenant_id,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+                resolved_at=t.resolved_at,
             )
             for t in tickets
         ],
-        total=total, page=page, page_size=page_size,
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 
@@ -48,21 +62,25 @@ def list_my_tickets(
 def get_my_ticket(
     ticket_id: int,
     current_user: User = Depends(require_customer),
-    svc = Depends(get_support_ticket_service),
+    svc=Depends(get_support_ticket_service),
 ):
     """Get ticket detail with messages — internal notes excluded (X1-073)."""
     ticket = svc.get_ticket(ticket_id, current_user)
     # Filter out internal notes
     visible_messages = [m for m in ticket.messages if not m.is_internal_note]
     return SupportTicketDetailResponse(
-        id=ticket.id, customer_id=ticket.customer_id, subject=ticket.subject,
-        status=ticket.status, priority=ticket.priority, category=ticket.category,
-        feedback_id=ticket.feedback_id, tenant_id=ticket.tenant_id,
-        created_at=ticket.created_at, updated_at=ticket.updated_at, resolved_at=ticket.resolved_at,
-        messages=[
-            support_message_to_response(m)
-            for m in visible_messages
-        ],
+        id=ticket.id,
+        customer_id=ticket.customer_id,
+        subject=ticket.subject,
+        status=ticket.status,
+        priority=ticket.priority,
+        category=ticket.category,
+        feedback_id=ticket.feedback_id,
+        tenant_id=ticket.tenant_id,
+        created_at=ticket.created_at,
+        updated_at=ticket.updated_at,
+        resolved_at=ticket.resolved_at,
+        messages=[support_message_to_response(m) for m in visible_messages],
         assignments=[],
     )
 
@@ -71,27 +89,42 @@ def get_my_ticket(
 def create_ticket(
     body: SupportTicketCreate,
     current_user: User = Depends(require_customer),
-    svc = Depends(get_support_ticket_service),
+    svc=Depends(get_support_ticket_service),
 ):
     """Create a new support ticket (X1-072)."""
     ticket = svc.create_ticket(
-        customer=current_user, subject=body.subject, content=body.content,
-        priority=body.priority, category=body.category, feedback_id=body.feedback_id,
+        customer=current_user,
+        subject=body.subject,
+        content=body.content,
+        priority=body.priority,
+        category=body.category,
+        feedback_id=body.feedback_id,
     )
     return SupportTicketResponse(
-        id=ticket.id, customer_id=ticket.customer_id, subject=ticket.subject,
-        status=ticket.status, priority=ticket.priority, category=ticket.category,
-        feedback_id=ticket.feedback_id, tenant_id=ticket.tenant_id,
-        created_at=ticket.created_at, updated_at=ticket.updated_at, resolved_at=ticket.resolved_at,
+        id=ticket.id,
+        customer_id=ticket.customer_id,
+        subject=ticket.subject,
+        status=ticket.status,
+        priority=ticket.priority,
+        category=ticket.category,
+        feedback_id=ticket.feedback_id,
+        tenant_id=ticket.tenant_id,
+        created_at=ticket.created_at,
+        updated_at=ticket.updated_at,
+        resolved_at=ticket.resolved_at,
     )
 
 
-@router.post("/tickets/{ticket_id}/messages", response_model=SupportTicketMessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tickets/{ticket_id}/messages",
+    response_model=SupportTicketMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def send_message(
     ticket_id: int,
     request: Request,
     current_user: User = Depends(require_customer),
-    svc = Depends(get_support_ticket_service),
+    svc=Depends(get_support_ticket_service),
 ):
     """Customer sends a message on a ticket (X1-074)."""
     content, _is_internal_note, upload = await parse_support_message_request(
@@ -123,7 +156,7 @@ async def send_message(
 def close_ticket(
     ticket_id: int,
     current_user: User = Depends(require_customer),
-    svc = Depends(get_support_ticket_service),
+    svc=Depends(get_support_ticket_service),
 ):
     """Customer closes a resolved ticket (X1-075)."""
     svc.close_ticket_as_customer(ticket_id, current_user)

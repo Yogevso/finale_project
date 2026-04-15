@@ -6,10 +6,8 @@ typing indicators, and read receipts.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-from datetime import datetime
 from typing import Optional
 
 from fastapi import WebSocket
@@ -44,7 +42,9 @@ class ConnectionManager:
                 self._chat_connections[chat_id] = {}
             self._chat_connections[chat_id][user_id] = websocket
 
-    async def connect_support(self, websocket: WebSocket, user_id: int, ticket_ids: list[int]) -> None:
+    async def connect_support(
+        self, websocket: WebSocket, user_id: int, ticket_ids: list[int]
+    ) -> None:
         """Register an already-accepted support websocket and subscribe it to rooms."""
         if user_id not in self._user_connections:
             self._user_connections[user_id] = set()
@@ -87,7 +87,9 @@ class ConnectionManager:
     # Broadcasting
     # ------------------------------------------------------------------
 
-    async def broadcast_to_chat(self, chat_id: int, event: str, data: dict, exclude_user: Optional[int] = None) -> None:
+    async def broadcast_to_chat(
+        self, chat_id: int, event: str, data: dict, exclude_user: Optional[int] = None
+    ) -> None:
         """Send event to all users in a chat room."""
         connections = self._chat_connections.get(chat_id, {})
         payload = json.dumps({"event": event, "data": data})
@@ -96,7 +98,9 @@ class ConnectionManager:
                 continue
             await self._safe_send(ws, payload)
 
-    async def broadcast_to_ticket(self, ticket_id: int, event: str, data: dict, exclude_user: Optional[int] = None) -> None:
+    async def broadcast_to_ticket(
+        self, ticket_id: int, event: str, data: dict, exclude_user: Optional[int] = None
+    ) -> None:
         """Send event to all users in a support ticket room."""
         connections = self._support_connections.get(ticket_id, {})
         payload = json.dumps({"event": event, "data": data})

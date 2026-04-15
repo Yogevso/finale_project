@@ -40,6 +40,7 @@ from app.services.permissions import Permission, has_permission
 
 logger = logging.getLogger(__name__)
 
+
 class ApproveReviewCommandErrorCode(str, Enum):
     """Expected approve-review command failure categories."""
 
@@ -135,9 +136,7 @@ class ApproveReviewCommandHandler:
         )
         update_result = self.db.execute(approval_stmt)
         if update_result.rowcount != 1:
-            raise ConflictError(
-                "This review has already been processed by another reviewer"
-            )
+            raise ConflictError("This review has already been processed by another reviewer")
 
     def _validate(self, context: CommandContext[ApproveReviewCommand]) -> None:
         review = self._load_review(context.command.review_id)
@@ -172,14 +171,18 @@ class ApproveReviewCommandHandler:
             raise RuntimeError("Missing review in command context")
 
         current_user = context.command.current_user
-        if not self.document_access_policy.can_access_document_tenant(current_user, review.document):
+        if not self.document_access_policy.can_access_document_tenant(
+            current_user, review.document
+        ):
             raise NotFoundError("Document not found")
 
         can_approve = self.review_policy.can_approve_review(
             reviewer=current_user,
             submitter=review.submitter,
             has_approve_permission=has_permission(current_user, Permission.APPROVE_REVIEW),
-            has_peer_approve_permission=has_permission(current_user, Permission.APPROVE_PEER_REVIEW),
+            has_peer_approve_permission=has_permission(
+                current_user, Permission.APPROVE_PEER_REVIEW
+            ),
         )
         if not can_approve:
             raise PermissionDeniedError(
@@ -192,7 +195,7 @@ class ApproveReviewCommandHandler:
             raise NotFoundError("Review not found")
         context.state["review"] = review
 
-        review_aggregate = ReviewAggregate(review)
+        ReviewAggregate(review)
         document_aggregate = DocumentAggregate(review.document)
         current_user = context.command.current_user
         document = review.document
@@ -248,9 +251,13 @@ class ApproveReviewCommandHandler:
                 stale_names = [c["name"] for c in audience_resolution["removed_stale_companies"]]
                 resolution_summary.append(f"removed stale companies: {stale_names}")
             if audience_resolution.get("companies_added"):
-                resolution_summary.append(f"companies added since submit: {audience_resolution['companies_added']}")
+                resolution_summary.append(
+                    f"companies added since submit: {audience_resolution['companies_added']}"
+                )
             if audience_resolution.get("companies_removed"):
-                resolution_summary.append(f"companies removed since submit: {audience_resolution['companies_removed']}")
+                resolution_summary.append(
+                    f"companies removed since submit: {audience_resolution['companies_removed']}"
+                )
             if resolution_summary:
                 audit_details += f" | Audience resolution: {'; '.join(resolution_summary)}"
 
@@ -342,8 +349,7 @@ class ApproveReviewCommandHandler:
             if stale_companies:
                 result["has_drift"] = True
                 result["removed_stale_companies"] = [
-                    {"id": c.id, "name": c.name, "reason": "deactivated"}
-                    for c in stale_companies
+                    {"id": c.id, "name": c.name, "reason": "deactivated"} for c in stale_companies
                 ]
                 # Note: We don't actually remove stale companies here - that's done
                 # at publish time. We just record them for the audit trail.

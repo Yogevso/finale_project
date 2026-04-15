@@ -37,8 +37,16 @@ class TestPortalDocumentsEndpoint:
         assert len(data["items"]) > 0
         item = data["items"][0]
         # These fields must exist for cross-channel parity
-        for field in ["document_number", "topic", "platform", "release_branch",
-                       "tags", "visibility", "created_at", "published_at"]:
+        for field in [
+            "document_number",
+            "topic",
+            "platform",
+            "release_branch",
+            "tags",
+            "visibility",
+            "created_at",
+            "published_at",
+        ]:
             assert field in item, f"Missing parity field: {field}"
 
     def test_customer_sees_own_company_documents(self, client, customer_headers, company_document):
@@ -89,8 +97,14 @@ class TestPortalDocumentDetailEndpoint:
         )
         assert response.status_code == 200
         data = response.json()
-        for field in ["document_number", "topic", "platform", "release_branch",
-                       "visibility", "published_at"]:
+        for field in [
+            "document_number",
+            "topic",
+            "platform",
+            "release_branch",
+            "visibility",
+            "published_at",
+        ]:
             assert field in data, f"Missing parity field: {field}"
 
     def test_customer_can_view_own_company_document(
@@ -241,7 +255,9 @@ class TestPortalDocumentDetailEndpoint:
         )
         db.commit()
 
-        list_response = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        list_response = client.get(
+            "/api/v1/portal/documents?per_page=100", headers=customer_headers
+        )
         assert list_response.status_code == 200
         list_payload = list_response.json()
         list_item = next(item for item in list_payload["items"] if item["id"] == document.id)
@@ -296,11 +312,15 @@ class TestPortalDocumentDetailEndpoint:
         db.commit()
 
         # List should NOT contain this document (no published version)
-        list_response = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        list_response = client.get(
+            "/api/v1/portal/documents?per_page=100", headers=customer_headers
+        )
         assert list_response.status_code == 200
         list_payload = list_response.json()
         doc_ids = [item["id"] for item in list_payload["items"]]
-        assert document.id not in doc_ids, "Unpublished-only document must not appear in portal list"
+        assert (
+            document.id not in doc_ids
+        ), "Unpublished-only document must not appear in portal list"
 
         # Detail should return 404 as well
         detail_response = client.get(
@@ -364,7 +384,9 @@ class TestPortalDocumentDetailEndpoint:
         assert viewer_before.status_code == 200
         assert document.id in [item["id"] for item in viewer_before.json()["items"]]
 
-        portal_before = client.get("/api/v1/portal/documents?per_page=100", headers=customer_headers)
+        portal_before = client.get(
+            "/api/v1/portal/documents?per_page=100", headers=customer_headers
+        )
         assert portal_before.status_code == 200
         assert document.id in [item["id"] for item in portal_before.json()["items"]]
 

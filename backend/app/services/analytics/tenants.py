@@ -28,36 +28,39 @@ class AnalyticsTenantsMixin:
 
             # Get user IDs for this tenant from core DB, then query AuditLog from analytics DB
             tenant_user_ids = [
-                row[0]
-                for row in self.db.query(User.id)
-                .filter(User.tenant_id == tenant.id)
-                .all()
+                row[0] for row in self.db.query(User.id).filter(User.tenant_id == tenant.id).all()
             ]
             active_user_ids = (
-                self.analytics_db.query(func.distinct(AuditLog.user_id))
-                .filter(
-                    AuditLog.user_id.in_(tenant_user_ids),
-                    AuditLog.created_at >= thirty_days_ago,
+                (
+                    self.analytics_db.query(func.distinct(AuditLog.user_id))
+                    .filter(
+                        AuditLog.user_id.in_(tenant_user_ids),
+                        AuditLog.created_at >= thirty_days_ago,
+                    )
+                    .all()
                 )
-                .all()
-            ) if tenant_user_ids else []
+                if tenant_user_ids
+                else []
+            )
             active_users_30d = len(active_user_ids)
 
             tenant_doc_ids = [
                 row[0]
-                for row in self.db.query(Document.id)
-                .filter(Document.tenant_id == tenant.id)
-                .all()
+                for row in self.db.query(Document.id).filter(Document.tenant_id == tenant.id).all()
             ]
             views_30d = (
-                self.analytics_db.query(AuditLog)
-                .filter(
-                    AuditLog.action == ActionType.VIEW,
-                    AuditLog.created_at >= thirty_days_ago,
-                    AuditLog.document_id.in_(tenant_doc_ids),
+                (
+                    self.analytics_db.query(AuditLog)
+                    .filter(
+                        AuditLog.action == ActionType.VIEW,
+                        AuditLog.created_at >= thirty_days_ago,
+                        AuditLog.document_id.in_(tenant_doc_ids),
+                    )
+                    .count()
                 )
-                .count()
-            ) if tenant_doc_ids else 0
+                if tenant_doc_ids
+                else 0
+            )
 
             health_score = min(
                 100,

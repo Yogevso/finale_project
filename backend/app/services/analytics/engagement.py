@@ -47,7 +47,9 @@ class AnalyticsEngagementMixin:
 
         date_trunc = self._get_date_trunc(granularity, AuditLog.created_at)
         views_query = (
-            self.analytics_db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            self.analytics_db.query(
+                date_trunc.label("date"), func.count(AuditLog.id).label("value")
+            )
             .filter(
                 AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
             )
@@ -60,7 +62,9 @@ class AnalyticsEngagementMixin:
         ]
 
         downloads_query = (
-            self.analytics_db.query(date_trunc.label("date"), func.count(AuditLog.id).label("value"))
+            self.analytics_db.query(
+                date_trunc.label("date"), func.count(AuditLog.id).label("value")
+            )
             .filter(
                 AuditLog.action == ActionType.DOWNLOAD,
                 AuditLog.created_at.between(start_dt, end_dt),
@@ -73,9 +77,9 @@ class AnalyticsEngagementMixin:
             TimeSeriesPoint(date=str(row.date), value=row.value) for row in downloads_query.all()
         ]
 
-        visitors_query = self.analytics_db.query(func.count(func.distinct(AuditLog.user_id))).filter(
-            AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt)
-        )
+        visitors_query = self.analytics_db.query(
+            func.count(func.distinct(AuditLog.user_id))
+        ).filter(AuditLog.action == ActionType.VIEW, AuditLog.created_at.between(start_dt, end_dt))
         visitors_query = apply_tenant_filter(visitors_query)
         unique_visitors = visitors_query.scalar() or 0
 

@@ -64,13 +64,9 @@ class SunsetMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._deprecations = _load_deprecations()
         if self._deprecations:
-            logger.info(
-                "SunsetMiddleware loaded %d deprecation(s)", len(self._deprecations)
-            )
+            logger.info("SunsetMiddleware loaded %d deprecation(s)", len(self._deprecations))
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
         path = request.url.path
 
@@ -85,12 +81,8 @@ class SunsetMiddleware(BaseHTTPMiddleware):
                 sunset_date = dep.get("sunset_date")
                 if sunset_date:
                     try:
-                        dt = datetime.strptime(sunset_date, "%Y-%m-%d").replace(
-                            tzinfo=timezone.utc
-                        )
-                        response.headers["Sunset"] = dt.strftime(
-                            "%a, %d %b %Y %H:%M:%S GMT"
-                        )
+                        dt = datetime.strptime(sunset_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                        response.headers["Sunset"] = dt.strftime("%a, %d %b %Y %H:%M:%S GMT")
                     except ValueError:
                         pass
 

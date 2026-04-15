@@ -41,9 +41,7 @@ async def list_announcements(
         now = datetime.utcnow()
         query = query.filter(
             Announcement.active.is_(True),
-        ).filter(
-            (Announcement.expires_at.is_(None)) | (Announcement.expires_at > now)
-        )
+        ).filter((Announcement.expires_at.is_(None)) | (Announcement.expires_at > now))
     items = query.order_by(Announcement.created_at.desc()).all()
     return [
         {
@@ -92,7 +90,9 @@ async def update_announcement(
     if "message" in data and data["message"]:
         data["message"] = sanitize_html_content(data["message"])
     if "expires_at" in data:
-        data["expires_at"] = datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None
+        data["expires_at"] = (
+            datetime.fromisoformat(data["expires_at"]) if data["expires_at"] else None
+        )
     for field, value in data.items():
         setattr(ann, field, value)
     db.commit()

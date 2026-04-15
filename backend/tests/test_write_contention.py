@@ -12,22 +12,30 @@ import types
 if "chromadb" not in sys.modules:
     _chromadb = types.ModuleType("chromadb")
     _chromadb.__path__ = []
+
     class _FS:
-        def __init__(self, **kw): pass
+        def __init__(self, **kw):
+            pass
+
     _cfg = types.ModuleType("chromadb.config")
     _cfg.__path__ = []
     _cfg.Settings = _FS
-    class _FC: pass
+
+    class _FC:
+        pass
+
     _chromadb.ClientAPI = _FC
     _chromadb.PersistentClient = lambda **kw: _FC()
-    for n, m in [("chromadb", _chromadb), ("chromadb.config", _cfg),
-                 ("chromadb.api", types.ModuleType("chromadb.api")),
-                 ("chromadb.api.types", types.ModuleType("chromadb.api.types"))]:
+    for n, m in [
+        ("chromadb", _chromadb),
+        ("chromadb.config", _cfg),
+        ("chromadb.api", types.ModuleType("chromadb.api")),
+        ("chromadb.api.types", types.ModuleType("chromadb.api.types")),
+    ]:
         sys.modules.setdefault(n, m)
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -35,14 +43,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
+
 settings.APP_ENV = "testing"
 
-from app.db.bases import AnalyticsBase, ChatBase, CoreBase
-import app.models  # noqa: F401
-from app.models import (
+import app.models  # noqa: F401, E402
+from app.db.bases import AnalyticsBase, ChatBase, CoreBase  # noqa: E402
+from app.models import (  # noqa: E402
     ActionType,
-    AuditLog,
     AssistantConversation,
+    AuditLog,
     Tenant,
     User,
     UserRole,
@@ -52,7 +61,9 @@ WRITE_COUNT = 200  # number of writes per category
 
 
 def _make_engine():
-    return create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    return create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
 
 
 def _write_audit_logs(session_factory, n):
@@ -88,11 +99,17 @@ def _write_users(session_factory, tenant_id, n):
     sess = session_factory()
     try:
         for i in range(n):
-            sess.add(User(
-                email=f"u{i}@load.test", username=f"load_{i}",
-                full_name=f"Load {i}", hashed_password="x",
-                role=UserRole.VIEWER, is_active=True, tenant_id=tenant_id,
-            ))
+            sess.add(
+                User(
+                    email=f"u{i}@load.test",
+                    username=f"load_{i}",
+                    full_name=f"Load {i}",
+                    hashed_password="x",
+                    role=UserRole.VIEWER,
+                    is_active=True,
+                    tenant_id=tenant_id,
+                )
+            )
             if i % 50 == 0:
                 sess.flush()
         sess.commit()
@@ -113,8 +130,13 @@ class TestSingleDBContention:
         self.Session = sessionmaker(bind=self.engine)
         # seed a tenant
         s = self.Session()
-        t = Tenant(name="Load", slug="load", is_active=True,
-                   contact_email="l@t.com", company_type="customer")
+        t = Tenant(
+            name="Load",
+            slug="load",
+            is_active=True,
+            contact_email="l@t.com",
+            company_type="customer",
+        )
         s.add(t)
         s.commit()
         self.tenant_id = t.id
@@ -132,7 +154,9 @@ class TestSingleDBContention:
         }
         wall = time.perf_counter() - start
         throughput = (WRITE_COUNT * 3) / wall
-        print(f"\n  [SINGLE DB] audit={results['audit']:.3f}s  chat={results['chat']:.3f}s  core={results['core']:.3f}s")
+        print(
+            f"\n  [SINGLE DB] audit={results['audit']:.3f}s  chat={results['chat']:.3f}s  core={results['core']:.3f}s"
+        )
         print(f"  [SINGLE DB] wall={wall:.3f}s  throughput={throughput:.0f} writes/s (sequential)")
         assert wall < 30, "Write took too long"
 
@@ -153,8 +177,13 @@ class TestMultiDBContention:
         self.ChatSession = sessionmaker(bind=self.chat_engine)
         # seed a tenant
         s = self.CoreSession()
-        t = Tenant(name="Load", slug="load", is_active=True,
-                   contact_email="l@t.com", company_type="customer")
+        t = Tenant(
+            name="Load",
+            slug="load",
+            is_active=True,
+            contact_email="l@t.com",
+            company_type="customer",
+        )
         s.add(t)
         s.commit()
         self.tenant_id = t.id
@@ -177,6 +206,8 @@ class TestMultiDBContention:
 
         total = sum(results.values())
         throughput = (WRITE_COUNT * 3) / total
-        print(f"\n  [MULTI DB]  audit={results['audit']:.3f}s  chat={results['chat']:.3f}s  core={results['core']:.3f}s")
+        print(
+            f"\n  [MULTI DB]  audit={results['audit']:.3f}s  chat={results['chat']:.3f}s  core={results['core']:.3f}s"
+        )
         print(f"  [MULTI DB]  total_wall={total:.3f}s  throughput={throughput:.0f} writes/s")
         assert all(v < 30 for v in results.values()), "Write took too long"

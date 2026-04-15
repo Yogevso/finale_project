@@ -23,7 +23,9 @@ def _payload(**overrides):
 
 
 def test_system_document_lifecycle_settings_default_shape(client, system_admin_headers):
-    response = client.get("/api/v1/system/settings/document-lifecycle", headers=system_admin_headers)
+    response = client.get(
+        "/api/v1/system/settings/document-lifecycle", headers=system_admin_headers
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -61,7 +63,12 @@ def test_system_document_lifecycle_settings_update_is_internal_and_audited(
     assert generic_get.status_code == 200
     assert DOCUMENT_LIFECYCLE_SETTINGS_KEY not in generic_get.json()["settings"]
 
-    log = db.query(AuditLog).filter(AuditLog.action == ActionType.SYSTEM).order_by(AuditLog.id.desc()).first()
+    log = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == ActionType.SYSTEM)
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
     assert log is not None
     details = json.loads(log.details)
     assert details["event"] == "system_document_lifecycle_settings_updated"

@@ -11,9 +11,7 @@ def test_resolve_database_target_supports_postgres_and_sqlite():
     postgres = backup_restore_drill.resolve_database_target(
         "postgresql://portal:secret@db:5432/portal"
     )
-    sqlite = backup_restore_drill.resolve_database_target(
-        "sqlite:///./data/portal.db"
-    )
+    sqlite = backup_restore_drill.resolve_database_target("sqlite:///./data/portal.db")
 
     assert postgres.dialect == "postgresql"
     assert postgres.database_name == "portal"

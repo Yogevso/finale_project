@@ -62,9 +62,7 @@ async def broken_links_summary(
     total = sum(count for _, count in rows)
     by_reason = {reason: count for reason, count in rows}
 
-    affected_docs = (
-        db.query(func.count(func.distinct(BrokenLinkReport.document_id))).scalar() or 0
-    )
+    affected_docs = db.query(func.count(func.distinct(BrokenLinkReport.document_id))).scalar() or 0
 
     return {
         "total_broken_links": total,

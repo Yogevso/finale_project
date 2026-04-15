@@ -25,7 +25,9 @@ class CollaborationManagerBase:
         self.db = db
         self.chat_db = chat_db or db
         self.container = container or build_container()
-        self.collaboration_service = collaboration_service or self.container.collaboration_service(db)
+        self.collaboration_service = collaboration_service or self.container.collaboration_service(
+            db
+        )
         self.document_repository = document_repository or DocumentRepository(db)
 
     def get_document_or_404(self, document_id: int):

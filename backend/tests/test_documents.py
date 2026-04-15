@@ -95,9 +95,7 @@ def test_create_document_requires_platform(client, auth_headers):
     assert response.json()["detail"] == "Platform is required"
 
 
-def test_create_company_visible_document_with_assignment(
-    client, system_admin_headers, test_tenant
-):
+def test_create_company_visible_document_with_assignment(client, system_admin_headers, test_tenant):
     response = client.post(
         "/api/v1/documents",
         headers=system_admin_headers,
@@ -350,7 +348,9 @@ def test_get_document(client, auth_headers, db, test_user):
     assert data["title"] == "Test Document"
 
 
-def test_viewer_document_list_excludes_draft_documents(client, viewer_auth_headers, db, test_viewer):
+def test_viewer_document_list_excludes_draft_documents(
+    client, viewer_auth_headers, db, test_viewer
+):
     draft_doc = Document(
         title="Viewer Hidden Draft",
         document_number="DOC-VIEW-DRAFT-0001",
@@ -396,7 +396,9 @@ def test_viewer_cannot_get_draft_document(client, viewer_auth_headers, db, test_
     assert response.status_code == 404
 
 
-def test_document_detail_payload_budget_under_50kb(client, admin_headers, db, test_admin, test_tenant):
+def test_document_detail_payload_budget_under_50kb(
+    client, admin_headers, db, test_admin, test_tenant
+):
     """Guardrail: keep /api/v1/documents/{id} payload under the 50KB budget."""
     doc = Document(
         title="Payload Budget Document",
@@ -456,7 +458,9 @@ def test_update_document(client, auth_headers, db, test_user):
     assert data["status"] == "draft"
 
 
-def test_editor_cannot_update_same_tenant_document_owned_by_another_editor(client, db, auth_headers, test_user):
+def test_editor_cannot_update_same_tenant_document_owned_by_another_editor(
+    client, db, auth_headers, test_user
+):
     other_editor = User(
         email="other-owner@example.com",
         username="other_owner",

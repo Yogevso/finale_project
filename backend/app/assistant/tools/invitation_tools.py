@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.models import Invitation, InvitationStatus, User, UserRole
-from app.services.permissions import Permission
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,11 @@ class CreateInvitationTool(BaseTool):
                 "type": "string",
                 "description": "Role for the new user (e.g. VIEWER, EDITOR, ADMIN, CUSTOMER)",
             },
-            "message": {"type": "string", "description": "Optional message to include", "maxLength": 1000},
+            "message": {
+                "type": "string",
+                "description": "Optional message to include",
+                "maxLength": 1000,
+            },
         },
         "required": ["email", "role"],
     }
@@ -35,7 +38,11 @@ class CreateInvitationTool(BaseTool):
     confirm_before_execute = True
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         email = params["email"].strip().lower()
         role_str = params["role"].upper()
@@ -45,7 +52,11 @@ class CreateInvitationTool(BaseTool):
             role = UserRole(role_str.lower()) if hasattr(UserRole, role_str) else UserRole[role_str]
         except (KeyError, ValueError):
             valid = ", ".join(r.name for r in UserRole)
-            return {"success": False, "result": "", "error": f"Invalid role '{role_str}'. Valid: {valid}"}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"Invalid role '{role_str}'. Valid: {valid}",
+            }
 
         # Check if invitation already exists
         existing = (
@@ -57,7 +68,11 @@ class CreateInvitationTool(BaseTool):
             .first()
         )
         if existing:
-            return {"success": False, "result": "", "error": f"A pending invitation for {email} already exists (ID: {existing.id})."}
+            return {
+                "success": False,
+                "result": "",
+                "error": f"A pending invitation for {email} already exists (ID: {existing.id}).",
+            }
 
         invitation = Invitation(
             email=email,
@@ -96,7 +111,11 @@ class ListInvitationsTool(BaseTool):
     required_role = "ADMIN"
 
     async def execute(
-        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session,
+        self,
+        user: User,
+        tenant_id: int | None,
+        params: dict[str, Any],
+        db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
         query = db.query(Invitation)
@@ -107,7 +126,11 @@ class ListInvitationsTool(BaseTool):
         status_str = params.get("status", "").upper()
         if status_str:
             try:
-                status = InvitationStatus(status_str.lower()) if hasattr(InvitationStatus, status_str) else InvitationStatus[status_str]
+                status = (
+                    InvitationStatus(status_str.lower())
+                    if hasattr(InvitationStatus, status_str)
+                    else InvitationStatus[status_str]
+                )
                 query = query.filter(Invitation.status == status)
             except (KeyError, ValueError):
                 pass
@@ -117,7 +140,14 @@ class ListInvitationsTool(BaseTool):
             return {"success": True, "result": "No invitations found."}
 
         inviter_ids = {i.invited_by for i in invitations}
-        users = {u.id: u.full_name or u.email for u in db.query(User).filter(User.id.in_(inviter_ids)).all()} if inviter_ids else {}
+        users = (
+            {
+                u.id: u.full_name or u.email
+                for u in db.query(User).filter(User.id.in_(inviter_ids)).all()
+            }
+            if inviter_ids
+            else {}
+        )
 
         lines = [f"**Invitations** ({len(invitations)})\n"]
         for inv in invitations:

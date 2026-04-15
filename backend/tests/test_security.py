@@ -337,7 +337,9 @@ class TestAudienceEndpointSecurity:
         ]
 
     @staticmethod
-    def _send_request(client, method: str, path: str, *, headers: dict | None, json_body: dict | None):
+    def _send_request(
+        client, method: str, path: str, *, headers: dict | None, json_body: dict | None
+    ):
         if method == "GET":
             return client.get(path, headers=headers)
         if method == "POST":

@@ -71,9 +71,7 @@ class TestAttachments:
         monkeypatch.setattr(
             "app.services.attachment_service.upload.scan_upload_bytes",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                MalwareDetectedError(
-                    "Upload blocked: malware detected in 'test-file.docx'."
-                )
+                MalwareDetectedError("Upload blocked: malware detected in 'test-file.docx'.")
             ),
         )
 
@@ -106,7 +104,9 @@ class TestAttachments:
     ):
         captured: dict[str, str] = {}
 
-        def _capture_validate(cls, content: bytes, original_filename: str, content_type: str) -> None:
+        def _capture_validate(
+            cls, content: bytes, original_filename: str, content_type: str
+        ) -> None:
             captured["filename"] = original_filename
             captured["content_type"] = content_type
             assert content.startswith(b"%PDF")
@@ -213,7 +213,10 @@ class TestAttachments:
             params={"token": ticket},
         )
         assert download_response.status_code == 200
-        assert hashlib.sha256(download_response.content).hexdigest() == hashlib.sha256(uploaded_bytes).hexdigest()
+        assert (
+            hashlib.sha256(download_response.content).hexdigest()
+            == hashlib.sha256(uploaded_bytes).hexdigest()
+        )
 
     def test_download_with_non_latin_filename_returns_200(
         self, client: TestClient, auth_headers: dict, test_document
@@ -313,8 +316,12 @@ class TestAttachments:
                 return True
 
         fake_storage = _FakeStorageBackend()
-        monkeypatch.setattr("app.services.attachment_service.upload.get_storage_backend", lambda: fake_storage)
-        monkeypatch.setattr("app.services.attachment_service.streams.get_storage_backend", lambda: fake_storage)
+        monkeypatch.setattr(
+            "app.services.attachment_service.upload.get_storage_backend", lambda: fake_storage
+        )
+        monkeypatch.setattr(
+            "app.services.attachment_service.streams.get_storage_backend", lambda: fake_storage
+        )
 
         first_response = client.post(
             f"/api/v1/documents/{test_document.id}/attachments",
@@ -451,7 +458,9 @@ class TestAttachments:
         )
         assert response.status_code == 403
 
-    def test_cross_tenant_user_cannot_read_attachment_metadata(self, client: TestClient, db, tmp_path):
+    def test_cross_tenant_user_cannot_read_attachment_metadata(
+        self, client: TestClient, db, tmp_path
+    ):
         tenant_a = Tenant(name="Tenant A", slug="tenant-a")
         tenant_b = Tenant(name="Tenant B", slug="tenant-b")
         db.add_all([tenant_a, tenant_b])
@@ -521,7 +530,9 @@ class TestAttachments:
         )
         assert response.status_code == 403
 
-    def test_cross_tenant_download_ticket_issuance_is_denied(self, client: TestClient, db, tmp_path):
+    def test_cross_tenant_download_ticket_issuance_is_denied(
+        self, client: TestClient, db, tmp_path
+    ):
         tenant_a = Tenant(name="Tenant Download A", slug="tenant-download-a")
         tenant_b = Tenant(name="Tenant Download B", slug="tenant-download-b")
         db.add_all([tenant_a, tenant_b])

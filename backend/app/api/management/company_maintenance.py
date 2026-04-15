@@ -145,6 +145,7 @@ def _build_hierarchy_snapshot(db: Session, company: Tenant) -> dict:
 
 class OrphanUserInfo(BaseModel):
     """Information about an orphaned user."""
+
     id: int
     email: str
     username: str
@@ -157,6 +158,7 @@ class OrphanUserInfo(BaseModel):
 
 class OrphanInvitationInfo(BaseModel):
     """Information about an orphaned invitation."""
+
     id: int
     email: str
     role: str
@@ -169,12 +171,14 @@ class OrphanInvitationInfo(BaseModel):
 
 class OrphanDetectorResponse(BaseModel):
     """Response from orphan detector jobs."""
+
     orphan_count: int
     orphans: list
 
 
 class CompanyTransferValidation(BaseModel):
     """Validation result for company ownership transfer."""
+
     can_transfer: bool
     source_company_id: int
     target_company_id: int
@@ -187,6 +191,7 @@ class CompanyTransferValidation(BaseModel):
 
 class CompanyArchiveValidation(BaseModel):
     """Validation result for company archive operation."""
+
     can_archive: bool
     company_id: int
     active_users: int
@@ -199,6 +204,7 @@ class CompanyArchiveValidation(BaseModel):
 
 class CompanyScopeConflict(BaseModel):
     """A scope conflict for a user."""
+
     user_id: int
     email: str
     role: str
@@ -209,6 +215,7 @@ class CompanyScopeConflict(BaseModel):
 
 class CompanyScopeConflictReport(BaseModel):
     """Report of all company scope conflicts."""
+
     conflict_count: int
     conflicts: list[CompanyScopeConflict]
 
@@ -235,20 +242,31 @@ async def get_company_deactivate_impact(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    active_users = db.query(User).filter(
-        User.tenant_id == company_id,
-        User.is_active.is_(True),
-    ).count()
-    pending_invitations = db.query(Invitation).filter(
-        Invitation.tenant_id == company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).count()
-    owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
-    assigned_documents = db.execute(
-        select(func.count()).select_from(document_company_assignments).where(
-            document_company_assignments.c.tenant_id == company_id
+    active_users = (
+        db.query(User)
+        .filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(True),
         )
-    ).scalar() or 0
+        .count()
+    )
+    pending_invitations = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+        .count()
+    )
+    owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
+    assigned_documents = (
+        db.execute(
+            select(func.count())
+            .select_from(document_company_assignments)
+            .where(document_company_assignments.c.tenant_id == company_id)
+        ).scalar()
+        or 0
+    )
     active_customer_visible_docs = (
         db.query(Document)
         .filter(
@@ -331,26 +349,38 @@ async def company_merge_reassignment_plan(
     owned_documents = db.query(Document).filter(Document.tenant_id == source_company_id).all()
     owned_doc_ids = [doc.id for doc in owned_documents]
 
-    source_assigned_doc_ids = db.execute(
-        select(document_company_assignments.c.document_id).where(
-            document_company_assignments.c.tenant_id == source_company_id
+    source_assigned_doc_ids = (
+        db.execute(
+            select(document_company_assignments.c.document_id).where(
+                document_company_assignments.c.tenant_id == source_company_id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     target_assigned_doc_ids = set(
         db.execute(
             select(document_company_assignments.c.document_id).where(
                 document_company_assignments.c.tenant_id == target_company_id
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
-    assignment_conflicts = sorted(set(source_assigned_doc_ids).intersection(target_assigned_doc_ids))
+    assignment_conflicts = sorted(
+        set(source_assigned_doc_ids).intersection(target_assigned_doc_ids)
+    )
 
     users_to_transfer = db.query(User).filter(User.tenant_id == source_company_id).count()
-    invitations_to_transfer = db.query(Invitation).filter(
-        Invitation.tenant_id == source_company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).count()
+    invitations_to_transfer = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == source_company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+        .count()
+    )
 
     if assignment_conflicts:
         warnings.append(
@@ -439,9 +469,7 @@ async def company_rename_propagation_checks(
 
     if new_slug and new_slug != company.slug:
         slug_conflict = (
-            db.query(Tenant)
-            .filter(Tenant.slug == new_slug, Tenant.id != company_id)
-            .first()
+            db.query(Tenant).filter(Tenant.slug == new_slug, Tenant.id != company_id).first()
         )
         if slug_conflict:
             blockers.append(f"Slug '{new_slug}' is already used by company id={slug_conflict.id}")
@@ -452,11 +480,14 @@ async def company_rename_propagation_checks(
     linked_users = db.query(User).filter(User.tenant_id == company_id).count()
     linked_invitations = db.query(Invitation).filter(Invitation.tenant_id == company_id).count()
     owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
-    assigned_documents = db.execute(
-        select(func.count()).select_from(document_company_assignments).where(
-            document_company_assignments.c.tenant_id == company_id
-        )
-    ).scalar() or 0
+    assigned_documents = (
+        db.execute(
+            select(func.count())
+            .select_from(document_company_assignments)
+            .where(document_company_assignments.c.tenant_id == company_id)
+        ).scalar()
+        or 0
+    )
 
     return {
         "can_rename": len(blockers) == 0,
@@ -496,16 +527,23 @@ async def company_deletion_hard_safety_checks(
 
     total_users = db.query(User).filter(User.tenant_id == company_id).count()
     total_invitations = db.query(Invitation).filter(Invitation.tenant_id == company_id).count()
-    pending_invitations = db.query(Invitation).filter(
-        Invitation.tenant_id == company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).count()
-    owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
-    assigned_documents = db.execute(
-        select(func.count()).select_from(document_company_assignments).where(
-            document_company_assignments.c.tenant_id == company_id
+    pending_invitations = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
         )
-    ).scalar() or 0
+        .count()
+    )
+    owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
+    assigned_documents = (
+        db.execute(
+            select(func.count())
+            .select_from(document_company_assignments)
+            .where(document_company_assignments.c.tenant_id == company_id)
+        ).scalar()
+        or 0
+    )
 
     blockers = []
     if total_users > 0:
@@ -636,16 +674,18 @@ async def detect_orphan_customers(
                     reason = f"Customer's company '{tenant.name}' is deactivated"
 
         if reason:
-            orphans.append(OrphanUserInfo(
-                id=customer.id,
-                email=customer.email,
-                username=customer.username,
-                role=customer.role.value,
-                tenant_id=customer.tenant_id,
-                tenant_name=tenant_name,
-                tenant_active=tenant_active,
-                reason=reason,
-            ))
+            orphans.append(
+                OrphanUserInfo(
+                    id=customer.id,
+                    email=customer.email,
+                    username=customer.username,
+                    role=customer.role.value,
+                    tenant_id=customer.tenant_id,
+                    tenant_name=tenant_name,
+                    tenant_active=tenant_active,
+                    reason=reason,
+                )
+            )
 
     return OrphanDetectorResponse(
         orphan_count=len(orphans),
@@ -674,9 +714,9 @@ async def detect_orphan_invitations(
     orphans: list[OrphanInvitationInfo] = []
 
     # Focus on pending invitations (active problems)
-    pending_invitations = db.query(Invitation).filter(
-        Invitation.status == InvitationStatus.PENDING
-    ).all()
+    pending_invitations = (
+        db.query(Invitation).filter(Invitation.status == InvitationStatus.PENDING).all()
+    )
 
     for invitation in pending_invitations:
         reason = None
@@ -697,16 +737,18 @@ async def detect_orphan_invitations(
                     reason = f"Invitation's company '{tenant.name}' is deactivated"
 
         if reason:
-            orphans.append(OrphanInvitationInfo(
-                id=invitation.id,
-                email=invitation.email,
-                role=invitation.role.value if invitation.role else "unknown",
-                tenant_id=invitation.tenant_id,
-                tenant_name=tenant_name,
-                tenant_active=tenant_active,
-                status=invitation.status.value,
-                reason=reason,
-            ))
+            orphans.append(
+                OrphanInvitationInfo(
+                    id=invitation.id,
+                    email=invitation.email,
+                    role=invitation.role.value if invitation.role else "unknown",
+                    tenant_id=invitation.tenant_id,
+                    tenant_name=tenant_name,
+                    tenant_active=tenant_active,
+                    status=invitation.status.value,
+                    reason=reason,
+                )
+            )
 
     return OrphanDetectorResponse(
         orphan_count=len(orphans),
@@ -766,15 +808,17 @@ async def validate_company_transfer(
     users_count = db.query(User).filter(User.tenant_id == source_company_id).count()
 
     # Count documents owned by source company
-    documents_count = db.query(Document).filter(
-        Document.tenant_id == source_company_id
-    ).count()
+    documents_count = db.query(Document).filter(Document.tenant_id == source_company_id).count()
 
     # Count pending invitations
-    invitations_count = db.query(Invitation).filter(
-        Invitation.tenant_id == source_company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).count()
+    invitations_count = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == source_company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+        .count()
+    )
 
     # Warnings
     if users_count > 0:
@@ -784,7 +828,9 @@ async def validate_company_transfer(
     if invitations_count > 0:
         warnings.append(f"{invitations_count} pending invitations will be updated")
     if source.is_active:
-        warnings.append(f"Source company '{source.name}' is still active - consider deactivating first")
+        warnings.append(
+            f"Source company '{source.name}' is still active - consider deactivating first"
+        )
 
     return CompanyTransferValidation(
         can_transfer=len(blockers) == 0,
@@ -834,28 +880,37 @@ async def validate_company_archive(
         warnings.append("Company is already deactivated")
 
     # Count active users
-    active_users = db.query(User).filter(
-        User.tenant_id == company_id,
-        User.is_active.is_(True),
-    ).count()
+    active_users = (
+        db.query(User)
+        .filter(
+            User.tenant_id == company_id,
+            User.is_active.is_(True),
+        )
+        .count()
+    )
 
     # Count pending invitations
-    pending_invitations = db.query(Invitation).filter(
-        Invitation.tenant_id == company_id,
-        Invitation.status == InvitationStatus.PENDING,
-    ).count()
+    pending_invitations = (
+        db.query(Invitation)
+        .filter(
+            Invitation.tenant_id == company_id,
+            Invitation.status == InvitationStatus.PENDING,
+        )
+        .count()
+    )
 
     # Count owned documents
-    owned_documents = db.query(Document).filter(
-        Document.tenant_id == company_id
-    ).count()
+    owned_documents = db.query(Document).filter(Document.tenant_id == company_id).count()
 
     # Count assigned documents (via the association table)
-    assigned_documents = db.execute(
-        select(func.count()).select_from(document_company_assignments).where(
-            document_company_assignments.c.tenant_id == company_id
-        )
-    ).scalar() or 0
+    assigned_documents = (
+        db.execute(
+            select(func.count())
+            .select_from(document_company_assignments)
+            .where(document_company_assignments.c.tenant_id == company_id)
+        ).scalar()
+        or 0
+    )
 
     # Generate warnings/blockers based on counts
     if active_users > 0:
@@ -865,7 +920,9 @@ async def validate_company_archive(
         warnings.append(f"{pending_invitations} pending invitations will be cancelled")
 
     if owned_documents > 0:
-        blockers.append(f"{owned_documents} documents are owned by this company - transfer ownership first")
+        blockers.append(
+            f"{owned_documents} documents are owned by this company - transfer ownership first"
+        )
 
     if assigned_documents > 0:
         warnings.append(f"{assigned_documents} document assignments will be affected")
@@ -947,38 +1004,50 @@ async def validate_company_onboarding(
     requirements: list[dict] = []
 
     # Requirement 1: Company must be active
-    requirements.append({
-        "requirement": "Company is active",
-        "met": company.is_active,
-        "severity": "blocker",
-    })
+    requirements.append(
+        {
+            "requirement": "Company is active",
+            "met": company.is_active,
+            "severity": "blocker",
+        }
+    )
 
     # Requirement 2: Has at least one admin or manager user
-    admin_count = db.query(User).filter(
-        User.tenant_id == company_id,
-        User.role.in_([UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]),
-        User.is_active.is_(True),
-    ).count()
-    requirements.append({
-        "requirement": "Has at least one admin or manager",
-        "met": admin_count > 0,
-        "severity": "blocker",
-        "current_value": admin_count,
-    })
+    admin_count = (
+        db.query(User)
+        .filter(
+            User.tenant_id == company_id,
+            User.role.in_([UserRole.ADMIN, UserRole.MANAGER, UserRole.SYSTEM_ADMIN]),
+            User.is_active.is_(True),
+        )
+        .count()
+    )
+    requirements.append(
+        {
+            "requirement": "Has at least one admin or manager",
+            "met": admin_count > 0,
+            "severity": "blocker",
+            "current_value": admin_count,
+        }
+    )
 
     # Requirement 3: Has contact email (optional but recommended)
-    requirements.append({
-        "requirement": "Has contact email configured",
-        "met": company.contact_email is not None and company.contact_email != "",
-        "severity": "warning",
-    })
+    requirements.append(
+        {
+            "requirement": "Has contact email configured",
+            "met": company.contact_email is not None and company.contact_email != "",
+            "severity": "warning",
+        }
+    )
 
     # Requirement 4: Has company logo (optional)
-    requirements.append({
-        "requirement": "Has company logo",
-        "met": company.company_logo is not None and company.company_logo != "",
-        "severity": "info",
-    })
+    requirements.append(
+        {
+            "requirement": "Has company logo",
+            "met": company.company_logo is not None and company.company_logo != "",
+            "severity": "info",
+        }
+    )
 
     # Calculate overall status
     blockers = [r for r in requirements if not r["met"] and r["severity"] == "blocker"]
@@ -1017,36 +1086,42 @@ async def detect_scope_conflicts(
     for user in all_users:
         # Conflict 1: Customer without company
         if user.role == UserRole.CUSTOMER and user.tenant_id is None:
-            conflicts.append(CompanyScopeConflict(
-                user_id=user.id,
-                email=user.email,
-                role=user.role.value,
-                current_tenant_id=user.tenant_id,
-                conflict_type="missing_company",
-                description="Customer user has no company assigned",
-            ))
+            conflicts.append(
+                CompanyScopeConflict(
+                    user_id=user.id,
+                    email=user.email,
+                    role=user.role.value,
+                    current_tenant_id=user.tenant_id,
+                    conflict_type="missing_company",
+                    description="Customer user has no company assigned",
+                )
+            )
 
         # Conflict 2: Customer assigned to inactive company
         elif user.role == UserRole.CUSTOMER and user.tenant_id:
             tenant = db.query(Tenant).filter(Tenant.id == user.tenant_id).first()
             if tenant and not tenant.is_active:
-                conflicts.append(CompanyScopeConflict(
-                    user_id=user.id,
-                    email=user.email,
-                    role=user.role.value,
-                    current_tenant_id=user.tenant_id,
-                    conflict_type="inactive_company",
-                    description=f"Customer is assigned to inactive company '{tenant.name}'",
-                ))
+                conflicts.append(
+                    CompanyScopeConflict(
+                        user_id=user.id,
+                        email=user.email,
+                        role=user.role.value,
+                        current_tenant_id=user.tenant_id,
+                        conflict_type="inactive_company",
+                        description=f"Customer is assigned to inactive company '{tenant.name}'",
+                    )
+                )
             elif not tenant:
-                conflicts.append(CompanyScopeConflict(
-                    user_id=user.id,
-                    email=user.email,
-                    role=user.role.value,
-                    current_tenant_id=user.tenant_id,
-                    conflict_type="deleted_company",
-                    description=f"Customer is assigned to non-existent company (id={user.tenant_id})",
-                ))
+                conflicts.append(
+                    CompanyScopeConflict(
+                        user_id=user.id,
+                        email=user.email,
+                        role=user.role.value,
+                        current_tenant_id=user.tenant_id,
+                        conflict_type="deleted_company",
+                        description=f"Customer is assigned to non-existent company (id={user.tenant_id})",
+                    )
+                )
 
         # Conflict 3: Non-customer with customer-only company type (if applicable)
         # This could be extended for more complex scenarios
@@ -1132,9 +1207,9 @@ async def resolve_orphan_invitations(
 
     # Detect orphans
     orphans = []
-    pending_invitations = db.query(Invitation).filter(
-        Invitation.status == InvitationStatus.PENDING
-    ).all()
+    pending_invitations = (
+        db.query(Invitation).filter(Invitation.status == InvitationStatus.PENDING).all()
+    )
 
     for invitation in pending_invitations:
         is_orphan = False

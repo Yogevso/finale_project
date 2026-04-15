@@ -38,10 +38,9 @@ if "chromadb" not in sys.modules:
     ]:
         sys.modules.setdefault(_name, _mod)
 
-from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -50,14 +49,13 @@ from app.config import settings
 settings.APP_ENV = "testing"
 settings.RATE_LIMIT_ENABLED = False
 
-from app.db.bases import AnalyticsBase, ChatBase, CoreBase
-
 # Import models so they register with their Base
-import app.models  # noqa: F401
-from app.models import (
+import app.models  # noqa: F401, E402
+from app.db.bases import AnalyticsBase, ChatBase, CoreBase  # noqa: E402
+from app.models import (  # noqa: E402
     ActionType,
-    AuditLog,
     AssistantConversation,
+    AuditLog,
     Notification,
     NotificationType,
     SecurityEvent,
@@ -65,11 +63,11 @@ from app.models import (
     User,
     UserRole,
 )
-from app.services.chat_service import ChatService
-from app.services.notification_service import NotificationService
-
+from app.services.chat_service import ChatService  # noqa: E402
+from app.services.notification_service import NotificationService  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def core_engine():
@@ -125,15 +123,26 @@ def chat_session(chat_engine):
 # ── Test 1: Table isolation ──────────────────────────────────────────────
 
 EXPECTED_ANALYTICS_TABLES = {
-    "activation_milestones", "audit_logs", "domain_event_outbox",
-    "nps_surveys", "onboarding_events", "search_analytics", "security_events",
+    "activation_milestones",
+    "audit_logs",
+    "domain_event_outbox",
+    "nps_surveys",
+    "onboarding_events",
+    "search_analytics",
+    "security_events",
 }
 
 EXPECTED_CHAT_TABLES = {
-    "assistant_conversations", "assistant_messages", "assistant_uploaded_files",
-    "chat_messages", "chat_participants", "chats",
-    "collaboration_activities", "collaboration_sessions",
-    "collaboration_snapshots", "notifications",
+    "assistant_conversations",
+    "assistant_messages",
+    "assistant_uploaded_files",
+    "chat_messages",
+    "chat_participants",
+    "chats",
+    "collaboration_activities",
+    "collaboration_sessions",
+    "collaboration_snapshots",
+    "notifications",
 }
 
 EXPECTED_CORE_SAMPLE = {"users", "tenants", "documents", "versions", "comments"}
@@ -142,13 +151,21 @@ EXPECTED_CORE_SAMPLE = {"users", "tenants", "documents", "versions", "comments"}
 class TestTableIsolation:
     def test_core_db_has_only_core_tables(self, core_engine):
         tables = set(inspect(core_engine).get_table_names())
-        assert EXPECTED_CORE_SAMPLE.issubset(tables), f"Missing core tables: {EXPECTED_CORE_SAMPLE - tables}"
-        assert not tables & EXPECTED_ANALYTICS_TABLES, f"Analytics tables leaked into core: {tables & EXPECTED_ANALYTICS_TABLES}"
-        assert not tables & EXPECTED_CHAT_TABLES, f"Chat tables leaked into core: {tables & EXPECTED_CHAT_TABLES}"
+        assert EXPECTED_CORE_SAMPLE.issubset(
+            tables
+        ), f"Missing core tables: {EXPECTED_CORE_SAMPLE - tables}"
+        assert (
+            not tables & EXPECTED_ANALYTICS_TABLES
+        ), f"Analytics tables leaked into core: {tables & EXPECTED_ANALYTICS_TABLES}"
+        assert (
+            not tables & EXPECTED_CHAT_TABLES
+        ), f"Chat tables leaked into core: {tables & EXPECTED_CHAT_TABLES}"
 
     def test_analytics_db_has_only_analytics_tables(self, analytics_engine):
         tables = set(inspect(analytics_engine).get_table_names())
-        assert tables == EXPECTED_ANALYTICS_TABLES, f"Expected {EXPECTED_ANALYTICS_TABLES}, got {tables}"
+        assert (
+            tables == EXPECTED_ANALYTICS_TABLES
+        ), f"Expected {EXPECTED_ANALYTICS_TABLES}, got {tables}"
         assert not tables & EXPECTED_CORE_SAMPLE, "Core tables leaked into analytics"
 
     def test_chat_db_has_only_chat_tables(self, chat_engine):
@@ -159,19 +176,27 @@ class TestTableIsolation:
 
 # ── Test 2: CRUD on each database ────────────────────────────────────────
 
+
 class TestCRUDIsolation:
     def test_core_crud(self, core_session):
         """Create a tenant and user in core DB."""
         tenant = Tenant(
-            name="Test Corp", slug="test-corp", is_active=True,
-            contact_email="t@test.com", company_type="customer",
+            name="Test Corp",
+            slug="test-corp",
+            is_active=True,
+            contact_email="t@test.com",
+            company_type="customer",
         )
         core_session.add(tenant)
         core_session.flush()
 
         user = User(
-            email="iso@test.com", username="isouser", full_name="Iso User",
-            hashed_password="fake", role=UserRole.EDITOR, is_active=True,
+            email="iso@test.com",
+            username="isouser",
+            full_name="Iso User",
+            hashed_password="fake",
+            role=UserRole.EDITOR,
+            is_active=True,
             tenant_id=tenant.id,
         )
         core_session.add(user)
@@ -183,14 +208,16 @@ class TestCRUDIsolation:
     def test_analytics_crud(self, analytics_session):
         """Create an audit log and security event in analytics DB."""
         log = AuditLog(
-            user_id=1, action=ActionType.CREATE,
+            user_id=1,
+            action=ActionType.CREATE,
             details='{"test": true}',
         )
         analytics_session.add(log)
         analytics_session.flush()
 
         sec = SecurityEvent(
-            event_type="login", user_id=1,
+            event_type="login",
+            user_id=1,
             ip_address="127.0.0.1",
         )
         analytics_session.add(sec)
@@ -204,14 +231,18 @@ class TestCRUDIsolation:
     def test_chat_crud(self, chat_session):
         """Create a notification and assistant conversation in chat DB."""
         notif = Notification(
-            user_id=1, type="info", title="Test",
-            message="Hello", is_read=False,
+            user_id=1,
+            type="info",
+            title="Test",
+            message="Hello",
+            is_read=False,
         )
         chat_session.add(notif)
         chat_session.flush()
 
         conv = AssistantConversation(
-            user_id=1, title="Test Conv",
+            user_id=1,
+            title="Test Conv",
         )
         chat_session.add(conv)
         chat_session.flush()
@@ -224,11 +255,13 @@ class TestCRUDIsolation:
 
 # ── Test 3: Cross-DB writes don't bleed ──────────────────────────────────
 
+
 class TestCrossDBIsolation:
     def test_analytics_write_not_visible_in_core(self, core_engine, analytics_session):
         """Data written to analytics DB must NOT appear in core DB."""
         log = AuditLog(
-            user_id=99, action=ActionType.SYSTEM,
+            user_id=99,
+            action=ActionType.SYSTEM,
             details='{"phantom": true}',
         )
         analytics_session.add(log)
@@ -241,8 +274,11 @@ class TestCrossDBIsolation:
     def test_chat_write_not_visible_in_core(self, core_engine, chat_session):
         """Data written to chat DB must NOT appear in core DB."""
         notif = Notification(
-            user_id=99, type="ghost", title="Ghost",
-            message="You shouldn't see me", is_read=False,
+            user_id=99,
+            type="ghost",
+            title="Ghost",
+            message="You shouldn't see me",
+            is_read=False,
         )
         chat_session.add(notif)
         chat_session.flush()
@@ -265,8 +301,12 @@ class TestCrossDBIsolation:
 
 class TestCrossDBServiceBehavior:
     def test_chat_service_uses_core_db_for_direct_chat_display_names(self):
-        core_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        chat_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        core_engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
+        chat_engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
         CoreBase.metadata.create_all(bind=core_engine)
         ChatBase.metadata.create_all(bind=chat_engine)
         CoreSession = sessionmaker(bind=core_engine)
@@ -320,8 +360,12 @@ class TestCrossDBServiceBehavior:
             core_engine.dispose()
 
     def test_notification_service_commits_chat_db_after_primary_commit(self):
-        core_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        chat_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        core_engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
+        chat_engine = create_engine(
+            "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        )
         CoreBase.metadata.create_all(bind=core_engine)
         ChatBase.metadata.create_all(bind=chat_engine)
         CoreSession = sessionmaker(bind=core_engine)
@@ -381,6 +425,7 @@ class TestCrossDBServiceBehavior:
 
 # ── Test 4: No FK constraint to external tables ─────────────────────────
 
+
 class TestNoExternalForeignKeys:
     """Verify analytics/chat models don't have FK constraints to core tables."""
 
@@ -390,9 +435,11 @@ class TestNoExternalForeignKeys:
             fks = inspector.get_foreign_keys(table)
             for fk in fks:
                 referred = fk.get("referred_table", "")
-                assert referred not in {"users", "tenants", "documents"}, (
-                    f"Analytics table {table} has FK to core table {referred}"
-                )
+                assert referred not in {
+                    "users",
+                    "tenants",
+                    "documents",
+                }, f"Analytics table {table} has FK to core table {referred}"
 
     def test_chat_no_fk_to_core(self, chat_engine):
         inspector = inspect(chat_engine)
@@ -400,12 +447,15 @@ class TestNoExternalForeignKeys:
             fks = inspector.get_foreign_keys(table)
             for fk in fks:
                 referred = fk.get("referred_table", "")
-                assert referred not in {"users", "tenants", "documents"}, (
-                    f"Chat table {table} has FK to core table {referred}"
-                )
+                assert referred not in {
+                    "users",
+                    "tenants",
+                    "documents",
+                }, f"Chat table {table} has FK to core table {referred}"
 
 
 # ── Test 5: Concurrent write to separate engines ────────────────────────
+
 
 class TestConcurrentWrites:
     def test_parallel_writes_no_lock_contention(
@@ -414,15 +464,19 @@ class TestConcurrentWrites:
         """Writes to all 3 databases succeed independently."""
         # Core
         tenant = Tenant(
-            name="Concurrent Corp", slug="concurrent-corp", is_active=True,
-            contact_email="c@test.com", company_type="customer",
+            name="Concurrent Corp",
+            slug="concurrent-corp",
+            is_active=True,
+            contact_email="c@test.com",
+            company_type="customer",
         )
         core_session.add(tenant)
         core_session.flush()
 
         # Analytics
         log = AuditLog(
-            user_id=1, action=ActionType.VIEW,
+            user_id=1,
+            action=ActionType.VIEW,
             details='{"concurrent": true}',
         )
         analytics_session.add(log)

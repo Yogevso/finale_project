@@ -5,15 +5,12 @@ import uuid
 
 from fastapi import HTTPException
 
-from app.models import Attachment, Document, Version
-from app.services.attachment_service import AttachmentService
 from app.conversion.pdf_to_docx import PdfConversionResult
 from app.conversion.pdf_to_pptx import PdfToPptxConversionResult
+from app.models import Attachment, Document, Version
+from app.services.attachment_service import AttachmentService
 
-
-DOCX_MIME_TYPE = (
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-)
+DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DEFAULT_PLATFORM = "Core Platform"
 
 
@@ -215,7 +212,9 @@ def test_editor_cannot_direct_publish_via_upload_override(client, auth_headers):
     assert response.status_code == 403
 
 
-def test_manager_can_explicitly_publish_via_upload_override(client, manager_headers, db, monkeypatch):
+def test_manager_can_explicitly_publish_via_upload_override(
+    client, manager_headers, db, monkeypatch
+):
     """Managers and above may explicitly publish/upload as public."""
     monkeypatch.setattr(
         "app.services.attachment_service.upload.get_document_converter_wrapper",

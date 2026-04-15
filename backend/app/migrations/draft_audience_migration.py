@@ -75,15 +75,13 @@ def _load_candidate_documents(db: Session, *, limit: int | None = None) -> list[
 
 
 def _load_active_owner_tenants(db: Session, documents: Sequence[Document]) -> dict[int, Tenant]:
-    tenant_ids = sorted({document.tenant_id for document in documents if document.tenant_id is not None})
+    tenant_ids = sorted(
+        {document.tenant_id for document in documents if document.tenant_id is not None}
+    )
     if not tenant_ids:
         return {}
 
-    owners = (
-        db.query(Tenant)
-        .filter(Tenant.id.in_(tenant_ids), Tenant.is_active.is_(True))
-        .all()
-    )
+    owners = db.query(Tenant).filter(Tenant.id.in_(tenant_ids), Tenant.is_active.is_(True)).all()
     return {tenant.id: tenant for tenant in owners}
 
 

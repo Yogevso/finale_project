@@ -40,4 +40,3 @@ class UnitOfWork:
         """Rollback the underlying transaction explicitly."""
         self.db.rollback()
         self._completed = True
-

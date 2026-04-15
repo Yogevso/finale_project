@@ -24,7 +24,6 @@ def _fixture_bytes(name: str = "wave_y_empty.docx") -> bytes:
 
 # ── Real DOCX bytes labeled DOCX → should 201 ───────────────────────────
 class TestUploadMagicBytesAccept:
-
     def test_valid_docx_accepted(self, client: TestClient, auth_headers: dict, test_document):
         """A proper .docx file (ZIP/PK header) passes magic-byte guard."""
         resp = client.post(
@@ -66,7 +65,6 @@ class TestUploadMagicBytesAccept:
 
 # ── Mismatched content → should 400 ─────────────────────────────────────
 class TestUploadMagicBytesReject:
-
     def test_exe_renamed_to_docx_rejected(
         self, client: TestClient, auth_headers: dict, test_document
     ):
@@ -80,9 +78,7 @@ class TestUploadMagicBytesReject:
         assert resp.status_code == 400
         assert "does not match extension" in resp.json()["detail"]
 
-    def test_png_data_as_pdf_rejected(
-        self, client: TestClient, auth_headers: dict, test_document
-    ):
+    def test_png_data_as_pdf_rejected(self, client: TestClient, auth_headers: dict, test_document):
         """PNG bytes served as .pdf must be rejected."""
         png_header = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50
         resp = client.post(
@@ -118,9 +114,7 @@ class TestUploadMagicBytesReject:
         assert resp.status_code == 400
         assert "does not match extension" in resp.json()["detail"]
 
-    def test_too_small_file_rejected(
-        self, client: TestClient, auth_headers: dict, test_document
-    ):
+    def test_too_small_file_rejected(self, client: TestClient, auth_headers: dict, test_document):
         """A file under 4 bytes named as a binary format must be rejected."""
         tiny = b"AB"
         resp = client.post(

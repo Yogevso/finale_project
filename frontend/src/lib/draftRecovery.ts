@@ -1,4 +1,4 @@
-import type { SectionEditMode } from '@/pages/document-detail/helpers/previewHelpers'
+export type SectionEditMode = 'edit' | 'insert' | 'full'
 
 export interface DraftRecoveryTarget {
   documentId: number

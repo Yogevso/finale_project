@@ -34,9 +34,7 @@ class AccessDenialAuditMiddleware(BaseHTTPMiddleware):
         user_id = getattr(request.state, "user_id", None)
         client_ip = self._get_client_ip(request)
         user_agent = request.headers.get("user-agent", "")[:512]
-        event_type = (
-            "access_denied_403" if response.status_code == 403 else "auth_failed_401"
-        )
+        event_type = "access_denied_403" if response.status_code == 403 else "auth_failed_401"
 
         try:
             from app.services.audit_helper import write_security_event

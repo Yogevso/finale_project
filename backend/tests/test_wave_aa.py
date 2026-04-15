@@ -22,14 +22,10 @@ from app.models import (
     AuditLog,
     Bookmark,
     Comment,
-    DataRequest,
     DataRequestStatus,
     DataRequestType,
     Document,
     DocumentStatus,
-    DocumentVisibility,
-    Feedback,
-    User,
     UserRole,
 )
 from app.services.gdpr_service import (
@@ -42,7 +38,6 @@ from app.services.gdpr_service import (
     request_data_export,
 )
 from tests.factories import create_document, create_tenant, create_user
-
 
 # ---------------------------------------------------------------------------
 # AA-017  Data Export Integration Test
@@ -85,7 +80,7 @@ class TestDataExport:
         """Export ZIP must list documents created by the user."""
         tenant = create_tenant(db)
         user = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
-        doc = create_document(db, created_by=user.id, title="My Doc")
+        create_document(db, created_by=user.id, title="My Doc")
 
         req = request_data_export(db, user_id=user.id, reason="test")
         zip_bytes = execute_data_export(db, req.id)
@@ -198,7 +193,9 @@ class TestDataDeletion:
         assert req.status == DataRequestStatus.PENDING
 
         # Step 2: Approve
-        req = approve_data_deletion(db, req.id, admin_id=admin.id, approved=True, comment="Approved")
+        req = approve_data_deletion(
+            db, req.id, admin_id=admin.id, approved=True, comment="Approved"
+        )
         assert req.status == DataRequestStatus.APPROVED
 
         # Step 3: Execute
@@ -364,8 +361,8 @@ class TestDependencyAuditScript:
 
     def test_audit_script_has_main_function(self):
         """The script should be executable."""
-        from pathlib import Path
         import importlib.util
+        from pathlib import Path
 
         script_path = Path(__file__).resolve().parents[1] / "scripts" / "dependency_audit.py"
         spec = importlib.util.spec_from_file_location("dependency_audit", script_path)
@@ -390,11 +387,13 @@ class TestAuditIntegrity:
         user = create_user(db, role=UserRole.EDITOR, tenant_id=tenant.id)
 
         # Create an unsigned audit log
-        db.add(AuditLog(
-            user_id=user.id,
-            action=ActionType.CREATE,
-            details='{"test": "unsigned"}',
-        ))
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action=ActionType.CREATE,
+                details='{"test": "unsigned"}',
+            )
+        )
         db.commit()
 
         result = check_audit_integrity(db)

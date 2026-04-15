@@ -110,9 +110,7 @@ class TestSearchIndexSyncService:
         SearchIndexSyncService(db).sync_document(doc.id)
 
         row = db.execute(
-            text(
-                "SELECT tenant_id, visibility, status FROM documents_fts WHERE rowid = :doc_id"
-            ),
+            text("SELECT tenant_id, visibility, status FROM documents_fts WHERE rowid = :doc_id"),
             {"doc_id": doc.id},
         ).fetchone()
 

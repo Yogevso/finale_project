@@ -168,7 +168,10 @@ def test_assign_company_set_use_case_replay_is_state_idempotent(
     )
     assert int(document.row_version) == row_version_after_first
     assert document.etag == etag_after_first
-    assert db.query(AuditLog).filter(AuditLog.document_id == document.id).count() == audit_count_after_first
+    assert (
+        db.query(AuditLog).filter(AuditLog.document_id == document.id).count()
+        == audit_count_after_first
+    )
 
     with pytest.raises(ValidationError) as exc_info:
         service.assign_company_set(document.id, [])

@@ -54,7 +54,9 @@ def _force_invalid_company_audience(*, db, document_id: int) -> None:
     db.commit()
 
 
-def test_smoke_assign_companies_requires_auth(client: TestClient, sample_document: dict, test_tenant):
+def test_smoke_assign_companies_requires_auth(
+    client: TestClient, sample_document: dict, test_tenant
+):
     resp = client.post(
         f"/api/v1/documents/{sample_document['id']}/assign-companies",
         json={"company_ids": [test_tenant.id]},
@@ -62,7 +64,9 @@ def test_smoke_assign_companies_requires_auth(client: TestClient, sample_documen
     assert resp.status_code == 401
 
 
-def test_smoke_bulk_assign_companies_requires_auth(client: TestClient, sample_document: dict, test_tenant):
+def test_smoke_bulk_assign_companies_requires_auth(
+    client: TestClient, sample_document: dict, test_tenant
+):
     resp = client.put(
         f"/api/v1/documents/{sample_document['id']}/companies/batch",
         json={"company_ids": [test_tenant.id]},
@@ -164,7 +168,9 @@ def test_smoke_publish_blocks_invalid_audience_when_enforcement_enabled(
         headers=system_admin_headers,
     )
     assert publish_resp.status_code == 400
-    assert "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
+    assert (
+        "Company visibility requires at least one assigned company" in publish_resp.json()["detail"]
+    )
 
 
 def test_smoke_publish_warns_when_enforcement_disabled(
@@ -256,4 +262,3 @@ def test_smoke_publish_warns_when_validation_unreachable_and_safe_mode_on(
     payload = publish_resp.json()
     assert payload["warnings"]
     assert any("safe-mode fallback allowed publish" in warning for warning in payload["warnings"])
-

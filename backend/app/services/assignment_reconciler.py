@@ -81,11 +81,14 @@ def process_assignment_reconciliation_batch(
 
             old_company_ids = sorted(company.id for company in (document.assigned_companies or []))
             new_companies = [
-                company for company in (document.assigned_companies or [])
+                company
+                for company in (document.assigned_companies or [])
                 if company.id not in stale_company_ids
             ]
             new_company_ids = sorted(company.id for company in new_companies)
-            removed_company_ids = [company_id for company_id in old_company_ids if company_id not in new_company_ids]
+            removed_company_ids = [
+                company_id for company_id in old_company_ids if company_id not in new_company_ids
+            ]
             if not removed_company_ids:
                 report.skipped += 1
                 continue
@@ -131,7 +134,9 @@ def process_assignment_reconciliation_batch(
             session.rollback()
 
         return report
-    except Exception:  # policy: COMPENSATING — reconciler must roll back partial mutations before re-raising
+    except (
+        Exception
+    ):  # policy: COMPENSATING — reconciler must roll back partial mutations before re-raising
         session.rollback()
         raise
     finally:

@@ -10,6 +10,7 @@ from app.collaboration.session_manager import SessionManager
 from app.models import User
 from app.observability import UseCaseTimer
 from app.security import get_current_active_user
+
 from .telemetry import record_collaboration_telemetry
 
 router = APIRouter()
@@ -72,7 +73,9 @@ async def start_collaboration_session(
             document_id=payload["document_id"],
             started_at=payload["started_at"],
         )
-    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
         error_type = type(exc).__name__
         raise
     finally:
@@ -106,7 +109,9 @@ async def end_collaboration_session(
         )
         outcome = "success"
         return payload
-    except Exception as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
+    except (
+        Exception
+    ) as exc:  # policy: BOUNDARY — route telemetry must capture failures before re-raising
         error_type = type(exc).__name__
         raise
     finally:

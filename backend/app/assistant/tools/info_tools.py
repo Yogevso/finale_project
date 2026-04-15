@@ -12,7 +12,7 @@ from app.assistant.document_access import (
 )
 from app.assistant.tools.base import BaseTool
 from app.models import Document, DocumentStatus, DocumentVisibility, User
-from app.services.permissions import Permission, get_user_permissions
+from app.services.permissions import get_user_permissions
 
 
 class GetMyProfileTool(BaseTool):
@@ -20,7 +20,9 @@ class GetMyProfileTool(BaseTool):
     description = "Get your own profile information including name, email, role, and tenant."
     parameters = {"type": "object", "properties": {}, "required": []}
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         info = (
             f"Username: {user.username}\n"
             f"Email: {user.email}\n"
@@ -37,7 +39,9 @@ class GetMyPermissionsTool(BaseTool):
     description = "List all permissions your current role grants you."
     parameters = {"type": "object", "properties": {}, "required": []}
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         perms = get_user_permissions(user)
         if not perms:
             return {"success": True, "result": "You have no special permissions."}
@@ -52,7 +56,9 @@ class GetHelpTool(BaseTool):
     description = "List all assistant tools available to you with their descriptions."
     parameters = {"type": "object", "properties": {}, "required": []}
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from app.assistant.tools.registry import registry
 
         tools = registry.get_tools_for_user(user)
@@ -76,10 +82,12 @@ class SearchPublicDocumentsTool(BaseTool):
         "required": ["query"],
     }
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         from sqlalchemy import or_
 
-        from app.models import UserRole, document_company_assignments
+        from app.models import UserRole
 
         q = params["query"].strip()
         limit = min(params.get("limit", 10), 50)
@@ -139,13 +147,19 @@ class GetDocumentContentTool(BaseTool):
         "required": ["document_id"],
     }
 
-    async def execute(self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session) -> dict[str, Any]:
+    async def execute(
+        self, user: User, tenant_id: int | None, params: dict[str, Any], db: Session
+    ) -> dict[str, Any]:
         doc = db.query(Document).filter(Document.id == params["document_id"]).first()
         if doc is None:
             return {"success": False, "result": "", "error": "Document not found."}
 
         if not assistant_can_view_document(user, doc, tenant_id=tenant_id):
-            return {"success": False, "result": "", "error": "You do not have access to this document."}
+            return {
+                "success": False,
+                "result": "",
+                "error": "You do not have access to this document.",
+            }
 
         version = resolve_assistant_visible_version(
             db,
@@ -156,6 +170,7 @@ class GetDocumentContentTool(BaseTool):
 
         if version and version.content:
             from app.assistant.rag.chunker import DocumentChunker
+
             text = DocumentChunker.strip_html(version.content).strip()
             if not text:
                 text = "(document contains only images or non-text content)"

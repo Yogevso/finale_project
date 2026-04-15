@@ -5,17 +5,14 @@ import pytest
 from app.config import settings
 from app.errors import DomainError
 from app.models import (
-    Document,
     DocumentStatus,
     DocumentVisibility,
     Feedback,
     FeedbackType,
     Notification,
     NotificationType,
-    SupportTicket,
     SupportTicketAssignment,
     SupportTicketMessage,
-    SupportTicketPriority,
     SupportTicketStatus,
     UserRole,
 )
@@ -52,8 +49,11 @@ def tenant(db):
 @pytest.fixture
 def customer(db, tenant):
     return create_user(
-        db, username="support_cust", full_name="Support Customer",
-        role=UserRole.CUSTOMER, tenant_id=tenant.id,
+        db,
+        username="support_cust",
+        full_name="Support Customer",
+        role=UserRole.CUSTOMER,
+        tenant_id=tenant.id,
     )
 
 
@@ -61,32 +61,44 @@ def customer(db, tenant):
 def customer_b(db):
     other_tenant = create_tenant(db, name="Other Tenant", slug="other-tenant-supp")
     return create_user(
-        db, username="other_cust", full_name="Other Customer",
-        role=UserRole.CUSTOMER, tenant_id=other_tenant.id,
+        db,
+        username="other_cust",
+        full_name="Other Customer",
+        role=UserRole.CUSTOMER,
+        tenant_id=other_tenant.id,
     )
 
 
 @pytest.fixture
 def agent(db, tenant):
     return create_user(
-        db, username="agent1", full_name="Agent One",
-        role=UserRole.MANAGER, tenant_id=tenant.id,
+        db,
+        username="agent1",
+        full_name="Agent One",
+        role=UserRole.MANAGER,
+        tenant_id=tenant.id,
     )
 
 
 @pytest.fixture
 def agent_b(db, tenant):
     return create_user(
-        db, username="agent2", full_name="Agent Two",
-        role=UserRole.MANAGER, tenant_id=tenant.id,
+        db,
+        username="agent2",
+        full_name="Agent Two",
+        role=UserRole.MANAGER,
+        tenant_id=tenant.id,
     )
 
 
 @pytest.fixture
 def feedback(db, customer, tenant):
     doc = create_document(
-        db, title="FB Doc", created_by=customer.id,
-        status=DocumentStatus.ACTIVE, visibility=DocumentVisibility.PUBLIC,
+        db,
+        title="FB Doc",
+        created_by=customer.id,
+        status=DocumentStatus.ACTIVE,
+        visibility=DocumentVisibility.PUBLIC,
     )
     fb = Feedback(
         user_id=customer.id,
@@ -109,6 +121,7 @@ def svc(db):
 # X1-107: create_ticket_from_feedback
 # =====================================================================
 
+
 class TestCreateTicketFromFeedback:
     """X1-107: Verify ticket created with correct customer, subject extracted."""
 
@@ -122,11 +135,7 @@ class TestCreateTicketFromFeedback:
 
     def test_initial_message_matches_feedback(self, db, svc, customer, feedback):
         ticket = svc.create_ticket_from_feedback(customer, feedback.id)
-        msgs = (
-            db.query(SupportTicketMessage)
-            .filter_by(ticket_id=ticket.id)
-            .all()
-        )
+        msgs = db.query(SupportTicketMessage).filter_by(ticket_id=ticket.id).all()
         assert len(msgs) == 1
         assert msgs[0].content == feedback.content
         assert msgs[0].sender_id == customer.id
@@ -149,6 +158,7 @@ class TestCreateTicketFromFeedback:
 # =====================================================================
 # X1-108: Internal notes visibility
 # =====================================================================
+
 
 class TestInternalNotes:
     """X1-108: Verify customer cannot see notes, agents can."""
@@ -184,6 +194,7 @@ class TestInternalNotes:
 # X1-109: Status transitions
 # =====================================================================
 
+
 class TestStatusTransitions:
     """X1-109: Verify valid transitions, reject invalid."""
 
@@ -203,7 +214,7 @@ class TestStatusTransitions:
 
     def test_customer_close_resolved_ticket(self, svc, customer):
         ticket = svc.create_ticket(customer, "Subject", "Content")
-        svc.update_ticket.__func__  # ensure method exists
+        assert hasattr(svc.update_ticket, "__func__")  # ensure method exists
         # Manually set resolved for this test
         ticket.status = SupportTicketStatus.RESOLVED
         svc.db.commit()
@@ -231,6 +242,7 @@ class TestStatusTransitions:
 # X1-110: Multi-agent ticket
 # =====================================================================
 
+
 class TestMultiAgentTicket:
     """X1-110: Two agents respond, verify both messages appear."""
 
@@ -252,11 +264,7 @@ class TestMultiAgentTicket:
         svc.assign_agent(ticket.id, agent, agent.id)
         svc.assign_agent(ticket.id, agent_b, agent_b.id)
 
-        assignments = (
-            db.query(SupportTicketAssignment)
-            .filter_by(ticket_id=ticket.id)
-            .all()
-        )
+        assignments = db.query(SupportTicketAssignment).filter_by(ticket_id=ticket.id).all()
         agent_ids = {a.agent_id for a in assignments}
         assert agent_ids == {agent.id, agent_b.id}
 
@@ -266,12 +274,16 @@ class TestMultiAgentTicket:
 
         svc.handoff_ticket(ticket.id, agent, agent_b.id, note="Take over please")
 
-        a1 = db.query(SupportTicketAssignment).filter_by(
-            ticket_id=ticket.id, agent_id=agent.id
-        ).first()
-        a2 = db.query(SupportTicketAssignment).filter_by(
-            ticket_id=ticket.id, agent_id=agent_b.id
-        ).first()
+        a1 = (
+            db.query(SupportTicketAssignment)
+            .filter_by(ticket_id=ticket.id, agent_id=agent.id)
+            .first()
+        )
+        a2 = (
+            db.query(SupportTicketAssignment)
+            .filter_by(ticket_id=ticket.id, agent_id=agent_b.id)
+            .first()
+        )
         assert a1.is_primary is False
         assert a2.is_primary is True
 
@@ -279,6 +291,7 @@ class TestMultiAgentTicket:
 # =====================================================================
 # X1-111: Customer isolation
 # =====================================================================
+
 
 class TestCustomerIsolation:
     """X1-111: Customer cannot access other customer's ticket."""
@@ -312,7 +325,9 @@ class TestCustomerIsolation:
         svc.create_ticket(customer_b, "Ticket B", "B")
 
         sys_admin = create_user(
-            db, username="sys_agent", full_name="Sys Agent",
+            db,
+            username="sys_agent",
+            full_name="Sys Agent",
             role=UserRole.SYSTEM_ADMIN,
         )
         tickets, total = svc.list_tickets(sys_admin)
@@ -550,14 +565,10 @@ class TestSupportNotifications:
         )
 
         same_tenant_notifications = (
-            svc.db.query(Notification)
-            .filter(Notification.user_id == same_tenant_editor.id)
-            .all()
+            svc.db.query(Notification).filter(Notification.user_id == same_tenant_editor.id).all()
         )
         external_notifications = (
-            svc.db.query(Notification)
-            .filter(Notification.user_id == external_editor.id)
-            .all()
+            svc.db.query(Notification).filter(Notification.user_id == external_editor.id).all()
         )
 
         assert len(same_tenant_notifications) == 1
@@ -595,7 +606,9 @@ class TestSupportMessageAttachments:
         monkeypatch,
     ):
         fake_storage = _FakeStorageBackend()
-        monkeypatch.setattr("app.services.support_service.get_storage_backend", lambda: fake_storage)
+        monkeypatch.setattr(
+            "app.services.support_service.get_storage_backend", lambda: fake_storage
+        )
 
         ticket = svc.create_ticket(customer, "Attachment support", "Initial issue")
         message = svc.send_message(
@@ -629,7 +642,9 @@ class TestSupportMessageAttachments:
         monkeypatch,
     ):
         fake_storage = _FakeStorageBackend()
-        monkeypatch.setattr("app.services.support_service.get_storage_backend", lambda: fake_storage)
+        monkeypatch.setattr(
+            "app.services.support_service.get_storage_backend", lambda: fake_storage
+        )
 
         ticket = svc.create_ticket(customer, "Attachment download", "Initial issue")
         message = svc.send_message(
