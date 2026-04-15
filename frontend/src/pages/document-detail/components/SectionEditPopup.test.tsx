@@ -279,6 +279,8 @@ describe('DraftRecovery in SectionEditPopup', () => {
     expect(commandSpies.addRowAfter).toHaveBeenCalledTimes(1)
     expect(commandSpies.addColumnAfter).toHaveBeenCalledTimes(1)
 
+    // Check the "Submit for review" checkbox to change the button text
+    await user.click(screen.getByRole('checkbox', { name: /submit for review after saving/i }))
     await user.click(screen.getByRole('button', { name: /save & submit for review/i }))
 
     await waitFor(() => {

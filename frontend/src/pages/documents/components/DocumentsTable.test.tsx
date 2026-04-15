@@ -73,7 +73,7 @@ describe('DocumentsTable', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete Document 42' }))
 
-    expect(onDelete).toHaveBeenCalledWith(42, 'Document 42')
+    expect(onDelete).toHaveBeenCalledWith(42, 'Document 42', 'etag-42')
   })
 
   it('shows restore and purge actions in the recovery window', async () => {
@@ -116,8 +116,8 @@ describe('DocumentsTable', () => {
     await user.click(screen.getByRole('button', { name: 'Restore Document 42' }))
     await user.click(screen.getByRole('button', { name: 'Permanently delete Document 42' }))
 
-    expect(onRestoreDeleted).toHaveBeenCalledWith(42, 'Document 42')
-    expect(onPurgeDeleted).toHaveBeenCalledWith(42, 'Document 42')
+    expect(onRestoreDeleted).toHaveBeenCalledWith(42, 'Document 42', 'etag-42')
+    expect(onPurgeDeleted).toHaveBeenCalledWith(42, 'Document 42', 'etag-42')
   })
 
   it('renders normalized titles and description previews for edge-case values', () => {

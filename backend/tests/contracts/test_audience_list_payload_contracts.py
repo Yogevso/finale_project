@@ -214,6 +214,17 @@ def test_public_documents_list_matches_frontend_dto_shape(
     db.commit()
     db.refresh(doc)
 
+    # Create a published version so the document appears in public listing
+    version = Version(
+        document_id=doc.id,
+        version_number=1,
+        changes_summary="Initial version",
+        is_published=True,
+        created_by=test_admin.id,
+    )
+    db.add(version)
+    db.commit()
+
     response = client.get(f"/api/v1/public/documents?search={marker}&page=1&page_size=100")
     assert response.status_code == 200
 
