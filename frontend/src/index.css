@@ -8,8 +8,8 @@
 
 @layer base {
   :root {
-    --font-display: "Space Grotesk", sans-serif;
-    --font-body: "IBM Plex Sans", sans-serif;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'IBM Plex Sans', sans-serif;
     --app-shell-header-height: 0px;
     --background: 210 35% 98%;
     --foreground: 222 47% 11%;
@@ -61,7 +61,7 @@
   .surface-card {
     @apply bg-white border border-slate-200 rounded-2xl shadow-[0_12px_24px_-24px_rgba(8,30,55,0.45)];
   }
-  
+
   .surface-card-hover {
     @apply bg-white border border-slate-200 rounded-2xl shadow-[0_12px_24px_-24px_rgba(8,30,55,0.45)] hover:border-slate-300 hover:shadow-[0_20px_36px_-24px_rgba(8,30,55,0.5)] hover:-translate-y-0.5 transition-all duration-200;
   }
@@ -193,7 +193,7 @@
   }
 
   .admin-sticky-toolbar::before {
-    content: "";
+    content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -211,11 +211,19 @@
     background:
       linear-gradient(to right, white 30%, transparent),
       linear-gradient(to left, white 30%, transparent),
-      linear-gradient(to right, rgba(0,0,0,.08), transparent 15px),
-      linear-gradient(to left, rgba(0,0,0,.08), transparent 15px);
-    background-position: left center, right center, left center, right center;
+      linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent 15px),
+      linear-gradient(to left, rgba(0, 0, 0, 0.08), transparent 15px);
+    background-position:
+      left center,
+      right center,
+      left center,
+      right center;
     background-repeat: no-repeat;
-    background-size: 20px 100%, 20px 100%, 15px 100%, 15px 100%;
+    background-size:
+      20px 100%,
+      20px 100%,
+      15px 100%,
+      15px 100%;
     background-attachment: local, local, scroll, scroll;
   }
 
@@ -258,7 +266,7 @@
   }
 
   .admin-table-cell:first-child::before {
-    content: "";
+    content: '';
     position: absolute;
     left: 0;
     top: 0.5rem;
@@ -452,6 +460,68 @@
     background: #f59e0b;
     box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.28);
   }
+
+  .review-section-body {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .review-section-body--modified {
+    background: rgba(255, 247, 237, 0.9);
+    border-color: rgba(251, 191, 36, 0.28);
+  }
+
+  .review-section-body--added {
+    background: rgba(236, 253, 245, 0.92);
+    border-color: rgba(16, 185, 129, 0.24);
+  }
+
+  .review-section-body--removed {
+    background: rgba(254, 242, 242, 0.92);
+    border-color: rgba(244, 63, 94, 0.22);
+  }
+
+  .review-section-body--suggested {
+    background: rgba(239, 246, 255, 0.94);
+    border-color: rgba(56, 189, 248, 0.26);
+  }
+
+  .document-review-highlight {
+    border-radius: 1rem;
+    padding: 0.65rem 0.85rem;
+    margin-inline: -0.85rem;
+    scroll-margin-top: 5.5rem;
+    transition:
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .document-review-highlight--modified {
+    background: rgba(255, 247, 237, 0.96);
+    box-shadow: inset 4px 0 0 rgba(245, 158, 11, 0.48);
+  }
+
+  .document-review-highlight--added {
+    background: rgba(236, 253, 245, 0.98);
+    box-shadow: inset 4px 0 0 rgba(16, 185, 129, 0.44);
+  }
+
+  .document-review-highlight--removed {
+    background: rgba(254, 242, 242, 0.98);
+    box-shadow: inset 4px 0 0 rgba(244, 63, 94, 0.42);
+  }
+
+  .document-review-highlight--suggested {
+    background: rgba(239, 246, 255, 0.98);
+    box-shadow: inset 4px 0 0 rgba(14, 165, 233, 0.42);
+  }
+
+  .document-review-highlight--focus {
+    box-shadow:
+      inset 4px 0 0 rgba(14, 165, 233, 0.42),
+      0 0 0 1px rgba(125, 211, 252, 0.45);
+  }
 }
 
 .dark .surface-card,
@@ -482,9 +552,17 @@
     linear-gradient(to left, #0f172a 30%, transparent),
     linear-gradient(to right, rgba(148, 163, 184, 0.18), transparent 15px),
     linear-gradient(to left, rgba(148, 163, 184, 0.18), transparent 15px);
-  background-position: left center, right center, left center, right center;
+  background-position:
+    left center,
+    right center,
+    left center,
+    right center;
   background-repeat: no-repeat;
-  background-size: 20px 100%, 20px 100%, 15px 100%, 15px 100%;
+  background-size:
+    20px 100%,
+    20px 100%,
+    15px 100%,
+    15px 100%;
   background-attachment: local, local, scroll, scroll;
 }
 
@@ -636,7 +714,8 @@
 }
 
 @keyframes syncPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.72;
     transform: scale(0.96);
   }
@@ -656,11 +735,13 @@ html {
 
 body {
   font-family: var(--font-body);
-  font-feature-settings: "rlig" 1, "calt" 1;
+  font-feature-settings:
+    'rlig' 1,
+    'calt' 1;
   color: #0b2d52;
-  background: radial-gradient(circle at top, rgba(0, 113, 197, 0.08), transparent 52%),
-    radial-gradient(circle at 20% 20%, rgba(123, 197, 255, 0.12), transparent 45%),
-    #f7f9fc;
+  background:
+    radial-gradient(circle at top, rgba(0, 113, 197, 0.08), transparent 52%),
+    radial-gradient(circle at 20% 20%, rgba(123, 197, 255, 0.12), transparent 45%), #f7f9fc;
   min-height: 100vh;
 }
 
@@ -668,11 +749,15 @@ body {
   color: #e2e8f0;
   background:
     radial-gradient(circle at top, rgba(14, 165, 233, 0.14), transparent 48%),
-    radial-gradient(circle at 20% 20%, rgba(2, 132, 199, 0.16), transparent 36%),
-    #020617;
+    radial-gradient(circle at 20% 20%, rgba(2, 132, 199, 0.16), transparent 36%), #020617;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
 }
@@ -905,7 +990,9 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--doc-paper-bg);
   border: 1px solid var(--doc-paper-border);
   border-radius: 10px;
-  box-shadow: 0 22px 44px -30px rgba(15, 23, 42, 0.55), 0 6px 18px -14px rgba(15, 23, 42, 0.45);
+  box-shadow:
+    0 22px 44px -30px rgba(15, 23, 42, 0.55),
+    0 6px 18px -14px rgba(15, 23, 42, 0.45);
 }
 
 .document-preview-paper-fluid {
@@ -985,7 +1072,7 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-kerning: normal;
-  font-family: "IBM Plex Serif", "Georgia", "Times New Roman", serif;
+  font-family: 'IBM Plex Serif', 'Georgia', 'Times New Roman', serif;
   font-size: var(--doc-font-size, 1rem);
   line-height: 1.74;
   letter-spacing: 0.002em;
@@ -1103,7 +1190,9 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 0.95rem;
   background: var(--doc-table-bg);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
   transform-origin: top center;
   position: relative;
   z-index: 1;
@@ -1112,7 +1201,9 @@ h1, h2, h3, h4, h5, h6 {
 .document-preview-content .document-table-scroll:hover,
 .document-preview-content .table-wrapper:hover {
   transform: scale(1.045);
-  box-shadow: 0 8px 32px -8px rgba(15, 23, 42, 0.18), 0 2px 8px -2px rgba(15, 23, 42, 0.10);
+  box-shadow:
+    0 8px 32px -8px rgba(15, 23, 42, 0.18),
+    0 2px 8px -2px rgba(15, 23, 42, 0.1);
   z-index: 10;
   border-color: var(--doc-link-color);
 }
@@ -1128,7 +1219,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .document-preview-content--reader {
-  font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
   font-size: var(--doc-font-size, 1rem);
   line-height: 1.68;
 }
@@ -1303,7 +1394,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .document-preview-content code {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
   background: var(--doc-inline-code-bg);
   color: var(--doc-inline-code-color);
   border-radius: 0.25rem;
@@ -1499,7 +1592,10 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--doc-link-color);
   background: transparent;
   opacity: 0;
-  transition: opacity 160ms ease, background-color 160ms ease, color 160ms ease;
+  transition:
+    opacity 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 .document-heading-copyable:hover .document-heading-anchor,
@@ -1526,7 +1622,9 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--doc-code-copy-color);
   border: 1px solid var(--doc-code-block-border);
   box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.45);
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .document-code-copy-button:hover {

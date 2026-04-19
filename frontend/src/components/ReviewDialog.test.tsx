@@ -1,25 +1,57 @@
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { BrowserRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { BrowserRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import ReviewDialog from './ReviewDialog'
-import type { ReviewRequest } from '@/types'
+import ReviewDialog from './ReviewDialog';
+import type { ReviewRequest } from '@/types';
 
 vi.mock('@/lib/api', () => ({
   api: {
+    getAttachmentReaderView: vi.fn(),
+    getAttachments: vi.fn(),
     getPreApprovePolicy: vi.fn(),
     getVersion: vi.fn(),
+    getVersions: vi.fn(),
   },
-}))
+}));
 
-import { api } from '@/lib/api'
+import { api } from '@/lib/api';
+
+const previousVersion = {
+  id: 10,
+  document_id: 42,
+  version_number: 1,
+  semantic_version: '1.0.0',
+  content: '<h1>Overview</h1><p>Before review</p><h2>Legacy Section</h2><p>Legacy copy</p>',
+  changes_summary: 'Original baseline',
+  is_published: false,
+  created_by: 5,
+  created_at: '2025-12-30T12:00:00Z',
+} as const;
+
+const currentVersion = {
+  id: 11,
+  document_id: 42,
+  version_number: 2,
+  semantic_version: '1.1.0',
+  content: '<h1>Overview</h1><p>After review</p><h2>New Section</h2><p>Updated copy</p>',
+  changes_summary: 'Updated introduction and added a new section',
+  is_published: false,
+  created_by: 7,
+  created_at: '2026-01-01T12:00:00Z',
+  created_by_user: {
+    id: 7,
+    full_name: 'Taylor Reviewer',
+    role: 'manager',
+  },
+} as const;
 
 function buildReview(overrides: Partial<ReviewRequest> = {}): ReviewRequest {
   return {
     id: 1,
     document_id: 42,
-    version_id: null,
+    version_id: 11,
     submitted_by: 7,
     reviewed_by: null,
     status: 'pending',
@@ -38,11 +70,12 @@ function buildReview(overrides: Partial<ReviewRequest> = {}): ReviewRequest {
       full_name: 'Taylor Reviewer',
     } as ReviewRequest['submitter'],
     ...overrides,
-  }
+  };
 }
 
 describe('ReviewDialog', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.mocked(api.getPreApprovePolicy).mockResolvedValue({
       can_approve: true,
       audience_summary: 'Document is internal only',
@@ -55,21 +88,50 @@ describe('ReviewDialog', () => {
         },
       ],
       warnings: [],
-    })
-    vi.mocked(api.getVersion).mockResolvedValue({
-      id: 11,
-      document_id: 42,
-      version_number: 1,
-      content: null,
-      changes_summary: 'Updated introduction',
-      is_published: false,
-      created_by: 7,
-      created_at: '2026-01-01T12:00:00Z',
-    } as never)
-  })
+    });
+    vi.mocked(api.getVersion).mockImplementation(async (_documentId, versionId) => {
+      if (versionId === 11) {
+        return currentVersion as never;
+      }
+
+      return previousVersion as never;
+    });
+    vi.mocked(api.getVersions).mockResolvedValue({
+      items: [currentVersion, previousVersion],
+      total: 2,
+    } as never);
+    vi.mocked(api.getAttachments).mockResolvedValue([
+      {
+        id: 501,
+        document_id: 42,
+        filename: 'security-policy.docx',
+        original_filename: 'security-policy.docx',
+        file_size: 1024,
+        mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        reader_html_status: 'ready',
+        reader_toc_source: 'headings',
+        uploaded_by: 7,
+        uploaded_at: '2026-01-01T11:00:00Z',
+      },
+    ] as never);
+    vi.mocked(api.getAttachmentReaderView).mockResolvedValue({
+      attachment_id: 501,
+      status: 'ready',
+      html_content: currentVersion.content,
+      toc_items: [
+        { id: 'toc-overview', title: 'Overview', level: 1, page: 1, page_start: 1 },
+        { id: 'toc-new', title: 'New Section', level: 2, page: 2, page_start: 2 },
+      ],
+      toc_source: 'headings',
+      warnings: [],
+      confidence: 0.98,
+      error: null,
+      generated_at: '2026-01-01T11:30:00Z',
+    } as never);
+  });
 
   it('shows inline rejection guidance instead of using a browser alert', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
 
     render(
       <BrowserRouter>
@@ -80,24 +142,57 @@ describe('ReviewDialog', () => {
           onReject={vi.fn()}
           isLoading={false}
         />
-      </BrowserRouter>,
-    )
+      </BrowserRouter>
+    );
 
-    expect(screen.getByRole('dialog', { name: /review document/i })).toBeInTheDocument()
-    expect(await screen.findByText(/approval policy/i)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: /review document/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /start review/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /reject/i }))
+    await user.click(screen.getByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /go to final review/i }));
+    expect(await screen.findByText(/approval policy/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /suggest changes/i }));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Rejection comments are required before you can confirm.',
-    )
-    expect(screen.getByRole('textbox', { name: /review comments/i })).toHaveAttribute(
+      'Add a general note or at least one section suggestion before sending the review back.'
+    );
+    expect(screen.getByRole('textbox', { name: /general review note/i })).toHaveAttribute(
       'aria-invalid',
-      'true',
-    )
-  })
+      'true'
+    );
+  });
+
+  it('starts a guided section review using the changed toc sections', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <BrowserRouter>
+        <ReviewDialog
+          review={buildReview()}
+          onClose={vi.fn()}
+          onApprove={vi.fn()}
+          onReject={vi.fn()}
+          isLoading={false}
+        />
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByRole('button', { name: /start review/i })).toBeInTheDocument();
+    expect(screen.getByText(/read each changed section in the document flow/i)).toBeInTheDocument();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByText('New Section')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /start review/i }));
+
+    expect(screen.getByText(/reviewing section 1 of 3/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /next section/i })).toBeInTheDocument();
+  });
 
   it('disables approval when the preflight policy blocks approval', async () => {
+    const user = userEvent.setup();
+
     vi.mocked(api.getPreApprovePolicy).mockResolvedValueOnce({
       can_approve: false,
       audience_summary: 'Document is internal only',
@@ -110,7 +205,7 @@ describe('ReviewDialog', () => {
         },
       ],
       warnings: [],
-    })
+    });
 
     render(
       <BrowserRouter>
@@ -121,10 +216,15 @@ describe('ReviewDialog', () => {
           onReject={vi.fn()}
           isLoading={false}
         />
-      </BrowserRouter>,
-    )
+      </BrowserRouter>
+    );
 
-    expect(await screen.findByText('User role cannot approve this submission')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled()
-  })
-})
+    await user.click(await screen.findByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /go to final review/i }));
+
+    expect(await screen.findByText('User role cannot approve this submission')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();
+  });
+});

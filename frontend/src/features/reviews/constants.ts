@@ -1,14 +1,32 @@
-import type { ComponentType } from 'react'
-import { AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react'
+import type { ComponentType } from 'react';
+import { AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react';
 
-import type { ReviewStatus } from '@/types'
+import type { ReviewRequest, ReviewStatus } from '@/types';
 
-export type ReviewsTabType = 'pending' | 'my-submissions'
+import { getPendingReviewWorkflowStatus, type PendingReviewWorkflowStatus } from './reviewProgress';
+
+export type ReviewsTabType = 'pending' | 'my-submissions';
+export type ReviewDisplayStatus = ReviewStatus | PendingReviewWorkflowStatus | 'pending_editor';
 
 export const reviewStatusConfig: Record<
-  ReviewStatus,
+  ReviewDisplayStatus,
   { label: string; icon: ComponentType<{ className?: string }>; className: string }
 > = {
+  new: {
+    label: 'New',
+    icon: Clock,
+    className: 'bg-sky-100 text-sky-700',
+  },
+  in_progress: {
+    label: 'In Progress',
+    icon: AlertCircle,
+    className: 'bg-amber-100 text-amber-700',
+  },
+  pending_editor: {
+    label: 'Pending Editor',
+    icon: AlertCircle,
+    className: 'bg-violet-100 text-violet-700',
+  },
   pending: {
     label: 'Pending',
     icon: Clock,
@@ -29,4 +47,19 @@ export const reviewStatusConfig: Record<
     icon: AlertCircle,
     className: 'bg-slate-100 text-slate-700',
   },
+};
+
+export function getReviewDisplayStatus(
+  review: Pick<ReviewRequest, 'id' | 'status'>,
+  activeTab: ReviewsTabType
+): ReviewDisplayStatus {
+  if (activeTab === 'pending' && review.status === 'pending') {
+    return getPendingReviewWorkflowStatus(review.id);
+  }
+
+  if (activeTab === 'my-submissions' && review.status === 'rejected') {
+    return 'pending_editor';
+  }
+
+  return review.status;
 }
