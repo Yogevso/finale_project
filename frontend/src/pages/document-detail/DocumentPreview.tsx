@@ -1,33 +1,38 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { getDocument, getDomParser } from '@/env/dom'
-import { api } from '@/lib/api'
-import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
-import { useAuth } from '@/lib/auth'
-import { reportRuntimeError } from '@/lib/runtimeReporter'
-import type { CSSProperties } from 'react'
-import type { ReadingWidth } from '@/lib/readingWidth'
-import type { Attachment } from '@/types'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { getDocument, getDomParser } from '@/env/dom';
+import { api } from '@/lib/api';
+import { useAttachmentDownload } from '@/hooks/useAttachmentDownload';
+import { useAuth } from '@/lib/auth';
+import { getReviewDocumentSession } from '@/features/reviews/reviewSession';
+import { reportRuntimeError } from '@/lib/runtimeReporter';
+import type { CSSProperties } from 'react';
+import type { ReadingWidth } from '@/lib/readingWidth';
+import type { Attachment } from '@/types';
 import {
   applyHighlights,
   clearHighlights,
+  findSectionMatchInRoot,
   filterOutlineSectionsByHtml,
   getUsableVersionContent,
   mergeTocSections,
   processHtmlIntoSections,
   resolveSectionPageStart,
   type TocSection,
-} from '@/pages/document-detail/helpers/previewHelpers'
-import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup'
-import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas'
-import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar'
-import { SectionEditPopup } from '@/pages/document-detail/components/SectionEditPopup'
-import { TocPanel } from '@/pages/document-detail/components/TocPanel'
-import { useContentEditingFlow, type RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow'
-import { useInlineComments } from '@/pages/document-detail/hooks/useInlineComments'
-import { usePreviewProgress } from '@/pages/document-detail/hooks/usePreviewProgress'
-import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewShortcuts'
-import { usePreviewSource } from '@/pages/document-detail/hooks/usePreviewSource'
-import { useReaderView } from '@/pages/document-detail/hooks/useReaderView'
+} from '@/pages/document-detail/helpers/previewHelpers';
+import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup';
+import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas';
+import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
+import { SectionEditPopup } from '@/pages/document-detail/components/SectionEditPopup';
+import { TocPanel } from '@/pages/document-detail/components/TocPanel';
+import {
+  useContentEditingFlow,
+  type RemovedSection,
+} from '@/pages/document-detail/hooks/useContentEditingFlow';
+import { useInlineComments } from '@/pages/document-detail/hooks/useInlineComments';
+import { usePreviewProgress } from '@/pages/document-detail/hooks/usePreviewProgress';
+import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewShortcuts';
+import { usePreviewSource } from '@/pages/document-detail/hooks/usePreviewSource';
+import { useReaderView } from '@/pages/document-detail/hooks/useReaderView';
 import {
   DOCUMENT_FONT_SIZE_VALUES,
   getDocumentFontSize,
@@ -37,23 +42,23 @@ import {
   setDocumentTheme,
   type DocumentFontSize,
   type DocumentTheme,
-} from '@/lib/documentReadingPreferences'
+} from '@/lib/documentReadingPreferences';
 
-const WORDS_PER_MINUTE = 200
+const WORDS_PER_MINUTE = 200;
 
 function estimateReadingTimeMinutes(html: string | null): number | null {
   if (!html) {
-    return null
+    return null;
   }
 
-  const textContent = getDomParser().parseFromString(html, 'text/html').body.textContent ?? ''
-  const wordCount = textContent.trim().split(/\s+/).filter(Boolean).length
+  const textContent = getDomParser().parseFromString(html, 'text/html').body.textContent ?? '';
+  const wordCount = textContent.trim().split(/\s+/).filter(Boolean).length;
 
   if (wordCount === 0) {
-    return null
+    return null;
   }
 
-  return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE))
+  return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE));
 }
 
 export function DocumentPreview({
@@ -70,39 +75,47 @@ export function DocumentPreview({
   contentEditRequestToken = 0,
   onToggleFullscreen,
   highlightAnchor,
+  reviewSessionId,
+  reviewSectionId,
   onRemovedSectionsChange,
 }: {
-  documentId: number
-  attachments: Attachment[]
-  documentTitle?: string
-  onScrollProgress?: (progress: number) => void
-  onReadingTimeChange?: (minutes: number | null) => void
-  isEditor?: boolean
-  isFullscreen?: boolean
-  showCanvasTitle?: boolean
-  sectionLinkBasePath: string
-  widthMode?: ReadingWidth
-  contentEditRequestToken?: number
-  onToggleFullscreen?: () => void
-  highlightAnchor?: string
-  onRemovedSectionsChange?: (sections: RemovedSection[], restore: (s: RemovedSection) => void, clear: () => void) => void
+  documentId: number;
+  attachments: Attachment[];
+  documentTitle?: string;
+  onScrollProgress?: (progress: number) => void;
+  onReadingTimeChange?: (minutes: number | null) => void;
+  isEditor?: boolean;
+  isFullscreen?: boolean;
+  showCanvasTitle?: boolean;
+  sectionLinkBasePath: string;
+  widthMode?: ReadingWidth;
+  contentEditRequestToken?: number;
+  onToggleFullscreen?: () => void;
+  highlightAnchor?: string;
+  reviewSessionId?: number | null;
+  reviewSectionId?: string;
+  onRemovedSectionsChange?: (
+    sections: RemovedSection[],
+    restore: (s: RemovedSection) => void,
+    clear: () => void
+  ) => void;
 }) {
-  const { user } = useAuth()
-  const [htmlContent, setHtmlContent] = useState<string | null>(null)
-  const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [sections, setSections] = useState<TocSection[]>([])
-  const [outlineSectionsTemplate, setOutlineSectionsTemplate] = useState<TocSection[]>([])
-  const [tocCollapsed, setTocCollapsed] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [searchMatchCount, setSearchMatchCount] = useState(0)
-  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1)
-  const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
-  const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme())
-  const { downloadAttachment } = useAttachmentDownload(documentId)
-  const previewPaneRef = useRef<HTMLDivElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const { user } = useAuth();
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sections, setSections] = useState<TocSection[]>([]);
+  const [outlineSectionsTemplate, setOutlineSectionsTemplate] = useState<TocSection[]>([]);
+  const [tocCollapsed, setTocCollapsed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
+  const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize());
+  const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme());
+  const { downloadAttachment } = useAttachmentDownload(documentId);
+  const previewPaneRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const {
     selectionPopup,
     commentPopup,
@@ -115,21 +128,21 @@ export function DocumentPreview({
     handleOpenCommentForm,
     handleSubmitComment,
     handleCloseCommentPopup,
-  } = useInlineComments(documentId)
+  } = useInlineComments(documentId);
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
-    setFontSizeState(value)
-    setDocumentFontSize(value)
-  }, [])
+    setFontSizeState(value);
+    setDocumentFontSize(value);
+  }, []);
 
   const handleSetTheme = useCallback((value: DocumentTheme) => {
-    setThemeState(value)
-    setDocumentTheme(value)
-  }, [])
+    setThemeState(value);
+    setDocumentTheme(value);
+  }, []);
 
   const processHtmlWithSections = useCallback((html: string) => {
-    return processHtmlIntoSections(html).html
-  }, [])
+    return processHtmlIntoSections(html).html;
+  }, []);
 
   const mergeWithOutlineTemplate = useCallback(
     (html: string, nextSections: TocSection[]) => {
@@ -137,24 +150,24 @@ export function DocumentPreview({
         return {
           mergedSections: nextSections,
           filteredTemplate: [] as TocSection[],
-        }
+        };
       }
 
-      const filteredTemplate = filterOutlineSectionsByHtml(outlineSectionsTemplate, html)
+      const filteredTemplate = filterOutlineSectionsByHtml(outlineSectionsTemplate, html);
       if (filteredTemplate.length === 0) {
         return {
           mergedSections: nextSections,
           filteredTemplate,
-        }
+        };
       }
 
       return {
         mergedSections: mergeTocSections(filteredTemplate, nextSections),
         filteredTemplate,
-      }
+      };
     },
-    [outlineSectionsTemplate],
-  )
+    [outlineSectionsTemplate]
+  );
 
   const {
     readerHtmlContent,
@@ -175,7 +188,7 @@ export function DocumentPreview({
     sections,
     setSections,
     processHtmlWithSections,
-  })
+  });
 
   const {
     previewableAttachments,
@@ -190,77 +203,80 @@ export function DocumentPreview({
     inlineContent: htmlContent,
     readerHtmlContent,
     readerStatus,
-  })
+  });
 
   const contentStyle = useMemo(
     () =>
       ({
         '--doc-font-size': DOCUMENT_FONT_SIZE_VALUES[fontSize],
       }) as CSSProperties,
-    [fontSize],
-  )
+    [fontSize]
+  );
 
-  const focusSearchMatch = useCallback((targetIndex: number, behavior: ScrollBehavior = 'smooth') => {
-    const container = getDocument().getElementById('document-content-area')
-    if (!container) {
-      setSearchMatchCount(0)
-      setActiveSearchMatchIndex(-1)
-      return
-    }
+  const focusSearchMatch = useCallback(
+    (targetIndex: number, behavior: ScrollBehavior = 'smooth') => {
+      const container = getDocument().getElementById('document-content-area');
+      if (!container) {
+        setSearchMatchCount(0);
+        setActiveSearchMatchIndex(-1);
+        return;
+      }
 
-    const matches = Array.from(container.querySelectorAll<HTMLElement>('mark.doc-highlight'))
-    if (matches.length === 0) {
-      setSearchMatchCount(0)
-      setActiveSearchMatchIndex(-1)
-      return
-    }
+      const matches = Array.from(container.querySelectorAll<HTMLElement>('mark.doc-highlight'));
+      if (matches.length === 0) {
+        setSearchMatchCount(0);
+        setActiveSearchMatchIndex(-1);
+        return;
+      }
 
-    const normalizedIndex = ((targetIndex % matches.length) + matches.length) % matches.length
-    matches.forEach((match, index) => {
-      match.classList.toggle('doc-highlight--active', index === normalizedIndex)
-    })
-    matches[normalizedIndex]?.scrollIntoView({ behavior, block: 'center' })
-    setSearchMatchCount(matches.length)
-    setActiveSearchMatchIndex(normalizedIndex)
-  }, [])
+      const normalizedIndex = ((targetIndex % matches.length) + matches.length) % matches.length;
+      matches.forEach((match, index) => {
+        match.classList.toggle('doc-highlight--active', index === normalizedIndex);
+      });
+      matches[normalizedIndex]?.scrollIntoView({ behavior, block: 'center' });
+      setSearchMatchCount(matches.length);
+      setActiveSearchMatchIndex(normalizedIndex);
+    },
+    []
+  );
 
   const handlePreviousSearchMatch = useCallback(() => {
     if (searchMatchCount === 0) {
-      return
+      return;
     }
-    focusSearchMatch(activeSearchMatchIndex - 1)
-  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount])
+    focusSearchMatch(activeSearchMatchIndex - 1);
+  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount]);
 
   const handleNextSearchMatch = useCallback(() => {
     if (searchMatchCount === 0) {
-      return
+      return;
     }
-    focusSearchMatch(activeSearchMatchIndex + 1)
-  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount])
+    focusSearchMatch(activeSearchMatchIndex + 1);
+  }, [activeSearchMatchIndex, focusSearchMatch, searchMatchCount]);
 
   const applyProcessedHtml = useCallback(
     (html: string) => {
-      const processed = processHtmlIntoSections(html)
-      setHtmlContent(processed.html)
+      const processed = processHtmlIntoSections(html);
+      setHtmlContent(processed.html);
 
       if (processed.sections.length === 0) {
-        setSections([])
-        setOutlineSectionsTemplate([])
-        return
+        setSections([]);
+        setOutlineSectionsTemplate([]);
+        return;
       }
 
       const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
         processed.html,
-        processed.sections,
-      )
-      setSections(mergedSections)
+        processed.sections
+      );
+      setSections(mergedSections);
 
       if (outlineSectionsTemplate.length > 0) {
-        setOutlineSectionsTemplate(filteredTemplate)
+        setOutlineSectionsTemplate(filteredTemplate);
       }
     },
-    [mergeWithOutlineTemplate, outlineSectionsTemplate.length],
-  )
+    [mergeWithOutlineTemplate, outlineSectionsTemplate.length]
+  );
 
   const {
     showContentEditChooser,
@@ -287,12 +303,12 @@ export function DocumentPreview({
     sections,
     applyProcessedHtml,
     onRequireInlineContent: () => setSelectedAttachment(null),
-  })
+  });
 
   // Expose removed sections to parent
   useEffect(() => {
-    onRemovedSectionsChange?.(removedSections, handleRestoreSection, clearRemovedSections)
-  }, [removedSections, handleRestoreSection, clearRemovedSections, onRemovedSectionsChange])
+    onRemovedSectionsChange?.(removedSections, handleRestoreSection, clearRemovedSections);
+  }, [removedSections, handleRestoreSection, clearRemovedSections, onRemovedSectionsChange]);
 
   const { previewScrollProgress, handleScroll } = usePreviewProgress({
     documentId,
@@ -306,98 +322,169 @@ export function DocumentPreview({
     setReaderCurrentPage,
     onScrollProgress,
     hasUser: !!user,
-  })
+  });
 
   useEffect(() => {
-    const container = getDocument().getElementById('document-content-area')
+    const container = getDocument().getElementById('document-content-area');
     if (!activeHtmlContent || !container) {
-      setSearchMatchCount(0)
-      setActiveSearchMatchIndex(-1)
-      return
+      setSearchMatchCount(0);
+      setActiveSearchMatchIndex(-1);
+      return;
     }
 
-    applyHighlights(container, searchTerm)
-    const matches = container.querySelectorAll('mark.doc-highlight')
+    applyHighlights(container, searchTerm);
+    const matches = container.querySelectorAll('mark.doc-highlight');
     if (matches.length === 0) {
-      setSearchMatchCount(0)
-      setActiveSearchMatchIndex(-1)
-      return
+      setSearchMatchCount(0);
+      setActiveSearchMatchIndex(-1);
+      return;
     }
 
-    focusSearchMatch(0, 'auto')
-  }, [activeHtmlContent, focusSearchMatch, searchTerm])
+    focusSearchMatch(0, 'auto');
+  }, [activeHtmlContent, focusSearchMatch, searchTerm]);
 
   // Highlight anchor text from URL (e.g. ?highlight=some+text from chat "View in document")
   useEffect(() => {
-    if (!highlightAnchor || !activeHtmlContent || searchTerm) return
-    const container = getDocument().getElementById('document-content-area')
-    if (!container) return
+    if (!highlightAnchor || !activeHtmlContent || searchTerm) return;
+    const container = getDocument().getElementById('document-content-area');
+    if (!container) return;
 
     // Small delay to let the DOM render
     const timer = setTimeout(() => {
-      applyHighlights(container, highlightAnchor)
-      const firstMark = container.querySelector('mark.doc-highlight')
+      applyHighlights(container, highlightAnchor);
+      const firstMark = container.querySelector('mark.doc-highlight');
       if (firstMark) {
-        firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
         // Add a pulsing animation then clear after a few seconds
         container.querySelectorAll('mark.doc-highlight').forEach((m) => {
-          ;(m as HTMLElement).style.background = '#fbbf24'
-          ;(m as HTMLElement).style.transition = 'background 2s ease'
-        })
+          (m as HTMLElement).style.background = '#fbbf24';
+          (m as HTMLElement).style.transition = 'background 2s ease';
+        });
         setTimeout(() => {
           container.querySelectorAll('mark.doc-highlight').forEach((m) => {
-            ;(m as HTMLElement).style.background = '#fef08a'
-          })
-        }, 2000)
+            (m as HTMLElement).style.background = '#fef08a';
+          });
+        }, 2000);
         // Clear the highlight marks after 6 seconds
         setTimeout(() => {
-          clearHighlights(container)
-        }, 6000)
+          clearHighlights(container);
+        }, 6000);
       }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [highlightAnchor, activeHtmlContent, searchTerm])
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [highlightAnchor, activeHtmlContent, searchTerm]);
 
   useEffect(() => {
-    onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent))
-  }, [activeHtmlContent, onReadingTimeChange])
+    if (!reviewSessionId || !activeHtmlContent) {
+      return;
+    }
+
+    const session = getReviewDocumentSession(reviewSessionId);
+    const container = getDocument().getElementById('document-content-area');
+    if (!session || !container) {
+      return;
+    }
+
+    const root =
+      (container.querySelector('.docx-document, .pptx-presentation') as HTMLElement | null) ||
+      container;
+
+    const clearReviewHighlights = () => {
+      root.querySelectorAll<HTMLElement>('.document-review-highlight').forEach((element) => {
+        element.classList.remove(
+          'document-review-highlight',
+          'document-review-highlight--added',
+          'document-review-highlight--modified',
+          'document-review-highlight--removed',
+          'document-review-highlight--suggested',
+          'document-review-highlight--focus'
+        );
+        element.removeAttribute('data-review-entry-id');
+      });
+    };
+
+    const applyReviewHighlights = () => {
+      clearReviewHighlights();
+
+      const focusedEntryId = reviewSectionId || session.focusedEntryId;
+      let focusedElement: HTMLElement | null = null;
+
+      session.entries.forEach((entry) => {
+        const match = findSectionMatchInRoot(root, {
+          anchorId: entry.anchorId,
+          text: entry.title,
+        });
+        const targetElement = match?.topLevelElement || null;
+        if (!targetElement) {
+          return;
+        }
+
+        targetElement.classList.add(
+          'document-review-highlight',
+          `document-review-highlight--${entry.status}`
+        );
+        targetElement.setAttribute('data-review-entry-id', entry.id);
+
+        if (entry.id === focusedEntryId) {
+          targetElement.classList.add('document-review-highlight--focus');
+          focusedElement = targetElement;
+        }
+      });
+
+      if (focusedElement) {
+        focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    const timer = window.setTimeout(applyReviewHighlights, 260);
+
+    return () => {
+      window.clearTimeout(timer);
+      clearReviewHighlights();
+    };
+  }, [activeHtmlContent, reviewSectionId, reviewSessionId]);
 
   useEffect(() => {
-    setOutlineSectionsTemplate([])
-  }, [documentId])
+    onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent));
+  }, [activeHtmlContent, onReadingTimeChange]);
+
+  useEffect(() => {
+    setOutlineSectionsTemplate([]);
+  }, [documentId]);
 
   useEffect(() => {
     if (selectedAttachment && readerHtmlContent && sections.length > 0) {
-      setOutlineSectionsTemplate(sections)
+      setOutlineSectionsTemplate(sections);
     }
-  }, [readerHtmlContent, sections, selectedAttachment])
+  }, [readerHtmlContent, sections, selectedAttachment]);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     const loadInlineContent = async () => {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       try {
-        const versionsResponse = await api.getVersions(documentId)
+        const versionsResponse = await api.getVersions(documentId);
         if (cancelled) {
-          return
+          return;
         }
         const withContent = versionsResponse.items.filter((version) =>
-          Boolean(getUsableVersionContent(version.content)),
-        )
+          Boolean(getUsableVersionContent(version.content))
+        );
         const latestVersion = withContent.sort(
-          (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-        )[0]
+          (left, right) =>
+            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+        )[0];
         const publishedVersion = withContent
           .filter((version) => version.is_published)
           .sort(
             (left, right) =>
               new Date(right.published_at || right.created_at).getTime() -
-              new Date(left.published_at || left.created_at).getTime(),
-          )[0]
-        let versionToShow = latestVersion || publishedVersion
+              new Date(left.published_at || left.created_at).getTime()
+          )[0];
+        let versionToShow = latestVersion || publishedVersion;
 
         if (!versionToShow && versionsResponse.items.length > 0) {
           const prioritizedIds = [
@@ -405,7 +492,7 @@ export function DocumentPreview({
               ...versionsResponse.items
                 .sort(
                   (left, right) =>
-                    new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+                    new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
                 )
                 .map((version) => version.id),
               ...versionsResponse.items
@@ -413,132 +500,135 @@ export function DocumentPreview({
                 .sort(
                   (left, right) =>
                     new Date(right.published_at || right.created_at).getTime() -
-                    new Date(left.published_at || left.created_at).getTime(),
+                    new Date(left.published_at || left.created_at).getTime()
                 )
                 .map((version) => version.id),
             ]),
-          ]
+          ];
 
           for (const versionId of prioritizedIds) {
-            const fullVersion = await api.getVersion(documentId, versionId)
+            const fullVersion = await api.getVersion(documentId, versionId);
             if (cancelled) {
-              return
+              return;
             }
             if (getUsableVersionContent(fullVersion?.content)) {
-              versionToShow = fullVersion
-              break
+              versionToShow = fullVersion;
+              break;
             }
           }
         }
 
         if (cancelled) {
-          return
+          return;
         }
 
-        const versionContent = getUsableVersionContent(versionToShow?.content)
+        const versionContent = getUsableVersionContent(versionToShow?.content);
         if (versionContent) {
-          const processed = processHtmlIntoSections(versionContent)
-          setHtmlContent(processed.html)
+          const processed = processHtmlIntoSections(versionContent);
+          setHtmlContent(processed.html);
           if (!selectedAttachment) {
             const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
               processed.html,
-              processed.sections,
-            )
-            setSections(mergedSections)
+              processed.sections
+            );
+            setSections(mergedSections);
             if (outlineSectionsTemplate.length > 0) {
-              setOutlineSectionsTemplate(filteredTemplate)
+              setOutlineSectionsTemplate(filteredTemplate);
             }
           }
         } else {
-          setHtmlContent(null)
+          setHtmlContent(null);
           if (!selectedAttachment) {
-            setSections([])
-            setOutlineSectionsTemplate([])
+            setSections([]);
+            setOutlineSectionsTemplate([]);
           }
         }
       } catch (loadError) {
         if (cancelled) {
-          return
+          return;
         }
         reportRuntimeError({
           scope: 'preview.inline',
           message: 'Preview load failed',
           error: loadError,
-        })
-        setError('Failed to load preview')
-        setHtmlContent(null)
+        });
+        setError('Failed to load preview');
+        setHtmlContent(null);
         if (!selectedAttachment) {
-          setSections([])
-          setOutlineSectionsTemplate([])
+          setSections([]);
+          setOutlineSectionsTemplate([]);
         }
       } finally {
         if (!cancelled) {
-          setIsLoading(false)
+          setIsLoading(false);
         }
       }
-    }
+    };
 
-    void loadInlineContent()
+    void loadInlineContent();
 
     return () => {
-      cancelled = true
-    }
-  }, [documentId, mergeWithOutlineTemplate, outlineSectionsTemplate.length, selectedAttachment])
+      cancelled = true;
+    };
+  }, [documentId, mergeWithOutlineTemplate, outlineSectionsTemplate.length, selectedAttachment]);
 
-  const tocSectionsForHtml = sections
+  const tocSectionsForHtml = sections;
 
   const handleReaderTocClick = useCallback(
     (item: TocSection) => {
-      navigateReaderToSection(item, 'smooth')
+      navigateReaderToSection(item, 'smooth');
     },
-    [navigateReaderToSection],
-  )
+    [navigateReaderToSection]
+  );
 
   const activeSectionIndex = useMemo(() => {
     if (tocSectionsForHtml.length === 0) {
-      return -1
+      return -1;
     }
 
     return tocSectionsForHtml.findIndex((item) => {
-      const pageStart = resolveSectionPageStart(item)
-      const anchorId = item.anchorId || `heading-${item.index}`
-      return activeHeading === anchorId || (!!pageStart && readerCurrentPage === pageStart)
-    })
-  }, [activeHeading, readerCurrentPage, tocSectionsForHtml])
+      const pageStart = resolveSectionPageStart(item);
+      const anchorId = item.anchorId || `heading-${item.index}`;
+      return activeHeading === anchorId || (!!pageStart && readerCurrentPage === pageStart);
+    });
+  }, [activeHeading, readerCurrentPage, tocSectionsForHtml]);
 
   const activeCurrentSection = useMemo(() => {
     if (!shouldRenderHtmlPreview || tocSectionsForHtml.length === 0 || activeSectionIndex < 0) {
-      return null
+      return null;
     }
 
-    const currentSection = tocSectionsForHtml[activeSectionIndex]
+    const currentSection = tocSectionsForHtml[activeSectionIndex];
     const h2Section = [...tocSectionsForHtml.slice(0, activeSectionIndex + 1)]
       .reverse()
-      .find((item) => item.level === 2)
+      .find((item) => item.level === 2);
 
-    return h2Section || currentSection || null
-  }, [activeSectionIndex, shouldRenderHtmlPreview, tocSectionsForHtml])
+    return h2Section || currentSection || null;
+  }, [activeSectionIndex, shouldRenderHtmlPreview, tocSectionsForHtml]);
 
   const showCurrentSectionIndicator =
-    !!activeCurrentSection && previewScrollProgress > 6 && activeSectionIndex > 0
+    !!activeCurrentSection && previewScrollProgress > 6 && activeSectionIndex > 0;
 
   const navigateBetweenSections = useCallback(
     (direction: 1 | -1) => {
       if (tocSectionsForHtml.length === 0) {
-        return
+        return;
       }
 
-      const currentIndex = activeSectionIndex >= 0 ? activeSectionIndex : 0
-      const nextIndex = Math.max(0, Math.min(tocSectionsForHtml.length - 1, currentIndex + direction))
-      const targetSection = tocSectionsForHtml[nextIndex]
+      const currentIndex = activeSectionIndex >= 0 ? activeSectionIndex : 0;
+      const nextIndex = Math.max(
+        0,
+        Math.min(tocSectionsForHtml.length - 1, currentIndex + direction)
+      );
+      const targetSection = tocSectionsForHtml[nextIndex];
       if (!targetSection) {
-        return
+        return;
       }
 
-      handleReaderTocClick(targetSection)
+      handleReaderTocClick(targetSection);
     },
-    [activeSectionIndex, handleReaderTocClick, tocSectionsForHtml],
-  )
+    [activeSectionIndex, handleReaderTocClick, tocSectionsForHtml]
+  );
 
   usePreviewShortcuts({
     searchInputRef,
@@ -549,25 +639,29 @@ export function DocumentPreview({
     handleCloseSectionEdit,
     navigateBetweenSections,
     onToggleFullscreen,
-  })
+  });
 
   if (previewState === 'NO_CONTENT') {
     return (
       <div className="surface-card rounded-2xl p-12 text-center">
         <div className="text-6xl mb-4">??</div>
         <h3 className="text-lg font-display font-medium text-slate-900 mb-2">No Content Yet</h3>
-        <p className="text-slate-500">This document has no content. Add content using the editor or upload a file.</p>
+        <p className="text-slate-500">
+          This document has no content. Add content using the editor or upload a file.
+        </p>
       </div>
-    )
+    );
   }
 
   if (previewState === 'DOWNLOAD_ONLY') {
-    const firstAttachment = attachments[0] ?? null
+    const firstAttachment = attachments[0] ?? null;
 
     return (
       <div className="surface-card rounded-2xl p-12 text-center">
         <div className="text-6xl mb-4">??</div>
-        <h3 className="text-lg font-display font-medium text-slate-900 mb-2">Preview Not Available</h3>
+        <h3 className="text-lg font-display font-medium text-slate-900 mb-2">
+          Preview Not Available
+        </h3>
         <p className="text-slate-500 mb-4">
           This attachment can be downloaded, but it cannot be previewed inline.
           <br />
@@ -578,25 +672,30 @@ export function DocumentPreview({
             href="#"
             download={firstAttachment.filename}
             onClick={(event) => {
-              event.preventDefault()
-              void downloadAttachment(firstAttachment)
+              event.preventDefault();
+              void downloadAttachment(firstAttachment);
             }}
             className="btn-primary inline-flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
             </svg>
             Download {firstAttachment.filename}
           </a>
         )}
       </div>
-    )
+    );
   }
 
   const documentPaperClass =
     widthMode === 'fluid'
       ? `document-preview-paper document-preview-paper-fluid ${getDocumentThemeClassName(theme)}`
-      : `document-preview-paper ${getDocumentThemeClassName(theme)}`
+      : `document-preview-paper ${getDocumentThemeClassName(theme)}`;
 
   return (
     <div className="document-preview-shell surface-card rounded-2xl overflow-hidden">
@@ -642,7 +741,9 @@ export function DocumentPreview({
               <p className="text-rose-600">{error}</p>
             </div>
           </div>
-        ) : previewState === 'LOADING' || isLoading || (selectedAttachment && isReaderLoading && !activeHtmlContent) ? (
+        ) : previewState === 'LOADING' ||
+          isLoading ||
+          (selectedAttachment && isReaderLoading && !activeHtmlContent) ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto"></div>
@@ -727,8 +828,8 @@ export function DocumentPreview({
             href="#"
             download
             onClick={(event) => {
-              event.preventDefault()
-              void downloadAttachment(selectedAttachment)
+              event.preventDefault();
+              void downloadAttachment(selectedAttachment);
             }}
             className="btn-primary text-sm"
           >
@@ -758,5 +859,5 @@ export function DocumentPreview({
         />
       )}
     </div>
-  )
+  );
 }

@@ -1,37 +1,40 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import Joyride from 'react-joyride'
-import { DocumentPreview } from '@/pages/document-detail/DocumentPreview'
-import { EditForm } from '@/pages/document-detail/EditForm'
-import { DocumentDetailsView } from '@/pages/document-detail/components/DocumentDetailsView'
-import { DocumentHeaderCard } from '@/pages/document-detail/components/DocumentHeaderCard'
-import { DocumentTabs } from '@/pages/document-detail/components/DocumentTabs'
-import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
-import { ReviewSubmitModal } from '@/pages/document-detail/components/ReviewSubmitModal'
-import { HelpPanel } from '@/pages/document-detail/components/HelpPanel'
-import { RemovedSectionsPanel } from '@/pages/document-detail/components/RemovedSectionsPanel'
-import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState'
-import type { RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow'
-import { api } from '@/lib/api'
-import EngagementBar from '@/components/EngagementBar'
-import { useTour } from '@/hooks/useTour'
-import { documentDetailTour } from '@/lib/tour'
-import NotFoundState from '@/components/NotFoundState'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import Joyride from 'react-joyride';
+import { DocumentPreview } from '@/pages/document-detail/DocumentPreview';
+import { EditForm } from '@/pages/document-detail/EditForm';
+import { DocumentDetailsView } from '@/pages/document-detail/components/DocumentDetailsView';
+import { DocumentHeaderCard } from '@/pages/document-detail/components/DocumentHeaderCard';
+import { DocumentTabs } from '@/pages/document-detail/components/DocumentTabs';
+import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar';
+import { ReviewSubmitModal } from '@/pages/document-detail/components/ReviewSubmitModal';
+import { HelpPanel } from '@/pages/document-detail/components/HelpPanel';
+import { RemovedSectionsPanel } from '@/pages/document-detail/components/RemovedSectionsPanel';
+import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState';
+import type { RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow';
+import { api } from '@/lib/api';
+import EngagementBar from '@/components/EngagementBar';
+import { useTour } from '@/hooks/useTour';
+import { documentDetailTour } from '@/lib/tour';
+import NotFoundState from '@/components/NotFoundState';
 
-const VersionsSection = lazy(() => import('@/components/VersionsSection'))
-const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'))
+const VersionsSection = lazy(() => import('@/components/VersionsSection'));
+const AttachmentsSection = lazy(() => import('@/components/AttachmentsSection'));
 // Comments tab removed — comments are accessible via inline popups
 
 export default function DocumentDetailPage() {
-  const tour = useTour('document-detail', documentDetailTour)
-  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null)
-  const [showHelp, setShowHelp] = useState(false)
-  const [showRemovedSections, setShowRemovedSections] = useState(false)
-  const [removedSections, setRemovedSections] = useState<RemovedSection[]>([])
-  const restoreSectionRef = useRef<(s: RemovedSection) => void>(() => {})
-  const clearRemovedSectionsRef = useRef<() => void>(() => {})
-  const [searchParams] = useSearchParams()
-  const highlightText = searchParams.get('highlight') || undefined
+  const tour = useTour('document-detail', documentDetailTour);
+  const [readingTimeMinutes, setReadingTimeMinutes] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showRemovedSections, setShowRemovedSections] = useState(false);
+  const [removedSections, setRemovedSections] = useState<RemovedSection[]>([]);
+  const restoreSectionRef = useRef<(s: RemovedSection) => void>(() => {});
+  const clearRemovedSectionsRef = useRef<() => void>(() => {});
+  const [searchParams] = useSearchParams();
+  const highlightText = searchParams.get('highlight') || undefined;
+  const reviewSessionParam = searchParams.get('review_session');
+  const reviewSessionId = reviewSessionParam ? Number(reviewSessionParam) : null;
+  const reviewSectionId = searchParams.get('review_section') || undefined;
   const {
     documentId,
     document,
@@ -87,34 +90,34 @@ export default function DocumentDetailPage() {
     pendingReviewId,
     cancelReview,
     isCancellingReview,
-  } = useDocumentDetailPageState()
+  } = useDocumentDetailPageState();
 
   useEffect(() => {
-    setReadingTimeMinutes(null)
-  }, [documentId])
+    setReadingTimeMinutes(null);
+  }, [documentId]);
 
   const handleRemovedSectionsChange = useCallback(
     (sections: RemovedSection[], restore: (s: RemovedSection) => void, clear: () => void) => {
-      setRemovedSections(sections)
-      restoreSectionRef.current = restore
-      clearRemovedSectionsRef.current = clear
+      setRemovedSections(sections);
+      restoreSectionRef.current = restore;
+      clearRemovedSectionsRef.current = clear;
     },
-    [],
-  )
+    []
+  );
 
   // Clear removed sections storage when status becomes approved
-  const prevStatusRef = useRef(document?.status)
+  const prevStatusRef = useRef(document?.status);
   useEffect(() => {
     if (document?.status === 'approved' && prevStatusRef.current !== 'approved') {
-      clearRemovedSectionsRef.current()
+      clearRemovedSectionsRef.current();
     }
-    prevStatusRef.current = document?.status
-  }, [document?.status])
+    prevStatusRef.current = document?.status;
+  }, [document?.status]);
 
   const tabCounts = {
     versions: document?.versions_count ?? 0,
     attachments: document?.attachments_count ?? attachments.length,
-  }
+  };
 
   if (isLoading) {
     return (
@@ -122,7 +125,7 @@ export default function DocumentDetailPage() {
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600" />
         <p className="body-copy">Loading document...</p>
       </div>
-    )
+    );
   }
 
   if (error || !document) {
@@ -133,22 +136,31 @@ export default function DocumentDetailPage() {
           description="This document may not exist or you may not have access."
         />
       </div>
-    )
+    );
   }
 
   const sourceFileType = (() => {
-    const first = attachments[0]
-    if (!first) return 'other' as const
-    const mime = first.mime_type?.toLowerCase() ?? ''
-    const name = first.original_filename?.toLowerCase() ?? ''
-    if (mime.includes('presentation') || mime.includes('powerpoint') || name.endsWith('.pptx') || name.endsWith('.ppt'))
-      return 'ppt' as const
-    if (mime.includes('word') || mime.includes('msword') || name.endsWith('.docx') || name.endsWith('.doc'))
-      return 'word' as const
-    if (mime === 'application/pdf' || name.endsWith('.pdf'))
-      return 'pdf' as const
-    return 'other' as const
-  })()
+    const first = attachments[0];
+    if (!first) return 'other' as const;
+    const mime = first.mime_type?.toLowerCase() ?? '';
+    const name = first.original_filename?.toLowerCase() ?? '';
+    if (
+      mime.includes('presentation') ||
+      mime.includes('powerpoint') ||
+      name.endsWith('.pptx') ||
+      name.endsWith('.ppt')
+    )
+      return 'ppt' as const;
+    if (
+      mime.includes('word') ||
+      mime.includes('msword') ||
+      name.endsWith('.docx') ||
+      name.endsWith('.doc')
+    )
+      return 'word' as const;
+    if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf' as const;
+    return 'other' as const;
+  })();
 
   return (
     <div
@@ -208,23 +220,23 @@ export default function DocumentDetailPage() {
               pdf: 'pdf',
               word: 'docx',
               ppt: 'pptx',
-            }
-            const apiFormat = formatMap[format]
-            if (!apiFormat) return
+            };
+            const apiFormat = formatMap[format];
+            if (!apiFormat) return;
             void (async () => {
               try {
-                const blob = await api.exportDocument(documentId, apiFormat)
-                const url = URL.createObjectURL(blob)
+                const blob = await api.exportDocument(documentId, apiFormat);
+                const url = URL.createObjectURL(blob);
                 const link = Object.assign(window.document.createElement('a'), {
                   href: url,
                   download: `${document.title || 'document'}.${apiFormat}`,
-                })
-                link.click()
-                URL.revokeObjectURL(url)
+                });
+                link.click();
+                URL.revokeObjectURL(url);
               } catch {
-                console.error('Export failed')
+                console.error('Export failed');
               }
-            })()
+            })();
           }}
           onHelp={() => setShowHelp(true)}
           removedSectionsCount={removedSections.length}
@@ -253,6 +265,10 @@ export default function DocumentDetailPage() {
             contentEditRequestToken={contentEditRequestToken}
             onToggleFullscreen={isFullscreen ? navigateToDetail : navigateToFullscreen}
             highlightAnchor={highlightText}
+            reviewSessionId={
+              reviewSessionId !== null && Number.isFinite(reviewSessionId) ? reviewSessionId : null
+            }
+            reviewSectionId={reviewSectionId}
             onRemovedSectionsChange={handleRemovedSectionsChange}
           />
         )}
@@ -317,8 +333,6 @@ export default function DocumentDetailPage() {
           </Suspense>
         )}
 
-
-
         <ReviewSubmitModal
           isOpen={showSubmitReview}
           documentId={documentId}
@@ -331,20 +345,18 @@ export default function DocumentDetailPage() {
           errorMessage={submitReviewErrorMessage}
         />
 
-        {showHelp && (
-          <HelpPanel isEditor={isEditor} onClose={() => setShowHelp(false)} />
-        )}
+        {showHelp && <HelpPanel isEditor={isEditor} onClose={() => setShowHelp(false)} />}
 
         {showRemovedSections && (
           <RemovedSectionsPanel
             removedSections={removedSections}
             onRestore={(section) => {
-              restoreSectionRef.current(section)
+              restoreSectionRef.current(section);
             }}
             onClose={() => setShowRemovedSections(false)}
           />
         )}
       </div>
     </div>
-  )
+  );
 }

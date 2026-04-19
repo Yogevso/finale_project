@@ -1,21 +1,21 @@
-import { Calendar, FileText, MessageSquare, User } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Calendar, FileText, MessageSquare, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-import { EmptyState } from '@/components/EmptyState'
-import { TableSkeleton } from '@/components/skeletons'
-import type { ReviewRequest } from '@/types'
+import { EmptyState } from '@/components/EmptyState';
+import { TableSkeleton } from '@/components/skeletons';
+import type { ReviewRequest } from '@/types';
 
-import { reviewStatusConfig, type ReviewsTabType } from '../constants'
+import { getReviewDisplayStatus, reviewStatusConfig, type ReviewsTabType } from '../constants';
 
 type ReviewsTableProps = {
-  activeTab: ReviewsTabType
-  reviews: ReviewRequest[] | undefined
-  isLoading: boolean
-  total: number | undefined
-  cancelPending: boolean
-  onOpenReview: (review: ReviewRequest) => void
-  onCancelReview: (reviewId: number) => void
-}
+  activeTab: ReviewsTabType;
+  reviews: ReviewRequest[] | undefined;
+  isLoading: boolean;
+  total: number | undefined;
+  cancelPending: boolean;
+  onOpenReview: (review: ReviewRequest) => void;
+  onCancelReview: (reviewId: number) => void;
+};
 
 export function ReviewsTable({
   activeTab,
@@ -64,9 +64,10 @@ export function ReviewsTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-200">
-            {reviews.map((review) => (
+            {reviews.map((review) =>
               (() => {
-                const StatusIcon = reviewStatusConfig[review.status].icon
+                const displayStatus = getReviewDisplayStatus(review, activeTab);
+                const StatusIcon = reviewStatusConfig[displayStatus].icon;
                 return (
                   <tr key={review.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
@@ -99,9 +100,9 @@ export function ReviewsTable({
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`pill ${reviewStatusConfig[review.status].className}`}>
+                      <span className={`pill ${reviewStatusConfig[displayStatus].className}`}>
                         <StatusIcon className="w-4 h-4" />
-                        {reviewStatusConfig[review.status].label}
+                        {reviewStatusConfig[displayStatus].label}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
@@ -112,18 +113,12 @@ export function ReviewsTable({
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/documents/${review.document_id}/fullscreen`}
-                          className="text-slate-600 hover:text-slate-800 text-sm"
-                        >
-                          View
-                        </Link>
                         {activeTab === 'pending' && review.status === 'pending' && (
                           <button
                             onClick={() => onOpenReview(review)}
                             className="btn-primary text-sm px-3 py-1"
                           >
-                            Review
+                            {displayStatus === 'in_progress' ? 'Continue Review' : 'Review'}
                           </button>
                         )}
                         {activeTab === 'my-submissions' && review.status === 'pending' && (
@@ -135,12 +130,20 @@ export function ReviewsTable({
                             Cancel
                           </button>
                         )}
+                        {activeTab === 'my-submissions' && review.status === 'rejected' && (
+                          <button
+                            onClick={() => onOpenReview(review)}
+                            className="text-sky-600 hover:text-sky-700 text-sm font-medium"
+                          >
+                            Feedback
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
-                )
+                );
               })()
-            ))}
+            )}
           </tbody>
         </table>
       )}
@@ -151,5 +154,5 @@ export function ReviewsTable({
         </div>
       )}
     </div>
-  )
+  );
 }
