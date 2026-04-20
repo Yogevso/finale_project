@@ -17,6 +17,10 @@ import {
   resolveSectionPageStart,
   type TocSection,
 } from '@/pages/document-detail/helpers/previewHelpers';
+import {
+  getAuthoritativeVersionCandidates,
+  selectAuthoritativeVersion,
+} from '@/pages/document-detail/helpers/versionSelection';
 import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup';
 import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas';
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
@@ -102,9 +106,10 @@ export function DocumentPreview({
 }) {
   const { user } = useAuth();
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [inlineSections, setInlineSections] = useState<TocSection[]>([]);
   const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [sections, setSections] = useState<TocSection[]>([]);
   const [tocCollapsed, setTocCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,6 +120,12 @@ export function DocumentPreview({
   const { downloadAttachment } = useAttachmentDownload(documentId);
   const previewPaneRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const selectedAttachmentRef = useRef<Attachment | null>(null);
+  const reviewSession = useMemo(
+    () => (reviewSessionId ? getReviewDocumentSession(reviewSessionId) : null),
+    [reviewSessionId]
+  );
+  const preferredVersionId = reviewSession?.versionId ?? null;
   const {
     selectionPopup,
     commentPopup,
@@ -164,8 +175,13 @@ export function DocumentPreview({
     processHtmlWithSections,
   });
 
+  useEffect(() => {
+    selectedAttachmentRef.current = selectedAttachment;
+  }, [selectedAttachment]);
+
   const {
     previewableAttachments,
+    previewSource,
     activeHtmlContent,
     showingReaderView,
     shouldRenderHtmlPreview,
@@ -177,6 +193,7 @@ export function DocumentPreview({
     inlineContent: htmlContent,
     readerHtmlContent,
     readerStatus,
+    isInlineLoading: isLoading,
   });
 
   const contentStyle = useMemo(
@@ -232,6 +249,7 @@ export function DocumentPreview({
     (html: string) => {
       const processed = processHtmlIntoSections(html);
       setHtmlContent(processed.html);
+      setInlineSections(processed.sections);
 
       if (processed.sections.length === 0) {
         setSections([]);
@@ -263,7 +281,7 @@ export function DocumentPreview({
     documentId,
     isEditor,
     contentEditRequestToken,
-    showingReaderView: selectedAttachment !== null,
+    showingReaderView,
     activeHtmlContent: htmlContent,
     isLoading,
     sections,
@@ -415,6 +433,18 @@ export function DocumentPreview({
   }, [activeHtmlContent, onReadingTimeChange]);
 
   useEffect(() => {
+    if (selectedAttachment || !htmlContent) {
+      if (!selectedAttachment && !htmlContent) {
+        setInlineSections((current) => (current.length === 0 ? current : []));
+        setSections((current) => (current.length === 0 ? current : []));
+      }
+      return;
+    }
+
+    setSections(inlineSections);
+  }, [htmlContent, inlineSections, selectedAttachment]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadInlineContent = async () => {
@@ -426,41 +456,16 @@ export function DocumentPreview({
         if (cancelled) {
           return;
         }
-        const withContent = versionsResponse.items.filter((version) =>
-          Boolean(getUsableVersionContent(version.content))
-        );
-        const latestVersion = withContent.sort(
-          (left, right) =>
-            new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-        )[0];
-        const publishedVersion = withContent
-          .filter((version) => version.is_published)
-          .sort(
-            (left, right) =>
-              new Date(right.published_at || right.created_at).getTime() -
-              new Date(left.published_at || left.created_at).getTime()
-          )[0];
-        let versionToShow = latestVersion || publishedVersion;
+        let versionToShow = selectAuthoritativeVersion({
+          versions: versionsResponse.items,
+          preferredVersionId,
+        });
 
         if (!versionToShow && versionsResponse.items.length > 0) {
-          const prioritizedIds = [
-            ...new Set([
-              ...versionsResponse.items
-                .sort(
-                  (left, right) =>
-                    new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-                )
-                .map((version) => version.id),
-              ...versionsResponse.items
-                .filter((version) => version.is_published)
-                .sort(
-                  (left, right) =>
-                    new Date(right.published_at || right.created_at).getTime() -
-                    new Date(left.published_at || left.created_at).getTime()
-                )
-                .map((version) => version.id),
-            ]),
-          ];
+          const prioritizedIds = getAuthoritativeVersionCandidates({
+            versions: versionsResponse.items,
+            preferredVersionId,
+          }).map((version) => version.id);
 
           for (const versionId of prioritizedIds) {
             const fullVersion = await api.getVersion(documentId, versionId);
@@ -482,12 +487,14 @@ export function DocumentPreview({
         if (versionContent) {
           const processed = processHtmlIntoSections(versionContent);
           setHtmlContent(processed.html);
-          if (!selectedAttachment) {
+          setInlineSections(processed.sections);
+          if (!selectedAttachmentRef.current) {
             setSections(processed.sections);
           }
         } else {
           setHtmlContent(null);
-          if (!selectedAttachment) {
+          setInlineSections([]);
+          if (!selectedAttachmentRef.current) {
             setSections([]);
           }
         }
@@ -502,7 +509,8 @@ export function DocumentPreview({
         });
         setError('Failed to load preview');
         setHtmlContent(null);
-        if (!selectedAttachment) {
+        setInlineSections([]);
+        if (!selectedAttachmentRef.current) {
           setSections([]);
         }
       } finally {
@@ -517,7 +525,7 @@ export function DocumentPreview({
     return () => {
       cancelled = true;
     };
-  }, [documentId, selectedAttachment]);
+  }, [documentId, preferredVersionId]);
 
   const tocSectionsForHtml = sections;
 
@@ -649,7 +657,10 @@ export function DocumentPreview({
       <PreviewToolbar
         previewableAttachments={previewableAttachments}
         selectedAttachment={selectedAttachment}
+        previewSource={previewSource}
+        inlinePreviewAvailable={Boolean(htmlContent?.trim())}
         onSelectAttachment={setSelectedAttachment}
+        onSelectInlinePreview={() => setSelectedAttachment(null)}
         readerError={readerError}
         onRetryReaderView={handleRetryReaderView}
         fontSize={fontSize}
@@ -767,7 +778,7 @@ export function DocumentPreview({
         ) : null}
       </div>
 
-      {selectedAttachment && (
+      {selectedAttachment && showingReaderView && (
         <div className="document-preview-downloads border-t border-slate-200 p-3 bg-slate-50 flex justify-between items-center">
           <span className="text-sm text-slate-600">
             {documentTitle || selectedAttachment.filename}

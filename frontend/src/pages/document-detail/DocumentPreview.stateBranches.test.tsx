@@ -265,7 +265,7 @@ describe('DocumentPreview state branches', () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it('does not let a stale inline load overwrite reader toc sections after attachment selection', async () => {
+  it('waits for inline resolution and keeps inline toc content authoritative when it becomes available', async () => {
     const inlineResponse = createDeferred<{ items: Array<{ id: number; content: string; created_at: string; is_published: boolean }> }>()
     const attachment = buildAttachment({
       id: 9,
@@ -321,9 +321,7 @@ describe('DocumentPreview state branches', () => {
       />,
     )
 
-    await waitFor(() => {
-      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
-    })
+    expect(screen.queryByTestId('preview-canvas')).not.toBeInTheDocument()
 
     inlineResponse.resolve({
       items: [
@@ -337,14 +335,61 @@ describe('DocumentPreview state branches', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
+      expect(screen.getByText('Inline Intro')).toBeInTheDocument()
     })
 
-    expect(screen.queryByText('Inline Intro')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reference Appendix')).not.toBeInTheDocument()
+    expect(screen.getByText('Reference Appendix')).toBeInTheDocument()
+    expect(screen.queryByText('Overview Notes')).not.toBeInTheDocument()
   })
 
-  it('keeps matched outline items after inline save while dropping stale entries', async () => {
+  it('uses the document inline toc when uploaded html contains a stripped contents block', async () => {
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 111,
+          content: [
+            '<article class="docx-document">',
+            '<p>Contents</p>',
+            '<ol>',
+            '<li>Release Kit Summary 7',
+            '<ol><li>Release Kit Details 7</li></ol>',
+            '</li>',
+            '<li>General Information 8</li>',
+            '<li>Appendix A 75</li>',
+            '</ol>',
+            '<h1 id="heading-summary">Release Kit Summary</h1>',
+            '<p>Summary body</p>',
+            '<h2 id="heading-details">Release Kit Details</h2>',
+            '<p>Details body</p>',
+            '<h1 id="heading-appendix">Appendix A</h1>',
+            '</article>',
+          ].join(''),
+          created_at: '2026-01-01T00:00:00Z',
+          is_published: true,
+        },
+      ],
+    } as never)
+
+    render(
+      <DocumentPreview
+        documentId={42}
+        attachments={[]}
+        documentTitle="Uploaded Document"
+        sectionLinkBasePath="/documents/42"
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Release Kit Summary')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Release Kit Details')).toBeInTheDocument()
+    expect(screen.getByText('General Information')).toBeInTheDocument()
+    expect(screen.getByText('Appendix A')).toBeInTheDocument()
+    expect(screen.queryByText('Contents')).not.toBeInTheDocument()
+  })
+
+  it('keeps inline headings after save and drops reader-only outline entries', async () => {
     const attachment = buildAttachment({
       id: 11,
       filename: 'edited.docx',
@@ -421,16 +466,10 @@ describe('DocumentPreview state branches', () => {
         sections: TocSection[]
         applyProcessedHtml: (html: string) => void
       }) => {
-        const armedRef = useRef(false)
         const savedRef = useRef(false)
 
         useEffect(() => {
-          if (!sections.some((section) => section.text === 'Overview Notes')) {
-            return
-          }
-
-          if (!armedRef.current) {
-            armedRef.current = true
+          if (!sections.some((section) => section.text === 'Reference Appendix')) {
             return
           }
 
@@ -467,10 +506,11 @@ describe('DocumentPreview state branches', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Overview Notes')).toBeInTheDocument()
+      expect(screen.getByText('Reference Appendix')).toBeInTheDocument()
     })
 
     expect(screen.getByText('Reference Appendix')).toBeInTheDocument()
+    expect(screen.queryByText('Overview Notes')).not.toBeInTheDocument()
     expect(screen.queryByText('Obsolete Section')).not.toBeInTheDocument()
   })
 })
