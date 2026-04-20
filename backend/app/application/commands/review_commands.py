@@ -27,16 +27,20 @@ from app.errors import ConflictError, NotFoundError, PermissionDeniedError, Vali
 from app.models import (
     ActionType,
     AuditLog,
+    Comment,
     Document,
     NotificationType,
     ReviewRequest,
+    ReviewRequestReviewer,
     ReviewStatus,
     Tenant,
     User,
+    UserRole,
     Version,
 )
 from app.services.notification_service import NotificationService
 from app.services.permissions import Permission, has_permission
+from app.services.review_feedback import serialize_review_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,7 @@ class ApproveReviewCommand:
 
     review_id: int
     comments: str | None
+    review_feedback: dict | None
     current_user: User
 
 
@@ -105,6 +110,9 @@ class ApproveReviewCommandHandler:
             .options(
                 joinedload(ReviewRequest.document).joinedload(Document.assigned_companies),
                 joinedload(ReviewRequest.submitter),
+                joinedload(ReviewRequest.reviewer_assignments).joinedload(
+                    ReviewRequestReviewer.reviewer
+                ),
             )
             .filter(ReviewRequest.id == review_id)
             .populate_existing()
@@ -119,6 +127,7 @@ class ApproveReviewCommandHandler:
         review_id: int,
         reviewer_id: int,
         comments: str | None,
+        review_feedback_json: str | None,
         reviewed_at: datetime,
     ) -> None:
         approval_stmt = (
@@ -131,6 +140,7 @@ class ApproveReviewCommandHandler:
                 status=ReviewStatus.APPROVED,
                 reviewed_by=reviewer_id,
                 review_comments=comments,
+                review_feedback_json=review_feedback_json,
                 reviewed_at=reviewed_at,
             )
         )
@@ -145,6 +155,21 @@ class ApproveReviewCommandHandler:
 
         review_aggregate = ReviewAggregate(review)
         review_aggregate.ensure_pending()
+
+        open_thread_count = (
+            self.db.query(Comment)
+            .filter(
+                Comment.review_id == review.id,
+                Comment.parent_id == None,  # noqa: E711
+                Comment.is_resolved.is_(False),
+            )
+            .count()
+        )
+        if open_thread_count > 0:
+            raise ConflictError(
+                "Cannot approve while review threads remain unresolved "
+                f"({open_thread_count} open thread{'s' if open_thread_count != 1 else ''})."
+            )
 
         if review.version_id:
             review_version = (
@@ -189,6 +214,18 @@ class ApproveReviewCommandHandler:
                 "You cannot approve this review (cannot approve own submission)"
             )
 
+        is_assignment_required = bool(review.reviewer_assignments)
+        if is_assignment_required:
+            privileged_roles = {UserRole.SYSTEM_ADMIN, UserRole.ADMIN, UserRole.MANAGER}
+            if current_user.role not in privileged_roles:
+                assigned_user_ids = {
+                    assignment.reviewer_id for assignment in review.reviewer_assignments
+                }
+                if current_user.id not in assigned_user_ids:
+                    raise PermissionDeniedError(
+                        "This review is assigned to a different reviewer."
+                    )
+
     def _execute_command(self, context: CommandContext[ApproveReviewCommand]) -> ReviewRequest:
         review = self._load_review(context.command.review_id, for_update=True)
         if not review:
@@ -226,15 +263,21 @@ class ApproveReviewCommandHandler:
             )
 
         reviewed_at = datetime.utcnow()
+        review_feedback_json = serialize_review_feedback(
+            context.command.review_feedback,
+            fallback_comments=context.command.comments,
+        )
         self._approve_pending_review_row(
             review_id=review.id,
             reviewer_id=current_user.id,
             comments=context.command.comments,
+            review_feedback_json=review_feedback_json,
             reviewed_at=reviewed_at,
         )
         review.status = ReviewStatus.APPROVED
         review.reviewed_by = current_user.id
         review.review_comments = context.command.comments
+        review.review_feedback_json = review_feedback_json
         review.reviewed_at = reviewed_at
         document_aggregate.finalize_review_approval()
 
@@ -286,6 +329,9 @@ class ApproveReviewCommandHandler:
                 joinedload(ReviewRequest.document),
                 joinedload(ReviewRequest.submitter),
                 joinedload(ReviewRequest.reviewer),
+                joinedload(ReviewRequest.reviewer_assignments).joinedload(
+                    ReviewRequestReviewer.reviewer
+                ),
             )
             .filter(ReviewRequest.id == review.id)
             .first()

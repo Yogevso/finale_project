@@ -8,7 +8,7 @@ import type { ReviewRequest, ReviewStatus } from '@/types';
 
 import type { ReviewsTabType } from '../constants';
 import { clearReviewProgress } from '../reviewProgress';
-import { reviewsUseCases } from '../useCases/reviewsUseCases';
+import { reviewsUseCases, type ReviewDecisionInput } from '../useCases/reviewsUseCases';
 
 export function useReviewsPageController() {
   const queryClient = useQueryClient();
@@ -23,8 +23,8 @@ export function useReviewsPageController() {
   const { data: submissionsData, isLoading: submissionsLoading } = submissionsQuery;
 
   const approveMutation = useMutation({
-    mutationFn: ({ reviewId, comments }: { reviewId: number; comments?: string }) =>
-      reviewsUseCases.approveReview(reviewId, comments),
+    mutationFn: ({ reviewId, decision }: { reviewId: number; decision: ReviewDecisionInput }) =>
+      reviewsUseCases.approveReview(reviewId, decision),
     onSuccess: (_result, variables) => {
       clearReviewProgress(variables.reviewId);
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all });
@@ -36,8 +36,8 @@ export function useReviewsPageController() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ reviewId, comments }: { reviewId: number; comments: string }) =>
-      reviewsUseCases.rejectReview(reviewId, comments),
+    mutationFn: ({ reviewId, decision }: { reviewId: number; decision: ReviewDecisionInput }) =>
+      reviewsUseCases.rejectReview(reviewId, decision),
     onSuccess: (_result, variables) => {
       clearReviewProgress(variables.reviewId);
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all });
@@ -72,18 +72,18 @@ export function useReviewsPageController() {
   const closeSelectedReview = () => setSelectedReview(null);
   const openSelectedReview = (review: ReviewRequest) => setSelectedReview(review);
 
-  const approveSelectedReview = (comments?: string) => {
+  const approveSelectedReview = (decision: ReviewDecisionInput) => {
     if (!selectedReview) {
       return;
     }
-    approveMutation.mutate({ reviewId: selectedReview.id, comments });
+    approveMutation.mutate({ reviewId: selectedReview.id, decision });
   };
 
-  const rejectSelectedReview = (comments: string) => {
+  const rejectSelectedReview = (decision: ReviewDecisionInput) => {
     if (!selectedReview) {
       return;
     }
-    rejectMutation.mutate({ reviewId: selectedReview.id, comments });
+    rejectMutation.mutate({ reviewId: selectedReview.id, decision });
   };
 
   return {

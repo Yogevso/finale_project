@@ -39,7 +39,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     foreign_keys = {fk["name"] for fk in inspector.get_foreign_keys("documents")}
-    if "fk_documents_deleted_by_users" not in foreign_keys:
+    if bind.dialect.name != "sqlite" and "fk_documents_deleted_by_users" not in foreign_keys:
         op.create_foreign_key(
             "fk_documents_deleted_by_users",
             "documents",
@@ -68,7 +68,7 @@ def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     foreign_keys = {fk["name"] for fk in inspector.get_foreign_keys("documents")}
-    if "fk_documents_deleted_by_users" in foreign_keys:
+    if bind.dialect.name != "sqlite" and "fk_documents_deleted_by_users" in foreign_keys:
         op.drop_constraint("fk_documents_deleted_by_users", "documents", type_="foreignkey")
 
     for column_name in ["purge_at", "deleted_at", "deleted_by"]:

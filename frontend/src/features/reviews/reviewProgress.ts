@@ -32,30 +32,38 @@ function readProgressStore(): Record<string, PersistedReviewProgress> {
 
     return Object.entries(parsed).reduce<Record<string, PersistedReviewProgress>>(
       (accumulator, [reviewId, value]) => {
+        const candidate =
+          value && typeof value === 'object'
+            ? (value as Record<string, unknown>)
+            : null;
         if (
-          value &&
-          typeof value === 'object' &&
-          typeof value.currentSectionIndex === 'number' &&
-          typeof value.startedAt === 'string' &&
-          typeof value.updatedAt === 'string'
+          candidate &&
+          typeof candidate.currentSectionIndex === 'number' &&
+          typeof candidate.startedAt === 'string' &&
+          typeof candidate.updatedAt === 'string'
         ) {
+          const rawSectionSuggestions =
+            candidate.sectionSuggestions &&
+            typeof candidate.sectionSuggestions === 'object'
+              ? (candidate.sectionSuggestions as Record<string, unknown>)
+              : null;
+
           accumulator[reviewId] = {
-            currentSectionIndex: value.currentSectionIndex,
-            startedAt: value.startedAt,
-            updatedAt: value.updatedAt,
-            decisionReady: value.decisionReady === true,
-            sectionSuggestions:
-              value.sectionSuggestions && typeof value.sectionSuggestions === 'object'
-                ? Object.entries(value.sectionSuggestions).reduce<Record<string, string>>(
-                    (suggestions, [sectionId, suggestion]) => {
-                      if (typeof suggestion === 'string') {
-                        suggestions[sectionId] = suggestion;
-                      }
-                      return suggestions;
-                    },
-                    {}
-                  )
-                : {},
+            currentSectionIndex: candidate.currentSectionIndex,
+            startedAt: candidate.startedAt,
+            updatedAt: candidate.updatedAt,
+            decisionReady: candidate.decisionReady === true,
+            sectionSuggestions: rawSectionSuggestions
+              ? Object.entries(rawSectionSuggestions).reduce<Record<string, string>>(
+                  (suggestions, [sectionId, suggestion]) => {
+                    if (typeof suggestion === 'string') {
+                      suggestions[sectionId] = suggestion;
+                    }
+                    return suggestions;
+                  },
+                  {},
+                )
+              : {},
           };
         }
         return accumulator;

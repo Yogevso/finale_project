@@ -24,7 +24,7 @@ export interface CommentPopupState {
 const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '' }
 const EMPTY_COMMENT_POPUP: CommentPopupState = { show: false, x: 0, y: 0, text: '', anchorId: '' }
 
-export function useInlineComments(documentId: number) {
+export function useInlineComments(documentId: number, reviewId: number | null = null) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [selectionPopup, setSelectionPopup] = useState<SelectionPopupState>(EMPTY_SELECTION_POPUP)
@@ -34,18 +34,29 @@ export function useInlineComments(documentId: number) {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
   const createCommentMutation = useMutation({
-    mutationFn: (data: { content: string; is_private?: boolean; anchor_text?: string; anchor_id?: string }) =>
+    mutationFn: (data: {
+      content: string
+      is_private?: boolean
+      anchor_text?: string
+      anchor_id?: string
+      review_id?: number
+    }) =>
       api.createComment(documentId, data),
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.comments.byDocument(documentId, reviewId),
+      })
 
-      const previousComments = queryClient.getQueryData<Comment[]>(queryKeys.comments.byDocument(documentId))
+      const previousComments = queryClient.getQueryData<Comment[]>(
+        queryKeys.comments.byDocument(documentId, reviewId),
+      )
       const optimisticId = -Date.now()
       const nowIso = new Date().toISOString()
       const optimisticComment: Comment = {
         id: optimisticId,
         document_id: documentId,
         user_id: user?.id || 0,
+        review_id: data.review_id ?? null,
         author_id: user?.id,
         author_name: user?.full_name || user?.username || 'You',
         parent_id: null,
@@ -69,8 +80,10 @@ export function useInlineComments(documentId: number) {
         chat_id: null,
       }
 
-      queryClient.setQueryData<Comment[]>(queryKeys.comments.byDocument(documentId), (current) =>
-        current ? [optimisticComment, ...current] : [optimisticComment],
+      queryClient.setQueryData<Comment[]>(
+        queryKeys.comments.byDocument(documentId, reviewId),
+        (current) =>
+          current ? [optimisticComment, ...current] : [optimisticComment],
       )
 
       const previousCommentPopup = commentPopup
@@ -92,15 +105,25 @@ export function useInlineComments(documentId: number) {
       }
     },
     onSuccess: (createdComment, _variables, context) => {
-      queryClient.setQueryData<Comment[]>(queryKeys.comments.byDocument(documentId), (current) => {
-        if (!current) return [createdComment]
-        return current.map((comment) => (comment.id === context?.optimisticId ? createdComment : comment))
+      queryClient.setQueryData<Comment[]>(
+        queryKeys.comments.byDocument(documentId, reviewId),
+        (current) => {
+          if (!current) return [createdComment]
+          return current.map((comment) =>
+            comment.id === context?.optimisticId ? createdComment : comment,
+          )
+        },
+      )
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.comments.byDocument(documentId, reviewId),
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.comments.byDocument(documentId) })
     },
     onError: (_error, _variables, context) => {
       if (context) {
-        queryClient.setQueryData(queryKeys.comments.byDocument(documentId), context.previousComments)
+        queryClient.setQueryData(
+          queryKeys.comments.byDocument(documentId, reviewId),
+          context.previousComments,
+        )
       }
       setCommentPopup(context?.previousCommentPopup ?? EMPTY_COMMENT_POPUP)
       setCommentText(context?.previousCommentText ?? '')
@@ -161,8 +184,16 @@ export function useInlineComments(documentId: number) {
       is_private: isPrivateComment,
       anchor_text: commentPopup.text,
       anchor_id: commentPopup.anchorId,
+      review_id: reviewId ?? undefined,
     })
-  }, [commentPopup.anchorId, commentPopup.text, commentText, createCommentMutation, isPrivateComment])
+  }, [
+    commentPopup.anchorId,
+    commentPopup.text,
+    commentText,
+    createCommentMutation,
+    isPrivateComment,
+    reviewId,
+  ])
 
   const handleCloseCommentPopup = useCallback(() => {
     setSelectionPopup(EMPTY_SELECTION_POPUP)

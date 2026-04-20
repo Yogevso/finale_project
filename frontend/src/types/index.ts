@@ -378,6 +378,7 @@ export interface Comment {
   id: number
   document_id: number
   user_id: number
+  review_id?: number | null
   author_id?: number  // alias for user_id
   author_name?: string // populated from join
   parent_id: number | null
@@ -404,6 +405,7 @@ export interface CommentCreate {
   is_private?: boolean
   anchor_text?: string
   anchor_id?: string
+  review_id?: number
   parent_id?: number
 }
 
@@ -714,6 +716,21 @@ export interface CompanyDocumentsResponse {
 // Review types
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 
+export type ReviewCommentSeverity = 'low' | 'medium' | 'high' | 'blocker'
+
+export interface ReviewSectionComment {
+  title?: string | null
+  comment: string
+  anchor_id?: string | null
+  severity: ReviewCommentSeverity
+  action_item_assignee?: number | null
+}
+
+export interface ReviewFeedback {
+  general_comment?: string | null
+  section_comments: ReviewSectionComment[]
+}
+
 export interface ReviewRequest {
   id: number
   document_id: number
@@ -723,6 +740,9 @@ export interface ReviewRequest {
   status: ReviewStatus
   message?: string | null
   review_comments?: string | null
+  review_feedback?: ReviewFeedback | null
+  requested_reviewer_ids?: number[]
+  requested_reviewers?: User[]
   submitted_at: string
   reviewed_at?: string | null
   created_at: string
@@ -734,10 +754,12 @@ export interface ReviewRequest {
 export interface ReviewSubmit {
   version_id?: number
   message?: string
+  requested_reviewer_ids?: number[]
 }
 
 export interface ReviewAction {
   comments?: string
+  review_feedback?: ReviewFeedback
 }
 
 export interface ApprovalPolicyCheck {

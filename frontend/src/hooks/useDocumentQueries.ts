@@ -65,12 +65,16 @@ export function useDocumentAttachmentsQuery(
   })
 }
 
-export function useDocumentCommentsQuery(documentId: DocumentIdInput, enabled: boolean = true) {
+export function useDocumentCommentsQuery(
+  documentId: DocumentIdInput,
+  reviewId?: number | null,
+  enabled: boolean = true,
+) {
   const parsedDocumentId = parseDocumentId(documentId)
 
   return useQuery({
-    queryKey: queryKeys.comments.byDocument(documentId ?? 'unknown'),
-    queryFn: () => api.getComments(parsedDocumentId as number),
+    queryKey: queryKeys.comments.byDocument(documentId ?? 'unknown', reviewId),
+    queryFn: () => api.getComments(parsedDocumentId as number, undefined, reviewId ?? undefined),
     enabled: enabled && parsedDocumentId !== null,
   })
 }

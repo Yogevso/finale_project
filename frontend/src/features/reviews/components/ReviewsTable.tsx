@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Calendar, FileText, MessageSquare, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -27,7 +28,7 @@ export function ReviewsTable({
   onCancelReview,
 }: ReviewsTableProps) {
   return (
-    <div className="surface-card rounded-2xl overflow-hidden">
+    <div className="reviews-table-shell">
       {isLoading ? (
         <TableSkeleton rows={6} columns={5} />
       ) : !reviews?.length ? (
@@ -43,114 +44,133 @@ export function ReviewsTable({
           />
         </div>
       ) : (
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                Document
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                {activeTab === 'pending' ? 'Submitted By' : 'Reviewed By'}
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
-            {reviews.map((review) =>
-              (() => {
-                const displayStatus = getReviewDisplayStatus(review, activeTab);
-                const StatusIcon = reviewStatusConfig[displayStatus].icon;
-                return (
-                  <tr key={review.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-slate-400" />
-                        <div>
-                          <Link
-                            to={`/documents/${review.document_id}/fullscreen`}
-                            className="text-sky-600 hover:text-sky-700 font-medium"
-                          >
-                            {review.document?.title || `Document #${review.document_id}`}
-                          </Link>
-                          {review.message && (
-                            <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-                              <MessageSquare className="w-3 h-3" />
-                              {review.message.length > 50
-                                ? `${review.message.slice(0, 50)}...`
-                                : review.message}
-                            </p>
+        <div className="reviews-table-scroll">
+          <table className="reviews-table" aria-label="Review queue list">
+            <thead className="reviews-table-head">
+              <tr>
+                <th>Document</th>
+                <th>{activeTab === 'pending' ? 'Submitted By' : 'Reviewer'}</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review, index) =>
+                (() => {
+                  const displayStatus = getReviewDisplayStatus(review, activeTab);
+                  const StatusIcon = reviewStatusConfig[displayStatus].icon;
+
+                  return (
+                    <tr
+                      key={review.id}
+                      className="reviews-table-row motion-enter-fade"
+                      style={
+                        {
+                          '--enter-delay': `${Math.min(index, 7) * 28}ms`,
+                        } as CSSProperties
+                      }
+                    >
+                      <td className="reviews-table-cell">
+                        <div className="flex items-start gap-3">
+                          <span className="reviews-doc-icon" aria-hidden="true">
+                            <FileText className="w-5 h-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <Link
+                              to={`/documents/${review.document_id}/fullscreen`}
+                              className="reviews-doc-link"
+                            >
+                              {review.document?.title || `Document #${review.document_id}`}
+                            </Link>
+                            {review.message && (
+                              <p className="reviews-message-chip">
+                                <MessageSquare className="w-3 h-3 shrink-0" />
+                                {review.message.length > 50
+                                  ? `${review.message.slice(0, 50)}...`
+                                  : review.message}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="reviews-table-cell">
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <User className="w-4 h-4 text-slate-400" />
+                          {activeTab === 'pending'
+                            ? review.submitter?.full_name || 'Unknown'
+                            : review.status === 'pending' &&
+                                (review.requested_reviewers?.length || 0) > 0
+                              ? (() => {
+                                  const names = review.requested_reviewers!.map((user) => user.full_name)
+                                  if (names.length <= 2) {
+                                    return names.join(', ')
+                                  }
+                                  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+                                })()
+                              : review.reviewer?.full_name || '-'}
+                        </div>
+                      </td>
+                      <td className="reviews-table-cell">
+                        <span
+                          className={`pill reviews-status-pill ${reviewStatusConfig[displayStatus].className}`}
+                        >
+                          <StatusIcon className="w-4 h-4" />
+                          {reviewStatusConfig[displayStatus].label}
+                        </span>
+                      </td>
+                      <td className="reviews-table-cell">
+                        <div className="inline-flex items-center gap-1.5 text-sm text-slate-600">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          {new Date(review.submitted_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="reviews-table-cell reviews-table-cell-actions">
+                        <div className="flex items-center justify-end gap-2">
+                          {activeTab === 'pending' && review.status === 'pending' && (
+                            <button
+                              onClick={() => onOpenReview(review)}
+                              className="btn-primary px-4 py-2 text-xs sm:text-sm"
+                            >
+                              {displayStatus === 'in_progress' ? 'Continue Review' : 'Review'}
+                            </button>
+                          )}
+                          {activeTab === 'my-submissions' && review.status === 'pending' && (
+                            <button
+                              onClick={() => onCancelReview(review.id)}
+                              disabled={cancelPending}
+                              className="inline-flex items-center rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-700 transition hover:bg-rose-50 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          {activeTab === 'my-submissions' && review.status === 'rejected' && (
+                            <button
+                              onClick={() => onOpenReview(review)}
+                              className="inline-flex items-center rounded-full border border-sky-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-50 hover:text-sky-800"
+                            >
+                              Feedback
+                            </button>
                           )}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <User className="w-4 h-4" />
-                        {activeTab === 'pending'
-                          ? review.submitter?.full_name || 'Unknown'
-                          : review.reviewer?.full_name || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`pill ${reviewStatusConfig[displayStatus].className}`}>
-                        <StatusIcon className="w-4 h-4" />
-                        {reviewStatusConfig[displayStatus].label}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(review.submitted_at).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {activeTab === 'pending' && review.status === 'pending' && (
-                          <button
-                            onClick={() => onOpenReview(review)}
-                            className="btn-primary text-sm px-3 py-1"
-                          >
-                            {displayStatus === 'in_progress' ? 'Continue Review' : 'Review'}
-                          </button>
-                        )}
-                        {activeTab === 'my-submissions' && review.status === 'pending' && (
-                          <button
-                            onClick={() => onCancelReview(review.id)}
-                            disabled={cancelPending}
-                            className="text-rose-600 hover:text-rose-700 text-sm"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                        {activeTab === 'my-submissions' && review.status === 'rejected' && (
-                          <button
-                            onClick={() => onOpenReview(review)}
-                            className="text-sky-600 hover:text-sky-700 text-sm font-medium"
-                          >
-                            Feedback
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })()
-            )}
-          </tbody>
-        </table>
+                      </td>
+                    </tr>
+                  );
+                })()
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {reviews && reviews.length > 0 && (
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
-          Showing {reviews.length} of {total} reviews
+        <div className="reviews-table-footer">
+          <span>
+            Showing {reviews.length} of {total} reviews
+          </span>
+          <span className="reviews-footer-pill">
+            {activeTab === 'pending' ? 'Queue View' : 'Submission View'}
+          </span>
         </div>
       )}
     </div>

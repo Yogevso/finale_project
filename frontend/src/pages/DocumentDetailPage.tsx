@@ -5,6 +5,7 @@ import { DocumentPreview } from '@/pages/document-detail/DocumentPreview';
 import { EditForm } from '@/pages/document-detail/EditForm';
 import { DocumentDetailsView } from '@/pages/document-detail/components/DocumentDetailsView';
 import { DocumentHeaderCard } from '@/pages/document-detail/components/DocumentHeaderCard';
+import { DocumentPreviewActionsBar } from '@/pages/document-detail/components/DocumentPreviewActionsBar';
 import { DocumentTabs } from '@/pages/document-detail/components/DocumentTabs';
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar';
 import { ReviewSubmitModal } from '@/pages/document-detail/components/ReviewSubmitModal';
@@ -270,6 +271,48 @@ export default function DocumentDetailPage() {
             }
             reviewSectionId={reviewSectionId}
             onRemovedSectionsChange={handleRemovedSectionsChange}
+            actionsBar={
+              <DocumentPreviewActionsBar
+                isEditor={isEditor}
+                documentStatus={document.status}
+                sourceFileType={sourceFileType}
+                dueDate={document.due_date}
+                onGenerateTranscript={() => window.print()}
+                onDownloadAs={(format) => {
+                  const formatMap: Record<string, 'pdf' | 'docx' | 'pptx'> = {
+                    pdf: 'pdf',
+                    word: 'docx',
+                    ppt: 'pptx',
+                  };
+                  const apiFormat = formatMap[format];
+                  if (!apiFormat) return;
+                  void (async () => {
+                    try {
+                      const blob = await api.exportDocument(documentId, apiFormat);
+                      const url = URL.createObjectURL(blob);
+                      const link = Object.assign(window.document.createElement('a'), {
+                        href: url,
+                        download: `${document.title || 'document'}.${apiFormat}`,
+                      });
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      console.error('Export failed');
+                    }
+                  })();
+                }}
+                onExportCalendar={document.due_date ? exportCalendar : undefined}
+                onOpenSubmitReview={openSubmitReview}
+                onCancelReview={pendingReviewId ? () => cancelReview() : undefined}
+                isCancellingReview={isCancellingReview}
+                onEditAction={handleEditAction}
+                onArchive={handleArchive}
+                onRestore={handleRestore}
+                removedSectionsCount={removedSections.length}
+                onShowRemovedSections={() => setShowRemovedSections(true)}
+                onHelp={() => setShowHelp(true)}
+              />
+            }
           />
         )}
 

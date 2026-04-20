@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { Check, ChevronDown, ChevronRight, Circle, Edit3, Link2, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Circle, Edit3, Link2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { writeText } from '@/env/clipboard'
 import { getWindowLocation } from '@/env/dom'
@@ -50,10 +50,8 @@ export function TocPanel({
   onAddSectionAfter,
 }: TocPanelProps) {
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null)
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const copiedTimeoutRef = useRef<number | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     return () => {
@@ -62,18 +60,6 @@ export function TocPanel({
       }
     }
   }, [])
-
-  // Close three-dot menu on outside click
-  useEffect(() => {
-    if (!menuOpenId) return
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpenId(null)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [menuOpenId])
 
   const sectionNumbers = useMemo(() => computeSectionNumbers(sections), [sections])
 
@@ -116,6 +102,9 @@ export function TocPanel({
       const pageStart = resolveSectionPageStart(item)
       return activeHeading === anchorId || (!!pageStart && readerCurrentPage === pageStart)
     }) ?? sections[0]
+  const activeSectionIndex = activeSection
+    ? sections.findIndex((section) => section.id === activeSection.id)
+    : -1
 
   const handleCopySectionLink = async (section: TocSection) => {
     const anchorId = section.anchorId || `heading-${section.index}`
@@ -201,6 +190,64 @@ export function TocPanel({
         )}
 
         {!tocCollapsed && (
+          <>
+            {isEditor && !showingReaderView && activeSection ? (
+              <div className="border-b border-slate-200 bg-slate-50/90 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Section Actions
+                </p>
+                <p className="mt-1 truncate text-xs text-slate-600 dark:text-slate-300">
+                  {activeSection.text}
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onEditSection(activeSection)}
+                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                    title={`Edit ${activeSection.text}`}
+                    aria-label={`Edit ${activeSection.text}`}
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  {onDeleteSection && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteSection(activeSection)}
+                      className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                      title={`Remove ${activeSection.text}`}
+                      aria-label={`Remove ${activeSection.text}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {onAddSectionAfter && activeSectionIndex >= 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onAddSectionAfter(activeSectionIndex)}
+                      className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                      title={`Add section below ${activeSection.text}`}
+                      aria-label={`Add section below ${activeSection.text}`}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleCopySectionLink(activeSection)}
+                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                    title={`Copy link to ${activeSection.text}`}
+                    aria-label={`Copy link to ${activeSection.text}`}
+                  >
+                    {copiedSectionId === activeSection.id ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Link2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
           <nav className="flex-1 h-0 overflow-y-auto p-2">
               {sections.length === 0 ? (
               <p className="body-copy px-2 py-2">No TOC available</p>
@@ -265,77 +312,6 @@ export function TocPanel({
                           </span>
                         </button>
 
-                        {/* Three-dot menu */}
-                        {isEditor && !showingReaderView && (
-                          <div className="relative flex-shrink-0" ref={menuOpenId === item.id ? menuRef : undefined}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setMenuOpenId(menuOpenId === item.id ? null : item.id)
-                              }}
-                              className="btn-icon h-7 w-7 border-0 bg-transparent p-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-700"
-                              title="Section actions"
-                            >
-                              <MoreVertical className="w-3.5 h-3.5" />
-                            </button>
-
-                            {menuOpenId === item.id && (
-                              <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMenuOpenId(null)
-                                    onEditSection(item)
-                                  }}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-200"
-                                >
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                  Edit
-                                </button>
-                                {onDeleteSection && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuOpenId(null)
-                                      onDeleteSection(item)
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:text-rose-400"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    Remove
-                                  </button>
-                                )}
-                                <div className="mx-2 my-1 border-t border-slate-100 dark:border-slate-800" />
-                                {onAddSectionAfter && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setMenuOpenId(null)
-                                      onAddSectionAfter(sectionIdx)
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400"
-                                  >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    Add Below
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMenuOpenId(null)
-                                    void handleCopySectionLink(item)
-                                  }}
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-200"
-                                >
-                                  <Link2 className="h-3.5 w-3.5" />
-                                  Copy Link
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
                         {/* Copy link (non-editor or reader view) */}
                         {(!isEditor || showingReaderView) && (
                           <button
@@ -355,26 +331,13 @@ export function TocPanel({
                           </button>
                         )}
                       </div>
-
-                      {/* Add section between items */}
-                      {isEditor && !showingReaderView && onAddSectionAfter && (
-                        <div className="relative h-0 overflow-visible opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={() => onAddSectionAfter(sectionIdx)}
-                            className="absolute left-1/2 -translate-x-1/2 -bottom-1 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm hover:bg-emerald-100 hover:shadow"
-                            title="Add section here"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-                      )}
                     </li>
                   )
                 })}
               </ul>
             )}
           </nav>
+          </>
         )}
       </div>
     </div>

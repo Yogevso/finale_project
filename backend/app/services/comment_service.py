@@ -13,7 +13,15 @@ from app.domain.events import (
     InProcessDomainEventDispatcher,
 )
 from app.errors import NotFoundError, PermissionDeniedError, ValidationError
-from app.models import Attachment, Comment, Document, NotificationType, User, UserRole
+from app.models import (
+    Attachment,
+    Comment,
+    Document,
+    NotificationType,
+    ReviewRequest,
+    User,
+    UserRole,
+)
 from app.repositories import (
     CommentRepository,
     DocumentRepository,
@@ -193,6 +201,7 @@ class CommentService(SessionService):
             is_private=comment.is_private,
             anchor_text=comment.anchor_text,
             anchor_id=comment.anchor_id,
+            review_id=comment.review_id,
             is_resolved=comment.is_resolved,
             created_at=comment.created_at,
             updated_at=comment.updated_at,
@@ -231,7 +240,13 @@ class CommentService(SessionService):
             )
 
     def get_comments(
-        self, document_id: int, current_user: User, *, page: int = 1, page_size: int = 50
+        self,
+        document_id: int,
+        current_user: User,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+        review_id: int | None = None,
     ) -> PaginatedComments:
         """
         Get comments for a document with contributor-based visibility filtering.
@@ -255,7 +270,10 @@ class CommentService(SessionService):
         contributors = CommentService.get_document_contributors(self.db, document_id)
 
         # Base query - get all top-level comments
-        all_comments = self.comment_repository.list_top_level_with_replies(document_id)
+        all_comments = self.comment_repository.list_top_level_with_replies(
+            document_id,
+            review_id=review_id,
+        )
 
         # Filter comments based on visibility rules
         visible_comments = []
@@ -337,6 +355,24 @@ class CommentService(SessionService):
             if self._comment_depth(parent_comment) >= self.MAX_REPLY_DEPTH:
                 raise ValidationError("Replies are limited to two nested levels")
 
+        review_id = comment_data.review_id
+        if parent_comment and parent_comment.review_id is not None:
+            if review_id is not None and review_id != parent_comment.review_id:
+                raise ValidationError("Reply review context must match parent comment thread")
+            review_id = parent_comment.review_id
+
+        if review_id is not None:
+            review = (
+                self.db.query(ReviewRequest)
+                .filter(
+                    ReviewRequest.id == review_id,
+                    ReviewRequest.document_id == document_id,
+                )
+                .first()
+            )
+            if not review:
+                raise NotFoundError("Review not found")
+
         # Create comment with new fields
         # AD-005: customers cannot create private comments
         is_private = comment_data.is_private
@@ -351,6 +387,7 @@ class CommentService(SessionService):
             is_private=is_private,
             anchor_text=comment_data.anchor_text,
             anchor_id=comment_data.anchor_id,
+            review_id=review_id,
         )
         commenter_name = current_user.full_name or current_user.username
         truncated_content = " ".join(comment.content.split())[:160]

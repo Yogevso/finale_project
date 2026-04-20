@@ -151,6 +151,100 @@ function normalizeSectionText(value: string | null | undefined): string {
   return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
+function normalizeCompactHtml(value: string | null | undefined): string {
+  return (value || '')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function ensureUniqueSectionAnchorId(params: {
+  html: string
+  existingAnchorIds: string[]
+  preferredAnchorId?: string | null
+}): { html: string; anchorId: string | null } {
+  const parser = getDomParser()
+  const doc = parser.parseFromString(params.html || '', 'text/html')
+  const heading = doc.body.querySelector('h1, h2, h3, h4, h5, h6')
+  if (!heading) {
+    return {
+      html: params.html,
+      anchorId: null,
+    }
+  }
+
+  const occupiedAnchorIds = new Set(
+    params.existingAnchorIds
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0),
+  )
+  const preferredAnchorId = (params.preferredAnchorId || '').trim()
+  const currentAnchorId = (heading.getAttribute('id') || '').trim()
+  const baseAnchorId =
+    preferredAnchorId ||
+    currentAnchorId ||
+    `heading-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  let resolvedAnchorId = baseAnchorId
+  let suffix = 2
+  while (occupiedAnchorIds.has(resolvedAnchorId)) {
+    resolvedAnchorId = `${baseAnchorId}-${suffix}`
+    suffix += 1
+  }
+
+  heading.setAttribute('id', resolvedAnchorId)
+  heading.classList.add('scroll-mt-4')
+  return {
+    html: doc.body.innerHTML,
+    anchorId: resolvedAnchorId,
+  }
+}
+
+function findSectionIndexInHtmlSections(
+  htmlSections: TocSection[],
+  referenceSection: TocSection | null | undefined,
+  fallbackIndex: number,
+): number {
+  if (htmlSections.length === 0) {
+    return -1
+  }
+
+  if (referenceSection?.anchorId) {
+    const byAnchor = htmlSections.findIndex((section) => section.anchorId === referenceSection.anchorId)
+    if (byAnchor >= 0) {
+      return byAnchor
+    }
+  }
+
+  const referenceText = normalizeSectionText(referenceSection?.text)
+  if (referenceText) {
+    const byLabel = htmlSections.findIndex(
+      (section) =>
+        normalizeSectionText(section.text) === referenceText &&
+        (!referenceSection || section.level === referenceSection.level),
+    )
+    if (byLabel >= 0) {
+      return byLabel
+    }
+  }
+
+  const referenceHtml = normalizeCompactHtml(referenceSection?.html)
+  if (referenceHtml) {
+    const byHtml = htmlSections.findIndex(
+      (section) => normalizeCompactHtml(section.html) === referenceHtml,
+    )
+    if (byHtml >= 0) {
+      return byHtml
+    }
+  }
+
+  if (fallbackIndex >= 0) {
+    return Math.min(htmlSections.length - 1, fallbackIndex)
+  }
+
+  return -1
+}
+
 function resolveSectionMatchBounds(
   root: HTMLElement,
   sections: TocSection[],
@@ -465,28 +559,65 @@ export function useContentEditingFlow({
       // Get old section content for comparison.
       const oldSectionHtml = editingSection.editMode === 'insert' ? '' : editingSection.html
 
+      const allAnchorIds = sections
+        .map((section) => (section.anchorId || '').trim())
+        .filter((anchorId) => anchorId.length > 0)
+      const anchorIdsWithoutCurrent =
+        editingSection.anchorId && editingSection.anchorId.trim()
+          ? allAnchorIds.filter((anchorId) => anchorId !== editingSection.anchorId)
+          : allAnchorIds
+      const normalizedSection =
+        editingSection.editMode === 'full'
+          ? { html: newHtml, anchorId: null as string | null }
+          : ensureUniqueSectionAnchorId({
+              html: newHtml,
+              existingAnchorIds:
+                editingSection.editMode === 'insert' ? allAnchorIds : anchorIdsWithoutCurrent,
+              preferredAnchorId:
+                editingSection.editMode === 'insert' ? null : editingSection.anchorId,
+            })
+      const nextSectionHtml = normalizedSection.html
+      const nextSectionAnchorId = normalizedSection.anchorId || editingSection.anchorId || null
+
       let newFullHtml = ''
       if (editingSection.editMode === 'insert') {
-        const insertAt = Math.max(
-          0,
-          Math.min(sections.length, (editingSection.insertAfterIndex ?? -1) + 1),
-        )
-        const updatedSections = [...sections]
-        updatedSections.splice(insertAt, 0, {
-          ...editingSection,
-          html: newHtml,
-          index: insertAt,
-        })
-        newFullHtml = updatedSections.map((section) => section.html).join('\n')
+        const htmlSections = processHtmlIntoSections(activeHtmlContent || '').sections
+        if (htmlSections.length === 0) {
+          newFullHtml = nextSectionHtml
+        } else {
+          const insertAfterIndex = editingSection.insertAfterIndex ?? -1
+          const afterSection = insertAfterIndex >= 0 ? sections[insertAfterIndex] : null
+          const matchedHtmlIndex = findSectionIndexInHtmlSections(
+            htmlSections,
+            afterSection,
+            insertAfterIndex,
+          )
+          const insertAt = Math.max(0, Math.min(htmlSections.length, matchedHtmlIndex + 1))
+          const updatedSections = [...htmlSections]
+          updatedSections.splice(insertAt, 0, {
+            ...editingSection,
+            html: nextSectionHtml,
+            index: insertAt,
+            anchorId: nextSectionAnchorId || undefined,
+          })
+          newFullHtml = updatedSections.map((section) => section.html).filter(Boolean).join('\n')
+        }
       } else if (editingSection.index < 0 || editingSection.editMode === 'full') {
-        newFullHtml = newHtml
+        newFullHtml = nextSectionHtml
       } else if (editingSection.replaceAnchorId && editingSection.replaceNodeCount && activeHtmlContent) {
         newFullHtml =
-          replaceFragmentInDocumentHtml(activeHtmlContent, editingSection, newHtml) || activeHtmlContent
+          replaceFragmentInDocumentHtml(activeHtmlContent, editingSection, nextSectionHtml) ||
+          activeHtmlContent
       } else {
         newFullHtml = sections
           .map((section, idx) =>
-            idx === editingSection.index ? { ...section, html: newHtml } : section,
+            idx === editingSection.index
+              ? {
+                  ...section,
+                  html: nextSectionHtml,
+                  anchorId: nextSectionAnchorId || section.anchorId,
+                }
+              : section,
           )
           .map((section) => section.html)
           .join('\n')
@@ -519,8 +650,8 @@ export function useContentEditingFlow({
       const changesSummary =
         `${sectionAction}: "${editingSection.text}"\n\n` +
         `--- Original content ---\n${oldContentSummary}\n\n` +
-        `--- New content ---\n${newHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
-          newHtml.length > 500 ? '...' : ''
+        `--- New content ---\n${nextSectionHtml.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
+          nextSectionHtml.length > 500 ? '...' : ''
         }`
 
       const version = await api.createVersion(documentId, {
@@ -550,27 +681,39 @@ export function useContentEditingFlow({
 
   const handleDeleteSection = useCallback(
     async (section: TocSection) => {
-      const sectionIndex = sections.findIndex((s) => s.id === section.id)
+      const htmlSections = processHtmlIntoSections(activeHtmlContent || '').sections
+      const sectionIndex =
+        htmlSections.length > 0
+          ? findSectionIndexInHtmlSections(
+              htmlSections,
+              section,
+              sections.findIndex((candidate) => candidate.id === section.id),
+            )
+          : sections.findIndex((candidate) => candidate.id === section.id)
       if (sectionIndex < 0) return
+
+      const resolvedSection = htmlSections[sectionIndex] || section
 
       // Store in removed sections before deleting
       setRemovedSections((prev) => [
         ...prev,
         {
-          id: section.id,
-          text: section.text,
-          html: section.html,
+          id: resolvedSection.id,
+          text: resolvedSection.text,
+          html: resolvedSection.html,
           removedAt: new Date().toISOString(),
         },
       ])
 
-      const remaining = sections.filter((_, idx) => idx !== sectionIndex)
-      const newFullHtml = remaining.map((s) => s.html).join('\n')
+      const remaining = htmlSections.length > 0
+        ? htmlSections.filter((_, idx) => idx !== sectionIndex)
+        : sections.filter((_, idx) => idx !== sectionIndex)
+      const newFullHtml = remaining.map((s) => s.html).filter(Boolean).join('\n')
 
       const changesSummary =
-        `Section removed: "${section.text}"\n\n` +
-        `--- Removed content ---\n${section.html.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
-          section.html.length > 500 ? '...' : ''
+        `Section removed: "${resolvedSection.text}"\n\n` +
+        `--- Removed content ---\n${resolvedSection.html.replace(/<[^>]*>/g, ' ').trim().slice(0, 500)}${
+          resolvedSection.html.length > 500 ? '...' : ''
         }`
 
       await api.createVersion(documentId, {
@@ -585,7 +728,7 @@ export function useContentEditingFlow({
       queryClient.invalidateQueries({ queryKey: queryKeys.bff.documentDetailBundle(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
     },
-    [applyProcessedHtml, documentId, queryClient, sections],
+    [activeHtmlContent, applyProcessedHtml, documentId, queryClient, sections],
   )
 
   const handleRestoreSection = useCallback(

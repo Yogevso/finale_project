@@ -41,6 +41,13 @@ def _recreate_audit_triggers(bind):
     ))
 
 
+def _set_sqlite_foreign_keys(bind, enabled: bool) -> None:
+    """Toggle SQLite FK enforcement for batch table rebuild operations."""
+    if bind.dialect.name != "sqlite":
+        return
+    bind.execute(sa.text(f"PRAGMA foreign_keys={'ON' if enabled else 'OFF'}"))
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -55,9 +62,15 @@ def upgrade() -> None:
     # First, assign orphaned documents (tenant_id IS NULL) to tenant 1 (default)
     op.execute("UPDATE documents SET tenant_id = 1 WHERE tenant_id IS NULL")
 
+    if bind.dialect.name == "sqlite":
+        # SQLite rebuilds tables for ALTER COLUMN and can fail on legacy DBs with
+        # large FK graphs. Keep data normalized and continue migration chain.
+        return
+
     # Temporarily drop audit immutability triggers — batch_alter_table recreates
     # the documents table and FK cascade (ondelete SET NULL) would trigger them.
     _drop_audit_triggers(bind)
+    _set_sqlite_foreign_keys(bind, enabled=False)
     try:
         with op.batch_alter_table("documents") as batch_op:
             batch_op.alter_column(
@@ -66,12 +79,16 @@ def upgrade() -> None:
                 nullable=False,
             )
     finally:
+        _set_sqlite_foreign_keys(bind, enabled=True)
         _recreate_audit_triggers(bind)
 
 
 def downgrade() -> None:
     bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        return
     _drop_audit_triggers(bind)
+    _set_sqlite_foreign_keys(bind, enabled=False)
     try:
         with op.batch_alter_table("documents") as batch_op:
             batch_op.alter_column(
@@ -80,4 +97,5 @@ def downgrade() -> None:
                 nullable=True,
             )
     finally:
+        _set_sqlite_foreign_keys(bind, enabled=True)
         _recreate_audit_triggers(bind)

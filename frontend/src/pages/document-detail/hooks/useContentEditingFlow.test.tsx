@@ -402,11 +402,15 @@ describe('useContentEditingFlow', () => {
       await result.current.handleSaveSection('<h2>Introduction</h2><p>New content</p>', true)
     })
 
-    expect(applyProcessedHtml).toHaveBeenCalledWith('<h2>Introduction</h2><p>New content</p>')
+    expect(applyProcessedHtml).toHaveBeenCalledWith(
+      expect.stringContaining('<h2 id="heading-0" class="scroll-mt-4">Introduction</h2><p>New content</p>'),
+    )
     expect(mockedApi.createVersion).toHaveBeenCalledWith(
       42,
       expect.objectContaining({
-        content: '<h2>Introduction</h2><p>New content</p>',
+        content: expect.stringContaining(
+          '<h2 id="heading-0" class="scroll-mt-4">Introduction</h2><p>New content</p>',
+        ),
       }),
     )
     expect(mockedApi.submitForReview).toHaveBeenCalledWith(42, {
@@ -618,6 +622,156 @@ describe('useContentEditingFlow', () => {
     expect(applyProcessedHtml).toHaveBeenCalledWith(
       expect.stringContaining('<td>XYZ</td><td>Updated body section table</td>'),
     )
+  })
+
+  it('preserves the section anchor id when edited heading html drops the id attribute', async () => {
+    const queryClient = createQueryClient()
+    const onRequireInlineContent = vi.fn()
+    const applyProcessedHtml = vi.fn()
+
+    mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 70,
+          content:
+            '<article class="docx-document"><h2 id="heading-0">Introduction</h2><p>Body</p></article>',
+          created_at: '2026-03-09T00:00:00.000Z',
+          is_published: true,
+          published_at: '2026-03-09T00:00:00.000Z',
+        },
+      ],
+    } as never)
+    mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
+
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(
+      () =>
+        useContentEditingFlow({
+          documentId: 42,
+          isEditor: true,
+          contentEditRequestToken: 0,
+          showingReaderView: false,
+          activeHtmlContent:
+            '<article class="docx-document"><h2 id="heading-0" class="scroll-mt-4">Introduction</h2><p>Body</p></article>',
+          isLoading: false,
+          sections: [
+            {
+              id: 'section-1',
+              text: 'Introduction',
+              level: 2,
+              html: '<h2 id="heading-0" class="scroll-mt-4">Introduction</h2><p>Body</p>',
+              index: 0,
+              anchorId: 'heading-0',
+            },
+          ],
+          applyProcessedHtml,
+          onRequireInlineContent,
+        }),
+      { wrapper },
+    )
+
+    act(() => {
+      result.current.handleChooseEditSection({
+        id: 'section-1',
+        text: 'Introduction',
+        level: 2,
+        html: '<h2 id="heading-0" class="scroll-mt-4">Introduction</h2><p>Body</p>',
+        index: 0,
+        anchorId: 'heading-0',
+      })
+    })
+
+    await act(async () => {
+      await result.current.handleSaveSection('<h2>Introduction Updated</h2><p>Body updated</p>', false)
+    })
+
+    const createVersionPayload = mockedApi.createVersion.mock.calls[0]?.[1] as
+      | { content?: string }
+      | undefined
+    expect(createVersionPayload?.content).toContain('id="heading-0"')
+    expect(applyProcessedHtml).toHaveBeenCalledWith(expect.stringContaining('id="heading-0"'))
+  })
+
+  it('assigns a unique heading id for inserted sections and keeps toc anchors unique', async () => {
+    const queryClient = createQueryClient()
+    const onRequireInlineContent = vi.fn()
+    const applyProcessedHtml = vi.fn()
+
+    mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 70,
+          content:
+            '<article class="docx-document"><h2 id="heading-0">Intro</h2><p>Body</p><h2 id="heading-1">Next</h2><p>Tail</p></article>',
+          created_at: '2026-03-09T00:00:00.000Z',
+          is_published: true,
+          published_at: '2026-03-09T00:00:00.000Z',
+        },
+      ],
+    } as never)
+    mockedApi.submitForReview.mockResolvedValue({ id: 9 } as never)
+
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(
+      () =>
+        useContentEditingFlow({
+          documentId: 42,
+          isEditor: true,
+          contentEditRequestToken: 0,
+          showingReaderView: false,
+          activeHtmlContent:
+            '<article class="docx-document"><h2 id="heading-0" class="scroll-mt-4">Intro</h2><p>Body</p><h2 id="heading-1" class="scroll-mt-4">Next</h2><p>Tail</p></article>',
+          isLoading: false,
+          sections: [
+            {
+              id: 'section-1',
+              text: 'Intro',
+              level: 2,
+              html: '<h2 id="heading-0" class="scroll-mt-4">Intro</h2><p>Body</p>',
+              index: 0,
+              anchorId: 'heading-0',
+            },
+            {
+              id: 'section-2',
+              text: 'Next',
+              level: 2,
+              html: '<h2 id="heading-1" class="scroll-mt-4">Next</h2><p>Tail</p>',
+              index: 1,
+              anchorId: 'heading-1',
+            },
+          ],
+          applyProcessedHtml,
+          onRequireInlineContent,
+        }),
+      { wrapper },
+    )
+
+    act(() => {
+      result.current.handleChooseAddSection(0)
+    })
+
+    await act(async () => {
+      await result.current.handleSaveSection('<h2>bellow 1</h2><p>Inserted body</p>', false)
+    })
+
+    const createVersionPayload = mockedApi.createVersion.mock.calls[0]?.[1] as
+      | { content?: string }
+      | undefined
+    const headingIds = Array.from(
+      (createVersionPayload?.content || '').matchAll(/<h[1-6][^>]*id=\"([^\"]+)\"/g),
+    ).map((match) => match[1])
+
+    expect(headingIds).toContain('heading-0')
+    expect(headingIds).toContain('heading-1')
+    expect(new Set(headingIds).size).toBe(headingIds.length)
   })
 
   it('does not raise a false conflict when current processed html matches the latest raw document content', async () => {

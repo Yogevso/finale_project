@@ -192,6 +192,7 @@ describe('useDocumentDetailPageState', () => {
     await waitFor(() => {
       expect(mockedApi.submitForReview).toHaveBeenCalledWith(42, {
         message: 'Please review section updates.',
+        requested_reviewer_ids: [],
       })
     })
 

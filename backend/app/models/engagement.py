@@ -41,6 +41,7 @@ class Comment(Base):
     is_private = Column(Boolean, default=False, nullable=False)
     anchor_text = Column(Text, nullable=True)
     anchor_id = Column(String(100), nullable=True)
+    review_id = Column(Integer, ForeignKey("review_requests.id"), nullable=True, index=True)
     is_resolved = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -48,6 +49,7 @@ class Comment(Base):
     document = relationship("Document", back_populates="comments")
     user = relationship("User", back_populates="comments")
     parent = relationship("Comment", remote_side=[id], backref="replies")
+    review = relationship("ReviewRequest", back_populates="comments")
 
 
 class UserSession(Base):
@@ -213,6 +215,7 @@ class ReviewRequest(Base):
     status = Column(SQLEnum(ReviewStatus), default=ReviewStatus.PENDING, nullable=False, index=True)
     message = Column(Text, nullable=True)
     review_comments = Column(Text, nullable=True)
+    review_feedback_json = Column(Text, nullable=True)
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     reviewed_at = Column(DateTime, nullable=True)
     reviewer_reminded_at = Column(DateTime, nullable=True)
@@ -226,6 +229,89 @@ class ReviewRequest(Base):
     version = relationship("Version")
     submitter = relationship("User", foreign_keys=[submitted_by])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+    comments = relationship("Comment", back_populates="review")
+    reviewer_assignments = relationship(
+        "ReviewRequestReviewer",
+        back_populates="review",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def requested_reviewer_ids(self) -> list[int]:
+        return [assignment.reviewer_id for assignment in self.reviewer_assignments]
+
+    @property
+    def requested_reviewers(self) -> list["User"]:
+        return [
+            assignment.reviewer
+            for assignment in self.reviewer_assignments
+            if getattr(assignment, "reviewer", None) is not None
+        ]
+
+    @property
+    def review_feedback(self) -> dict | None:
+        from app.services.review_feedback import deserialize_review_feedback
+
+        return deserialize_review_feedback(
+            self.review_feedback_json,
+            fallback_comments=self.review_comments,
+        )
+
+
+class ReviewOwnershipRule(Base):
+    """Ownership routing rules for review assignment."""
+
+    __tablename__ = "review_ownership_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    category = Column(String(100), nullable=True, index=True)
+    platform = Column(String(100), nullable=True, index=True)
+    company_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    priority = Column(Integer, default=100, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    tenant = relationship("Tenant", foreign_keys=[tenant_id])
+    company = relationship("Tenant", foreign_keys=[company_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
+    created_by_user = relationship("User", foreign_keys=[created_by])
+    review_assignments = relationship(
+        "ReviewRequestReviewer",
+        back_populates="ownership_rule",
+    )
+
+
+class ReviewRequestReviewer(Base):
+    """Reviewer assignments attached to a review request."""
+
+    __tablename__ = "review_request_reviewers"
+    __table_args__ = (
+        UniqueConstraint(
+            "review_id",
+            "reviewer_id",
+            name="uq_review_request_reviewers_review_reviewer",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    review_id = Column(
+        Integer,
+        ForeignKey("review_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    source = Column(String(20), nullable=False, default="manual")
+    rule_id = Column(Integer, ForeignKey("review_ownership_rules.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    review = relationship("ReviewRequest", back_populates="reviewer_assignments")
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
+    ownership_rule = relationship("ReviewOwnershipRule", back_populates="review_assignments")
 
 
 class Invitation(Base):

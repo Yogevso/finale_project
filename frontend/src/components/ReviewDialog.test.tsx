@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,9 +11,11 @@ vi.mock('@/lib/api', () => ({
   api: {
     getAttachmentReaderView: vi.fn(),
     getAttachments: vi.fn(),
+    getComments: vi.fn(),
     getPreApprovePolicy: vi.fn(),
     getVersion: vi.fn(),
     getVersions: vi.fn(),
+    updateComment: vi.fn(),
   },
 }));
 
@@ -47,6 +50,18 @@ const currentVersion = {
   },
 } as const;
 
+const intermediateVersion = {
+  id: 12,
+  document_id: 42,
+  version_number: 1,
+  semantic_version: '1.0.1',
+  content: '<h1>Overview</h1><p>Interim changes</p><h2>Legacy Section</h2><p>Interim legacy copy</p>',
+  changes_summary: 'Interim changes',
+  is_published: false,
+  created_by: 6,
+  created_at: '2025-12-31T12:00:00Z',
+} as const;
+
 function buildReview(overrides: Partial<ReviewRequest> = {}): ReviewRequest {
   return {
     id: 1,
@@ -71,6 +86,29 @@ function buildReview(overrides: Partial<ReviewRequest> = {}): ReviewRequest {
     } as ReviewRequest['submitter'],
     ...overrides,
   };
+}
+
+function renderDialog(review: ReviewRequest) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <ReviewDialog
+          review={review}
+          onClose={vi.fn()}
+          onApprove={vi.fn()}
+          onReject={vi.fn()}
+          isLoading={false}
+        />
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
 }
 
 describe('ReviewDialog', () => {
@@ -128,22 +166,14 @@ describe('ReviewDialog', () => {
       error: null,
       generated_at: '2026-01-01T11:30:00Z',
     } as never);
+    vi.mocked(api.getComments).mockResolvedValue([] as never);
+    vi.mocked(api.updateComment).mockResolvedValue({ id: 1 } as never);
   });
 
   it('shows inline rejection guidance instead of using a browser alert', async () => {
     const user = userEvent.setup();
 
-    render(
-      <BrowserRouter>
-        <ReviewDialog
-          review={buildReview()}
-          onClose={vi.fn()}
-          onApprove={vi.fn()}
-          onReject={vi.fn()}
-          isLoading={false}
-        />
-      </BrowserRouter>
-    );
+    renderDialog(buildReview());
 
     expect(screen.getByRole('dialog', { name: /review document/i })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /start review/i })).toBeInTheDocument();
@@ -167,27 +197,37 @@ describe('ReviewDialog', () => {
   it('starts a guided section review using the changed toc sections', async () => {
     const user = userEvent.setup();
 
-    render(
-      <BrowserRouter>
-        <ReviewDialog
-          review={buildReview()}
-          onClose={vi.fn()}
-          onApprove={vi.fn()}
-          onReject={vi.fn()}
-          isLoading={false}
-        />
-      </BrowserRouter>
-    );
+    renderDialog(buildReview());
 
     expect(await screen.findByRole('button', { name: /start review/i })).toBeInTheDocument();
     expect(screen.getByText(/read each changed section in the document flow/i)).toBeInTheDocument();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
-    expect(screen.getByText('New Section')).toBeInTheDocument();
+    expect((await screen.findAllByText('Overview')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('New Section')).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /start review/i }));
 
     expect(screen.getByText(/reviewing section 1 of 3/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /next section/i })).toBeInTheDocument();
+  });
+
+  it('uses the earliest contentful version as baseline when no reviewed or published baseline exists', async () => {
+    vi.mocked(api.getVersions).mockResolvedValueOnce({
+      items: [currentVersion, intermediateVersion, previousVersion],
+      total: 3,
+    } as never);
+    vi.mocked(api.getVersion).mockImplementationOnce(async (_documentId, versionId) => {
+      if (versionId === 11) {
+        return currentVersion as never;
+      }
+      if (versionId === 12) {
+        return intermediateVersion as never;
+      }
+      return previousVersion as never;
+    });
+
+    renderDialog(buildReview());
+
+    expect(await screen.findByText(/against/i)).toHaveTextContent('against v1.0.0');
   });
 
   it('disables approval when the preflight policy blocks approval', async () => {
@@ -207,17 +247,7 @@ describe('ReviewDialog', () => {
       warnings: [],
     });
 
-    render(
-      <BrowserRouter>
-        <ReviewDialog
-          review={buildReview()}
-          onClose={vi.fn()}
-          onApprove={vi.fn()}
-          onReject={vi.fn()}
-          isLoading={false}
-        />
-      </BrowserRouter>
-    );
+    renderDialog(buildReview());
 
     await user.click(await screen.findByRole('button', { name: /start review/i }));
     await user.click(screen.getByRole('button', { name: /next section/i }));

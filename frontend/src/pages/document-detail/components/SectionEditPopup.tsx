@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Edit3, RefreshCw, Save, Send, X } from 'lucide-react'
+import { Edit3, Save, Send, X } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -10,7 +10,6 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import { TableCell } from '@tiptap/extension-table-cell'
 import DOMPurify from 'dompurify'
 import DraftRecoveryNotice from '@/components/DraftRecoveryNotice'
-import VersionDiffView from '@/components/VersionDiffView'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 import {
   clearDraftRecovery,
@@ -34,7 +33,6 @@ interface SectionEditPopupProps {
   onBack?: () => void
 }
 
-type ConflictState = Extract<SectionSaveResult, { status: 'conflict' }>
 type EditingFrame = {
   editorHtml: string
   toPersistedHtml: (editorHtml: string) => string
@@ -121,11 +119,9 @@ export function SectionEditPopup({
   const [submitForReview, setSubmitForReview] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [baselineHtml, setBaselineHtml] = useState(initialEditingFrame.editorHtml)
-  const [comparisonHtml, setComparisonHtml] = useState<string | null>(null)
   const [restorableDraftSavedAt, setRestorableDraftSavedAt] = useState<string | null>(null)
   const [autoSavedAt, setAutoSavedAt] = useState<string | null>(null)
   const [hasLocalDraft, setHasLocalDraft] = useState(false)
-  const [conflictState, setConflictState] = useState<ConflictState | null>(null)
   const hasPendingRecoveredDraftRef = useRef(false)
 
   const draftRecoveryTarget = useMemo(
@@ -244,7 +240,6 @@ export function SectionEditPopup({
     setRestorableDraftSavedAt(null)
     setAutoSavedAt(recoveredDraft.savedAt)
     setHasLocalDraft(true)
-    setConflictState(null)
     setSaveError(null)
   }
 
@@ -262,12 +257,15 @@ export function SectionEditPopup({
     setSaveError(null)
     try {
       const persistedHtml = editingFrame.toPersistedHtml(editor.getHTML())
-      const result = await onSave(persistedHtml, submitForReview, {
-        comparisonHtml: comparisonHtml ?? undefined,
-      })
+      let result = await onSave(persistedHtml, submitForReview)
       if (result.status === 'conflict') {
-        setConflictState(result)
-        return
+        result = await onSave(persistedHtml, submitForReview, {
+          force: true,
+          comparisonHtml: result.liveDocumentHtml,
+        })
+      }
+      if (result.status === 'conflict') {
+        throw new Error('Failed to save changes. Please try again.')
       }
 
       hasPendingRecoveredDraftRef.current = false
@@ -280,55 +278,6 @@ export function SectionEditPopup({
     } finally {
       setIsSaving(false)
     }
-  }
-
-  const handleForceSaveAfterConflict = async () => {
-    if (!editor) {
-      return
-    }
-
-    setIsSaving(true)
-    setSaveError(null)
-    try {
-      const persistedHtml = editingFrame.toPersistedHtml(editor.getHTML())
-      const result = await onSave(persistedHtml, submitForReview, {
-        force: true,
-        comparisonHtml: comparisonHtml ?? undefined,
-      })
-      if (result.status === 'conflict') {
-        setConflictState(result)
-        return
-      }
-
-      hasPendingRecoveredDraftRef.current = false
-      clearDraftRecovery(draftRecoveryTarget)
-      setAutoSavedAt(null)
-      setHasLocalDraft(false)
-      onClose()
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save section')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleUseLiveVersion = () => {
-    if (!editor || !conflictState) {
-      return
-    }
-
-    const liveEditingFrame = createEditingFrame(conflictState.liveEditorHtml)
-    editor.commands.setContent(liveEditingFrame.editorHtml)
-    setEditingFrame(liveEditingFrame)
-    setBaselineHtml(liveEditingFrame.editorHtml)
-    setComparisonHtml(conflictState.liveDocumentHtml)
-    hasPendingRecoveredDraftRef.current = false
-    clearDraftRecovery(draftRecoveryTarget)
-    setAutoSavedAt(null)
-    setHasLocalDraft(false)
-    setConflictState(null)
-    setRestorableDraftSavedAt(null)
-    setSaveError(null)
   }
 
   useEffect(() => {
@@ -578,56 +527,6 @@ export function SectionEditPopup({
         <div className="flex-1 overflow-auto bg-white">
           <EditorContent editor={editor} className="min-h-[300px]" />
         </div>
-
-        {conflictState && (
-          <div className="border-t border-slate-200 bg-slate-50 px-6 py-6">
-            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
-                <div>
-                  <p className="font-semibold">Concurrent edits detected</p>
-                  <p className="mt-1 text-amber-800">
-                    The live document changed while you were editing. Review the diff below, then choose whether to keep your draft or refresh from the latest live content.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <VersionDiffView
-              leftHtml={conflictState.liveDocumentHtml}
-              rightHtml={conflictState.draftDocumentHtml}
-              leftLabel="Live version"
-              rightLabel="Your draft"
-            />
-
-            <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConflictState(null)}
-                className="btn-ghost table-action-btn"
-              >
-                Continue editing
-              </button>
-              <button
-                type="button"
-                onClick={handleUseLiveVersion}
-                className="btn-secondary table-action-btn inline-flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Use live version
-              </button>
-              <button
-                type="button"
-                onClick={handleForceSaveAfterConflict}
-                disabled={isSaving}
-                className="btn-primary table-action-btn inline-flex items-center gap-2 disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" />
-                {isSaving ? 'Saving...' : 'Keep my draft and save'}
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="surface-muted flex items-center justify-between rounded-none border-0 border-t border-slate-200 px-6 py-4">
           <div className="body-copy">

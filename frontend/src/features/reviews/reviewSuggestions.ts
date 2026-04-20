@@ -1,6 +1,11 @@
+import type { ReviewFeedback, ReviewSectionComment } from '@/types';
+
 export interface ReviewSectionSuggestion {
   title: string;
   comment: string;
+  anchor_id?: string | null;
+  severity?: ReviewSectionComment['severity'];
+  action_item_assignee?: number | null;
 }
 
 export interface ParsedReviewSuggestions {
@@ -90,4 +95,32 @@ export function parseReviewSuggestions(
     generalComment,
     sectionSuggestions,
   };
+}
+
+export function extractReviewSuggestions(
+  reviewFeedback: ReviewFeedback | null | undefined,
+  legacyReviewComments: string | null | undefined
+): ParsedReviewSuggestions {
+  const sectionComments = reviewFeedback?.section_comments || [];
+  if (
+    reviewFeedback &&
+    (reviewFeedback.general_comment || sectionComments.length > 0)
+  ) {
+    const sectionSuggestions = sectionComments
+      .filter((section) => (section.comment || '').trim().length > 0)
+      .map((section) => ({
+        title: (section.title || 'Section feedback').trim(),
+        comment: section.comment.trim(),
+        anchor_id: section.anchor_id ?? null,
+        severity: section.severity,
+        action_item_assignee: section.action_item_assignee ?? null,
+      }));
+
+    return {
+      generalComment: (reviewFeedback.general_comment || '').trim(),
+      sectionSuggestions,
+    };
+  }
+
+  return parseReviewSuggestions(legacyReviewComments);
 }
