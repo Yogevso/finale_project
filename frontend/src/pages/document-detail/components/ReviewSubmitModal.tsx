@@ -4,6 +4,7 @@ import VersionDiffView from '@/components/VersionDiffView'
 import { useFocusTrap } from '@/hooks/useAccessibility'
 import { api } from '@/lib/api'
 import { getUsableVersionContent } from '@/pages/document-detail/helpers/previewHelpers'
+import type { User } from '@/types'
 
 interface ReviewSubmitModalProps {
   isOpen: boolean
@@ -12,7 +13,7 @@ interface ReviewSubmitModalProps {
   message: string
   onMessageChange: (value: string) => void
   onClose: () => void
-  onSubmit: () => void
+  onSubmit: (requestedReviewerIds: number[]) => void
   isSubmitting: boolean
   errorMessage?: string | null
 }
@@ -33,12 +34,16 @@ export function ReviewSubmitModal({
   const [publishedHtml, setPublishedHtml] = useState<string | null>(null)
   const [latestHtml, setLatestHtml] = useState<string | null>(null)
   const [loadingDiff, setLoadingDiff] = useState(false)
+  const [reviewerCandidates, setReviewerCandidates] = useState<User[]>([])
+  const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>([])
+  const [loadingReviewers, setLoadingReviewers] = useState(false)
 
   useEffect(() => {
     if (!isOpen) {
       setShowDiff(false)
       setPublishedHtml(null)
       setLatestHtml(null)
+      setSelectedReviewerIds([])
       return
     }
 
@@ -67,11 +72,48 @@ export function ReviewSubmitModal({
     return () => { cancelled = true }
   }, [isOpen, documentId])
 
+  useEffect(() => {
+    if (!isOpen) {
+      setReviewerCandidates([])
+      setLoadingReviewers(false)
+      return
+    }
+
+    let cancelled = false
+    async function loadReviewerCandidates() {
+      setLoadingReviewers(true)
+      try {
+        const candidates = await api.getReviewerCandidates(documentId)
+        if (cancelled) return
+        setReviewerCandidates(candidates)
+      } catch {
+        if (cancelled) return
+        setReviewerCandidates([])
+      } finally {
+        if (!cancelled) setLoadingReviewers(false)
+      }
+    }
+
+    void loadReviewerCandidates()
+    return () => {
+      cancelled = true
+    }
+  }, [documentId, isOpen])
+
   if (!isOpen) {
     return null
   }
 
   const hasDiffData = publishedHtml !== null && latestHtml !== null
+
+  const toggleReviewerSelection = (reviewerId: number) => {
+    setSelectedReviewerIds((currentIds) => {
+      if (currentIds.includes(reviewerId)) {
+        return currentIds.filter((id) => id !== reviewerId)
+      }
+      return [...currentIds, reviewerId]
+    })
+  }
 
   return (
     <div className="modal-overlay flex items-center justify-center p-4">
@@ -154,6 +196,46 @@ export function ReviewSubmitModal({
           />
         </div>
 
+        <div className="mt-5">
+          <p className="helper-copy mb-2 block font-medium uppercase tracking-wide">
+            Requested reviewers (optional)
+          </p>
+          <p className="body-copy mb-3 text-sm text-slate-500">
+            Choose specific reviewers or leave empty to route using ownership rules.
+          </p>
+          <div className="max-h-44 overflow-auto rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/60">
+            {loadingReviewers ? (
+              <p className="body-copy text-slate-400">Loading reviewers...</p>
+            ) : reviewerCandidates.length === 0 ? (
+              <p className="body-copy text-slate-400">
+                No explicit reviewer candidates found for this document.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {reviewerCandidates.map((reviewer) => (
+                  <label
+                    key={reviewer.id}
+                    className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-2 text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800/70"
+                  >
+                    <span className="text-slate-700 dark:text-slate-200">
+                      {reviewer.full_name}
+                      <span className="ml-2 text-xs uppercase tracking-wide text-slate-400">
+                        {reviewer.role.replace('_', ' ')}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={selectedReviewerIds.includes(reviewer.id)}
+                      onChange={() => toggleReviewerSelection(reviewer.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {errorMessage ? (
           <p className="alert-danger body-copy mt-4" role="alert">
             {errorMessage}
@@ -171,7 +253,7 @@ export function ReviewSubmitModal({
           </button>
           <button
             type="button"
-            onClick={onSubmit}
+            onClick={() => onSubmit(selectedReviewerIds)}
             disabled={isSubmitting}
             className="btn-primary table-action-btn flex items-center gap-2"
           >

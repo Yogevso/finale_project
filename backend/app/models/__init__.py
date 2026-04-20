@@ -53,7 +53,9 @@ from app.models.engagement import (
     Notification,
     PasswordReset,
     ReadingProgress,
+    ReviewOwnershipRule,
     ReviewRequest,
+    ReviewRequestReviewer,
     SavedSearch,
     UserSession,
 )
@@ -142,6 +144,8 @@ __all__ = [
     "Feedback",
     "ReadingProgress",
     "ReviewRequest",
+    "ReviewOwnershipRule",
+    "ReviewRequestReviewer",
     "Invitation",
     "CollaborationSession",
     "CollaborationActivity",

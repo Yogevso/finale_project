@@ -74,10 +74,7 @@ describe('TocPanel', () => {
     const user = userEvent.setup()
     renderTocPanel()
 
-    // Open the three-dot menu for the first section
-    await user.click(screen.getAllByTitle('Section actions')[0]!)
-    // Click "Copy Link" in the dropdown
-    await user.click(screen.getByText('Copy Link'))
+    await user.click(screen.getByLabelText('Copy link to Introduction'))
 
     const expectedUrl = new URL('/documents/42/fullscreen#intro', window.location.origin).toString()
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(expectedUrl)
@@ -90,10 +87,7 @@ describe('TocPanel', () => {
     const user = userEvent.setup()
     renderTocPanel()
 
-    // Open the three-dot menu for the first section
-    await user.click(screen.getAllByTitle('Section actions')[0]!)
-    // Click "Copy Link" in the dropdown
-    await user.click(screen.getByText('Copy Link'))
+    await user.click(screen.getByLabelText('Copy link to Introduction'))
 
     expect(toastErrorMock).toHaveBeenCalledWith('Failed to copy section link')
     expect(toastSuccessMock).not.toHaveBeenCalled()
@@ -126,12 +120,7 @@ describe('TocPanel', () => {
     })
 
     expect(
-      screen.getByRole('button', {
-        name: /a very long subsection title that should stay readable inside the toc panel/i,
-      }),
-    ).toHaveAttribute(
-      'title',
-      'A very long subsection title that should stay readable inside the toc panel',
-    )
+      screen.getByTitle('A very long subsection title that should stay readable inside the toc panel'),
+    ).toBeInTheDocument()
   })
 })

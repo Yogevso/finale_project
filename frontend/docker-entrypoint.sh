@@ -18,7 +18,11 @@ ensure_dependencies() {
     installed_hash="$(cat "$HASHFILE")"
   fi
 
-  if [ "$current_hash" != "$installed_hash" ]; then
+  # Detect stale/partial node_modules even when the lock hash matches.
+  deps_broken=0
+  npm ls --depth=0 >/dev/null 2>&1 || deps_broken=1
+
+  if [ "$current_hash" != "$installed_hash" ] || [ "$deps_broken" -eq 1 ]; then
     echo "Dependencies changed, installing npm packages"
     npm install --legacy-peer-deps
     mkdir -p /app/node_modules

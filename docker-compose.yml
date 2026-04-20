@@ -8,7 +8,6 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - backend-data:/app/data
       - ./data/chromadb:/app/data/chromadb
     environment:
       - APP_ENV=development
@@ -121,7 +120,7 @@ services:
     deploy:
       resources:
         reservations:
-          memory: 2G
+          memory: 4G
 
   # PostgreSQL — production-grade database (optional profile)
   # Start with: docker-compose --profile postgres up
@@ -147,7 +146,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  backend-data:
   redis-data:
   ollama-data:
   postgres-data:

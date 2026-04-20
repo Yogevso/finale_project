@@ -6,11 +6,19 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.assistant.tools.base import BaseTool
 from app.container import AppContainer
-from app.models import ActionType, Document, ReviewRequest, ReviewStatus, User
+from app.models import (
+    ActionType,
+    Document,
+    ReviewRequest,
+    ReviewRequestReviewer,
+    ReviewStatus,
+    User,
+)
 from app.services.audit_helper import write_audit_log
 from app.services.permissions import Permission
 
@@ -48,9 +56,18 @@ class SubmitReviewTool(BaseTool):
         if not review:
             return {"success": False, "result": "", "error": "Review request not found."}
 
-        # Verify the user is the assigned reviewer
-        if review.reviewed_by and review.reviewed_by != user.id:
-            return {"success": False, "result": "", "error": "You are not the assigned reviewer."}
+        assigned_reviewer_ids = {
+            row.reviewer_id
+            for row in db.query(ReviewRequestReviewer)
+            .filter(ReviewRequestReviewer.review_id == review.id)
+            .all()
+        }
+        if assigned_reviewer_ids and user.id not in assigned_reviewer_ids:
+            return {
+                "success": False,
+                "result": "",
+                "error": "You are not the assigned reviewer.",
+            }
 
         if review.status != ReviewStatus.PENDING:
             return {
@@ -91,6 +108,7 @@ class SubmitReviewTool(BaseTool):
             command = ApproveReviewCommand(
                 review_id=review.id,
                 comments=params.get("comments"),
+                review_feedback=None,
                 current_user=user,
             )
             result = handler.execute(command)
@@ -153,11 +171,24 @@ class ListPendingReviewsTool(BaseTool):
         db: Session,
     ) -> dict[str, Any]:
         limit = min(params.get("limit", 20), 50)
+        assignment_exists = (
+            db.query(ReviewRequestReviewer.id)
+            .filter(ReviewRequestReviewer.review_id == ReviewRequest.id)
+            .exists()
+        )
+        assigned_to_user = (
+            db.query(ReviewRequestReviewer.id)
+            .filter(
+                ReviewRequestReviewer.review_id == ReviewRequest.id,
+                ReviewRequestReviewer.reviewer_id == user.id,
+            )
+            .exists()
+        )
         reviews = (
             db.query(ReviewRequest)
             .filter(
-                ReviewRequest.reviewed_by == user.id,
                 ReviewRequest.status == ReviewStatus.PENDING,
+                or_(assigned_to_user, ~assignment_exists),
             )
             .order_by(ReviewRequest.submitted_at.desc())
             .limit(limit)

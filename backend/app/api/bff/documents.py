@@ -16,7 +16,14 @@ from app.application.queries.document_queries import (
 from app.db import get_db
 from app.dependencies.permissions import require_internal_user
 from app.errors import NotFoundError
-from app.models import DocumentStatus, DocumentVisibility, ReviewRequest, User, Version
+from app.models import (
+    DocumentStatus,
+    DocumentVisibility,
+    ReviewRequest,
+    ReviewRequestReviewer,
+    User,
+    Version,
+)
 from app.schemas import (
     AudienceAccessPreviewResponse,
     DocumentDetailPageBundleResponse,
@@ -143,6 +150,9 @@ def _load_document_review_history(
         .options(
             joinedload(ReviewRequest.submitter),
             joinedload(ReviewRequest.reviewer),
+            joinedload(ReviewRequest.reviewer_assignments).joinedload(
+                ReviewRequestReviewer.reviewer
+            ),
         )
         .filter(ReviewRequest.document_id == document_id)
         .order_by(ReviewRequest.submitted_at.desc())

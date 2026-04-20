@@ -345,8 +345,18 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       return mapMessageResponseDto(data)
     }
 
-    async getComments(documentId: number, parentId?: number): Promise<Comment[]> {
-      const params = parentId !== undefined ? { parent_id: parentId } : {}
+    async getComments(
+      documentId: number,
+      parentId?: number,
+      reviewId?: number,
+    ): Promise<Comment[]> {
+      const params: { parent_id?: number; review_id?: number } = {}
+      if (parentId !== undefined) {
+        params.parent_id = parentId
+      }
+      if (reviewId !== undefined) {
+        params.review_id = reviewId
+      }
       const { data } = await this.client.get<CommentDto[]>(`/documents/${documentId}/comments`, {
         params,
       })

@@ -34,6 +34,30 @@ function normalizeSectionLabel(value: string | undefined): string {
   return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
+function reserveUniqueAnchorId(
+  preferredId: string | null | undefined,
+  usedAnchorIds: Set<string>,
+  blockedAnchorIds: Set<string>,
+  fallbackIndex: number,
+): string {
+  const rawPreferred = (preferredId || '').trim()
+  const baseId = rawPreferred || `heading-${fallbackIndex}`
+
+  if (!usedAnchorIds.has(baseId) && !blockedAnchorIds.has(baseId)) {
+    usedAnchorIds.add(baseId)
+    return baseId
+  }
+
+  let suffix = 2
+  let candidate = `${baseId}-${suffix}`
+  while (usedAnchorIds.has(candidate) || blockedAnchorIds.has(candidate)) {
+    suffix += 1
+    candidate = `${baseId}-${suffix}`
+  }
+  usedAnchorIds.add(candidate)
+  return candidate
+}
+
 export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): TocSection[] {
   return items
     .map((item, index) => {
@@ -542,6 +566,13 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
   }
 
   const tocHeadingTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+  const existingHeadingIds = new Set(
+    elements
+      .filter((element) => tocHeadingTags.has(element.tagName.toLowerCase()))
+      .map((element) => (element.getAttribute('id') || '').trim())
+      .filter((id) => id.length > 0),
+  )
+  const usedAnchorIds = new Set<string>()
 
   let currentSection: { heading: Element | null; content: Element[] } = { heading: null, content: [] }
 
@@ -553,8 +584,18 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
       }
 
       const existingHeadingId = element.getAttribute('id')
-      const headingAnchorId = existingHeadingId || `heading-${sections.length}`
+      const normalizedExistingHeadingId = (existingHeadingId || '').trim()
+      const headingAnchorId =
+        normalizedExistingHeadingId && !usedAnchorIds.has(normalizedExistingHeadingId)
+          ? normalizedExistingHeadingId
+          : reserveUniqueAnchorId(
+              normalizedExistingHeadingId,
+              usedAnchorIds,
+              existingHeadingIds,
+              sections.length,
+            )
       element.setAttribute('id', headingAnchorId)
+      usedAnchorIds.add(headingAnchorId)
       element.classList.add('scroll-mt-4')
       currentSection = { heading: element, content: [] }
     } else if (currentSection.heading) {

@@ -21,6 +21,7 @@ def list_comments(
     document_id: int,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Comments per page"),
+    review_id: int | None = Query(None, description="Filter comments by review session"),
     comment_service: CommentService = Depends(get_comment_service),
     current_user: User = Depends(require_internal_user),
 ) -> PaginatedComments:
@@ -30,7 +31,13 @@ def list_comments(
     Returns top-level comments with their replies, paginated.
     Private comments are only visible to admins/editors or the comment author.
     """
-    return comment_service.get_comments(document_id, current_user, page=page, page_size=page_size)
+    return comment_service.get_comments(
+        document_id,
+        current_user,
+        page=page,
+        page_size=page_size,
+        review_id=review_id,
+    )
 
 
 @router.get("/documents/{document_id}/comments/stats")
@@ -111,6 +118,28 @@ def resolve_comment(
     """
     return comment_service.update_comment(
         document_id, comment_id, CommentUpdate(is_resolved=True), current_user
+    )
+
+
+@router.post(
+    "/documents/{document_id}/comments/{comment_id}/reopen",
+    response_model=CommentResponse,
+)
+def reopen_comment(
+    document_id: int,
+    comment_id: int,
+    comment_service: CommentService = Depends(get_comment_service),
+    current_user: User = Depends(require_internal_user),
+):
+    """
+    Re-open a resolved comment thread.
+    Only admins, managers and editors can re-open comments.
+    """
+    return comment_service.update_comment(
+        document_id,
+        comment_id,
+        CommentUpdate(is_resolved=False),
+        current_user,
     )
 
 

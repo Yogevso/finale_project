@@ -36,7 +36,6 @@ if python -m alembic -n chat upgrade head 2>/dev/null; then
 else
     echo "Chat migrations skipped (no separate DB configured or first run)."
 fi
-
 # Check if seed data is needed (no users exist)
 echo "Checking if seed data is needed..."
 NEED_SEED=$(python -c "

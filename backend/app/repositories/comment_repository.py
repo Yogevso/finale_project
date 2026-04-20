@@ -11,8 +11,13 @@ from app.repositories.base import BaseRepository
 class CommentRepository(BaseRepository):
     """Comment persistence/query access."""
 
-    def list_top_level_with_replies(self, document_id: int) -> list[Comment]:
-        return (
+    def list_top_level_with_replies(
+        self,
+        document_id: int,
+        *,
+        review_id: int | None = None,
+    ) -> list[Comment]:
+        query = (
             self.db.query(Comment)
             .filter(
                 Comment.document_id == document_id,
@@ -24,8 +29,10 @@ class CommentRepository(BaseRepository):
                 joinedload(Comment.replies).joinedload(Comment.replies).joinedload(Comment.user),
             )
             .order_by(Comment.created_at.desc())
-            .all()
         )
+        if review_id is not None:
+            query = query.filter(Comment.review_id == review_id)
+        return query.all()
 
     def list_for_document(self, document_id: int) -> list[Comment]:
         return self.db.query(Comment).filter(Comment.document_id == document_id).all()

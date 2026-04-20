@@ -1,7 +1,7 @@
 """Pydantic Schemas - API Contracts"""
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -299,7 +299,9 @@ class BulkDocumentMetadataUpdateResponse(BaseModel):
 class VersionBase(BaseModel):
     """Base version schema"""
 
-    content: Optional[str] = Field(None, max_length=500000)  # 500KB max for rich HTML content
+    # Response payloads may include converted HTML that exceeds editor input limits.
+    # Keep write-time limits on create/update schemas, but allow full content in responses.
+    content: Optional[str] = None
     changes_summary: Optional[str] = Field(None, max_length=2000)
 
 
@@ -448,6 +450,7 @@ class CommentCreate(CommentBase):
     is_private: bool = False  # Private = only admins/editors can see
     anchor_text: Optional[str] = None  # The text that was selected for inline comment
     anchor_id: Optional[str] = None  # Reference to heading/section ID
+    review_id: Optional[int] = None  # Optional review session for threaded review flow
     parent_id: Optional[int] = None  # For replies to create threads
 
 
@@ -479,6 +482,7 @@ class CommentResponse(CommentBase):
     is_private: bool = False
     anchor_text: Optional[str] = None
     anchor_id: Optional[str] = None
+    review_id: Optional[int] = None
     is_resolved: bool = False
     created_at: datetime
     updated_at: datetime
@@ -515,23 +519,43 @@ class AuditLogResponse(BaseModel):
 
 
 # ========== Review Schemas ==========
+class ReviewSectionComment(BaseModel):
+    """Structured section-level review feedback."""
+
+    title: Optional[str] = None
+    comment: str = Field(..., min_length=1, max_length=5000)
+    anchor_id: Optional[str] = None
+    severity: Literal["low", "medium", "high", "blocker"] = "medium"
+    action_item_assignee: Optional[int] = None
+
+
+class ReviewFeedback(BaseModel):
+    """Structured review feedback payload."""
+
+    general_comment: Optional[str] = Field(None, max_length=2000)
+    section_comments: List[ReviewSectionComment] = []
+
+
 class ReviewSubmit(BaseModel):
     """Submit document for review"""
 
     version_id: Optional[int] = None
     message: Optional[str] = Field(None, max_length=1000)
+    requested_reviewer_ids: List[int] = []
 
 
 class ReviewAction(BaseModel):
     """Approve or reject a review"""
 
     comments: Optional[str] = Field(None, max_length=2000)
+    review_feedback: Optional[ReviewFeedback] = None
 
 
 class ReviewReject(BaseModel):
     """Reject a review (comments required)"""
 
     comments: str = Field(..., min_length=1, max_length=2000)
+    review_feedback: Optional[ReviewFeedback] = None
 
 
 class AudienceDiff(BaseModel):
@@ -576,6 +600,7 @@ class ReviewResponse(BaseModel):
     status: ReviewStatus
     message: Optional[str] = None
     review_comments: Optional[str] = None
+    review_feedback: Optional[ReviewFeedback] = None
     submitted_at: datetime
     reviewed_at: Optional[datetime] = None
     reviewer_reminded_at: Optional[datetime] = None
@@ -583,12 +608,40 @@ class ReviewResponse(BaseModel):
     created_at: datetime
     audience_visibility_snapshot: Optional[str] = None
     audience_company_ids_snapshot: Optional[str] = None
+    requested_reviewer_ids: List[int] = []
     audience_diff: Optional[AudienceDiff] = None
     document: Optional["DocumentResponse"] = None
     submitter: Optional[UserResponse] = None
     reviewer: Optional[UserResponse] = None
+    requested_reviewers: List[UserResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewOwnershipRuleBase(BaseModel):
+    """Review ownership rule selectors."""
+
+    category: Optional[str] = Field(None, max_length=100)
+    platform: Optional[str] = Field(None, max_length=100)
+    company_id: Optional[int] = None
+    reviewer_id: int
+    priority: int = Field(100, ge=0, le=1000)
+    is_active: bool = True
+
+
+class ReviewOwnershipRuleCreate(ReviewOwnershipRuleBase):
+    """Create ownership rule payload."""
+
+
+class ReviewOwnershipRuleResponse(ReviewOwnershipRuleBase):
+    """Ownership rule response schema."""
+
+    id: int
+    tenant_id: int
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    reviewer: Optional[UserResponse] = None
 
 
 class ReviewListResponse(BaseModel):
@@ -808,6 +861,8 @@ __all__ = [
     "CommentUpdate",
     "CommentResponse",
     # Review
+    "ReviewSectionComment",
+    "ReviewFeedback",
     "ReviewSubmit",
     "ReviewAction",
     "ReviewReject",
@@ -815,6 +870,8 @@ __all__ = [
     "ReviewListResponse",
     "ReviewSlaItem",
     "ReviewSlaProcessResponse",
+    "ReviewOwnershipRuleCreate",
+    "ReviewOwnershipRuleResponse",
     # BFF
     "AudienceAccessPreviewResponse",
     "DocumentDetailPageBundleResponse",

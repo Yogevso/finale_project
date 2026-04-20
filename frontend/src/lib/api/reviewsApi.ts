@@ -8,6 +8,7 @@ import type {
   ReviewListResponse,
   ReviewRequest,
   ReviewSubmit,
+  User,
 } from '@/types'
 import {
   type FeedbackDetailResponseDto,
@@ -38,6 +39,12 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
         payload as ReviewSubmitDto,
       )
       return mapReviewRequestDto(response)
+    }
+
+    async getReviewerCandidates(documentId?: number): Promise<User[]> {
+      const params = documentId !== undefined ? { document_id: documentId } : undefined
+      const { data } = await this.client.get<User[]>('/reviews/reviewer-candidates', { params })
+      return data
     }
 
     async getPendingReviews(params?: { page?: number; per_page?: number }): Promise<ReviewListResponse> {
@@ -77,10 +84,11 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       return mapReviewRequestDto(response)
     }
 
-    async rejectReview(reviewId: number, data: { comments: string }): Promise<ReviewRequest> {
+    async rejectReview(reviewId: number, data: ReviewAction): Promise<ReviewRequest> {
+      const payload = toReviewActionDto(data)
       const { data: response } = await this.client.post<ReviewRequestDto>(
         `/reviews/${reviewId}/reject`,
-        data,
+        payload as ReviewActionDto,
       )
       return mapReviewRequestDto(response)
     }
@@ -146,4 +154,3 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       return mapManagementFeedbackStatsDto(data)
     }
   }
-

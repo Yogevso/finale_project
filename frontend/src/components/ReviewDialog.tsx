@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Calendar,
@@ -29,22 +29,30 @@ import {
 } from '@/features/reviews/reviewProgress';
 import { persistReviewDocumentSession } from '@/features/reviews/reviewSession';
 import {
+  extractReviewSuggestions,
   formatReviewSuggestions,
-  parseReviewSuggestions,
 } from '@/features/reviews/reviewSuggestions';
+import type { ReviewDecisionInput } from '@/features/reviews/useCases/reviewsUseCases';
 import { useFocusTrap } from '@/hooks/useAccessibility';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/dateUtils';
 import { parseDocumentHtml } from '@/lib/documentRenderer';
 import { reportRuntimeError } from '@/lib/runtimeReporter';
 import { getUsableVersionContent } from '@/pages/document-detail/helpers/previewHelpers';
-import type { AttachmentOutlineItem, PreApprovePolicy, ReviewRequest, Version } from '@/types';
+import type {
+  AttachmentOutlineItem,
+  Comment,
+  PreApprovePolicy,
+  ReviewRequest,
+  ReviewSectionComment,
+  Version,
+} from '@/types';
 
 interface ReviewDialogProps {
   review: ReviewRequest;
   onClose: () => void;
-  onApprove: (comments?: string) => void;
-  onReject: (comments: string) => void;
+  onApprove: (decision: ReviewDecisionInput) => void;
+  onReject: (decision: ReviewDecisionInput) => void;
   isLoading: boolean;
 }
 
@@ -96,6 +104,65 @@ function normalizeLabel(value: string | undefined): string {
   return (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+function parseSectionNumberPath(title: string | undefined): number[] | null {
+  const normalized = (title || '').trim();
+  const match = normalized.match(/^(\d+(?:\.\d+)*)/);
+  if (!match) {
+    return null;
+  }
+
+  const numbers = match[1]
+    .split('.')
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isFinite(value));
+  return numbers.length > 0 ? numbers : null;
+}
+
+function compareSectionNumberPath(left: number[] | null, right: number[] | null): number {
+  if (!left && !right) {
+    return 0;
+  }
+  if (!left) {
+    return 1;
+  }
+  if (!right) {
+    return -1;
+  }
+
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = left[index] ?? -1;
+    const rightValue = right[index] ?? -1;
+    if (leftValue !== rightValue) {
+      return leftValue - rightValue;
+    }
+  }
+
+  return 0;
+}
+
+function sortEntriesByAscendingSectionNumber(entries: ReviewDiffEntry[]): ReviewDiffEntry[] {
+  return entries
+    .map((entry, index) => ({
+      entry,
+      index,
+      sectionPath: parseSectionNumberPath(entry.title),
+    }))
+    .sort((left, right) => {
+      const sectionOrder = compareSectionNumberPath(left.sectionPath, right.sectionPath);
+      if (sectionOrder !== 0) {
+        return sectionOrder;
+      }
+
+      if ((left.entry.pageStart || 0) !== (right.entry.pageStart || 0)) {
+        return (left.entry.pageStart || Number.MAX_SAFE_INTEGER) - (right.entry.pageStart || Number.MAX_SAFE_INTEGER);
+      }
+
+      return left.index - right.index;
+    })
+    .map((item) => item.entry);
+}
+
 function getVersionLabel(version: Version | null | undefined, fallback: string): string {
   if (!version) {
     return fallback;
@@ -131,8 +198,34 @@ function selectBaselineVersion(
       return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
     });
 
+  const olderVersionsWithContent = olderVersions.filter((version) =>
+    Boolean(getUsableVersionContent(version.content))
+  );
+
+  const reviewedOrPublishedBaseline = olderVersionsWithContent.find(
+    (version) => version.is_published || version.latest_review?.status === 'approved'
+  );
+  if (reviewedOrPublishedBaseline) {
+    return reviewedOrPublishedBaseline;
+  }
+
+  const latestTerminalReviewedBaseline = olderVersionsWithContent.find(
+    (version) =>
+      Boolean(version.latest_review) &&
+      version.latest_review?.status !== 'pending'
+  );
+  if (latestTerminalReviewedBaseline) {
+    return latestTerminalReviewedBaseline;
+  }
+
+  // No reviewed/published anchor exists yet.
+  // Compare against the earliest contentful version to include all pending edits in one review.
+  if (olderVersionsWithContent.length > 0) {
+    return olderVersionsWithContent[olderVersionsWithContent.length - 1];
+  }
+
   if (olderVersions.length > 0) {
-    return olderVersions[0];
+    return olderVersions[olderVersions.length - 1];
   }
 
   return (
@@ -213,10 +306,19 @@ function SectionReader({
 
 function buildFeedbackEntries(
   entries: ReviewDiffEntry[],
-  sectionSuggestions: Array<{ title: string; comment: string }>
+  sectionSuggestions: Array<{
+    title: string;
+    comment: string;
+    anchor_id?: string | null;
+    severity?: ReviewSectionComment['severity'];
+    action_item_assignee?: number | null;
+  }>
 ) {
   return sectionSuggestions.map((sectionSuggestion, index) => {
     const matchingEntry =
+      (sectionSuggestion.anchor_id
+        ? entries.find((entry) => entry.anchorId === sectionSuggestion.anchor_id)
+        : null) ||
       entries.find(
         (entry) => normalizeLabel(entry.title) === normalizeLabel(sectionSuggestion.title)
       ) ||
@@ -237,7 +339,7 @@ function buildFeedbackEntries(
           currentHtml: null,
           diffRows: [],
         } as ReviewDiffEntry),
-      comment: sectionSuggestion.comment,
+      suggestion: sectionSuggestion,
     };
   });
 }
@@ -263,6 +365,7 @@ export default function ReviewDialog({
   onReject,
   isLoading,
 }: ReviewDialogProps) {
+  const queryClient = useQueryClient();
   const [generalComment, setGeneralComment] = useState('');
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -276,8 +379,8 @@ export default function ReviewDialog({
   const { containerRef } = useFocusTrap(onClose);
   const isPendingReview = review.status === 'pending';
   const parsedFeedback = useMemo(
-    () => parseReviewSuggestions(review.review_comments),
-    [review.review_comments]
+    () => extractReviewSuggestions(review.review_feedback, review.review_comments),
+    [review.review_comments, review.review_feedback]
   );
   const initialStage: ReviewStage = isPendingReview ? 'overview' : 'feedback';
   const [stage, setStage] = useState<ReviewStage>(initialStage);
@@ -358,6 +461,27 @@ export default function ReviewDialog({
     enabled: isPendingReview,
   });
 
+  const reviewThreadsQuery = useQuery({
+    queryKey: ['review-dialog', 'threads', review.id],
+    queryFn: async () => {
+      try {
+        return await api.getComments(review.document_id, undefined, review.id);
+      } catch (error) {
+        return reportAndRethrow('review.dialog', 'Failed to load review comment threads', error);
+      }
+    },
+    enabled: isPendingReview && Boolean(review.document_id),
+  });
+
+  const toggleThreadResolutionMutation = useMutation({
+    mutationFn: ({ commentId, resolve }: { commentId: number; resolve: boolean }) =>
+      api.updateComment(review.document_id, commentId, { is_resolved: resolve }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['review-dialog', 'threads', review.id] });
+      void queryClient.invalidateQueries({ queryKey: ['review-dialog', 'policy', review.id] });
+    },
+  });
+
   const baselineVersionCandidate = useMemo(
     () => selectBaselineVersion(versionQuery.data || null, versionsQuery.data?.items),
     [versionQuery.data, versionsQuery.data?.items]
@@ -387,6 +511,8 @@ export default function ReviewDialog({
   const version = versionQuery.data || null;
   const baselineVersion = baselineVersionQuery.data || baselineVersionCandidate || null;
   const preApprovePolicy: PreApprovePolicy | null = policyQuery.data || null;
+  const reviewThreads: Comment[] = reviewThreadsQuery.data || [];
+  const openThreadCount = reviewThreads.filter((thread) => !thread.is_resolved).length;
   const policyError = policyQuery.isError
     ? 'Approval checks could not be loaded. Approval is temporarily disabled.'
     : null;
@@ -404,7 +530,10 @@ export default function ReviewDialog({
     });
   }, [baselineVersion?.content, readerViewQuery.data?.toc_items, version?.content]);
 
-  const changedEntries = reviewDiff?.changedEntries || [];
+  const changedEntries = useMemo(
+    () => sortEntriesByAscendingSectionNumber(reviewDiff?.changedEntries || []),
+    [reviewDiff?.changedEntries],
+  );
   const currentVersionLabel = getVersionLabel(version, 'Submitted version');
   const baselineVersionLabel = getVersionLabel(baselineVersion, 'Previous version');
   const isDiffLoading =
@@ -468,7 +597,9 @@ export default function ReviewDialog({
       return '';
     }
 
-    return feedbackEntries.find((entry) => entry.entry.id === activeEntry.id)?.comment || '';
+    return (
+      feedbackEntries.find((entry) => entry.entry.id === activeEntry.id)?.suggestion.comment || ''
+    );
   }, [activeEntry, feedbackEntries, isPendingReview]);
 
   const canApprove =
@@ -584,7 +715,11 @@ export default function ReviewDialog({
 
   const handleConfirm = () => {
     if (action === 'approve') {
-      onApprove(generalComment.trim() || undefined);
+      const general = generalComment.trim();
+      onApprove({
+        comments: general || undefined,
+        generalComment: general || undefined,
+      });
       return;
     }
 
@@ -593,17 +728,45 @@ export default function ReviewDialog({
       return;
     }
 
+    const structuredSectionComments = changedEntries.reduce<ReviewSectionComment[]>(
+      (acc, entry) => {
+        const comment = (sectionSuggestions[entry.id] || '').trim();
+        if (!comment) {
+          return acc;
+        }
+
+        const severityByStatus: Record<ReviewDiffEntry['status'], ReviewSectionComment['severity']> = {
+          added: 'low',
+          modified: 'medium',
+          removed: 'high',
+          unchanged: 'medium',
+        };
+
+        acc.push({
+          title: entry.title,
+          comment,
+          anchor_id: entry.anchorId || undefined,
+          severity: severityByStatus[entry.status] || 'medium',
+          action_item_assignee: null,
+        });
+        return acc;
+      },
+      [],
+    );
+
     const formattedSuggestions = formatReviewSuggestions({
       generalComment,
-      sectionSuggestions: changedEntries
-        .map((entry) => ({
-          title: entry.title,
-          comment: sectionSuggestions[entry.id] || '',
-        }))
-        .filter((entry) => entry.comment.trim().length > 0),
+      sectionSuggestions: structuredSectionComments.map((entry) => ({
+        title: entry.title || 'Section feedback',
+        comment: entry.comment,
+      })),
     });
 
-    onReject(formattedSuggestions);
+    onReject({
+      comments: formattedSuggestions,
+      generalComment: generalComment.trim() || undefined,
+      sectionComments: structuredSectionComments,
+    });
   };
 
   const showDecisionArea = isPendingReview && stage === 'complete';
@@ -684,11 +847,23 @@ export default function ReviewDialog({
                     <TonePill tone="modified">
                       {hasStartedReview ? 'In Progress' : 'Ready To Review'}
                     </TonePill>
-                    {changedEntries.length > 0 ? (
-                      <TonePill tone="unchanged">
-                        {changedEntries.length} Changed Section
-                        {changedEntries.length === 1 ? '' : 's'}
+                    {(reviewDiff?.summary.modified || 0) > 0 ? (
+                      <TonePill tone="modified">
+                        {reviewDiff!.summary.modified} Modified
                       </TonePill>
+                    ) : null}
+                    {(reviewDiff?.summary.added || 0) > 0 ? (
+                      <TonePill tone="added">
+                        {reviewDiff!.summary.added} Added
+                      </TonePill>
+                    ) : null}
+                    {(reviewDiff?.summary.removed || 0) > 0 ? (
+                      <TonePill tone="removed">
+                        {reviewDiff!.summary.removed} Removed
+                      </TonePill>
+                    ) : null}
+                    {changedEntries.length === 0 ? (
+                      <TonePill tone="unchanged">No detected section changes</TonePill>
                     ) : null}
                   </div>
                 ) : review.status === 'rejected' ? (
@@ -717,6 +892,15 @@ export default function ReviewDialog({
                     )}
                   </span>
                 </div>
+                {isPendingReview && (review.requested_reviewers?.length || 0) > 0 ? (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <User className="h-4 w-4" />
+                    <span>
+                      Assigned reviewers:{' '}
+                      {review.requested_reviewers!.map((reviewer) => reviewer.full_name).join(', ')}
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
               {review.message ? (
@@ -823,6 +1007,13 @@ export default function ReviewDialog({
                       shown as normal reading content with a quiet background tint so the reviewer
                       can stay in context without a noisy side-by-side diff.
                     </p>
+                    {changedEntries.length > 0 ? (
+                      <p className="mt-3 text-sm font-medium text-slate-700">
+                        Detected changes: {reviewDiff?.summary.modified || 0} modified,{' '}
+                        {reviewDiff?.summary.added || 0} added,{' '}
+                        {reviewDiff?.summary.removed || 0} removed.
+                      </p>
+                    ) : null}
 
                     <div className="mt-6 grid gap-3">
                       {changedEntries.length === 0 ? (
@@ -1047,6 +1238,68 @@ export default function ReviewDialog({
                             )}
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="surface-card rounded-2xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                            Review Threads
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {openThreadCount} open thread{openThreadCount === 1 ? '' : 's'}.
+                            Resolve open threads before approval.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {reviewThreadsQuery.isLoading ? (
+                          <p className="text-sm text-slate-500">Loading review threads...</p>
+                        ) : reviewThreads.length === 0 ? (
+                          <p className="text-sm text-slate-500">No review threads yet.</p>
+                        ) : (
+                          reviewThreads.map((thread) => (
+                            <div
+                              key={thread.id}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-slate-800">
+                                    {thread.author_name || thread.user?.full_name || 'Reviewer'}
+                                  </p>
+                                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">
+                                    {thread.content}
+                                  </p>
+                                  {thread.anchor_text ? (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      Anchor: {thread.anchor_text}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleThreadResolutionMutation.mutate({
+                                      commentId: thread.id,
+                                      resolve: !thread.is_resolved,
+                                    })
+                                  }
+                                  disabled={toggleThreadResolutionMutation.isPending}
+                                  className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                                    thread.is_resolved
+                                      ? 'border border-sky-200 text-sky-700 hover:bg-sky-50'
+                                      : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                                >
+                                  {thread.is_resolved ? 'Reopen' : 'Resolve'}
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
 

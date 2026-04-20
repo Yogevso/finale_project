@@ -256,7 +256,11 @@ export function useDocumentDetailPageState() {
   })
 
   const submitReviewMutation = useMutation({
-    mutationFn: (message?: string) => api.submitForReview(documentId, { message }),
+    mutationFn: (payload: { message?: string; requestedReviewerIds?: number[] }) =>
+      api.submitForReview(documentId, {
+        message: payload.message,
+        requested_reviewer_ids: payload.requestedReviewerIds || [],
+      }),
     onSuccess: () => {
       invalidateDocumentDetailState()
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
@@ -527,9 +531,15 @@ export function useDocumentDetailPageState() {
     setSubmitMessage('')
   }, [])
 
-  const submitReview = useCallback(() => {
-    submitReviewMutation.mutate(submitMessage || undefined)
-  }, [submitMessage, submitReviewMutation])
+  const submitReview = useCallback(
+    (requestedReviewerIds: number[] = []) => {
+      submitReviewMutation.mutate({
+        message: submitMessage || undefined,
+        requestedReviewerIds,
+      })
+    },
+    [submitMessage, submitReviewMutation],
+  )
 
   const clearPendingAnchor = useCallback(() => {
     setPendingAnchor(null)

@@ -144,6 +144,19 @@ describe('processHtmlIntoSections', () => {
     expect(result.sections[1]?.level).toBe(5)
   })
 
+  it('keeps existing heading ids stable and assigns a unique id to inserted headings without ids', () => {
+    const result = processHtmlIntoSections(
+      '<article class="docx-document"><h2 id="heading-0">Intro</h2><p>Body</p><h2>Inserted</h2><p>Mid body</p><h2 id="heading-1">Next</h2><p>Tail</p></article>',
+    )
+
+    expect(result.sections).toHaveLength(3)
+    expect(result.sections[0]?.anchorId).toBe('heading-0')
+    expect(result.sections[2]?.anchorId).toBe('heading-1')
+    expect(result.sections[1]?.anchorId).not.toBe('heading-0')
+    expect(result.sections[1]?.anchorId).not.toBe('heading-1')
+    expect(new Set(result.sections.map((section) => section.anchorId)).size).toBe(3)
+  })
+
   it('uses slide fallbacks when a PPTX slide has no heading element', () => {
     const result = processHtmlIntoSections(
       '<div class="pptx-presentation"><section class="pptx-slide" id="slide-1"><p>No title</p></section></div>',

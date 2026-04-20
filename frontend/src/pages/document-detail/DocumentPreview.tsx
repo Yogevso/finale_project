@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { getDocument, getDomParser } from '@/env/dom';
 import { api } from '@/lib/api';
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload';
@@ -12,9 +12,7 @@ import {
   applyHighlights,
   clearHighlights,
   findSectionMatchInRoot,
-  filterOutlineSectionsByHtml,
   getUsableVersionContent,
-  mergeTocSections,
   processHtmlIntoSections,
   resolveSectionPageStart,
   type TocSection,
@@ -78,6 +76,7 @@ export function DocumentPreview({
   reviewSessionId,
   reviewSectionId,
   onRemovedSectionsChange,
+  actionsBar,
 }: {
   documentId: number;
   attachments: Attachment[];
@@ -99,6 +98,7 @@ export function DocumentPreview({
     restore: (s: RemovedSection) => void,
     clear: () => void
   ) => void;
+  actionsBar?: ReactNode;
 }) {
   const { user } = useAuth();
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
@@ -106,7 +106,6 @@ export function DocumentPreview({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sections, setSections] = useState<TocSection[]>([]);
-  const [outlineSectionsTemplate, setOutlineSectionsTemplate] = useState<TocSection[]>([]);
   const [tocCollapsed, setTocCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchMatchCount, setSearchMatchCount] = useState(0);
@@ -128,7 +127,7 @@ export function DocumentPreview({
     handleOpenCommentForm,
     handleSubmitComment,
     handleCloseCommentPopup,
-  } = useInlineComments(documentId);
+  } = useInlineComments(documentId, reviewSessionId ?? null);
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
     setFontSizeState(value);
@@ -143,31 +142,6 @@ export function DocumentPreview({
   const processHtmlWithSections = useCallback((html: string) => {
     return processHtmlIntoSections(html).html;
   }, []);
-
-  const mergeWithOutlineTemplate = useCallback(
-    (html: string, nextSections: TocSection[]) => {
-      if (outlineSectionsTemplate.length === 0) {
-        return {
-          mergedSections: nextSections,
-          filteredTemplate: [] as TocSection[],
-        };
-      }
-
-      const filteredTemplate = filterOutlineSectionsByHtml(outlineSectionsTemplate, html);
-      if (filteredTemplate.length === 0) {
-        return {
-          mergedSections: nextSections,
-          filteredTemplate,
-        };
-      }
-
-      return {
-        mergedSections: mergeTocSections(filteredTemplate, nextSections),
-        filteredTemplate,
-      };
-    },
-    [outlineSectionsTemplate]
-  );
 
   const {
     readerHtmlContent,
@@ -261,21 +235,13 @@ export function DocumentPreview({
 
       if (processed.sections.length === 0) {
         setSections([]);
-        setOutlineSectionsTemplate([]);
         return;
       }
 
-      const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
-        processed.html,
-        processed.sections
-      );
-      setSections(mergedSections);
-
-      if (outlineSectionsTemplate.length > 0) {
-        setOutlineSectionsTemplate(filteredTemplate);
-      }
+      // Inline editing should always reflect the live HTML section order exactly.
+      setSections(processed.sections);
     },
-    [mergeWithOutlineTemplate, outlineSectionsTemplate.length]
+    []
   );
 
   const {
@@ -407,7 +373,7 @@ export function DocumentPreview({
       clearReviewHighlights();
 
       const focusedEntryId = reviewSectionId || session.focusedEntryId;
-      let focusedElement: HTMLElement | null = null;
+      const focusTarget = { current: null as HTMLElement | null };
 
       session.entries.forEach((entry) => {
         const match = findSectionMatchInRoot(root, {
@@ -427,12 +393,12 @@ export function DocumentPreview({
 
         if (entry.id === focusedEntryId) {
           targetElement.classList.add('document-review-highlight--focus');
-          focusedElement = targetElement;
+          focusTarget.current = targetElement;
         }
       });
 
-      if (focusedElement) {
-        focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (focusTarget.current) {
+        focusTarget.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     };
 
@@ -447,16 +413,6 @@ export function DocumentPreview({
   useEffect(() => {
     onReadingTimeChange?.(estimateReadingTimeMinutes(activeHtmlContent));
   }, [activeHtmlContent, onReadingTimeChange]);
-
-  useEffect(() => {
-    setOutlineSectionsTemplate([]);
-  }, [documentId]);
-
-  useEffect(() => {
-    if (selectedAttachment && readerHtmlContent && sections.length > 0) {
-      setOutlineSectionsTemplate(sections);
-    }
-  }, [readerHtmlContent, sections, selectedAttachment]);
 
   useEffect(() => {
     let cancelled = false;
@@ -527,20 +483,12 @@ export function DocumentPreview({
           const processed = processHtmlIntoSections(versionContent);
           setHtmlContent(processed.html);
           if (!selectedAttachment) {
-            const { mergedSections, filteredTemplate } = mergeWithOutlineTemplate(
-              processed.html,
-              processed.sections
-            );
-            setSections(mergedSections);
-            if (outlineSectionsTemplate.length > 0) {
-              setOutlineSectionsTemplate(filteredTemplate);
-            }
+            setSections(processed.sections);
           }
         } else {
           setHtmlContent(null);
           if (!selectedAttachment) {
             setSections([]);
-            setOutlineSectionsTemplate([]);
           }
         }
       } catch (loadError) {
@@ -556,7 +504,6 @@ export function DocumentPreview({
         setHtmlContent(null);
         if (!selectedAttachment) {
           setSections([]);
-          setOutlineSectionsTemplate([]);
         }
       } finally {
         if (!cancelled) {
@@ -570,7 +517,7 @@ export function DocumentPreview({
     return () => {
       cancelled = true;
     };
-  }, [documentId, mergeWithOutlineTemplate, outlineSectionsTemplate.length, selectedAttachment]);
+  }, [documentId, selectedAttachment]);
 
   const tocSectionsForHtml = sections;
 
@@ -777,6 +724,7 @@ export function DocumentPreview({
               showDocumentTitle={showCanvasTitle}
               documentTitle={documentTitle}
               selectedAttachmentFilename={selectedAttachment?.filename}
+              actionsBar={actionsBar}
               searchTerm={searchTerm}
               searchMatchCount={searchMatchCount}
               activeSearchMatchIndex={activeSearchMatchIndex}

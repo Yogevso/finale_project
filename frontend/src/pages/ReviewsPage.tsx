@@ -1,15 +1,23 @@
-import { ErrorState } from '@/components/ErrorState'
-import ReviewDialog from '@/components/ReviewDialog'
-import PageHeader from '@/components/PageHeader'
+import { Activity, Clock3, Filter } from 'lucide-react';
+
+import { ErrorState } from '@/components/ErrorState';
+import ReviewDialog from '@/components/ReviewDialog';
+import PageHeader from '@/components/PageHeader';
 import {
   ReviewsStatusFilter,
   ReviewsTable,
   ReviewsTabs,
   useReviewsPageController,
-} from '@/features/reviews'
+} from '@/features/reviews';
 
 export default function ReviewsPage() {
-  const controller = useReviewsPageController()
+  const controller = useReviewsPageController();
+  const pendingCount = controller.pendingData?.total || 0;
+  const visibleRows = controller.reviews?.length || 0;
+  const activeViewLabel = controller.activeTab === 'pending' ? 'Pending queue' : 'My submissions';
+  const activeStatusLabel = controller.statusFilter
+    ? controller.statusFilter.replace('_', ' ')
+    : 'all statuses';
 
   return (
     <div className="page-stack">
@@ -18,18 +26,54 @@ export default function ReviewsPage() {
         subtitle="Review and approve submissions. Publishing is a separate step."
       />
 
-      <ReviewsTabs
-        activeTab={controller.activeTab}
-        pendingCount={controller.pendingData?.total || 0}
-        onTabChange={controller.setActiveTab}
-      />
+      <section className="reviews-hero">
+        <div className="reviews-hero-grid">
+          <article className="reviews-hero-stat">
+            <span className="reviews-stat-icon" aria-hidden="true">
+              <Clock3 className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="reviews-stat-label">Pending Queue</p>
+              <p className="reviews-stat-value">{pendingCount}</p>
+            </div>
+          </article>
+          <article className="reviews-hero-stat">
+            <span className="reviews-stat-icon" aria-hidden="true">
+              <Activity className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="reviews-stat-label">Visible Rows</p>
+              <p className="reviews-stat-value">{visibleRows}</p>
+            </div>
+          </article>
+          <article className="reviews-hero-stat">
+            <span className="reviews-stat-icon" aria-hidden="true">
+              <Filter className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="reviews-stat-label">Current Lens</p>
+              <p className="reviews-stat-value text-base capitalize">
+                {controller.activeTab === 'my-submissions'
+                  ? `${activeViewLabel} · ${activeStatusLabel}`
+                  : activeViewLabel}
+              </p>
+            </div>
+          </article>
+        </div>
 
-      {controller.activeTab === 'my-submissions' && (
-        <ReviewsStatusFilter
-          statusFilter={controller.statusFilter}
-          onStatusFilterChange={controller.setStatusFilter}
+        <ReviewsTabs
+          activeTab={controller.activeTab}
+          pendingCount={pendingCount}
+          onTabChange={controller.setActiveTab}
         />
-      )}
+
+        {controller.activeTab === 'my-submissions' && (
+          <ReviewsStatusFilter
+            statusFilter={controller.statusFilter}
+            onStatusFilterChange={controller.setStatusFilter}
+          />
+        )}
+      </section>
 
       {controller.isError ? (
         <ErrorState
@@ -67,5 +111,5 @@ export default function ReviewsPage() {
         />
       )}
     </div>
-  )
+  );
 }

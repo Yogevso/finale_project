@@ -287,13 +287,55 @@ describe('DraftRecovery in SectionEditPopup', () => {
       expect(onSave).toHaveBeenCalledWith(
         expect.stringContaining('<article class="docx-document">'),
         true,
-        { comparisonHtml: undefined },
       )
     })
     expect(onSave).toHaveBeenCalledWith(
       expect.not.stringContaining('table-wrapper'),
       true,
-      { comparisonHtml: undefined },
     )
+  })
+
+  it('auto-resolves concurrent edits without rendering the conflict panel', async () => {
+    const user = userEvent.setup()
+    const onSave = vi
+      .fn<
+        [string, boolean, ({ force?: boolean; comparisonHtml?: string } | undefined)?],
+        Promise<SectionSaveResult>
+      >()
+      .mockResolvedValueOnce({
+        status: 'conflict',
+        draftDocumentHtml: '<h2>Introduction</h2><p>Draft copy</p>',
+        liveDocumentHtml: '<h2>Introduction</h2><p>Live copy</p>',
+        liveEditorHtml: '<h2>Introduction</h2><p>Live copy</p>',
+      })
+      .mockResolvedValueOnce({ status: 'saved' })
+
+    const onClose = vi.fn()
+
+    render(
+      <SectionEditPopup
+        documentId={42}
+        section={baseSection}
+        onClose={onClose}
+        onSave={onSave}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /save as draft/i }))
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(2)
+    })
+    expect(onSave).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      false,
+      expect.objectContaining({
+        force: true,
+        comparisonHtml: '<h2>Introduction</h2><p>Live copy</p>',
+      }),
+    )
+    expect(screen.queryByText(/concurrent edits detected/i)).not.toBeInTheDocument()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

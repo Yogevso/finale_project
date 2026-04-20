@@ -57,7 +57,8 @@ export const queryKeys = {
 
   comments: {
     all: ['comments'] as const,
-    byDocument: (documentId: QueryEntityId) => ['comments', 'document', normalizeId(documentId)] as const,
+    byDocument: (documentId: QueryEntityId, reviewId?: number | null) =>
+      ['comments', 'document', normalizeId(documentId), { review_id: reviewId ?? null }] as const,
   },
 
   reviews: {
