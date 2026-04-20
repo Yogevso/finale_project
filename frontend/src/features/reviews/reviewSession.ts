@@ -12,6 +12,7 @@ export interface ReviewDocumentSessionEntry {
 export interface ReviewDocumentSession {
   reviewId: number;
   documentId: number;
+  versionId?: number | null;
   mode: 'review' | 'suggestions';
   focusedEntryId?: string;
   entries: ReviewDocumentSessionEntry[];

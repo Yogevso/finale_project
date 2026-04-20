@@ -7,7 +7,10 @@ import type {
 interface PreviewToolbarProps {
   previewableAttachments: Attachment[]
   selectedAttachment: Attachment | null
+  previewSource: 'reader' | 'inline' | 'none'
+  inlinePreviewAvailable: boolean
   onSelectAttachment: (attachment: Attachment | null) => void
+  onSelectInlinePreview: () => void
   readerError: string | null
   onRetryReaderView: () => void
   fontSize: DocumentFontSize
@@ -19,7 +22,10 @@ interface PreviewToolbarProps {
 export function PreviewToolbar({
   previewableAttachments,
   selectedAttachment,
+  previewSource,
+  inlinePreviewAvailable,
   onSelectAttachment,
+  onSelectInlinePreview,
   readerError,
   onRetryReaderView,
   fontSize,
@@ -27,13 +33,54 @@ export function PreviewToolbar({
   theme,
   onSetTheme,
 }: PreviewToolbarProps) {
+  const preferredReaderAttachment = selectedAttachment || previewableAttachments[0] || null
+
   return (
     <div
       className="document-preview-toolbar surface-muted flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-3"
       data-tour="document-preview-toolbar"
     >
       <div className="flex flex-wrap items-center gap-3">
-        {previewableAttachments.length > 1 ? (
+        {(inlinePreviewAvailable || previewableAttachments.length > 0) && (
+          <div
+            className="inline-flex items-center rounded-xl border border-slate-300 bg-white p-1"
+            role="group"
+            aria-label="Document preview source"
+          >
+            {inlinePreviewAvailable && (
+              <button
+                type="button"
+                onClick={onSelectInlinePreview}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                  previewSource === 'inline'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                aria-label="Show current version content"
+                title="Show current version content"
+              >
+                Current version
+              </button>
+            )}
+            {previewableAttachments.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSelectAttachment(preferredReaderAttachment)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                  previewSource === 'reader'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                aria-label="Show source file preview"
+                title="Show source file preview"
+              >
+                Source file
+              </button>
+            )}
+          </div>
+        )}
+
+        {previewSource === 'reader' && previewableAttachments.length > 1 ? (
           <select
             value={selectedAttachment?.id || ''}
             onChange={(event) => {
@@ -53,7 +100,11 @@ export function PreviewToolbar({
           </select>
         ) : (
           <span className="card-title text-sm">
-            {selectedAttachment?.filename || 'Document preview'}
+            {previewSource === 'reader'
+              ? selectedAttachment?.filename || 'Source file preview'
+              : inlinePreviewAvailable
+                ? 'Current version content'
+                : 'Document preview'}
           </span>
         )}
 

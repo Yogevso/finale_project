@@ -607,7 +607,10 @@ export default function CustomerDocumentPage() {
           <PreviewToolbar
             previewableAttachments={[]}
             selectedAttachment={null}
+            previewSource="inline"
+            inlinePreviewAvailable
             onSelectAttachment={() => {}}
+            onSelectInlinePreview={() => {}}
             readerError={null}
             onRetryReaderView={() => {}}
             fontSize={fontSize}

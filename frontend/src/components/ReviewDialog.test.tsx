@@ -257,4 +257,28 @@ describe('ReviewDialog', () => {
     expect(await screen.findByText('User role cannot approve this submission')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();
   });
+
+  it('persists the reviewed version id when opening the document from review', async () => {
+    const user = userEvent.setup();
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    renderDialog(buildReview());
+
+    await user.click(await screen.findByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /open.*new tab/i }));
+
+    const rawSessionStore = window.localStorage.getItem('reviews.document.session.v1');
+    expect(rawSessionStore).not.toBeNull();
+
+    const parsedSessionStore = JSON.parse(rawSessionStore || '{}');
+    expect(parsedSessionStore['1']).toMatchObject({
+      reviewId: 1,
+      documentId: 42,
+      versionId: 11,
+      mode: 'review',
+    });
+    expect(windowOpenSpy).toHaveBeenCalled();
+
+    windowOpenSpy.mockRestore();
+  });
 });

@@ -20,7 +20,7 @@ function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
 }
 
 describe('usePreviewSource', () => {
-  it('keeps the preview attachment selected and reports inline source when reader html is unavailable', async () => {
+  it('keeps inline content authoritative and does not auto-select reader mode while inline content exists', async () => {
     const attachment = buildAttachment()
 
     const { result } = renderHook(() => {
@@ -32,6 +32,7 @@ describe('usePreviewSource', () => {
         inlineContent: '<p>Inline body</p>',
         readerHtmlContent: null,
         readerStatus: 'processing',
+        isInlineLoading: false,
       })
 
       return {
@@ -40,14 +41,68 @@ describe('usePreviewSource', () => {
       }
     })
 
-    await waitFor(() => {
-      expect(result.current.selectedAttachment?.id).toBe(attachment.id)
-    })
-
+    expect(result.current.selectedAttachment).toBeNull()
     expect(result.current.previewSource).toBe('inline')
     expect(result.current.activeHtmlContent).toBe('<p>Inline body</p>')
     expect(result.current.showingReaderView).toBe(false)
     expect(result.current.previewState).toBe('READY')
+  })
+
+  it('auto-selects reader mode only after inline content is unavailable and loading has settled', async () => {
+    const attachment = buildAttachment()
+    type PreviewSourceProps = {
+      attachments: Attachment[]
+      inlineContent: string | null
+      readerHtmlContent: string | null
+      isInlineLoading: boolean
+    }
+    const initialProps: PreviewSourceProps = {
+      attachments: [attachment],
+      inlineContent: null,
+      readerHtmlContent: null,
+      isInlineLoading: true,
+    }
+
+    const { result, rerender } = renderHook(
+      ({ attachments, inlineContent, readerHtmlContent, isInlineLoading }: PreviewSourceProps) => {
+        const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
+        const preview = usePreviewSource({
+          attachments,
+          selectedAttachment,
+          setSelectedAttachment,
+          inlineContent,
+          readerHtmlContent,
+          readerStatus: 'pending',
+          isInlineLoading,
+        })
+
+        return {
+          selectedAttachment,
+          ...preview,
+        }
+      },
+      {
+        initialProps,
+      },
+    )
+
+    expect(result.current.selectedAttachment).toBeNull()
+    expect(result.current.previewSource).toBe('none')
+
+    rerender({
+      attachments: [attachment],
+      inlineContent: null,
+      readerHtmlContent: '<h1>Reader</h1>',
+      isInlineLoading: false,
+    })
+
+    await waitFor(() => {
+      expect(result.current.selectedAttachment?.id).toBe(attachment.id)
+    })
+
+    expect(result.current.previewSource).toBe('reader')
+    expect(result.current.showingReaderView).toBe(true)
+    expect(result.current.activeHtmlContent).toBe('<h1>Reader</h1>')
   })
 
   it('clears stale attachment selection and falls back to download-only when no preview source exists', async () => {
@@ -62,7 +117,6 @@ describe('usePreviewSource', () => {
       inlineContent: null,
       readerHtmlContent: '<h1>Reader</h1>',
     }
-
     const { result, rerender } = renderHook(
       ({ attachments, inlineContent, readerHtmlContent }: PreviewSourceProps) => {
         const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(attachment)
@@ -73,6 +127,7 @@ describe('usePreviewSource', () => {
           inlineContent,
           readerHtmlContent,
           readerStatus: 'failed',
+          isInlineLoading: false,
         })
 
         return {
@@ -122,6 +177,7 @@ describe('usePreviewSource', () => {
           inlineContent: null,
           readerHtmlContent: '<h1>Reader</h1>',
           readerStatus: 'ready',
+          isInlineLoading: false,
         }),
       {
         initialProps: {
@@ -144,5 +200,28 @@ describe('usePreviewSource', () => {
     })
 
     expect(setSelectedAttachmentSpy).not.toHaveBeenCalled()
+  })
+
+  it('stays on reader mode when the user explicitly selected the source file even if inline html exists', () => {
+    const attachment = buildAttachment({ id: 17, reader_html_status: 'ready' })
+
+    const { result } = renderHook(() => {
+      const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(attachment)
+      const preview = usePreviewSource({
+        attachments: [attachment],
+        selectedAttachment,
+        setSelectedAttachment,
+        inlineContent: '<p>Inline body</p>',
+        readerHtmlContent: '<h1>Reader body</h1>',
+        readerStatus: 'ready',
+        isInlineLoading: false,
+      })
+
+      return preview
+    })
+
+    expect(result.current.previewSource).toBe('reader')
+    expect(result.current.showingReaderView).toBe(true)
+    expect(result.current.activeHtmlContent).toBe('<h1>Reader body</h1>')
   })
 })

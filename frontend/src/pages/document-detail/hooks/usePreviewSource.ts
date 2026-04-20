@@ -1,9 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import {
-  getPreferredPreviewAttachment,
-  resolveSelectedAttachment,
-} from '@/lib/attachmentSelection'
+import { getPreferredPreviewAttachment } from '@/lib/attachmentSelection'
 import type { Attachment } from '@/types'
 import {
   decidePreviewState,
@@ -20,6 +17,7 @@ interface UsePreviewSourceParams {
   inlineContent: string | null
   readerHtmlContent: string | null
   readerStatus: Attachment['reader_html_status'] | string | null
+  isInlineLoading: boolean
 }
 
 function getAttachmentSelectionKey(attachment: Attachment | null): string {
@@ -45,6 +43,7 @@ export function usePreviewSource({
   inlineContent,
   readerHtmlContent,
   readerStatus,
+  isInlineLoading,
 }: UsePreviewSourceParams) {
   const previewableAttachments = useMemo(
     () => getPreviewableAttachments(attachments),
@@ -52,23 +51,40 @@ export function usePreviewSource({
   )
 
   useEffect(() => {
-    const nextSelection = resolveSelectedAttachment(
-      previewableAttachments,
-      selectedAttachment,
-      getPreferredPreviewAttachment,
-    )
-    if (getAttachmentSelectionKey(nextSelection) !== getAttachmentSelectionKey(selectedAttachment)) {
+    if (selectedAttachment) {
+      const refreshedSelection =
+        previewableAttachments.find((attachment) => attachment.id === selectedAttachment.id) || null
+      if (
+        getAttachmentSelectionKey(refreshedSelection) !==
+        getAttachmentSelectionKey(selectedAttachment)
+      ) {
+        setSelectedAttachment(refreshedSelection)
+      }
+      return
+    }
+
+    if (inlineContent || isInlineLoading || previewableAttachments.length === 0) {
+      return
+    }
+
+    const nextSelection = getPreferredPreviewAttachment(previewableAttachments)
+    if (
+      getAttachmentSelectionKey(nextSelection) !== getAttachmentSelectionKey(selectedAttachment)
+    ) {
       setSelectedAttachment(nextSelection)
     }
-  }, [previewableAttachments, selectedAttachment, setSelectedAttachment])
+  }, [inlineContent, isInlineLoading, previewableAttachments, selectedAttachment, setSelectedAttachment])
 
-  const previewSource: PreviewSourceKind = inlineContent
-    ? 'inline'
-    : readerHtmlContent
-      ? 'reader'
-      : 'none'
-  const activeHtmlContent = inlineContent || readerHtmlContent
-  const showingReaderView = selectedAttachment !== null && previewSource === 'reader'
+  const previewSource: PreviewSourceKind = selectedAttachment
+    ? 'reader'
+    : inlineContent
+      ? 'inline'
+      : readerHtmlContent
+        ? 'reader'
+        : 'none'
+  const activeHtmlContent =
+    previewSource === 'reader' ? readerHtmlContent : previewSource === 'inline' ? inlineContent : null
+  const showingReaderView = previewSource === 'reader'
   const shouldRenderHtmlPreview = activeHtmlContent !== null
   const previewState = useMemo(
     () =>

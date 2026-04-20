@@ -16,12 +16,28 @@ import {
   type DocumentFontSize,
   type DocumentTheme,
 } from '@/lib/documentReadingPreferences'
+import type { Attachment } from '@/types'
 
 vi.mock('@/env/clipboard', () => ({
   writeText: vi.fn(),
 }))
 
 const clipboardWriteTextMock = vi.mocked(clipboardEnv.writeText)
+
+function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
+  return {
+    id: 1,
+    document_id: 42,
+    filename: 'source.docx',
+    original_filename: 'source.docx',
+    file_size: 256,
+    mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    uploaded_by: 7,
+    uploaded_at: '2026-01-01T00:00:00Z',
+    reader_html_status: 'ready',
+    ...overrides,
+  }
+}
 
 function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) {
   const [fontSize, setFontSizeState] = useState<DocumentFontSize>(() => getDocumentFontSize())
@@ -53,7 +69,10 @@ function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) 
         <PreviewToolbar
           previewableAttachments={[]}
           selectedAttachment={null}
+          previewSource="inline"
+          inlinePreviewAvailable
           onSelectAttachment={() => undefined}
+          onSelectInlinePreview={() => undefined}
           readerError={null}
           onRetryReaderView={() => undefined}
           fontSize={fontSize}
@@ -254,5 +273,38 @@ describe('ReadingUX controls', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('1 table was simplified')
     expect(screen.getByRole('status')).not.toHaveTextContent(/extraction confidence/i)
+  })
+
+  it('lets the user switch between current version content and the source file preview', async () => {
+    const user = userEvent.setup()
+
+    function ToolbarHarness() {
+      const [selectedAttachment, setSelectedAttachment] = useState<Attachment | null>(null)
+
+      return (
+        <PreviewToolbar
+          previewableAttachments={[buildAttachment()]}
+          selectedAttachment={selectedAttachment}
+          previewSource={selectedAttachment ? 'reader' : 'inline'}
+          inlinePreviewAvailable
+          onSelectAttachment={setSelectedAttachment}
+          onSelectInlinePreview={() => setSelectedAttachment(null)}
+          readerError={null}
+          onRetryReaderView={() => undefined}
+          fontSize="default"
+          onSetFontSize={() => undefined}
+          theme="light"
+          onSetTheme={() => undefined}
+        />
+      )
+    }
+
+    render(<ToolbarHarness />)
+
+    await user.click(screen.getByRole('button', { name: /show source file preview/i }))
+    expect(screen.getByText('source.docx')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /show current version content/i }))
+    expect(screen.getByText('Current version content')).toBeInTheDocument()
   })
 })
