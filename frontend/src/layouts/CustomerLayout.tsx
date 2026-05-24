@@ -28,11 +28,11 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
       <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
-      <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
+      <header className="z-20 border-b border-blue-200 bg-blue-100/85 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
           <div className="flex items-center justify-between">
@@ -73,7 +73,7 @@ export default function CustomerLayout() {
                   className={({ isActive }) =>
                     `relative px-4 py-2 rounded-full transition-colors ${
                       isActive
-                        ? 'bg-white text-sky-800 font-semibold border border-sky-200'
+                        ? 'bg-white text-blue-800 font-semibold border border-blue-200'
                         : 'text-slate-600 hover:bg-white/80 hover:text-slate-900'
                     }`
                   }
@@ -115,7 +115,7 @@ export default function CustomerLayout() {
             {/* User info */}
             <div className="flex items-center gap-2 text-sm">
               <span className="text-slate-500">{user?.full_name || user?.email}</span>
-              <span className="pill bg-white border-sky-200">Customer</span>
+              <span className="pill bg-white border-blue-200">Customer</span>
             </div>
 
             <button onClick={handleLogout} className="btn-ghost">
@@ -126,7 +126,7 @@ export default function CustomerLayout() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-sky-200 bg-sky-50/90">
+          <div className="md:hidden border-t border-blue-200 bg-blue-50/90">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navigation.map((item) => {
                 const Icon = item.icon
@@ -138,7 +138,7 @@ export default function CustomerLayout() {
                     className={({ isActive }) =>
                       `flex items-center px-4 py-2 rounded-xl transition-colors ${
                         isActive
-                          ? 'bg-white text-sky-800 font-semibold'
+                          ? 'bg-white text-blue-800 font-semibold'
                           : 'text-slate-600 hover:bg-white'
                       }`
                     }
@@ -199,8 +199,8 @@ export default function CustomerLayout() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
             <p>Customer Portal</p>
             <nav className="flex items-center gap-4" aria-label="Footer">
-              <Link to="/portal/support" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Support</Link>
-              <Link to="/portal/documents" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Documents</Link>
+              <Link to="/portal/support" className="hover:text-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">Support</Link>
+              <Link to="/portal/documents" className="hover:text-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">Documents</Link>
               <span className="text-slate-300">|</span>
               <span className="text-xs">&copy; {new Date().getFullYear()} Developer Portal</span>
             </nav>
@@ -220,7 +220,7 @@ export default function CustomerLayout() {
       {!isFullscreen && (
         <Link
           to="/portal/support"
-          className="fixed bottom-6 right-20 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
+          className="fixed bottom-6 right-20 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-blue-700"
           title="Need help? Contact support"
         >
           <HelpCircle className="h-6 w-6" />

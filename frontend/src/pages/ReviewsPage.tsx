@@ -1,4 +1,4 @@
-import { Activity, Clock3, Filter } from 'lucide-react';
+import { Activity, Clock3, FileSearch, Filter, X } from 'lucide-react';
 
 import { ErrorState } from '@/components/ErrorState';
 import ReviewDialog from '@/components/ReviewDialog';
@@ -72,6 +72,23 @@ export default function ReviewsPage() {
             statusFilter={controller.statusFilter}
             onStatusFilterChange={controller.setStatusFilter}
           />
+        )}
+
+        {controller.documentFilterId && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200/80 bg-blue-50/60 p-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">
+              <FileSearch className="h-3.5 w-3.5" />
+              Filtered to document #{controller.documentFilterId}
+            </span>
+            <button
+              type="button"
+              onClick={controller.clearDocumentFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-800"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear filter
+            </button>
+          </div>
         )}
       </section>
 

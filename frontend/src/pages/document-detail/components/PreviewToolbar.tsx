@@ -133,7 +133,7 @@ export function PreviewToolbar({
             onClick={() => onSetFontSize('small')}
             className={`px-2 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               fontSize === 'small'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Set small font size"
@@ -146,7 +146,7 @@ export function PreviewToolbar({
             onClick={() => onSetFontSize('default')}
             className={`px-2 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               fontSize === 'default'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Set default font size"
@@ -159,7 +159,7 @@ export function PreviewToolbar({
             onClick={() => onSetFontSize('large')}
             className={`px-2 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               fontSize === 'large'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Set large font size"
@@ -179,7 +179,7 @@ export function PreviewToolbar({
             onClick={() => onSetTheme('light')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               theme === 'light'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Use light theme"
@@ -192,7 +192,7 @@ export function PreviewToolbar({
             onClick={() => onSetTheme('sepia')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               theme === 'sepia'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Use sepia theme"
@@ -205,7 +205,7 @@ export function PreviewToolbar({
             onClick={() => onSetTheme('dark')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
               theme === 'dark'
-                ? 'bg-sky-600 text-white shadow-sm'
+                ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
             aria-label="Use dark theme"

@@ -22,10 +22,10 @@ const visibilityConfig = {
   internal: {
     icon: Building2,
     label: 'Internal',
-    bgColor: 'bg-sky-50',
-    textColor: 'text-sky-700',
-    iconColor: 'text-sky-600',
-    borderColor: 'border-sky-200',
+    bgColor: 'bg-blue-50',
+    textColor: 'text-blue-700',
+    iconColor: 'text-blue-600',
+    borderColor: 'border-blue-200',
     description: 'Visible to internal staff only',
   },
   company: {
@@ -40,10 +40,10 @@ const visibilityConfig = {
   client: {
     icon: Users,
     label: 'Client',
-    bgColor: 'bg-sky-50',
-    textColor: 'text-sky-700',
-    iconColor: 'text-sky-600',
-    borderColor: 'border-sky-200',
+    bgColor: 'bg-blue-50',
+    textColor: 'text-blue-700',
+    iconColor: 'text-blue-600',
+    borderColor: 'border-blue-200',
     description: 'Visible to assigned client companies + staff',
   },
   draft: {

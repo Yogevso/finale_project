@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import AdminFirstCompanyWizard from '@/components/AdminFirstCompanyWizard'
 import BookmarkToggleButton from '@/components/BookmarkToggleButton'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import OnboardingGuideDialog from '@/components/OnboardingGuideDialog'
@@ -216,7 +217,7 @@ export default function DashboardPage() {
           </h2>
           <Link
             to={documentsPath}
-            className="text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200"
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
           >
             View all -&gt;
           </Link>
@@ -229,7 +230,14 @@ export default function DashboardPage() {
               <Skeleton className="h-4 w-44" />
             </div>
           ) : documents?.items.length === 0 ? (
-            <div className="helper-copy p-6 text-center" role="status">No documents yet</div>
+            <div className="p-4" role="status">
+              <EmptyState
+                size="compact"
+                title="No documents yet"
+                description="Create or upload a document to populate your recent list."
+                icon={<FileText className="h-6 w-6" aria-hidden="true" />}
+              />
+            </div>
           ) : (
             documents?.items.map((doc) => (
               <div key={doc.id} role="listitem" className="p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70">
@@ -237,7 +245,7 @@ export default function DashboardPage() {
                   <div>
                     <Link
                       to={`/documents/${doc.id}/fullscreen`}
-                      className="block hover:text-sky-700 dark:hover:text-sky-300"
+                      className="block hover:text-blue-700 dark:hover:text-blue-300"
                     >
                       <h3 className="font-medium text-slate-900 dark:text-slate-100">{doc.title}</h3>
                       <p className="helper-copy">{doc.document_number}</p>
@@ -250,7 +258,7 @@ export default function DashboardPage() {
                         doc.status === 'active'
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200'
                           : doc.status === 'approved'
-                            ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200'
+                            ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200'
                             : doc.status === 'draft'
                               ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200'
                               : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -325,10 +333,13 @@ function BookmarksWidget() {
             <Skeleton className="h-3 w-36" />
           </div>
         ) : bookmarks.length === 0 ? (
-          <div className="p-6 text-center" role="status">
-            <BookMarked className="mx-auto mb-2 h-6 w-6 text-slate-300 dark:text-slate-600" aria-hidden="true" />
-            <p>No bookmarks yet</p>
-            <p className="helper-copy mt-1">Bookmark documents for quick access</p>
+          <div className="p-4" role="status">
+            <EmptyState
+              size="compact"
+              title="No bookmarks yet"
+              description="Bookmark documents for quick access."
+              icon={<BookMarked className="h-6 w-6" aria-hidden="true" />}
+            />
           </div>
         ) : (
           bookmarks.slice(0, 5).map((bookmark) => (
@@ -360,7 +371,7 @@ function RecentActivityWidget() {
     <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-activity-heading">
       <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
         <h2 id="dashboard-activity-heading" className="section-title flex items-center gap-2">
-          <Activity className="h-4 w-4 text-sky-600" aria-hidden="true" />
+          <Activity className="h-4 w-4 text-blue-600" aria-hidden="true" />
           Recent Activity
         </h2>
         <span className="pill border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
@@ -375,7 +386,15 @@ function RecentActivityWidget() {
             <Skeleton className="h-3 w-48" />
           </div>
         ) : activities.length === 0 ? (
-          <div className="helper-copy p-6 text-center" role="status">No recent activity yet</div>
+          <div className="p-4" role="status">
+            <EmptyState
+              tone="info"
+              size="compact"
+              title="No recent activity yet"
+              description="New edits, submissions, and comments will appear here."
+              icon={<Activity className="h-6 w-6" aria-hidden="true" />}
+            />
+          </div>
         ) : (
           activities.map((activity) => (
             <div key={activity.id} role="listitem" className="p-4">
@@ -390,7 +409,7 @@ function RecentActivityWidget() {
                   {activity.document_id && activity.document_title ? (
                     <Link
                       to={`/documents/${activity.document_id}`}
-                      className="mt-1 inline-block text-sm text-sky-700 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+                      className="mt-1 inline-block text-sm text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                     >
                       {activity.document_title}
                     </Link>
@@ -445,7 +464,7 @@ function ReadingProgressWidget() {
     <section className="surface-card overflow-hidden rounded-2xl" aria-labelledby="dashboard-reading-progress-heading">
       <div className="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-800">
         <h2 id="dashboard-reading-progress-heading" className="section-title flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-sky-500" aria-hidden="true" />
+          <BookOpen className="h-4 w-4 text-blue-500" aria-hidden="true" />
           Reading Progress
         </h2>
         <span className="pill border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
@@ -478,7 +497,7 @@ function ReadingProgressWidget() {
                   <p className="flex-1 truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                     {item.document_title}
                   </p>
-                  <span className="ml-2 text-xs text-sky-600 dark:text-sky-300">{item.progress_percent}%</span>
+                  <span className="ml-2 text-xs text-blue-600 dark:text-blue-300">{item.progress_percent}%</span>
                 </div>
                 <div className="progress-track h-1.5 w-full">
                   <div className="progress-fill" style={{ width: `${item.progress_percent}%` }} />

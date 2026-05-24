@@ -23,7 +23,7 @@ export function LoadingOverlay({
     >
       <span className="sr-only">{label}</span>
       <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-slate-800 dark:bg-slate-900">
-        <Loader2 className="h-5 w-5 animate-spin text-sky-600 dark:text-sky-400" aria-hidden="true" />
+        <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" aria-hidden="true" />
         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
       </div>
     </div>

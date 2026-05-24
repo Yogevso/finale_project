@@ -43,10 +43,10 @@ export default function OnboardingChecklist({
 
   if (isCollapsed && !isComplete) {
     return (
-      <div className="surface-card rounded-2xl border border-sky-200 bg-sky-50/75 p-4">
+      <div className="surface-card rounded-2xl border border-blue-200 bg-blue-50/75 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-sky-800">
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-800">
               <Sparkles className="h-4 w-4" />
               Welcome onboarding
             </div>
@@ -69,10 +69,10 @@ export default function OnboardingChecklist({
   }
 
   return (
-    <div className="surface-card rounded-2xl border border-sky-200 bg-[linear-gradient(180deg,_rgba(240,249,255,0.95)_0%,_rgba(255,255,255,0.98)_100%)] p-6">
+    <div className="surface-card rounded-2xl border border-blue-200 bg-[linear-gradient(180deg,_rgba(240,249,255,0.95)_0%,_rgba(255,255,255,0.98)_100%)] p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-800">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">
             <Sparkles className="h-3.5 w-3.5" />
             Welcome onboarding
           </div>
@@ -114,7 +114,7 @@ export default function OnboardingChecklist({
             <div className="h-2.5 w-full rounded-full bg-slate-200">
               <div
                 className={`h-2.5 rounded-full transition-all ${
-                  isComplete ? 'bg-emerald-500' : 'bg-sky-600'
+                  isComplete ? 'bg-emerald-500' : 'bg-blue-600'
                 }`}
                 style={{ width: `${progressPercent}%` }}
               />
@@ -147,7 +147,7 @@ export default function OnboardingChecklist({
                   className={`mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
                     stepIsCompleted
                       ? 'border-emerald-200 bg-emerald-100 text-emerald-700'
-                      : 'border-slate-200 bg-white text-sky-700 hover:border-sky-200 hover:bg-sky-50'
+                      : 'border-slate-200 bg-white text-blue-700 hover:border-blue-200 hover:bg-blue-50'
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                   aria-label={`${stepIsCompleted ? 'Unmark' : 'Mark'} ${step.title} complete`}
                 >

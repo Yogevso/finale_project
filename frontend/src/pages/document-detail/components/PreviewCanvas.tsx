@@ -61,6 +61,7 @@ interface PreviewCanvasProps {
   onCommentTextChange: (value: string) => void
   onPrivateCommentChange: (value: boolean) => void
   onSubmitComment: () => void
+  isRevamp?: boolean
 }
 
 export function PreviewCanvas({
@@ -101,6 +102,7 @@ export function PreviewCanvas({
   onCommentTextChange,
   onPrivateCommentChange,
   onSubmitComment,
+  isRevamp = false,
 }: PreviewCanvasProps) {
   const [copiedHeadingId, setCopiedHeadingId] = useState<string | null>(null)
   const copiedHeadingTimeoutRef = useRef<number | null>(null)
@@ -201,7 +203,13 @@ export function PreviewCanvas({
 
   return (
     <div className="document-preview-canvas flex-1 flex flex-col overflow-hidden">
-      <div className="document-preview-topbar bg-gradient-to-r from-sky-600 to-sky-700 text-white px-4 py-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between flex-shrink-0">
+      <div
+        className={`document-preview-topbar text-white flex flex-col gap-2 px-4 flex-shrink-0 md:flex-row md:items-center md:justify-between ${
+          isRevamp
+            ? 'border-b border-blue-800/50 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 py-2.5'
+            : 'bg-gradient-to-r from-blue-600 to-blue-700 py-2'
+        }`}
+      >
         {showDocumentTitle && headerTitle ? (
           <div className="flex items-center gap-2">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -272,7 +280,11 @@ export function PreviewCanvas({
         </div>
       </div>
       {actionsBar ? (
-        <div className="border-b border-slate-200 bg-slate-100/95 px-3 py-2">
+        <div
+          className={`border-b border-slate-200 px-3 py-2 ${
+            isRevamp ? 'bg-white/95' : 'bg-slate-100/95'
+          }`}
+        >
           {actionsBar}
         </div>
       ) : null}
@@ -299,10 +311,10 @@ export function PreviewCanvas({
         className="document-preview-scroll-region flex-1 relative overflow-y-auto overflow-x-auto document-preview-pane"
         onScroll={onScroll}
       >
-        <div className="document-reading-progress sticky top-0 z-10 h-[3px]" aria-hidden="true">
+        <div className="document-reading-progress z-10 h-[3px]" aria-hidden="true">
           <div
             data-testid="document-reading-progress-bar"
-            className="document-reading-progress__bar h-full bg-sky-600 transition-[width] duration-150 ease-out"
+            className="document-reading-progress__bar h-full bg-blue-700 transition-[width] duration-150 ease-out"
             style={{ width: `${scrollProgress}%` }}
           />
         </div>

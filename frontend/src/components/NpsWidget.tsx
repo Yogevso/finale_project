@@ -105,7 +105,7 @@ export default function NpsWidget() {
           <p className="text-sm text-slate-500 mt-1">Your feedback helps us improve.</p>
           <button
             onClick={handleDismiss}
-            className="mt-4 text-sm text-sky-600 hover:text-sky-700"
+            className="mt-4 text-sm text-blue-600 hover:text-blue-700"
           >
             Close
           </button>
@@ -165,14 +165,14 @@ export default function NpsWidget() {
             onChange={(e) => setComment(e.target.value)}
             placeholder="Any additional feedback? (optional)"
             rows={2}
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
         )}
 
         <button
           onClick={() => submitMutation.mutate()}
           disabled={selectedScore === null || submitMutation.isPending}
-          className="w-full py-2 text-sm font-medium text-white bg-sky-600 rounded-xl hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="w-full py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {submitMutation.isPending ? 'Submitting...' : 'Submit'}
         </button>

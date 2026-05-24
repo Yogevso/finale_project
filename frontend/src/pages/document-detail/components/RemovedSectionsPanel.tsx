@@ -91,7 +91,7 @@ export function RemovedSectionsPanel({
                         <button
                           type="button"
                           onClick={() => onRestore(section)}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-100"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
                           title={`Restore "${section.text}"`}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />

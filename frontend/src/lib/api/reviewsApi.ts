@@ -47,7 +47,11 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       return data
     }
 
-    async getPendingReviews(params?: { page?: number; per_page?: number }): Promise<ReviewListResponse> {
+    async getPendingReviews(params?: {
+      page?: number
+      per_page?: number
+      document_id?: number
+    }): Promise<ReviewListResponse> {
       const { data } = await this.client.get<ReviewListResponseDto>('/reviews/pending', { params })
       return mapReviewListResponseDto(data)
     }
@@ -56,6 +60,7 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       page?: number
       per_page?: number
       status?: string
+      document_id?: number
     }): Promise<ReviewListResponse> {
       const { data } = await this.client.get<ReviewListResponseDto>('/reviews/my-submissions', {
         params,

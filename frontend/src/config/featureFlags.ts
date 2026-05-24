@@ -1,4 +1,4 @@
-export type FrontendFeatureFlag = 'optimisticConcurrencyHeaders'
+export type FrontendFeatureFlag = 'optimisticConcurrencyHeaders' | 'documentViewRevamp'
 
 type FrontendFeatureFlagState = Record<FrontendFeatureFlag, boolean>
 
@@ -28,6 +28,7 @@ export function resolveFrontendFeatureFlags(
       env.VITE_FF_OPTIMISTIC_CONCURRENCY_HEADERS,
       true,
     ),
+    documentViewRevamp: parseBooleanFlag(env.VITE_FF_DOCUMENT_VIEW_REVAMP, true),
   })
 }
 

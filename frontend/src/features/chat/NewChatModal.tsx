@@ -91,7 +91,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
             type="button"
             className={`flex-1 py-2.5 text-sm font-medium ${
               tab === 'direct'
-                ? 'border-b-2 border-sky-600 text-sky-600'
+                ? 'border-b-2 border-blue-600 text-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => { setTab('direct'); setSelectedIds([]) }}
@@ -103,7 +103,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
             type="button"
             className={`flex-1 py-2.5 text-sm font-medium ${
               tab === 'group'
-                ? 'border-b-2 border-sky-600 text-sky-600'
+                ? 'border-b-2 border-blue-600 text-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
             onClick={() => { setTab('group'); setSelectedIds([]) }}
@@ -121,7 +121,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
               placeholder="Group name"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               aria-label="Group name"
             />
           </div>
@@ -136,7 +136,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
               placeholder="Search people..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none"
               aria-label="Search people"
             />
           </div>
@@ -162,7 +162,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
                 }}
                 disabled={tab === 'direct' && isPending}
                 className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left transition-colors hover:bg-gray-50 ${
-                  selectedIds.includes(u.id) ? 'bg-sky-50' : ''
+                  selectedIds.includes(u.id) ? 'bg-blue-50' : ''
                 }`}
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600">
@@ -184,7 +184,7 @@ export default function NewChatModal({ onClose, onCreated }: NewChatModalProps) 
                   </div>
                 </div>
                 {tab === 'group' && selectedIds.includes(u.id) && (
-                  <div className="h-5 w-5 rounded-full bg-sky-600 text-center text-xs leading-5 text-white">✓</div>
+                  <div className="h-5 w-5 rounded-full bg-blue-600 text-center text-xs leading-5 text-white">✓</div>
                 )}
               </button>
             ))

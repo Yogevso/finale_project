@@ -173,7 +173,7 @@ export default function DocumentEditor({
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
         <p className="text-slate-500">Loading document...</p>
       </div>
     )
@@ -186,7 +186,7 @@ export default function DocumentEditor({
         <h3 className="text-lg font-medium text-rose-600 mb-2">{error}</h3>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-700"
+          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
         >
           Retry
         </button>
@@ -257,7 +257,7 @@ export default function DocumentEditor({
                 <button
                   onClick={handleSave}
                   disabled={saving || !hasChanges}
-                  className="px-4 py-1.5 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {saving ? (
                     <>
@@ -272,7 +272,7 @@ export default function DocumentEditor({
             ) : (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-1.5 bg-sky-600 text-white text-sm rounded-xl hover:bg-sky-700 flex items-center gap-2"
+                className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -292,7 +292,7 @@ export default function DocumentEditor({
         )}
 
         {collaborationEnabled && user ? (
-          <Suspense fallback={<CollaborativeEditorFallback className={isEditing ? 'ring-2 ring-sky-500' : ''} />}>
+          <Suspense fallback={<CollaborativeEditorFallback className={isEditing ? 'ring-2 ring-blue-500' : ''} />}>
             <CollaborativeEditor
               ydoc={collaboration.ydoc}
               provider={collaboration.provider}
@@ -313,7 +313,7 @@ export default function DocumentEditor({
               content={content}
               onChange={handleContentChange}
               editable={isEditing}
-              className={isEditing ? 'ring-2 ring-sky-500' : ''}
+              className={isEditing ? 'ring-2 ring-blue-500' : ''}
               onRetry={collaboration.reconnect}
             />
           </Suspense>
@@ -322,7 +322,7 @@ export default function DocumentEditor({
             content={content}
             onChange={handleContentChange}
             editable={isEditing}
-            className={isEditing ? 'ring-2 ring-sky-500' : ''}
+            className={isEditing ? 'ring-2 ring-blue-500' : ''}
           />
         )}
       </div>

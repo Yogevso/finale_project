@@ -35,7 +35,7 @@ const typeConfig: Record<FeedbackType, { label: string; icon: React.ReactNode; c
   question: {
     label: 'Question',
     icon: <HelpCircle className="w-4 h-4" />,
-    className: 'text-sky-600 bg-sky-50',
+    className: 'text-blue-600 bg-blue-50',
   },
   suggestion: {
     label: 'Suggestion',
@@ -153,7 +153,7 @@ export default function FeedbackResponseDialog({
               to={`/documents/${feedback.document_id}/fullscreen`}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 text-sky-600 hover:text-sky-700"
+              className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
             >
               <FileText className="w-4 h-4" />
               <span className="font-medium">{feedback.document_title}</span>

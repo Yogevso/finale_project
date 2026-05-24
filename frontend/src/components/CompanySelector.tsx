@@ -32,7 +32,7 @@ const EMPTY_PAGE_COMPANIES: SelectorCompany[] = []
 
 const getCompanyTypeBadgeClassName = (companyType: CompanyType) => {
   if (companyType === 'customer') {
-    return 'bg-sky-100 text-sky-700'
+    return 'bg-blue-100 text-blue-700'
   }
   if (companyType === 'partner') {
     return 'bg-indigo-100 text-indigo-700'
@@ -344,7 +344,7 @@ export default function CompanySelector({
             {selectedCompanies.map((company) => (
               <span
                 key={company.id}
-                className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-sm text-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-200"
               >
                 <Building2 className="w-3 h-3" />
                 {company.name}
@@ -352,7 +352,7 @@ export default function CompanySelector({
                   <button
                     type="button"
                     onClick={() => removeCompany(company.id)}
-                    className="btn-icon ml-1 h-6 w-6 border-0 bg-transparent text-sky-700 shadow-none hover:bg-sky-200 hover:text-sky-900 dark:hover:bg-sky-900/50 dark:hover:text-sky-100"
+                    className="btn-icon ml-1 h-6 w-6 border-0 bg-transparent text-blue-700 shadow-none hover:bg-blue-200 hover:text-blue-900 dark:hover:bg-blue-900/50 dark:hover:text-blue-100"
                     data-testid={`company-selector-remove-${company.id}`}
                     aria-label={`Remove ${company.name}`}
                   >
@@ -443,7 +443,7 @@ export default function CompanySelector({
                   onFocus={() => setActiveOptionIndex(index)}
                   className={`w-full px-4 py-2 text-left ${
                     activeOptionIndex === index
-                      ? 'bg-sky-50 dark:bg-sky-950/40'
+                      ? 'bg-blue-50 dark:bg-blue-950/40'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-900'
                   }`}
                   data-testid={`company-selector-option-${company.id}`}
@@ -452,7 +452,7 @@ export default function CompanySelector({
                     <div
                       className={`flex h-5 w-5 items-center justify-center rounded border ${
                         selectedIds.includes(company.id)
-                          ? 'border-sky-600 bg-sky-600'
+                          ? 'border-blue-600 bg-blue-600'
                           : 'border-slate-300'
                       }`}
                     >

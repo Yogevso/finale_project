@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Edit3, Save, Send, X } from 'lucide-react'
+import { ArrowRight, Edit3, Save, Send, ShieldAlert, X } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -31,11 +31,81 @@ interface SectionEditPopupProps {
     options?: { force?: boolean; comparisonHtml?: string },
   ) => Promise<SectionSaveResult>
   onBack?: () => void
+  saveDisabled?: boolean
+  saveDisabledReason?: string
+  reviewsLinkTo?: string
 }
 
 type EditingFrame = {
   editorHtml: string
   toPersistedHtml: (editorHtml: string) => string
+}
+
+type SectionSaveApiError = {
+  response?: {
+    status?: number
+    data?: {
+      detail?: unknown
+      message?: unknown
+      error_code?: unknown
+    }
+  }
+  message?: unknown
+}
+
+const extractErrorText = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  if (value && typeof value === 'object') {
+    const nested = value as {
+      detail?: unknown
+      message?: unknown
+      error?: unknown
+    }
+    return (
+      extractErrorText(nested.detail) ||
+      extractErrorText(nested.message) ||
+      extractErrorText(nested.error)
+    )
+  }
+
+  return null
+}
+
+const getSectionSaveErrorMessage = (error: unknown): string => {
+  const apiError = error as SectionSaveApiError
+  const status = apiError.response?.status
+  const errorCode = apiError.response?.data?.error_code
+  const detail =
+    extractErrorText(apiError.response?.data?.detail) ||
+    extractErrorText(apiError.response?.data?.message) ||
+    extractErrorText(apiError.message)
+
+  const detailLower = detail?.toLowerCase() ?? ''
+  const isPendingReviewConflict =
+    status === 409 &&
+    (errorCode === 'conflict' ||
+      detailLower.includes('review is pending') ||
+      detailLower.includes('while a review is pending'))
+
+  if (isPendingReviewConflict) {
+    return (
+      'Cannot save while this document has a pending review. ' +
+      'Ask a manager/admin to resolve the current review, then try again.'
+    )
+  }
+
+  if (status === 401 || status === 403) {
+    return (
+      'Your session expired while saving. Your draft remains saved locally in this browser. ' +
+      'Sign in again and retry.'
+    )
+  }
+
+  return detail || 'Failed to save section'
 }
 
 function unwrapElement(element: Element): void {
@@ -111,6 +181,9 @@ export function SectionEditPopup({
   onClose,
   onSave,
   onBack,
+  saveDisabled = false,
+  saveDisabledReason,
+  reviewsLinkTo = '/reviews',
 }: SectionEditPopupProps) {
   const initialEditingFrame = useMemo(() => createEditingFrame(section.html), [section.html])
   const { containerRef: dialogRef } = useFocusTrap<HTMLDivElement>(onClose)
@@ -123,6 +196,9 @@ export function SectionEditPopup({
   const [autoSavedAt, setAutoSavedAt] = useState<string | null>(null)
   const [hasLocalDraft, setHasLocalDraft] = useState(false)
   const hasPendingRecoveredDraftRef = useRef(false)
+  const resolvedSaveDisabledReason =
+    saveDisabledReason?.trim() ||
+    'This document has a pending review. Resolve it before creating a new draft.'
 
   const draftRecoveryTarget = useMemo(
     () => ({
@@ -252,7 +328,7 @@ export function SectionEditPopup({
   }
 
   const handleSave = async () => {
-    if (!editor) return
+    if (!editor || saveDisabled) return
     setIsSaving(true)
     setSaveError(null)
     try {
@@ -274,7 +350,7 @@ export function SectionEditPopup({
       setHasLocalDraft(false)
       onClose()
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save section')
+      setSaveError(getSectionSaveErrorMessage(error))
     } finally {
       setIsSaving(false)
     }
@@ -325,7 +401,7 @@ export function SectionEditPopup({
         tabIndex={-1}
         className="modal-content relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
           <div className="flex items-center gap-3">
             <Edit3 className="w-5 h-5 text-white" />
             <h2 className="section-title text-xl !text-white">{popupTitle}</h2>
@@ -352,7 +428,7 @@ export function SectionEditPopup({
 
         {saveError && (
           <div className="px-6 pt-6">
-            <div className="alert-danger body-copy">
+            <div className="alert-danger body-copy" role="alert" aria-live="assertive">
               {saveError}
             </div>
           </div>
@@ -374,7 +450,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleBold().run()}
               aria-label="Bold"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('bold') ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('bold') ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Bold"
             >
@@ -385,7 +461,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleItalic().run()}
               aria-label="Italic"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('italic') ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('italic') ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Italic"
             >
@@ -396,7 +472,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleUnderline().run()}
               aria-label="Underline"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('underline') ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('underline') ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Underline"
             >
@@ -408,7 +484,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
               aria-label="Heading 2"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('heading', { level: 2 }) ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('heading', { level: 2 }) ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Heading 2"
             >
@@ -419,7 +495,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
               aria-label="Heading 3"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('heading', { level: 3 }) ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('heading', { level: 3 }) ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Heading 3"
             >
@@ -431,7 +507,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleBulletList().run()}
               aria-label="Bullet List"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('bulletList') ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('bulletList') ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Bullet List"
             >
@@ -442,7 +518,7 @@ export function SectionEditPopup({
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
               aria-label="Numbered List"
               className={`${toolbarButtonClassName} ${
-                editor.isActive('orderedList') ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200' : ''
+                editor.isActive('orderedList') ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : ''
               }`}
               title="Numbered List"
             >
@@ -535,9 +611,12 @@ export function SectionEditPopup({
                 type="checkbox"
                 checked={submitForReview}
                 onChange={(event) => setSubmitForReview(event.target.checked)}
-                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                disabled={isSaving || saveDisabled}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="flex items-center gap-2">
+              <span
+                className={`flex items-center gap-2 ${saveDisabled ? 'opacity-60' : ''}`}
+              >
                 <Send className="w-4 h-4" />
                 Submit for review after saving
               </span>
@@ -545,6 +624,30 @@ export function SectionEditPopup({
             <p className="helper-copy ml-6 mt-1">
               An admin/manager will review and approve your changes
             </p>
+            {saveDisabled && (
+              <div className="ml-6 mt-2 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50 via-amber-50 to-white p-3 shadow-sm">
+                <div className="flex flex-wrap items-start gap-3">
+                  <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                    <ShieldAlert className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-[220px] flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                      Saving is temporarily locked
+                    </p>
+                    <p className="helper-copy mt-1 text-amber-700" role="status">
+                      {resolvedSaveDisabledReason}
+                    </p>
+                  </div>
+                  <a
+                    href={reviewsLinkTo}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-800 transition hover:border-amber-400 hover:bg-amber-100/40"
+                  >
+                    Open Reviews
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
             {onBack && (
@@ -558,11 +661,16 @@ export function SectionEditPopup({
             <button
               type="button"
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || saveDisabled}
+              title={saveDisabled ? resolvedSaveDisabledReason : undefined}
               className="btn-primary table-action-btn flex items-center gap-2 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              {isSaving ? 'Saving...' : submitForReview ? 'Save & Submit for Review' : 'Save as Draft'}
+              {isSaving
+                ? 'Saving...'
+                : submitForReview
+                  ? 'Save & Submit for Review'
+                  : 'Save as Draft'}
             </button>
           </div>
         </div>

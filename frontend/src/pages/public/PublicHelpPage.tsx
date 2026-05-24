@@ -34,11 +34,11 @@ export default function PublicHelpPage() {
     <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
       <SEO title="Help Center" description="Find answers, search documentation, and get support." />
 
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-12">
           <div className="mb-3 text-xs uppercase tracking-widest text-white/85">Viewer Portal</div>
           <h1 className="text-3xl font-display font-bold md:text-4xl">Help Center</h1>
-          <p className="mt-3 max-w-2xl text-sky-100">
+          <p className="mt-3 max-w-2xl text-blue-100">
             Guidance for searching docs, requesting access, and staying aligned with release updates.
           </p>
           <form onSubmit={handleSearch} className="mt-6 flex max-w-xl gap-2">
@@ -52,7 +52,7 @@ export default function PublicHelpPage() {
                 className="w-full rounded-xl border border-white/25 bg-white/14 py-3 pl-10 pr-4 text-white placeholder:text-white/80 focus:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/30"
               />
             </div>
-            <button type="submit" className="btn-secondary table-action-btn rounded-xl bg-white text-sky-700 hover:bg-sky-50 dark:bg-slate-950 dark:text-sky-200 dark:hover:bg-slate-900">
+            <button type="submit" className="btn-secondary table-action-btn rounded-xl bg-white text-blue-700 hover:bg-blue-50 dark:bg-slate-950 dark:text-blue-200 dark:hover:bg-slate-900">
               Search
             </button>
           </form>
@@ -71,7 +71,7 @@ export default function PublicHelpPage() {
                     Use the search bar above or{' '}
                     <Link
                       to="/docs"
-                      className="font-medium text-sky-800 underline decoration-sky-700/70 underline-offset-4 hover:text-sky-900"
+                      className="font-medium text-blue-800 underline decoration-blue-700/70 underline-offset-4 hover:text-blue-900"
                     >
                       browse the document library
                     </Link>{' '}
@@ -127,7 +127,7 @@ export default function PublicHelpPage() {
                     <Link
                       key={cat.category}
                       to={`/docs?category=${encodeURIComponent(cat.category)}`}
-                      className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-sky-100 hover:text-sky-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-sky-950/50 dark:hover:text-sky-200"
+                      className="inline-flex items-center rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-blue-950/50 dark:hover:text-blue-200"
                     >
                       <Folder className="mr-1.5 h-4 w-4" />
                       {cat.category}
@@ -139,7 +139,7 @@ export default function PublicHelpPage() {
             ) : null}
           </div>
 
-          <div className="rounded-3xl bg-gradient-to-br from-sky-900 via-sky-800 to-sky-700 p-8 text-white">
+          <div className="rounded-3xl bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 p-8 text-white">
             <div className="mb-3 text-xs uppercase tracking-widest text-white/85">Need help?</div>
             <h3 className="section-title mb-4 text-white">Support channels</h3>
             <ul className="space-y-3 text-sm text-white/90">
@@ -149,7 +149,7 @@ export default function PublicHelpPage() {
             </ul>
             <Link
               to="/docs"
-              className="btn-secondary table-action-btn mt-6 inline-flex bg-white/90 text-sky-900 hover:bg-white"
+              className="btn-secondary table-action-btn mt-6 inline-flex bg-white/90 text-blue-900 hover:bg-white"
             >
               Return to docs
             </Link>

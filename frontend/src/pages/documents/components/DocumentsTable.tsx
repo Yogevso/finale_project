@@ -161,7 +161,7 @@ export function DocumentsTable({
                             ) : null}
                           </div>
                         ) : (
-                          <Link to={`/documents/${doc.id}/fullscreen`} className="block min-w-0 hover:text-sky-700">
+                          <Link to={`/documents/${doc.id}/fullscreen`} className="block min-w-0 hover:text-blue-700">
                             <div
                               className="max-w-[40rem] text-[0.95rem] font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]"
                               title={documentTitle}
@@ -199,7 +199,7 @@ export function DocumentsTable({
                           doc.status === 'active'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : doc.status === 'approved'
-                              ? 'bg-sky-50 text-sky-700 border-sky-200'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
                               : doc.status === 'draft'
                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : doc.status === 'pending_review'
@@ -240,7 +240,7 @@ export function DocumentsTable({
                             {effectiveVisibility === 'company' ? (
                               <Link
                                 to={`/documents/${doc.id}?tab=details&manage_companies=1#company-assignments`}
-                                className="inline-flex text-xs font-medium text-sky-700 hover:text-sky-800"
+                                className="inline-flex text-xs font-medium text-blue-700 hover:text-blue-800"
                               >
                                 Manage companies
                               </Link>
@@ -283,7 +283,7 @@ export function DocumentsTable({
                           <Link
                             to={`/documents/${doc.id}`}
                             aria-label={`Edit ${documentTitle}`}
-                            className="text-xs font-semibold uppercase tracking-wide text-sky-600 hover:text-sky-700"
+                            className="text-xs font-semibold uppercase tracking-wide text-blue-600 hover:text-blue-700"
                           >
                             Edit
                           </Link>

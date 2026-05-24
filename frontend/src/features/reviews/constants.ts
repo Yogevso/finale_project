@@ -15,7 +15,7 @@ export const reviewStatusConfig: Record<
   new: {
     label: 'New',
     icon: Clock,
-    className: 'bg-sky-100 text-sky-700',
+    className: 'bg-blue-100 text-blue-700',
   },
   in_progress: {
     label: 'In Progress',

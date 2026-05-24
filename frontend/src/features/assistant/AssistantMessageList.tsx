@@ -176,12 +176,12 @@ export default function AssistantMessageList({
           cursor only pulses while actively receiving tokens */}
       {streamingText && (
         <div className="motion-enter-fade flex items-start gap-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
             <Bot className="h-4 w-4" />
           </div>
           <div className="prose prose-sm max-w-none rounded-xl bg-white p-3 shadow-sm border border-slate-100">
             <AssistantMarkdown>{streamingText}</AssistantMarkdown>
-            {isStreaming && <span className="inline-block h-4 w-1 animate-pulse bg-sky-500 ml-0.5" />}
+            {isStreaming && <span className="inline-block h-4 w-1 animate-pulse bg-blue-500 ml-0.5" />}
           </div>
         </div>
       )}
@@ -189,18 +189,18 @@ export default function AssistantMessageList({
       {/* Thinking indicator — shown during LLM processing and between tool iterations */}
       {isLoading && !isStreaming && (thinkingStatus || activeToolCalls.length === 0) && (
         <div className="motion-enter-fade flex items-start gap-3">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
             <Bot className="h-4 w-4" />
           </div>
           <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-300">
-              <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
+              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
               <span>{thinkingStatus || 'Preparing a response…'}</span>
             </div>
             <div className="mt-2 flex items-center gap-1.5">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-300 [animation-delay:-200ms]" />
-              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-400 [animation-delay:-100ms]" />
-              <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-blue-300 [animation-delay:-200ms]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-blue-400 [animation-delay:-100ms]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
             </div>
           </div>
         </div>
@@ -252,7 +252,7 @@ function MessageBubble({
     return (
       <div className="motion-enter-fade group flex items-start justify-end gap-3" style={motionStyle}>
         <div className="flex flex-col items-end">
-          <div className="rounded-xl bg-sky-600 text-white px-4 py-2.5 max-w-[80%] shadow-sm">
+          <div className="rounded-xl bg-blue-600 text-white px-4 py-2.5 max-w-[80%] shadow-sm">
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           </div>
           <div className="flex items-center gap-2 mt-1">
@@ -272,7 +272,7 @@ function MessageBubble({
             )}
           </div>
         </div>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
           <User className="h-4 w-4" />
         </div>
       </div>
@@ -282,7 +282,7 @@ function MessageBubble({
   if (message.role === 'assistant' && message.content) {
     return (
       <div className="motion-enter-fade group flex items-start gap-3" style={motionStyle}>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
           <Bot className="h-4 w-4" />
         </div>
         <div className="flex flex-col">

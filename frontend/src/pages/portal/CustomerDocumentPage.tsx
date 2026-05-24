@@ -500,7 +500,7 @@ export default function CustomerDocumentPage() {
   if (isLoading) {
     return (
       <div className="content-shell flex animate-fade-in justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -595,7 +595,7 @@ export default function CustomerDocumentPage() {
                 {document.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200"
+                    className="pill border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200"
                   >
                     {tag}
                   </span>
@@ -634,8 +634,8 @@ export default function CustomerDocumentPage() {
                         onClick={() => handleSectionClick(section)}
                         className={`block w-full rounded-xl px-3 py-2 text-left text-sm transition-colors ${
                           isActive
-                            ? 'bg-sky-100 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-200'
-                            : 'text-slate-600 hover:bg-sky-50 hover:text-sky-700 dark:text-slate-300 dark:hover:bg-slate-900'
+                            ? 'bg-blue-100 font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-200'
+                            : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-900'
                         }`}
                         style={{ paddingLeft: `${(section.level - 1) * 12 + 12}px` }}
                       >
@@ -649,7 +649,7 @@ export default function CustomerDocumentPage() {
 
             <div className="items-start gap-6 lg:flex">
               {tocSections.length > 1 ? (
-                <div className="hidden h-[70vh] flex-shrink-0 self-start lg:sticky lg:top-28 lg:block">
+                <div className="hidden h-[70vh] flex-shrink-0 self-start lg:block">
                   <TocPanel
                     sections={tocSections}
                     tocCollapsed={tocCollapsed}

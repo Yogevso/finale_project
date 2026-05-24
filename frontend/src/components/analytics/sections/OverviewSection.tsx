@@ -27,7 +27,7 @@ export function OverviewSection({ params }: OverviewSectionProps) {
   const topChurnItems = (overview?.assignment_churn_90d || []).slice(0, 5)
 
   const getActivityIcon = (action: RecentActivity['action']) => {
-    if (action.includes('view')) return <Eye className="w-4 h-4 text-sky-500" />
+    if (action.includes('view')) return <Eye className="w-4 h-4 text-blue-500" />
     if (action.includes('comment')) return <MessageSquare className="w-4 h-4 text-emerald-500" />
     if (action.includes('review')) return <FileText className="w-4 h-4 text-purple-500" />
     if (action.includes('status')) return <Clock className="w-4 h-4 text-orange-500" />

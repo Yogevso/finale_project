@@ -9,7 +9,7 @@ import { ListSkeleton } from '@/components/skeletons'
 const CATEGORY_COLORS: Record<string, string> = {
   feature: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200',
   bugfix: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-200',
-  improvement: 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200',
+  improvement: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-200',
 }
 
 export default function PublicChangelogPage() {
@@ -34,11 +34,11 @@ export default function PublicChangelogPage() {
         description="See the latest updates, features, and fixes to the documentation platform."
       />
 
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell max-w-4xl py-12">
-          <div className="mb-3 text-xs uppercase tracking-widest text-sky-200">Platform Updates</div>
+          <div className="mb-3 text-xs uppercase tracking-widest text-blue-200">Platform Updates</div>
           <h1 className="text-3xl font-display font-bold md:text-4xl">Changelog</h1>
-          <p className="mt-3 text-sky-100">
+          <p className="mt-3 text-blue-100">
             Stay up to date with the latest features, improvements, and fixes.
           </p>
         </div>
@@ -73,7 +73,7 @@ export default function PublicChangelogPage() {
                 created_at: string
               }) => (
                 <div key={entry.id} className="relative pl-10">
-                  <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full border-2 border-white bg-sky-500 dark:border-slate-900" />
+                  <div className="absolute left-2.5 top-2 h-3 w-3 rounded-full border-2 border-white bg-blue-500 dark:border-slate-900" />
                   <div className="surface-card rounded-2xl p-6">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="helper-copy flex items-center gap-1">

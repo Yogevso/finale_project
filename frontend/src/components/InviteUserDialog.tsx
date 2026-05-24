@@ -133,8 +133,8 @@ export default function InviteUserDialog({
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="modal-content motion-enter-scale relative z-10 w-full max-w-md dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 p-6 dark:border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-sky-100 rounded-xl">
-              <Mail className="w-5 h-5 text-sky-600" />
+            <div className="p-2 bg-blue-100 rounded-xl">
+              <Mail className="w-5 h-5 text-blue-600" />
             </div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-900 font-display dark:text-slate-100">Invite User</h2>
           </div>
@@ -268,8 +268,8 @@ export default function InviteUserDialog({
             </p>
           </div>
 
-          <div className="bg-sky-50 rounded-2xl p-4 border border-sky-200">
-            <p className="text-sm text-sky-800">
+          <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200">
+            <p className="text-sm text-blue-800">
               <strong>Note:</strong> The invitation will be valid for 7 days. The user will
               receive an email with a link to create their account.
             </p>

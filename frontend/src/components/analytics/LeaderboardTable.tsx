@@ -53,7 +53,7 @@ export function LeaderboardTable({
     if (rank === 1) return 'bg-amber-100 text-amber-800'
     if (rank === 2) return 'bg-slate-100 text-slate-800'
     if (rank === 3) return 'bg-orange-100 text-orange-800'
-    return 'bg-sky-50 text-sky-700'
+    return 'bg-blue-50 text-blue-700'
   }
 
   return (

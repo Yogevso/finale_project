@@ -66,7 +66,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
 
   const tbtn = (active: boolean) =>
     `rounded-lg px-2 py-1.5 text-sm transition-colors ${
-      active ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+      active ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
     }`
 
   return (
@@ -81,7 +81,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
             onBlur={() => setTimeout(() => setBlockDropdownOpen(false), 150)}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
               isHeadingActive
-                ? 'border-sky-300 bg-sky-50 text-sky-700'
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
                 : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
             }`}
             aria-expanded={blockDropdownOpen}
@@ -109,7 +109,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
                       setBlockDropdownOpen(false)
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
-                      isActive ? 'bg-sky-50 text-sky-700' : 'text-slate-700 hover:bg-slate-50'
+                      isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     <span className={`font-medium ${
@@ -123,7 +123,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
                       </span>
                     )}
                     {isActive && (
-                      <svg className="ml-auto h-4 w-4 text-sky-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
+                      <svg className="ml-auto h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
                     )}
                   </button>
                 )
@@ -184,7 +184,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
             onBlur={() => setTimeout(() => setTableMenuOpen(false), 150)}
             className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
               isInsideTable
-                ? 'border-sky-300 bg-sky-50 text-sky-700'
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
                 : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
             }`}
             title="Table options"
@@ -282,7 +282,7 @@ export default function RichTextEditor({
       Highlight.configure({ multicolor: false }),
       Subscript,
       Superscript,
-      Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-sky-600 underline cursor-pointer' } }),
+      Link.configure({ openOnClick: false, HTMLAttributes: { class: 'text-blue-600 underline cursor-pointer' } }),
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),

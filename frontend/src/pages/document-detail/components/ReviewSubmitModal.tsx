@@ -157,7 +157,7 @@ export function ReviewSubmitModal({
             <button
               type="button"
               onClick={() => setShowDiff(!showDiff)}
-              className="flex items-center gap-2 text-sm font-medium text-sky-600 hover:text-sky-800"
+              className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800"
             >
               {showDiff ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               {showDiff ? 'Hide changes' : 'View changes since last published version'}
@@ -227,7 +227,7 @@ export function ReviewSubmitModal({
                       type="checkbox"
                       checked={selectedReviewerIds.includes(reviewer.id)}
                       onChange={() => toggleReviewerSelection(reviewer.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                   </label>
                 ))}

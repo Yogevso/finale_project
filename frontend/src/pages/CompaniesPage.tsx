@@ -116,7 +116,7 @@ export default function CompaniesPage() {
   const getTypeBadgeColor = (type: CompanyType) => {
     switch (type) {
       case 'customer':
-        return 'bg-sky-100 text-sky-700'
+        return 'bg-blue-100 text-blue-700'
       case 'partner':
         return 'bg-purple-100 text-purple-700'
       case 'internal':
@@ -243,8 +243,8 @@ export default function CompaniesPage() {
                   <tr key={company.id} className="admin-table-row">
                     <td className="admin-table-cell">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center">
-                          <Building2 className="w-5 h-5 text-sky-600" />
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                          <Building2 className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
                           <div className="card-title">{company.name}</div>
@@ -258,13 +258,13 @@ export default function CompaniesPage() {
                       </span>
                     </td>
                     <td className="admin-table-cell">
-                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-sky-700">
+                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-blue-700">
                         <Users className="w-4 h-4" />
                         {company.user_count}
                       </Link>
                     </td>
                     <td className="admin-table-cell">
-                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-sky-700">
+                      <Link to={`/admin/companies/${company.id}`} className="body-copy flex items-center gap-2 text-slate-600 hover:text-blue-700">
                         <FileText className="w-4 h-4" />
                         {company.assigned_document_count}
                       </Link>

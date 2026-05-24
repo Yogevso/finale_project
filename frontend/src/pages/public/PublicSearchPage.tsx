@@ -101,17 +101,17 @@ export default function PublicSearchPage() {
 
   return (
     <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-12">
           <Link
             to="/docs"
-            className="inline-flex items-center gap-2 text-sky-100/80 hover:text-white mb-4"
+            className="inline-flex items-center gap-2 text-blue-100/80 hover:text-white mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to docs
           </Link>
           <h1 className="text-3xl md:text-4xl font-display font-bold mb-3">Search Documents</h1>
-          <p className="text-sky-100 max-w-2xl">
+          <p className="text-blue-100 max-w-2xl">
             Search across approved documentation, release notes, and technical guides.
           </p>
 
@@ -122,7 +122,7 @@ export default function PublicSearchPage() {
                 placeholder="Search public documents..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full rounded-2xl px-6 py-4 pl-14 text-lg text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40 dark:bg-slate-950 dark:text-slate-100"
+                className="w-full rounded-2xl px-6 py-4 pl-14 text-lg text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-300/40 dark:bg-slate-950 dark:text-slate-100"
               />
               <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <button
@@ -134,7 +134,7 @@ export default function PublicSearchPage() {
               </button>
             </div>
             {searchInput.length > 0 && searchInput.length < 2 && (
-              <p className="helper-copy mt-2 text-sky-200/80">Enter at least 2 characters to search</p>
+              <p className="helper-copy mt-2 text-blue-200/80">Enter at least 2 characters to search</p>
             )}
           </form>
         </div>
@@ -149,7 +149,7 @@ export default function PublicSearchPage() {
               onClick={() => handleCategoryChange(null)}
               className={`px-3 py-1 rounded-full text-sm font-medium ${
                 !category
-                  ? 'bg-sky-500 text-white'
+                  ? 'bg-blue-500 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
               }`}
             >
@@ -162,7 +162,7 @@ export default function PublicSearchPage() {
                 onClick={() => handleCategoryChange(cat.category)}
                 className={`px-3 py-1 rounded-full text-sm font-medium ${
                   category === cat.category
-                    ? 'bg-sky-500 text-white'
+                    ? 'bg-blue-500 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
@@ -203,9 +203,9 @@ export default function PublicSearchPage() {
                   className="block surface-card-hover rounded-2xl p-5 group"
                 >
                   <div className="flex items-start gap-4">
-                    <FileText className="h-6 w-6 text-sky-500 flex-shrink-0 mt-1" />
+                    <FileText className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />
                     <div className="flex-1 min-w-0">
-                      <h3 className="card-title mb-1 group-hover:text-sky-600">
+                      <h3 className="card-title mb-1 group-hover:text-blue-600">
                         <HighlightText text={item.title} query={query} />
                       </h3>
                       <p className="helper-copy mb-2">{item.document_number}</p>

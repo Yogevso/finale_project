@@ -69,16 +69,16 @@ export function SupportMessageList({
             {ticket.assignments.map((assignment) => (
               <span
                 key={assignment.id}
-                className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
+                className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200"
               >
                 {assignment.agent_full_name || `Agent #${assignment.agent_id}`}
                 {assignment.is_primary ? (
-                  <span className="text-[9px] text-sky-500 dark:text-sky-300">(primary)</span>
+                  <span className="text-[9px] text-blue-500 dark:text-blue-300">(primary)</span>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => onUnassignAgent(assignment.agent_id)}
-                  className="ml-0.5 rounded-full p-0.5 text-sky-400 hover:bg-sky-100 hover:text-sky-700 dark:text-sky-300 dark:hover:bg-sky-900/40 dark:hover:text-sky-100"
+                  className="ml-0.5 rounded-full p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:hover:text-blue-100"
                   title="Unassign"
                 >
                   <X className="h-3 w-3" />
@@ -110,7 +110,7 @@ export function SupportMessageList({
                   message.is_internal_note
                     ? 'border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100'
                     : message.sender_id === currentUserId
-                      ? 'bg-sky-600 text-white'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-900 dark:bg-slate-800 dark:text-slate-100'
                 }`}
               >
@@ -131,7 +131,7 @@ export function SupportMessageList({
                         message.is_internal_note
                           ? 'border-amber-300 bg-amber-100/70 text-amber-950 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100'
                           : message.sender_id === currentUserId
-                            ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                            ? 'border-blue-400/40 bg-blue-500/10 text-white'
                             : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
                       }`}
                     >
@@ -147,7 +147,7 @@ export function SupportMessageList({
                         message.is_internal_note
                           ? 'border-amber-300 bg-amber-100/70 text-amber-950 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-100'
                           : message.sender_id === currentUserId
-                            ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                            ? 'border-blue-400/40 bg-blue-500/10 text-white'
                             : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
                       }`}
                     >

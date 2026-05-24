@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 
 import { useMySubmissionsQuery, usePendingReviewsQuery } from '@/hooks/useReviewQueries';
 import { queryKeys } from '@/lib/queryKeys';
@@ -13,12 +14,25 @@ import { reviewsUseCases, type ReviewDecisionInput } from '../useCases/reviewsUs
 export function useReviewsPageController() {
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<ReviewsTabType>('pending');
   const [selectedReview, setSelectedReview] = useState<ReviewRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<ReviewStatus | ''>('');
+  const documentFilterParam = searchParams.get('document_id');
+  const parsedDocumentFilterId =
+    documentFilterParam && Number.isInteger(Number(documentFilterParam))
+      ? Number(documentFilterParam)
+      : null;
+  const documentFilterId = parsedDocumentFilterId && parsedDocumentFilterId > 0
+    ? parsedDocumentFilterId
+    : null;
 
-  const pendingQuery = usePendingReviewsQuery(activeTab === 'pending');
-  const submissionsQuery = useMySubmissionsQuery(statusFilter, activeTab === 'my-submissions');
+  const pendingQuery = usePendingReviewsQuery(documentFilterId ?? undefined, activeTab === 'pending');
+  const submissionsQuery = useMySubmissionsQuery(
+    statusFilter,
+    documentFilterId ?? undefined,
+    activeTab === 'my-submissions',
+  );
   const { data: pendingData, isLoading: pendingLoading } = pendingQuery;
   const { data: submissionsData, isLoading: submissionsLoading } = submissionsQuery;
 
@@ -86,6 +100,12 @@ export function useReviewsPageController() {
     rejectMutation.mutate({ reviewId: selectedReview.id, decision });
   };
 
+  const clearDocumentFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('document_id');
+    setSearchParams(next, { replace: true });
+  };
+
   return {
     activeTab,
     setActiveTab,
@@ -105,5 +125,7 @@ export function useReviewsPageController() {
     approveSelectedReview,
     rejectSelectedReview,
     dialogLoading: approveMutation.isPending || rejectMutation.isPending,
+    documentFilterId,
+    clearDocumentFilter,
   };
 }

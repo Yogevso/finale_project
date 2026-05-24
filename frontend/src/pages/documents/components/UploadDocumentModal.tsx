@@ -135,7 +135,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             type="button"
             className={`surface-muted w-full border-2 border-dashed p-6 text-center transition-colors ${
               dragActive
-                ? 'border-sky-500 bg-sky-50 dark:border-sky-400 dark:bg-sky-950/40'
+                ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/40'
                 : 'border-slate-300 hover:border-slate-400 dark:border-slate-700 dark:hover:border-slate-600'
             }`}
             aria-label="Choose a document to upload"
@@ -149,11 +149,11 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
           >
             {selectedFile ? (
               <div className="flex flex-col items-center gap-2">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
                   <FileText className="h-7 w-7" aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="helper-copy font-medium uppercase tracking-[0.2em] text-sky-700 dark:text-sky-300">
+                  <p className="helper-copy font-medium uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">
                     Primary file
                   </p>
                   <p className="card-title mt-1">{selectedFile.name}</p>
@@ -276,7 +276,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                     type="file"
                     accept={ACCEPTED_FILE_TYPES}
                     aria-label="Additional content file"
-                    className="input-field file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-sky-700"
+                    className="input-field file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700"
                     onChange={(e) => handleSupplementalFileSelect('content', e.target.files?.[0] ?? null)}
                   />
                   <p className="helper-copy mt-1">
@@ -296,7 +296,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                     type="file"
                     accept={ACCEPTED_FILE_TYPES}
                     aria-label="Release notes file"
-                    className="input-field file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-sky-700"
+                    className="input-field file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-blue-700"
                     onChange={(e) =>
                       handleSupplementalFileSelect('releaseNotes', e.target.files?.[0] ?? null)
                     }
@@ -418,7 +418,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                     onClick={() => handlePresetApply(preset.id)}
                     className={`rounded-2xl border px-3 py-3 text-left transition-colors ${
                       isActive
-                        ? 'border-sky-500 bg-sky-50 text-sky-800 dark:border-sky-400 dark:bg-sky-950/40 dark:text-sky-100'
+                        ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-100'
                         : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600'
                     }`}
                   >
@@ -522,8 +522,8 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           {isUploading ? (
-            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-3">
-              <div className="flex items-center justify-between text-sm font-medium text-sky-900">
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-center justify-between text-sm font-medium text-blue-900">
                 <span className="inline-flex items-center gap-2">
                   <FilePlus2 className="sync-status-pulse h-4 w-4" aria-hidden="true" />
                   Uploading {selectedFile?.name ?? 'file'}
@@ -531,7 +531,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                 <span>{progressValue}%</span>
               </div>
               <div
-                className="progress-track mt-2 h-2 bg-sky-100 dark:bg-sky-950/50"
+                className="progress-track mt-2 h-2 bg-blue-100 dark:bg-blue-950/50"
                 role="progressbar"
                 aria-label="Upload progress"
                 aria-valuemin={0}
@@ -543,7 +543,7 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                   style={{ width: `${progressValue}%` }}
                 />
               </div>
-              <p className="helper-copy mt-2 text-right text-sky-800 dark:text-sky-200">
+              <p className="helper-copy mt-2 text-right text-blue-800 dark:text-blue-200">
                 Uploading... Please wait to close this window.
               </p>
             </div>

@@ -213,7 +213,7 @@ export default function GlobalSearchBar() {
           onFocus={() => query.trim().length >= 2 && (hasResults || loading) && setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder="Search documents..."
-          className="max-w-[calc(100vw-8rem)] w-44 rounded-full border border-sky-200 bg-white/80 py-1.5 pl-9 pr-8 text-sm text-slate-700 placeholder-slate-400 transition-all focus:w-64 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-400"
+          className="max-w-[calc(100vw-8rem)] w-44 rounded-full border border-blue-200 bg-white/80 py-1.5 pl-9 pr-8 text-sm text-slate-700 placeholder-slate-400 transition-all focus:w-64 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400"
           aria-label="Search documents"
           role="combobox"
           aria-controls={resultsListId}
@@ -269,7 +269,7 @@ export default function GlobalSearchBar() {
                       key={suggestion}
                       type="button"
                       onClick={() => handleChange(suggestion)}
-                      className="text-sky-600 hover:underline dark:text-sky-300"
+                      className="text-blue-600 hover:underline dark:text-blue-300"
                     >
                       {suggestion}
                       {index < suggestions.length - 1 ? ', ' : ''}
@@ -296,7 +296,7 @@ export default function GlobalSearchBar() {
                   style={{ '--enter-delay': `${Math.min(index, 5) * 35}ms` } as CSSProperties}
                   className={`motion-enter-fade flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors ${
                     activeIndex === index
-                      ? 'bg-sky-50 ring-2 ring-inset ring-sky-300 dark:bg-sky-950/30'
+                      ? 'bg-blue-50 ring-2 ring-inset ring-blue-300 dark:bg-blue-950/30'
                       : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
@@ -322,10 +322,10 @@ export default function GlobalSearchBar() {
                 aria-selected={activeIndex === results.length}
                 onClick={navigateToFullSearch}
                 style={{ '--enter-delay': `${Math.min(results.length, 5) * 35}ms` } as CSSProperties}
-                className={`motion-enter-fade w-full border-t border-slate-100 px-4 py-3 text-center text-sm font-semibold text-sky-600 transition-colors dark:border-slate-800 ${
+                className={`motion-enter-fade w-full border-t border-slate-100 px-4 py-3 text-center text-sm font-semibold text-blue-600 transition-colors dark:border-slate-800 ${
                   activeIndex === results.length
-                    ? 'bg-sky-50 ring-2 ring-inset ring-sky-300 dark:bg-sky-950/30'
-                    : 'hover:bg-sky-50 dark:hover:bg-sky-950/30'
+                    ? 'bg-blue-50 ring-2 ring-inset ring-blue-300 dark:bg-blue-950/30'
+                    : 'hover:bg-blue-50 dark:hover:bg-blue-950/30'
                 }`}
               >
                 View all results for "{query}" -&gt;

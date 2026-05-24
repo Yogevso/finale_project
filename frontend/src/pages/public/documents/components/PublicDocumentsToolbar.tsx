@@ -39,7 +39,7 @@ export function PublicDocumentsToolbar({
               onClick={() => onViewModeChange('grid')}
               className={`rounded-lg p-2 ${
                 viewMode === 'grid'
-                  ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
                   : 'text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800'
               }`}
               aria-label="Grid view"
@@ -51,7 +51,7 @@ export function PublicDocumentsToolbar({
               onClick={() => onViewModeChange('list')}
               className={`rounded-lg p-2 ${
                 viewMode === 'list'
-                  ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
                   : 'text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800'
               }`}
               aria-label="List view"
@@ -68,7 +68,7 @@ export function PublicDocumentsToolbar({
             <button
               type="button"
               onClick={onClearCategory}
-              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200"
+              className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200"
             >
               Category: {activeCategory}
               <span aria-hidden>x</span>

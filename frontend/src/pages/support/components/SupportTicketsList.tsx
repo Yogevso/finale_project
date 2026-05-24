@@ -145,7 +145,7 @@ export function SupportTicketsList({
                       </span>
                     ) : null}
                     {ticket.needs_attention ? (
-                      <span className="inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
                         Needs attention
                       </span>
                     ) : null}

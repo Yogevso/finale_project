@@ -2,8 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
 
-export function usePendingReviewsQuery(enabled: boolean = true) {
-  const params = { per_page: 50 }
+export function usePendingReviewsQuery(documentId?: number, enabled: boolean = true) {
+  const params = {
+    per_page: 50,
+    document_id: documentId,
+  }
 
   return useQuery({
     queryKey: queryKeys.reviews.pending(params),
@@ -12,8 +15,16 @@ export function usePendingReviewsQuery(enabled: boolean = true) {
   })
 }
 
-export function useMySubmissionsQuery(statusFilter: string, enabled: boolean = true) {
-  const params = { per_page: 50, status: statusFilter || undefined }
+export function useMySubmissionsQuery(
+  statusFilter: string,
+  documentId?: number,
+  enabled: boolean = true,
+) {
+  const params = {
+    per_page: 50,
+    status: statusFilter || undefined,
+    document_id: documentId,
+  }
 
   return useQuery({
     queryKey: queryKeys.reviews.mySubmissions(params),

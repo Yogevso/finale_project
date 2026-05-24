@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { AlertTriangle, ArrowUpRight } from 'lucide-react';
 import { getDocument, getDomParser } from '@/env/dom';
 import { api } from '@/lib/api';
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload';
@@ -48,6 +49,28 @@ import {
 
 const WORDS_PER_MINUTE = 200;
 
+function areTocSectionsEquivalent(left: TocSection[], right: TocSection[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftSection = left[index];
+    const rightSection = right[index];
+    if (
+      leftSection.id !== rightSection.id ||
+      leftSection.text !== rightSection.text ||
+      leftSection.level !== rightSection.level ||
+      leftSection.index !== rightSection.index ||
+      (leftSection.anchorId || '') !== (rightSection.anchorId || '')
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function estimateReadingTimeMinutes(html: string | null): number | null {
   if (!html) {
     return null;
@@ -75,12 +98,14 @@ export function DocumentPreview({
   sectionLinkBasePath,
   widthMode = 'reading',
   contentEditRequestToken = 0,
+  hasPendingReview = false,
   onToggleFullscreen,
   highlightAnchor,
   reviewSessionId,
   reviewSectionId,
   onRemovedSectionsChange,
   actionsBar,
+  isRevamp = false,
 }: {
   documentId: number;
   attachments: Attachment[];
@@ -93,6 +118,7 @@ export function DocumentPreview({
   sectionLinkBasePath: string;
   widthMode?: ReadingWidth;
   contentEditRequestToken?: number;
+  hasPendingReview?: boolean;
   onToggleFullscreen?: () => void;
   highlightAnchor?: string;
   reviewSessionId?: number | null;
@@ -103,6 +129,7 @@ export function DocumentPreview({
     clear: () => void
   ) => void;
   actionsBar?: ReactNode;
+  isRevamp?: boolean;
 }) {
   const { user } = useAuth();
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
@@ -180,6 +207,7 @@ export function DocumentPreview({
   }, [selectedAttachment]);
 
   const {
+    previewSource,
     previewableAttachments,
     previewSource,
     activeHtmlContent,
@@ -195,6 +223,32 @@ export function DocumentPreview({
     readerStatus,
     isInlineLoading: isLoading,
   });
+
+  const inlineSections = useMemo(() => {
+    if (previewSource !== 'inline' || !activeHtmlContent) {
+      return null;
+    }
+    return processHtmlIntoSections(activeHtmlContent).sections;
+  }, [activeHtmlContent, previewSource]);
+
+  useEffect(() => {
+    if (previewSource !== 'inline') {
+      return;
+    }
+
+    if (!inlineSections) {
+      if (sections.length > 0) {
+        setSections([]);
+      }
+      return;
+    }
+
+    // Keep TOC locked to the currently rendered inline HTML.
+    // This guards against stale reader-outline updates overriding edited content TOC.
+    if (!areTocSectionsEquivalent(sections, inlineSections)) {
+      setSections(inlineSections);
+    }
+  }, [inlineSections, previewSource, sections]);
 
   const contentStyle = useMemo(
     () =>
@@ -623,11 +677,9 @@ export function DocumentPreview({
           Download the original file to view it.
         </p>
         {firstAttachment && (
-          <a
-            href="#"
-            download={firstAttachment.filename}
-            onClick={(event) => {
-              event.preventDefault();
+          <button
+            type="button"
+            onClick={() => {
               void downloadAttachment(firstAttachment);
             }}
             className="btn-primary inline-flex items-center gap-2"
@@ -641,7 +693,7 @@ export function DocumentPreview({
               />
             </svg>
             Download {firstAttachment.filename}
-          </a>
+          </button>
         )}
       </div>
     );
@@ -651,9 +703,21 @@ export function DocumentPreview({
     widthMode === 'fluid'
       ? `document-preview-paper document-preview-paper-fluid ${getDocumentThemeClassName(theme)}`
       : `document-preview-paper ${getDocumentThemeClassName(theme)}`;
+  const previewStageHeightClass = isRevamp
+    ? isFullscreen
+      ? 'h-[calc(100vh-13rem)] min-h-[34rem]'
+      : 'h-[72vh] min-h-[32rem]'
+    : '';
+  const htmlLayoutClassName = isRevamp
+    ? 'document-preview-html-layout document-preview-html-layout--revamp flex h-full'
+    : 'document-preview-html-layout flex h-[70vh]';
 
   return (
-    <div className="document-preview-shell surface-card rounded-2xl overflow-hidden">
+    <div
+      className={`document-preview-shell surface-card overflow-hidden ${
+        isRevamp ? 'rounded-3xl border-slate-200' : 'rounded-2xl'
+      } ${isRevamp ? 'document-preview-shell--revamp' : ''}`}
+    >
       <PreviewToolbar
         previewableAttachments={previewableAttachments}
         selectedAttachment={selectedAttachment}
@@ -669,6 +733,50 @@ export function DocumentPreview({
         onSetTheme={handleSetTheme}
       />
 
+      {hasPendingReview && isEditor && !showingReaderView && (
+        <div
+          className={`border-b border-amber-200/80 ${
+            isRevamp
+              ? 'bg-amber-50/90'
+              : 'bg-gradient-to-r from-amber-50 via-amber-50 to-white'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <div
+            className={`flex gap-2 px-4 ${
+              isRevamp
+                ? 'items-center justify-between py-2.5'
+                : 'flex-col py-3 sm:flex-row sm:items-center sm:justify-between'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Pending review in progress
+                </p>
+                {!isRevamp && (
+                  <p className="text-sm text-amber-900">
+                    Draft saves are locked until the current review is resolved by an admin or
+                    manager.
+                  </p>
+                )}
+              </div>
+            </div>
+            <a
+              href={`/reviews?document_id=${documentId}`}
+              className="inline-flex items-center gap-1 self-start rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-800 transition hover:border-amber-400 hover:bg-amber-100/40 sm:self-auto"
+            >
+              Open Reviews
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        </div>
+      )}
+
       <div
         className={`document-current-section-indicator overflow-hidden border-b border-slate-200 bg-white transition-all duration-200 ${
           showCurrentSectionIndicator ? 'max-h-11 opacity-100' : 'max-h-0 opacity-0'
@@ -678,10 +786,10 @@ export function DocumentPreview({
           <button
             type="button"
             onClick={() => handleReaderTocClick(activeCurrentSection)}
-            className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-sky-50 hover:text-sky-700"
+            className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-700"
             title="Current section (J/K)"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600">
               Current section
             </span>
             <span className="flex-1 truncate font-medium text-slate-700">
@@ -691,7 +799,10 @@ export function DocumentPreview({
         )}
       </div>
 
-      <div className="document-preview-stage relative" style={{ minHeight: '600px' }}>
+      <div
+        className={`document-preview-stage relative ${previewStageHeightClass}`}
+        style={isRevamp ? undefined : { minHeight: '600px' }}
+      >
         {error ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
@@ -704,14 +815,14 @@ export function DocumentPreview({
           (selectedAttachment && isReaderLoading && !activeHtmlContent) ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
               {selectedAttachment && (
                 <p className="text-xs text-slate-500 mt-3">Preparing document preview...</p>
               )}
             </div>
           </div>
         ) : previewState === 'READY' && shouldRenderHtmlPreview ? (
-          <div className="document-preview-html-layout flex h-[70vh]">
+          <div className={htmlLayoutClassName}>
             <TocPanel
               sections={tocSectionsForHtml}
               tocCollapsed={tocCollapsed}
@@ -725,6 +836,7 @@ export function DocumentPreview({
               onEditSection={handleStartEditingSection}
               onDeleteSection={handleDeleteSection}
               onAddSectionAfter={handleChooseAddSection}
+              isRevamp={isRevamp}
             />
 
             <PreviewCanvas
@@ -765,6 +877,7 @@ export function DocumentPreview({
               onCommentTextChange={setCommentText}
               onPrivateCommentChange={setIsPrivateComment}
               onSubmitComment={handleSubmitComment}
+              isRevamp={isRevamp}
             />
           </div>
         ) : previewState === 'ERROR' && selectedAttachment && readerError ? (
@@ -783,17 +896,15 @@ export function DocumentPreview({
           <span className="text-sm text-slate-600">
             {documentTitle || selectedAttachment.filename}
           </span>
-          <a
-            href="#"
-            download
-            onClick={(event) => {
-              event.preventDefault();
+          <button
+            type="button"
+            onClick={() => {
               void downloadAttachment(selectedAttachment);
             }}
             className="btn-primary text-sm"
           >
             Download Original
-          </a>
+          </button>
         </div>
       )}
 
@@ -815,6 +926,9 @@ export function DocumentPreview({
           onClose={handleCloseSectionEdit}
           onBack={editingSection.fromChooser ? handleBackToChooser : undefined}
           onSave={handleSaveSection}
+          saveDisabled={hasPendingReview}
+          saveDisabledReason="This document currently has a pending review. Resolve it before creating a new draft."
+          reviewsLinkTo={`/reviews?document_id=${documentId}`}
         />
       )}
     </div>

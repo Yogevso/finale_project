@@ -108,7 +108,7 @@ export default function CompanyDetailPage() {
       case 'manager':
         return 'bg-amber-100 text-amber-700'
       case 'editor':
-        return 'bg-sky-100 text-sky-700'
+        return 'bg-blue-100 text-blue-700'
       case 'customer':
         return 'bg-emerald-100 text-emerald-700'
       default:
@@ -121,7 +121,7 @@ export default function CompanyDetailPage() {
       case 'active':
         return 'bg-emerald-100 text-emerald-700'
       case 'approved':
-        return 'bg-sky-100 text-sky-700'
+        return 'bg-blue-100 text-blue-700'
       case 'draft':
         return 'bg-slate-100 text-slate-700'
       case 'pending_review':
@@ -186,8 +186,8 @@ export default function CompanyDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="surface-card rounded-2xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sky-100 rounded-xl flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-sky-600" />
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <p className="metric-label">Type</p>
@@ -289,7 +289,7 @@ export default function CompanyDetailPage() {
             type="button"
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'users'
-                ? 'border-sky-600 text-sky-600'
+                ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -300,7 +300,7 @@ export default function CompanyDetailPage() {
             type="button"
             className={`py-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'documents'
-                ? 'border-sky-600 text-sky-600'
+                ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >

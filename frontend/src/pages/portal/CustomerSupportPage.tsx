@@ -25,14 +25,14 @@ import type {
 
 const STATUS_COLORS: Record<string, string> = {
   open: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200',
-  in_progress: 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200',
+  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200',
   resolved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
   closed: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
   low: 'text-slate-500 dark:text-slate-400',
-  normal: 'text-sky-600 dark:text-sky-300',
+  normal: 'text-blue-600 dark:text-blue-300',
   high: 'text-orange-600 dark:text-orange-300',
   urgent: 'text-red-600 dark:text-red-300',
 }
@@ -409,10 +409,14 @@ function CustomerTicketView({
       <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="max-h-[60vh] space-y-4 overflow-y-auto p-4">
           {ticket.messages.filter((m) => !m.is_internal_note).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
-              <Send className="mb-2 h-8 w-8" />
-              <p className="card-title text-slate-500 dark:text-slate-300">No messages yet</p>
-              <p className="helper-copy mt-0.5">Send a message to start the conversation</p>
+            <div className="py-6">
+              <EmptyState
+                tone="info"
+                size="compact"
+                title="No messages yet"
+                description="Send a message to start the conversation."
+                icon={<Send className="h-5 w-5" aria-hidden="true" />}
+              />
             </div>
           ) : (
             ticket.messages
@@ -425,7 +429,7 @@ function CustomerTicketView({
                   <div
                     className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                       msg.sender_type === 'customer'
-                        ? 'bg-sky-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
                     }`}
                   >
@@ -441,7 +445,7 @@ function CustomerTicketView({
                           href={msg.file_url}
                           className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
                             msg.sender_type === 'customer'
-                              ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                              ? 'border-blue-400/40 bg-blue-500/10 text-white'
                               : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
                           }`}
                         >
@@ -453,7 +457,7 @@ function CustomerTicketView({
                         <div
                           className={`mt-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
                             msg.sender_type === 'customer'
-                              ? 'border-sky-400/40 bg-sky-500/10 text-white'
+                              ? 'border-blue-400/40 bg-blue-500/10 text-white'
                               : 'border-slate-200 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-100'
                           }`}
                         >
@@ -466,7 +470,7 @@ function CustomerTicketView({
                     <p
                       className={`mt-1 text-[10px] ${
                         msg.sender_type === 'customer'
-                          ? 'text-sky-200'
+                          ? 'text-blue-200'
                           : 'text-slate-400 dark:text-slate-500'
                       }`}
                     >

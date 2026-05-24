@@ -87,7 +87,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
       <button
         type="button"
         onClick={openPicker}
-        className="absolute inset-y-0 right-2 inline-flex items-center rounded-md px-1.5 text-slate-400 transition hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-slate-500 dark:hover:text-slate-300"
+        className="absolute inset-y-0 right-2 inline-flex items-center rounded-md px-1.5 text-slate-400 transition hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-500 dark:hover:text-slate-300"
         aria-label={label ? `Open ${label}` : 'Open date picker'}
         disabled={props.disabled}
       >

@@ -128,10 +128,10 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
+              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>1</span>
               <span className={step === 1 ? 'font-medium text-slate-700' : 'text-slate-400'}>Details</span>
               <span className="mx-1 text-slate-300">—</span>
-              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+              <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${step === 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
               <span className={step === 2 ? 'font-medium text-slate-700' : 'text-slate-400'}>Content</span>
             </div>
             <button type="button" onClick={confirmClose} className="btn-icon h-9 w-9 text-slate-500 hover:bg-slate-100" aria-label="Close create document dialog">
@@ -172,13 +172,13 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                   </div>
 
                   {selectedSourceDocument ? (
-                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
                       <div className="font-medium">Copying from {selectedSourceDocument.title}</div>
-                      <div className="text-xs text-sky-700">{selectedSourceDocument.document_number}</div>
+                      <div className="text-xs text-blue-700">{selectedSourceDocument.document_number}</div>
                       <button
                         type="button"
                         onClick={clearCopiedSource}
-                        className="mt-2 text-xs font-semibold uppercase tracking-wide text-sky-700 hover:text-sky-800"
+                        className="mt-2 text-xs font-semibold uppercase tracking-wide text-blue-700 hover:text-blue-800"
                       >
                         Clear source
                       </button>
@@ -245,7 +245,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                       setSaveAsTemplate(event.target.checked)
                       setFieldErrors({})
                     }}
-                    className="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   <div>
                     <label htmlFor="create-document-save-template" className="block font-medium text-slate-900">
@@ -385,7 +385,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                             onClick={() => handlePresetApply(preset.id)}
                             className={`text-left px-3 py-2 rounded-xl border transition-colors ${
                               isActive
-                                ? 'border-sky-500 bg-sky-50 text-sky-800'
+                                ? 'border-blue-500 bg-blue-50 text-blue-800'
                                 : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
                             }`}
                           >
@@ -527,7 +527,7 @@ export function CreateDocumentModal({ onClose }: { onClose: () => void }) {
                       type="checkbox"
                       checked={generateWord}
                       onChange={(e) => setGenerateWord(e.target.checked)}
-                      className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                     Generate Word file (DOCX)
                   </label>

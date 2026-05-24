@@ -31,7 +31,7 @@ export function PublicPlatformHighlights({ items }: PublicPlatformHighlightsProp
           <Link
             key={item.platform}
             to={item.platformId ? `/platforms/${item.platformId}` : '/platforms'}
-            className="surface-muted block cursor-pointer rounded-2xl p-4 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+            className="surface-muted block cursor-pointer rounded-2xl p-4 transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <div className="text-xs uppercase tracking-widest text-slate-600">Platform</div>
             <div className="section-title mt-1">{item.platform}</div>

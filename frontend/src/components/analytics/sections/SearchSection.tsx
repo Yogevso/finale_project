@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, BarChart3, MousePointerClick, Search } from 'lucide-react'
 
 import { api } from '@/lib/api'
+import { EmptyState } from '@/components/EmptyState'
 
 export function SearchSection() {
   const [days, setDays] = useState(30)
@@ -15,7 +16,7 @@ export function SearchSection() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     )
   }
@@ -30,7 +31,7 @@ export function SearchSection() {
             key={d}
             onClick={() => setDays(d)}
             className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              days === d ? 'bg-sky-100 text-sky-700 font-medium' : 'text-slate-600 hover:bg-slate-100'
+              days === d ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             {d}d
@@ -42,8 +43,8 @@ export function SearchSection() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="surface-card rounded-2xl p-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
-              <Search className="h-5 w-5 text-sky-600" />
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+              <Search className="h-5 w-5 text-blue-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{data?.total_searches ?? 0}</p>
@@ -86,7 +87,13 @@ export function SearchSection() {
           </div>
           <div className="p-4">
             {data?.top_queries?.length === 0 ? (
-              <p className="text-sm text-slate-500 py-4 text-center">No search data yet</p>
+              <EmptyState
+                tone="info"
+                size="compact"
+                title="No search data yet"
+                description="Run searches in the product to populate this analytics panel."
+                icon={<Search className="h-5 w-5" aria-hidden="true" />}
+              />
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -121,7 +128,13 @@ export function SearchSection() {
           </div>
           <div className="p-4">
             {data?.zero_result_queries?.length === 0 ? (
-              <p className="text-sm text-slate-500 py-4 text-center">No zero-result queries</p>
+              <EmptyState
+                tone="success"
+                size="compact"
+                title="No zero-result queries"
+                description="Great signal: users are finding results for their searches."
+                icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+              />
             ) : (
               <table className="w-full text-sm">
                 <thead>

@@ -99,7 +99,7 @@ export default function AdvancedSearchModal({ isOpen, onClose, initialQuery = ''
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-5 w-5 text-sky-600 dark:text-sky-300" />
+            <SlidersHorizontal className="h-5 w-5 text-blue-600 dark:text-blue-300" />
             <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">Advanced Search</h2>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200" aria-label="Close advanced search">

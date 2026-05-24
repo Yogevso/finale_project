@@ -133,14 +133,14 @@ export default function ChatHeader({
     <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
       <div className="flex items-center gap-3 min-w-0">
         {/* Avatar */}
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-600">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-600">
           {displayName.charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-gray-900">{displayName}</h3>
           <div className="flex items-center gap-2 text-xs text-gray-500">
             {typingText ? (
-              <span className="italic text-sky-500">{typingText}</span>
+              <span className="italic text-blue-500">{typingText}</span>
             ) : isGroup ? (
               <button
                 type="button"

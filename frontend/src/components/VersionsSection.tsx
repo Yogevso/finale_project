@@ -9,6 +9,7 @@ import { queryKeys } from '@/lib/queryKeys'
 import { useDocumentVersionsQuery } from '@/hooks/useDocumentQueries'
 import { extractApiErrorMessage, useToast } from '@/lib/toast'
 import ConfirmationDialog from '@/components/ConfirmationDialog'
+import { EmptyState } from '@/components/EmptyState'
 import type { Version, VersionBumpType, VersionCreate } from '@/types'
 
 interface VersionsSectionProps {
@@ -24,7 +25,7 @@ const bumpMeta: Record<VersionBumpType, { label: string; style: string; hint: st
   },
   minor: {
     label: 'Minor',
-    style: 'bg-sky-100 text-sky-700',
+    style: 'bg-blue-100 text-blue-700',
     hint: 'New section or meaningful update',
   },
   patch: {
@@ -121,11 +122,11 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
       </div>
 
       {isCreating && (
-        <div className="mb-4 p-4 bg-sky-50 rounded-xl border border-sky-200">
-          <h3 className="font-medium text-sky-900 mb-3">Create New Version</h3>
+        <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+          <h3 className="font-medium text-blue-900 mb-3">Create New Version</h3>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm text-sky-800 mb-1">Version Type</label>
+              <label className="block text-sm text-blue-800 mb-1">Version Type</label>
               <select
                 value={newVersion.bump_type || 'patch'}
                 onChange={(e) =>
@@ -137,12 +138,12 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
                 <option value="minor">Minor (x.y+1.0)</option>
                 <option value="major">Major (x+1.0.0)</option>
               </select>
-              <p className="text-xs text-sky-700 mt-1">
+              <p className="text-xs text-blue-700 mt-1">
                 {bumpMeta[(newVersion.bump_type || 'patch') as VersionBumpType].hint}
               </p>
             </div>
             <div>
-              <label className="block text-sm text-sky-800 mb-1">Content</label>
+              <label className="block text-sm text-blue-800 mb-1">Content</label>
               <textarea
                 value={newVersion.content || ''}
                 onChange={(e) => setNewVersion({ ...newVersion, content: e.target.value })}
@@ -152,7 +153,7 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               />
             </div>
             <div>
-              <label className="block text-sm text-sky-800 mb-1">Changes Summary</label>
+              <label className="block text-sm text-blue-800 mb-1">Changes Summary</label>
               <input
                 type="text"
                 value={newVersion.changes_summary || ''}
@@ -184,7 +185,13 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
       )}
 
       {versions.length === 0 ? (
-        <p className="text-slate-500 text-sm">No versions yet</p>
+        <EmptyState
+          tone="info"
+          size="compact"
+          title="No versions yet"
+          description="Create the first version to track and publish changes safely."
+          icon={<GitCompareArrows className="h-6 w-6" aria-hidden="true" />}
+        />
       ) : (
         <div className="space-y-3">
           {versions.map((version: Version) => (

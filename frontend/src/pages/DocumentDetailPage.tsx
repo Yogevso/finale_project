@@ -14,6 +14,7 @@ import { RemovedSectionsPanel } from '@/pages/document-detail/components/Removed
 import { useDocumentDetailPageState } from '@/pages/document-detail/hooks/useDocumentDetailPageState';
 import type { RemovedSection } from '@/pages/document-detail/hooks/useContentEditingFlow';
 import { api } from '@/lib/api';
+import { isFrontendFeatureEnabled } from '@/config/featureFlags';
 import EngagementBar from '@/components/EngagementBar';
 import { useTour } from '@/hooks/useTour';
 import { documentDetailTour } from '@/lib/tour';
@@ -31,11 +32,32 @@ export default function DocumentDetailPage() {
   const [removedSections, setRemovedSections] = useState<RemovedSection[]>([]);
   const restoreSectionRef = useRef<(s: RemovedSection) => void>(() => {});
   const clearRemovedSectionsRef = useRef<() => void>(() => {});
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const highlightText = searchParams.get('highlight') || undefined;
   const reviewSessionParam = searchParams.get('review_session');
   const reviewSessionId = reviewSessionParam ? Number(reviewSessionParam) : null;
   const reviewSectionId = searchParams.get('review_section') || undefined;
+  const docViewParam = searchParams.get('doc_view');
+  const isDocumentViewRevamp =
+    docViewParam === 'classic'
+      ? false
+      : docViewParam === 'revamp'
+        ? true
+        : isFrontendFeatureEnabled('documentViewRevamp');
+  const setDocumentViewMode = useCallback(
+    (mode: 'revamp' | 'classic') => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('doc_view', mode);
+      setSearchParams(nextParams, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+  const toggleDocumentViewMode = useCallback(() => {
+    setDocumentViewMode(isDocumentViewRevamp ? 'classic' : 'revamp');
+  }, [isDocumentViewRevamp, setDocumentViewMode]);
+  const viewModeToggleLabel = isDocumentViewRevamp
+    ? 'Switch to Classic View'
+    : 'Switch to Revamp View';
   const {
     documentId,
     document,
@@ -123,7 +145,7 @@ export default function DocumentDetailPage() {
   if (isLoading) {
     return (
       <div className="content-shell flex h-64 animate-fade-in flex-col items-center justify-center gap-3">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
         <p className="body-copy">Loading document...</p>
       </div>
     );
@@ -165,7 +187,13 @@ export default function DocumentDetailPage() {
 
   return (
     <div
-      className={`document-detail-page animate-fade-in ${isFullscreen ? 'min-h-screen bg-slate-50 px-6 py-6 md:px-10 lg:px-14' : 'page-stack'}`}
+      className={`document-detail-page animate-fade-in ${
+        isFullscreen
+          ? isDocumentViewRevamp
+            ? 'min-h-screen bg-slate-50 px-4 pb-6 pt-3 md:px-8 lg:px-12'
+            : 'min-h-screen bg-slate-50 px-6 py-6 md:px-10 lg:px-14'
+          : 'page-stack'
+      }`}
     >
       <Joyride
         steps={documentDetailTour}
@@ -185,6 +213,9 @@ export default function DocumentDetailPage() {
         onExitFullscreen={navigateToDetail}
         onSetReadingWidth={() => applyWidth('reading')}
         onSetFluidWidth={() => applyWidth('fluid')}
+        isRevamp={isDocumentViewRevamp}
+        onToggleViewMode={toggleDocumentViewMode}
+        viewModeLabel={viewModeToggleLabel}
       />
 
       <div
@@ -192,64 +223,86 @@ export default function DocumentDetailPage() {
           isFullscreen ? `w-full ${contentWidthClass} mx-auto` : ''
         }`}
       >
-        <DocumentHeaderCard
-          documentId={document.id}
-          documentTitle={document.title}
-          documentNumber={document.document_number}
-          readingTimeMinutes={readingTimeMinutes}
-          dueDate={document.due_date}
-          isOverdue={isOverdue}
-          isFullscreen={isFullscreen}
-          isEditor={isEditor}
-          documentStatus={document.status}
-          activeTab={activeTab}
-          isEditing={isEditing}
-          sourceFileType={sourceFileType}
-          onBackToDocuments={navigateToDocuments}
-          onEnterFullscreen={navigateToFullscreen}
-          onExitFullscreen={navigateToDetail}
-          onGenerateTranscript={() => window.print()}
-          onExportCalendar={document.due_date ? exportCalendar : undefined}
-          onOpenSubmitReview={openSubmitReview}
-          onCancelReview={pendingReviewId ? () => cancelReview() : undefined}
-          isCancellingReview={isCancellingReview}
-          onEditAction={handleEditAction}
-          onArchive={handleArchive}
-          onRestore={handleRestore}
-          onDownloadAs={(format) => {
-            const formatMap: Record<string, 'pdf' | 'docx' | 'pptx'> = {
-              pdf: 'pdf',
-              word: 'docx',
-              ppt: 'pptx',
-            };
-            const apiFormat = formatMap[format];
-            if (!apiFormat) return;
-            void (async () => {
-              try {
-                const blob = await api.exportDocument(documentId, apiFormat);
-                const url = URL.createObjectURL(blob);
-                const link = Object.assign(window.document.createElement('a'), {
-                  href: url,
-                  download: `${document.title || 'document'}.${apiFormat}`,
-                });
-                link.click();
-                URL.revokeObjectURL(url);
-              } catch {
-                console.error('Export failed');
-              }
-            })();
-          }}
-          onHelp={() => setShowHelp(true)}
-          removedSectionsCount={removedSections.length}
-          onShowRemovedSections={() => setShowRemovedSections(true)}
-        />
+        {!isFullscreen || !isDocumentViewRevamp ? (
+          <DocumentHeaderCard
+            documentId={document.id}
+            documentTitle={document.title}
+            documentNumber={document.document_number}
+            readingTimeMinutes={readingTimeMinutes}
+            dueDate={document.due_date}
+            isOverdue={isOverdue}
+            isFullscreen={isFullscreen}
+            isEditor={isEditor}
+            documentStatus={document.status}
+            activeTab={activeTab}
+            isEditing={isEditing}
+            sourceFileType={sourceFileType}
+            onBackToDocuments={navigateToDocuments}
+            onEnterFullscreen={navigateToFullscreen}
+            onExitFullscreen={navigateToDetail}
+            onGenerateTranscript={() => window.print()}
+            onExportCalendar={document.due_date ? exportCalendar : undefined}
+            onOpenSubmitReview={openSubmitReview}
+            onCancelReview={pendingReviewId ? () => cancelReview() : undefined}
+            isCancellingReview={isCancellingReview}
+            onEditAction={handleEditAction}
+            onArchive={handleArchive}
+            onRestore={handleRestore}
+            onDownloadAs={(format) => {
+              const formatMap: Record<string, 'pdf' | 'docx' | 'pptx'> = {
+                pdf: 'pdf',
+                word: 'docx',
+                ppt: 'pptx',
+              };
+              const apiFormat = formatMap[format];
+              if (!apiFormat) return;
+              void (async () => {
+                try {
+                  const blob = await api.exportDocument(documentId, apiFormat);
+                  const url = URL.createObjectURL(blob);
+                  const link = Object.assign(window.document.createElement('a'), {
+                    href: url,
+                    download: `${document.title || 'document'}.${apiFormat}`,
+                  });
+                  link.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  console.error('Export failed');
+                }
+              })();
+            }}
+            onHelp={() => setShowHelp(true)}
+            removedSectionsCount={removedSections.length}
+            onShowRemovedSections={() => setShowRemovedSections(true)}
+            isRevamp={isDocumentViewRevamp}
+          />
+        ) : null}
 
         <EngagementBar
           documentId={documentId}
           scrollProgress={activeTab === 'preview' ? scrollProgress : undefined}
+          isRevamp={isDocumentViewRevamp}
         />
 
-        <DocumentTabs activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
+        {!isFullscreen ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={toggleDocumentViewMode}
+              className="table-action-btn inline-flex items-center rounded-xl border border-blue-700 bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800"
+              title={viewModeToggleLabel}
+            >
+              {viewModeToggleLabel}
+            </button>
+          </div>
+        ) : null}
+
+        <DocumentTabs
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          counts={tabCounts}
+          isRevamp={isDocumentViewRevamp}
+        />
 
         {activeTab === 'preview' && (
           <DocumentPreview
@@ -264,6 +317,7 @@ export default function DocumentDetailPage() {
             sectionLinkBasePath={`/documents/${documentId}`}
             widthMode={contentWidth}
             contentEditRequestToken={contentEditRequestToken}
+            hasPendingReview={Boolean(pendingReviewId)}
             onToggleFullscreen={isFullscreen ? navigateToDetail : navigateToFullscreen}
             highlightAnchor={highlightText}
             reviewSessionId={
@@ -271,6 +325,7 @@ export default function DocumentDetailPage() {
             }
             reviewSectionId={reviewSectionId}
             onRemovedSectionsChange={handleRemovedSectionsChange}
+            isRevamp={isDocumentViewRevamp}
             actionsBar={
               <DocumentPreviewActionsBar
                 isEditor={isEditor}
@@ -311,6 +366,7 @@ export default function DocumentDetailPage() {
                 removedSectionsCount={removedSections.length}
                 onShowRemovedSections={() => setShowRemovedSections(true)}
                 onHelp={() => setShowHelp(true)}
+                isRevamp={isDocumentViewRevamp}
               />
             }
           />

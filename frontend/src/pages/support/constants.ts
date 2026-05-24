@@ -1,13 +1,13 @@
 const STATUS_COLORS: Record<string, string> = {
   open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-200',
-  in_progress: 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200',
+  in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200',
   resolved: 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-200',
   closed: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300',
 }
 
 const PRIORITY_BADGE: Record<string, string> = {
   low: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300',
-  normal: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200',
+  normal: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200',
   high: 'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-200',
   urgent: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-200',
 }

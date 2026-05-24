@@ -18,7 +18,7 @@ export function getRoleBadgeColor(role: UserRole | string) {
     case 'manager':
       return 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'
     case 'editor':
-      return 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200'
+      return 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200'
     case 'customer':
       return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'
     default:

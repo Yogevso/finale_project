@@ -6,6 +6,7 @@ import { useDocumentAttachmentsQuery } from '@/hooks/useDocumentQueries'
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload'
 import { ATTACHMENT_INPUT_ACCEPT, validateAttachmentFile } from '@/lib/attachmentUpload'
 import { PLATFORM_UPLOAD_MAX_SIZE_LABEL } from '@/lib/uploadLimits'
+import { EmptyState } from '@/components/EmptyState'
 import type { Attachment } from '@/types'
 
 interface AttachmentsSectionProps {
@@ -115,15 +116,16 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
       )}
 
       {attachments.length === 0 ? (
-        <div className="text-center py-8">
-          <div className="text-4xl mb-2">ATT</div>
-          <p className="text-slate-500 text-sm">No attachments yet</p>
-          {isEditor && (
-            <p className="text-slate-400 text-xs mt-1">
-              Upload DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF, text, or image files up to {PLATFORM_UPLOAD_MAX_SIZE_LABEL}
-            </p>
-          )}
-        </div>
+        <EmptyState
+          size="compact"
+          title="No attachments yet"
+          description={
+            isEditor
+              ? `Upload DOC, DOCX, XLS, XLSX, PPT, PPTX, PDF, text, or image files up to ${PLATFORM_UPLOAD_MAX_SIZE_LABEL}.`
+              : 'No files are attached to this document yet.'
+          }
+          icon={<span className="text-[11px] font-semibold tracking-[0.16em]">ATT</span>}
+        />
       ) : (
         <div className="space-y-2">
           {attachments.map((attachment: Attachment) => (
@@ -147,7 +149,7 @@ export default function AttachmentsSection({ documentId, isEditor }: Attachments
                   onClick={() => {
                     void downloadAttachment(attachment)
                   }}
-                  className="p-1.5 text-sky-600 hover:bg-sky-50 rounded-lg"
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
                   title="Download"
                   disabled={downloadingAttachmentId === attachment.id}
                 >

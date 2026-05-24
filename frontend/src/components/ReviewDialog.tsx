@@ -94,8 +94,8 @@ const SECTION_TONE_META: Record<
   },
   suggested: {
     label: 'Suggestion',
-    pillClassName: 'bg-sky-100 text-sky-700',
-    cardClassName: 'border-sky-200 bg-sky-50/80',
+    pillClassName: 'bg-blue-100 text-blue-700',
+    cardClassName: 'border-blue-200 bg-blue-50/80',
     bodyClassName: 'review-section-body review-section-body--suggested',
   },
 };
@@ -289,8 +289,8 @@ function SectionReader({
       </div>
 
       {note ? (
-        <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
+        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
             Reviewer Suggestion
           </p>
           <p className="mt-2 whitespace-pre-wrap">{note}</p>
@@ -817,7 +817,7 @@ export default function ReviewDialog({
             <div className="surface-muted rounded-2xl border border-slate-200 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <FileText className="mt-1 h-6 w-6 text-sky-600" />
+                  <FileText className="mt-1 h-6 w-6 text-blue-600" />
                   <div>
                     <p className="text-xl font-semibold text-slate-900">
                       {review.document?.title || `Document #${review.document_id}`}
@@ -967,7 +967,7 @@ export default function ReviewDialog({
                             }}
                             className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                               SECTION_TONE_META[tone].cardClassName
-                            } ${isActive ? 'ring-2 ring-sky-400 ring-offset-1' : ''} ${
+                            } ${isActive ? 'ring-2 ring-blue-400 ring-offset-1' : ''} ${
                               isPendingReview && stage === 'overview'
                                 ? 'cursor-default'
                                 : 'hover:shadow-sm'
@@ -1191,7 +1191,7 @@ export default function ReviewDialog({
 
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex items-start gap-3">
-                        <CheckCircle className="mt-0.5 h-4 w-4 text-sky-600" />
+                        <CheckCircle className="mt-0.5 h-4 w-4 text-blue-600" />
                         <div className="flex-1 space-y-3">
                           <div>
                             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
@@ -1199,7 +1199,7 @@ export default function ReviewDialog({
                             </p>
                             {policyQuery.isLoading ? (
                               <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-sky-600"></div>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600"></div>
                                 Loading approval checks...
                               </div>
                             ) : policyError ? (
@@ -1291,7 +1291,7 @@ export default function ReviewDialog({
                                   disabled={toggleThreadResolutionMutation.isPending}
                                   className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
                                     thread.is_resolved
-                                      ? 'border border-sky-200 text-sky-700 hover:bg-sky-50'
+                                      ? 'border border-blue-200 text-blue-700 hover:bg-blue-50'
                                       : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                                   } disabled:cursor-not-allowed disabled:opacity-60`}
                                 >
@@ -1335,26 +1335,26 @@ export default function ReviewDialog({
                         className={`rounded-2xl border p-4 ${
                           action === 'approve'
                             ? 'border-emerald-200 bg-emerald-50'
-                            : 'border-sky-200 bg-sky-50'
+                            : 'border-blue-200 bg-blue-50'
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           <AlertTriangle
                             className={`h-5 w-5 ${
-                              action === 'approve' ? 'text-emerald-600' : 'text-sky-600'
+                              action === 'approve' ? 'text-emerald-600' : 'text-blue-600'
                             }`}
                           />
                           <div>
                             <p
                               className={`font-medium ${
-                                action === 'approve' ? 'text-emerald-800' : 'text-sky-800'
+                                action === 'approve' ? 'text-emerald-800' : 'text-blue-800'
                               }`}
                             >
                               {action === 'approve' ? 'Confirm Approval' : 'Confirm Suggestions'}
                             </p>
                             <p
                               className={`mt-1 text-sm ${
-                                action === 'approve' ? 'text-emerald-700' : 'text-sky-700'
+                                action === 'approve' ? 'text-emerald-700' : 'text-blue-700'
                               }`}
                             >
                               {action === 'approve'
@@ -1458,7 +1458,7 @@ export default function ReviewDialog({
                     type="button"
                     onClick={() => handleAction('reject')}
                     disabled={isLoading}
-                    className="flex items-center gap-2 rounded-full bg-sky-100 px-4 py-2 font-medium text-sky-700 transition hover:bg-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-2 rounded-full bg-blue-100 px-4 py-2 font-medium text-blue-700 transition hover:bg-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <MessageSquare className="h-4 w-4" />
                     Suggest Changes
@@ -1494,7 +1494,7 @@ export default function ReviewDialog({
                     className={`flex items-center gap-2 rounded-full px-4 py-2 font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
                       action === 'approve'
                         ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-sky-600 hover:bg-sky-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
                     }`}
                   >
                     {isLoading ? (

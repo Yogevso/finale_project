@@ -36,7 +36,7 @@ export function PublicDocumentsSidebar({
           <div
             className={`flex items-center gap-2 rounded-xl transition-colors ${
               isSelected
-                ? 'bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
                 : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
             style={{ paddingLeft: `${0.75 + level * 0.8}rem` }}
@@ -83,7 +83,7 @@ export function PublicDocumentsSidebar({
     })
 
   return (
-    <aside className="flex-shrink-0 lg:sticky lg:top-6 lg:w-72 lg:self-start">
+    <aside className="flex-shrink-0 lg:w-72 lg:self-start">
       <form onSubmit={onSearchSubmit} className="mb-6">
         <div className="relative">
           <input
@@ -113,7 +113,7 @@ export function PublicDocumentsSidebar({
               onClick={() => onCategoryClick(null)}
               className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition-colors ${
                 !activeCategory
-                  ? 'bg-sky-50 font-medium text-sky-800 dark:bg-sky-950/40 dark:text-sky-200'
+                  ? 'bg-blue-50 font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200'
                   : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
             >

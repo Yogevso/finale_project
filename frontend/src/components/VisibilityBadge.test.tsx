@@ -16,7 +16,7 @@ describe('VisibilityBadge', () => {
     const clientBadge = screen.getByTitle('Visible to assigned client companies + staff')
 
     expect(companyBadge).toHaveClass('bg-amber-50')
-    expect(clientBadge).toHaveClass('bg-sky-50')
+    expect(clientBadge).toHaveClass('bg-blue-50')
 
     const companyIconMarkup = companyBadge.querySelector('svg')?.innerHTML
     const clientIconMarkup = clientBadge.querySelector('svg')?.innerHTML

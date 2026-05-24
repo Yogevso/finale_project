@@ -17,7 +17,7 @@ export function DocumentsEmptyState({
 }: DocumentsEmptyStateProps) {
   return (
     <div className="surface-card rounded-3xl border border-slate-200 p-10 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-700">
         {hasActiveFilters ? (
           <FileSearch className="h-7 w-7" />
         ) : (

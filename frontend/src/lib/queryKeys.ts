@@ -63,9 +63,14 @@ export const queryKeys = {
 
   reviews: {
     all: ['reviews'] as const,
-    pending: (params?: { page?: number; per_page?: number }) =>
+    pending: (params?: { page?: number; per_page?: number; document_id?: number }) =>
       ['reviews', 'pending', params ?? {}] as const,
-    mySubmissions: (params?: { page?: number; per_page?: number; status?: string }) =>
+    mySubmissions: (params?: {
+      page?: number
+      per_page?: number
+      status?: string
+      document_id?: number
+    }) =>
       ['reviews', 'my-submissions', params ?? {}] as const,
     byDocument: (documentId: QueryEntityId, params?: { page?: number; per_page?: number }) =>
       ['reviews', 'document', normalizeId(documentId), params ?? {}] as const,

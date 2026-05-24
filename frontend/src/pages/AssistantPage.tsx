@@ -315,7 +315,7 @@ export default function AssistantPage() {
                 value={searchFilter}
                 onChange={e => setSearchFilter(e.target.value)}
                 placeholder="Search chats…"
-                className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
               />
             </div>
           </div>
@@ -355,7 +355,7 @@ export default function AssistantPage() {
                       key={conv.id}
                       className={`group flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors ${
                         conv.id === chat.conversationId
-                          ? 'bg-sky-100 text-sky-700'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                       onClick={() => editingId !== conv.id && handleLoadConversation(conv.id)}
@@ -400,7 +400,7 @@ export default function AssistantPage() {
                             setEditingId(conv.id)
                             setEditTitle(conv.title)
                           }}
-                          className="btn-icon h-8 w-8 text-slate-400 hover:bg-sky-50 hover:text-sky-500"
+                          className="btn-icon h-8 w-8 text-slate-400 hover:bg-blue-50 hover:text-blue-500"
                           title="Rename conversation"
                           aria-label={`Rename ${conv.title}`}
                         >
@@ -442,7 +442,7 @@ export default function AssistantPage() {
               <PanelLeftOpen className="h-4 w-4" />
             </button>
           )}
-          <Sparkles className="h-4 w-4 text-sky-600" />
+          <Sparkles className="h-4 w-4 text-blue-600" />
           <h1 className="card-title text-sm">AI Assistant</h1>
           <span
             className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getAssistantStatusClasses(assistantHealth?.status ?? null)}`}
@@ -510,7 +510,7 @@ export default function AssistantPage() {
                 key={i}
                 type="button"
                 onClick={() => handleSend(q)}
-                className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs text-sky-700 hover:bg-sky-100 hover:border-sky-300 transition-colors"
+                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
               >
                 {q}
               </button>
@@ -609,8 +609,8 @@ function WelcomeScreen({
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-8">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100">
-        <Sparkles className="h-7 w-7 text-sky-600" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100">
+        <Sparkles className="h-7 w-7 text-blue-600" />
       </div>
 
       <div className="text-center">
@@ -650,7 +650,7 @@ function WelcomeScreen({
             key={i}
             type="button"
             onClick={() => onSuggestionClick(s)}
-            className="surface-card justify-start rounded-2xl px-4 py-3 text-left body-copy hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 transition-colors"
+            className="surface-card justify-start rounded-2xl px-4 py-3 text-left body-copy hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
           >
             {s}
           </button>

@@ -153,7 +153,7 @@ export default function ViewerDocumentPage() {
 
   if (docLoading) {
     return (
-      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-slate-900">
         <Header />
         <main className="content-shell max-w-4xl py-8">
           <div className="surface-card animate-pulse rounded-2xl p-8">
@@ -172,7 +172,7 @@ export default function ViewerDocumentPage() {
 
   if (error || !document) {
     return (
-      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-slate-900">
         <Header />
         <main className="content-shell max-w-4xl py-16">
           <NotFoundState
@@ -251,13 +251,13 @@ export default function ViewerDocumentPage() {
       className={
         isFullscreen
           ? 'fixed inset-0 animate-fade-in bg-white dark:bg-slate-950'
-          : 'min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900'
+          : 'min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-slate-900'
       }
     >
       {!isFullscreen ? (
         <Header />
       ) : (
-        <div className="flex items-center justify-between gap-4 bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 px-4 py-3 text-white shadow-lg">
+        <div className="flex items-center justify-between gap-4 bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 px-4 py-3 text-white shadow-lg">
           <button
             onClick={() => {
               const params = new URLSearchParams(location.search)
@@ -275,7 +275,7 @@ export default function ViewerDocumentPage() {
               onClick={() => applyWidth('reading')}
               className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                 contentWidth === 'reading'
-                  ? 'border-white bg-white text-sky-900'
+                  ? 'border-white bg-white text-blue-900'
                   : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
               }`}
               type="button"
@@ -286,7 +286,7 @@ export default function ViewerDocumentPage() {
               onClick={() => applyWidth('fluid')}
               className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                 contentWidth === 'fluid'
-                  ? 'border-white bg-white text-sky-900'
+                  ? 'border-white bg-white text-blue-900'
                   : 'border-white/30 bg-white/10 text-white hover:bg-white/20'
               }`}
               type="button"
@@ -305,7 +305,7 @@ export default function ViewerDocumentPage() {
         } py-8`}
       >
         <nav className="mb-6 flex items-center justify-between">
-          <Link to="/viewer" className="body-copy text-sky-600 hover:underline">
+          <Link to="/viewer" className="body-copy text-blue-600 hover:underline">
             Documents
           </Link>
           <div className="flex items-center gap-2">
@@ -329,7 +329,7 @@ export default function ViewerDocumentPage() {
 
         <div className="surface-card mb-6 rounded-2xl p-8">
           <div className="mb-4 flex items-start justify-between">
-            <span className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+            <span className="pill border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200">
               {document.category || 'General'}
             </span>
             <span className="font-mono text-sm text-slate-400 dark:text-slate-500">
@@ -381,7 +381,7 @@ export default function ViewerDocumentPage() {
             ) : selectedVersionAttachmentsLoading ? (
               <div className="flex h-[40vh] items-center justify-center">
                 <div className="body-copy text-center">
-                  <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-b-2 border-sky-600"></div>
+                  <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-b-2 border-blue-600"></div>
                   Loading version content...
                 </div>
               </div>
@@ -459,9 +459,9 @@ export default function ViewerDocumentPage() {
                   key={version.id}
                   type="button"
                   onClick={() => handleVersionSelect(version.id)}
-                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:border-sky-300 dark:hover:border-sky-700 ${
+                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:border-blue-300 dark:hover:border-blue-700 ${
                     selectedVersionId === version.id
-                      ? 'border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/40'
+                      ? 'border-blue-400 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40'
                       : version.is_published
                         ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'
                         : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
@@ -473,7 +473,7 @@ export default function ViewerDocumentPage() {
                         v{versionLabel(version)}
                       </span>
                       {selectedVersionId === version.id && (
-                        <span className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                        <span className="pill border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200">
                           Viewing
                         </span>
                       )}

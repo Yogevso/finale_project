@@ -31,7 +31,7 @@ export default function OnboardingGuideDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Welcome guide"
-        className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-sky-100 bg-white shadow-2xl"
+        className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-blue-100 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
@@ -50,7 +50,7 @@ export default function OnboardingGuideDialog({
               First-time guide
             </div>
             <h2 className="text-2xl font-display font-semibold md:text-3xl">{config.title}</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50 md:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-50 md:text-base">
               {config.description}
             </p>
           </div>
@@ -69,7 +69,7 @@ export default function OnboardingGuideDialog({
                     className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4"
                   >
                     <div className="flex items-center gap-2 text-slate-900">
-                      <BookOpen className="h-4 w-4 text-sky-600" />
+                      <BookOpen className="h-4 w-4 text-blue-600" />
                       <h4 className="text-sm font-semibold">{card.title}</h4>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>

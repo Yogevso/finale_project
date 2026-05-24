@@ -140,7 +140,7 @@ export default function CustomerDocumentsPage() {
             <button
               type="button"
               onClick={clearAllFilters}
-            className="body-copy flex w-full items-center justify-center gap-1 font-medium text-sky-600 hover:text-sky-700"
+            className="body-copy flex w-full items-center justify-center gap-1 font-medium text-blue-600 hover:text-blue-700"
             >
               <X className="h-3.5 w-3.5" />
               Clear all filters
@@ -260,7 +260,7 @@ export default function CustomerDocumentsPage() {
                 onClick={() => setViewMode('grid')}
                 className={`p-2 ${
                   viewMode === 'grid'
-                    ? 'bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-200'
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-200'
                     : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
                 }`}
                 aria-label="Grid view"
@@ -272,7 +272,7 @@ export default function CustomerDocumentsPage() {
                 onClick={() => setViewMode('list')}
                 className={`p-2 ${
                   viewMode === 'list'
-                    ? 'bg-sky-100 text-sky-600 dark:bg-sky-950/50 dark:text-sky-200'
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/50 dark:text-blue-200'
                     : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
                 }`}
                 aria-label="List view"
@@ -311,7 +311,7 @@ export default function CustomerDocumentsPage() {
                   className="surface-card-hover rounded-2xl p-5"
                 >
                   <div className="flex items-start">
-                    <FileText className="h-10 w-10 text-sky-500 flex-shrink-0" />
+                    <FileText className="h-10 w-10 text-blue-500 flex-shrink-0" />
                     <div className="ml-4 flex-1 min-w-0">
                       <h3 className="card-title truncate">{doc.title}</h3>
                       {doc.description && (
@@ -340,7 +340,7 @@ export default function CustomerDocumentsPage() {
                   className="block p-4 hover:bg-slate-50 dark:hover:bg-slate-800/70"
                 >
                   <div className="flex items-center">
-                    <FileText className="h-8 w-8 text-sky-500 flex-shrink-0" />
+                    <FileText className="h-8 w-8 text-blue-500 flex-shrink-0" />
                     <div className="ml-4 flex-1 min-w-0">
                       <h3 className="card-title">{doc.title}</h3>
                       {doc.description && <p className="helper-copy truncate">{doc.description}</p>}
@@ -425,12 +425,12 @@ function FacetSection({
               onClick={() => onSelect(selected === item.name ? null : item.name)}
               className={`w-full text-left px-2 py-1.5 rounded-lg text-sm flex items-center justify-between transition-colors ${
                 selected === item.name
-                  ? 'bg-sky-100 text-sky-700 font-medium dark:bg-sky-950/50 dark:text-sky-200'
+                  ? 'bg-blue-100 text-blue-700 font-medium dark:bg-blue-950/50 dark:text-blue-200'
                   : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
               }`}
             >
               <span className="truncate">{item.name}</span>
-              <span className={`ml-2 flex-shrink-0 text-xs ${selected === item.name ? 'text-sky-500 dark:text-sky-300' : 'text-slate-400 dark:text-slate-500'}`}>
+              <span className={`ml-2 flex-shrink-0 text-xs ${selected === item.name ? 'text-blue-500 dark:text-blue-300' : 'text-slate-400 dark:text-slate-500'}`}>
                 {item.count}
               </span>
             </button>
@@ -443,12 +443,12 @@ function FacetSection({
 
 function FilterPill({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-sky-100 px-3 py-1 text-sm text-sky-700 dark:bg-sky-950/50 dark:text-sky-200">
+    <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-700 dark:bg-blue-950/50 dark:text-blue-200">
       {label}
       <button
         type="button"
         onClick={onRemove}
-        className="ml-2 hover:text-sky-900 dark:hover:text-sky-100"
+        className="ml-2 hover:text-blue-900 dark:hover:text-blue-100"
         aria-label={`Remove filter ${label}`}
       >
         &times;

@@ -259,7 +259,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
 
   return (
     <div
-      className={`border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 ${isDragging ? 'ring-2 ring-sky-400 ring-inset bg-sky-50' : ''}`}
+      className={`border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 ${isDragging ? 'ring-2 ring-blue-400 ring-inset bg-blue-50' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -280,9 +280,9 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
       {isLoading && (
         <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
           <span className="flex gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
           </span>
           AI is typing…
         </div>
@@ -294,14 +294,14 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
           {attachedDocs.map(doc => (
             <span
               key={`doc-${doc.id}`}
-              className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-xs text-sky-700"
+              className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs text-blue-700"
             >
               <FileText className="h-3 w-3" />
               {doc.title.slice(0, 30)}{doc.title.length > 30 ? '…' : ''}
               <button
                 type="button"
                 onClick={() => setAttachedDocs(prev => prev.filter(d => d.id !== doc.id))}
-                className="ml-0.5 text-sky-400 hover:text-sky-600"
+                className="ml-0.5 text-blue-400 hover:text-blue-600"
               >
                 ×
               </button>
@@ -335,8 +335,8 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
                 key={cmd.cmd}
                 type="button"
                 onClick={() => { setText(cmd.cmd + ' '); setSlashSearch(null) }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sky-50 ${
-                  i === slashIdx ? 'bg-sky-50 text-sky-700' : 'text-slate-600'
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-50 ${
+                  i === slashIdx ? 'bg-blue-50 text-blue-700' : 'text-slate-600'
                 }`}
               >
                 <span className="font-mono text-xs font-medium">{cmd.cmd}</span>
@@ -354,8 +354,8 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
                 key={doc.id}
                 type="button"
                 onClick={() => insertMention(doc)}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sky-50 ${
-                  i === mentionIdx ? 'bg-sky-50 text-sky-700' : 'text-slate-600'
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-blue-50 ${
+                  i === mentionIdx ? 'bg-blue-50 text-blue-700' : 'text-slate-600'
                 }`}
               >
                 <FileText className="h-4 w-4 text-slate-400 shrink-0" />
@@ -376,7 +376,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
             title="Attach a file"
           >
             {uploadingFile ? (
-              <span className="h-4 w-4 border-2 border-slate-300 border-t-sky-500 rounded-full animate-spin" />
+              <span className="h-4 w-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
             ) : (
               <Paperclip className="h-4 w-4" />
             )}
@@ -390,7 +390,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
             placeholder="Type a message… (@ mention docs, attach files, / for commands)"
             rows={1}
             disabled={disabled}
-            className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-400 outline-none disabled:opacity-50 max-h-[200px]"
+            className="flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none disabled:opacity-50 max-h-[200px]"
           />
 
           {isLoading ? (
@@ -407,7 +407,7 @@ export default function AssistantInput({ onSend, onCancel, isLoading, disabled, 
               type="button"
               onClick={handleSubmit}
               disabled={!text.trim() || disabled}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title="Send message"
             >
               <Send className="h-4 w-4" />

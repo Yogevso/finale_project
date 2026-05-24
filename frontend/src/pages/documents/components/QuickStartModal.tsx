@@ -36,7 +36,7 @@ export function QuickStartModal({ onClose, onCreate, onUpload }: QuickStartModal
           Choose how you would like to create your document.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button type="button" onClick={onUpload} className="surface-card-hover rounded-2xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+          <button type="button" onClick={onUpload} className="surface-card-hover rounded-2xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
             <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
               <Upload className="h-6 w-6" />
             </div>
@@ -44,8 +44,8 @@ export function QuickStartModal({ onClose, onCreate, onUpload }: QuickStartModal
             <p className="body-copy mt-2">Upload a PDF, Word, or PowerPoint file and generate a working draft.</p>
             <p className="mt-3 text-sm text-slate-500">Best for existing policies, presentations, and source files.</p>
           </button>
-          <button type="button" onClick={onCreate} className="surface-card-hover rounded-2xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
-            <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+          <button type="button" onClick={onCreate} className="surface-card-hover rounded-2xl p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
               <FilePlus className="h-6 w-6" />
             </div>
             <div className="card-title text-lg">From Scratch</div>

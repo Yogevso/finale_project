@@ -10,9 +10,10 @@ import type { DocumentWatchStatus } from '@/types'
 interface EngagementBarProps {
   documentId: number
   scrollProgress?: number // Real-time scroll progress from document preview
+  isRevamp?: boolean
 }
 
-export default function EngagementBar({ documentId, scrollProgress }: EngagementBarProps) {
+export default function EngagementBar({ documentId, scrollProgress, isRevamp = false }: EngagementBarProps) {
   const queryClient = useQueryClient()
   const lastSavedProgress = useRef<number>(0)
   const { isCustomer, isInternal } = useAuth()
@@ -122,8 +123,14 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
     : (progress?.progress_percent || 0)
 
   return (
-    <div className="document-detail-engagement bg-white rounded-xl shadow-sm border p-4 mb-6">
-      <div className="flex flex-wrap items-center gap-6">
+    <div
+      className={`document-detail-engagement border bg-white ${
+        isRevamp
+          ? 'rounded-2xl px-4 py-3 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.35)]'
+          : 'mb-6 rounded-xl p-4 shadow-sm'
+      }`}
+    >
+      <div className={`flex flex-wrap items-center ${isRevamp ? 'gap-3' : 'gap-6'}`}>
         {/* Bookmark */}
         {isCustomer && (
           <button
@@ -148,7 +155,7 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
             disabled={toggleWatch.isPending}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
               watchStatus?.is_watching
-                ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
                 : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
             aria-pressed={watchStatus?.is_watching ?? false}
@@ -172,13 +179,13 @@ export default function EngagementBar({ documentId, scrollProgress }: Engagement
               <div className="w-32 h-2.5 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
-                    displayProgress >= 100 ? 'bg-emerald-500' : 'bg-sky-500'
+                    displayProgress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'
                   }`}
                   style={{ width: `${displayProgress}%` }}
                 />
               </div>
               <span className={`text-sm font-medium min-w-[3rem] ${
-                displayProgress >= 100 ? 'text-emerald-600' : 'text-sky-600'
+                displayProgress >= 100 ? 'text-emerald-600' : 'text-blue-600'
               }`}>
                 {Math.round(displayProgress)}%
               </span>

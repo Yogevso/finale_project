@@ -63,11 +63,11 @@ export function PublicDocumentsResults({
                 className="surface-card-hover group rounded-2xl p-6"
               >
                 <div className="flex items-start gap-4">
-                  <div className="rounded-xl bg-sky-100 p-3 dark:bg-sky-950/40">
-                    <FileText className="h-6 w-6 text-sky-700" aria-hidden="true" />
+                  <div className="rounded-xl bg-blue-100 p-3 dark:bg-blue-950/40">
+                    <FileText className="h-6 w-6 text-blue-700" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="card-title truncate group-hover:text-sky-700">{doc.title}</h3>
+                    <h3 className="card-title truncate group-hover:text-blue-700">{doc.title}</h3>
                     <p className="helper-copy mt-1">{doc.document_number}</p>
                     <p className="body-copy mt-2 line-clamp-2">{doc.description || 'No description'}</p>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -107,10 +107,10 @@ export function PublicDocumentsResults({
                 className="group block rounded-2xl p-4 surface-card-hover"
               >
                 <div className="flex items-center gap-4">
-                  <FileText className="h-8 w-8 flex-shrink-0 text-sky-700" aria-hidden="true" />
+                  <FileText className="h-8 w-8 flex-shrink-0 text-blue-700" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="card-title group-hover:text-sky-700">{doc.title}</h3>
+                      <h3 className="card-title group-hover:text-blue-700">{doc.title}</h3>
                       <span className="helper-copy">{doc.document_number}</span>
                     </div>
                     <p className="body-copy truncate">{doc.description || 'No description'}</p>

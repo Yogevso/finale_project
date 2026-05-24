@@ -47,7 +47,7 @@ export function CollaborationStatus({
             {onRetry && (
               <button
                 onClick={onRetry}
-                className="text-xs text-sky-600 hover:text-sky-700 underline ml-1"
+                className="text-xs text-blue-600 hover:text-blue-700 underline ml-1"
               >
                 Retry
               </button>
@@ -56,8 +56,8 @@ export function CollaborationStatus({
         )}
 
         {isConnected && !isSynced && (
-          <div className="flex items-center gap-1.5 text-sky-600">
-            <div className="sync-status-pulse h-2 w-2 rounded-full bg-sky-500" />
+          <div className="flex items-center gap-1.5 text-blue-600">
+            <div className="sync-status-pulse h-2 w-2 rounded-full bg-blue-500" />
             <span className="text-xs">Syncing...</span>
           </div>
         )}

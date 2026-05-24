@@ -180,7 +180,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-slate-900 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-500">Skip to main content</a>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-slate-900 focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Skip to main content</a>
       <div id="main-content" className="w-full max-w-md">
         <div className="surface-card animate-fade-in rounded-2xl p-8 dark:bg-slate-900">
           <div className="text-center mb-8">
@@ -228,7 +228,7 @@ export default function LoginPage() {
                     setForgotError('')
                     setForgotMessage('')
                   }}
-                  className="text-xs text-sky-700 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+                  className="text-xs text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                 >
                   Forgot password?
                 </button>
@@ -254,7 +254,7 @@ export default function LoginPage() {
                 checked={rememberUsername}
                 onChange={(event) => setRememberUsername(event.target.checked)}
                 aria-label="Remember me on this device"
-                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
               Remember me on this device
             </label>
@@ -335,7 +335,7 @@ export default function LoginPage() {
                 onClick={() => { setUsername('manager'); setPassword('manager123'); setTimeout(() => document.querySelector('form')?.requestSubmit(), 100); }}
                 className="p-2 surface-muted rounded-xl text-center hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-300"
               >
-                <div className="font-medium text-sky-700">Manager</div>
+                <div className="font-medium text-blue-700">Manager</div>
                 <div className="text-slate-500">manager / manager123</div>
               </button>
               <button

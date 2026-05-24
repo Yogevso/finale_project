@@ -46,7 +46,7 @@ function CollaboratorAvatar({
       onMouseLeave={() => setShowTooltip(false)}
     >
       <div
-        className={`relative rounded-full flex items-center justify-center font-medium text-white ring-2 ring-white transition-transform hover:scale-110 cursor-pointer ${sizeClasses[size]} ${isCurrentUser ? 'ring-sky-500' : ''}`}
+        className={`relative rounded-full flex items-center justify-center font-medium text-white ring-2 ring-white transition-transform hover:scale-110 cursor-pointer ${sizeClasses[size]} ${isCurrentUser ? 'ring-blue-500' : ''}`}
         style={{ backgroundColor: collaborator.color }}
       >
         {initial}

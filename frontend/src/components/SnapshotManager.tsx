@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Check,
 } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/api'
 import { formatDistanceToNow, format } from 'date-fns'
 import { reportRuntimeError } from '@/lib/runtimeReporter'
@@ -77,7 +78,7 @@ function getSnapshotTypeColor(type: string): string {
     case 'auto_save':
       return 'bg-slate-100 text-slate-700'
     case 'manual_save':
-      return 'bg-sky-100 text-sky-700'
+      return 'bg-blue-100 text-blue-700'
     case 'session_end':
       return 'bg-amber-100 text-amber-700'
     case 'pre_publish':
@@ -216,7 +217,7 @@ export function SnapshotManager({
                 handleCreateSnapshot()
               }}
               disabled={creating}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-sky-600 text-white rounded-lg hover:bg-sky-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               title="Create snapshot"
             >
               {creating ? (
@@ -265,12 +266,18 @@ export function SnapshotManager({
               <span className="text-sm">Loading snapshots...</span>
             </div>
           ) : snapshots.length === 0 ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
-              <History className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-              <p>No snapshots yet</p>
-              {canEdit && (
-                <p className="text-xs mt-1">Click "Save" to create your first snapshot</p>
-              )}
+            <div className="p-3">
+              <EmptyState
+                tone="info"
+                size="compact"
+                title="No snapshots yet"
+                description={
+                  canEdit
+                    ? 'Click "Save" to capture the first point-in-time snapshot.'
+                    : 'Snapshots will appear here once editors create them.'
+                }
+                icon={<History className="h-5 w-5" aria-hidden="true" />}
+              />
             </div>
           ) : (
             snapshots.map((snapshot) => (
@@ -282,7 +289,7 @@ export function SnapshotManager({
                         {snapshot.name || 'Untitled'}
                       </span>
                       {snapshot.is_pinned && (
-                        <Pin className="w-3 h-3 text-sky-500 flex-shrink-0" />
+                        <Pin className="w-3 h-3 text-blue-500 flex-shrink-0" />
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
@@ -347,7 +354,7 @@ export function SnapshotManager({
                             onClick={() => handleTogglePin(snapshot)}
                             className={`p-1.5 rounded-lg ${
                               snapshot.is_pinned
-                                ? 'text-sky-600 hover:bg-sky-50'
+                                ? 'text-blue-600 hover:bg-blue-50'
                                 : 'text-slate-500 hover:bg-slate-200'
                             }`}
                             title={snapshot.is_pinned ? 'Unpin' : 'Pin (prevent auto-delete)'}
