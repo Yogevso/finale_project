@@ -28,7 +28,7 @@ export function DocumentsQuickCreatePanel({ onCreate, onUpload }: DocumentsQuick
           onClick={onCreate}
           className="surface-card-hover rounded-2xl border border-slate-200/80 p-6 text-left"
         >
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
             <FilePlus2 className="h-6 w-6" aria-hidden="true" />
           </div>
           <div className="card-title mt-4 text-lg">New Document</div>

@@ -100,7 +100,7 @@ export default function AcceptInvitationPage() {
   // No token provided
   if (!token) {
     return (
-      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
         <div className="surface-card rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-rose-600" />
@@ -124,9 +124,9 @@ export default function AcceptInvitationPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-sky-600 animate-spin mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
           <p className="body-copy">Validating invitation...</p>
         </div>
       </div>
@@ -136,7 +136,7 @@ export default function AcceptInvitationPage() {
   // Invalid or expired invitation
   if (validationError || !invitation?.valid) {
     return (
-      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 flex items-center justify-center p-4">
+      <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
         <div className="surface-card rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-rose-600" />
@@ -159,12 +159,12 @@ export default function AcceptInvitationPage() {
   }
 
   return (
-    <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-100 flex items-center justify-center p-4">
+    <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-100 flex items-center justify-center p-4">
       <div className="surface-card rounded-2xl shadow-lg w-full max-w-lg">
         {/* Header */}
         <div className="p-6 border-b border-slate-200 text-center">
-          <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-sky-600" />
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-blue-600" />
           </div>
           <h1 className="page-title">Accept Invitation</h1>
           <p className="body-copy mt-2">
@@ -176,16 +176,16 @@ export default function AcceptInvitationPage() {
         <div className="px-6 pt-6">
           <div className="surface-muted rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-sky-600" />
+              <Mail className="w-5 h-5 text-blue-600" />
               <div>
-                <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Email</p>
+                <p className="helper-copy font-medium uppercase tracking-wide text-blue-700">Email</p>
                 <p className="body-copy text-slate-900">{invitation.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <User className="w-5 h-5 text-sky-600" />
+              <User className="w-5 h-5 text-blue-600" />
               <div>
-                <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Role</p>
+                <p className="helper-copy font-medium uppercase tracking-wide text-blue-700">Role</p>
                 <p className="body-copy text-slate-900 capitalize">
                   {invitation.role?.replace('_', ' ')}
                 </p>
@@ -193,24 +193,24 @@ export default function AcceptInvitationPage() {
             </div>
             {invitation.company_name && (
               <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-sky-600" />
+                <Building2 className="w-5 h-5 text-blue-600" />
                 <div>
-                  <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Company</p>
+                  <p className="helper-copy font-medium uppercase tracking-wide text-blue-700">Company</p>
                   <p className="body-copy text-slate-900">{invitation.company_name}</p>
                 </div>
               </div>
             )}
             {invitation.inviter_name && (
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-sky-600" />
+                <CheckCircle2 className="w-5 h-5 text-blue-600" />
                 <div>
-                  <p className="helper-copy font-medium uppercase tracking-wide text-sky-700">Invited by</p>
+                  <p className="helper-copy font-medium uppercase tracking-wide text-blue-700">Invited by</p>
                   <p className="body-copy text-slate-900">{invitation.inviter_name}</p>
                 </div>
               </div>
             )}
             {invitation.message && (
-              <div className="pt-2 border-t border-sky-200">
+              <div className="pt-2 border-t border-blue-200">
                 <p className="body-copy italic">"{invitation.message}"</p>
               </div>
             )}

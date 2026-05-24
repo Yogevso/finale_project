@@ -12,10 +12,23 @@ export default {
         body: ['var(--font-body)'],
       },
       colors: {
+        blue: {
+          50: '#EAF3FB',
+          100: '#D5E8F8',
+          200: '#B5D4F0',
+          300: '#8DBCE6',
+          400: '#5E9ED9',
+          500: '#2D82CB',
+          600: '#0077C8',
+          700: '#0068B5',
+          800: '#00508F',
+          900: '#003B6A',
+          950: '#002544',
+        },
         primary: {
-          DEFAULT: '#0369a1',
-          hover: '#075985',
-          light: '#e0f2fe',
+          DEFAULT: '#0068B5',
+          hover: '#00508F',
+          light: '#EAF3FB',
         },
         success: {
           DEFAULT: '#059669',
@@ -30,8 +43,8 @@ export default {
           light: '#fee2e2',
         },
         info: {
-          DEFAULT: '#0284c7',
-          light: '#e0f2fe',
+          DEFAULT: '#0077C8',
+          light: '#EAF3FB',
         },
         slate: {
           50: '#f8fafc',

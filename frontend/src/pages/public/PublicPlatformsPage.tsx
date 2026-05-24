@@ -58,7 +58,7 @@ export default function PublicPlatformsPage() {
 
   return (
     <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-9">
           <div className="max-w-3xl">
             <div className="mb-3 text-xs uppercase tracking-widest text-slate-300">Viewer Portal</div>

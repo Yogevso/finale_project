@@ -235,7 +235,7 @@ describe('DocumentPreview state branches', () => {
       expect(screen.getByTestId('preview-canvas')).toHaveTextContent('<h1>Reader body</h1>')
     })
 
-    fireEvent.click(screen.getByRole('link', { name: 'Download Original' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Download Original' }))
 
     expect(downloadAttachmentMock).toHaveBeenCalledWith(attachment)
   })

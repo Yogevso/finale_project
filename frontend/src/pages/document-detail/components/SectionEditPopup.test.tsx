@@ -338,4 +338,69 @@ describe('DraftRecovery in SectionEditPopup', () => {
     expect(screen.queryByText(/concurrent edits detected/i)).not.toBeInTheDocument()
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('shows a professional conflict message when a pending review blocks saving', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn(
+      async (): Promise<SectionSaveResult> => {
+        throw {
+          response: {
+            status: 409,
+            data: {
+              detail: 'Cannot create a new version while a review is pending',
+            },
+          },
+        }
+      },
+    )
+
+    render(
+      <SectionEditPopup
+        documentId={42}
+        section={baseSection}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /save as draft/i }))
+
+    expect(
+      await screen.findByText(
+        'Cannot save while this document has a pending review. ' +
+          'Ask a manager/admin to resolve the current review, then try again.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('disables save actions and explains why when saving is blocked by pending review', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn(
+      async (
+        _newHtml: string,
+        _submitForReview: boolean,
+        _options?: { force?: boolean; comparisonHtml?: string },
+      ): Promise<SectionSaveResult> => ({ status: 'saved' }),
+    )
+
+    render(
+      <SectionEditPopup
+        documentId={42}
+        section={baseSection}
+        onClose={vi.fn()}
+        onSave={onSave}
+        saveDisabled
+      />,
+    )
+
+    const saveButton = screen.getByRole('button', { name: /save as draft/i })
+    expect(saveButton).toBeDisabled()
+    expect(
+      screen.getByText(/this document has a pending review\. resolve it before creating a new draft\./i),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /open reviews/i })).toHaveAttribute('href', '/reviews')
+
+    await user.click(saveButton)
+    expect(onSave).not.toHaveBeenCalled()
+  })
 })

@@ -51,14 +51,14 @@ export default function PublicHomePage() {
         description="Browse technical documentation, release notes, and guides on our documentation platform."
       />
       {/* Hero Section */}
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-16">
           <div className="max-w-4xl">
-            <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
+            <div className="text-xs uppercase tracking-widest text-blue-200 mb-3">Viewer Portal</div>
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-4">
               Documentation Platform
             </h1>
-            <p className="text-lg text-sky-100 mb-6">
+            <p className="text-lg text-blue-100 mb-6">
               Find approved documentation fast. Browse tools and release notes with role-aware access.
             </p>
 
@@ -71,13 +71,13 @@ export default function PublicHomePage() {
                     placeholder="Search docs and tools"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full rounded-full px-6 py-3.5 pl-12 text-slate-900 focus:outline-none focus:ring-4 focus:ring-sky-300/40 dark:bg-slate-950 dark:text-slate-100"
+                    className="w-full rounded-full px-6 py-3.5 pl-12 text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-300/40 dark:bg-slate-950 dark:text-slate-100"
                   />
                   <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 </div>
                 <button
                   type="submit"
-                  className="rounded-full bg-white px-6 py-3.5 font-medium text-sky-900 hover:bg-sky-50 dark:bg-slate-950 dark:text-sky-200 dark:hover:bg-slate-900"
+                  className="rounded-full bg-white px-6 py-3.5 font-medium text-blue-900 hover:bg-blue-50 dark:bg-slate-950 dark:text-blue-200 dark:hover:bg-slate-900"
                 >
                   Search
                 </button>
@@ -105,12 +105,12 @@ export default function PublicHomePage() {
               <h2 className="page-title mb-6">Start with the essentials</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Link to="/docs" className="surface-card-hover rounded-2xl p-4">
-                  <BookOpen className="h-6 w-6 text-sky-600 mb-3" />
+                  <BookOpen className="h-6 w-6 text-blue-600 mb-3" />
                   <div className="card-title">Documentation Library</div>
                   <p className="body-copy">Approved docs, release notes, and guides.</p>
                 </Link>
                 <Link to="/tools" className="surface-card-hover rounded-2xl p-4">
-                  <Wrench className="h-6 w-6 text-sky-600 mb-3" />
+                  <Wrench className="h-6 w-6 text-blue-600 mb-3" />
                   <div className="card-title">Tools</div>
                   <p className="body-copy">SDKs, APIs, and supporting resources.</p>
                 </Link>
@@ -193,8 +193,8 @@ export default function PublicHomePage() {
                 <Link key={doc.id} to={`/doc/${doc.id}?fullscreen=1`} className="surface-card-hover rounded-2xl p-6">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-sky-100 flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-sky-600" />
+                      <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
                         <div className="text-xs uppercase tracking-widest text-slate-400">Public access</div>
@@ -206,7 +206,7 @@ export default function PublicHomePage() {
                   <p className="body-copy mt-3 line-clamp-2">
                     {doc.description || 'No description available'}
                   </p>
-                  <div className="mt-4 inline-flex items-center gap-2 text-sm text-sky-700">
+                  <div className="mt-4 inline-flex items-center gap-2 text-sm text-blue-700">
                     Open document <ArrowRight className="h-4 w-4" />
                   </div>
                 </Link>

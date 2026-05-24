@@ -60,7 +60,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
 
   const roleIcon = (role: ChatParticipantRole) => {
     if (role === 'owner') return <Crown className="h-3.5 w-3.5 text-amber-500" />
-    if (role === 'admin') return <Shield className="h-3.5 w-3.5 text-sky-500" />
+    if (role === 'admin') return <Shield className="h-3.5 w-3.5 text-blue-500" />
     return null
   }
 
@@ -106,7 +106,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
               value={name}
               onChange={(e) => { setName(e.target.value); setNameChanged(true) }}
               disabled={!isAdmin}
-              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
               placeholder="Group name"
             />
             {isAdmin && nameChanged && name.trim() && (
@@ -114,7 +114,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
                 type="button"
                 onClick={() => renameMutation.mutate()}
                 disabled={renameMutation.isPending}
-                className="flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
                 Save
@@ -158,7 +158,7 @@ export default function GroupSettingsModal({ chat, onClose }: GroupSettingsModal
                     type="button"
                     onClick={() => handleRoleToggle(p)}
                     disabled={roleMutation.isPending}
-                    className="rounded-lg px-2 py-1 text-xs font-medium text-sky-600 hover:bg-sky-50 disabled:opacity-50"
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
                     title={p.role === 'admin' ? 'Demote to member' : 'Promote to admin'}
                   >
                     {p.role === 'admin' ? 'Demote' : 'Promote'}

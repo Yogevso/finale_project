@@ -19,7 +19,7 @@ export default function PageHeader({
 }: PageHeaderProps) {
   return (
     <section
-      className={`surface-card animate-fade-in rounded-2xl border border-sky-100 bg-gradient-to-r from-white via-sky-50/70 to-white px-6 py-5 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 ${className}`.trim()}
+      className={`surface-card animate-fade-in rounded-2xl border border-blue-100 bg-gradient-to-r from-white via-blue-50/70 to-white px-6 py-5 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 ${className}`.trim()}
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>

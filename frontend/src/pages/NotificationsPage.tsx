@@ -43,7 +43,7 @@ const getNotificationIcon = (notification: Pick<Notification, 'type' | 'link'>) 
   switch (notification.type) {
     case 'comment_added':
     case 'comment_reply':
-      return <MessageSquare className="w-4 h-4 text-sky-500" />
+      return <MessageSquare className="w-4 h-4 text-blue-500" />
     case 'document_created':
     case 'document_updated':
     case 'document_published':
@@ -246,7 +246,7 @@ export default function NotificationsPage() {
         title="Notifications"
         subtitle="Review updates and manage read status."
         meta={
-          <span className="pill border-sky-200 bg-sky-100 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
+          <span className="pill border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200">
             {unreadCount} unread
           </span>
         }
@@ -328,7 +328,7 @@ export default function NotificationsPage() {
                       className={`pill ${
                         notification.is_read
                           ? 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          : 'border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200'
+                          : 'border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-200'
                       }`}
                     >
                       {notification.is_read ? 'Read' : 'Unread'}

@@ -113,7 +113,7 @@ describe('ChatMessage', () => {
       isActiveResult: true,
     })
 
-    const activeEl = container.querySelector('.ring-sky-500')
+    const activeEl = container.querySelector('.ring-blue-500')
     expect(activeEl).toBeTruthy()
   })
 

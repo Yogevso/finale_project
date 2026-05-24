@@ -107,7 +107,7 @@ export function SupportReplyComposer({
                       key={cannedResponse.id}
                       type="button"
                       onClick={() => onInsertCanned(cannedResponse.content)}
-                      className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                      className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-blue-50 dark:hover:bg-blue-950/30"
                     >
                       <p className="text-xs font-medium text-gray-900 dark:text-slate-100">
                         {cannedResponse.title}

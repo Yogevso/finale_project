@@ -47,7 +47,7 @@ export default function ActionQueuePanel() {
       pending: 'bg-yellow-100 text-yellow-700',
       approved: 'bg-green-100 text-green-700',
       rejected: 'bg-red-100 text-red-700',
-      executed: 'bg-sky-100 text-sky-700',
+      executed: 'bg-blue-100 text-blue-700',
     }
     return colors[status] || 'bg-slate-100 text-slate-700'
   }

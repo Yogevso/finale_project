@@ -80,7 +80,7 @@ export default function ViewerHomePage() {
   const totalPages = data?.total_pages || 1
 
   return (
-    <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-sky-50 dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen animate-fade-in bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-950 dark:to-slate-900">
       <header className="border-b border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
         <div className="content-shell py-6">
           <div className="flex items-center justify-between">
@@ -136,7 +136,7 @@ export default function ViewerHomePage() {
             <div className="mt-4 flex items-center gap-2">
               <span className="helper-copy">Filters:</span>
               {search ? (
-                <span className="pill flex items-center gap-1 border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                <span className="pill flex items-center gap-1 border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200">
                   "{search}"
                   <button
                     type="button"
@@ -146,7 +146,7 @@ export default function ViewerHomePage() {
                       params.delete('search')
                       setSearchParams(params)
                     }}
-                    className="hover:text-sky-900 dark:hover:text-sky-100"
+                    className="hover:text-blue-900 dark:hover:text-blue-100"
                     aria-label={`Remove search filter ${search}`}
                   >
                     x
@@ -210,13 +210,13 @@ export default function ViewerHomePage() {
                 className="group surface-card-hover rounded-2xl p-6"
               >
                 <div className="mb-3 flex items-start justify-between">
-                  <span className="pill border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                  <span className="pill border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200">
                     {doc.category || 'General'}
                   </span>
                   <span className="helper-copy">{doc.document_number}</span>
                 </div>
 
-                <h2 className="card-title mb-2 line-clamp-2 transition-colors group-hover:text-sky-600">
+                <h2 className="card-title mb-2 line-clamp-2 transition-colors group-hover:text-blue-600">
                   {doc.title}
                 </h2>
 
@@ -226,7 +226,7 @@ export default function ViewerHomePage() {
 
                 <div className="mt-auto flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
                   <span className="helper-copy">Updated {new Date(doc.updated_at).toLocaleDateString()}</span>
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-sky-600 group-hover:underline">
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 group-hover:underline">
                     Read more
                     <ArrowRight className="h-4 w-4" />
                   </span>
@@ -265,7 +265,7 @@ export default function ViewerHomePage() {
                     onClick={() => handlePageChange(pageNum)}
                     className={`h-10 w-10 rounded-xl font-medium transition-colors ${
                       page === pageNum
-                        ? 'bg-sky-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'border border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
                     }`}
                     type="button"

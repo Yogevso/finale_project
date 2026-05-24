@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import OnboardingGuideDialog from '@/components/OnboardingGuideDialog'
@@ -135,8 +136,8 @@ export default function CustomerDashboard() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="surface-card rounded-2xl p-5">
             <div className="flex items-center">
-              <div className="flex-shrink-0 rounded-xl bg-sky-100 p-3 dark:bg-sky-950/50">
-                <FileText className="h-6 w-6 text-sky-600" />
+              <div className="flex-shrink-0 rounded-xl bg-blue-100 p-3 dark:bg-blue-950/50">
+                <FileText className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-4">
                 <p className="eyebrow">Total Documents</p>
@@ -195,7 +196,7 @@ export default function CustomerDashboard() {
         <div className="surface-card rounded-2xl">
           <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
             <h2 className="section-title flex items-center">
-              <PlayCircle className="mr-2 h-5 w-5 text-sky-600" />
+              <PlayCircle className="mr-2 h-5 w-5 text-blue-600" />
               Continue Reading
             </h2>
             <p className="body-copy">Pick up where you left off</p>
@@ -206,10 +207,10 @@ export default function CustomerDashboard() {
                 <Link
                   key={item.document_id}
                   to={`/portal/documents/${item.document_id}?fullscreen=1`}
-                  className="flex items-center rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-sky-700"
+                  className="flex items-center rounded-xl border border-slate-200 p-4 transition-all hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-blue-700"
                 >
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-950/40">
-                    <BookOpen className="h-6 w-6 text-sky-600" />
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/40">
+                    <BookOpen className="h-6 w-6 text-blue-600" />
                   </div>
                   <div className="ml-3 min-w-0 flex-1">
                     <h3 className="card-title truncate">{item.title}</h3>
@@ -247,7 +248,7 @@ export default function CustomerDashboard() {
                 <Link
                   key={item.document_id}
                   to={`/portal/documents/${item.document_id}?fullscreen=1`}
-                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-sky-700"
+                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-blue-300 hover:shadow-sm dark:border-slate-800 dark:hover:border-blue-700"
                 >
                   <div className="flex items-start">
                     <FileText className="h-6 w-6 flex-shrink-0 text-slate-400 dark:text-slate-500" />
@@ -287,12 +288,17 @@ export default function CustomerDashboard() {
         <div className="p-6">
           {docsLoading ? (
             <div className="flex justify-center py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-sky-600"></div>
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
             </div>
           ) : recentDocs?.items.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 dark:text-slate-400">
-              <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-              <p className="mt-2">No documents available yet</p>
+            <div className="py-3">
+              <EmptyState
+                tone="info"
+                size="compact"
+                title="No documents available yet"
+                description="Published documents for your audience will appear here."
+                icon={<FileText className="h-6 w-6" aria-hidden="true" />}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -300,7 +306,7 @@ export default function CustomerDashboard() {
                 <Link
                   key={doc.id}
                   to={`/portal/documents/${doc.id}?fullscreen=1`}
-                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-sky-300 hover:shadow-md dark:border-slate-800 dark:hover:border-sky-700"
+                  className="block rounded-xl border border-slate-200 p-4 transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:hover:border-blue-700"
                 >
                   <div className="flex items-start">
                     <FileText className="h-8 w-8 flex-shrink-0 text-slate-400 dark:text-slate-500" />
@@ -341,7 +347,7 @@ export default function CustomerDashboard() {
                 <Link
                   key={cat.category}
                   to={`/portal/documents?category=${encodeURIComponent(cat.category)}`}
-                  className="inline-flex items-center rounded-full bg-slate-100 px-4 py-2 text-slate-700 transition-colors hover:bg-sky-100 hover:text-sky-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-sky-950/50 dark:hover:text-sky-200"
+                  className="inline-flex items-center rounded-full bg-slate-100 px-4 py-2 text-slate-700 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-blue-950/50 dark:hover:text-blue-200"
                 >
                   <Folder className="mr-2 h-4 w-4" />
                   {cat.category}
@@ -360,8 +366,8 @@ export default function CustomerDashboard() {
           to="/portal/documents"
           className="surface-card-hover flex items-center rounded-2xl p-6"
         >
-          <div className="rounded-xl bg-sky-100 p-3 dark:bg-sky-950/50">
-            <FileText className="h-8 w-8 text-sky-600" />
+          <div className="rounded-xl bg-blue-100 p-3 dark:bg-blue-950/50">
+            <FileText className="h-8 w-8 text-blue-600" />
           </div>
           <div className="ml-4">
             <h3 className="card-title">

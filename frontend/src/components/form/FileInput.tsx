@@ -102,14 +102,14 @@ export function FileInput({
         className={[
           'flex w-full flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-5 py-8 text-center transition',
           isDragging
-            ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/30'
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
             : 'border-slate-300 bg-slate-50/80 hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:hover:border-slate-600',
           error ? 'border-rose-300 motion-error-shake dark:border-rose-800' : '',
           className,
         ].filter(Boolean).join(' ')}
         disabled={disabled}
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm dark:bg-slate-950 dark:text-sky-400">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-950 dark:text-blue-400">
           <Upload className="h-6 w-6" aria-hidden="true" />
         </div>
         <div>
@@ -130,7 +130,7 @@ export function FileInput({
             {selectedFiles.map((file, index) => (
               <div key={`${file.name}-${index}`} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-950/70">
                 {file.type.startsWith('image/') ? (
-                  <ImageIcon className="h-4 w-4 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+                  <ImageIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
                 ) : (
                   <FileText className="h-4 w-4 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                 )}

@@ -20,7 +20,7 @@ export function AnalyticsTabsNav({ activeTab, tabs, onTabChange }: AnalyticsTabs
                 onClick={() => onTabChange(tab.id)}
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 whitespace-nowrap ${
                   isActive
-                    ? 'border-sky-500 text-sky-600'
+                    ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}
               >

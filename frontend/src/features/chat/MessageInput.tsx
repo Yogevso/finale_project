@@ -240,13 +240,13 @@ export default function MessageInput({
           disabled={disabled || !!pendingFile}
           rows={1}
           maxLength={COMMUNICATION_INPUT_LIMITS.chatMessage}
-          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50"
+          className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={disabled || (!value.trim() && !pendingFile)}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-sky-600 text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           aria-label={pendingFile ? `Send ${pendingFile.name}` : 'Send message'}
         >
           <Send className="h-4 w-4" />

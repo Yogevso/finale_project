@@ -54,7 +54,7 @@ const statusConfig = {
 }
 
 const typeConfig = {
-  question: { label: 'Question', icon: HelpCircle, color: 'text-sky-600 dark:text-sky-300' },
+  question: { label: 'Question', icon: HelpCircle, color: 'text-blue-600 dark:text-blue-300' },
   suggestion: { label: 'Suggestion', icon: Lightbulb, color: 'text-amber-600 dark:text-amber-300' },
   issue: { label: 'Issue', icon: AlertTriangle, color: 'text-rose-600 dark:text-rose-300' },
   other: { label: 'Other', icon: MessageSquare, color: 'text-slate-600 dark:text-slate-300' },
@@ -122,7 +122,7 @@ export default function MyFeedbackPage() {
             onClick={() => setStatusFilter('')}
             className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               !statusFilter
-                ? 'bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-200'
                 : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
             type="button"
@@ -197,7 +197,7 @@ export default function MyFeedbackPage() {
                         <span className="helper-copy">-</span>
                         <Link
                           to={buildDocumentLink(item)}
-                          className="card-title truncate text-sky-600 hover:text-sky-500"
+                          className="card-title truncate text-blue-600 hover:text-blue-500"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {item.document_title}
@@ -271,7 +271,7 @@ export default function MyFeedbackPage() {
                 <p className="helper-copy">Document</p>
                 <Link
                   to={buildDocumentLink(selectedFeedback)}
-                  className="card-title mt-1 flex items-center text-sky-600 hover:text-sky-500"
+                  className="card-title mt-1 flex items-center text-blue-600 hover:text-blue-500"
                   onClick={() => setSelectedFeedback(null)}
                 >
                   <FileText className="mr-2 h-5 w-5" />
@@ -320,7 +320,7 @@ export default function MyFeedbackPage() {
               )}
 
               {selectedFeedback.ticket_id ? (
-                <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-900 dark:bg-sky-950/40">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
                   <p className="body-copy text-slate-900 dark:text-slate-100">
                     This feedback was escalated into a support conversation.
                   </p>

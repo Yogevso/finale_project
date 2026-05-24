@@ -28,7 +28,7 @@ export default function TemplateLibrary({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-        <FileStack className="h-4 w-4 text-sky-600" />
+        <FileStack className="h-4 w-4 text-blue-600" />
         Template Library
       </div>
       <p className="text-xs text-slate-500">
@@ -46,7 +46,7 @@ export default function TemplateLibrary({
               aria-label={`Use template ${template.name}`}
               className={`rounded-2xl border p-3 text-left transition-colors ${
                 isSelected
-                  ? 'border-sky-500 bg-sky-50 text-sky-900'
+                  ? 'border-blue-500 bg-blue-50 text-blue-900'
                   : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >

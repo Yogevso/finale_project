@@ -70,7 +70,7 @@ export default function PublicPlatformDetailPage() {
 
   return (
     <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-9">
           <div className="max-w-3xl">
             <div className="mb-2 text-xs uppercase tracking-widest text-slate-300">
@@ -191,7 +191,7 @@ export default function PublicPlatformDetailPage() {
                       className="public-table-row group"
                     >
                       <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">
-                        <Link to={`/doc/${doc.id}?fullscreen=1`} className="hover:text-sky-700">
+                        <Link to={`/doc/${doc.id}?fullscreen=1`} className="hover:text-blue-700">
                           {doc.title}
                         </Link>
                         <span className="ml-2 text-xs font-mono text-slate-400 dark:text-slate-500">

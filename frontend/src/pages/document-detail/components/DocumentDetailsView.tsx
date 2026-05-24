@@ -1,4 +1,5 @@
 import CompanySelector from '@/components/CompanySelector'
+import { EmptyState } from '@/components/EmptyState'
 import TagEditor from '@/components/TagEditor'
 import VisibilityBadge from '@/components/VisibilityBadge'
 import { formatDate } from '@/lib/dateUtils'
@@ -69,7 +70,7 @@ export function DocumentDetailsView({
                 document.status === 'active'
                   ? 'bg-emerald-100 text-emerald-700'
                   : document.status === 'approved'
-                    ? 'bg-sky-100 text-sky-700'
+                    ? 'bg-blue-100 text-blue-700'
                     : document.status === 'draft'
                       ? 'bg-amber-100 text-amber-700'
                       : 'bg-slate-100 text-slate-700'
@@ -143,7 +144,7 @@ export function DocumentDetailsView({
             <span
               className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${
                 audienceAccessPreview.includes_internal_users
-                  ? 'bg-sky-100 text-sky-700'
+                  ? 'bg-blue-100 text-blue-700'
                   : 'bg-slate-100 text-slate-700'
               }`}
             >
@@ -276,9 +277,17 @@ export function DocumentDetailsView({
               ))}
             </div>
           ) : (
-            <p className="body-copy">
-              No companies assigned yet. {canAssignCompanies ? 'Click "Assign Companies" to add.' : ''}
-            </p>
+            <EmptyState
+              tone="warning"
+              size="compact"
+              title="No companies assigned yet"
+              description={
+                canAssignCompanies
+                  ? 'Click "Assign Companies" to grant company-level audience access.'
+                  : 'Company assignments will appear here when configured.'
+              }
+              icon={<Building2 className="h-5 w-5" aria-hidden="true" />}
+            />
           )}
         </div>
       ) : null}

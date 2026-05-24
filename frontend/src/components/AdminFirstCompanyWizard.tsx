@@ -122,9 +122,9 @@ export default function AdminFirstCompanyWizard({
 
         <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2 text-xs text-slate-600">
-            <span className={`pill ${step >= 1 ? 'bg-sky-100 text-sky-700 border-sky-200' : ''}`}>1. Company</span>
-            <span className={`pill ${step >= 2 ? 'bg-sky-100 text-sky-700 border-sky-200' : ''}`}>2. Invite user</span>
-            <span className={`pill ${step >= 3 ? 'bg-sky-100 text-sky-700 border-sky-200' : ''}`}>3. Done</span>
+            <span className={`pill ${step >= 1 ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}`}>1. Company</span>
+            <span className={`pill ${step >= 2 ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}`}>2. Invite user</span>
+            <span className={`pill ${step >= 3 ? 'bg-blue-100 text-blue-700 border-blue-200' : ''}`}>3. Done</span>
           </div>
         </div>
 
@@ -132,7 +132,7 @@ export default function AdminFirstCompanyWizard({
           {step === 1 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-slate-900">
-                <Building2 className="h-5 w-5 text-sky-600" />
+                <Building2 className="h-5 w-5 text-blue-600" />
                 <h3 className="font-medium">Create company</h3>
               </div>
               <div className="grid gap-4">
@@ -183,7 +183,7 @@ export default function AdminFirstCompanyWizard({
           {step === 2 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-slate-900">
-                <Mail className="h-5 w-5 text-sky-600" />
+                <Mail className="h-5 w-5 text-blue-600" />
                 <h3 className="font-medium">Invite first user</h3>
               </div>
               <div className="grid gap-4">

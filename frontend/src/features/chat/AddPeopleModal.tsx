@@ -78,7 +78,7 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
               placeholder="Search users..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none"
               aria-label="Search people"
             />
           </div>
@@ -109,7 +109,7 @@ export default function AddPeopleModal({ chat, onClose }: AddPeopleModalProps) {
                   type="button"
                   onClick={() => addMutation.mutate(u.id)}
                   disabled={addMutation.isPending}
-                  className="flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-600 hover:bg-sky-100 disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:opacity-50"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   Add

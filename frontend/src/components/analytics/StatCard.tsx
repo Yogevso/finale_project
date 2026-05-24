@@ -36,8 +36,8 @@ export function StatCard({ title, value, icon: Icon, trend, subtitle, loading }:
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>
           ) : null}
         </div>
-        <div className="rounded-full bg-sky-50 p-3 dark:bg-sky-950/40">
-          <Icon className="h-6 w-6 text-sky-600 dark:text-sky-300" />
+        <div className="rounded-full bg-blue-50 p-3 dark:bg-blue-950/40">
+          <Icon className="h-6 w-6 text-blue-600 dark:text-blue-300" />
         </div>
       </div>
       {trend ? (

@@ -11,6 +11,8 @@ interface ErrorStateProps {
   className?: string
   retryLabel?: string
   retryLoading?: boolean
+  tone?: 'error' | 'warning' | 'info'
+  size?: 'default' | 'compact'
 }
 
 export function ErrorState({
@@ -21,19 +23,58 @@ export function ErrorState({
   className = '',
   retryLabel,
   retryLoading = false,
+  tone = 'error',
+  size = 'default',
 }: ErrorStateProps) {
+  const compact = size === 'compact'
+
   return (
     <div
       role="alert"
-      className={['rounded-3xl border border-rose-200 bg-rose-50/90 p-8 text-center text-rose-900 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-100', className].filter(Boolean).join(' ')}
+      className={[
+        'state-card',
+        `state-card--${tone}`,
+        compact ? 'state-card--compact' : 'state-card--default',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/80 text-rose-600 shadow-sm dark:bg-rose-900/50 dark:text-rose-200">
+      <div
+        className={[
+          'state-icon',
+          `state-icon--${tone}`,
+          compact ? 'state-icon--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         {icon ?? <AlertCircle className="h-7 w-7" aria-hidden="true" />}
       </div>
-      <h2 className="mt-4 text-xl font-semibold">{title}</h2>
-      <p className="mt-2 text-sm text-rose-700 dark:text-rose-200/85">{message}</p>
+      <h2
+        className={[
+          'state-title',
+          `state-title--${tone}`,
+          compact ? 'state-title--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {title}
+      </h2>
+      <p
+        className={[
+          'state-copy',
+          `state-copy--${tone}`,
+          compact ? 'state-copy--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {message}
+      </p>
       {onRetry ? (
-        <div className="mt-6 flex justify-center">
+        <div className={['state-actions', compact ? 'state-actions--compact' : ''].filter(Boolean).join(' ')}>
           <RetryButton loading={retryLoading} onClick={onRetry} label={retryLabel} />
         </div>
       ) : null}

@@ -17,14 +17,14 @@ export default function PublicDocumentsPage() {
         description="Explore approved documentation, release notes, and technical guides."
       />
 
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-14">
           <div className="max-w-3xl">
             <div className="mb-3 text-xs uppercase tracking-widest text-white/85">
               Viewer Portal
             </div>
             <h1 className="mb-3 text-4xl font-display font-bold">Documentation Library</h1>
-            <p className="text-sky-100">
+            <p className="text-blue-100">
               Explore approved documentation, release notes, and technical guides curated by the
               docs team.
             </p>

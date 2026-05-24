@@ -128,7 +128,7 @@ export function HelpPanel({ isEditor, onClose }: HelpPanelProps) {
               const Icon = item.icon
               return (
                 <li key={item.label} className="flex gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                     <Icon className="h-4 w-4" />
                   </div>
                   <div>

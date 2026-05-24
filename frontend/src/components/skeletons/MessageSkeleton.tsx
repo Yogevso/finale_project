@@ -32,7 +32,7 @@ export function MessageSkeleton({
               <div
                 className={`rounded-3xl px-4 py-4 ${
                   isOwn
-                    ? 'bg-sky-100 dark:bg-sky-950/50'
+                    ? 'bg-blue-100 dark:bg-blue-950/50'
                     : 'bg-white dark:bg-slate-900'
                 }`}
               >

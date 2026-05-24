@@ -97,7 +97,7 @@ export default function VersionComparePage() {
     return (
       <div className="page-stack">
         <div className="surface-card flex animate-fade-in flex-col items-center justify-center gap-3 rounded-2xl p-12 text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-sky-600" />
+          <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-blue-600" />
           <p className="body-copy">Loading version comparison...</p>
         </div>
       </div>
@@ -142,7 +142,7 @@ export default function VersionComparePage() {
           </>
         }
         meta={
-          <div className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
             <GitCompareArrows className="h-3.5 w-3.5" />
             {versions.length} version{versions.length === 1 ? '' : 's'} available
           </div>

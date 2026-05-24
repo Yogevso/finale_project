@@ -157,7 +157,7 @@ export default function ChatSidebar({
                 </div>
                 {globalSearchLoading ? (
                   <div className="flex items-center justify-center py-6">
-                    <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-sky-600" />
+                    <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-blue-600" />
                   </div>
                 ) : globalSearchResults && globalSearchResults.length > 0 ? (
                   globalSearchResults.map((msg) => (
@@ -211,7 +211,7 @@ function GlobalSearchResult({
   return (
     <button
       onClick={onClick}
-      className="w-full border-l-3 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-sky-50"
+      className="w-full border-l-3 border-transparent px-4 py-2.5 text-left transition-colors hover:bg-blue-50"
     >
       <div className="flex items-start gap-3">
         <div
@@ -238,7 +238,7 @@ function GlobalSearchResult({
 
 /** Color palette for avatar backgrounds based on first character */
 const AVATAR_COLORS = [
-  'bg-sky-500',
+  'bg-blue-500',
   'bg-emerald-500',
   'bg-purple-500',
   'bg-amber-500',
@@ -276,7 +276,7 @@ function ChatListEntry({
     <button
       onClick={onClick}
       className={`w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 ${
-        isActive ? 'border-l-3 border-sky-600 bg-sky-50' : 'border-l-3 border-transparent'
+        isActive ? 'border-l-3 border-blue-600 bg-blue-50' : 'border-l-3 border-transparent'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -293,7 +293,7 @@ function ChatListEntry({
               {item.display_name}
             </span>
             {timeAgo && (
-              <span className={`ml-2 flex-shrink-0 text-[11px] ${item.unread_count > 0 ? 'font-medium text-sky-600' : 'text-gray-400'}`}>
+              <span className={`ml-2 flex-shrink-0 text-[11px] ${item.unread_count > 0 ? 'font-medium text-blue-600' : 'text-gray-400'}`}>
                 {timeAgo}
               </span>
             )}
@@ -307,7 +307,7 @@ function ChatListEntry({
               <p className="text-xs text-gray-400 italic">No messages</p>
             )}
             {item.unread_count > 0 && (
-              <span className="ml-2 flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-sky-600 px-1.5 text-[10px] font-bold text-white">
+              <span className="ml-2 flex h-5 min-w-[1.25rem] flex-shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
                 {item.unread_count > 99 ? '99+' : item.unread_count}
               </span>
             )}

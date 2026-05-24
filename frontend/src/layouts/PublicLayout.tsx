@@ -17,7 +17,7 @@ export default function PublicLayout() {
       <SkipNavLink />
       {/* Zip B Style Header */}
       {!isFullscreen && (
-      <header className="sticky top-0 z-20 backdrop-blur bg-sky-100/85 border-b border-sky-200">
+      <header className="z-20 border-b border-blue-200 bg-blue-100/85 backdrop-blur">
         <div className="container mx-auto px-4 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           {/* Logo */}
           <div className="flex items-center justify-between">
@@ -53,8 +53,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
-                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
+                    ? 'bg-white text-blue-800 font-medium border border-blue-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-blue-800'
                 }`
               }
             >
@@ -65,8 +65,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
-                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
+                    ? 'bg-white text-blue-800 font-medium border border-blue-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-blue-800'
                 }`
               }
             >
@@ -77,8 +77,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
-                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
+                    ? 'bg-white text-blue-800 font-medium border border-blue-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-blue-800'
                 }`
               }
             >
@@ -89,8 +89,8 @@ export default function PublicLayout() {
               className={({ isActive }) =>
                 `px-4 py-2 rounded-full transition-colors ${
                   isActive
-                    ? 'bg-white text-sky-800 font-medium border border-sky-200'
-                    : 'text-slate-600 hover:bg-white/80 hover:text-sky-800'
+                    ? 'bg-white text-blue-800 font-medium border border-blue-200'
+                    : 'text-slate-600 hover:bg-white/80 hover:text-blue-800'
                 }`
               }
             >
@@ -127,7 +127,7 @@ export default function PublicLayout() {
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      ? 'bg-blue-100 text-blue-800 font-medium'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`
                 }
@@ -140,7 +140,7 @@ export default function PublicLayout() {
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      ? 'bg-blue-100 text-blue-800 font-medium'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`
                 }
@@ -153,7 +153,7 @@ export default function PublicLayout() {
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      ? 'bg-blue-100 text-blue-800 font-medium'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`
                 }
@@ -166,7 +166,7 @@ export default function PublicLayout() {
                 className={({ isActive }) =>
                   `block px-4 py-2 rounded-xl transition-colors ${
                     isActive
-                      ? 'bg-sky-100 text-sky-800 font-medium'
+                      ? 'bg-blue-100 text-blue-800 font-medium'
                       : 'text-slate-600 hover:bg-slate-100'
                   }`
                 }
@@ -247,17 +247,17 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/docs" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/docs" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
                     Docs Library
                   </Link>
                 </li>
                 <li>
-                  <Link to="/platforms" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/platforms" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
                     Platform History
                   </Link>
                 </li>
                 <li>
-                  <Link to="/search" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/search" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
                     Search
                   </Link>
                 </li>
@@ -267,7 +267,7 @@ export default function PublicLayout() {
               <h3 className="font-semibold text-slate-900 mb-3 font-display">Access</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <Link to="/login" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+                  <Link to="/login" className="text-slate-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
                     Login for more content
                   </Link>
                 </li>

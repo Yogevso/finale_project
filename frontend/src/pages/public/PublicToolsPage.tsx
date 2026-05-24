@@ -13,11 +13,11 @@ const tools = [
 export default function PublicToolsPage() {
   return (
     <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div className="content-shell py-12">
-          <div className="text-xs uppercase tracking-widest text-sky-200 mb-3">Viewer Portal</div>
+          <div className="text-xs uppercase tracking-widest text-blue-200 mb-3">Viewer Portal</div>
           <h1 className="text-3xl md:text-4xl font-display font-bold">Tools</h1>
-          <p className="text-sky-100 mt-3 max-w-2xl">
+          <p className="text-blue-100 mt-3 max-w-2xl">
             SDKs, APIs, and supporting resources for approved documentation.
           </p>
         </div>
@@ -33,7 +33,7 @@ export default function PublicToolsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {tools.map((tool) => (
             <div key={tool.title} className="surface-card rounded-2xl p-6">
-              <Wrench className="h-8 w-8 text-sky-500 mb-3" />
+              <Wrench className="h-8 w-8 text-blue-500 mb-3" />
               <h3 className="card-title">{tool.title}</h3>
               <p className="body-copy mt-2">{tool.description}</p>
               <div className="mt-4 flex items-center justify-between">

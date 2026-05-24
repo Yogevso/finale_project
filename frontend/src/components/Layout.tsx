@@ -104,11 +104,11 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-sky-50 text-slate-900 transition-colors dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 dark:text-slate-100">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900 transition-colors dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 dark:text-slate-100">
       <SkipNavLink />
       {/* Intel-like Header */}
       {!isFullscreen && (
-      <header ref={headerRef} className="app-shell-header sticky top-0 z-30 border-b border-sky-200 bg-sky-100/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+      <header ref={headerRef} className="app-shell-header z-30 border-b border-blue-200 bg-blue-100/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="max-w-7xl mx-auto px-4 py-4 space-y-3">
           {/* Logo + Mobile toggle */}
           <div className="flex items-center justify-between gap-3">
@@ -142,7 +142,7 @@ export default function Layout() {
             <div className="hidden md:flex flex-wrap items-center justify-end gap-3 text-sm">
               <div className="hidden lg:flex items-center gap-2">
                 <span className="text-slate-500 dark:text-slate-400">{user?.full_name}</span>
-                <span className="pill border-sky-200 bg-white capitalize dark:border-slate-700 dark:bg-slate-900">{user?.role}</span>
+                <span className="pill border-blue-200 bg-white capitalize dark:border-slate-700 dark:bg-slate-900">{user?.role}</span>
               </div>
 
               {isSystemAdmin && (
@@ -172,7 +172,7 @@ export default function Layout() {
                   className={({ isActive }) =>
                     `relative px-4 py-2 rounded-full transition-colors ${
                       isActive
-                        ? 'border border-sky-200 bg-white font-semibold text-sky-800 dark:border-slate-700 dark:bg-slate-900 dark:text-sky-300'
+                        ? 'border border-blue-200 bg-white font-semibold text-blue-800 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300'
                         : 'text-slate-600 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white'
                     }`
                   }
@@ -199,7 +199,7 @@ export default function Layout() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div ref={mobileMenuRef} className="border-t border-sky-200 bg-sky-50/90 md:hidden dark:border-slate-800 dark:bg-slate-950/95">
+          <div ref={mobileMenuRef} className="border-t border-blue-200 bg-blue-50/90 md:hidden dark:border-slate-800 dark:bg-slate-950/95">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
@@ -211,7 +211,7 @@ export default function Layout() {
                     className={({ isActive }) =>
                       `flex items-center px-4 py-2 rounded-xl transition-colors ${
                         isActive
-                          ? 'bg-white font-semibold text-sky-800 dark:bg-slate-900 dark:text-sky-300'
+                          ? 'bg-white font-semibold text-blue-800 dark:bg-slate-900 dark:text-blue-300'
                           : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900'
                       }`
                     }
@@ -264,14 +264,14 @@ export default function Layout() {
       {!isFullscreen && breadcrumbs.length > 1 && (
         <nav aria-label="Breadcrumb" className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16 pt-4">
           <ol className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-            <li><Link to="/dashboard" className="hover:text-sky-700 transition-colors">Home</Link></li>
+            <li><Link to="/dashboard" className="hover:text-blue-700 transition-colors">Home</Link></li>
             {breadcrumbs.map((crumb, i) => (
               <li key={crumb.path} className="flex items-center gap-1">
                 <ChevronRight className="h-3.5 w-3.5" />
                 {i === breadcrumbs.length - 1 ? (
                   <span aria-current="page" className="font-medium text-slate-700 dark:text-slate-200">{crumb.label}</span>
                 ) : (
-                  <Link to={crumb.path} className="hover:text-sky-700 transition-colors">{crumb.label}</Link>
+                  <Link to={crumb.path} className="hover:text-blue-700 transition-colors">{crumb.label}</Link>
                 )}
               </li>
             ))}
@@ -293,8 +293,8 @@ export default function Layout() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-400">
             <p>Developer Portal &mdash; Internal documentation workspace</p>
             <nav className="flex items-center gap-4" aria-label="Footer">
-              <Link to="/help" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Help</Link>
-              <Link to="/docs" className="hover:text-sky-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">Documentation</Link>
+              <Link to="/help" className="hover:text-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">Help</Link>
+              <Link to="/docs" className="hover:text-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">Documentation</Link>
               <span className="text-slate-300">|</span>
               <span className="text-xs">&copy; {new Date().getFullYear()} DocPortal</span>
             </nav>

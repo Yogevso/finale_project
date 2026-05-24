@@ -55,8 +55,8 @@ export function ContentSection({ params }: ContentSectionProps) {
       {contentAnalytics?.avg_review_turnaround_hours !== null && (
         <div className="bg-white rounded-xl shadow p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-sky-50 rounded-full">
-              <Clock className="w-6 h-6 text-sky-600" />
+            <div className="p-3 bg-blue-50 rounded-full">
+              <Clock className="w-6 h-6 text-blue-600" />
             </div>
             <div>
               <p className="text-sm font-medium text-slate-500">Avg. Review Turnaround</p>

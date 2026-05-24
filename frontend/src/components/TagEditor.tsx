@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Sparkles, Tag, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
+import { EmptyState } from '@/components/EmptyState'
 
 type TagEditorProps = {
   tags: string[]
@@ -84,7 +85,12 @@ export default function TagEditor({
             </span>
           ))
         ) : (
-          <p className="text-sm text-slate-500">No tags added yet.</p>
+          <EmptyState
+            size="compact"
+            title="No tags added yet"
+            description={canEdit ? 'Add tags to improve discoverability and filtering.' : undefined}
+            icon={<Tag className="h-5 w-5" aria-hidden="true" />}
+          />
         )}
       </div>
 
@@ -129,7 +135,7 @@ export default function TagEditor({
                   type="button"
                   onClick={() => addTag(suggestion)}
                   disabled={isSaving}
-                  className="rounded-full border border-sky-200 bg-white px-3 py-1 text-sm text-sky-700 transition-colors hover:bg-sky-50"
+                  className="rounded-full border border-blue-200 bg-white px-3 py-1 text-sm text-blue-700 transition-colors hover:bg-blue-50"
                 >
                   {suggestion}
                 </button>

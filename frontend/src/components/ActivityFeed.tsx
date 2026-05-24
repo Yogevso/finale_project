@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Activity,
 } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/api'
 import { formatDistanceToNow } from 'date-fns'
 import { reportRuntimeError } from '@/lib/runtimeReporter'
@@ -55,7 +56,7 @@ function getActivityIcon(type: string) {
     case 'user_left':
       return <LogOut className="w-4 h-4 text-slate-500" />
     case 'content_edited':
-      return <Edit3 className="w-4 h-4 text-sky-500" />
+      return <Edit3 className="w-4 h-4 text-blue-500" />
     case 'version_created':
       return <Save className="w-4 h-4 text-purple-500" />
     case 'comment_added':
@@ -214,7 +215,7 @@ export function ActivityFeed({
           <button
             type="button"
             onClick={fetchActivities}
-            className="mt-2 text-sm text-sky-600 hover:underline dark:text-sky-300"
+            className="mt-2 text-sm text-blue-600 hover:underline dark:text-blue-300"
           >
             Try again
           </button>
@@ -278,8 +279,14 @@ export function ActivityFeed({
           aria-relevant="additions text"
         >
           {activities.length === 0 ? (
-            <div className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
-              No activity yet
+            <div className="p-3">
+              <EmptyState
+                tone="info"
+                size="compact"
+                title="No activity yet"
+                description="Realtime collaboration activity will appear here."
+                icon={<Activity className="h-5 w-5" aria-hidden="true" />}
+              />
             </div>
           ) : (
             <>
@@ -294,7 +301,7 @@ export function ActivityFeed({
                 <button
                   type="button"
                   onClick={loadMore}
-                  className="w-full p-2 text-center text-sm text-sky-600 hover:bg-slate-50 dark:text-sky-300 dark:hover:bg-slate-800"
+                  className="w-full p-2 text-center text-sm text-blue-600 hover:bg-slate-50 dark:text-blue-300 dark:hover:bg-slate-800"
                 >
                   Load more
                 </button>

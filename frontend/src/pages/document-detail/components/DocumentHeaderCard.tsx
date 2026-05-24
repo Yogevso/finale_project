@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { DocumentStatus } from '@/types'
 import { formatDueDate } from '@/lib/documentDueDates'
 import { getDocumentDisplayTitle } from '@/lib/documentDisplay'
@@ -43,6 +44,7 @@ interface DocumentHeaderCardProps {
   onHelp?: () => void
   removedSectionsCount?: number
   onShowRemovedSections?: () => void
+  isRevamp?: boolean
 }
 
 export function DocumentHeaderCard({
@@ -73,7 +75,9 @@ export function DocumentHeaderCard({
   onHelp: _onHelp,
   removedSectionsCount: _removedSectionsCount = 0,
   onShowRemovedSections: _onShowRemovedSections,
+  isRevamp = false,
 }: DocumentHeaderCardProps) {
+  const [isCondensed, setIsCondensed] = useState(false)
   const resolvedDocumentTitle = getDocumentDisplayTitle(documentTitle)
   const headerHeroActionClassName =
     'table-action-btn inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20'
@@ -82,9 +86,42 @@ export function DocumentHeaderCard({
   const showPendingBadge = documentStatus === 'pending_review'
   const showApprovedBadge = documentStatus === 'approved'
 
+  useEffect(() => {
+    if (!isRevamp) {
+      setIsCondensed(false)
+      return
+    }
+
+    const onScroll = () => {
+      setIsCondensed(window.scrollY > 22)
+    }
+
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [isRevamp])
+
   return (
-    <div className="document-detail-header-card sticky top-0 z-30 overflow-hidden rounded-3xl bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white shadow-lg">
-      <div className="px-6 py-5 md:px-8 md:py-6">
+    <div
+      className={`document-detail-header-card overflow-hidden text-white transition-all duration-200 ${
+        isRevamp
+          ? `z-30 rounded-2xl border border-blue-200/55 bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 ${
+              isCondensed ? 'shadow-[0_10px_22px_-14px_rgba(0,59,106,0.65)]' : 'shadow-lg'
+            }`
+          : isFullscreen
+            ? 'relative rounded-3xl bg-gradient-to-br from-blue-800 via-blue-700 to-blue-600 shadow-lg'
+            : 'z-30 rounded-3xl bg-gradient-to-l from-blue-800 via-blue-700 to-blue-600 shadow-lg'
+      }`}
+    >
+      <div
+        className={`${
+          isRevamp
+            ? isCondensed
+              ? 'px-4 py-3 md:px-6 md:py-3'
+              : 'px-5 py-4 md:px-7 md:py-4'
+            : 'px-6 py-5 md:px-8 md:py-6'
+        }`}
+      >
         <div
           className={`flex flex-col gap-5 ${
             isFullscreen ? 'items-center text-center' : 'md:flex-row md:items-start md:justify-between'
@@ -94,7 +131,7 @@ export function DocumentHeaderCard({
             <button
               type="button"
               onClick={onBackToDocuments}
-              className={`helper-copy mb-2 inline-flex items-center gap-2 text-sky-100/80 hover:text-white ${
+              className={`helper-copy mb-2 inline-flex items-center gap-2 text-blue-100/80 hover:text-white ${
                 isFullscreen ? 'self-start' : ''
               }`}
             >
@@ -103,13 +140,19 @@ export function DocumentHeaderCard({
             </button>
             <h1
               className={`page-title leading-tight !text-white [overflow-wrap:anywhere] ${
-                isFullscreen ? 'max-w-5xl text-4xl md:text-5xl' : 'max-w-4xl md:text-3xl'
+                isRevamp
+                  ? isCondensed
+                    ? 'max-w-3xl text-2xl md:text-[1.8rem]'
+                    : 'max-w-4xl text-[2rem] md:text-[2.35rem]'
+                  : isFullscreen
+                    ? 'max-w-5xl text-3xl md:text-4xl'
+                    : 'max-w-4xl md:text-3xl'
               }`}
             >
               {resolvedDocumentTitle}
             </h1>
             <p
-              className={`helper-copy mt-2 flex flex-wrap items-center gap-2 text-sky-100/80 ${
+              className={`helper-copy mt-2 flex flex-wrap items-center gap-2 text-blue-100/80 ${
                 isFullscreen ? 'justify-center text-sm md:text-base' : ''
               }`}
             >

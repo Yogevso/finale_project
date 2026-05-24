@@ -688,6 +688,7 @@ async def submit_for_review(
 # ========== Get Pending Reviews ==========
 @router.get("/pending", response_model=ReviewListResponse)
 async def get_pending_reviews(
+    document_id: int | None = Query(None, ge=1),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -721,6 +722,8 @@ async def get_pending_reviews(
     )
     if current_user.role != UserRole.SYSTEM_ADMIN:
         query = query.filter(Document.tenant_id == current_user.tenant_id)
+    if document_id is not None:
+        query = query.filter(ReviewRequest.document_id == document_id)
 
     assignment_exists = (
         db.query(ReviewRequestReviewer.id)
@@ -753,6 +756,7 @@ async def get_pending_reviews(
 # ========== Get My Submissions ==========
 @router.get("/my-submissions", response_model=ReviewListResponse)
 async def get_my_submissions(
+    document_id: int | None = Query(None, ge=1),
     status_filter: Optional[ReviewStatus] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -774,6 +778,8 @@ async def get_my_submissions(
     )
     if current_user.role != UserRole.SYSTEM_ADMIN:
         query = query.filter(Document.tenant_id == current_user.tenant_id)
+    if document_id is not None:
+        query = query.filter(ReviewRequest.document_id == document_id)
 
     if status_filter:
         query = query.filter(ReviewRequest.status == status_filter)

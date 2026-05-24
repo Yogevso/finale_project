@@ -802,7 +802,7 @@ export default function SystemSetupPage() {
               </div>
             ) : null}
           </div>
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-100 lg:max-w-md">
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100 lg:max-w-md">
             Leave the password blank to keep the stored secret. Enable <span className="font-semibold">Clear stored password</span> only when you want the database override removed.
           </div>
         </div>
@@ -1060,7 +1060,7 @@ export default function SystemSetupPage() {
                           >
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                               checked={rbacPolicies[role]?.has(permission.value) || false}
                               onChange={() => togglePermission(role, permission.value)}
                             />

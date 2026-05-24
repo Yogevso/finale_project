@@ -147,7 +147,7 @@ export function ReviewsTable({
                           {activeTab === 'my-submissions' && review.status === 'rejected' && (
                             <button
                               onClick={() => onOpenReview(review)}
-                              className="inline-flex items-center rounded-full border border-sky-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sky-700 transition hover:bg-sky-50 hover:text-sky-800"
+                              className="inline-flex items-center rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-blue-700 transition hover:bg-blue-50 hover:text-blue-800"
                             >
                               Feedback
                             </button>

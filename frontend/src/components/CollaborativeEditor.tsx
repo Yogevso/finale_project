@@ -90,7 +90,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
             onBlur={() => setTimeout(() => setBlockDropdownOpen(false), 150)}
             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
               isHeadingActive
-                ? 'border-sky-300 bg-sky-50 text-sky-700'
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
                 : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
             }`}
             aria-expanded={blockDropdownOpen}
@@ -118,7 +118,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
                       setBlockDropdownOpen(false)
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
-                      isActive ? 'bg-sky-50 text-sky-700' : 'text-slate-700 hover:bg-slate-50'
+                      isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     <span className={`font-medium ${
@@ -132,7 +132,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
                       </span>
                     )}
                     {isActive && (
-                      <svg className="ml-auto h-4 w-4 text-sky-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
+                      <svg className="ml-auto h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
                     )}
                   </button>
                 )
@@ -148,7 +148,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={`px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            editor.isActive('bold') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('bold') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Bold (Ctrl+B)"
         >
@@ -158,7 +158,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('italic') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('italic') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Italic (Ctrl+I)"
         >
@@ -168,7 +168,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('underline') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('underline') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Underline (Ctrl+U)"
         >
@@ -178,7 +178,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleStrike().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('strike') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('strike') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Strikethrough"
         >
@@ -192,7 +192,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('bulletList') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('bulletList') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Bullet List"
         >
@@ -202,7 +202,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('orderedList') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('orderedList') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Numbered List"
         >
@@ -216,7 +216,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().setTextAlign('left').run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive({ textAlign: 'left' }) ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive({ textAlign: 'left' }) ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Align Left"
         >
@@ -226,7 +226,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().setTextAlign('center').run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive({ textAlign: 'center' }) ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive({ textAlign: 'center' }) ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Align Center"
         >
@@ -236,7 +236,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().setTextAlign('right').run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive({ textAlign: 'right' }) ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive({ textAlign: 'right' }) ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Align Right"
         >
@@ -250,7 +250,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('blockquote') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('blockquote') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Quote"
         >
@@ -260,7 +260,7 @@ const MenuBar = ({ editor }: { editor: ReturnType<typeof useEditor> }) => {
           type="button"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
           className={`px-2 py-1.5 rounded-lg text-sm transition-colors ${
-            editor.isActive('codeBlock') ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200' : 'text-slate-600 hover:bg-slate-200'
+            editor.isActive('codeBlock') ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'text-slate-600 hover:bg-slate-200'
           }`}
           title="Code Block"
         >

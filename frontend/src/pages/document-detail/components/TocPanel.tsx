@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { Check, ChevronDown, ChevronRight, Circle, Edit3, Link2, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Circle, Edit3, FilePlus2, Link2, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { writeText } from '@/env/clipboard'
 import { getWindowLocation } from '@/env/dom'
@@ -18,6 +18,7 @@ interface TocPanelProps {
   onEditSection: (section: TocSection) => void
   onDeleteSection?: (section: TocSection) => void
   onAddSectionAfter?: (insertAfterIndex: number) => void
+  isRevamp?: boolean
 }
 
 /** Compute hierarchical numbering like 1, 1.1, 1.2, 2, 2.1, 2.1.1 */
@@ -48,6 +49,7 @@ export function TocPanel({
   onEditSection,
   onDeleteSection,
   onAddSectionAfter,
+  isRevamp = false,
 }: TocPanelProps) {
   const [copiedSectionId, setCopiedSectionId] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
@@ -135,13 +137,19 @@ export function TocPanel({
 
   return (
     <div
-      className={`document-detail-toc-panel surface-muted rounded-none border-x-0 border-l-0 transition-all duration-300 ${
-        tocCollapsed ? 'w-10' : 'w-72'
+      className={`document-detail-toc-panel transition-all duration-300 ${
+        isRevamp
+          ? `border-r border-slate-200 bg-slate-50/75 ${tocCollapsed ? 'w-12' : 'w-80'}`
+          : `surface-muted rounded-none border-x-0 border-l-0 ${tocCollapsed ? 'w-10' : 'w-72'}`
       } h-full flex flex-col flex-shrink-0 overflow-hidden`}
       data-tour="document-toc-panel"
     >
-      <div className="sticky top-0 flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white p-3 dark:bg-slate-950">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div
+          className={`flex items-center justify-between border-b border-slate-200 p-3 dark:bg-slate-950 ${
+            isRevamp ? 'bg-slate-100/80 backdrop-blur' : 'bg-white'
+          }`}
+        >
           {!tocCollapsed && (
             <h3 className="card-title flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -181,7 +189,7 @@ export function TocPanel({
           <div className="flex flex-1 items-center justify-center overflow-hidden px-1">
             <span
               className={`block max-w-[180px] origin-center -rotate-90 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                activeSection ? 'text-sky-700' : 'text-slate-400'
+                activeSection ? 'text-blue-700' : 'text-slate-400'
               }`}
             >
               {activeSection?.text || 'Contents'}
@@ -203,7 +211,7 @@ export function TocPanel({
                   <button
                     type="button"
                     onClick={() => onEditSection(activeSection)}
-                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
                     title={`Edit ${activeSection.text}`}
                     aria-label={`Edit ${activeSection.text}`}
                   >
@@ -234,7 +242,7 @@ export function TocPanel({
                   <button
                     type="button"
                     onClick={() => void handleCopySectionLink(activeSection)}
-                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                    className="btn-icon h-7 w-7 border border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
                     title={`Copy link to ${activeSection.text}`}
                     aria-label={`Copy link to ${activeSection.text}`}
                   >
@@ -248,9 +256,30 @@ export function TocPanel({
               </div>
             ) : null}
 
-          <nav className="flex-1 h-0 overflow-y-auto p-2">
-              {sections.length === 0 ? (
-              <p className="body-copy px-2 py-2">No TOC available</p>
+          <nav className={`flex-1 h-0 overflow-y-auto ${isRevamp ? 'p-2.5' : 'p-2'}`}>
+            {sections.length === 0 ? (
+              <div className="px-2 py-2">
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/80 p-3 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                  <span className="mx-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <FilePlus2 className="h-4 w-4" />
+                  </span>
+                  <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                    No sections yet
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Add the first section to start building the outline.
+                  </p>
+                </div>
+                {isEditor && !showingReaderView && onAddSectionAfter && (
+                  <button
+                    type="button"
+                    onClick={() => onAddSectionAfter(-1)}
+                    className="mt-3 inline-flex items-center rounded-full border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-50"
+                  >
+                    Add first section
+                  </button>
+                )}
+              </div>
             ) : (
               <ul className="space-y-0.5">
                 {visibleSections.map(({ section: item, number: sectionNumber, visible }) => {
@@ -271,7 +300,7 @@ export function TocPanel({
                           <button
                             type="button"
                             onClick={() => toggleCollapse(item.id)}
-                            className="flex-shrink-0 h-6 w-5 flex items-center justify-center text-slate-400 hover:text-sky-600"
+                            className="flex-shrink-0 h-6 w-5 flex items-center justify-center text-slate-400 hover:text-blue-600"
                             title={isCollapsed ? 'Expand' : 'Collapse'}
                           >
                             {isCollapsed ? (
@@ -295,9 +324,9 @@ export function TocPanel({
                           type="button"
                           onClick={() => onSectionClick(item)}
                           title={item.text}
-                          className={`flex-1 rounded-l px-1.5 py-1.5 text-left text-[13px] leading-5 transition-colors hover:bg-sky-50 hover:text-sky-700 ${
+                          className={`flex-1 rounded-l px-1.5 py-1.5 text-left text-[13px] leading-5 transition-colors hover:bg-blue-50 hover:text-blue-700 ${
                             isActiveItem
-                              ? 'bg-sky-100 text-sky-700 font-medium dark:bg-sky-950/40 dark:text-sky-200'
+                              ? 'bg-blue-100 text-blue-700 font-medium dark:bg-blue-950/40 dark:text-blue-200'
                               : 'text-slate-600 dark:text-slate-300'
                           }`}
                           style={{ paddingLeft: `${Math.max(0, (item.level - 1) * 8)}px` }}
@@ -320,7 +349,7 @@ export function TocPanel({
                               event.stopPropagation()
                               void handleCopySectionLink(item)
                             }}
-                            className="btn-icon h-7 w-7 flex-shrink-0 border-0 bg-transparent p-0 text-sky-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sky-100 hover:text-sky-700"
+                            className="btn-icon h-7 w-7 flex-shrink-0 border-0 bg-transparent p-0 text-blue-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-blue-100 hover:text-blue-700"
                             title="Copy link to section"
                           >
                             {copiedSectionId === item.id ? (

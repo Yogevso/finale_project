@@ -84,14 +84,14 @@ function CollaborationToastItem({
   const bgColorMap = {
     join: 'bg-emerald-50 border-emerald-200',
     leave: 'bg-slate-50 border-slate-200',
-    edit: 'bg-sky-50 border-sky-200',
+    edit: 'bg-blue-50 border-blue-200',
     version: 'bg-purple-50 border-purple-200',
   }
 
   const iconColorMap = {
     join: 'text-emerald-600',
     leave: 'text-slate-600',
-    edit: 'text-sky-600',
+    edit: 'text-blue-600',
     version: 'text-purple-600',
   }
 

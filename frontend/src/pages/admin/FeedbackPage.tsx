@@ -48,7 +48,7 @@ const typeConfig: Record<FeedbackType, { label: string; icon: React.ReactNode; c
   question: {
     label: 'Question',
     icon: <HelpCircle className="w-4 h-4" />,
-    className: 'text-sky-600',
+    className: 'text-blue-600',
   },
   suggestion: {
     label: 'Suggestion',
@@ -349,7 +349,7 @@ export default function FeedbackPage() {
                   <td className="px-4 py-3">
                     <Link
                       to={`/documents/${feedback.document_id}/fullscreen`}
-                      className="flex items-center gap-1 text-sm text-sky-600 hover:text-sky-700"
+                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
                     >
                       <FileText className="w-3 h-3 flex-shrink-0" />
                       <span className="max-w-[10rem] truncate">

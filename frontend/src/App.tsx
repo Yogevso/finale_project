@@ -1,9 +1,10 @@
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { Toaster } from 'sonner'
+import { toast, Toaster } from 'sonner'
 import { CheckCircle2 } from 'lucide-react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { getHomeRouteForRole } from './config/routes'
+import SessionExpiredModal from './components/SessionExpiredModal'
 import ErrorBoundary from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
@@ -55,6 +56,7 @@ import RoleGuard, { InternalGuard, ManagerGuard } from './components/guards/Role
 import { RouteAnnouncer } from './components/a11y/SkipNavLink'
 import RouteTransition from './components/RouteTransition'
 import { useTheme } from './hooks/useTheme'
+import { AUTH_SESSION_EXPIRED_EVENT, HTTP_RETRYING_EVENT } from './lib/httpEvents'
 
 // Smart redirect based on user role
 function RoleBasedRedirect() {
@@ -63,7 +65,7 @@ function RoleBasedRedirect() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
@@ -105,17 +107,17 @@ function NotFoundPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search documentation..."
-            className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
+            className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
           />
           <button
             type="submit"
-            className="px-5 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700 font-medium"
+            className="px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium"
           >
             Search
           </button>
         </form>
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-          <a href={homePath} className="px-6 py-3 bg-sky-600 text-white rounded-xl hover:bg-sky-700">
+          <a href={homePath} className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700">
             Go Home
           </a>
           <a href="/docs" className="px-6 py-3 border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-100">
@@ -130,7 +132,7 @@ function NotFoundPage() {
 function RouteLoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-sky-600"></div>
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
     </div>
   )
 }
@@ -152,6 +154,34 @@ function RouteChangeAnnouncer() {
 
 function App() {
   const { theme } = useTheme()
+  const [sessionExpiredOpen, setSessionExpiredOpen] = useState(false)
+
+  useEffect(() => {
+    const onSessionExpired = () => setSessionExpiredOpen(true)
+    const onHttpRetrying = (event: Event) => {
+      const custom = event as CustomEvent<{
+        attempt: number
+        maxAttempts: number
+      }>
+      const attempt = custom.detail?.attempt || 1
+      const maxAttempts = custom.detail?.maxAttempts || 1
+      toast.info('Connection hiccup detected', {
+        description: `Retrying request (${attempt}/${maxAttempts})...`,
+      })
+    }
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, onSessionExpired)
+    window.addEventListener(HTTP_RETRYING_EVENT, onHttpRetrying as EventListener)
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, onSessionExpired)
+      window.removeEventListener(HTTP_RETRYING_EVENT, onHttpRetrying as EventListener)
+    }
+  }, [])
+
+  const handleSignInAgain = () => {
+    setSessionExpiredOpen(false)
+    window.location.href = '/login?session_expired=1'
+  }
 
   return (
     <AuthProvider>
@@ -171,7 +201,7 @@ function App() {
             success: 'border-emerald-200/80 dark:border-emerald-900/70',
             icon: 'motion-enter-scale',
             actionButton:
-              'bg-sky-600 text-white hover:bg-sky-500 focus-visible:ring-sky-400',
+              'bg-blue-600 text-white hover:bg-blue-500 focus-visible:ring-blue-400',
             cancelButton:
               'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800',
             closeButton:
@@ -179,6 +209,7 @@ function App() {
           },
         }}
       />
+      <SessionExpiredModal isOpen={sessionExpiredOpen} onSignInAgain={handleSignInAgain} />
       <RouteChangeAnnouncer />
       <Suspense fallback={<RouteLoadingFallback />}>
         <RouteTransition>

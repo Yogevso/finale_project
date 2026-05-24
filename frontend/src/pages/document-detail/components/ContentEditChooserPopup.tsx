@@ -35,10 +35,10 @@ export function ContentEditChooserPopup({
         tabIndex={-1}
         className="modal-content relative z-10 flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-sky-600 to-sky-700 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
           <div>
             <h2 className="section-title text-xl !text-white">Edit Content Options</h2>
-            <p className="helper-copy mt-1 !text-sky-100">
+            <p className="helper-copy mt-1 !text-blue-100">
               Choose whether to edit an existing section or insert a new one.
             </p>
           </div>
@@ -53,7 +53,7 @@ export function ContentEditChooserPopup({
         </div>
 
         <div className="space-y-6 overflow-auto p-6">
-          <section className="surface-muted border-sky-200 bg-sky-50 p-4 dark:border-sky-900/60 dark:bg-sky-950/30">
+          <section className="surface-muted border-blue-200 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/30">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h3 className="section-title text-base">Edit Entire Document</h3>

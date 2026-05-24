@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { EmptyState } from '@/components/EmptyState'
+import { ErrorState } from '@/components/ErrorState'
 import { api } from '@/lib/api'
 import {
   markAllNotificationsRead,
@@ -180,7 +182,7 @@ export default function NotificationBell() {
     switch (notification.type) {
       case 'comment_added':
       case 'comment_reply':
-        return <MessageSquare className="w-4 h-4 text-sky-500" />
+        return <MessageSquare className="w-4 h-4 text-blue-500" />
       case 'document_created':
       case 'document_updated':
       case 'document_published':
@@ -237,7 +239,7 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="motion-enter-scale absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-sky-600 px-1 text-xs font-bold text-white" aria-live="polite" role="status">
+          <span className="motion-enter-scale absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1 text-xs font-bold text-white" aria-live="polite" role="status">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -259,7 +261,7 @@ export default function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => markAllReadMutation.mutate()}
-                  className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                   disabled={isBusy}
                   aria-label="Mark all notifications as read"
                 >
@@ -282,24 +284,27 @@ export default function NotificationBell() {
           <div className="max-h-96 overflow-y-auto">
             {showSpinner ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-600"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
               </div>
             ) : !data && !isLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500 dark:text-slate-400">
-                <AlertCircle className="mb-2 h-8 w-8 text-rose-300 dark:text-rose-400" />
-                <p className="text-sm">Failed to load notifications</p>
-                <button
-                  type="button"
-                  onClick={() => void refetch()}
-                  className="mt-2 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-                >
-                  Try again
-                </button>
+              <div className="p-3">
+                <ErrorState
+                  tone="warning"
+                  size="compact"
+                  title="Failed to load notifications"
+                  message="Please try again."
+                  onRetry={() => void refetch()}
+                />
               </div>
             ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500 dark:text-slate-400">
-                <Bell className="mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" />
-                <p className="text-sm">No notifications yet</p>
+              <div className="p-3">
+                <EmptyState
+                  tone="info"
+                  size="compact"
+                  title="No notifications yet"
+                  description="Updates and alerts will appear here."
+                  icon={<Bell className="h-5 w-5" aria-hidden="true" />}
+                />
               </div>
             ) : (
               notifications.map((notification, index) => (
@@ -318,7 +323,7 @@ export default function NotificationBell() {
                   className={`motion-enter-fade flex cursor-pointer items-start gap-3 border-b border-slate-50 px-4 py-3 transition-colors dark:border-slate-800 ${
                     notification.is_read
                       ? 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/80'
-                      : 'bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/30 dark:hover:bg-sky-900/40'
+                      : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/40'
                   }`}
                 >
                   <div className="flex-shrink-0 mt-0.5">
@@ -345,7 +350,7 @@ export default function NotificationBell() {
                           e.stopPropagation()
                           markReadMutation.mutate(notification.id)
                         }}
-                        className="rounded-full p-1 text-slate-400 hover:bg-sky-50 hover:text-sky-600 dark:text-slate-500 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"
+                        className="rounded-full p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 dark:text-slate-500 dark:hover:bg-blue-950/40 dark:hover:text-blue-300"
                         title="Mark as read"
                         disabled={isBusy}
                         aria-label={`Mark notification "${notification.title}" as read`}
@@ -380,7 +385,7 @@ export default function NotificationBell() {
                 closeDropdown()
                 navigate('/notifications')
               }}
-              className="w-full text-center text-xs text-sky-600 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+              className="w-full text-center text-xs text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
             >
               See all notifications
             </button>

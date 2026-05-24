@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosHeaders, AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { TokenResponse } from '@/types'
+import { emitHttpRetrying, emitSessionExpired } from '@/lib/httpEvents'
 import { withTraceHeader } from '@/lib/requestTrace'
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
@@ -12,7 +13,14 @@ type RefreshSubscriber = {
 type MutableRequestConfig = {
   headers?: InternalAxiosRequestConfig['headers']
   url?: string
+  method?: string
+  __retryCount?: number
 }
+
+const RETRYABLE_METHODS = new Set(['get', 'head', 'options'])
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504])
+const RETRYABLE_ERROR_CODES = new Set(['ECONNABORTED', 'ERR_NETWORK', 'ETIMEDOUT'])
+const MAX_TRANSIENT_RETRIES = 1
 
 export type Constructor<T = object> = new (...args: any[]) => T
 
@@ -31,7 +39,7 @@ export class ApiHttpClient {
   private refreshToken: string | null = null
   private isRefreshing = false
   private refreshSubscribers: RefreshSubscriber[] = []
-  private hasRedirectedToLogin = false
+  private hasNotifiedSessionExpired = false
 
   constructor() {
     this.client = axios.create({
@@ -70,12 +78,26 @@ export class ApiHttpClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config
+        const originalRequest = (error.config || null) as MutableRequestConfig | null
         const requestUrl = originalRequest?.url || ''
         const isAuthFlowRequest =
           requestUrl.includes('/auth/login') ||
           requestUrl.includes('/auth/forgot-password') ||
           requestUrl.includes('/auth/refresh')
+
+        if (originalRequest && !isAuthFlowRequest && this.shouldRetryTransientError(error, originalRequest)) {
+          const currentRetryCount = originalRequest.__retryCount || 0
+          const attempt = currentRetryCount + 1
+          originalRequest.__retryCount = attempt
+          emitHttpRetrying({
+            attempt,
+            maxAttempts: MAX_TRANSIENT_RETRIES,
+            method: (originalRequest.method || 'get').toUpperCase(),
+            url: requestUrl,
+          })
+          await this.sleep(300 * attempt)
+          return this.client(originalRequest as InternalAxiosRequestConfig)
+        }
 
         if (error.response?.status === 401 && originalRequest && !isAuthFlowRequest) {
           // Try to refresh the token (in-memory refresh token OR httpOnly cookie)
@@ -90,7 +112,7 @@ export class ApiHttpClient {
             } catch (refreshError) {
               this.isRefreshing = false
               this.onRefreshFailed(refreshError)
-              this.forceLogoutAndRedirect()
+              this.forceLogoutAndNotify()
               return Promise.reject(refreshError)
             }
           } else if (this.isRefreshing) {
@@ -107,7 +129,7 @@ export class ApiHttpClient {
               )
             })
           } else {
-            this.forceLogoutAndRedirect()
+            this.forceLogoutAndNotify()
             return Promise.reject(error)
           }
         }
@@ -161,14 +183,37 @@ export class ApiHttpClient {
     this.refreshSubscribers = []
   }
 
-  private forceLogoutAndRedirect() {
+  private shouldRetryTransientError(error: AxiosError, request: MutableRequestConfig): boolean {
+    const method = (request.method || 'get').toLowerCase()
+    if (!RETRYABLE_METHODS.has(method)) {
+      return false
+    }
+
+    const currentRetryCount = request.__retryCount || 0
+    if (currentRetryCount >= MAX_TRANSIENT_RETRIES) {
+      return false
+    }
+
+    const statusCode = error.response?.status
+    if (statusCode && RETRYABLE_STATUS_CODES.has(statusCode)) {
+      return true
+    }
+
+    return !!error.code && RETRYABLE_ERROR_CODES.has(error.code)
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => globalThis.setTimeout(resolve, ms))
+  }
+
+  private forceLogoutAndNotify() {
     this.clearTokens()
-    if (typeof window === 'undefined' || this.hasRedirectedToLogin) {
+    if (typeof window === 'undefined' || this.hasNotifiedSessionExpired) {
       return
     }
-    this.hasRedirectedToLogin = true
+    this.hasNotifiedSessionExpired = true
     if (window.location.pathname !== '/login') {
-      window.location.href = '/login'
+      emitSessionExpired()
     }
   }
 
@@ -207,7 +252,7 @@ export class ApiHttpClient {
 
   setToken(token: string, refresh?: string | null) {
     this.token = token
-    this.hasRedirectedToLogin = false
+    this.hasNotifiedSessionExpired = false
     // AD-004: tokens stored in memory only — not localStorage
     if (refresh !== undefined) {
       this.refreshToken = refresh ?? null

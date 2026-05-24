@@ -25,4 +25,18 @@ describe('featureFlags', () => {
       }).optimisticConcurrencyHeaders,
     ).toBe(true)
   })
+
+  it('resolves document-view revamp flag from env', () => {
+    expect(
+      resolveFrontendFeatureFlags({
+        VITE_FF_DOCUMENT_VIEW_REVAMP: 'false',
+      }).documentViewRevamp,
+    ).toBe(false)
+
+    expect(
+      resolveFrontendFeatureFlags({
+        VITE_FF_DOCUMENT_VIEW_REVAMP: 'true',
+      }).documentViewRevamp,
+    ).toBe(true)
+  })
 })

@@ -125,11 +125,11 @@ export default function PublicDocumentPage() {
         wrapperClassName="px-4"
       />
 
-      <section className="bg-gradient-to-l from-sky-700 via-sky-600 to-sky-500 text-white">
+      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
         <div
           className={`${isFullscreen ? (contentWidth === 'reading' ? 'mx-auto max-w-5xl' : 'max-w-none') : 'content-shell max-w-5xl'} px-6 py-12`}
         >
-          <nav className="mb-5 flex flex-wrap items-center gap-2 text-sm text-sky-100/80">
+          <nav className="mb-5 flex flex-wrap items-center gap-2 text-sm text-blue-100/80">
             <Link to="/docs" className="hover:text-white">
               Home
             </Link>
@@ -142,7 +142,7 @@ export default function PublicDocumentPage() {
           </nav>
           <Link
             to="/docs"
-            className="mb-5 inline-flex items-center gap-2 text-sky-100/80 hover:text-white"
+            className="mb-5 inline-flex items-center gap-2 text-blue-100/80 hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to documents
@@ -152,12 +152,12 @@ export default function PublicDocumentPage() {
               <FileText className="h-8 w-8 text-white" />
             </div>
             <div className="flex-1">
-              <div className="text-xs uppercase tracking-widest text-sky-200">Viewer Portal</div>
+              <div className="text-xs uppercase tracking-widest text-blue-200">Viewer Portal</div>
               <h1 className="mt-2 text-3xl font-display font-bold md:text-4xl">{doc.title}</h1>
-              <p className="mt-2 text-sky-100">{doc.document_number}</p>
+              <p className="mt-2 text-blue-100">{doc.document_number}</p>
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap gap-4 text-sm text-sky-100/80">
+          <div className="mt-6 flex flex-wrap gap-4 text-sm text-blue-100/80">
             <div className="flex items-center gap-1">
               <Calendar className="h-4 w-4" />
               <span>Created {formatDate(doc.created_at)}</span>
@@ -282,7 +282,7 @@ export default function PublicDocumentPage() {
           </section>
         )}
 
-        <section className="rounded-2xl bg-sky-50 p-6 text-center dark:bg-sky-950/40">
+        <section className="rounded-2xl bg-blue-50 p-6 text-center dark:bg-blue-950/40">
           <h3 className="section-title mb-2">
             Want access to more documents?
           </h3>

@@ -77,9 +77,9 @@ export function OfflineIndicator({
           reconnectAttempt > 0
             ? `Reconnecting... (attempt ${reconnectAttempt})`
             : 'Establishing connection...',
-        color: 'text-sky-600 dark:text-sky-300',
-        bgColor: 'bg-sky-50 dark:bg-sky-950/30',
-        borderColor: 'border-sky-200 dark:border-sky-900/70',
+        color: 'text-blue-600 dark:text-blue-300',
+        bgColor: 'bg-blue-50 dark:bg-blue-950/30',
+        borderColor: 'border-blue-200 dark:border-blue-900/70',
         animate: true,
       }
     }
@@ -100,9 +100,9 @@ export function OfflineIndicator({
         icon: Cloud,
         label: 'Syncing',
         description: 'Synchronizing with server...',
-        color: 'text-sky-600 dark:text-sky-300',
-        bgColor: 'bg-sky-50 dark:bg-sky-950/30',
-        borderColor: 'border-sky-200 dark:border-sky-900/70',
+        color: 'text-blue-600 dark:text-blue-300',
+        bgColor: 'bg-blue-50 dark:bg-blue-950/30',
+        borderColor: 'border-blue-200 dark:border-blue-900/70',
         animate: true,
       }
     }
@@ -226,7 +226,7 @@ export function OfflineIndicator({
                       setShowDetails(false)
                       onReconnect()
                     }}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2 text-white transition-colors hover:bg-sky-700"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700"
                   >
                     <RefreshCw className="h-4 w-4" />
                     Reconnect Now

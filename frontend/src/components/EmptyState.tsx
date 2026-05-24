@@ -10,6 +10,8 @@ interface EmptyStateProps {
     onClick: () => void
   }
   className?: string
+  tone?: 'empty' | 'info' | 'success' | 'warning'
+  size?: 'default' | 'compact'
 }
 
 export function EmptyState({
@@ -18,20 +20,59 @@ export function EmptyState({
   description,
   action,
   className = '',
+  tone = 'empty',
+  size = 'default',
 }: EmptyStateProps) {
+  const compact = size === 'compact'
+
   return (
     <div
-      className={['rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-10 text-center dark:border-slate-700 dark:bg-slate-900/70', className].filter(Boolean).join(' ')}
+      className={[
+        'state-card',
+        `state-card--${tone}`,
+        compact ? 'state-card--compact' : 'state-card--default',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm dark:bg-slate-950 dark:text-slate-300">
+      <div
+        className={[
+          'state-icon',
+          `state-icon--${tone}`,
+          compact ? 'state-icon--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         {icon ?? <Inbox className="h-8 w-8" aria-hidden="true" />}
       </div>
-      <h2 className="mt-4 text-xl font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+      <h2
+        className={[
+          'state-title',
+          `state-title--${tone}`,
+          compact ? 'state-title--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {title}
+      </h2>
       {description ? (
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-600 dark:text-slate-400">{description}</p>
+        <p
+          className={[
+            'state-copy',
+            `state-copy--${tone}`,
+            compact ? 'state-copy--compact' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {description}
+        </p>
       ) : null}
       {action ? (
-        <div className="mt-6 flex justify-center">
+        <div className={['state-actions', compact ? 'state-actions--compact' : ''].filter(Boolean).join(' ')}>
           <button type="button" onClick={action.onClick} className="btn-primary">
             {action.label}
           </button>

@@ -5,6 +5,7 @@ import {
   Download,
   FileText,
   HelpCircle,
+  MoreHorizontal,
   RotateCcw,
   Send,
   Trash2,
@@ -30,6 +31,7 @@ interface DocumentPreviewActionsBarProps {
   onHelp?: () => void
   removedSectionsCount?: number
   onShowRemovedSections?: () => void
+  isRevamp?: boolean
 }
 
 export function DocumentPreviewActionsBar({
@@ -49,21 +51,31 @@ export function DocumentPreviewActionsBar({
   onHelp,
   removedSectionsCount = 0,
   onShowRemovedSections,
+  isRevamp = false,
 }: DocumentPreviewActionsBarProps) {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false)
 
   const actionClassName =
-    'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700'
+    'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
   const primaryClassName =
-    'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-sky-600 bg-sky-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-sky-700'
+    'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700'
   const dangerClassName =
     'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-medium text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-100 disabled:opacity-50'
+  const overflowTriggerClassName =
+    'table-action-btn inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
 
   const showWordDownload = sourceFileType === 'word' || sourceFileType === 'pdf'
   const showPptDownload = sourceFileType === 'ppt'
+  const showRemovedSectionsAction = isEditor
+  const showExportCalendarAction = Boolean(dueDate && onExportCalendar)
+  const showHelpAction = Boolean(onHelp)
+  const shouldShowOverflowMenu =
+    isRevamp && (showRemovedSectionsAction || showExportCalendarAction || showHelpAction)
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={`flex flex-wrap items-center gap-2 ${isRevamp ? 'justify-between' : ''}`}>
+      <div className="flex flex-wrap items-center gap-2">
       {onGenerateTranscript && (
         <button
           type="button"
@@ -102,7 +114,7 @@ export function DocumentPreviewActionsBar({
                     setShowDownloadMenu(false)
                     onDownloadAs('pdf')
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                 >
                   PDF
                 </button>
@@ -113,7 +125,7 @@ export function DocumentPreviewActionsBar({
                       setShowDownloadMenu(false)
                       onDownloadAs('word')
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                   >
                     Word (.docx)
                   </button>
@@ -125,7 +137,7 @@ export function DocumentPreviewActionsBar({
                       setShowDownloadMenu(false)
                       onDownloadAs('ppt')
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-sky-50 hover:text-sky-700"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                   >
                     PowerPoint (.pptx)
                   </button>
@@ -164,32 +176,34 @@ export function DocumentPreviewActionsBar({
           <button type="button" onClick={onEditAction} className={actionClassName}>
             Edit Document
           </button>
-          <button
-            type="button"
-            onClick={documentStatus === 'archived' ? onRestore : (onShowRemovedSections ?? onArchive)}
-            className={actionClassName}
-          >
-            {documentStatus === 'archived' ? (
-              <>
-                <RotateCcw className="h-4 w-4" />
-                Restore
-              </>
-            ) : (
-              <>
-                <Trash2 className="h-4 w-4" />
-                Removed Sections
-                {removedSectionsCount > 0 && (
-                  <span className="ml-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
-                    {removedSectionsCount}
-                  </span>
-                )}
-              </>
-            )}
-          </button>
+          {!isRevamp && (
+            <button
+              type="button"
+              onClick={documentStatus === 'archived' ? onRestore : (onShowRemovedSections ?? onArchive)}
+              className={actionClassName}
+            >
+              {documentStatus === 'archived' ? (
+                <>
+                  <RotateCcw className="h-4 w-4" />
+                  Restore
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Removed Sections
+                  {removedSectionsCount > 0 && (
+                    <span className="ml-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
+                      {removedSectionsCount}
+                    </span>
+                  )}
+                </>
+              )}
+            </button>
+          )}
         </>
       ) : null}
 
-      {dueDate && onExportCalendar ? (
+      {!isRevamp && dueDate && onExportCalendar ? (
         <button
           type="button"
           onClick={onExportCalendar}
@@ -201,13 +215,99 @@ export function DocumentPreviewActionsBar({
         </button>
       ) : null}
 
-      {onHelp && (
+      {!isRevamp && onHelp && (
         <button type="button" onClick={onHelp} className={actionClassName} title="Help">
           <HelpCircle className="h-4 w-4" />
           Help
         </button>
       )}
+      </div>
+
+      {shouldShowOverflowMenu && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowOverflowMenu((previous) => !previous)}
+            className={overflowTriggerClassName}
+            aria-haspopup="menu"
+            aria-expanded={showOverflowMenu}
+            title="More actions"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+            More
+          </button>
+          {showOverflowMenu && (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-40 bg-transparent"
+                onClick={() => setShowOverflowMenu(false)}
+                aria-label="Close actions menu"
+              />
+              <div className="absolute right-0 top-full z-50 mt-1 min-w-[15rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                {showRemovedSectionsAction ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOverflowMenu(false)
+                      if (documentStatus === 'archived') {
+                        onRestore()
+                        return
+                      }
+                      const openRemovedSections = onShowRemovedSections ?? onArchive
+                      openRemovedSections()
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  >
+                    {documentStatus === 'archived' ? (
+                      <>
+                        <RotateCcw className="h-4 w-4" />
+                        Restore
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Removed Sections
+                        {removedSectionsCount > 0 && (
+                          <span className="ml-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
+                            {removedSectionsCount}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                ) : null}
+                {showExportCalendarAction ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOverflowMenu(false)
+                      onExportCalendar?.()
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Export iCal
+                  </button>
+                ) : null}
+                {showHelpAction ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowOverflowMenu(false)
+                      onHelp?.()
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    Help
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
-

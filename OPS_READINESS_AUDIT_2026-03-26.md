@@ -16,13 +16,13 @@ This is the right follow-up audit after the codebase-level excellence work reach
 
 ## 2. Current Rating
 
-| Area | Current Rating | Why it is not 10/10 yet |
-|------|----------------|-------------------------|
-| Deploy automation | 6.4/10 | CI/CD build quality is strong, but deployment and rollback are still mostly placeholders |
-| Environment parity | 6.8/10 | Runtime, compose, and examples/docs still drift in a few production-critical places |
-| Migration readiness | 8.8/10 | Migration safety is materially better than average, but production rollback/backup posture is still uneven |
-| Backup / recovery | 7.2/10 | Useful scripts exist, but they are SQLite-centric and not integrated into production validation |
-| Overall ops readiness | 7.3/10 | Strong engineering base, but not yet a turnkey production operations base |
+| Area                  | Current Rating | Why it is not 10/10 yet                                                                                    |
+| --------------------- | -------------- | ---------------------------------------------------------------------------------------------------------- |
+| Deploy automation     | 6.4/10         | CI/CD build quality is strong, but deployment and rollback are still mostly placeholders                   |
+| Environment parity    | 6.8/10         | Runtime, compose, and examples/docs still drift in a few production-critical places                        |
+| Migration readiness   | 8.8/10         | Migration safety is materially better than average, but production rollback/backup posture is still uneven |
+| Backup / recovery     | 7.2/10         | Useful scripts exist, but they are SQLite-centric and not integrated into production validation            |
+| Overall ops readiness | 7.3/10         | Strong engineering base, but not yet a turnkey production operations base                                  |
 
 ## 3. Bottom Line
 
@@ -37,16 +37,16 @@ The biggest gaps are not in application logic. They are in:
 
 ## 4. Findings Summary
 
-| ID | Severity | Area | Title |
-|----|----------|------|-------|
-| OR-01 | HIGH | CD / Release | Deployment workflow is example-only and rollback is a stub |
-| OR-02 | HIGH | Production Config | `docker-compose.prod.yml` cannot satisfy the backend's production rate-limit requirement as written |
-| OR-03 | HIGH | Production Bootstrap | Fresh production boot seeds demo users and sample data with known passwords |
-| OR-04 | HIGH | Release Artifact Chain | The collab server is missing from the CD build/deploy chain, and frontend image builds do not inject the collab URL |
-| OR-05 | MEDIUM | Env / Docs Parity | Ops examples still use stale names like `JWT_SECRET` and `VITE_COLLAB_WS_URL` |
-| OR-06 | MEDIUM | Backup / Recovery | Backup, restore, and DR validation are mostly SQLite-oriented rather than production PostgreSQL-oriented |
-| OR-07 | MEDIUM | Secrets / Rotation | The documented JWT rotation grace-period procedure is not implemented by runtime config |
-| OR-08 | MEDIUM | Frontend Production Runtime | The production frontend image/config path is likely inconsistent with the unprivileged nginx base and needs a real smoke validation |
+| ID    | Severity | Area                        | Title                                                                                                                               |
+| ----- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| OR-01 | HIGH     | CD / Release                | Deployment workflow is example-only and rollback is a stub                                                                          |
+| OR-02 | HIGH     | Production Config           | `docker-compose.prod.yml` cannot satisfy the backend's production rate-limit requirement as written                                 |
+| OR-03 | HIGH     | Production Bootstrap        | Fresh production boot seeds demo users and sample data with known passwords                                                         |
+| OR-04 | HIGH     | Release Artifact Chain      | The collab server is missing from the CD build/deploy chain, and frontend image builds do not inject the collab URL                 |
+| OR-05 | MEDIUM   | Env / Docs Parity           | Ops examples still use stale names like `JWT_SECRET` and `VITE_COLLAB_WS_URL`                                                       |
+| OR-06 | MEDIUM   | Backup / Recovery           | Backup, restore, and DR validation are mostly SQLite-oriented rather than production PostgreSQL-oriented                            |
+| OR-07 | MEDIUM   | Secrets / Rotation          | The documented JWT rotation grace-period procedure is not implemented by runtime config                                             |
+| OR-08 | MEDIUM   | Frontend Production Runtime | The production frontend image/config path is likely inconsistent with the unprivileged nginx base and needs a real smoke validation |
 
 ## 5. Detailed Findings
 

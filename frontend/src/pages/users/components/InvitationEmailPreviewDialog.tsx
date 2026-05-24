@@ -59,7 +59,7 @@ export function InvitationEmailPreviewDialog({
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4 dark:border-slate-800">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Mail className="h-5 w-5 text-sky-600 dark:text-sky-300" />
+              <Mail className="h-5 w-5 text-blue-600 dark:text-blue-300" />
               <h3
                 id={titleId}
                 className="text-lg font-display font-semibold text-slate-900 dark:text-slate-100"

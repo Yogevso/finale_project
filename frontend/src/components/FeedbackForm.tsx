@@ -55,7 +55,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
 
   const getColorClasses = (type: (typeof feedbackTypes)[number], isSelected: boolean) => {
     const colors = {
-      blue: isSelected ? 'bg-sky-50 border-sky-500 text-sky-700' : 'hover:bg-sky-50',
+      blue: isSelected ? 'bg-blue-50 border-blue-500 text-blue-700' : 'hover:bg-blue-50',
       yellow: isSelected ? 'bg-amber-50 border-amber-500 text-amber-700' : 'hover:bg-amber-50',
       red: isSelected ? 'bg-rose-50 border-rose-500 text-rose-700' : 'hover:bg-rose-50',
       gray: isSelected ? 'bg-slate-100 border-slate-500 text-slate-700' : 'hover:bg-slate-50',

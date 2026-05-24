@@ -76,7 +76,7 @@ export default function AssistantChatBubble() {
       <button
         type="button"
         onClick={() => setState('expanded')}
-        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-sky-700"
+        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-transform hover:scale-110 hover:bg-blue-700"
         title="Open AI Assistant (Ctrl+Shift+A)"
       >
         <Sparkles className="h-5 w-5" />
@@ -91,7 +91,7 @@ export default function AssistantChatBubble() {
       <button
         type="button"
         onClick={() => setState('expanded')}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-sky-600 pl-4 pr-3 py-2 text-white shadow-lg hover:bg-sky-700 transition-colors text-sm"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 pl-4 pr-3 py-2 text-white shadow-lg hover:bg-blue-700 transition-colors text-sm"
       >
         <Sparkles className="h-4 w-4" />
         <span className="max-w-[180px] truncate">Portal Assistant</span>
@@ -106,7 +106,7 @@ export default function AssistantChatBubble() {
     <div className="fixed bottom-6 right-6 z-50 flex flex-col w-[400px] h-[500px] max-h-[80vh] max-w-[calc(100vw-48px)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-200">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-4 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-t-2xl">
-        <Sparkles className="h-4 w-4 text-sky-600" />
+        <Sparkles className="h-4 w-4 text-blue-600" />
         <span className="flex-1 text-sm font-semibold text-slate-800">Portal Assistant</span>
 
         {/* History */}
@@ -122,14 +122,23 @@ export default function AssistantChatBubble() {
           {historyOpen && (
             <div className="absolute right-0 top-9 z-50 w-56 rounded-lg border border-slate-200 bg-white shadow-lg py-1 max-h-64 overflow-y-auto">
               {recentConversations.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-slate-400">No conversations yet</p>
+                <div className="px-3 py-3">
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-center dark:border-slate-700 dark:bg-slate-800/60">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      No conversations yet
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                      Start a new chat to create history.
+                    </p>
+                  </div>
+                </div>
               ) : (
                 recentConversations.map(c => (
                   <button
                     key={c.id}
                     type="button"
                     className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-50 ${
-                      c.id === chat.conversationId ? 'bg-sky-50 text-sky-700' : 'text-slate-600'
+                      c.id === chat.conversationId ? 'bg-blue-50 text-blue-700' : 'text-slate-600'
                     }`}
                     onClick={() => {
                       chat.loadConversation(c.id)
@@ -218,7 +227,7 @@ export default function AssistantChatBubble() {
               key={i}
               type="button"
               onClick={() => handleSend(q)}
-              className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] text-sky-700 hover:bg-sky-100 transition-colors"
+              className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] text-blue-700 hover:bg-blue-100 transition-colors"
             >
               {q}
             </button>
