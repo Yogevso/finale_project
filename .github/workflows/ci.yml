@@ -11,7 +11,7 @@ on:
       - 'frontend/**'
       - 'collab-server/**'
       - 'scripts/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   pull_request:
     branches: [main, develop]
     paths:
@@ -19,7 +19,7 @@ on:
       - 'frontend/**'
       - 'collab-server/**'
       - 'scripts/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   workflow_call:
 
 env:
@@ -241,7 +241,9 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          npm run generate:api-contracts:check
+          npx vite build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
