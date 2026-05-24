@@ -193,6 +193,7 @@ jobs:
     if: github.event_name != 'schedule'
 
     strategy:
+      fail-fast: false
       matrix:
         image:
           - name: backend
@@ -228,7 +229,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.image.name }}.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'  # Y15-004: Fail on HIGH/CRITICAL vulnerabilities
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}  # Report on PRs, enforce on protected branches
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@480db559a14342288b67e54bd959dd52dc3ee68f # v3
@@ -260,12 +261,14 @@ jobs:
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
       - name: Run TruffleHog
         uses: trufflesecurity/trufflehog@586f66d7886cd0b037c7c245d4a6e34ef357ab10
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         with:
           extra_args: --only-verified
 

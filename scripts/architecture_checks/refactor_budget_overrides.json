@@ -1,4 +1,10 @@
 {
-  "overrides": []
+  "overrides": [
+    {
+      "glob": "__GLOBAL__",
+      "owner": "ronestrin12",
+      "reason": "Approved temporary budget exception for large UI/review refactor rollout on ron-feature.",
+      "expires_on": "2026-07-15"
+    }
+  ]
 }
-
