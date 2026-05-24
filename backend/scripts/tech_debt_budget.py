@@ -26,6 +26,7 @@ MARKERS = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b", re.IGNORECASE)
 EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".md"}
 SKIP_DIRS = {
     "node_modules",
+    "venv",
     ".venv",
     "__pycache__",
     ".git",
@@ -35,6 +36,9 @@ SKIP_DIRS = {
     "build",
     ".mypy_cache",
     ".pytest_cache",
+}
+SKIP_FILES = {
+    "backend/scripts/tech_debt_budget.py",
 }
 
 
@@ -54,13 +58,16 @@ def scan_directory(root: Path) -> list[Hit]:
             if ext not in EXTENSIONS:
                 continue
             fpath = os.path.join(dirpath, fname)
+            relpath = os.path.relpath(fpath, root).replace(os.sep, "/")
+            if relpath in SKIP_FILES:
+                continue
             try:
                 with open(fpath, encoding="utf-8", errors="replace") as fh:
                     for lineno, line in enumerate(fh, 1):
                         for m in MARKERS.finditer(line):
                             hits.append(
                                 Hit(
-                                    file=os.path.relpath(fpath, root),
+                                    file=relpath,
                                     line=lineno,
                                     marker=m.group(1).upper(),
                                     text=line.strip()[:120],
@@ -97,7 +104,10 @@ def scan_new_markers_from_diff(root: Path, base_ref: str, head_ref: str) -> list
         if raw_line.startswith("+++ b/"):
             candidate = raw_line[6:]
             ext = os.path.splitext(candidate)[1]
-            current_file = candidate if ext in EXTENSIONS else None
+            if candidate in SKIP_FILES:
+                current_file = None
+            else:
+                current_file = candidate if ext in EXTENSIONS else None
             continue
 
         if raw_line.startswith("@@"):
