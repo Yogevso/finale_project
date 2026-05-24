@@ -125,8 +125,9 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
           <h3 className="font-medium text-blue-900 mb-3">Create New Version</h3>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm text-blue-800 mb-1">Version Type</label>
+              <label htmlFor="new-version-type" className="block text-sm text-blue-800 mb-1">Version Type</label>
               <select
+                id="new-version-type"
                 value={newVersion.bump_type || 'patch'}
                 onChange={(e) =>
                   setNewVersion({ ...newVersion, bump_type: e.target.value as VersionBumpType })
@@ -142,8 +143,9 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               </p>
             </div>
             <div>
-              <label className="block text-sm text-blue-800 mb-1">Content</label>
+              <label htmlFor="new-version-content" className="block text-sm text-blue-800 mb-1">Content</label>
               <textarea
+                id="new-version-content"
                 value={newVersion.content || ''}
                 onChange={(e) => setNewVersion({ ...newVersion, content: e.target.value })}
                 className="input-field"
@@ -152,8 +154,9 @@ export default function VersionsSection({ documentId, isEditor }: VersionsSectio
               />
             </div>
             <div>
-              <label className="block text-sm text-blue-800 mb-1">Changes Summary</label>
+              <label htmlFor="new-version-summary" className="block text-sm text-blue-800 mb-1">Changes Summary</label>
               <input
+                id="new-version-summary"
                 type="text"
                 value={newVersion.changes_summary || ''}
                 onChange={(e) => setNewVersion({ ...newVersion, changes_summary: e.target.value })}
@@ -263,6 +266,14 @@ function VersionCard({
       <div
         className="p-3 flex items-start justify-between cursor-pointer hover:bg-slate-50 rounded-t-xl"
         onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onToggle()
+          }
+        }}
+        role="button"
+        tabIndex={0}
       >
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -308,7 +319,7 @@ function VersionCard({
       {isExpanded && (
         <div className="px-3 pb-3 border-t border-slate-100 space-y-3">
           <div className="pt-3">
-            <label className="text-xs text-slate-500">Content</label>
+            <p className="text-xs text-slate-500">Content</p>
             <div className="mt-1 p-2 bg-white rounded-lg border text-sm whitespace-pre-wrap">
               {version.content || 'No content'}
             </div>
@@ -316,7 +327,7 @@ function VersionCard({
 
           {version.changes_summary && (
             <div>
-              <label className="text-xs text-slate-500">Change Summary</label>
+              <p className="text-xs text-slate-500">Change Summary</p>
               <p className="mt-1 text-sm text-slate-700">{version.changes_summary}</p>
             </div>
           )}

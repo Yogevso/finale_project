@@ -66,10 +66,10 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Feedback type selector */}
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-3">
+      <fieldset>
+        <legend className="block text-sm font-medium text-slate-700 mb-3">
           What type of feedback?
-        </label>
+        </legend>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {feedbackTypes.map((type) => {
             const isSelected = feedbackType === type.id;
@@ -88,7 +88,7 @@ export default function FeedbackForm({ onSubmit, isLoading, error }: FeedbackFor
             );
           })}
         </div>
-      </div>
+      </fieldset>
 
       {/* Content textarea */}
       <div>

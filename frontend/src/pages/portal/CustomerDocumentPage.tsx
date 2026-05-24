@@ -274,7 +274,7 @@ export default function CustomerDocumentPage() {
   });
 
   const handleSelectionMouseUp = useCallback(
-    (event: React.MouseEvent<HTMLElement>) => {
+    (event: React.PointerEvent<HTMLElement>) => {
       if ((event.target as HTMLElement).closest('.inline-comment-popup')) {
         return;
       }
@@ -670,7 +670,7 @@ export default function CustomerDocumentPage() {
                   <div
                     ref={contentRef}
                     id="document-content-area"
-                    onMouseUp={handleSelectionMouseUp}
+                    onPointerUp={handleSelectionMouseUp}
                     className={`document-preview-content prose ${
                       contentWidth === 'reading' ? 'mx-auto max-w-3xl' : 'max-w-none'
                     }`}

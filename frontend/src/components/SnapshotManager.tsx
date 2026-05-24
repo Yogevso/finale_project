@@ -201,6 +201,14 @@ export function SnapshotManager({
       <div
         className="flex items-center justify-between p-3 border-b border-slate-200 cursor-pointer hover:bg-slate-50 rounded-t-xl"
         onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setIsExpanded((previous) => !previous)
+          }
+        }}
+        role="button"
+        tabIndex={0}
       >
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-slate-600" />

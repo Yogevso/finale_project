@@ -193,36 +193,38 @@ export function UploadDocumentModal({ onClose }: { onClose: () => void }) {
                   Convert PDF into
                 </legend>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="surface-card flex cursor-pointer items-start gap-3 p-3">
+                  <div className="surface-card flex cursor-pointer items-start gap-3 p-3">
                     <input
+                      id="pdf-conversion-target-docx"
                       type="radio"
                       name="pdf-conversion-target"
                       value="docx"
                       checked={pdfConversionTarget === 'docx'}
                       onChange={() => setPdfConversionTarget('docx')}
                     />
-                    <span>
+                    <label htmlFor="pdf-conversion-target-docx">
                       <span className="card-title block">Word (.docx)</span>
                       <span className="helper-copy">
                         Best when the PDF should continue as an editable document.
                       </span>
-                    </span>
-                  </label>
-                  <label className="surface-card flex cursor-pointer items-start gap-3 p-3">
+                    </label>
+                  </div>
+                  <div className="surface-card flex cursor-pointer items-start gap-3 p-3">
                     <input
+                      id="pdf-conversion-target-pptx"
                       type="radio"
                       name="pdf-conversion-target"
                       value="pptx"
                       checked={pdfConversionTarget === 'pptx'}
                       onChange={() => setPdfConversionTarget('pptx')}
                     />
-                    <span>
+                    <label htmlFor="pdf-conversion-target-pptx">
                       <span className="card-title block">PowerPoint (.pptx)</span>
                       <span className="helper-copy">
                         Best when each PDF page should carry forward as presentation slides.
                       </span>
-                    </span>
-                  </label>
+                    </label>
+                  </div>
                 </div>
               </fieldset>
             </div>

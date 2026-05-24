@@ -80,23 +80,27 @@ export default function NotificationPreferences({
       </div>
 
       <div className="space-y-4">
-        {PREFERENCE_OPTIONS.map((option) => (
-          <label
-            key={option.key}
-            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <input
-              type="checkbox"
-              className="mt-1 rounded border-slate-300"
-              checked={Boolean(preferences[option.key])}
-              onChange={() => handleToggle(option.key)}
-            />
-            <span className="space-y-1">
-              <span className="block text-sm font-medium text-slate-900">{option.label}</span>
-              <span className="block text-xs text-slate-500">{option.description}</span>
-            </span>
-          </label>
-        ))}
+        {PREFERENCE_OPTIONS.map((option) => {
+          const checkboxId = `notification-pref-${option.key}`
+          return (
+            <div
+              key={option.key}
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"
+            >
+              <input
+                id={checkboxId}
+                type="checkbox"
+                className="mt-1 rounded border-slate-300"
+                checked={Boolean(preferences[option.key])}
+                onChange={() => handleToggle(option.key)}
+              />
+              <label htmlFor={checkboxId} className="space-y-1">
+                <span className="block text-sm font-medium text-slate-900">{option.label}</span>
+                <span className="block text-xs text-slate-500">{option.description}</span>
+              </label>
+            </div>
+          )
+        })}
       </div>
 
       <button
