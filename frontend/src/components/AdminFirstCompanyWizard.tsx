@@ -47,7 +47,7 @@ export default function AdminFirstCompanyWizard({
     onDismiss()
   }, [dismissStorageKey, onDismiss])
 
-  const { containerRef, handleKeyDown } = useFocusTrap(dismissWizard)
+  const { containerRef } = useFocusTrap(dismissWizard)
 
   const createCompanyMutation = useMutation({
     mutationFn: () =>
@@ -103,8 +103,15 @@ export default function AdminFirstCompanyWizard({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4" onClick={dismissWizard}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-label="First Company Wizard" className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
+    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center px-4">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="First Company Wizard"
+        tabIndex={-1}
+        className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <p className="eyebrow text-slate-500">Admin Setup</p>
@@ -137,8 +144,9 @@ export default function AdminFirstCompanyWizard({
               </div>
               <div className="grid gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-700">Company name</label>
+                  <label htmlFor="wizard-company-name" className="text-sm text-slate-700">Company name</label>
                   <input
+                    id="wizard-company-name"
                     type="text"
                     value={companyName}
                     onChange={(event) => setCompanyName(event.target.value)}
@@ -147,8 +155,9 @@ export default function AdminFirstCompanyWizard({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-700">Industry</label>
+                  <label htmlFor="wizard-company-industry" className="text-sm text-slate-700">Industry</label>
                   <input
+                    id="wizard-company-industry"
                     type="text"
                     value={industry}
                     onChange={(event) => setIndustry(event.target.value)}
@@ -157,8 +166,9 @@ export default function AdminFirstCompanyWizard({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-700">Website</label>
+                  <label htmlFor="wizard-company-website" className="text-sm text-slate-700">Website</label>
                   <input
+                    id="wizard-company-website"
                     type="url"
                     value={website}
                     onChange={(event) => setWebsite(event.target.value)}
@@ -188,8 +198,9 @@ export default function AdminFirstCompanyWizard({
               </div>
               <div className="grid gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-700">Email</label>
+                  <label htmlFor="wizard-invite-email" className="text-sm text-slate-700">Email</label>
                   <input
+                    id="wizard-invite-email"
                     type="email"
                     value={inviteEmail}
                     onChange={(event) => setInviteEmail(event.target.value)}
@@ -198,8 +209,9 @@ export default function AdminFirstCompanyWizard({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-700">Role</label>
+                  <label htmlFor="wizard-invite-role" className="text-sm text-slate-700">Role</label>
                   <select
+                    id="wizard-invite-role"
                     value={inviteRole}
                     onChange={(event) => setInviteRole(event.target.value as UserRole)}
                     className="select-field"

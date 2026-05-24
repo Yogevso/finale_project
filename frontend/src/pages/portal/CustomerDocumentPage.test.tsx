@@ -181,7 +181,7 @@ describe('CustomerDocumentPage', () => {
       .closest('#document-content-area');
     expect(contentContainer).toBeTruthy();
 
-    fireEvent.mouseUp(contentContainer!);
+    fireEvent.pointerUp(contentContainer!);
     fireEvent.click(await screen.findByRole('button', { name: /add feedback/i }));
 
     const popupTitle = await screen.findByText(/feedback on selection/i);

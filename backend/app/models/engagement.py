@@ -1,5 +1,7 @@
 """Comments, reviews, feedback, sessions, and user engagement models."""
 
+from typing import TYPE_CHECKING
+
 from app.models._shared import (
     Base,
     Boolean,
@@ -24,6 +26,9 @@ from app.models.enums import (
     ReviewStatus,
     UserRole,
 )
+
+if TYPE_CHECKING:
+    from app.models.content import User
 
 
 class Comment(Base):

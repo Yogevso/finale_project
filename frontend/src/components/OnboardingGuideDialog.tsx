@@ -15,25 +15,21 @@ export default function OnboardingGuideDialog({
   config,
   onClose,
 }: OnboardingGuideDialogProps) {
-  const { containerRef, handleKeyDown } = useFocusTrap(onClose)
+  const { containerRef } = useFocusTrap(onClose)
 
   if (!open || !config) {
     return null
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-8"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-8">
       <div
         ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Welcome guide"
+        tabIndex={-1}
         className="w-full max-w-4xl overflow-hidden rounded-[28px] border border-blue-100 bg-white shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={handleKeyDown}
       >
         <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.2),_transparent_45%),linear-gradient(135deg,_#082f49_0%,_#0f766e_100%)] px-6 py-6 text-white md:px-8">
           <button

@@ -171,7 +171,6 @@ export default function AssistantPage() {
   // Refresh sidebar when LLM generates a conversation title
   useEffect(() => {
     if (chat.titleVersion > 0) refreshConversations()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.titleVersion])
 
   useEffect(() => {

@@ -636,7 +636,9 @@ async def submit_for_review(
     )
 
     if resolved_assignments:
-        assigned_reviewer_ids = [reviewer_id for reviewer_id, _source, _rule_id in resolved_assignments]
+        assigned_reviewer_ids = [
+            reviewer_id for reviewer_id, _source, _rule_id in resolved_assignments
+        ]
         reviewers = (
             db.query(User)
             .filter(User.id.in_(assigned_reviewer_ids), User.is_active.is_(True))

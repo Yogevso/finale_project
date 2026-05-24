@@ -163,9 +163,9 @@ export function EditForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="helper-copy mb-1 block font-medium uppercase tracking-wide">
+            <p className="helper-copy mb-1 block font-medium uppercase tracking-wide">
               Workflow Status
-            </label>
+            </p>
             <div className="input-field flex min-h-11 items-center bg-slate-50 text-slate-700">
               {workflowStatusLabel}
             </div>

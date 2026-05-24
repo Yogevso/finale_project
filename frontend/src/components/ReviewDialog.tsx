@@ -38,7 +38,6 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/dateUtils';
 import { parseDocumentHtml } from '@/lib/documentRenderer';
 import { reportRuntimeError } from '@/lib/runtimeReporter';
-import { getUsableVersionContent } from '@/pages/document-detail/helpers/previewHelpers';
 import type {
   AttachmentOutlineItem,
   Comment,
@@ -161,6 +160,17 @@ function sortEntriesByAscendingSectionNumber(entries: ReviewDiffEntry[]): Review
       return left.index - right.index;
     })
     .map((item) => item.entry);
+}
+
+function getUsableVersionContent(content?: string | null): string | null {
+  if (!content) {
+    return null;
+  }
+  const trimmed = content.trim();
+  if (!trimmed || trimmed.toLowerCase().startsWith('uploaded from file:')) {
+    return null;
+  }
+  return trimmed;
 }
 
 function getVersionLabel(version: Version | null | undefined, fallback: string): string {

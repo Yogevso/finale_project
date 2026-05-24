@@ -222,9 +222,7 @@ class ApproveReviewCommandHandler:
                     assignment.reviewer_id for assignment in review.reviewer_assignments
                 }
                 if current_user.id not in assigned_user_ids:
-                    raise PermissionDeniedError(
-                        "This review is assigned to a different reviewer."
-                    )
+                    raise PermissionDeniedError("This review is assigned to a different reviewer.")
 
     def _execute_command(self, context: CommandContext[ApproveReviewCommand]) -> ReviewRequest:
         review = self._load_review(context.command.review_id, for_update=True)

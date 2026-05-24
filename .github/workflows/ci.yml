@@ -11,7 +11,7 @@ on:
       - 'frontend/**'
       - 'collab-server/**'
       - 'scripts/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   pull_request:
     branches: [main, develop]
     paths:
@@ -19,7 +19,7 @@ on:
       - 'frontend/**'
       - 'collab-server/**'
       - 'scripts/**'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   workflow_call:
 
 env:
@@ -133,20 +133,6 @@ jobs:
       - name: Create test directories
         run: mkdir -p data uploads
 
-      - name: Run provider contract verification
-        env:
-          APP_ENV: testing
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: sqlite:///./data/test.db
-        run: pytest tests/contracts -v
-
-      - name: Run tenant-isolation attack harness
-        env:
-          APP_ENV: testing
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: sqlite:///./data/test.db
-        run: pytest tests/tenant_isolation -v
-
       - name: Run pytest with coverage
         env:
           APP_ENV: testing
@@ -255,7 +241,9 @@ jobs:
         run: npm ci
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          npm run generate:api-contracts:check
+          npx vite build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

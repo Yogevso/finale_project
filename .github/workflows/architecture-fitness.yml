@@ -60,7 +60,7 @@ jobs:
         run: python scripts/architecture_checks/query_plans.py
 
       - name: Tech-debt budget check
-        run: python backend/scripts/tech_debt_budget.py --budget 200
+        run: python backend/scripts/tech_debt_budget.py --budget 200 --delta-only --max-new 0
 
       - name: Refactor budget check
         run: python scripts/architecture_checks/check_refactor_budget.py

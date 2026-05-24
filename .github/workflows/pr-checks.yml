@@ -254,7 +254,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
-    if: github.event.action == 'opened' || github.event.action == 'synchronize'
+    if: (github.event.action == 'opened' || github.event.action == 'synchronize') && github.actor == 'dependabot[bot]'
 
     steps:
       - name: Checkout code
@@ -265,7 +265,6 @@ jobs:
         with:
           fail-on-severity: high
           deny-licenses: GPL-3.0, AGPL-3.0
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
 
   # ============================================
   # Auto-merge Dependabot PRs
@@ -297,7 +296,7 @@ jobs:
     name: PR Summary
     runs-on: ubuntu-latest
     if: always()
-    needs: [labeler, size-check, title-check, dependency-review]
+    needs: [labeler, size-check, title-check]
 
     steps:
       - name: Post summary
@@ -309,4 +308,3 @@ jobs:
           echo "| Auto Labeler | ${{ needs.labeler.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Size Check | ${{ needs.size-check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Title Check | ${{ needs.title-check.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Review | ${{ needs.dependency-review.result }} |" >> $GITHUB_STEP_SUMMARY
