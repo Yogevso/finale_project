@@ -766,7 +766,7 @@ describe('useContentEditingFlow', () => {
       | { content?: string }
       | undefined
     const headingIds = Array.from(
-      (createVersionPayload?.content || '').matchAll(/<h[1-6][^>]*id=\"([^\"]+)\"/g),
+      (createVersionPayload?.content || '').matchAll(/<h[1-6][^>]*id="([^"]+)"/g),
     ).map((match) => match[1])
 
     expect(headingIds).toContain('heading-0')

@@ -107,7 +107,7 @@ describe('DocumentPreview empty states', () => {
     expect(
       screen.getByText(/this attachment can be downloaded, but it cannot be previewed inline/i),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /download legacy\.bin/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /download legacy\.bin/i })).toBeInTheDocument()
   })
 
   it('shows no-content UI when there are no attachments and no inline content', async () => {
