@@ -2,6 +2,8 @@
 
 Structural checks used by architecture governance and CI fitness gates.
 
+Part of the Intel Documentation Platform quality tooling. These checks enforce architectural boundaries that the repo expects contributors to keep intact.
+
 ## Checks
 
 - `check_backend_architecture.py`
@@ -46,3 +48,9 @@ Add entries in `refactor_budget_overrides.json`:
 - `expires_on` (`YYYY-MM-DD`)
 
 Expired overrides are ignored automatically.
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Architecture](../../docs/ARCHITECTURE.md)
+- [ADRs](../../docs/adr/README.md)

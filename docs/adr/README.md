@@ -2,6 +2,8 @@
 
 This directory stores architecture decisions that affect boundaries, contracts, migration strategy, or long-term operability.
 
+Part of the Intel Documentation Platform documentation set. ADRs are the durable record for architectural decisions that should outlive a single pull request or migration wave.
+
 ## ADR Required When
 
 Create or update an ADR when a change:
@@ -45,3 +47,9 @@ Create or update an ADR when a change:
 | [ADR-0002-selective-event-sourcing-review-pilot](./ADR-0002-selective-event-sourcing-review-pilot.md) | accepted | 2026-02-28 | Feature-flagged review workflow event-sourcing pilot decision. |
 | [ADR-0003-backend-context-first-architecture](./ADR-0003-backend-context-first-architecture.md) | accepted | 2026-03-26 | Standardize backend orchestration on context public APIs and block route-level controller imports. |
 | [ADR-0004-aggregate-repository-boundaries](./ADR-0004-aggregate-repository-boundaries.md) | accepted | 2026-03-26 | Repositories are mandatory for aggregate-heavy write domains, not all projections. |
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Architecture](../ARCHITECTURE.md)
+- [Migration Playbooks](../migrations/README.md)

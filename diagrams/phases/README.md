@@ -2,6 +2,8 @@
 
 This directory contains endpoint-level diagram packs grouped by platform phase.
 
+Part of the Intel Documentation Platform diagrams workspace. Each phase pack follows the same file layout so traceability stays consistent across architecture waves.
+
 ## Phase Folders
 
 - `P0_ACCESS_IDENTITY/`
@@ -27,3 +29,9 @@ This directory contains endpoint-level diagram packs grouped by platform phase.
 - `TRACEABILITY.md`
 
 API path references assume prefix `/api/v1`.
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Diagrams Workspace](../README.md)
+- [Architecture](../../docs/ARCHITECTURE.md)

@@ -2,6 +2,8 @@
 
 Wave O observability artifacts for:
 
+Part of the Intel Documentation Platform observability documentation. This directory defines the SLO contract consumed by local checks, CI, and alert-response workflows.
+
 - Task 98: use-case performance SLOs
 - Task 119: use-case burn-rate alerts and escalation runbook
 
@@ -34,3 +36,9 @@ Events include:
 - optional `dimensions`
 
 Compatible with backend emitters in `app.observability.telemetry`.
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Observability Scripts](../../scripts/observability/README.md)
+- [Deployment](../DEPLOYMENT.md)
