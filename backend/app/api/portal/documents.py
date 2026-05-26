@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.application.queries.dependencies import get_portal_documents_query_hand
 from app.application.queries.portal_queries import PortalDocumentsQueryHandler
 from app.db import get_db
 from app.dependencies.permissions import require_customer
+from app.dependencies.services import get_comment_service
 from app.domain.specifications import ExternalEmbedPolicySpec, LinkSharingPolicySpec
 from app.models import (
     Attachment,
@@ -25,6 +26,7 @@ from app.models import (
     ReadingProgress,
     User,
 )
+from app.schemas import CommentCreate, CommentResponse, CommentUpdate
 from app.schemas.portal import (
     PortalDashboardStats,
     PortalDocumentDetail,
@@ -32,6 +34,7 @@ from app.schemas.portal import (
     PortalFacetsResponse,
 )
 from app.services.attachment_service import AttachmentService
+from app.services.comment_service import CommentService, PaginatedComments
 from app.utils.http_headers import build_content_disposition
 
 router = APIRouter(prefix="/portal", tags=["Customer Portal"])
@@ -160,6 +163,52 @@ async def get_customer_document(
         current_user=current_user,
         portal_documents_query_handler=portal_documents_query_handler,
     )
+
+
+@router.get("/documents/{document_id}/comments")
+def list_customer_document_comments(
+    document_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Comments per page"),
+    review_id: int | None = Query(None, description="Filter comments by review session"),
+    current_user: User = Depends(require_customer),
+    comment_service: CommentService = Depends(get_comment_service),
+) -> PaginatedComments:
+    """List comments for a customer-visible portal document."""
+    return comment_service.get_comments(
+        document_id,
+        current_user,
+        page=page,
+        page_size=page_size,
+        review_id=review_id,
+    )
+
+
+@router.post(
+    "/documents/{document_id}/comments",
+    response_model=CommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_customer_document_comment(
+    document_id: int,
+    comment_data: CommentCreate,
+    current_user: User = Depends(require_customer),
+    comment_service: CommentService = Depends(get_comment_service),
+) -> CommentResponse:
+    """Create a comment thread or reply on a customer-visible portal document."""
+    return comment_service.create_comment(document_id, comment_data, current_user)
+
+
+@router.patch("/documents/{document_id}/comments/{comment_id}", response_model=CommentResponse)
+def update_customer_document_comment(
+    document_id: int,
+    comment_id: int,
+    comment_data: CommentUpdate,
+    current_user: User = Depends(require_customer),
+    comment_service: CommentService = Depends(get_comment_service),
+) -> CommentResponse:
+    """Update a comment on a customer-visible portal document."""
+    return comment_service.update_comment(document_id, comment_id, comment_data, current_user)
 
 
 @router.get("/documents/{document_id}/related")

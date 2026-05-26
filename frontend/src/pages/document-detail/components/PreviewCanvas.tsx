@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type MouseEventHandler,
   type ReactNode,
   type RefObject,
   type UIEventHandler,
@@ -49,7 +48,6 @@ interface PreviewCanvasProps {
   contentStyle?: CSSProperties
   sectionLinkBasePath: string
   onScroll: UIEventHandler<HTMLDivElement>
-  onMouseUp: MouseEventHandler<HTMLElement>
   hasUser: boolean
   selectionPopup: SelectionPopupState
   commentPopup: CommentPopupState
@@ -90,7 +88,6 @@ export function PreviewCanvas({
   contentStyle,
   sectionLinkBasePath,
   onScroll,
-  onMouseUp,
   hasUser,
   selectionPopup,
   commentPopup,
@@ -187,14 +184,13 @@ export function PreviewCanvas({
           ]
             .filter(Boolean)
             .join(' '),
-          onMouseUp,
         },
         headingChildren,
       )
     }
 
     return parseDocumentHtml(activeHtmlContent || '', { replace })
-  }, [activeHtmlContent, copiedHeadingId, handleCopyHeadingLink, onMouseUp])
+  }, [activeHtmlContent, copiedHeadingId, handleCopyHeadingLink])
 
   const headerTitle = documentTitle || selectedAttachmentFilename
   const hasSearchTerm = searchTerm.trim().length > 0

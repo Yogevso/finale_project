@@ -120,6 +120,7 @@ export const ReviewsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base: 
       status?: FeedbackStatus
       type?: FeedbackType
       company_id?: number
+      document_id?: number
       search?: string
     }): Promise<FeedbackListManagementResponse> {
       const { data } = await this.client.get<FeedbackListManagementResponseDto>('/feedback', {

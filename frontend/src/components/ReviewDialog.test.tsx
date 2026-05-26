@@ -257,4 +257,97 @@ describe('ReviewDialog', () => {
     expect(await screen.findByText('User role cannot approve this submission')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /approve/i })).toBeDisabled();
   });
+
+  it('shows shared submitter comments alongside current review threads', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(api.getComments).mockImplementation(async (_documentId, _parentId, reviewId) => {
+      if (reviewId === 1) {
+        return [
+          {
+            id: 401,
+            document_id: 42,
+            user_id: 9,
+            author_name: 'Assigned Reviewer',
+            review_id: 1,
+            parent_id: null,
+            content: 'Reviewer thread note',
+            is_private: false,
+            anchor_text: 'Overview',
+            anchor_id: 'overview',
+            is_resolved: false,
+            created_at: '2026-01-01T12:05:00Z',
+            updated_at: '2026-01-01T12:05:00Z',
+            replies: [],
+            reply_count: 0,
+          },
+        ] as never;
+      }
+
+      return [
+        {
+          id: 401,
+          document_id: 42,
+          user_id: 9,
+          author_name: 'Assigned Reviewer',
+          review_id: 1,
+          parent_id: null,
+          content: 'Reviewer thread note',
+          is_private: false,
+          anchor_text: 'Overview',
+          anchor_id: 'overview',
+          is_resolved: false,
+          created_at: '2026-01-01T12:05:00Z',
+          updated_at: '2026-01-01T12:05:00Z',
+          replies: [],
+          reply_count: 0,
+        },
+        {
+          id: 402,
+          document_id: 42,
+          user_id: 7,
+          author_name: 'Submitter',
+          review_id: null,
+          parent_id: null,
+          content: 'Please validate this source table.',
+          is_private: false,
+          anchor_text: 'Project Type',
+          anchor_id: 'project-type',
+          is_resolved: false,
+          created_at: '2026-01-01T12:04:00Z',
+          updated_at: '2026-01-01T12:04:00Z',
+          replies: [],
+          reply_count: 0,
+        },
+        {
+          id: 403,
+          document_id: 42,
+          user_id: 8,
+          author_name: 'Previous Reviewer',
+          review_id: 999,
+          parent_id: null,
+          content: 'Historical review thread.',
+          is_private: false,
+          anchor_text: 'Legacy Section',
+          anchor_id: 'legacy',
+          is_resolved: false,
+          created_at: '2026-01-01T12:03:00Z',
+          updated_at: '2026-01-01T12:03:00Z',
+          replies: [],
+          reply_count: 0,
+        },
+      ] as never;
+    });
+
+    renderDialog(buildReview());
+
+    await user.click(await screen.findByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /go to final review/i }));
+
+    expect(await screen.findByText('Reviewer thread note')).toBeInTheDocument();
+    expect(screen.getByText('Please validate this source table.')).toBeInTheDocument();
+    expect(screen.queryByText('Historical review thread.')).not.toBeInTheDocument();
+  });
 });

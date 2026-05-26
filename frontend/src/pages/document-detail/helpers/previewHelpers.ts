@@ -395,6 +395,117 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function normalizeAnchorText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+export interface CommentHighlightTarget {
+  threadId: number
+  anchorText: string
+}
+
+export interface AppliedCommentHighlight {
+  threadId: number
+  element: HTMLSpanElement
+}
+
+function collectHighlightableTextNodes(container: HTMLElement): Text[] {
+  const documentRef = container.ownerDocument
+  const nodeFilter = documentRef.defaultView?.NodeFilter ?? NodeFilter
+  const walker = documentRef.createTreeWalker(container, nodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const text = node.nodeValue
+      if (!text || !text.trim()) {
+        return nodeFilter.FILTER_REJECT
+      }
+      const parent = (node as Text).parentElement
+      if (!parent) {
+        return nodeFilter.FILTER_REJECT
+      }
+      if (parent.closest('.doc-comment-highlight')) {
+        return nodeFilter.FILTER_REJECT
+      }
+      if (parent.tagName === 'MARK') {
+        return nodeFilter.FILTER_REJECT
+      }
+      return nodeFilter.FILTER_ACCEPT
+    },
+  })
+
+  const textNodes: Text[] = []
+  let current = walker.nextNode()
+  while (current) {
+    textNodes.push(current as Text)
+    current = walker.nextNode()
+  }
+  return textNodes
+}
+
+export function clearCommentHighlights(container: HTMLElement) {
+  const documentRef = container.ownerDocument
+  container.querySelectorAll('span.doc-comment-highlight').forEach((mark) => {
+    const parent = mark.parentNode
+    if (!parent) return
+    parent.replaceChild(documentRef.createTextNode(mark.textContent || ''), mark)
+    parent.normalize()
+  })
+}
+
+export function applyCommentHighlights(
+  container: HTMLElement,
+  targets: CommentHighlightTarget[],
+): AppliedCommentHighlight[] {
+  clearCommentHighlights(container)
+
+  const applied: AppliedCommentHighlight[] = []
+
+  targets.forEach((target) => {
+    const normalizedAnchor = normalizeAnchorText(target.anchorText)
+    if (!normalizedAnchor) {
+      return
+    }
+
+    const pattern = new RegExp(escapeRegExp(normalizedAnchor).replace(/\s+/g, '\\s+'), 'i')
+    const textNodes = collectHighlightableTextNodes(container)
+    const documentRef = container.ownerDocument
+
+    for (const node of textNodes) {
+      const text = node.nodeValue
+      if (!text) {
+        continue
+      }
+      const match = pattern.exec(text)
+      if (!match || match[0].length === 0) {
+        continue
+      }
+
+      const start = match.index
+      const end = start + match[0].length
+      const fragment = documentRef.createDocumentFragment()
+
+      if (start > 0) {
+        fragment.appendChild(documentRef.createTextNode(text.slice(0, start)))
+      }
+
+      const highlight = documentRef.createElement('span')
+      highlight.className = 'doc-comment-highlight'
+      highlight.setAttribute('data-comment-thread-id', String(target.threadId))
+      highlight.textContent = text.slice(start, end)
+      fragment.appendChild(highlight)
+
+      if (end < text.length) {
+        fragment.appendChild(documentRef.createTextNode(text.slice(end)))
+      }
+
+      node.parentNode?.replaceChild(fragment, node)
+      applied.push({ threadId: target.threadId, element: highlight })
+      break
+    }
+  })
+
+  return applied
+}
+
 export function applyHighlights(container: HTMLElement, searchTerm: string) {
   clearHighlights(container)
   const term = searchTerm.trim()

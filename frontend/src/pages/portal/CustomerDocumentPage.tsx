@@ -6,10 +6,13 @@ import { useLocation, useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { portalApi, type FeedbackItem, type FeedbackListResponse } from '../../lib/portalApi';
 import { useAuth } from '@/lib/auth';
+import { getDocument } from '@/env/dom';
 import { parseDocumentHtml } from '@/lib/documentRenderer';
 import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness';
 import {
+  applyCommentHighlights,
   applyHighlights,
+  clearCommentHighlights,
   clearHighlights,
   findSectionMatchInRoot,
   filterOutlineSectionsByHtml,
@@ -18,19 +21,15 @@ import {
   processHtmlIntoSections,
   type TocSection,
 } from '@/pages/document-detail/helpers/previewHelpers';
+import { DocumentCommentsSidebar } from '@/pages/document-detail/components/DocumentCommentsSidebar';
+import { InlineCommentPopups } from '@/pages/document-detail/components/InlineCommentPopups';
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
 import { TocPanel } from '@/pages/document-detail/components/TocPanel';
-import {
-  InlineFeedbackPopups,
-  type InlineFeedbackPopupState,
-  type SelectionPopupState,
-} from '@/pages/portal/components/InlineFeedbackPopups';
+import type {
+  CommentPopupState,
+  SelectionPopupState,
+} from '@/pages/document-detail/hooks/useInlineComments';
 import FeedbackForm from '../../components/FeedbackForm';
-import {
-  COMMUNICATION_INPUT_LIMITS,
-  COMMUNICATION_INPUT_MIN_LENGTHS,
-  normalizeMultilineInput,
-} from '@/lib/uiInputRules';
 import {
   DOCUMENT_FONT_SIZE_VALUES,
   getDocumentFontSize,
@@ -57,12 +56,13 @@ import { getReadingWidth, setReadingWidth, type ReadingWidth } from '@/lib/readi
 import NotFoundState from '@/components/NotFoundState';
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar';
 
-const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '' };
-const EMPTY_INLINE_FEEDBACK_POPUP: InlineFeedbackPopupState = {
+const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '', anchorId: '' };
+const EMPTY_COMMENT_POPUP: CommentPopupState = {
   show: false,
   x: 0,
   y: 0,
   text: '',
+  anchorId: '',
 };
 
 function formatFileSize(bytes: number): string {
@@ -83,6 +83,59 @@ function escapeSelector(value: string): string {
   return value.replace(/([ #;&,.+*~':"!^$[\]()=>|/@])/g, '\\$1');
 }
 
+function resolveAnchorId(selection: Selection): string {
+  if (selection.rangeCount === 0) {
+    return 'document-content-area';
+  }
+
+  const range = selection.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const baseElement = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as
+    | HTMLElement
+    | null;
+
+  if (!baseElement) {
+    return 'document-content-area';
+  }
+
+  const contentRoot = baseElement.closest<HTMLElement>('#document-content-area');
+  if (!contentRoot) {
+    return 'document-content-area';
+  }
+
+  const directHeading = baseElement.closest<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');
+  if (directHeading?.id) {
+    return directHeading.id;
+  }
+
+  const headings = Array.from(
+    contentRoot.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'),
+  );
+  const nodeType = baseElement.ownerDocument.defaultView?.Node ?? Node;
+  let fallbackHeadingId: string | null = null;
+
+  for (const heading of headings) {
+    if (heading === baseElement || heading.contains(baseElement)) {
+      fallbackHeadingId = heading.id;
+      break;
+    }
+    const relation = heading.compareDocumentPosition(baseElement);
+    if (relation & nodeType.DOCUMENT_POSITION_FOLLOWING) {
+      fallbackHeadingId = heading.id;
+      continue;
+    }
+    if (relation & nodeType.DOCUMENT_POSITION_PRECEDING) {
+      break;
+    }
+  }
+
+  if (fallbackHeadingId) {
+    return fallbackHeadingId;
+  }
+
+  return headings[0]?.id || 'document-content-area';
+}
+
 export default function CustomerDocumentPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -95,16 +148,15 @@ export default function CustomerDocumentPage() {
   const [tocCollapsed, setTocCollapsed] = useState(false);
   const [activeHeading, setActiveHeading] = useState<string | null>(null);
   const [selectionPopup, setSelectionPopup] = useState<SelectionPopupState>(EMPTY_SELECTION_POPUP);
-  const [inlineFeedbackPopup, setInlineFeedbackPopup] = useState<InlineFeedbackPopupState>(
-    EMPTY_INLINE_FEEDBACK_POPUP
-  );
-  const [inlineFeedbackType, setInlineFeedbackType] = useState<
-    'question' | 'suggestion' | 'issue' | 'other'
-  >('suggestion');
-  const [inlineFeedbackContent, setInlineFeedbackContent] = useState('');
-  const [inlineFeedbackError, setInlineFeedbackError] = useState('');
-  const { isCustomer } = useAuth();
+  const [commentPopup, setCommentPopup] = useState<CommentPopupState>(EMPTY_COMMENT_POPUP);
+  const [commentText, setCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [showResolvedComments, setShowResolvedComments] = useState(false);
+  const [activeCommentThreadId, setActiveCommentThreadId] = useState<number | null>(null);
+  const [submittingReplyThreadId, setSubmittingReplyThreadId] = useState<number | null>(null);
+  const { isCustomer, user } = useAuth();
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const commentsSidebarRef = useRef<HTMLDivElement | null>(null);
   const lastSavedProgress = useRef<number>(0);
   const rafId = useRef<number | null>(null);
   const isFullscreen = location.search.includes('fullscreen=1');
@@ -123,6 +175,23 @@ export default function CustomerDocumentPage() {
     enabled: !!id,
     ...audienceSensitiveQueryOptions,
   });
+  const commentsQuery = useQuery({
+    queryKey: ['portal', 'document', id, 'comments'],
+    queryFn: () => portalApi.getDocumentComments(Number(id)),
+    enabled: Boolean(id && user),
+  });
+
+  const commentThreads = useMemo(
+    () => (commentsQuery.data || []).filter((comment) => comment.parent_id === null),
+    [commentsQuery.data],
+  );
+  const visibleCommentThreads = useMemo(
+    () =>
+      showResolvedComments
+        ? commentThreads
+        : commentThreads.filter((thread) => !thread.is_resolved),
+    [commentThreads, showResolvedComments],
+  );
   const processedPreview = useMemo(
     () => processHtmlIntoSections(document?.content ?? ''),
     [document?.content]
@@ -171,14 +240,17 @@ export default function CustomerDocumentPage() {
     ...audienceSensitiveQueryOptions,
   });
 
-  const closeInlineFeedbackPopup = useCallback(() => {
+  const closeCommentPopup = useCallback(() => {
     setSelectionPopup(EMPTY_SELECTION_POPUP);
-    setInlineFeedbackPopup(EMPTY_INLINE_FEEDBACK_POPUP);
-    setInlineFeedbackContent('');
-    setInlineFeedbackError('');
-    setInlineFeedbackType('suggestion');
+    setCommentPopup(EMPTY_COMMENT_POPUP);
+    setCommentText('');
+    setIsSubmittingComment(false);
     window.getSelection()?.removeAllRanges();
   }, []);
+
+  const invalidateComments = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['portal', 'document', id, 'comments'] });
+  }, [id, queryClient]);
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
     setFontSizeState(value);
@@ -249,7 +321,6 @@ export default function CustomerDocumentPage() {
       });
     },
     onSuccess: (createdFeedback, _variables, context) => {
-      closeInlineFeedbackPopup();
       setSubmittedFeedback(createdFeedback);
       queryClient.setQueriesData<FeedbackListResponse>(
         { queryKey: ['portal', 'feedback'] },
@@ -269,6 +340,38 @@ export default function CustomerDocumentPage() {
     },
   });
 
+  const createCommentMutation = useMutation({
+    mutationFn: (data: { content: string; anchor_text: string; anchor_id: string }) =>
+      portalApi.createDocumentComment(Number(id), data),
+    onSuccess: () => {
+      closeCommentPopup();
+      invalidateComments();
+    },
+    onError: () => {
+      setIsSubmittingComment(false);
+    },
+  });
+
+  const toggleCommentResolutionMutation = useMutation({
+    mutationFn: ({ commentId, resolve }: { commentId: number; resolve: boolean }) =>
+      portalApi.updateDocumentComment(Number(id), commentId, { is_resolved: resolve }),
+    onSuccess: () => {
+      invalidateComments();
+    },
+  });
+
+  const addReplyMutation = useMutation({
+    mutationFn: ({ threadId, content }: { threadId: number; content: string }) =>
+      portalApi.createDocumentComment(Number(id), { content, parent_id: threadId }),
+    onSuccess: () => {
+      setSubmittingReplyThreadId(null);
+      invalidateComments();
+    },
+    onError: () => {
+      setSubmittingReplyThreadId(null);
+    },
+  });
+
   const updateProgressMutation = useMutation({
     mutationFn: (percent: number) => portalApi.updateReadingProgress(Number(id), percent),
   });
@@ -281,7 +384,7 @@ export default function CustomerDocumentPage() {
 
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) {
-        if (!inlineFeedbackPopup.show) {
+        if (!commentPopup.show) {
           setSelectionPopup(EMPTY_SELECTION_POPUP);
         }
         return;
@@ -300,46 +403,175 @@ export default function CustomerDocumentPage() {
         x: rect.left + rect.width / 2,
         y: rect.top - 10,
         text: selectedText,
+        anchorId: resolveAnchorId(selection),
       });
-      setInlineFeedbackError('');
     },
-    [inlineFeedbackPopup.show]
+    [commentPopup.show]
   );
 
-  const handleOpenInlineFeedbackForm = useCallback(() => {
+  const handleOpenCommentForm = useCallback(() => {
     if (!selectionPopup.text) {
       return;
     }
 
-    setInlineFeedbackPopup({
+    setCommentPopup({
       show: true,
       x: selectionPopup.x,
       y: selectionPopup.y + 60,
       text: selectionPopup.text,
+      anchorId: selectionPopup.anchorId || 'document-content-area',
     });
     setSelectionPopup(EMPTY_SELECTION_POPUP);
-    setInlineFeedbackError('');
   }, [selectionPopup]);
 
-  const handleSubmitInlineFeedback = useCallback(() => {
-    const normalizedContent = normalizeMultilineInput(
-      inlineFeedbackContent,
-      COMMUNICATION_INPUT_LIMITS.feedbackContent
+  const handleSubmitComment = useCallback(() => {
+    const trimmed = commentText.trim();
+    if (!trimmed || !commentPopup.text) {
+      return;
+    }
+    setIsSubmittingComment(true);
+    createCommentMutation.mutate({
+      content: trimmed,
+      anchor_text: commentPopup.text,
+      anchor_id: commentPopup.anchorId || 'document-content-area',
+    });
+  }, [commentPopup.anchorId, commentPopup.text, commentText, createCommentMutation]);
+
+  const scrollThreadIntoSidebarView = useCallback((threadId: number) => {
+    const threadElement = commentsSidebarRef.current?.querySelector<HTMLElement>(
+      `[data-thread-id="${threadId}"]`,
     );
-    if (normalizedContent.length < COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent) {
-      setInlineFeedbackError(
-        `Please enter at least ${COMMUNICATION_INPUT_MIN_LENGTHS.feedbackContent} characters of feedback.`
-      );
+    threadElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
+
+  const scrollToThreadHighlight = useCallback((threadId: number) => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!container) {
+      return;
+    }
+    const highlight = container.querySelector<HTMLElement>(
+      `.doc-comment-highlight[data-comment-thread-id="${threadId}"]`,
+    );
+    if (!highlight) {
+      return;
+    }
+    highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const handleSelectCommentThread = useCallback(
+    (threadId: number) => {
+      setActiveCommentThreadId(threadId);
+      scrollThreadIntoSidebarView(threadId);
+      scrollToThreadHighlight(threadId);
+    },
+    [scrollThreadIntoSidebarView, scrollToThreadHighlight],
+  );
+
+  const handleToggleCommentThreadResolved = useCallback(
+    (threadId: number, resolve: boolean) => {
+      toggleCommentResolutionMutation.mutate({ commentId: threadId, resolve });
+      if (resolve && !showResolvedComments && activeCommentThreadId === threadId) {
+        setActiveCommentThreadId(null);
+      }
+    },
+    [activeCommentThreadId, showResolvedComments, toggleCommentResolutionMutation],
+  );
+
+  const handleSubmitCommentReply = useCallback(
+    (threadId: number, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        return;
+      }
+      setSubmittingReplyThreadId(threadId);
+      addReplyMutation.mutate({
+        threadId,
+        content: trimmed,
+      });
+    },
+    [addReplyMutation],
+  );
+
+  useEffect(() => {
+    if (activeCommentThreadId === null) {
+      return;
+    }
+    if (!visibleCommentThreads.some((thread) => thread.id === activeCommentThreadId)) {
+      setActiveCommentThreadId(null);
+    }
+  }, [activeCommentThreadId, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) {
       return;
     }
 
-    setInlineFeedbackError('');
-    feedbackMutation.mutate({
-      feedback_type: inlineFeedbackType,
-      content: normalizedContent,
-      anchor_text: inlineFeedbackPopup.text,
+    applyCommentHighlights(
+      container,
+      visibleCommentThreads
+        .filter((thread) => (thread.anchor_text || '').trim().length > 0)
+        .map((thread) => ({
+          threadId: thread.id,
+          anchorText: thread.anchor_text || '',
+        })),
+    );
+
+    return () => {
+      clearCommentHighlights(container);
+    };
+  }, [renderedContent, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) {
+      return;
+    }
+
+    container.querySelectorAll('.doc-comment-highlight--active').forEach((element) => {
+      element.classList.remove('doc-comment-highlight--active');
     });
-  }, [feedbackMutation, inlineFeedbackContent, inlineFeedbackPopup.text, inlineFeedbackType]);
+
+    if (activeCommentThreadId === null) {
+      return;
+    }
+
+    container
+      .querySelectorAll<HTMLElement>(
+        `.doc-comment-highlight[data-comment-thread-id="${activeCommentThreadId}"]`,
+      )
+      .forEach((element) => {
+        element.classList.add('doc-comment-highlight--active');
+      });
+  }, [activeCommentThreadId, renderedContent, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleCommentHighlightClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      const highlight = target?.closest<HTMLElement>('.doc-comment-highlight');
+      if (!highlight) {
+        return;
+      }
+
+      const threadId = Number(highlight.getAttribute('data-comment-thread-id'));
+      if (!Number.isFinite(threadId)) {
+        return;
+      }
+
+      setActiveCommentThreadId(threadId);
+      scrollThreadIntoSidebarView(threadId);
+    };
+
+    container.addEventListener('click', handleCommentHighlightClick);
+    return () => {
+      container.removeEventListener('click', handleCommentHighlightClick);
+    };
+  }, [scrollThreadIntoSidebarView]);
 
   const computeAndSaveProgress = useCallback(() => {
     if (!isCustomer || !contentRef.current || !id) {
@@ -662,42 +894,59 @@ export default function CustomerDocumentPage() {
                 </div>
               ) : null}
 
-              <div className="min-w-0 flex-1">
-                <div
-                  className={`${documentPaperClass} rounded-2xl`}
-                  data-testid="customer-document-paper"
-                >
+              <div className="min-w-0 flex-1 lg:flex lg:items-start lg:gap-6">
+                <div className="min-w-0 flex-1">
                   <div
-                    ref={contentRef}
-                    id="document-content-area"
-                    onPointerUp={handleSelectionMouseUp}
-                    className={`document-preview-content prose ${
-                      contentWidth === 'reading' ? 'mx-auto max-w-3xl' : 'max-w-none'
-                    }`}
-                    style={contentStyle}
+                    className={`${documentPaperClass} rounded-2xl`}
+                    data-testid="customer-document-paper"
                   >
-                    {renderedContent}
+                    <div
+                      ref={contentRef}
+                      id="document-content-area"
+                      onPointerUp={handleSelectionMouseUp}
+                      className={`document-preview-content prose ${
+                        contentWidth === 'reading' ? 'mx-auto max-w-3xl' : 'max-w-none'
+                      }`}
+                      style={contentStyle}
+                    >
+                      {renderedContent}
+                    </div>
                   </div>
+                </div>
+
+                <div ref={commentsSidebarRef} className="mt-6 lg:mt-0 lg:w-[22rem] lg:flex-shrink-0">
+                  <DocumentCommentsSidebar
+                    threads={commentThreads}
+                    isLoading={commentsQuery.isLoading}
+                    isError={commentsQuery.isError}
+                    showResolved={showResolvedComments}
+                    activeThreadId={activeCommentThreadId}
+                    canResolveThreads={false}
+                    resolveMutationPending={toggleCommentResolutionMutation.isPending}
+                    submittingReplyThreadId={submittingReplyThreadId}
+                    onToggleShowResolved={setShowResolvedComments}
+                    onThreadSelect={handleSelectCommentThread}
+                    onToggleThreadResolved={handleToggleCommentThreadResolved}
+                    onSubmitReply={handleSubmitCommentReply}
+                  />
                 </div>
               </div>
             </div>
 
-            <InlineFeedbackPopups
+            <InlineCommentPopups
+              hasUser={Boolean(user)}
               selectionPopup={selectionPopup}
-              feedbackPopup={inlineFeedbackPopup}
-              feedbackType={inlineFeedbackType}
-              feedbackContent={inlineFeedbackContent}
-              validationError={
-                inlineFeedbackError ||
-                (inlineFeedbackPopup.show ? (feedbackMutation.error?.message ?? '') : '')
-              }
-              isSubmitting={feedbackMutation.isPending}
+              commentPopup={commentPopup}
+              commentText={commentText}
+              isPrivateComment={false}
+              showPrivateOption={false}
+              isSubmittingComment={isSubmittingComment}
               topOffset={isFullscreen ? 76 : 0}
-              onOpenFeedbackForm={handleOpenInlineFeedbackForm}
-              onCloseFeedbackPopup={closeInlineFeedbackPopup}
-              onFeedbackTypeChange={setInlineFeedbackType}
-              onFeedbackContentChange={setInlineFeedbackContent}
-              onSubmitFeedback={handleSubmitInlineFeedback}
+              onOpenCommentForm={handleOpenCommentForm}
+              onCloseCommentPopup={closeCommentPopup}
+              onCommentTextChange={setCommentText}
+              onPrivateCommentChange={() => {}}
+              onSubmitComment={handleSubmitComment}
             />
           </div>
         </div>
@@ -787,8 +1036,8 @@ export default function CustomerDocumentPage() {
           <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
             <h2 className="section-title dark:text-slate-100">Submit Feedback</h2>
             <p className="body-copy dark:text-slate-400">
-              Have a question or suggestion about this document? Let us know. You can also highlight
-              text above and send feedback directly on the selected passage.
+              Have a question or suggestion about this document? Let us know. You can also
+              highlight text above to add inline comments in the comments panel.
             </p>
           </div>
           <div className="p-6">

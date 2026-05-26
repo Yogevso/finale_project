@@ -4,7 +4,7 @@
 import axios, { AxiosHeaders } from 'axios'
 import { api } from '@/lib/api'
 import { withTraceHeader } from '@/lib/requestTrace'
-import type { AttachmentOutlineItem } from '@/types'
+import type { AttachmentOutlineItem, Comment, CommentCreate, CommentUpdate } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -185,6 +185,40 @@ export const portalApi = {
 
   async getDocument(id: number): Promise<PortalDocumentDetail> {
     const response = await portalClient.get(`/portal/documents/${id}`)
+    return response.data
+  },
+
+  async getDocumentComments(documentId: number): Promise<Comment[]> {
+    const response = await portalClient.get<Comment[] | { items?: Comment[] }>(
+      `/portal/documents/${documentId}/comments`,
+    )
+    const payload = response.data
+    if (Array.isArray(payload)) {
+      return payload
+    }
+    if (Array.isArray(payload.items)) {
+      return payload.items
+    }
+    return []
+  },
+
+  async createDocumentComment(documentId: number, comment: CommentCreate): Promise<Comment> {
+    const response = await portalClient.post<Comment>(
+      `/portal/documents/${documentId}/comments`,
+      comment,
+    )
+    return response.data
+  },
+
+  async updateDocumentComment(
+    documentId: number,
+    commentId: number,
+    comment: CommentUpdate,
+  ): Promise<Comment> {
+    const response = await portalClient.patch<Comment>(
+      `/portal/documents/${documentId}/comments/${commentId}`,
+      comment,
+    )
     return response.data
   },
 

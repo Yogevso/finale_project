@@ -152,6 +152,48 @@ class TestCustomerAccessControl:
         # 403 forbidden or 404 not found
         assert response.status_code in [403, 404]
 
+    def test_customer_can_list_portal_document_comments(
+        self, client, customer_headers, public_document, db
+    ):
+        """Customer can read non-private comments through the portal route."""
+        from app.models import Comment
+
+        db.add(
+            Comment(
+                document_id=public_document.id,
+                user_id=public_document.created_by,
+                content="Portal-visible comment",
+                is_private=False,
+            )
+        )
+        db.commit()
+
+        response = client.get(
+            f"/api/v1/portal/documents/{public_document.id}/comments",
+            headers=customer_headers,
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        items = payload.get("items", []) if isinstance(payload, dict) else payload
+        assert any(item.get("content") == "Portal-visible comment" for item in items)
+
+    def test_customer_can_create_portal_document_comment(
+        self, client, customer_headers, public_document
+    ):
+        """Customer can create a comment thread on portal-visible documents."""
+        response = client.post(
+            f"/api/v1/portal/documents/{public_document.id}/comments",
+            headers=customer_headers,
+            json={
+                "content": "Customer-side inline comment",
+                "anchor_text": "Selected sentence",
+            },
+        )
+        assert response.status_code == 201
+        payload = response.json()
+        assert payload["content"] == "Customer-side inline comment"
+        assert payload["is_private"] is False
+
 
 class TestCrossCompanyIsolation:
     """Test security of multi-tenant isolation"""

@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import type { MouseEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -11,6 +10,7 @@ export interface SelectionPopupState {
   x: number
   y: number
   text: string
+  anchorId: string
 }
 
 export interface CommentPopupState {
@@ -21,8 +21,71 @@ export interface CommentPopupState {
   anchorId: string
 }
 
-const EMPTY_SELECTION_POPUP: SelectionPopupState = { show: false, x: 0, y: 0, text: '' }
+interface MouseUpTargetEvent {
+  target: EventTarget | null
+}
+
+const EMPTY_SELECTION_POPUP: SelectionPopupState = {
+  show: false,
+  x: 0,
+  y: 0,
+  text: '',
+  anchorId: '',
+}
 const EMPTY_COMMENT_POPUP: CommentPopupState = { show: false, x: 0, y: 0, text: '', anchorId: '' }
+
+function resolveAnchorId(selection: Selection): string {
+  if (selection.rangeCount === 0) {
+    return 'document-content-area'
+  }
+
+  const range = selection.getRangeAt(0)
+  const node = range.commonAncestorContainer
+  const baseElement = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as
+    | HTMLElement
+    | null
+
+  if (!baseElement) {
+    return 'document-content-area'
+  }
+
+  const contentRoot = baseElement.closest<HTMLElement>('#document-content-area')
+  if (!contentRoot) {
+    return 'document-content-area'
+  }
+
+  const directHeading = baseElement.closest<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]')
+  if (directHeading?.id) {
+    return directHeading.id
+  }
+
+  const headings = Array.from(
+    contentRoot.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'),
+  )
+  const nodeType = baseElement.ownerDocument.defaultView?.Node ?? Node
+  let fallbackHeadingId: string | null = null
+
+  for (const heading of headings) {
+    if (heading === baseElement || heading.contains(baseElement)) {
+      fallbackHeadingId = heading.id
+      break
+    }
+    const relation = heading.compareDocumentPosition(baseElement)
+    if (relation & nodeType.DOCUMENT_POSITION_FOLLOWING) {
+      fallbackHeadingId = heading.id
+      continue
+    }
+    if (relation & nodeType.DOCUMENT_POSITION_PRECEDING) {
+      break
+    }
+  }
+
+  if (fallbackHeadingId) {
+    return fallbackHeadingId
+  }
+
+  return headings[0]?.id || 'document-content-area'
+}
 
 export function useInlineComments(documentId: number, reviewId: number | null = null) {
   const queryClient = useQueryClient()
@@ -133,8 +196,9 @@ export function useInlineComments(documentId: number, reviewId: number | null = 
   })
 
   const handleMouseUp = useCallback(
-    (event: MouseEvent) => {
-      if ((event.target as HTMLElement).closest('.inline-comment-popup')) {
+    (event: MouseUpTargetEvent) => {
+      const eventTarget = event.target as HTMLElement | null
+      if (eventTarget?.closest('.inline-comment-popup')) {
         return
       }
 
@@ -155,6 +219,7 @@ export function useInlineComments(documentId: number, reviewId: number | null = 
           x: rect.left + rect.width / 2,
           y: rect.top - 10,
           text: selectedText,
+          anchorId: resolveAnchorId(selection),
         })
       } else {
         setSelectionPopup(EMPTY_SELECTION_POPUP)
@@ -171,7 +236,7 @@ export function useInlineComments(documentId: number, reviewId: number | null = 
       x: selectionPopup.x,
       y: selectionPopup.y + 60,
       text: selectionPopup.text,
-      anchorId: `anchor-${Date.now()}`,
+      anchorId: selectionPopup.anchorId || 'document-content-area',
     })
     setSelectionPopup(EMPTY_SELECTION_POPUP)
   }, [selectionPopup])

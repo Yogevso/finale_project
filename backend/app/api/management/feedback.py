@@ -182,6 +182,7 @@ async def list_all_feedback(
     status_filter: Optional[FeedbackStatus] = Query(None, alias="status"),
     type_filter: Optional[FeedbackType] = Query(None, alias="type"),
     company_id: Optional[int] = Query(None),
+    document_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager),
@@ -214,6 +215,9 @@ async def list_all_feedback(
 
     if company_id:
         query = query.join(Feedback.user).filter(User.tenant_id == company_id)
+
+    if document_id:
+        query = query.filter(Feedback.document_id == document_id)
 
     if search:
         search_term = f"%{search}%"

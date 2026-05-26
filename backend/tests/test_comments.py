@@ -3,9 +3,10 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
-from app.models import Comment, User
+from app.models import Comment, User, UserRole
 from app.repositories.comment_repository import CommentRepository
 from app.services.comment_service import CommentService
+from tests.factories import create_user
 
 
 class TestCommentsAPI:
@@ -190,6 +191,31 @@ class TestCommentsAPI:
         persisted_reply = db.query(Comment).filter(Comment.id == reply.id).first()
         assert persisted_reply is not None
         assert persisted_reply.parent_id == parent.id
+
+    def test_internal_viewer_can_see_non_private_comments_without_being_contributor(
+        self, db, sample_document: dict
+    ):
+        """Non-private threads should be visible to all internal users, not only contributors."""
+        admin_user = db.query(User).filter(User.id == 1).first()
+        assert admin_user is not None
+
+        viewer_user = create_user(
+            db,
+            role=UserRole.VIEWER,
+            tenant_id=admin_user.tenant_id,
+        )
+
+        comment = Comment(
+            document_id=sample_document["id"],
+            user_id=admin_user.id,
+            content="Internal note visible to all staff",
+            is_private=False,
+        )
+        db.add(comment)
+        db.commit()
+
+        comments = CommentService(db).get_comments(sample_document["id"], viewer_user)
+        assert any(item.id == comment.id for item in comments.items)
 
     def test_parent_chain_is_eager_loaded_for_depth_checks(self, db, sample_document: dict):
         current_user = db.query(User).filter(User.id == 1).first()
