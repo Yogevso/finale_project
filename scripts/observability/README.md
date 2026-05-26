@@ -2,6 +2,8 @@
 
 Wave O observability evaluator scripts:
 
+Part of the Intel Documentation Platform observability tooling. These scripts evaluate use-case telemetry against the checked-in SLO contract and produce evidence artifacts.
+
 - Task 98: use-case SLO evaluation
 - Task 119: burn-rate alert evaluation and evidence export
 
@@ -35,3 +37,9 @@ Telemetry input can use:
 
 - workflow: `.github/workflows/slo-burn-rate.yml`
 - evidence output: `docs/slo/evidence/latest-slo-burn-rate-report.json`
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [SLO Docs](../../docs/slo/README.md)
+- [Deployment](../../docs/DEPLOYMENT.md)
