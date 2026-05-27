@@ -59,6 +59,7 @@ if [[ "$backend_changed" == true ]]; then
   echo "[pre-push] Running backend guard checks..."
   require_cmd ruff
   (cd backend && ruff check app/ tests/)
+  (cd backend && ruff format app/ tests/ --check)
 fi
 
 if [[ "$frontend_changed" == true ]]; then

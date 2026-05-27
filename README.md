@@ -913,7 +913,7 @@ Local pre-push checks (recommended):
 
 This enables `.githooks/pre-push`, which runs short guard checks based on changed paths:
 
-- `backend/**`: `ruff check app/ tests/`
+- `backend/**`: `ruff check app/ tests/`, `ruff format app/ tests/ --check`
 - `frontend/**`: `npm run lint`, `tsc --noEmit`, `npm run generate:api-contracts:check`
 - `collab-server/**`: `npm run lint`
 - `.github/workflows/**` or `scripts/architecture_checks/**`: `check_refactor_budget.py`
