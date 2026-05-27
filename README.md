@@ -905,6 +905,25 @@ Recommended workflow:
 5. Update docs when behavior or setup changes
 6. Open a PR with testing notes
 
+Local pre-push checks (recommended):
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+This enables `.githooks/pre-push`, which runs short guard checks based on changed paths:
+
+- `backend/**`: `ruff check app/ tests/`
+- `frontend/**`: `npm run lint`, `tsc --noEmit`, `npm run generate:api-contracts:check`
+- `collab-server/**`: `npm run lint`
+- `.github/workflows/**` or `scripts/architecture_checks/**`: `check_refactor_budget.py`
+
+Emergency bypass (single push):
+
+```bash
+SKIP_PRE_PUSH=1 git push
+```
+
 Suggested branch names:
 
 - `feature/<name>`

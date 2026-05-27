@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "${SKIP_PRE_PUSH:-}" == "1" ]]; then
+  echo "[pre-push] SKIP_PRE_PUSH=1, skipping checks."
+  exit 0
+fi
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "[pre-push] Missing required command: $cmd"
+    exit 1
+  fi
+}
+
+BASE_REF=""
+if git rev-parse --verify --quiet "@{upstream}" >/dev/null; then
+  BASE_REF="$(git merge-base HEAD @{upstream})"
+elif git rev-parse --verify --quiet "origin/main" >/dev/null; then
+  BASE_REF="$(git merge-base HEAD origin/main)"
+else
+  BASE_REF="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
+fi
+
+CHANGED_FILES="$(git diff --name-only "${BASE_REF}...HEAD")"
+if [[ -z "$CHANGED_FILES" ]]; then
+  echo "[pre-push] No changes detected."
+  exit 0
+fi
+
+backend_changed=false
+frontend_changed=false
+collab_changed=false
+workflow_changed=false
+
+while IFS= read -r path; do
+  case "$path" in
+    backend/*)
+      backend_changed=true
+      ;;
+    frontend/*)
+      frontend_changed=true
+      ;;
+    collab-server/*)
+      collab_changed=true
+      ;;
+    .github/workflows/*|scripts/architecture_checks/*)
+      workflow_changed=true
+      ;;
+  esac
+done <<< "$CHANGED_FILES"
+
+if [[ "$backend_changed" == true ]]; then
+  echo "[pre-push] Running backend guard checks..."
+  require_cmd ruff
+  (cd backend && ruff check app/ tests/)
+fi
+
+if [[ "$frontend_changed" == true ]]; then
+  echo "[pre-push] Running frontend guard checks..."
+  require_cmd npm
+  (cd frontend && npm run lint --silent)
+  (cd frontend && npx tsc --noEmit)
+  (cd frontend && npm run generate:api-contracts:check --silent)
+fi
+
+if [[ "$collab_changed" == true ]]; then
+  echo "[pre-push] Running collab guard checks..."
+  require_cmd npm
+  (cd collab-server && npm run lint --silent)
+fi
+
+if [[ "$workflow_changed" == true ]]; then
+  echo "[pre-push] Running workflow guard checks..."
+  require_cmd python
+  python scripts/architecture_checks/check_refactor_budget.py
+fi
+
+echo "[pre-push] All required checks passed."

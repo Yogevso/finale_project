@@ -94,8 +94,12 @@ PROJECT_FULL_AUDIT3.md
 AUDIT_REMEDIATION_PLAN.md
 
 # Codex / Ralph Loop / Skills
-.agents/
-skills/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/ci-cd-firefighter/
+!.agents/skills/ci-cd-firefighter/**
+/skills/
 skills-lock.json
 .skill_inspect_microsoft/
 .skill_inspect_openai/
