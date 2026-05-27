@@ -4,19 +4,26 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'collab-server/**'
-      - 'scripts/architecture_checks/**'
-      - '.github/workflows/architecture-fitness.yml'
+      - "backend/**"
+      - "frontend/**"
+      - "collab-server/**"
+      - "scripts/architecture_checks/**"
+      - ".github/workflows/architecture-fitness.yml"
   pull_request:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'collab-server/**'
-      - 'scripts/architecture_checks/**'
-      - '.github/workflows/architecture-fitness.yml'
+      - "backend/**"
+      - "frontend/**"
+      - "collab-server/**"
+      - "scripts/architecture_checks/**"
+      - ".github/workflows/architecture-fitness.yml"
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: "Upload detailed architecture-check logs as artifacts"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   architecture-fitness:
@@ -26,6 +33,7 @@ jobs:
       GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
       GITHUB_BEFORE_SHA: ${{ github.event.before }}
       GITHUB_HEAD_SHA: ${{ github.sha }}
+      DEBUG_MODE: ${{ (github.event_name == 'workflow_dispatch' && inputs.debug_mode) && 'true' || 'false' }}
 
     steps:
       - name: Checkout code
@@ -36,31 +44,58 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Backend architecture checks
-        run: python scripts/architecture_checks/check_backend_architecture.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_backend_architecture.py 2>&1 | tee arch-backend.log
 
       - name: Broad exception policy checks
-        run: python scripts/architecture_checks/check_exception_policy_annotations.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_exception_policy_annotations.py 2>&1 | tee arch-exceptions.log
 
       - name: Collab architecture checks
-        run: python scripts/architecture_checks/check_collab_architecture.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_collab_architecture.py 2>&1 | tee arch-collab.log
 
       - name: Frontend dependency checks
-        run: python scripts/architecture_checks/check_frontend_feature_dependencies.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_frontend_feature_dependencies.py 2>&1 | tee arch-frontend-deps.log
 
       - name: Route DB access baseline check
-        run: python scripts/architecture_checks/check_route_db_access.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_route_db_access.py 2>&1 | tee arch-route-db.log
 
       - name: Route SQL usage baseline check
-        run: python scripts/architecture_checks/check_route_sql_usage.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_route_sql_usage.py 2>&1 | tee arch-route-sql.log
 
       - name: Query-plan regression check
-        run: python scripts/architecture_checks/query_plans.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/query_plans.py 2>&1 | tee arch-query-plans.log
 
       - name: Tech-debt budget check
-        run: python backend/scripts/tech_debt_budget.py --budget 200 --delta-only --max-new 0
+        run: |
+          set -o pipefail
+          python backend/scripts/tech_debt_budget.py --budget 200 --delta-only --max-new 0 2>&1 | tee arch-tech-debt.log
 
       - name: Refactor budget check
-        run: python scripts/architecture_checks/check_refactor_budget.py
+        run: |
+          set -o pipefail
+          python scripts/architecture_checks/check_refactor_budget.py 2>&1 | tee arch-refactor-budget.log
+
+      - name: Upload architecture debug logs
+        if: always() && env.DEBUG_MODE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-fitness-logs
+          path: arch-*.log
+          if-no-files-found: ignore
+          retention-days: 14
