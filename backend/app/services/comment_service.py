@@ -92,7 +92,9 @@ class CommentService(SessionService):
         return False
 
     @staticmethod
-    def _ensure_user_can_access_document_for_comments(document: Document, current_user: User) -> None:
+    def _ensure_user_can_access_document_for_comments(
+        document: Document, current_user: User
+    ) -> None:
         if current_user.role == UserRole.SYSTEM_ADMIN:
             return
 

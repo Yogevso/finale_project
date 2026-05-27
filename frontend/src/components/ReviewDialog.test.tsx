@@ -338,9 +338,6 @@ describe('ReviewDialog', () => {
         },
       ] as never;
     });
-  it('persists the reviewed version id when opening the document from review', async () => {
-    const user = userEvent.setup();
-    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
     renderDialog(buildReview());
 
@@ -352,6 +349,18 @@ describe('ReviewDialog', () => {
     expect(await screen.findByText('Reviewer thread note')).toBeInTheDocument();
     expect(screen.getByText('Please validate this source table.')).toBeInTheDocument();
     expect(screen.queryByText('Historical review thread.')).not.toBeInTheDocument();
+  });
+
+  it('persists the reviewed version id when opening the document from review', async () => {
+    const user = userEvent.setup();
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    renderDialog(buildReview());
+
+    await user.click(await screen.findByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    await user.click(screen.getByRole('button', { name: /go to final review/i }));
     await user.click(screen.getByRole('button', { name: /open.*new tab/i }));
 
     const rawSessionStore = window.localStorage.getItem('reviews.document.session.v1');

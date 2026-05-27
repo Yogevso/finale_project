@@ -170,19 +170,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      - name: Detect code scanning availability
+        id: code_scanning
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          status_code=$(curl -sS -o /tmp/code-scanning-check.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/code-scanning/alerts?per_page=1")
+
+          if [[ "${status_code}" == "200" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Code scanning API unavailable (HTTP ${status_code}); skipping CodeQL analyze/upload."
+          fi
+
       - name: Initialize CodeQL
+        if: steps.code_scanning.outputs.enabled == 'true'
         uses: github/codeql-action/init@480db559a14342288b67e54bd959dd52dc3ee68f # v3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Autobuild
+        if: steps.code_scanning.outputs.enabled == 'true'
         uses: github/codeql-action/autobuild@480db559a14342288b67e54bd959dd52dc3ee68f # v3
 
       - name: Perform CodeQL Analysis
+        if: steps.code_scanning.outputs.enabled == 'true'
         uses: github/codeql-action/analyze@480db559a14342288b67e54bd959dd52dc3ee68f # v3
         with:
           category: "/language:${{ matrix.language }}"
+
+      - name: Skip CodeQL when code scanning is disabled
+        if: steps.code_scanning.outputs.enabled != 'true'
+        run: |
+          echo "Code scanning is not enabled or accessible for this repository."
+          echo "Skipping CodeQL analysis to avoid noisy failures on pull requests."
 
   # ============================================
   # Docker Image Security Scanning

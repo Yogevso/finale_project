@@ -50,6 +50,14 @@ def write_baseline(entries: set[str]) -> None:
     BASELINE_FILE.write_text("\n".join(header + body) + "\n", encoding="utf-8")
 
 
+def _file_counts(entries: set[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for entry in entries:
+        file_path = entry.rsplit(":", 1)[0]
+        counts[file_path] = counts.get(file_path, 0) + 1
+    return counts
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -89,6 +97,15 @@ def main() -> int:
         print("New direct db.query route usages detected:")
         for violation in new_violations:
             print(f"- {violation}")
+        resolved_counts = _file_counts(set(resolved_since_baseline))
+        new_counts = _file_counts(set(new_violations))
+        if resolved_counts == new_counts and resolved_counts:
+            print(
+                "\nHint: detected additions/resolutions are perfectly mirrored per file. "
+                "This is usually line-number drift after formatting/refactors. "
+                "If behavior did not add new route db.query calls, regenerate baseline with:\n"
+                "python scripts/architecture_checks/check_route_db_access.py --update-baseline"
+            )
         return 1
 
     print("Route DB access check passed (no new direct db.query usages).")

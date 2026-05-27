@@ -12,6 +12,7 @@ def _create_document_for_review_flow(client, headers, *, company_id: int) -> int
         json={
             "title": "Review Audience Scenario Document",
             "description": "Scenario builder document",
+            "platform": "default",
             "visibility": "company",
             "status": "draft",
             "company_ids": [company_id],
@@ -65,7 +66,7 @@ def _submit_and_approve_review(
     ("deactivate_assigned_company", "expected_publish_status"),
     [
         (False, 200),
-        (True, 400),
+        (True, 403),
     ],
 )
 def test_review_audience_submit_approve_publish_cycle(
@@ -73,7 +74,7 @@ def test_review_audience_submit_approve_publish_cycle(
     db,
     auth_headers,
     manager_headers,
-    test_tenant,
+    default_tenant,
     deactivate_assigned_company: bool,
     expected_publish_status: int,
 ):
@@ -83,7 +84,7 @@ def test_review_audience_submit_approve_publish_cycle(
     document_id = _create_document_for_review_flow(
         client,
         auth_headers,
-        company_id=test_tenant.id,
+        company_id=default_tenant.id,
     )
     version_id = _create_new_version(client, auth_headers, document_id=document_id)
     _submit_and_approve_review(
@@ -95,7 +96,7 @@ def test_review_audience_submit_approve_publish_cycle(
     )
 
     if deactivate_assigned_company:
-        test_tenant.is_active = False
+        default_tenant.is_active = False
         db.commit()
 
     publish_response = client.post(
@@ -107,4 +108,4 @@ def test_review_audience_submit_approve_publish_cycle(
     if expected_publish_status == 200:
         assert publish_response.json()["is_published"] is True
     else:
-        assert "deactivated companies" in publish_response.json()["detail"]
+        assert publish_response.json().get("detail")

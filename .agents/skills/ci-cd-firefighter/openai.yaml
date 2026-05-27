@@ -1,0 +1,4 @@
+interface:
+  display_name: "CI/CD Firefighter"
+  short_description: "Diagnose and fix failing pipeline checks"
+  default_prompt: "Use $ci-cd-firefighter to debug the failing CI/CD checks on this PR, reproduce locally, fix root cause, and verify the failing jobs."

@@ -63,7 +63,7 @@ Key runtime details:
 | --- | --- | --- |
 | `PORT` | `8002` | WebSocket server port |
 | `HOST` | `0.0.0.0` | Bind host |
-| `SECRET_KEY` | none | Required shared signing key |
+| `SECRET_KEY` | none | Required `SECRET_KEY` environment variable used as the shared signing key |
 | `SECRET_KEY_OLD` | none | Optional grace-period rotation key |
 | `JWT_SECRET` | none | Legacy fallback only |
 | `BACKEND_URL` | `http://localhost:8000` | Backend API base |

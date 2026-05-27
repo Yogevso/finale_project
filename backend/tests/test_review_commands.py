@@ -104,6 +104,7 @@ def test_approve_review_blocks_stale_concurrent_overwrite(tmp_path):
             command=ApproveReviewCommand(
                 review_id=review_id,
                 comments="First approval wins",
+                review_feedback=None,
                 current_user=reviewer_one,
             )
         )
@@ -111,6 +112,7 @@ def test_approve_review_blocks_stale_concurrent_overwrite(tmp_path):
             command=ApproveReviewCommand(
                 review_id=review_id,
                 comments="Second approval must lose",
+                review_feedback=None,
                 current_user=reviewer_two,
             )
         )
