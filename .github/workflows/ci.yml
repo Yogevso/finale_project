@@ -7,26 +7,76 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'collab-server/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
+      - "backend/**"
+      - "frontend/**"
+      - "collab-server/**"
+      - "scripts/**"
+      - ".github/workflows/**"
   pull_request:
     branches: [main, develop]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'collab-server/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
+      - "backend/**"
+      - "frontend/**"
+      - "collab-server/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+    inputs:
+      test_profile:
+        description: "Test profile to run"
+        required: true
+        default: critical
+        type: choice
+        options:
+          - critical
+          - full
+      debug_mode:
+        description: "Upload extra debug artifacts and print runtime logs on failures"
+        required: false
+        default: false
+        type: boolean
   workflow_call:
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '20'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
 
 jobs:
+  ci-mode:
+    name: Resolve CI Mode
+    runs-on: ubuntu-latest
+    outputs:
+      run_extended_suite: ${{ steps.resolve.outputs.run_extended_suite }}
+      debug_mode: ${{ steps.resolve.outputs.debug_mode }}
+
+    steps:
+      - name: Resolve runtime mode
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          run_extended_suite="false"
+          debug_mode="false"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_call" ]]; then
+            run_extended_suite="true"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            test_profile="$(jq -r '.inputs.test_profile // "critical"' "$GITHUB_EVENT_PATH")"
+            debug_input="$(jq -r '.inputs.debug_mode // "false"' "$GITHUB_EVENT_PATH")"
+
+            if [[ "${test_profile}" == "full" ]]; then
+              run_extended_suite="true"
+            fi
+
+            if [[ "${debug_input}" == "true" ]]; then
+              debug_mode="true"
+            fi
+          fi
+
+          echo "run_extended_suite=${run_extended_suite}" >> "$GITHUB_OUTPUT"
+          echo "debug_mode=${debug_mode}" >> "$GITHUB_OUTPUT"
+
   # ============================================
   # Backend Tests & Quality Checks
   # ============================================
@@ -45,7 +95,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install dependencies
@@ -70,7 +120,7 @@ jobs:
   backend-lint:
     name: Backend Lint & Type Check
     runs-on: ubuntu-latest
-    needs: migration-safety
+    needs: [ci-mode, migration-safety]
     defaults:
       run:
         working-directory: ./backend
@@ -83,7 +133,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install dependencies
@@ -103,12 +153,12 @@ jobs:
 
       - name: Run MyPy type checking
         run: mypy app/ --ignore-missing-imports --no-error-summary
-        continue-on-error: true  # Type errors are warnings for now
+        continue-on-error: true # Type errors are warnings for now
 
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
-    needs: backend-lint
+    needs: [ci-mode, backend-lint]
     defaults:
       run:
         working-directory: ./backend
@@ -121,7 +171,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Install dependencies
@@ -181,14 +231,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint 2>/dev/null || echo "No lint script configured"
+        run: npm run lint
 
       - name: Run TypeScript type check
         run: npx tsc --noEmit
@@ -196,7 +246,7 @@ jobs:
   frontend-tests:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
-    needs: frontend-lint
+    needs: [ci-mode, frontend-lint]
     defaults:
       run:
         working-directory: ./frontend
@@ -209,7 +259,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
@@ -221,7 +271,7 @@ jobs:
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
-    needs: [frontend-lint, frontend-tests]
+    needs: [ci-mode, frontend-lint, frontend-tests]
     defaults:
       run:
         working-directory: ./frontend
@@ -234,7 +284,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
@@ -270,7 +320,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: collab-server/package-lock.json
 
       - name: Install dependencies
@@ -288,7 +338,8 @@ jobs:
   performance-gates:
     name: Performance Regression Gates
     runs-on: ubuntu-latest
-    needs: [backend-tests, collab-quality, frontend-lint]
+    if: needs.ci-mode.outputs.run_extended_suite == 'true'
+    needs: [ci-mode, backend-tests, collab-quality, frontend-lint]
     timeout-minutes: 25
 
     steps:
@@ -299,14 +350,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: |
             frontend/package-lock.json
             collab-server/package-lock.json
@@ -403,7 +454,7 @@ jobs:
   e2e-core:
     name: E2E Core Tests
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-build]
+    needs: [ci-mode, backend-tests, frontend-build]
     timeout-minutes: 20
     defaults:
       run:
@@ -417,14 +468,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend dependencies
@@ -479,19 +530,40 @@ jobs:
           CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
           SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../e2e-backend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
-          npm run dev &
+          npm run dev > ../e2e-frontend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run Core E2E tests (auth, documents, app)
         env:
-          PW_SKIP_WEBSERVER: '1'
-          BASE_URL: 'http://localhost:3000'
-        run: npx playwright test e2e/app.spec.ts e2e/documents.spec.ts --reporter=github
+          PW_SKIP_WEBSERVER: "1"
+          BASE_URL: "http://localhost:3000"
+        run: npx playwright test e2e/app.spec.ts e2e/documents.spec.ts e2e/permissions.spec.ts --reporter=github,line
+
+      - name: Debug E2E runtime logs (core)
+        if: failure() && needs.ci-mode.outputs.debug_mode == 'true'
+        run: |
+          echo "===== backend (tail) ====="
+          tail -n 300 ../e2e-backend.log || true
+          echo "===== frontend (tail) ====="
+          tail -n 300 ../e2e-frontend.log || true
+
+      - name: Upload E2E artifacts (core)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-core-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+            e2e-backend.log
+            e2e-frontend.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ============================================
   # E2E Tests - Stage 2: Role-Based Tests (Parallel)
@@ -499,7 +571,8 @@ jobs:
   e2e-roles:
     name: E2E Role Tests (${{ matrix.spec }})
     runs-on: ubuntu-latest
-    needs: [e2e-core]
+    if: needs.ci-mode.outputs.run_extended_suite == 'true'
+    needs: [ci-mode, e2e-core]
     timeout-minutes: 20
     defaults:
       run:
@@ -523,14 +596,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend dependencies
@@ -585,19 +658,40 @@ jobs:
           CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
           SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../e2e-backend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
-          npm run dev &
+          npm run dev > ../e2e-frontend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run E2E tests - ${{ matrix.spec }}
         env:
-          PW_SKIP_WEBSERVER: '1'
-          BASE_URL: 'http://localhost:3000'
-        run: npx playwright test e2e/${{ matrix.spec }} --reporter=github
+          PW_SKIP_WEBSERVER: "1"
+          BASE_URL: "http://localhost:3000"
+        run: npx playwright test e2e/${{ matrix.spec }} --reporter=github,line
+
+      - name: Debug E2E runtime logs (roles)
+        if: failure() && needs.ci-mode.outputs.debug_mode == 'true'
+        run: |
+          echo "===== backend (tail) ====="
+          tail -n 300 ../e2e-backend.log || true
+          echo "===== frontend (tail) ====="
+          tail -n 300 ../e2e-frontend.log || true
+
+      - name: Upload E2E artifacts (roles)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-roles-${{ matrix.spec }}-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+            e2e-backend.log
+            e2e-frontend.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ============================================
   # E2E Tests - Stage 3: Feature Tests (Parallel)
@@ -605,7 +699,8 @@ jobs:
   e2e-features:
     name: E2E Feature Tests (${{ matrix.spec }})
     runs-on: ubuntu-latest
-    needs: [e2e-core]
+    if: needs.ci-mode.outputs.run_extended_suite == 'true'
+    needs: [ci-mode, e2e-core]
     timeout-minutes: 20
     defaults:
       run:
@@ -636,14 +731,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: "pip"
           cache-dependency-path: backend/requirements*.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend dependencies
@@ -698,19 +793,40 @@ jobs:
           CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173"]'
           SEARCH_BACKEND_MODE: sqlite_fts5
         run: |
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../e2e-backend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break || sleep 2; done || exit 1
 
       - name: Start frontend dev server
         run: |
-          npm run dev &
+          npm run dev > ../e2e-frontend.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3000 && break || sleep 2; done || exit 1
 
       - name: Run E2E tests - ${{ matrix.spec }}
         env:
-          PW_SKIP_WEBSERVER: '1'
-          BASE_URL: 'http://localhost:3000'
-        run: npx playwright test e2e/${{ matrix.spec }} --reporter=github
+          PW_SKIP_WEBSERVER: "1"
+          BASE_URL: "http://localhost:3000"
+        run: npx playwright test e2e/${{ matrix.spec }} --reporter=github,line
+
+      - name: Debug E2E runtime logs (features)
+        if: failure() && needs.ci-mode.outputs.debug_mode == 'true'
+        run: |
+          echo "===== backend (tail) ====="
+          tail -n 300 ../e2e-backend.log || true
+          echo "===== frontend (tail) ====="
+          tail -n 300 ../e2e-frontend.log || true
+
+      - name: Upload E2E artifacts (features)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-features-${{ matrix.spec }}-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+            e2e-backend.log
+            e2e-frontend.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ============================================
   # Summary Job
@@ -718,13 +834,27 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [migration-safety, backend-tests, frontend-tests, collab-quality, performance-gates, e2e-core, e2e-roles, e2e-features]
+    needs:
+      [
+        ci-mode,
+        migration-safety,
+        backend-tests,
+        frontend-tests,
+        collab-quality,
+        performance-gates,
+        e2e-core,
+        e2e-roles,
+        e2e-features,
+      ]
     if: always()
 
     steps:
       - name: Check all jobs passed
         run: |
           echo "## 🧪 CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Extended suite: ${{ needs.ci-mode.outputs.run_extended_suite }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Debug mode: ${{ needs.ci-mode.outputs.debug_mode }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -736,7 +866,7 @@ jobs:
           echo "| E2E Core | ${{ needs.e2e-core.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Roles | ${{ needs.e2e-roles.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| E2E Features | ${{ needs.e2e-features.result }} |" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "${{ needs.migration-safety.result }}" != "success" ]]; then
             echo "Migration safety checks failed"
             exit 1
@@ -753,7 +883,7 @@ jobs:
             echo "❌ Collaboration server checks failed"
             exit 1
           fi
-          if [[ "${{ needs.performance-gates.result }}" != "success" ]]; then
+          if [[ "${{ needs.performance-gates.result }}" != "success" && "${{ needs.performance-gates.result }}" != "skipped" ]]; then
             echo "Performance regression gates failed"
             exit 1
           fi
@@ -761,12 +891,42 @@ jobs:
             echo "❌ E2E core tests failed"
             exit 1
           fi
-          if [[ "${{ needs.e2e-roles.result }}" != "success" ]]; then
+          if [[ "${{ needs.e2e-roles.result }}" != "success" && "${{ needs.e2e-roles.result }}" != "skipped" ]]; then
             echo "❌ E2E role tests failed"
             exit 1
           fi
-          if [[ "${{ needs.e2e-features.result }}" != "success" ]]; then
+          if [[ "${{ needs.e2e-features.result }}" != "success" && "${{ needs.e2e-features.result }}" != "skipped" ]]; then
             echo "❌ E2E feature tests failed"
             exit 1
           fi
           echo "✅ All CI checks passed!"
+
+  failure-debug-summary:
+    name: Failure Debug Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        ci-mode,
+        migration-safety,
+        backend-tests,
+        frontend-tests,
+        collab-quality,
+        performance-gates,
+        e2e-core,
+        e2e-roles,
+        e2e-features,
+      ]
+    if: failure() && needs.ci-mode.outputs.debug_mode == 'true'
+
+    steps:
+      - name: Print failing jobs
+        run: |
+          echo "Debug summary (requested):"
+          echo "- migration-safety: ${{ needs.migration-safety.result }}"
+          echo "- backend-tests: ${{ needs.backend-tests.result }}"
+          echo "- frontend-tests: ${{ needs.frontend-tests.result }}"
+          echo "- collab-quality: ${{ needs.collab-quality.result }}"
+          echo "- performance-gates: ${{ needs.performance-gates.result }}"
+          echo "- e2e-core: ${{ needs.e2e-core.result }}"
+          echo "- e2e-roles: ${{ needs.e2e-roles.result }}"
+          echo "- e2e-features: ${{ needs.e2e-features.result }}"

@@ -125,15 +125,15 @@ Development and test environments seed demo data by default unless explicitly di
 
 Seeded users from [backend/seed_data.py](./backend/seed_data.py):
 
-| Username | Password | Role | Tenant |
-| --- | --- | --- | --- |
-| `sysadmin` | `sysadmin123` | `system_admin` | default internal tenant |
-| `admin` | `admin123` | `admin` | default internal tenant |
-| `manager` | `manager123` | `manager` | default internal tenant |
-| `editor` | `editor123` | `editor` | default internal tenant |
-| `viewer` | `viewer123` | `viewer` | default internal tenant |
-| `customer1` | `customer123` | `customer` | Company A |
-| `customer2` | `customer123` | `customer` | Company B |
+| Username    | Password      | Role           | Tenant                  |
+| ----------- | ------------- | -------------- | ----------------------- |
+| `sysadmin`  | `sysadmin123` | `system_admin` | default internal tenant |
+| `admin`     | `admin123`    | `admin`        | default internal tenant |
+| `manager`   | `manager123`  | `manager`      | default internal tenant |
+| `editor`    | `editor123`   | `editor`       | default internal tenant |
+| `viewer`    | `viewer123`   | `viewer`       | default internal tenant |
+| `customer1` | `customer123` | `customer`     | Company A               |
+| `customer2` | `customer123` | `customer`     | Company B               |
 
 Notes:
 
@@ -145,12 +145,12 @@ Notes:
 
 The repository does encode canonical frontend environments in CI/CD, and it carries default production API and collaboration hosts in deployment config.
 
-| Environment | Surface | URL |
-| --- | --- | --- |
-| `staging` | Frontend app | `https://staging.portal.example.com` |
-| `production` | Frontend app | `https://portal.example.com` |
-| `production default` | Backend API | `https://api.portal.example.com` |
-| `production default` | Collaboration server | `wss://collab.portal.example.com` |
+| Environment          | Surface              | URL                                  |
+| -------------------- | -------------------- | ------------------------------------ |
+| `staging`            | Frontend app         | `https://staging.portal.example.com` |
+| `production`         | Frontend app         | `https://portal.example.com`         |
+| `production default` | Backend API          | `https://api.portal.example.com`     |
+| `production default` | Collaboration server | `wss://collab.portal.example.com`    |
 
 Notes:
 
@@ -325,46 +325,46 @@ docker compose down -v
 
 Run these from `backend/`:
 
-| Command | Purpose |
-| --- | --- |
+| Command                                                    | Purpose                      |
+| ---------------------------------------------------------- | ---------------------------- |
 | `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` | Start FastAPI in development |
-| `pytest tests/ -v` | Run backend tests |
-| `ruff check app/ tests/` | Lint backend code |
-| `ruff format app/ tests/ --check` | Check backend formatting |
-| `alembic upgrade head` | Run core migrations |
-| `alembic -n analytics upgrade head` | Run analytics DB migrations |
-| `alembic -n chat upgrade head` | Run chat DB migrations |
+| `pytest tests/ -v`                                         | Run backend tests            |
+| `ruff check app/ tests/`                                   | Lint backend code            |
+| `ruff format app/ tests/ --check`                          | Check backend formatting     |
+| `alembic upgrade head`                                     | Run core migrations          |
+| `alembic -n analytics upgrade head`                        | Run analytics DB migrations  |
+| `alembic -n chat upgrade head`                             | Run chat DB migrations       |
 
 ### Frontend
 
 Run these from `frontend/`:
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start Vite dev server |
-| `npm run build` | Type-check and build |
-| `npm run preview` | Preview production build |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Run Prettier |
-| `npm run test -- --run` | Run Vitest once |
-| `npm run test:e2e` | Run Playwright E2E |
-| `npm run test:lighthouse` | Run Lighthouse CI |
-| `npm run generate:api-contracts` | Generate frontend API contracts |
-| `npm run generate:api-contracts:check` | Verify contracts are current |
-| `npm run refresh:api-contracts` | Refresh OpenAPI snapshot and contracts |
+| Command                                | Purpose                                |
+| -------------------------------------- | -------------------------------------- |
+| `npm run dev`                          | Start Vite dev server                  |
+| `npm run build`                        | Type-check and build                   |
+| `npm run preview`                      | Preview production build               |
+| `npm run lint`                         | Run ESLint                             |
+| `npm run format`                       | Run Prettier                           |
+| `npm run test -- --run`                | Run Vitest once                        |
+| `npm run test:e2e`                     | Run Playwright E2E                     |
+| `npm run test:lighthouse`              | Run Lighthouse CI                      |
+| `npm run generate:api-contracts`       | Generate frontend API contracts        |
+| `npm run generate:api-contracts:check` | Verify contracts are current           |
+| `npm run refresh:api-contracts`        | Refresh OpenAPI snapshot and contracts |
 
 ### Collaboration server
 
 Run these from `collab-server/`:
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the Hocuspocus server with watch mode |
-| `npm run build` | Build TypeScript output |
-| `npm start` | Run compiled production server |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm run test` | Run Jest tests |
-| `npm run test:coverage` | Run Jest with coverage |
+| Command                 | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `npm run dev`           | Start the Hocuspocus server with watch mode |
+| `npm run build`         | Build TypeScript output                     |
+| `npm start`             | Run compiled production server              |
+| `npm run typecheck`     | Run TypeScript checks                       |
+| `npm run test`          | Run Jest tests                              |
+| `npm run test:coverage` | Run Jest with coverage                      |
 
 ## API Documentation
 
@@ -832,38 +832,38 @@ SEED_DEMO_DATA=false
 
 ### Required
 
-| Variable | Description |
-| --- | --- |
+| Variable     | Description                                                 |
+| ------------ | ----------------------------------------------------------- |
 | `SECRET_KEY` | Shared signing key used by backend and collaboration server |
 
 ### Common backend variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DATABASE_URL` | `sqlite:///./data/portal.db` | Core database |
-| `ANALYTICS_DATABASE_URL` | `sqlite:///./data/analytics.db` | Analytics database |
-| `CHAT_DATABASE_URL` | `sqlite:///./data/chat.db` | Chat database |
-| `REDIS_URL` | `redis://redis:6379/0` | Redis for rate limiting and pub/sub |
-| `SEARCH_BACKEND_MODE` | `portable_like` or `auto` | Search backend strategy |
-| `MAX_UPLOAD_SIZE` | `52428800` | Max upload size in bytes |
+| Variable                 | Default                         | Description                         |
+| ------------------------ | ------------------------------- | ----------------------------------- |
+| `DATABASE_URL`           | `sqlite:///./data/portal.db`    | Core database                       |
+| `ANALYTICS_DATABASE_URL` | `sqlite:///./data/analytics.db` | Analytics database                  |
+| `CHAT_DATABASE_URL`      | `sqlite:///./data/chat.db`      | Chat database                       |
+| `REDIS_URL`              | `redis://redis:6379/0`          | Redis for rate limiting and pub/sub |
+| `SEARCH_BACKEND_MODE`    | `portable_like` or `auto`       | Search backend strategy             |
+| `MAX_UPLOAD_SIZE`        | `52428800`                      | Max upload size in bytes            |
 
 ### Frontend variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `VITE_API_URL` | `/api/v1` or deployed API URL | Frontend API base |
-| `VITE_API_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite dev proxy target |
-| `VITE_COLLAB_SERVER_URL` | `ws://localhost:8002` | Collaboration server URL |
-| `VITE_FF_OPTIMISTIC_CONCURRENCY_HEADERS` | `true` | Frontend concurrency feature flag |
+| Variable                                 | Default                       | Description                       |
+| ---------------------------------------- | ----------------------------- | --------------------------------- |
+| `VITE_API_URL`                           | `/api/v1` or deployed API URL | Frontend API base                 |
+| `VITE_API_PROXY_TARGET`                  | `http://127.0.0.1:8000`       | Vite dev proxy target             |
+| `VITE_COLLAB_SERVER_URL`                 | `ws://localhost:8002`         | Collaboration server URL          |
+| `VITE_FF_OPTIMISTIC_CONCURRENCY_HEADERS` | `true`                        | Frontend concurrency feature flag |
 
 ### Optional integrations
 
-| Variable | Description |
-| --- | --- |
-| `OLLAMA_BASE_URL` | Ollama base URL |
-| `ASSISTANT_MODEL` | LLM model name |
-| `S3_ENABLED` | Enable S3-compatible attachment storage |
-| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | Email delivery |
+| Variable                                  | Description                             |
+| ----------------------------------------- | --------------------------------------- |
+| `OLLAMA_BASE_URL`                         | Ollama base URL                         |
+| `ASSISTANT_MODEL`                         | LLM model name                          |
+| `S3_ENABLED`                              | Enable S3-compatible attachment storage |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` | Email delivery                          |
 
 ## Testing
 
@@ -923,6 +923,12 @@ Emergency bypass (single push):
 ```bash
 SKIP_PRE_PUSH=1 git push
 ```
+
+CI test modes:
+
+- PR/push runs the critical profile only (fast and blocking).
+- Full regression is available via Actions manual run (`CI - Tests & Quality`) with `test_profile=full`.
+- Add `debug_mode=true` in manual run to get extra E2E runtime logs/artifacts for fast failure triage.
 
 Suggested branch names:
 
@@ -1032,14 +1038,14 @@ High-level expectations:
 
 ## Roles at a Glance
 
-| Role | Primary use | Can create/edit docs | Can submit reviews | Can approve reviews | Can access portal as customer |
-| --- | --- | --- | --- | --- | --- |
-| `system_admin` | cross-tenant administration | Yes | Yes | Yes | No |
-| `admin` | tenant administration | Yes | Yes | Yes | No |
-| `manager` | publishing and review authority | Yes | Yes | Yes | No |
-| `editor` | authoring and collaboration | Yes | Yes | Usually no | No |
-| `viewer` | internal read-only | No | No | No | No |
-| `customer` | tenant-scoped customer portal use | No | No | No | Yes |
+| Role           | Primary use                       | Can create/edit docs | Can submit reviews | Can approve reviews | Can access portal as customer |
+| -------------- | --------------------------------- | -------------------- | ------------------ | ------------------- | ----------------------------- |
+| `system_admin` | cross-tenant administration       | Yes                  | Yes                | Yes                 | No                            |
+| `admin`        | tenant administration             | Yes                  | Yes                | Yes                 | No                            |
+| `manager`      | publishing and review authority   | Yes                  | Yes                | Yes                 | No                            |
+| `editor`       | authoring and collaboration       | Yes                  | Yes                | Usually no          | No                            |
+| `viewer`       | internal read-only                | No                   | No                 | No                  | No                            |
+| `customer`     | tenant-scoped customer portal use | No                   | No                 | No                  | Yes                           |
 
 This is a quick scan table, not a full permission matrix. For route-level detail, use [docs/AUTHORIZATION_MATRIX.md](./docs/AUTHORIZATION_MATRIX.md).
 
@@ -1047,21 +1053,21 @@ This is a quick scan table, not a full permission matrix. For route-level detail
 
 This table is the higher-signal summary of the platform permission model. It is intentionally broader than the quick roles table above, but still not a substitute for the full route matrix.
 
-| Capability | system_admin | admin | manager | editor | viewer | customer |
-| --- | --- | --- | --- | --- | --- | --- |
-| Access internal management UI | Yes | Yes | Yes | Yes | Yes | No |
-| Access customer portal | No | No | No | No | No | Yes |
-| Create and edit documents | Yes | Yes | Yes | Yes | No | No |
-| Upload DOCX/PPTX/PDF documents | Yes | Yes | Yes | Yes | No | No |
-| Create public documents directly | Yes | Yes | Yes | No | No | No |
-| Upload directly as `active` | Yes | Yes | Yes | No | No | No |
-| Assign company audience | Yes | Yes | Yes | Yes | No | No |
-| Submit documents for review | Yes | Yes | Yes | Yes | No | No |
-| Approve or reject reviews | Yes | Yes | Yes | Usually no | No | No |
-| View tenant analytics and admin operations | Yes | Yes | Yes | Limited | No | No |
-| Use internal assistant against accessible docs | Yes | Yes | Yes | Yes | Yes | No |
-| Use portal/customer document access | No | No | No | No | No | Yes |
-| Access public documents | Yes | Yes | Yes | Yes | Yes | Yes |
+| Capability                                     | system_admin | admin | manager | editor     | viewer | customer |
+| ---------------------------------------------- | ------------ | ----- | ------- | ---------- | ------ | -------- |
+| Access internal management UI                  | Yes          | Yes   | Yes     | Yes        | Yes    | No       |
+| Access customer portal                         | No           | No    | No      | No         | No     | Yes      |
+| Create and edit documents                      | Yes          | Yes   | Yes     | Yes        | No     | No       |
+| Upload DOCX/PPTX/PDF documents                 | Yes          | Yes   | Yes     | Yes        | No     | No       |
+| Create public documents directly               | Yes          | Yes   | Yes     | No         | No     | No       |
+| Upload directly as `active`                    | Yes          | Yes   | Yes     | No         | No     | No       |
+| Assign company audience                        | Yes          | Yes   | Yes     | Yes        | No     | No       |
+| Submit documents for review                    | Yes          | Yes   | Yes     | Yes        | No     | No       |
+| Approve or reject reviews                      | Yes          | Yes   | Yes     | Usually no | No     | No       |
+| View tenant analytics and admin operations     | Yes          | Yes   | Yes     | Limited    | No     | No       |
+| Use internal assistant against accessible docs | Yes          | Yes   | Yes     | Yes        | Yes    | No       |
+| Use portal/customer document access            | No           | No    | No      | No         | No     | Yes      |
+| Access public documents                        | Yes          | Yes   | Yes     | Yes        | Yes    | Yes      |
 
 Interpretation notes:
 
@@ -1076,11 +1082,11 @@ Audience behavior is central to the platform.
 
 ### Visibility values
 
-| Value | Meaning |
-| --- | --- |
-| `internal` | only internal users can access the document |
-| `company` | internal users plus specific assigned customer companies |
-| `public` | publicly viewable through public routes |
+| Value      | Meaning                                                  |
+| ---------- | -------------------------------------------------------- |
+| `internal` | only internal users can access the document              |
+| `company`  | internal users plus specific assigned customer companies |
+| `public`   | publicly viewable through public routes                  |
 
 ### Backend invariants
 
@@ -1150,19 +1156,19 @@ Key variables:
 
 Common API responses:
 
-| Code | Meaning | Typical case |
-| --- | --- | --- |
-| `200` | OK | Successful read or update |
-| `201` | Created | Resource created |
-| `204` | No Content | Successful delete |
-| `400` | Bad Request | Validation or malformed input |
-| `401` | Unauthorized | Missing or invalid auth |
-| `403` | Forbidden | RBAC or tenant isolation denial |
-| `404` | Not Found | Unknown route or entity |
-| `409` | Conflict | Pending review exists or state conflict |
-| `422` | Unprocessable Entity | Schema validation failure |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Internal Server Error | Unexpected backend failure |
+| Code  | Meaning               | Typical case                            |
+| ----- | --------------------- | --------------------------------------- |
+| `200` | OK                    | Successful read or update               |
+| `201` | Created               | Resource created                        |
+| `204` | No Content            | Successful delete                       |
+| `400` | Bad Request           | Validation or malformed input           |
+| `401` | Unauthorized          | Missing or invalid auth                 |
+| `403` | Forbidden             | RBAC or tenant isolation denial         |
+| `404` | Not Found             | Unknown route or entity                 |
+| `409` | Conflict              | Pending review exists or state conflict |
+| `422` | Unprocessable Entity  | Schema validation failure               |
+| `429` | Too Many Requests     | Rate limit exceeded                     |
+| `500` | Internal Server Error | Unexpected backend failure              |
 
 Health endpoints:
 
