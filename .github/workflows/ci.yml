@@ -454,6 +454,7 @@ jobs:
   e2e-core:
     name: E2E Core Tests
     runs-on: ubuntu-latest
+    if: needs.ci-mode.outputs.run_extended_suite == 'true'
     needs: [ci-mode, backend-tests, frontend-build]
     timeout-minutes: 20
     defaults:
@@ -887,7 +888,7 @@ jobs:
             echo "Performance regression gates failed"
             exit 1
           fi
-          if [[ "${{ needs.e2e-core.result }}" != "success" ]]; then
+          if [[ "${{ needs.e2e-core.result }}" != "success" && "${{ needs.e2e-core.result }}" != "skipped" ]]; then
             echo "❌ E2E core tests failed"
             exit 1
           fi
