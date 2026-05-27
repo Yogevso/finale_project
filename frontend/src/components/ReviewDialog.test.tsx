@@ -350,4 +350,29 @@ describe('ReviewDialog', () => {
     expect(screen.getByText('Please validate this source table.')).toBeInTheDocument();
     expect(screen.queryByText('Historical review thread.')).not.toBeInTheDocument();
   });
+
+  it('persists the review document session when opening the document from review', async () => {
+    const user = userEvent.setup();
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    renderDialog(buildReview());
+
+    await user.click(await screen.findByRole('button', { name: /start review/i }));
+    await user.click(screen.getByRole('button', { name: /open.*new tab/i }));
+
+    const rawSessionStore = window.localStorage.getItem('reviews.document.session.v1');
+    expect(rawSessionStore).not.toBeNull();
+
+    const parsedSessionStore = JSON.parse(rawSessionStore || '{}');
+    expect(parsedSessionStore['1']).toMatchObject({
+      reviewId: 1,
+      documentId: 42,
+      mode: 'review',
+    });
+    expect(parsedSessionStore['1']?.entries?.length).toBeGreaterThan(0);
+    expect(parsedSessionStore['1']?.focusedEntryId).toBeTruthy();
+    expect(windowOpenSpy).toHaveBeenCalled();
+
+    windowOpenSpy.mockRestore();
+  });
 });
