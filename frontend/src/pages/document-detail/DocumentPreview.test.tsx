@@ -1,5 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
 import type { Attachment } from '@/types'
 import { DocumentPreview } from './DocumentPreview'
 
@@ -19,7 +21,7 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/pages/document-detail/hooks/useInlineComments', () => ({
   useInlineComments: () => ({
-    selectionPopup: { show: false, x: 0, y: 0, text: '' },
+    selectionPopup: { show: false, x: 0, y: 0, text: '', anchorId: '' },
     commentPopup: { show: false, x: 0, y: 0, text: '', anchorId: '' },
     commentText: '',
     isPrivateComment: false,
@@ -69,6 +71,17 @@ vi.mock('@/pages/document-detail/hooks/useReaderView', () => ({
 const { api } = await import('@/lib/api')
 const mockedApi = vi.mocked(api, true)
 
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
+
 function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
   return {
     id: 1,
@@ -91,7 +104,7 @@ describe('DocumentPreview empty states', () => {
   })
 
   it('shows download-only UI when attachments exist but none are previewable', async () => {
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[buildAttachment()]}
@@ -111,7 +124,7 @@ describe('DocumentPreview empty states', () => {
   })
 
   it('shows no-content UI when there are no attachments and no inline content', async () => {
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[]}

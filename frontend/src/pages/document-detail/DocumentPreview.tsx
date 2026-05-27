@@ -1,16 +1,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDocument, getDomParser } from '@/env/dom';
 import { api } from '@/lib/api';
 import { useAttachmentDownload } from '@/hooks/useAttachmentDownload';
+import { useDocumentCommentsQuery } from '@/hooks/useDocumentQueries';
 import { useAuth } from '@/lib/auth';
 import { getReviewDocumentSession } from '@/features/reviews/reviewSession';
+import { queryKeys } from '@/lib/queryKeys';
 import { reportRuntimeError } from '@/lib/runtimeReporter';
 import type { CSSProperties } from 'react';
 import type { ReadingWidth } from '@/lib/readingWidth';
-import type { Attachment } from '@/types';
+import type { Attachment, Comment, FeedbackDetailResponse } from '@/types';
 import {
+  applyCommentHighlights,
   applyHighlights,
+  clearCommentHighlights,
   clearHighlights,
   findSectionMatchInRoot,
   getUsableVersionContent,
@@ -23,6 +28,8 @@ import {
   selectAuthoritativeVersion,
 } from '@/pages/document-detail/helpers/versionSelection';
 import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup';
+import { DocumentCommentsSidebar } from '@/pages/document-detail/components/DocumentCommentsSidebar';
+import { DocumentFeedbackSidebar } from '@/pages/document-detail/components/DocumentFeedbackSidebar';
 import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas';
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
 import { SectionEditPopup } from '@/pages/document-detail/components/SectionEditPopup';
@@ -86,6 +93,23 @@ function estimateReadingTimeMinutes(html: string | null): number | null {
   return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE));
 }
 
+function sortCommentsNewestFirst(left: Comment, right: Comment): number {
+  const leftTime = new Date(left.created_at).getTime();
+  const rightTime = new Date(right.created_at).getTime();
+
+  if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) {
+    return right.id - left.id;
+  }
+  if (Number.isNaN(leftTime)) {
+    return 1;
+  }
+  if (Number.isNaN(rightTime)) {
+    return -1;
+  }
+
+  return rightTime - leftTime;
+}
+
 export function DocumentPreview({
   documentId,
   attachments,
@@ -146,7 +170,13 @@ export function DocumentPreview({
   const [theme, setThemeState] = useState<DocumentTheme>(() => getDocumentTheme());
   const { downloadAttachment } = useAttachmentDownload(documentId);
   const previewPaneRef = useRef<HTMLDivElement>(null);
+  const commentsSidebarRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const [showResolvedComments, setShowResolvedComments] = useState(false);
+  const [activeCommentThreadId, setActiveCommentThreadId] = useState<number | null>(null);
+  const [submittingReplyThreadId, setSubmittingReplyThreadId] = useState<number | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<'comments' | 'feedback'>('comments');
   const selectedAttachmentRef = useRef<Attachment | null>(null);
   const reviewSession = useMemo(
     () => (reviewSessionId ? getReviewDocumentSession(reviewSessionId) : null),
@@ -166,6 +196,159 @@ export function DocumentPreview({
     handleSubmitComment,
     handleCloseCommentPopup,
   } = useInlineComments(documentId, reviewSessionId ?? null);
+  const commentsQuery = useDocumentCommentsQuery(documentId, reviewSessionId ?? null, Boolean(user));
+  const allCommentsQuery = useDocumentCommentsQuery(documentId, null, Boolean(user && reviewSessionId));
+
+  const commentThreads = useMemo(() => {
+    const scopedThreads = (commentsQuery.data || []).filter((comment) => comment.parent_id === null);
+    if (!reviewSessionId) {
+      return scopedThreads;
+    }
+
+    const reviewAndSharedThreads = (allCommentsQuery.data || [])
+      .filter((comment) => comment.parent_id === null)
+      .filter((comment) => comment.review_id === null || comment.review_id === reviewSessionId);
+
+    const mergedThreads = new Map<number, Comment>();
+    reviewAndSharedThreads.forEach((thread) => mergedThreads.set(thread.id, thread));
+    scopedThreads.forEach((thread) => mergedThreads.set(thread.id, thread));
+
+    return Array.from(mergedThreads.values()).sort(sortCommentsNewestFirst);
+  }, [allCommentsQuery.data, commentsQuery.data, reviewSessionId]);
+
+  const commentThreadsById = useMemo(
+    () => new Map(commentThreads.map((thread) => [thread.id, thread])),
+    [commentThreads],
+  );
+
+  const visibleCommentThreads = useMemo(
+    () =>
+      showResolvedComments
+        ? commentThreads
+        : commentThreads.filter((thread) => !thread.is_resolved),
+    [commentThreads, showResolvedComments],
+  );
+
+  const canResolveThreads = Boolean(
+    user && ['system_admin', 'admin', 'manager', 'editor'].includes(user.role),
+  );
+
+  const invalidateCommentThreads = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.comments.byDocument(documentId, reviewSessionId ?? null),
+    });
+    if (reviewSessionId) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.comments.byDocument(documentId, null),
+      });
+    }
+  }, [documentId, queryClient, reviewSessionId]);
+
+  const toggleCommentResolutionMutation = useMutation({
+    mutationFn: ({ threadId, resolve }: { threadId: number; resolve: boolean }) =>
+      api.updateComment(documentId, threadId, { is_resolved: resolve }),
+    onSuccess: () => {
+      invalidateCommentThreads();
+    },
+  });
+
+  const addReplyMutation = useMutation({
+    mutationFn: ({
+      threadId,
+      content,
+      reviewId,
+    }: {
+      threadId: number;
+      content: string;
+      reviewId?: number;
+    }) =>
+      api.createComment(documentId, {
+        content,
+        parent_id: threadId,
+        review_id: reviewId,
+      }),
+    onSuccess: () => {
+      setSubmittingReplyThreadId(null);
+      invalidateCommentThreads();
+    },
+    onError: () => {
+      setSubmittingReplyThreadId(null);
+    },
+  });
+
+  const scrollThreadIntoSidebarView = useCallback((threadId: number) => {
+    const threadElement = commentsSidebarRef.current?.querySelector<HTMLElement>(
+      `[data-thread-id="${threadId}"]`,
+    );
+    threadElement?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
+
+  const scrollToThreadHighlight = useCallback((threadId: number) => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!container) {
+      return;
+    }
+    const highlight = container.querySelector<HTMLElement>(
+      `.doc-comment-highlight[data-comment-thread-id="${threadId}"]`,
+    );
+    if (!highlight) {
+      return;
+    }
+    highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const handleSelectCommentThread = useCallback(
+    (threadId: number) => {
+      setSidebarMode('comments');
+      setActiveCommentThreadId(threadId);
+      scrollThreadIntoSidebarView(threadId);
+      scrollToThreadHighlight(threadId);
+    },
+    [scrollThreadIntoSidebarView, scrollToThreadHighlight],
+  );
+
+  const handleToggleCommentThreadResolved = useCallback(
+    (threadId: number, resolve: boolean) => {
+      toggleCommentResolutionMutation.mutate({ threadId, resolve });
+      if (resolve && !showResolvedComments && activeCommentThreadId === threadId) {
+        setActiveCommentThreadId(null);
+      }
+    },
+    [activeCommentThreadId, showResolvedComments, toggleCommentResolutionMutation],
+  );
+
+  const handleSubmitCommentReply = useCallback(
+    (threadId: number, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        return;
+      }
+      const thread = commentThreadsById.get(threadId);
+      const replyReviewId = thread ? (thread.review_id ?? undefined) : reviewSessionId ?? undefined;
+      setSubmittingReplyThreadId(threadId);
+      addReplyMutation.mutate({ threadId, content: trimmed, reviewId: replyReviewId });
+    },
+    [addReplyMutation, commentThreadsById, reviewSessionId],
+  );
+
+  const commentsLoading = commentsQuery.isLoading || (Boolean(reviewSessionId) && allCommentsQuery.isLoading);
+  const commentsError = commentsQuery.isError || (Boolean(reviewSessionId) && allCommentsQuery.isError);
+  const feedbackQuery = useQuery({
+    queryKey: ['documents', documentId, 'feedback'],
+    queryFn: async () => {
+      const response = await api.getAllFeedback({
+        page: 1,
+        per_page: 100,
+        document_id: documentId,
+      });
+      return response.items;
+    },
+    enabled: Boolean(user) && sidebarMode === 'feedback',
+  });
+  const feedbackItems = useMemo<FeedbackDetailResponse[]>(
+    () => feedbackQuery.data || [],
+    [feedbackQuery.data],
+  );
 
   const handleSetFontSize = useCallback((value: DocumentFontSize) => {
     setFontSizeState(value);
@@ -361,6 +544,109 @@ export function DocumentPreview({
     onScrollProgress,
     hasUser: !!user,
   });
+
+  useEffect(() => {
+    if (activeCommentThreadId === null) {
+      return;
+    }
+    if (!visibleCommentThreads.some((thread) => thread.id === activeCommentThreadId)) {
+      setActiveCommentThreadId(null);
+    }
+  }, [activeCommentThreadId, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!activeHtmlContent || !container || !user) {
+      if (container) {
+        clearCommentHighlights(container);
+      }
+      return;
+    }
+
+    applyCommentHighlights(
+      container,
+      visibleCommentThreads
+        .filter((thread) => (thread.anchor_text || '').trim().length > 0)
+        .map((thread) => ({
+          threadId: thread.id,
+          anchorText: thread.anchor_text || '',
+        })),
+    );
+
+    return () => {
+      clearCommentHighlights(container);
+    };
+  }, [activeHtmlContent, user, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!container) {
+      return;
+    }
+
+    container.querySelectorAll('.doc-comment-highlight--active').forEach((element) => {
+      element.classList.remove('doc-comment-highlight--active');
+    });
+
+    if (activeCommentThreadId === null) {
+      return;
+    }
+
+    container
+      .querySelectorAll<HTMLElement>(
+        `.doc-comment-highlight[data-comment-thread-id="${activeCommentThreadId}"]`,
+      )
+      .forEach((element) => {
+        element.classList.add('doc-comment-highlight--active');
+      });
+  }, [activeCommentThreadId, activeHtmlContent, visibleCommentThreads]);
+
+  useEffect(() => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!container) {
+      return;
+    }
+
+    const handleCommentHighlightClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      const highlight = target?.closest<HTMLElement>('.doc-comment-highlight');
+      if (!highlight) {
+        return;
+      }
+
+      const threadId = Number(highlight.getAttribute('data-comment-thread-id'));
+      if (!Number.isFinite(threadId)) {
+        return;
+      }
+
+      setSidebarMode('comments');
+      setActiveCommentThreadId(threadId);
+      scrollThreadIntoSidebarView(threadId);
+    };
+
+    container.addEventListener('click', handleCommentHighlightClick);
+
+    return () => {
+      container.removeEventListener('click', handleCommentHighlightClick);
+    };
+  }, [scrollThreadIntoSidebarView]);
+
+  useEffect(() => {
+    const container = getDocument().getElementById('document-content-area');
+    if (!activeHtmlContent || !container) {
+      return;
+    }
+
+    const handleNativeMouseUp = (event: MouseEvent) => {
+      handleMouseUp(event);
+    };
+
+    container.addEventListener('mouseup', handleNativeMouseUp);
+
+    return () => {
+      container.removeEventListener('mouseup', handleNativeMouseUp);
+    };
+  }, [activeHtmlContent, handleMouseUp]);
 
   useEffect(() => {
     const container = getDocument().getElementById('document-content-area');
@@ -709,8 +995,8 @@ export function DocumentPreview({
       : 'h-[72vh] min-h-[32rem]'
     : '';
   const htmlLayoutClassName = isRevamp
-    ? 'document-preview-html-layout document-preview-html-layout--revamp flex h-full'
-    : 'document-preview-html-layout flex h-[70vh]';
+    ? 'document-preview-html-layout document-preview-html-layout--revamp flex h-full flex-col md:flex-row'
+    : 'document-preview-html-layout flex h-[70vh] flex-col md:flex-row';
 
   return (
     <div
@@ -865,7 +1151,6 @@ export function DocumentPreview({
               contentStyle={contentStyle}
               sectionLinkBasePath={sectionLinkBasePath}
               onScroll={handleScroll}
-              onMouseUp={handleMouseUp}
               hasUser={!!user}
               selectionPopup={selectionPopup}
               commentPopup={commentPopup}
@@ -879,6 +1164,58 @@ export function DocumentPreview({
               onSubmitComment={handleSubmitComment}
               isRevamp={isRevamp}
             />
+
+            {user ? (
+              <div ref={commentsSidebarRef} className="h-full w-full flex-shrink-0 md:w-auto">
+                <div className="mb-2 inline-flex rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarMode('comments')}
+                    className={`rounded-full px-3 py-1.5 transition ${
+                      sidebarMode === 'comments'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Comments
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarMode('feedback')}
+                    className={`rounded-full px-3 py-1.5 transition ${
+                      sidebarMode === 'feedback'
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Feedback
+                  </button>
+                </div>
+
+                {sidebarMode === 'comments' ? (
+                  <DocumentCommentsSidebar
+                    threads={commentThreads}
+                    isLoading={commentsLoading}
+                    isError={commentsError}
+                    showResolved={showResolvedComments}
+                    activeThreadId={activeCommentThreadId}
+                    canResolveThreads={canResolveThreads}
+                    resolveMutationPending={toggleCommentResolutionMutation.isPending}
+                    submittingReplyThreadId={submittingReplyThreadId}
+                    onToggleShowResolved={setShowResolvedComments}
+                    onThreadSelect={handleSelectCommentThread}
+                    onToggleThreadResolved={handleToggleCommentThreadResolved}
+                    onSubmitReply={handleSubmitCommentReply}
+                  />
+                ) : (
+                  <DocumentFeedbackSidebar
+                    feedbackItems={feedbackItems}
+                    isLoading={feedbackQuery.isLoading}
+                    isError={feedbackQuery.isError}
+                  />
+                )}
+              </div>
+            ) : null}
           </div>
         ) : previewState === 'ERROR' && selectedAttachment && readerError ? (
           <div className="absolute inset-0 flex items-center justify-center px-6">

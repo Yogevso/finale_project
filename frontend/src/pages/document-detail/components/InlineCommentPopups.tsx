@@ -10,6 +10,7 @@ interface InlineCommentPopupsProps {
   commentPopup: CommentPopupState
   commentText: string
   isPrivateComment: boolean
+  showPrivateOption?: boolean
   isSubmittingComment: boolean
   topOffset?: number
   onOpenCommentForm: () => void
@@ -25,6 +26,7 @@ export function InlineCommentPopups({
   commentPopup,
   commentText,
   isPrivateComment,
+  showPrivateOption = true,
   isSubmittingComment,
   topOffset = 0,
   onOpenCommentForm,
@@ -103,18 +105,22 @@ export function InlineCommentPopups({
               />
 
               <div className="flex items-center justify-between">
-                <label className="body-copy flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isPrivateComment}
-                    onChange={(event) => onPrivateCommentChange(event.target.checked)}
-                    className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
-                  />
-                  <span className="flex items-center gap-1">
-                    <Lock className="h-3.5 w-3.5" />
-                    Private
-                  </span>
-                </label>
+                {showPrivateOption ? (
+                  <label className="body-copy flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isPrivateComment}
+                      onChange={(event) => onPrivateCommentChange(event.target.checked)}
+                      className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="flex items-center gap-1">
+                      <Lock className="h-3.5 w-3.5" />
+                      Private
+                    </span>
+                  </label>
+                ) : (
+                  <span />
+                )}
 
                 <div className="flex items-center gap-2">
                   <button

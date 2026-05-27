@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyCommentHighlights,
   applyHighlights,
+  clearCommentHighlights,
   clearHighlights,
   embedStoredTocSectionsInHtml,
   filterOutlineSectionsByHtml,
@@ -117,6 +119,28 @@ describe('processHtmlIntoSections', () => {
     clearHighlights(container)
     expect(container.querySelectorAll('mark.doc-highlight')).toHaveLength(0)
     expect(container.textContent).toContain('Regex chars .* stay literal.')
+  })
+
+  it('applies thread highlights to anchor text and clears them cleanly', () => {
+    const container = document.createElement('div')
+    container.innerHTML = '<p>Alpha beta gamma. Alpha beta delta.</p>'
+
+    const applied = applyCommentHighlights(container, [
+      { threadId: 41, anchorText: 'beta gamma' },
+      { threadId: 42, anchorText: 'alpha   beta' },
+    ])
+
+    expect(applied).toHaveLength(2)
+    expect(
+      container.querySelector('span.doc-comment-highlight[data-comment-thread-id="41"]'),
+    ).not.toBeNull()
+    expect(
+      container.querySelector('span.doc-comment-highlight[data-comment-thread-id="42"]'),
+    ).not.toBeNull()
+
+    clearCommentHighlights(container)
+    expect(container.querySelectorAll('span.doc-comment-highlight')).toHaveLength(0)
+    expect(container.textContent).toContain('Alpha beta gamma. Alpha beta delta.')
   })
 
   it('creates a fallback document section when sanitized html has no headings', () => {

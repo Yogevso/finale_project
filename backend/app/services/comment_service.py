@@ -17,6 +17,8 @@ from app.models import (
     Attachment,
     Comment,
     Document,
+    DocumentStatus,
+    DocumentVisibility,
     NotificationType,
     ReviewRequest,
     User,
@@ -68,6 +70,39 @@ class CommentService(SessionService):
         self.version_repository = VersionRepository(db)
         self.notification_service = NotificationService(db, chat_db=chat_db)
         self.event_dispatcher = event_dispatcher or build_outbox_event_dispatcher(db)
+
+    @staticmethod
+    def _customer_can_access_document(document: Document, current_user: User) -> bool:
+        if current_user.role != UserRole.CUSTOMER:
+            return False
+
+        if document.status != DocumentStatus.ACTIVE:
+            return False
+
+        if document.visibility == DocumentVisibility.PUBLIC:
+            return True
+
+        if document.visibility == DocumentVisibility.INTERNAL:
+            return False
+
+        if document.visibility == DocumentVisibility.COMPANY:
+            assigned_tenant_ids = {company.id for company in (document.assigned_companies or [])}
+            return current_user.tenant_id in assigned_tenant_ids
+
+        return False
+
+    @staticmethod
+    def _ensure_user_can_access_document_for_comments(document: Document, current_user: User) -> None:
+        if current_user.role == UserRole.SYSTEM_ADMIN:
+            return
+
+        if current_user.role == UserRole.CUSTOMER:
+            if CommentService._customer_can_access_document(document, current_user):
+                return
+            raise NotFoundError("Document not found")
+
+        if document.tenant_id != current_user.tenant_id:
+            raise NotFoundError("Document not found")
 
     @staticmethod
     def is_internal_staff(user: User) -> bool:
@@ -131,8 +166,7 @@ class CommentService(SessionService):
         - Private comments (is_private=True) are only visible to author,
           system admins, and internal staff with an elevated role
           (admin / manager / editor)
-        - Non-private comments are visible to internal staff who have
-          contributed to the document
+        - Non-private comments are visible to all document viewers
         """
         # Comment author can always see their own comment
         if comment.user_id == current_user.id:
@@ -150,14 +184,7 @@ class CommentService(SessionService):
                 UserRole.EDITOR,
             ]
 
-        # Internal staff who have contributed to this document can see non-private comments
-        if CommentService.is_internal_staff(current_user):
-            if contributors is None:
-                contributors = CommentService.get_document_contributors(db, comment.document_id)
-            if current_user.id in contributors:
-                return True
-
-        return False
+        return True
 
     @staticmethod
     def can_view_private_comments(user: User) -> bool:
@@ -261,10 +288,7 @@ class CommentService(SessionService):
         if not document:
             raise NotFoundError("Document not found")
 
-        # Y15-016: Tenant isolation - non-system-admins can only see comments on their tenant's documents
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            if document.tenant_id != current_user.tenant_id:
-                raise NotFoundError("Document not found")
+        CommentService._ensure_user_can_access_document_for_comments(document, current_user)
 
         # Get all contributors to this document for visibility checks
         contributors = CommentService.get_document_contributors(self.db, document_id)
@@ -308,10 +332,7 @@ class CommentService(SessionService):
         if not document:
             raise NotFoundError("Document not found")
 
-        # Tenant isolation: non-system-admins can only access comments on their tenant's documents
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            if document.tenant_id != current_user.tenant_id:
-                raise NotFoundError("Document not found")
+        CommentService._ensure_user_can_access_document_for_comments(document, current_user)
 
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
@@ -338,10 +359,7 @@ class CommentService(SessionService):
         if not document:
             raise NotFoundError("Document not found")
 
-        # Y15-016: Tenant isolation - non-system-admins can only create comments on their tenant's documents
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            if document.tenant_id != current_user.tenant_id:
-                raise NotFoundError("Document not found")
+        CommentService._ensure_user_can_access_document_for_comments(document, current_user)
 
         parent_id = comment_data.parent_id
 
@@ -549,10 +567,7 @@ class CommentService(SessionService):
         if not document:
             raise NotFoundError("Document not found")
 
-        # Tenant isolation: non-system-admins can only update comments on their tenant's documents
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            if document.tenant_id != current_user.tenant_id:
-                raise NotFoundError("Document not found")
+        CommentService._ensure_user_can_access_document_for_comments(document, current_user)
 
         comment = self.comment_repository.get_by_id_for_document(
             comment_id,
@@ -608,10 +623,7 @@ class CommentService(SessionService):
         if not document:
             raise NotFoundError("Document not found")
 
-        # Tenant isolation: non-system-admins can only delete comments on their tenant's documents
-        if current_user.role != UserRole.SYSTEM_ADMIN:
-            if document.tenant_id != current_user.tenant_id:
-                raise NotFoundError("Document not found")
+        CommentService._ensure_user_can_access_document_for_comments(document, current_user)
 
         comment = self.comment_repository.get_by_id_for_document(comment_id, document_id)
 

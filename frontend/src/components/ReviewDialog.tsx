@@ -181,6 +181,21 @@ function getVersionLabel(version: Version | null | undefined, fallback: string):
   return `v${version.semantic_version || `${version.version_number}.0.0`}`;
 }
 
+function sortCommentsByNewestCreatedAt(left: Comment, right: Comment): number {
+  const leftTime = new Date(left.created_at).getTime();
+  const rightTime = new Date(right.created_at).getTime();
+  if (Number.isNaN(leftTime) && Number.isNaN(rightTime)) {
+    return right.id - left.id;
+  }
+  if (Number.isNaN(leftTime)) {
+    return 1;
+  }
+  if (Number.isNaN(rightTime)) {
+    return -1;
+  }
+  return rightTime - leftTime;
+}
+
 function selectBaselineVersion(
   currentVersion: Version | null | undefined,
   versions: Version[] | undefined
@@ -483,11 +498,26 @@ export default function ReviewDialog({
     enabled: isPendingReview && Boolean(review.document_id),
   });
 
+  const documentThreadsQuery = useQuery({
+    queryKey: ['review-dialog', 'threads', 'document', review.document_id],
+    queryFn: async () => {
+      try {
+        return await api.getComments(review.document_id);
+      } catch (error) {
+        return reportAndRethrow('review.dialog', 'Failed to load document comment threads', error);
+      }
+    },
+    enabled: isPendingReview && Boolean(review.document_id),
+  });
+
   const toggleThreadResolutionMutation = useMutation({
     mutationFn: ({ commentId, resolve }: { commentId: number; resolve: boolean }) =>
       api.updateComment(review.document_id, commentId, { is_resolved: resolve }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['review-dialog', 'threads', review.id] });
+      void queryClient.invalidateQueries({
+        queryKey: ['review-dialog', 'threads', 'document', review.document_id],
+      });
       void queryClient.invalidateQueries({ queryKey: ['review-dialog', 'policy', review.id] });
     },
   });
@@ -521,7 +551,18 @@ export default function ReviewDialog({
   const version = versionQuery.data || null;
   const baselineVersion = baselineVersionQuery.data || baselineVersionCandidate || null;
   const preApprovePolicy: PreApprovePolicy | null = policyQuery.data || null;
-  const reviewThreads: Comment[] = reviewThreadsQuery.data || [];
+  const reviewThreads: Comment[] = useMemo(() => {
+    const reviewScoped = reviewThreadsQuery.data || [];
+    const relevantDocumentThreads = (documentThreadsQuery.data || []).filter(
+      (thread) => thread.review_id === null || thread.review_id === review.id,
+    );
+    const merged = new Map<number, Comment>();
+    relevantDocumentThreads.forEach((thread) => merged.set(thread.id, thread));
+    reviewScoped.forEach((thread) => merged.set(thread.id, thread));
+    return Array.from(merged.values()).sort(sortCommentsByNewestCreatedAt);
+  }, [documentThreadsQuery.data, review.id, reviewThreadsQuery.data]);
+  const isReviewThreadsLoading = reviewThreadsQuery.isLoading || documentThreadsQuery.isLoading;
+  const isReviewThreadsError = reviewThreadsQuery.isError || documentThreadsQuery.isError;
   const openThreadCount = reviewThreads.filter((thread) => !thread.is_resolved).length;
   const policyError = policyQuery.isError
     ? 'Approval checks could not be loaded. Approval is temporarily disabled.'
@@ -1266,8 +1307,10 @@ export default function ReviewDialog({
                       </div>
 
                       <div className="mt-3 space-y-2">
-                        {reviewThreadsQuery.isLoading ? (
+                        {isReviewThreadsLoading ? (
                           <p className="text-sm text-slate-500">Loading review threads...</p>
+                        ) : isReviewThreadsError ? (
+                          <p className="text-sm text-rose-600">Failed to load comment threads.</p>
                         ) : reviewThreads.length === 0 ? (
                           <p className="text-sm text-slate-500">No review threads yet.</p>
                         ) : (

@@ -102,9 +102,8 @@ function ReadingUXHarness({ scrollProgress = 37 }: { scrollProgress?: number }) 
           contentStyle={contentStyle}
           sectionLinkBasePath="/documents/42"
           onScroll={() => undefined}
-          onMouseUp={() => undefined}
           hasUser={false}
-          selectionPopup={{ show: false, x: 0, y: 0, text: '' }}
+          selectionPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentText=""
           isPrivateComment={false}
@@ -201,9 +200,8 @@ describe('ReadingUX controls', () => {
           scrollProgress={0}
           sectionLinkBasePath="/documents/42"
           onScroll={() => undefined}
-          onMouseUp={() => undefined}
           hasUser={false}
-          selectionPopup={{ show: false, x: 0, y: 0, text: '' }}
+          selectionPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentText=""
           isPrivateComment={false}
@@ -255,9 +253,8 @@ describe('ReadingUX controls', () => {
           scrollProgress={0}
           sectionLinkBasePath="/documents/42"
           onScroll={() => undefined}
-          onMouseUp={() => undefined}
           hasUser={false}
-          selectionPopup={{ show: false, x: 0, y: 0, text: '' }}
+          selectionPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentPopup={{ show: false, x: 0, y: 0, text: '', anchorId: '' }}
           commentText=""
           isPrivateComment={false}

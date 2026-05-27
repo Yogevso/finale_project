@@ -7,6 +7,9 @@ import CustomerDocumentPage from '@/pages/portal/CustomerDocumentPage';
 
 const mockGetDocument = vi.fn();
 const mockGetRelatedDocuments = vi.fn();
+const mockGetDocumentComments = vi.fn();
+const mockCreateDocumentComment = vi.fn();
+const mockUpdateDocumentComment = vi.fn();
 const mockSubmitFeedback = vi.fn();
 const mockUpdateReadingProgress = vi.fn();
 
@@ -25,6 +28,9 @@ vi.mock('@/lib/portalApi', async () => {
       ...actual.portalApi,
       getDocument: (...args: unknown[]) => mockGetDocument(...args),
       getRelatedDocuments: (...args: unknown[]) => mockGetRelatedDocuments(...args),
+      getDocumentComments: (...args: unknown[]) => mockGetDocumentComments(...args),
+      createDocumentComment: (...args: unknown[]) => mockCreateDocumentComment(...args),
+      updateDocumentComment: (...args: unknown[]) => mockUpdateDocumentComment(...args),
       submitFeedback: (...args: unknown[]) => mockSubmitFeedback(...args),
       updateReadingProgress: (...args: unknown[]) => mockUpdateReadingProgress(...args),
     },
@@ -103,6 +109,24 @@ describe('CustomerDocumentPage', () => {
   beforeEach(() => {
     mockGetDocument.mockResolvedValue(documentPayload);
     mockGetRelatedDocuments.mockResolvedValue([]);
+    mockGetDocumentComments.mockResolvedValue([]);
+    mockCreateDocumentComment.mockResolvedValue({
+      id: 301,
+      document_id: 7,
+      user_id: 5,
+      review_id: null,
+      parent_id: null,
+      content: 'u sure?',
+      is_private: false,
+      anchor_text: 'Important selected sentence for feedback.',
+      anchor_id: 'document-content-area',
+      is_resolved: false,
+      created_at: '2026-03-28T12:05:00Z',
+      updated_at: '2026-03-28T12:05:00Z',
+      replies: [],
+      reply_count: 0,
+    });
+    mockUpdateDocumentComment.mockResolvedValue({});
     mockSubmitFeedback.mockResolvedValue({
       id: 101,
       document_id: 7,
@@ -155,11 +179,12 @@ describe('CustomerDocumentPage', () => {
     });
   });
 
-  it('submits short feedback from a selected excerpt', async () => {
+  it('submits inline comment from a selected excerpt', async () => {
     const selectionMock = {
       isCollapsed: false,
       toString: () => 'Important selected sentence for feedback.',
       getRangeAt: () => ({
+        commonAncestorContainer: document.createElement('p'),
         getBoundingClientRect: () => ({
           left: 100,
           width: 120,
@@ -182,27 +207,24 @@ describe('CustomerDocumentPage', () => {
     expect(contentContainer).toBeTruthy();
 
     fireEvent.pointerUp(contentContainer!);
-    fireEvent.click(await screen.findByRole('button', { name: /add feedback/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add comment/i }));
 
-    const popupTitle = await screen.findByText(/feedback on selection/i);
+    const popupTitle = await screen.findByText(/commenting on/i);
     const popup = popupTitle.closest('.inline-comment-popup');
     expect(popup).toBeTruthy();
 
     fireEvent.change(
-      within(popup as HTMLElement).getByPlaceholderText(
-        /describe what should change or what needs clarification/i
-      ),
+      within(popup as HTMLElement).getByPlaceholderText(/write your comment/i),
       { target: { value: 'u sure?' } }
     );
 
-    fireEvent.click(within(popup as HTMLElement).getByRole('button', { name: /send feedback/i }));
+    fireEvent.click(within(popup as HTMLElement).getByRole('button', { name: /post/i }));
 
     await waitFor(() => {
-      expect(mockSubmitFeedback).toHaveBeenCalledWith({
-        document_id: 7,
-        feedback_type: 'suggestion',
+      expect(mockCreateDocumentComment).toHaveBeenCalledWith(7, {
         content: 'u sure?',
         anchor_text: 'Important selected sentence for feedback.',
+        anchor_id: 'document-content-area',
       });
     });
   });

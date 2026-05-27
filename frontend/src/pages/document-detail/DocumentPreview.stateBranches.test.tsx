@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect, useRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
 import type { Attachment } from '@/types'
 import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
 import { DocumentPreview } from './DocumentPreview'
@@ -31,7 +33,7 @@ vi.mock('@/hooks/useAttachmentDownload', () => ({
 
 vi.mock('@/pages/document-detail/hooks/useInlineComments', () => ({
   useInlineComments: () => ({
-    selectionPopup: { show: false, x: 0, y: 0, text: '' },
+    selectionPopup: { show: false, x: 0, y: 0, text: '', anchorId: '' },
     commentPopup: { show: false, x: 0, y: 0, text: '', anchorId: '' },
     commentText: '',
     isPrivateComment: false,
@@ -94,6 +96,17 @@ vi.mock('@/pages/document-detail/components/SectionEditPopup', () => ({
 
 const { api } = await import('@/lib/api')
 const mockedApi = vi.mocked(api, true)
+
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 function buildAttachment(overrides: Partial<Attachment> = {}): Attachment {
   return {
@@ -168,7 +181,7 @@ describe('DocumentPreview state branches', () => {
       }),
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[buildAttachment()]}
@@ -190,7 +203,7 @@ describe('DocumentPreview state branches', () => {
       }),
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[buildAttachment()]}
@@ -222,7 +235,7 @@ describe('DocumentPreview state branches', () => {
       }),
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[attachment]}
@@ -249,7 +262,7 @@ describe('DocumentPreview state branches', () => {
       }),
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[buildAttachment()]}
@@ -312,7 +325,7 @@ describe('DocumentPreview state branches', () => {
       },
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[attachment]}
@@ -496,7 +509,7 @@ describe('DocumentPreview state branches', () => {
       },
     )
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[attachment]}

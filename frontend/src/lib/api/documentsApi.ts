@@ -357,10 +357,18 @@ export const DocumentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Base
       if (reviewId !== undefined) {
         params.review_id = reviewId
       }
-      const { data } = await this.client.get<CommentDto[]>(`/documents/${documentId}/comments`, {
-        params,
-      })
-      return mapCommentsDto(data)
+      const { data } = await this.client.get<CommentDto[] | { items: CommentDto[] }>(
+        `/documents/${documentId}/comments`,
+        {
+          params,
+        },
+      )
+      const payload = Array.isArray(data)
+        ? data
+        : Array.isArray((data as { items?: CommentDto[] }).items)
+          ? ((data as { items?: CommentDto[] }).items as CommentDto[])
+          : []
+      return mapCommentsDto(payload)
     }
 
     async getComment(documentId: number, commentId: number): Promise<Comment> {
