@@ -10,13 +10,19 @@ import { api } from '@/lib/api'
 import { sanitizeHtmlForPreview } from '@/lib/htmlSanitizer'
 import { queryKeys } from '@/lib/queryKeys'
 import {
+  embedStoredTocSectionsInHtml,
   findSectionMatchInRoot,
   getEditableHtmlRoot,
   getUsableVersionContent,
+  mergeTocSections,
   processHtmlIntoSections,
   type SectionEditTarget,
   type TocSection,
 } from '@/pages/document-detail/helpers/previewHelpers'
+import {
+  getAuthoritativeVersionCandidates,
+  selectAuthoritativeVersion,
+} from '@/pages/document-detail/helpers/versionSelection'
 
 export interface RemovedSection {
   id: string
@@ -55,42 +61,14 @@ function normalizeComparableHtml(html: string | null | undefined): string {
 
 async function getLatestDocumentHtml(documentId: number): Promise<string | null> {
   const versionsResponse = await api.getVersions(documentId)
-  const versionsWithContent = versionsResponse.items.filter((version) =>
-    Boolean(getUsableVersionContent(version.content)),
-  )
-
-  const publishedVersion = versionsWithContent
-    .filter((version) => version.is_published)
-    .sort(
-      (left, right) =>
-        new Date(right.published_at || right.created_at).getTime() -
-        new Date(left.published_at || left.created_at).getTime(),
-    )[0]
-  const latestVersion = versionsWithContent.sort(
-    (left, right) =>
-      new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-  )[0]
-  let versionToShow = publishedVersion || latestVersion
+  let versionToShow = selectAuthoritativeVersion({
+    versions: versionsResponse.items,
+  })
 
   if (!versionToShow && versionsResponse.items.length > 0) {
-    const prioritizedIds = [
-      ...new Set([
-        ...versionsResponse.items
-          .filter((version) => version.is_published)
-          .sort(
-            (left, right) =>
-              new Date(right.published_at || right.created_at).getTime() -
-              new Date(left.published_at || left.created_at).getTime(),
-          )
-          .map((version) => version.id),
-        ...versionsResponse.items
-          .sort(
-            (left, right) =>
-              new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
-          )
-          .map((version) => version.id),
-      ]),
-    ]
+    const prioritizedIds = getAuthoritativeVersionCandidates({
+      versions: versionsResponse.items,
+    }).map((version) => version.id)
 
     for (const versionId of prioritizedIds) {
       const fullVersion = await api.getVersion(documentId, versionId)
@@ -243,6 +221,168 @@ function findSectionIndexInHtmlSections(
   }
 
   return -1
+}
+
+function getPersistableHtmlSections(documentHtml: string): TocSection[] {
+  return processHtmlIntoSections(documentHtml || '').sections.filter(
+    (section) => section.html.trim().length > 0,
+  )
+}
+
+function reindexStoredSections(sections: TocSection[]): TocSection[] {
+  return sections.map((section, index) => ({
+    ...section,
+    html: '',
+    index,
+  }))
+}
+
+function findSectionIndexInOutline(
+  outlineSections: TocSection[],
+  referenceSection: TocSection | null | undefined,
+): number {
+  if (!referenceSection) {
+    return -1
+  }
+
+  const byId = outlineSections.findIndex((section) => section.id === referenceSection.id)
+  if (byId >= 0) {
+    return byId
+  }
+
+  if (referenceSection.anchorId) {
+    const byAnchor = outlineSections.findIndex(
+      (section) =>
+        section.anchorId === referenceSection.anchorId &&
+        normalizeSectionText(section.text) === normalizeSectionText(referenceSection.text),
+    )
+    if (byAnchor >= 0) {
+      return byAnchor
+    }
+  }
+
+  const byLabel = outlineSections.findIndex(
+    (section) =>
+      normalizeSectionText(section.text) === normalizeSectionText(referenceSection.text) &&
+      section.level === referenceSection.level,
+  )
+  if (byLabel >= 0) {
+    return byLabel
+  }
+
+  if (referenceSection.index >= 0) {
+    return Math.min(outlineSections.length - 1, referenceSection.index)
+  }
+
+  return -1
+}
+
+function resolveStoredSectionFromHtml(
+  section: TocSection,
+  editedHtml: string,
+  preferredAnchorId?: string | null,
+): TocSection {
+  const parsedSections = getPersistableHtmlSections(editedHtml)
+  const parsedSection = parsedSections[0]
+
+  if (!parsedSection) {
+    return {
+      ...section,
+      html: '',
+      anchorId: preferredAnchorId || section.anchorId,
+    }
+  }
+
+  return {
+    ...section,
+    text: parsedSection.text || section.text,
+    level: parsedSection.level || section.level,
+    html: '',
+    anchorId: preferredAnchorId || parsedSection.anchorId || section.anchorId,
+  }
+}
+
+function buildStoredSectionsAfterSave(params: {
+  currentSections: TocSection[]
+  editingSection: SectionEditTarget
+  nextSectionHtml: string
+  nextSectionAnchorId: string | null
+  documentHtml: string
+}): TocSection[] {
+  const htmlSections = getPersistableHtmlSections(params.documentHtml)
+
+  if (params.editingSection.editMode === 'full') {
+    return htmlSections
+  }
+
+  const outlineSections = reindexStoredSections(params.currentSections)
+  if (params.editingSection.editMode === 'insert') {
+    const insertAt = Math.max(
+      0,
+      Math.min(outlineSections.length, (params.editingSection.insertAfterIndex ?? -1) + 1),
+    )
+    outlineSections.splice(
+      insertAt,
+      0,
+      resolveStoredSectionFromHtml(
+        {
+          ...params.editingSection,
+          html: '',
+          index: insertAt,
+          anchorId: params.nextSectionAnchorId || params.editingSection.anchorId,
+        },
+        params.nextSectionHtml,
+        params.nextSectionAnchorId,
+      ),
+    )
+  } else {
+    const sectionIndex = findSectionIndexInOutline(outlineSections, params.editingSection)
+    if (sectionIndex >= 0) {
+      outlineSections[sectionIndex] = resolveStoredSectionFromHtml(
+        outlineSections[sectionIndex],
+        params.nextSectionHtml,
+        params.nextSectionAnchorId,
+      )
+    }
+  }
+
+  return mergeTocSections(reindexStoredSections(outlineSections), htmlSections)
+}
+
+function buildStoredSectionsAfterDelete(
+  currentSections: TocSection[],
+  section: TocSection,
+  remainingHtmlSections: TocSection[],
+): TocSection[] {
+  const outlineSections = reindexStoredSections(currentSections)
+  const sectionIndex = findSectionIndexInOutline(outlineSections, section)
+  if (sectionIndex >= 0) {
+    outlineSections.splice(sectionIndex, 1)
+  }
+  return mergeTocSections(reindexStoredSections(outlineSections), remainingHtmlSections)
+}
+
+function buildStoredSectionsAfterRestore(
+  currentSections: TocSection[],
+  removedSection: RemovedSection,
+  documentHtml: string,
+): TocSection[] {
+  const htmlSections = getPersistableHtmlSections(documentHtml)
+  const outlineSections = reindexStoredSections(currentSections)
+  outlineSections.push(
+    resolveStoredSectionFromHtml(
+      {
+        id: removedSection.id,
+        text: removedSection.text,
+        level: 2,
+        html: '',
+        index: outlineSections.length,
+      },
+      removedSection.html,
+      null,
+    ),
+  )
+  return mergeTocSections(reindexStoredSections(outlineSections), htmlSections)
 }
 
 function resolveSectionMatchBounds(
@@ -623,6 +763,14 @@ export function useContentEditingFlow({
           .join('\n')
       }
 
+      const nextStoredSections = buildStoredSectionsAfterSave({
+        currentSections: sections,
+        editingSection,
+        nextSectionHtml,
+        nextSectionAnchorId,
+        documentHtml: newFullHtml,
+      })
+      const persistedFullHtml = embedStoredTocSectionsInHtml(newFullHtml, nextStoredSections)
       const latestDocumentHtml = await getLatestDocumentHtml(documentId)
       const baselineHtml = options?.comparisonHtml ?? activeHtmlContent ?? ''
 
@@ -634,7 +782,7 @@ export function useContentEditingFlow({
       ) {
         return {
           status: 'conflict',
-          draftDocumentHtml: newFullHtml,
+          draftDocumentHtml: persistedFullHtml,
           liveDocumentHtml: latestDocumentHtml,
           liveEditorHtml: resolveLiveEditorHtml(editingSection, latestDocumentHtml),
         }
@@ -655,7 +803,7 @@ export function useContentEditingFlow({
         }`
 
       const version = await api.createVersion(documentId, {
-        content: newFullHtml,
+        content: persistedFullHtml,
         changes_summary: changesSummary,
       })
 
@@ -668,7 +816,7 @@ export function useContentEditingFlow({
         })
       }
 
-      applyProcessedHtml(newFullHtml)
+      applyProcessedHtml(persistedFullHtml)
 
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentId) })
@@ -709,6 +857,8 @@ export function useContentEditingFlow({
         ? htmlSections.filter((_, idx) => idx !== sectionIndex)
         : sections.filter((_, idx) => idx !== sectionIndex)
       const newFullHtml = remaining.map((s) => s.html).filter(Boolean).join('\n')
+      const nextStoredSections = buildStoredSectionsAfterDelete(sections, section, remaining)
+      const persistedFullHtml = embedStoredTocSectionsInHtml(newFullHtml, nextStoredSections)
 
       const changesSummary =
         `Section removed: "${resolvedSection.text}"\n\n` +
@@ -717,11 +867,11 @@ export function useContentEditingFlow({
         }`
 
       await api.createVersion(documentId, {
-        content: newFullHtml,
+        content: persistedFullHtml,
         changes_summary: changesSummary,
       })
 
-      applyProcessedHtml(newFullHtml)
+      applyProcessedHtml(persistedFullHtml)
 
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.detail(documentId) })
@@ -734,17 +884,23 @@ export function useContentEditingFlow({
   const handleRestoreSection = useCallback(
     async (removedSection: RemovedSection) => {
       // Append the restored section at the end of the current content
-      const currentHtml = sections.map((s) => s.html).join('\n')
-      const newFullHtml = currentHtml + '\n' + removedSection.html
+      const currentHtml = (activeHtmlContent || '').trim()
+      const newFullHtml = [currentHtml, removedSection.html].filter(Boolean).join('\n')
+      const nextStoredSections = buildStoredSectionsAfterRestore(
+        sections,
+        removedSection,
+        newFullHtml,
+      )
+      const persistedFullHtml = embedStoredTocSectionsInHtml(newFullHtml, nextStoredSections)
 
       const changesSummary = `Section restored: "${removedSection.text}"`
 
       await api.createVersion(documentId, {
-        content: newFullHtml,
+        content: persistedFullHtml,
         changes_summary: changesSummary,
       })
 
-      applyProcessedHtml(newFullHtml)
+      applyProcessedHtml(persistedFullHtml)
       setRemovedSections((prev) => prev.filter((s) => s.id !== removedSection.id))
 
       queryClient.invalidateQueries({ queryKey: queryKeys.documents.versions(documentId) })
@@ -752,7 +908,7 @@ export function useContentEditingFlow({
       queryClient.invalidateQueries({ queryKey: queryKeys.bff.documentDetailBundle(documentId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all })
     },
-    [applyProcessedHtml, documentId, queryClient, sections],
+    [activeHtmlContent, applyProcessedHtml, documentId, queryClient, sections],
   )
 
   const clearRemovedSections = useCallback(() => {

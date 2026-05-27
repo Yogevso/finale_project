@@ -2,154 +2,234 @@
 
 FastAPI backend for the Intel Documentation Platform.
 
-## Highlights
+## Table of Contents
 
-- Multi-tenant API surface (`management`, `portal`, `public`, `bff`, `viewer` routes)
-- Layered architecture (`domain`, `application`, `infrastructure`, `web`)
-- 6-tier RBAC with centralized policy decision point and tenant isolation
-- JWT + httpOnly cookie auth with session management, account lockout, concurrent session limits
-- HMAC-signed tamper-evident audit logging
-- Optimistic concurrency (`row_version` / ETag) on documents and versions
-- Review workflow with audience snapshots, drift detection, and version locking
-- AI assistant with Ollama LLM, RAG pipeline (ChromaDB), and 29 tool-augmented responses
-- DOCX/PPTX content extraction and ingestion pipeline
-- Global exception handler (safe 500s — no internal leak)
-- Non-root Docker container via gosu privilege drop
-- Required `SECRET_KEY` — no hardcoded fallbacks
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [API Surface](#api-surface)
+- [Authentication Model](#authentication-model)
+- [Visibility and Review Rules](#visibility-and-review-rules)
+- [Project Structure](#project-structure)
+- [Environment Configuration](#environment-configuration)
+- [Database Setup](#database-setup)
+- [Commands](#commands)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
 
-## API Domains
+## Overview
 
-| Domain | Modules | Description |
-| --- | --- | --- |
-| **Management** | auth, users, companies, tenants, documents, versions, attachments, analytics, assistant, chat, reviews, feedback, support, notifications, engagement, rbac, announcements, canned_responses, search, invitations, gdpr, collaboration | Internal admin/editor APIs |
-| **Portal** | documents, feedback, nps, support | Customer-facing APIs |
-| **Public** | documents, platforms, announcements, changelog, topics, sitemap | Unauthenticated public APIs |
-| **Viewer** | documents | Public document viewer |
-| **BFF** | documents | Backend-for-Frontend orchestration |
+The backend owns authentication, authorization, tenant isolation, document workflows, review pipelines, analytics, assistant orchestration, notifications, and public or customer-facing read APIs.
 
-## Important Paths
+Core capabilities:
 
-- `app/api/`: FastAPI route modules (management, portal, public, viewer, bff)
-- `app/db/`: Multi-database engine module (core, analytics, chat)
-- `app/application/`: command/query handlers, bus/pipeline orchestration
-- `app/domain/`: aggregates, value objects, specifications, workflows
-- `app/infrastructure/`: adapters and persistence-facing components
-- `app/observability/`: telemetry, SLO, burn-rate models
-- `app/event_store/`: event-sourcing pilot components
-- `app/assistant/`: AI assistant engine, Ollama client, RAG pipeline, tools
-- `tests/`: backend tests (unit/integration/contracts/security/resilience)
+- FastAPI application with `/api/v1` prefix
+- Layered architecture across `domain`, `application`, `infrastructure`, and `api`
+- Multi-tenant RBAC with centralized policy enforcement
+- JWT and cookie session flows
+- Review lifecycle with audience snapshot locking
+- AI assistant orchestration with Ollama and ChromaDB
+- Audit logging, rate limiting, and health endpoints
 
-## Setup
+## Quick Start
 
 ```bash
+cd backend
 python -m venv venv
-venv\Scripts\activate          # Windows
-source venv/bin/activate       # macOS / Linux
-
+venv\Scripts\activate
 pip install -r requirements-dev.txt
-```
-
-Dependency manifest contract:
-
-- `requirements.in`: runtime source dependencies
-- `requirements.txt`: generated runtime lockfile used by Docker/CI
-- `requirements-dev.in`: dev/audit source dependencies
-- `requirements-dev.txt`: generated dev lockfile for local development
-
-Regenerate the lockfiles with:
-
-```bash
-python -m piptools compile --resolver=backtracking --output-file requirements.txt requirements.in
-python -m piptools compile --resolver=backtracking --output-file requirements-dev.txt requirements-dev.in
-```
-
-Known pip-audit exceptions live in `pip-audit.ignore` and must only be used for
-advisories that currently have no published fix version.
-
-Run server:
-
-```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-API docs: http://localhost:8000/api/v1/docs | http://localhost:8000/api/v1/redoc
+Useful local URLs:
 
-## Environment Variables
+- API root: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/api/v1/docs`
+- OpenAPI JSON: `http://localhost:8000/api/v1/openapi.json`
+- Health: `http://localhost:8000/health`
+- Detailed health: `http://localhost:8000/health/detailed`
+
+## API Surface
+
+The API is grouped into these domains:
+
+| Domain | Purpose |
+| --- | --- |
+| `management` | Internal admin, editorial, review, support, and analytics flows |
+| `portal` | Customer-facing tenant-scoped APIs |
+| `public` | Public document and discovery endpoints |
+| `viewer` | Public document consumption |
+| `bff` | Backend-for-frontend orchestration for complex views |
+
+Representative endpoints:
+
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `GET /api/v1/documents`
+- `POST /api/v1/documents`
+- `POST /api/v1/reviews/documents/{document_id}/submit`
+- `POST /api/v1/reviews/{review_id}/approve`
+- `POST /api/v1/assistant/chat`
+- `GET /api/v1/portal/documents`
+- `GET /api/v1/public/documents`
+
+## Authentication Model
+
+- login uses `username` and `password`
+- access tokens expire after `30` minutes
+- refresh tokens expire after `7` days
+- login and refresh both support cookie-oriented session flows
+- collaboration uses `POST /api/v1/auth/collab-token` to mint a document-scoped websocket token
+
+Primary auth endpoints:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/change-password`
+- `POST /api/v1/auth/collab-token`
+
+## Visibility and Review Rules
+
+Visibility values:
+
+- `internal`
+- `company`
+- `public`
+
+Important invariants:
+
+- `company` visibility requires at least one assigned company
+- non-`company` visibility must not carry `company_ids`
+- customer portal access is tenant-scoped and only returns published content
+
+Review workflow notes:
+
+- document reviews are submitted through `POST /api/v1/reviews/documents/{document_id}/submit`
+- review payload uses `message`, `version_id`, and `requested_reviewer_ids`
+- approval preflight is available at `GET /api/v1/reviews/{review_id}/approve/preflight`
+- approval and rejection support structured review feedback payloads
+- audience drift is checked between submission time and approval time
+
+## Project Structure
+
+```text
+backend/
+|-- app/
+|   |-- api/              route modules
+|   |-- application/      command and query orchestration
+|   |-- assistant/        AI assistant, tools, RAG, Ollama client
+|   |-- db/               engines, sessions, database bases
+|   |-- domain/           business rules and aggregates
+|   |-- infrastructure/   persistence and external adapters
+|   |-- middleware/       auth, rate limiting, audit, logging
+|   `-- observability/    health and SLO support
+|-- tests/                unit, integration, contracts, scenarios
+|-- alembic.ini
+|-- requirements.in
+|-- requirements-dev.in
+`-- requirements-dev.txt
+```
+
+## Environment Configuration
+
+Important variables:
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `SECRET_KEY` | **Yes** | — | Signing key for JWT and sessions |
-| `DATABASE_URL` | No | `sqlite:///./data/portal.db` | Core database connection string |
-| `ANALYTICS_DATABASE_URL` | No | *(falls back to `DATABASE_URL`)* | Analytics database (audit logs, security events, NPS) |
-| `CHAT_DATABASE_URL` | No | *(falls back to `DATABASE_URL`)* | Chat database (notifications, assistant, collaboration) |
-| `OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama LLM service URL |
-| `ASSISTANT_MODEL` | No | `llama3.1:8b` | Ollama model name |
+| `SECRET_KEY` | Yes | none | Shared signing key |
+| `DATABASE_URL` | No | `sqlite:///./data/portal.db` | Core database |
+| `ANALYTICS_DATABASE_URL` | No | falls back to `DATABASE_URL` | Analytics database |
+| `CHAT_DATABASE_URL` | No | falls back to `DATABASE_URL` | Chat and assistant database |
 | `REDIS_URL` | No | `redis://redis:6379/0` | Redis for rate limiting and pub/sub |
+| `OLLAMA_BASE_URL` | No | `http://ollama:11434` | Ollama base URL |
+| `ASSISTANT_MODEL` | No | `llama3.1:8b` | Assistant model |
+| `MAX_UPLOAD_SIZE` | No | `52428800` | Max upload size in bytes |
+| `SEARCH_BACKEND_MODE` | No | `auto` or `portable_like` | Search backend strategy |
 
-Feature flags: see `../docs/feature-rollout-flags.md`.
+## Database Setup
 
-## Multi-Database Architecture
+Local development defaults to SQLite. Production should use PostgreSQL.
 
-The backend uses a 3-database split to isolate workloads and reduce lock contention:
+Run migrations:
 
-| Database | Engine | Tables | Purpose |
-| --- | --- | --- | --- |
-| **Core** | `DATABASE_URL` | 45 (users, documents, versions, etc.) | Primary business entities |
-| **Analytics** | `ANALYTICS_DATABASE_URL` | 7 (audit_logs, security_events, nps_surveys, etc.) | Write-heavy analytics and audit trail |
-| **Chat** | `CHAT_DATABASE_URL` | 10 (notifications, chats, assistant_conversations, etc.) | Real-time messaging and AI assistant |
-
-When `ANALYTICS_DATABASE_URL` or `CHAT_DATABASE_URL` are not set, they automatically fall back to `DATABASE_URL` (single-DB mode). This ensures backward compatibility.
-
-**Key files:**
-- `app/db/bases.py` — `CoreBase`, `AnalyticsBase`, `ChatBase` declarative bases
-- `app/db/engines.py` — 3 independent engine instances
-- `app/db/sessions.py` — 3 session factories
-- `app/db/dependencies.py` — `get_db()`, `get_analytics_db()`, `get_chat_db()` FastAPI deps
-
-**Data migration:** To split an existing single database into 3:
 ```bash
-python scripts/split_databases.py          # Dry run (default)
-python scripts/split_databases.py --execute   # Copy data to analytics.db and chat.db
+alembic upgrade head
+alembic -n analytics upgrade head
+alembic -n chat upgrade head
 ```
 
-**Alembic migrations** run independently per database:
+If you need to split an existing single DB into dedicated analytics and chat stores:
+
 ```bash
-alembic upgrade head                       # Core
-alembic -n analytics upgrade head          # Analytics
-alembic -n chat upgrade head               # Chat
+python scripts/split_databases.py
+python scripts/split_databases.py --execute
 ```
 
-## AI Assistant
+## Commands
 
-Self-hosted AI assistant powered by Ollama:
+| Command | Purpose |
+| --- | --- |
+| `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` | Start dev server |
+| `pytest tests/ -v` | Run backend tests |
+| `ruff check app/ tests/` | Lint backend code |
+| `ruff format app/ tests/ --check` | Check formatting |
+| `alembic upgrade head` | Run core migrations |
+| `alembic -n analytics upgrade head` | Run analytics migrations |
+| `alembic -n chat upgrade head` | Run chat migrations |
 
-- **LLM**: llama3.1:8b (served via Ollama on port 11434)
-- **Vector Store**: ChromaDB for document embeddings and RAG retrieval
-- **Tools**: 29 tools — document search, analytics queries, content extraction
-- **Security**: All RAG tools enforce `DocumentAccessPolicy.can_view_document()` before loading content
-- **Architecture**: `app/assistant/` — engine, conversation manager, tool router, prompts, RAG modules
-
-Requires the Ollama service running (included in Docker Compose with `--profile ai`).
-
-## Quality Gates
-
-Lint and format:
+Sample requests:
 
 ```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+curl -X POST http://localhost:8000/api/v1/auth/collab-token \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"document_id":42}'
+```
+
+## Testing
+
+```bash
+pytest tests/ -v
 ruff check app/ tests/
 ruff format app/ tests/ --check
 ```
 
-Full backend tests:
+High-value test areas:
 
-```bash
-pytest tests/ -v
-```
+- auth and RBAC
+- tenant isolation
+- review workflow correctness
+- assistant safety and tool routing
+- contracts and public API stability
+
+## Troubleshooting
+
+### Swagger is missing
+
+Docs are exposed in non-production only. Confirm your environment is not running in production mode.
+
+### Auth works in API tests but collab fails
+
+The collaboration server must share the same `SECRET_KEY` as the backend.
+
+### Assistant calls fail
+
+Check `OLLAMA_BASE_URL`, model availability, and `GET /api/v1/assistant/health`.
+
+### Rate limiting behaves unexpectedly
+
+Verify `REDIS_URL` connectivity and your `RATE_LIMIT_*` environment variables.
 
 ## Related Docs
 
-- `../docs/adr/`
-- `../docs/migrations/`
-- `../docs/slo/`
-- `../scripts/migration_safety/README.md`
-- `../scripts/chaos/README.md`
+- [Root README](../README.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Deployment](../docs/DEPLOYMENT.md)
+- [API Examples](../docs/API_EXAMPLES.md)
+- [Authorization Matrix](../docs/AUTHORIZATION_MATRIX.md)
+- [ADRs](../docs/adr)

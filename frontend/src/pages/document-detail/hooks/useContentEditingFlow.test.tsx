@@ -4,7 +4,10 @@ import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { queryKeys } from '@/lib/queryKeys'
-import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
+import {
+  processHtmlIntoSections,
+  type TocSection,
+} from '@/pages/document-detail/helpers/previewHelpers'
 import { useContentEditingFlow } from '@/pages/document-detail/hooks/useContentEditingFlow'
 
 vi.mock('@/lib/api', () => ({
@@ -429,6 +432,118 @@ describe('useContentEditingFlow', () => {
         queryKeys.reviews.all,
       ]),
     )
+  })
+
+  it('persists the richer toc model when saving a heading-backed section from an uploaded outline', async () => {
+    const queryClient = createQueryClient()
+    const onRequireInlineContent = vi.fn()
+    const applyProcessedHtml = vi.fn()
+
+    mockedApi.createVersion.mockResolvedValue({ id: 77 } as never)
+    mockedApi.getVersions.mockResolvedValue({
+      items: [
+        {
+          id: 70,
+          content:
+            '<article class="docx-document"><h1 id="heading-summary">Release Kit Summary</h1><p>Summary body</p><h2 id="heading-details">Release Kit Details</h2><p>Details body</p><h1 id="heading-appendix">Appendix A</h1></article>',
+          created_at: '2026-03-09T00:00:00.000Z',
+          is_published: true,
+          published_at: '2026-03-09T00:00:00.000Z',
+        },
+      ],
+    } as never)
+
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+
+    const { result } = renderHook(
+      () =>
+        useContentEditingFlow({
+          documentId: 42,
+          isEditor: true,
+          contentEditRequestToken: 0,
+          showingReaderView: false,
+          activeHtmlContent:
+            '<article class="docx-document"><h1 id="heading-summary" class="scroll-mt-4">Release Kit Summary</h1><p>Summary body</p><h2 id="heading-details" class="scroll-mt-4">Release Kit Details</h2><p>Details body</p><h1 id="heading-appendix" class="scroll-mt-4">Appendix A</h1></article>',
+          isLoading: false,
+          sections: [
+            {
+              id: 'toc-0',
+              text: 'Release Kit Summary',
+              level: 1,
+              html: '<h1 id="heading-summary" class="scroll-mt-4">Release Kit Summary</h1><p>Summary body</p>',
+              index: 0,
+              anchorId: 'heading-summary',
+              pageStart: 7,
+            },
+            {
+              id: 'toc-1',
+              text: 'Release Kit Details',
+              level: 2,
+              html: '<h2 id="heading-details" class="scroll-mt-4">Release Kit Details</h2><p>Details body</p>',
+              index: 1,
+              anchorId: 'heading-details',
+              pageStart: 7,
+            },
+            {
+              id: 'toc-2',
+              text: 'General Information',
+              level: 1,
+              html: '',
+              index: 2,
+              anchorId: 'page-8',
+              pageStart: 8,
+            },
+            {
+              id: 'toc-3',
+              text: 'Appendix A',
+              level: 1,
+              html: '<h1 id="heading-appendix" class="scroll-mt-4">Appendix A</h1>',
+              index: 3,
+              anchorId: 'heading-appendix',
+              pageStart: 75,
+            },
+          ],
+          applyProcessedHtml,
+          onRequireInlineContent,
+        }),
+      { wrapper },
+    )
+
+    act(() => {
+      result.current.handleChooseEditSection({
+        id: 'toc-0',
+        text: 'Release Kit Summary',
+        level: 1,
+        html: '<h1 id="heading-summary" class="scroll-mt-4">Release Kit Summary</h1><p>Summary body</p>',
+        index: 0,
+        anchorId: 'heading-summary',
+        pageStart: 7,
+      })
+    })
+
+    await act(async () => {
+      await result.current.handleSaveSection(
+        '<h1>Release Kit Summary 123</h1><p>Updated summary body</p>',
+        false,
+      )
+    })
+
+    const createVersionPayload = mockedApi.createVersion.mock.calls[0]?.[1] as
+      | { content?: string }
+      | undefined
+    expect(createVersionPayload?.content).toContain('doc-outline-metadata')
+    expect(applyProcessedHtml).toHaveBeenCalledWith(expect.stringContaining('doc-outline-metadata'))
+
+    const persistedSections = processHtmlIntoSections(createVersionPayload?.content || '').sections
+    expect(persistedSections.map((section) => section.text)).toEqual([
+      'Release Kit Summary 123',
+      'Release Kit Details',
+      'General Information',
+      'Appendix A',
+    ])
+    expect(persistedSections[2]?.anchorId).toBe('page-8')
   })
 
   it('replaces only the matched fragment when saving an outline-derived edit target', async () => {

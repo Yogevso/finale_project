@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Attachment } from '@/types'
 import type { TocSection } from '@/pages/document-detail/helpers/previewHelpers'
@@ -27,12 +26,6 @@ export function useReaderView({
     processHtmlWithSections,
   })
   const outlineNavigation = useOutlineNavigation({ selectedAttachment })
-
-  useEffect(() => {
-    if (!selectedAttachment) {
-      setSections([])
-    }
-  }, [selectedAttachment, setSections])
 
   return {
     ...artifactState,

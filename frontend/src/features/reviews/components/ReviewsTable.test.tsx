@@ -99,7 +99,7 @@ describe('ReviewsTable', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText('Pending Editor')).toBeInTheDocument();
+    expect(screen.getByText('Pending editor')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /feedback/i })).toBeInTheDocument();
   });
 });

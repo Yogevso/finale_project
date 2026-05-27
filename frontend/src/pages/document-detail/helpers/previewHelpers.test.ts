@@ -4,6 +4,7 @@ import {
   applyHighlights,
   clearCommentHighlights,
   clearHighlights,
+  embedStoredTocSectionsInHtml,
   filterOutlineSectionsByHtml,
   getUsableVersionContent,
   mapOutlineItemsToSections,
@@ -193,6 +194,129 @@ describe('processHtmlIntoSections', () => {
         level: 2,
       }),
     ])
+  })
+
+  it('preserves nested inline toc entries after stripping the source contents block', () => {
+    const result = processHtmlIntoSections(
+      [
+        '<article class="docx-document">',
+        '<p>Contents</p>',
+        '<ol>',
+        '<li>Release Kit Summary 7',
+        '<ol><li>Release Kit Details 7</li></ol>',
+        '</li>',
+        '<li>General Information 8</li>',
+        '<li>Appendix A 75</li>',
+        '</ol>',
+        '<h1 id="heading-summary">Release Kit Summary</h1>',
+        '<p>Summary body</p>',
+        '<h2 id="heading-details">Release Kit Details</h2>',
+        '<p>Details body</p>',
+        '<h1 id="heading-appendix">Appendix A</h1>',
+        '</article>',
+      ].join(''),
+    )
+
+    expect(result.html).not.toContain('Contents')
+    expect(result.sections.map((section) => section.text)).toEqual([
+      'Release Kit Summary',
+      'Release Kit Details',
+      'General Information',
+      'Appendix A',
+    ])
+    expect(result.sections.map((section) => section.level)).toEqual([1, 2, 1, 1])
+    expect(result.sections[0]?.anchorId).toBe('heading-summary')
+    expect(result.sections[1]?.anchorId).toBe('heading-details')
+    expect(result.sections[2]?.anchorId).toBe('page-8')
+    expect(result.sections[3]?.anchorId).toBe('heading-appendix')
+  })
+
+  it('preserves paragraph-based inline toc entries using toc level classes', () => {
+    const result = processHtmlIntoSections(
+      [
+        '<article class="docx-document">',
+        '<p>Contents</p>',
+        '<p class="MsoToc1">Release Kit Summary 7</p>',
+        '<p class="MsoToc2">Release Kit Details 7</p>',
+        '<p class="MsoToc1">Appendix A 75</p>',
+        '<h1 id="heading-summary">Release Kit Summary</h1>',
+        '<p>Summary body</p>',
+        '<h2 id="heading-details">Release Kit Details</h2>',
+        '<p>Details body</p>',
+        '<h1 id="heading-appendix">Appendix A</h1>',
+        '</article>',
+      ].join(''),
+    )
+
+    expect(result.sections.map((section) => section.text)).toEqual([
+      'Release Kit Summary',
+      'Release Kit Details',
+      'Appendix A',
+    ])
+    expect(result.sections.map((section) => section.level)).toEqual([1, 2, 1])
+    expect(result.sections[0]?.anchorId).toBe('heading-summary')
+    expect(result.sections[1]?.anchorId).toBe('heading-details')
+    expect(result.sections[2]?.anchorId).toBe('heading-appendix')
+  })
+
+  it('round-trips stored toc metadata without rendering the metadata block', () => {
+    const persistedHtml = embedStoredTocSectionsInHtml(
+      '<article class="docx-document"><h1 id="heading-summary">Release Kit Summary</h1><p>Summary body</p><h2 id="heading-details">Release Kit Details</h2><p>Details body</p><h1 id="heading-appendix">Appendix A</h1></article>',
+      [
+        {
+          id: 'toc-0',
+          text: 'Release Kit Summary',
+          level: 1,
+          html: '',
+          index: 0,
+          anchorId: 'page-7',
+          pageStart: 7,
+        },
+        {
+          id: 'toc-1',
+          text: 'Release Kit Details',
+          level: 2,
+          html: '',
+          index: 1,
+          anchorId: 'page-7',
+          pageStart: 7,
+        },
+        {
+          id: 'toc-2',
+          text: 'General Information',
+          level: 1,
+          html: '',
+          index: 2,
+          anchorId: 'page-8',
+          pageStart: 8,
+        },
+        {
+          id: 'toc-3',
+          text: 'Appendix A',
+          level: 1,
+          html: '',
+          index: 3,
+          anchorId: 'page-75',
+          pageStart: 75,
+        },
+      ],
+    )
+
+    expect(persistedHtml).toContain('doc-outline-metadata')
+
+    const result = processHtmlIntoSections(persistedHtml)
+
+    expect(result.html).not.toContain('doc-outline-metadata')
+    expect(result.sections.map((section) => section.text)).toEqual([
+      'Release Kit Summary',
+      'Release Kit Details',
+      'General Information',
+      'Appendix A',
+    ])
+    expect(result.sections[0]?.anchorId).toBe('heading-summary')
+    expect(result.sections[1]?.anchorId).toBe('heading-details')
+    expect(result.sections[2]?.anchorId).toBe('page-8')
+    expect(result.sections[3]?.anchorId).toBe('heading-appendix')
   })
 
   it('keeps backend TOC order while reusing html anchor ids for matching headings', () => {

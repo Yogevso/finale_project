@@ -53,7 +53,7 @@ export function useReaderArtifact({
     setIsReaderLoading(false)
     setReaderReloadToken(0)
 
-    if (!selectedAttachmentId) {
+    if (selectedAttachmentId) {
       setSections([])
     }
   }, [selectedAttachmentId, selectedAttachmentStatus, setSections])

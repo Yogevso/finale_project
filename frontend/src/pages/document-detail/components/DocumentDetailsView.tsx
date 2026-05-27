@@ -2,6 +2,7 @@ import CompanySelector from '@/components/CompanySelector'
 import { EmptyState } from '@/components/EmptyState'
 import TagEditor from '@/components/TagEditor'
 import VisibilityBadge from '@/components/VisibilityBadge'
+import { reviewStatusConfig } from '@/features/reviews/constants'
 import { formatDate } from '@/lib/dateUtils'
 import { formatDueDate, isOverdueDueDate } from '@/lib/documentDueDates'
 import { getDocumentDisplayDescription } from '@/lib/documentDisplay'
@@ -323,7 +324,7 @@ export function DocumentDetailsView({
                     {review.status === 'pending' ? (
                       <Clock className="w-4 h-4 text-amber-600" />
                     ) : null}
-                    <span className="card-title text-sm capitalize">{review.status}</span>
+                    <span className="card-title text-sm">{reviewStatusConfig[review.status].label}</span>
                   </div>
                   <span className="helper-copy">
                     {new Date(review.submitted_at).toLocaleDateString()}

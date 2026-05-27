@@ -2,6 +2,8 @@
 
 Task 122 generator for consistent architecture scaffolding.
 
+Part of the Intel Documentation Platform developer tooling. Use it to create consistent starter files that already match the repository’s architectural conventions.
+
 ## Supported Targets
 
 - Backend: `service`, `repository`, `policy`, `controller`
@@ -49,3 +51,9 @@ node scripts/scaffold/scaffold.mjs \
 ```bash
 node scripts/scaffold/check_scaffold_output.mjs
 ```
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Development Guide](../../docs/DEVELOPMENT.md)
+- [Migration Playbooks](../../docs/migrations/README.md)
