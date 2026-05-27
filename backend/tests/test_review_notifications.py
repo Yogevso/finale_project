@@ -131,5 +131,5 @@ def test_review_rejection_notifies_submitter(
         .first()
     )
     assert notification is not None
-    assert notification.title == "Document rejected"
+    assert notification.title == "Sent back for changes"
     assert notification.link == f"/documents/{test_document.id}"
