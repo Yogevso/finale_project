@@ -392,7 +392,6 @@ export function DocumentPreview({
   const {
     previewSource,
     previewableAttachments,
-    previewSource,
     activeHtmlContent,
     showingReaderView,
     shouldRenderHtmlPreview,
@@ -407,7 +406,7 @@ export function DocumentPreview({
     isInlineLoading: isLoading,
   });
 
-  const inlineSections = useMemo(() => {
+  const inlinePreviewSections = useMemo(() => {
     if (previewSource !== 'inline' || !activeHtmlContent) {
       return null;
     }
@@ -419,7 +418,7 @@ export function DocumentPreview({
       return;
     }
 
-    if (!inlineSections) {
+    if (!inlinePreviewSections) {
       if (sections.length > 0) {
         setSections([]);
       }
@@ -428,10 +427,10 @@ export function DocumentPreview({
 
     // Keep TOC locked to the currently rendered inline HTML.
     // This guards against stale reader-outline updates overriding edited content TOC.
-    if (!areTocSectionsEquivalent(sections, inlineSections)) {
-      setSections(inlineSections);
+    if (!areTocSectionsEquivalent(sections, inlinePreviewSections)) {
+      setSections(inlinePreviewSections);
     }
-  }, [inlineSections, previewSource, sections]);
+  }, [inlinePreviewSections, previewSource, sections]);
 
   const contentStyle = useMemo(
     () =>
