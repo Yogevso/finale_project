@@ -2,6 +2,8 @@
 
 These playbooks provide repeatable execution checklists for architecture waves.
 
+Part of the Intel Documentation Platform refactor program. Use these playbooks when a change spans boundaries, rollout safety, or coordinated migration steps.
+
 ## Playbooks
 
 - [Wave E - Governance and Domain Mapping](./wave-e-governance-domain-mapping.md)
@@ -45,3 +47,9 @@ For each wave:
   - `python backend/scripts/draft_audience_migration_helper.py --strategy auto`
 - Wave P draft-audience remediation apply:
   - `python backend/scripts/draft_audience_migration_helper.py --apply --strategy auto`
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [ADRs](../adr/README.md)
+- [Migration Safety Scripts](../../scripts/migration_safety/README.md)

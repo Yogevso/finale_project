@@ -2,6 +2,8 @@
 
 Task 118 migration safety framework runner.
 
+Part of the Intel Documentation Platform rollout-safety tooling. Use this runner when a change could impact schema compatibility, upgrade sequencing, or rollback safety.
+
 ## Runner
 
 - `run_migration_safety.py`
@@ -31,3 +33,9 @@ python scripts/migration_safety/run_migration_safety.py \
 
 - JSON summary report
 - generated schema SQL dump artifact
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Migration Playbooks](../../docs/migrations/README.md)
+- [Deployment](../../docs/DEPLOYMENT.md)

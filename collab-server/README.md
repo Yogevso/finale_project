@@ -1,66 +1,122 @@
 # Collaboration Server
 
-Hocuspocus/Yjs server for real-time collaborative editing.
+Hocuspocus and Yjs collaboration server for real-time document editing.
 
-## Highlights
+## Table of Contents
 
-- JWT-authenticated WebSocket collaboration sessions
-- Yjs CRDT conflict resolution for simultaneous editing
-- Live cursor presence (see where others are editing)
-- Required `SECRET_KEY` environment variable; `JWT_SECRET` is legacy fallback only
-- Optional `SECRET_KEY_OLD` grace-period verification during coordinated key rotation
-- Regex-validated document IDs (`/^\d+$/`) to prevent injection
-- Adapter boundaries for backend token/state contracts
-- Persistence integration with backend APIs
-- Connection/session orchestration services
-- Optional Redis support for horizontal scaling
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Key Features](#key-features)
+- [Auth Flow](#auth-flow)
+- [Environment Configuration](#environment-configuration)
+- [Scripts](#scripts)
+- [Runtime Notes](#runtime-notes)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
 
-## Setup
+## Overview
+
+This service handles real-time collaborative editing sessions for documents. It verifies auth with the shared signing key, synchronizes Yjs document state, exposes health checks, and can use Redis for scaling and coordination.
+
+## Quick Start
 
 ```bash
+cd collab-server
 npm install
 npm run dev
 ```
 
-Build + run:
+Local defaults:
 
-```bash
-npm run build
-npm start
-```
+- WebSocket server: `ws://localhost:8002`
+- Health server: `http://localhost:8003/health`
 
-## Environment Variables
+## Key Features
+
+- Hocuspocus websocket server
+- Yjs CRDT synchronization
+- Shared `SECRET_KEY` verification with backend
+- Optional `SECRET_KEY_OLD` during key rotation
+- Regex validation of document identifiers
+- Optional Redis extension for horizontal scaling
+- Connection guardrails and reconnect telemetry
+
+## Auth Flow
+
+The collaboration server does not accept arbitrary websocket clients. The intended flow is:
+
+1. authenticate against the backend
+2. request `POST /api/v1/auth/collab-token` with a `document_id`
+3. receive a signed collaboration token, permissions list, websocket URL, and expiry
+4. connect to the returned websocket URL with that token
+
+Key runtime details:
+
+- token expiry is `3600` seconds
+- permissions are document-scoped
+- backend and collab server must share `SECRET_KEY`
+- inaccessible documents are rejected before token issuance
+
+## Environment Configuration
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `8002` | WebSocket server port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `SECRET_KEY` | - | **Required.** Must match backend `SECRET_KEY` |
-| `SECRET_KEY_OLD` | - | Optional 24h grace-period verification key during rotation |
-| `JWT_SECRET` | - | Legacy fallback only when `SECRET_KEY` is unset |
-| `BACKEND_URL` | `http://localhost:8000` | Backend API base URL |
+| `HOST` | `0.0.0.0` | Bind host |
+| `SECRET_KEY` | none | Required shared signing key |
+| `SECRET_KEY_OLD` | none | Optional grace-period rotation key |
+| `JWT_SECRET` | none | Legacy fallback only |
+| `BACKEND_URL` | `http://localhost:8000` | Backend API base |
 | `BACKEND_API_PREFIX` | `/api/v1` | Backend API prefix |
-| `LOG_LEVEL` | `info` | Logging verbosity |
-| `REDIS_URL` | - | Optional, for horizontal scaling |
-| `COLLAB_MAX_TOTAL_CONNECTIONS` | `200` | Hard cap for concurrent websocket connections per collab-server instance |
-| `COLLAB_MAX_CONNECTIONS_PER_DOCUMENT` | `25` | Hard cap for concurrent connections on one document per instance |
-| `COLLAB_RECONNECT_WINDOW_SECONDS` | `60` | Window used to classify rapid reconnect churn in runtime telemetry |
+| `REDIS_URL` | none | Optional Redis URL |
+| `LOG_LEVEL` | `info` | Logging level |
+| `COLLAB_MAX_TOTAL_CONNECTIONS` | `200` | Per-instance connection cap |
+| `COLLAB_MAX_CONNECTIONS_PER_DOCUMENT` | `25` | Per-document connection cap |
+| `COLLAB_RECONNECT_WINDOW_SECONDS` | `60` | Reconnect churn window |
 
-## Commands
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start watch mode with `tsx` |
+| `npm run build` | Build production output |
+| `npm start` | Start compiled server |
+| `npm run typecheck` | Run TypeScript checks |
+| `npm run test` | Run Jest tests |
+| `npm run test:coverage` | Run Jest with coverage |
+| `npm run lint` | Alias to typecheck |
+
+## Runtime Notes
+
+- The backend and collaboration server must use the same `SECRET_KEY`
+- The frontend should point `VITE_COLLAB_SERVER_URL` at this service
+- Health checks run on port `8003`, separate from the websocket port
+- Redis is optional locally and strongly recommended when scaling beyond a single instance
+
+## Testing
 
 ```bash
-npm run dev         # Development with hot reload
-npm run build       # TypeScript compilation
-npm start           # Production server
-npm run typecheck   # Type checking
-npm run test        # Jest tests
-npm run lint        # Linting
+npm run typecheck
+npm run test
 ```
 
-## Important Paths
+## Troubleshooting
 
-- `src/index.ts`: bootstrap entrypoint
-- `src/server/`: server composition (app/health/connection registry)
-- `src/adapters/`: contract adapters (backend integration)
-- `src/authContext/`: auth context services (JWT validation)
-- `src/__tests__/`: unit and contract tests
+### Clients cannot connect
+
+Check port `8002`, verify the frontend websocket URL, and confirm there is no mismatch between `ws://` and `wss://`.
+
+### Auth succeeds in HTTP but collaboration fails
+
+This usually means the backend and collab server are not sharing the same `SECRET_KEY`.
+
+### Health checks fail
+
+Check that the health listener is reachable at `http://localhost:8003/health`.
+
+## Related Docs
+
+- [Root README](../README.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Deployment](../docs/DEPLOYMENT.md)
+- [Development Guide](../docs/DEVELOPMENT.md)

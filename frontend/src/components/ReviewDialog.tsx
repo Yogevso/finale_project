@@ -745,6 +745,7 @@ export default function ReviewDialog({
     persistReviewDocumentSession({
       reviewId: review.id,
       documentId: review.document_id,
+      versionId: version?.id ?? review.version_id ?? null,
       mode: isPendingReview ? 'review' : 'suggestions',
       focusedEntryId: activeEntry?.id || sessionEntries[0]?.id,
       entries: sessionEntries,
@@ -918,7 +919,7 @@ export default function ReviewDialog({
                     ) : null}
                   </div>
                 ) : review.status === 'rejected' ? (
-                  <TonePill tone="suggested">Returned With Suggestions</TonePill>
+                  <TonePill tone="suggested">Sent back for changes</TonePill>
                 ) : null}
               </div>
 

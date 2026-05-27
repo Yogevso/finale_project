@@ -2,6 +2,8 @@
 
 Architecture and workflow diagrams for the Documentation Platform.
 
+Part of the Intel Documentation Platform repository. Use this directory for platform and phase-level visual references, not for normative API or deployment instructions.
+
 ## Scope
 
 - Platform-level workflow and sequence references.
@@ -27,3 +29,9 @@ See [phases/README.md](./phases/README.md) for phase-level artifacts.
 
 - Update phase `TRACEABILITY.md` files when route, handler, or workflow ownership changes.
 - Keep role naming aligned with `ROLE_LEGEND.md` and docs/context ownership artifacts.
+
+## Related Docs
+
+- [Root README](../README.md)
+- [Phase Packs](./phases/README.md)
+- [Architecture](../docs/ARCHITECTURE.md)

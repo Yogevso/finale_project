@@ -6,8 +6,8 @@ describe('reviews status config', () => {
   it('contains labels and styles for each review state', () => {
     expect(reviewStatusConfig.pending.label).toBe('Pending')
     expect(reviewStatusConfig.approved.className).toContain('emerald')
-    expect(reviewStatusConfig.rejected.label).toBe('Rejected')
+    expect(reviewStatusConfig.pending_editor.label).toBe('Pending editor')
+    expect(reviewStatusConfig.rejected.label).toBe('Sent back for changes')
     expect(reviewStatusConfig.cancelled.className).toContain('slate')
   })
 })
-

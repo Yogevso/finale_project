@@ -23,7 +23,7 @@ export const reviewStatusConfig: Record<
     className: 'bg-amber-100 text-amber-700',
   },
   pending_editor: {
-    label: 'Pending Editor',
+    label: 'Pending editor',
     icon: AlertCircle,
     className: 'bg-violet-100 text-violet-700',
   },
@@ -38,7 +38,7 @@ export const reviewStatusConfig: Record<
     className: 'bg-emerald-100 text-emerald-700',
   },
   rejected: {
-    label: 'Rejected',
+    label: 'Sent back for changes',
     icon: XCircle,
     className: 'bg-rose-100 text-rose-700',
   },

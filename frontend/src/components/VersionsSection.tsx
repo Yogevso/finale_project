@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { GitCompareArrows } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { reviewStatusConfig } from '@/features/reviews/constants'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/dateUtils'
 import { queryKeys } from '@/lib/queryKeys'
@@ -291,7 +292,7 @@ function VersionCard({
             )}
             {reviewStatus && (
               <span className={`px-2 py-0.5 text-xs rounded-full ${reviewBadgeStyle}`}>
-                Review: {reviewStatus}
+                Review: {reviewStatusConfig[reviewStatus].label}
               </span>
             )}
           </div>

@@ -2,6 +2,8 @@
 
 This directory captures upstream/downstream dependencies across major bounded contexts.
 
+Part of the Intel Documentation Platform documentation set. Use these artifacts when a change affects ownership boundaries, context flow, or integration direction.
+
 ## Primary Context Map
 
 ```mermaid
@@ -41,3 +43,9 @@ Update this directory when a change:
 - introduces a new upstream/downstream dependency
 - changes ownership boundaries
 - changes contract flow between backend/frontend/collab contexts
+
+## Related Docs
+
+- [Root README](../../README.md)
+- [Architecture](../ARCHITECTURE.md)
+- [ADRs](../adr/README.md)

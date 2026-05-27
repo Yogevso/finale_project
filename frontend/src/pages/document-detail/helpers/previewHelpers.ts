@@ -30,6 +30,17 @@ export interface SectionHtmlMatch {
   topLevelIndex: number
 }
 
+interface StoredTocSectionPayload {
+  id?: string
+  text?: string
+  level?: number
+  anchorId?: string | null
+  pageStart?: number | null
+  pageEnd?: number | null
+}
+
+const STORED_TOC_METADATA_CLASS = 'doc-outline-metadata'
+
 function normalizeSectionLabel(value: string | undefined): string {
   return (value || '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
@@ -74,6 +85,106 @@ export function mapOutlineItemsToSections(items: AttachmentOutlineItem[] = []): 
       }
     })
     .filter((item) => item.text.trim().length > 0)
+}
+
+function normalizeStoredTocSections(rawSections: unknown): TocSection[] {
+  if (!Array.isArray(rawSections)) {
+    return []
+  }
+
+  const normalizedSections: TocSection[] = []
+
+  rawSections.forEach((item, index) => {
+    if (!item || typeof item !== 'object') {
+      return
+    }
+
+    const payload = item as StoredTocSectionPayload
+    const text = String(payload.text || '').trim()
+    if (!text) {
+      return
+    }
+
+    const rawLevel = Number(payload.level || 1)
+    const level = Number.isFinite(rawLevel) && rawLevel > 0 ? Math.max(1, rawLevel) : 1
+
+    const rawPageStart = Number(payload.pageStart || 0)
+    const pageStart =
+      Number.isFinite(rawPageStart) && rawPageStart > 0 ? Math.max(1, rawPageStart) : undefined
+    const rawPageEnd = Number(payload.pageEnd || 0)
+    const pageEnd =
+      Number.isFinite(rawPageEnd) && rawPageEnd > 0 ? Math.max(pageStart || 1, rawPageEnd) : null
+    const anchorId = String(
+      payload.anchorId || (pageStart ? `page-${pageStart}` : `stored-toc-${index}`),
+    )
+
+    normalizedSections.push({
+      id: String(payload.id || `stored-toc-${index}`),
+      text,
+      level,
+      html: '',
+      index,
+      anchorId,
+      pageStart,
+      pageEnd,
+    })
+  })
+
+  return normalizedSections
+}
+
+function serializeStoredTocSections(sections: TocSection[]): StoredTocSectionPayload[] {
+  return sections
+    .map((section) => ({
+      id: section.id,
+      text: section.text.trim(),
+      level: Math.max(1, section.level || 1),
+      anchorId: section.anchorId || null,
+      pageStart: section.pageStart ?? null,
+      pageEnd: section.pageEnd ?? null,
+    }))
+    .filter((section) => section.text.length > 0)
+}
+
+function extractStoredTocSections(doc: Document): TocSection[] {
+  const metadataNodes = Array.from(
+    doc.querySelectorAll<HTMLElement>(`.${STORED_TOC_METADATA_CLASS}`),
+  )
+  let storedSections: TocSection[] = []
+
+  metadataNodes.forEach((node) => {
+    if (storedSections.length === 0) {
+      try {
+        storedSections = normalizeStoredTocSections(JSON.parse(node.textContent || '[]'))
+      } catch {
+        storedSections = []
+      }
+    }
+    node.remove()
+  })
+
+  return storedSections
+}
+
+export function embedStoredTocSectionsInHtml(html: string, sections: TocSection[]): string {
+  const parser = getDomParser()
+  const doc = parser.parseFromString(html || '', 'text/html')
+  Array.from(doc.querySelectorAll<HTMLElement>(`.${STORED_TOC_METADATA_CLASS}`)).forEach((node) =>
+    node.remove(),
+  )
+
+  const serializedSections = serializeStoredTocSections(sections)
+  if (serializedSections.length === 0) {
+    return doc.body.innerHTML
+  }
+
+  const root = getEditableHtmlRoot(doc)
+  const metadataNode = doc.createElement('div')
+  metadataNode.className = STORED_TOC_METADATA_CLASS
+  metadataNode.setAttribute('role', 'presentation')
+  metadataNode.textContent = JSON.stringify(serializedSections)
+  root.insertBefore(metadataNode, root.firstChild)
+  return doc.body.innerHTML
 }
 
 export function getEditableHtmlRoot(doc: Document): HTMLElement {
@@ -573,14 +684,124 @@ export function clearHighlights(container: HTMLElement) {
  * Detect whether an <ol> looks like a table-of-contents list.
  * TOC lists typically have items ending with page numbers (e.g. "Changes 40").
  */
+function normalizeInlineTocText(value: string): string {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[._]{2,}\s*/g, ' ')
+    .trim()
+}
+
+function parseInlineTocEntry(value: string): { text: string; pageStart: number | null } | null {
+  const normalized = normalizeInlineTocText(value)
+  if (!normalized) {
+    return null
+  }
+
+  const pageMatch = normalized.match(/^(.*?)(?:\s+)(\d{1,4})$/)
+  if (!pageMatch) {
+    return {
+      text: normalized,
+      pageStart: null,
+    }
+  }
+
+  const text = pageMatch[1]?.trim()
+  const pageStart = Number.parseInt(pageMatch[2] || '', 10)
+  if (!text) {
+    return null
+  }
+
+  return {
+    text,
+    pageStart: Number.isFinite(pageStart) && pageStart > 0 ? pageStart : null,
+  }
+}
+
+function getInlineTocOwnText(element: Element): string {
+  const clone = element.cloneNode(true) as HTMLElement
+  clone.querySelectorAll('ol, ul').forEach((list) => list.remove())
+  return clone.textContent || ''
+}
+
+function inferInlineTocLevel(element: HTMLElement, fallbackLevel: number): number {
+  const classLevelMatch =
+    element.className.match(/\bmso[\s_-]*toc(\d+)\b/i) ||
+    element.className.match(/\btoc[\s_-]?(\d+)\b/i)
+  if (classLevelMatch) {
+    const parsedLevel = Number.parseInt(classLevelMatch[1] || '', 10)
+    if (Number.isFinite(parsedLevel) && parsedLevel > 0) {
+      return parsedLevel
+    }
+  }
+
+  return Math.max(1, fallbackLevel)
+}
+
+function pushInlineTocSection(
+  sections: TocSection[],
+  seenKeys: Set<string>,
+  rawText: string,
+  level: number,
+) {
+  const parsed = parseInlineTocEntry(rawText)
+  if (!parsed) {
+    return
+  }
+
+  const normalizedLabel = normalizeSectionLabel(parsed.text)
+  if (!normalizedLabel) {
+    return
+  }
+
+  const dedupeKey = `${normalizedLabel}:${parsed.pageStart || 'none'}`
+  if (seenKeys.has(dedupeKey)) {
+    return
+  }
+  seenKeys.add(dedupeKey)
+
+  const index = sections.length
+  sections.push({
+    id: `inline-toc-${index}`,
+    text: parsed.text,
+    level: Math.max(1, level),
+    html: '',
+    index,
+    anchorId: parsed.pageStart ? `page-${parsed.pageStart}` : `inline-toc-${index}`,
+    pageStart: parsed.pageStart ?? undefined,
+    pageEnd: null,
+  })
+}
+
+function collectInlineTocSectionsFromList(
+  list: Element,
+  depth: number,
+  sections: TocSection[],
+  seenKeys: Set<string>,
+) {
+  Array.from(list.children)
+    .filter((child) => child.tagName.toLowerCase() === 'li')
+    .forEach((child) => {
+      const item = child as HTMLElement
+      pushInlineTocSection(
+        sections,
+        seenKeys,
+        getInlineTocOwnText(item),
+        inferInlineTocLevel(item, depth),
+      )
+
+      item.querySelectorAll(':scope > ol, :scope > ul').forEach((nestedList) => {
+        collectInlineTocSectionsFromList(nestedList, depth + 1, sections, seenKeys)
+      })
+    })
+}
+
 function looksLikeTocList(ol: Element): boolean {
-  const items = ol.querySelectorAll('li')
+  const items = ol.querySelectorAll(':scope > li')
   if (items.length === 0) return false
   let pageNumberCount = 0
   items.forEach((li) => {
-    // Only check direct text, ignoring nested lists
-    const text = (li.childNodes[0]?.textContent || '').trim()
-    if (/\d{1,4}\s*$/.test(text)) {
+    if (parseInlineTocEntry(getInlineTocOwnText(li))?.pageStart) {
       pageNumberCount++
     }
   })
@@ -591,7 +812,9 @@ function looksLikeTocList(ol: Element): boolean {
  * Remove inline table of contents from the parsed document.
  * Matches a "Contents" heading/paragraph followed by consecutive <ol> TOC lists.
  */
-function removeInlineToc(doc: Document): void {
+function extractAndRemoveInlineToc(doc: Document): TocSection[] {
+  const extractedSections: TocSection[] = []
+  const seenKeys = new Set<string>()
   const root = doc.body.firstElementChild?.classList.contains('docx-document')
     ? doc.body.firstElementChild
     : doc.body
@@ -610,40 +833,53 @@ function removeInlineToc(doc: Document): void {
 
     // Found "Contents" — remove it and all consecutive TOC elements after it
     const toRemove: HTMLElement[] = [el]
+    let foundTocEntries = false
     for (let j = i + 1; j < children.length; j++) {
       const next = children[j]
       const tag = next.tagName.toLowerCase()
-      if (tag === 'ol' && looksLikeTocList(next)) {
+      if ((tag === 'ol' || tag === 'ul') && looksLikeTocList(next)) {
         toRemove.push(next)
+        collectInlineTocSectionsFromList(next, 1, extractedSections, seenKeys)
+        foundTocEntries = true
       } else if (tag === 'p' && !next.textContent?.trim()) {
         // Skip empty paragraphs between TOC lists
         toRemove.push(next)
       } else if (tag === 'p' && /\d{1,4}\s*$/.test(next.textContent?.trim() || '')) {
         // Standalone TOC entry paragraph ending with page number
         toRemove.push(next)
+        pushInlineTocSection(
+          extractedSections,
+          seenKeys,
+          next.textContent || '',
+          inferInlineTocLevel(next, 1),
+        )
+        foundTocEntries = true
       } else {
         break
       }
     }
 
-    // Only remove if we found at least one TOC list after the heading
-    if (toRemove.length > 1) {
+    if (foundTocEntries) {
       toRemove.forEach((node) => node.remove())
     }
     break
   }
+
+  return extractedSections
 }
 
 export function processHtmlIntoSections(html: string): { html: string; sections: TocSection[] } {
   const sanitizedHtml = sanitizeHtmlForPreview(html)
   const parser = getDomParser()
   const doc = parser.parseFromString(sanitizedHtml, 'text/html')
+  const storedTocSections = extractStoredTocSections(doc)
+  const inlineTocSections = extractAndRemoveInlineToc(doc)
+  const preferredOutlineSections =
+    storedTocSections.length > 0 ? storedTocSections : inlineTocSections
 
   // Remove inline table of contents from the document body.
   // The TOC is typically a heading/paragraph containing "Contents" followed by
   // ordered lists whose items end with page numbers (e.g. "40", "41").
-  removeInlineToc(doc)
-
   const sections: TocSection[] = []
   const rootElement = doc.body.firstElementChild
   const elements = resolveSectionElements(doc)
@@ -734,7 +970,10 @@ export function processHtmlIntoSections(html: string): { html: string; sections:
 
   return {
     html: doc.body.innerHTML,
-    sections,
+    sections:
+      preferredOutlineSections.length > 0
+        ? mergeTocSections(preferredOutlineSections, sections)
+        : sections,
   }
 }
 

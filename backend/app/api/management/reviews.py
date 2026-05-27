@@ -1126,8 +1126,8 @@ async def reject_review(
     notification_service.create_notification(
         user_id=review.submitted_by,
         notification_type=NotificationType.REVIEW_REJECTED,
-        title="Document rejected",
-        message=f"Your document '{review.document.title}' was rejected by {current_user.full_name}. Reason: {data.comments[:100]}...",
+        title="Sent back for changes",
+        message=f"Your document '{review.document.title}' was sent back for changes by {current_user.full_name}. Reason: {data.comments[:100]}...",
         link=f"/documents/{review.document_id}",
     )
     write_audit_log(
