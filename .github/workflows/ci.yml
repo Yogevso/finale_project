@@ -7,19 +7,19 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - "backend/**"
-      - "frontend/**"
-      - "collab-server/**"
-      - "scripts/**"
-      - ".github/workflows/**"
+      - 'backend/**'
+      - 'frontend/**'
+      - 'collab-server/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
   pull_request:
     branches: [main, develop]
     paths:
-      - "backend/**"
-      - "frontend/**"
-      - "collab-server/**"
-      - "scripts/**"
-      - ".github/workflows/**"
+      - 'backend/**'
+      - 'frontend/**'
+      - 'collab-server/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
       test_profile:

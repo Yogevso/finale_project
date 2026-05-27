@@ -383,7 +383,7 @@ describe('DocumentPreview state branches', () => {
       ],
     } as never)
 
-    render(
+    renderWithQueryClient(
       <DocumentPreview
         documentId={42}
         attachments={[]}
