@@ -1,0 +1,12 @@
+title = "finale_project gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret test fixtures and documentation examples"
+paths = [
+  '''collab-server/src/__tests__/.*''',
+  '''backend/tests/.*''',
+  '''docs/API_EXAMPLES\.md''',
+]
