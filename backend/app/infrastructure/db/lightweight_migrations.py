@@ -19,6 +19,7 @@ def _legacy_preview_column(*parts: str) -> str:
 def run_lightweight_migrations(
     *,
     engine: Engine,
+    analytics_engine: Engine | None = None,
     skip_versions_semantic_migration: bool = False,
 ) -> None:
     """Apply lightweight startup migrations for SQLite deployments."""
@@ -39,12 +40,18 @@ def run_lightweight_migrations(
         _ensure_domain_event_outbox(conn)
         _ensure_idempotency_keys(conn)
         _ensure_document_assignment_indexes(conn)
-        _ensure_audit_log_columns(conn)
         _backfill_invitation_security_fields(conn)
         _ensure_invitation_delivery_columns(conn)
         if not skip_versions_semantic_migration:
             _ensure_versions_semantic_columns(conn)
         conn.commit()
+
+    # audit_logs lives in the analytics database, not core.
+    audit_log_engine = analytics_engine or engine
+    if audit_log_engine.dialect.name == "sqlite":
+        with audit_log_engine.connect() as audit_conn:
+            _ensure_audit_log_columns(audit_conn)
+            audit_conn.commit()
 
 
 def _slugify(value: str) -> str:

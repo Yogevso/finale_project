@@ -101,5 +101,6 @@ def _run_lightweight_migrations(*, skip_versions_semantic_migration: bool = Fals
     """Run lightweight SQLite-only data migrations."""
     run_lightweight_migrations(
         engine=core_engine,
+        analytics_engine=analytics_engine,
         skip_versions_semantic_migration=skip_versions_semantic_migration,
     )
