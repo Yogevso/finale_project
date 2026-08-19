@@ -63,9 +63,16 @@ def _run_managed_migrations() -> bool:
     )
 
 
+def _register_model_metadata() -> None:
+    # Importing the models package is what populates the Base metadata that
+    # create_all() reads; without it every metadata object is empty.
+    import app.models  # noqa: F401
+
+
 def _bootstrap_schema_from_metadata() -> None:
     """Create all tables on all three engines from metadata."""
     logger.warning("Managed migrations unavailable; bootstrapping schema via SQLAlchemy metadata.")
+    _register_model_metadata()
     CoreBase.metadata.create_all(bind=core_engine)
     AnalyticsBase.metadata.create_all(bind=analytics_engine)
     ChatBase.metadata.create_all(bind=chat_engine)
@@ -73,6 +80,7 @@ def _bootstrap_schema_from_metadata() -> None:
 
 def _bootstrap_secondary_schemas() -> None:
     """Ensure analytics and chat schemas exist (their managed migrations come later)."""
+    _register_model_metadata()
     AnalyticsBase.metadata.create_all(bind=analytics_engine)
     ChatBase.metadata.create_all(bind=chat_engine)
 
