@@ -7,6 +7,10 @@ import { useAttachmentDownload } from '@/hooks/useAttachmentDownload';
 import { useDocumentCommentsQuery } from '@/hooks/useDocumentQueries';
 import { useAuth } from '@/lib/auth';
 import { getReviewDocumentSession } from '@/features/reviews/reviewSession';
+import {
+  getCommentsSidebarCollapsed,
+  setCommentsSidebarCollapsed,
+} from '@/lib/commentsSidebar';
 import { queryKeys } from '@/lib/queryKeys';
 import { reportRuntimeError } from '@/lib/runtimeReporter';
 import type { CSSProperties } from 'react';
@@ -163,6 +167,7 @@ export function DocumentPreview({
   const [isLoading, setIsLoading] = useState(true);
   const [sections, setSections] = useState<TocSection[]>([]);
   const [tocCollapsed, setTocCollapsed] = useState(false);
+  const [commentsCollapsed, setCommentsCollapsed] = useState(() => getCommentsSidebarCollapsed());
   const [searchTerm, setSearchTerm] = useState('');
   const [searchMatchCount, setSearchMatchCount] = useState(0);
   const [activeSearchMatchIndex, setActiveSearchMatchIndex] = useState(-1);
@@ -1165,8 +1170,15 @@ export function DocumentPreview({
             />
 
             {user ? (
-              <div ref={commentsSidebarRef} className="h-full w-full flex-shrink-0 md:w-auto">
-                <div className="mb-2 inline-flex rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold">
+              <div
+                ref={commentsSidebarRef}
+                className={`h-full flex-shrink-0 transition-all duration-300 ${
+                  commentsCollapsed ? 'w-full md:w-12' : 'w-full md:w-auto'
+                }`}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  {commentsCollapsed ? null : (
+                    <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 text-xs font-semibold">
                   <button
                     type="button"
                     onClick={() => setSidebarMode('comments')}
@@ -1189,9 +1201,45 @@ export function DocumentPreview({
                   >
                     Feedback
                   </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCommentsCollapsed((previous) => {
+                        const next = !previous;
+                        setCommentsSidebarCollapsed(next);
+                        return next;
+                      })
+                    }
+                    className="btn-icon h-8 w-8 shrink-0 border-0 bg-transparent text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                    title={commentsCollapsed ? 'Show comments' : 'Hide comments'}
+                    aria-label={commentsCollapsed ? 'Show comments panel' : 'Hide comments panel'}
+                    aria-expanded={!commentsCollapsed}
+                  >
+                    <svg
+                      className={`h-4 w-4 transition-transform ${commentsCollapsed ? '' : 'rotate-180'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
                 </div>
 
-                {sidebarMode === 'comments' ? (
+                {commentsCollapsed ? (
+                  <div className="hidden flex-1 items-center justify-center overflow-hidden px-1 md:flex">
+                    <span className="block origin-center -rotate-90 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      {sidebarMode === 'comments' ? 'Comments' : 'Feedback'}
+                    </span>
+                  </div>
+                ) : sidebarMode === 'comments' ? (
                   <DocumentCommentsSidebar
                     threads={commentThreads}
                     isLoading={commentsLoading}
