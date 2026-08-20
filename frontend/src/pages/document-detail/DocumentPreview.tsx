@@ -34,6 +34,10 @@ import {
 import { ContentEditChooserPopup } from '@/pages/document-detail/components/ContentEditChooserPopup';
 import { DocumentCommentsSidebar } from '@/pages/document-detail/components/DocumentCommentsSidebar';
 import { DocumentFeedbackSidebar } from '@/pages/document-detail/components/DocumentFeedbackSidebar';
+import {
+  supportsFidelityView,
+  useFidelityView,
+} from '@/pages/document-detail/hooks/useFidelityView';
 import { PreviewCanvas } from '@/pages/document-detail/components/PreviewCanvas';
 import { PreviewToolbar } from '@/pages/document-detail/components/PreviewToolbar';
 import { SectionEditPopup } from '@/pages/document-detail/components/SectionEditPopup';
@@ -410,6 +414,36 @@ export function DocumentPreview({
     readerStatus,
     isInlineLoading: isLoading,
   });
+
+  // "Original layout" is a read-only rendering mode on top of the reader source, not a
+  // source of its own, so previewSource and every flow keyed off it are left untouched.
+  const [showFidelityView, setShowFidelityView] = useState(false);
+  const fidelityAttachment = selectedAttachment || previewableAttachments[0] || null;
+  const fidelityAvailable = supportsFidelityView(fidelityAttachment);
+  const showingFidelity = showFidelityView && fidelityAvailable && previewSource === 'reader';
+
+  const { fidelityHtml, fidelityError, isFidelityLoading } = useFidelityView({
+    documentId,
+    attachment: fidelityAttachment,
+    enabled: showingFidelity,
+  });
+
+  const handleSelectFidelityView = useCallback(() => {
+    if (fidelityAttachment) {
+      setSelectedAttachment(fidelityAttachment);
+    }
+    setShowFidelityView(true);
+  }, [fidelityAttachment]);
+
+  const handleSelectPreviewAttachment = useCallback((attachment: Attachment | null) => {
+    setShowFidelityView(false);
+    setSelectedAttachment(attachment);
+  }, []);
+
+  const handleSelectInlinePreview = useCallback(() => {
+    setShowFidelityView(false);
+    setSelectedAttachment(null);
+  }, []);
 
   const inlinePreviewSections = useMemo(() => {
     if (previewSource !== 'inline' || !activeHtmlContent) {
@@ -1013,8 +1047,11 @@ export function DocumentPreview({
         selectedAttachment={selectedAttachment}
         previewSource={previewSource}
         inlinePreviewAvailable={Boolean(htmlContent?.trim())}
-        onSelectAttachment={setSelectedAttachment}
-        onSelectInlinePreview={() => setSelectedAttachment(null)}
+        fidelityAvailable={fidelityAvailable}
+        showingFidelity={showingFidelity}
+        onSelectAttachment={handleSelectPreviewAttachment}
+        onSelectInlinePreview={handleSelectInlinePreview}
+        onSelectFidelityView={handleSelectFidelityView}
         readerError={readerError}
         onRetryReaderView={handleRetryReaderView}
         fontSize={fontSize}
@@ -1134,6 +1171,10 @@ export function DocumentPreview({
               documentPaperClass={documentPaperClass}
               activeHtmlContent={activeHtmlContent}
               showingReaderView={showingReaderView}
+              showingFidelity={showingFidelity}
+              fidelityHtml={fidelityHtml}
+              fidelityError={fidelityError}
+              isFidelityLoading={isFidelityLoading}
               showDocumentTitle={showCanvasTitle}
               documentTitle={documentTitle}
               selectedAttachmentFilename={selectedAttachment?.filename}

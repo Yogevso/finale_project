@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  AttachmentFidelityViewResponse,
   AttachmentReaderViewResponse,
   AttachmentUploadResponse,
   MessageResponse,
@@ -66,6 +67,20 @@ export const AttachmentsApiMixin = <TBase extends Constructor<ApiClientBase>>(Ba
         },
       )
       return mapAttachmentReaderViewResponseDto(data)
+    }
+
+    /**
+     * Page-faithful HTML for a PDF attachment. Read-only companion to the Reader View;
+     * the response is rendered on demand rather than stored, so it has no DTO contract.
+     */
+    async getAttachmentFidelityView(
+      documentId: number,
+      attachmentId: number,
+    ): Promise<AttachmentFidelityViewResponse> {
+      const { data } = await this.client.get<AttachmentFidelityViewResponse>(
+        `/documents/${documentId}/attachments/${attachmentId}/fidelity-view`,
+      )
+      return data
     }
 
     async retryAttachmentReaderView(
