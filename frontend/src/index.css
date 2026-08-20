@@ -1663,9 +1663,13 @@ h6 {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-kerning: normal;
-  font-family: 'IBM Plex Serif', 'Georgia', 'Times New Roman', serif;
+  /* Source documents here are technical specifications set in Verdana or Arial:
+     dense tables, part numbers, version strings. A serif reading face suits
+     prose but misrepresents them and reads poorly at table density, so the
+     stack stays sans and close to the original. */
+  font-family: var(--doc-font-family, 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif);
   font-size: var(--doc-font-size, 1rem);
-  line-height: 1.74;
+  line-height: 1.7;
   letter-spacing: 0.002em;
   padding: clamp(1.5rem, 2.8vw, 2.75rem) clamp(1.2rem, 3vw, 3.2rem) clamp(2.25rem, 3vw, 3rem);
 }

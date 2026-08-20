@@ -197,6 +197,9 @@ class VersionService(SessionService):
             "row_version": version.row_version,
             "etag": version.etag,
             "content": version.content,
+            # Built at conversion time and stored beside the content; omitting it
+            # here silently drops it from every listing the service serves.
+            "toc_items": version.toc_json,
             "changes_summary": version.changes_summary,
             "is_published": version.is_published,
             "published_at": version.published_at,

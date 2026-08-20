@@ -593,7 +593,12 @@ class DocxExtractor:
         parts: list[str] = []
         for node in run_element:
             tag_name = self._local_name(node.tag)
-            if tag_name in {"t", "instrText"}:
+            # w:instrText holds a field *instruction*, never text a reader should
+            # see. Emitting it puts the raw code into the document: a contents
+            # page renders as 'TOC \o "3-4" \h \z ... PAGEREF _Toc237367833 \h 10'
+            # instead of '1 Release Kit Summary 10'. The field's visible result is
+            # carried by the w:t runs that follow it, so nothing is lost.
+            if tag_name == "t":
                 parts.append(node.text or "")
             elif tag_name == "tab":
                 parts.append("\t")
