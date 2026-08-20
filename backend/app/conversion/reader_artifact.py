@@ -9,7 +9,10 @@ from app.conversion.ir import IRNode, count_ir_elements
 
 def build_reader_artifact_from_extraction_result(result: Any) -> dict[str, Any]:
     """Normalize DOCX/PPTX extraction results into reader-artifact payloads."""
-    toc_items = _build_toc_items(getattr(result, "headings", []))
+    # A contents page the document generated states real page numbers; deriving
+    # them from heading order labels the fifty-seventh heading "page 57".
+    declared_toc = list(getattr(result, "declared_toc", []) or [])
+    toc_items = declared_toc or _build_toc_items(getattr(result, "headings", []))
     payload: dict[str, Any] = {
         "status": getattr(result, "status", "failed"),
         "title": getattr(result, "title", None),
@@ -34,7 +37,7 @@ def build_reader_artifact_from_extraction_result(result: Any) -> dict[str, Any]:
         "status": payload["status"],
         "html_content": getattr(result, "html", "") or "",
         "toc_items": toc_items,
-        "toc_source": "headings",
+        "toc_source": "contents" if declared_toc else "headings",
         "payload": payload,
         "error": extraction_error,
     }

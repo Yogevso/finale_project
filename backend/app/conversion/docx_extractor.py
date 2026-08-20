@@ -99,6 +99,9 @@ class ExtractionResult:
     confidence: float = 0.0
     extraction_error: str | None = None
     ir: IRNode | None = None
+    # Entries from the document's own contents page, when it generated one.
+    # They carry the real page numbers, which the headings alone never do.
+    declared_toc: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,6 +275,10 @@ class DocxExtractor:
         document_title = str(parsed_document.metadata.get("title") or "") or (
             headings[0].text if headings else None
         )
+        # The contents page Word generated states the real page numbers; the
+        # extraction result alone cannot, so it is read from the same bytes here.
+        declared_toc = self._read_declared_toc(content)
+
         result = ExtractionResult(
             status="ready",
             html=html_content,
@@ -282,6 +289,7 @@ class DocxExtractor:
             confidence=1.0,
             extraction_error=None,
             ir=document_ir,
+            declared_toc=declared_toc,
         )
         result.warnings = self._verify(result)
         result.confidence = calculate_confidence(result)
@@ -318,6 +326,20 @@ class DocxExtractor:
 
     def _extract_paragraphs(self, parsed_document: ParsedDocxDocument) -> list[ParagraphBlock]:
         return parsed_document.paragraphs
+
+    def _read_declared_toc(self, data: bytes) -> list[dict[str, Any]]:
+        """Read the contents page Word generated, if the document has one."""
+        from app.conversion.document_toc import build_toc_from_docx_structure
+        from app.conversion.docx_structure import extract_docx_structure
+
+        try:
+            structure = extract_docx_structure(data)
+        except Exception:  # policy: DEGRADED — a missing contents page is not an error
+            logger.debug("Declared contents page unavailable", exc_info=True)
+            return []
+        if structure.error:
+            return []
+        return build_toc_from_docx_structure(structure)
 
     def _extract_headings(self, paragraphs: list[ParagraphBlock]) -> dict[int, HeadingItem]:
         return self._build_heading_items(paragraphs)
