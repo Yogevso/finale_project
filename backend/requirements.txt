@@ -78,6 +78,8 @@ fastapi==0.135.1
     # via -r requirements.in
 filelock==3.25.2
     # via huggingface-hub
+fonttools==4.60.1
+    # via -r requirements.in
 flatbuffers==25.12.19
     # via onnxruntime
 fsspec==2026.2.0

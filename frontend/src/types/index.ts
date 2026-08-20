@@ -363,6 +363,17 @@ export interface AttachmentReaderViewResponse {
   generated_at: string | null
 }
 
+/**
+ * Page-faithful render of a PDF attachment. Generated on demand and never stored, so it
+ * takes no part in the edit, review or publish flows.
+ */
+export interface AttachmentFidelityViewResponse {
+  status: 'ready' | 'failed' | string
+  html_content: string | null
+  toc_items: AttachmentOutlineItem[]
+  error: string | null
+}
+
 export interface AttachmentOutlineItem {
   id: string
   level: number

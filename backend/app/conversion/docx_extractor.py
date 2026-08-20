@@ -670,14 +670,18 @@ class DocxExtractor:
         while index < len(blocks):
             block = blocks[index]
             if block.kind == "paragraph" and block.paragraph is not None:
-                if self._is_list_paragraph(block.paragraph):
-                    list_run, index = self._collect_list_run(blocks, index)
+                heading_item = heading_lookup.get(id(block.paragraph))
+                # Numbered headings ("1.1 Release Kit Summary") carry a numPr just like
+                # list items do. Without this guard the list branch claims them and the
+                # document loses every heading, and with it its table of contents.
+                if heading_item is None and self._is_list_paragraph(block.paragraph):
+                    list_run, index = self._collect_list_run(blocks, index, heading_lookup)
                     children.extend(self._build_list_ir(self._extract_lists(list_run)))
                     continue
 
                 paragraph_node = self._build_paragraph_ir(
                     block.paragraph,
-                    heading_lookup.get(id(block.paragraph)),
+                    heading_item,
                 )
                 if paragraph_node is not None:
                     children.append(paragraph_node)
@@ -876,14 +880,18 @@ class DocxExtractor:
         self,
         blocks: list[BodyBlock],
         start_index: int,
+        heading_lookup: dict[int, HeadingItem] | None = None,
     ) -> tuple[list[ParagraphBlock], int]:
         index = start_index
         run: list[ParagraphBlock] = []
+        headings = heading_lookup or {}
         while index < len(blocks):
             block = blocks[index]
             if block.kind != "paragraph" or block.paragraph is None:
                 break
             if not self._is_list_paragraph(block.paragraph):
+                break
+            if id(block.paragraph) in headings:
                 break
             run.append(block.paragraph)
             index += 1

@@ -9,8 +9,12 @@ interface PreviewToolbarProps {
   selectedAttachment: Attachment | null
   previewSource: 'reader' | 'inline' | 'none'
   inlinePreviewAvailable: boolean
+  /** Page-faithful render, offered for PDF attachments only. */
+  fidelityAvailable?: boolean
+  showingFidelity?: boolean
   onSelectAttachment: (attachment: Attachment | null) => void
   onSelectInlinePreview: () => void
+  onSelectFidelityView?: () => void
   readerError: string | null
   onRetryReaderView: () => void
   fontSize: DocumentFontSize
@@ -24,8 +28,11 @@ export function PreviewToolbar({
   selectedAttachment,
   previewSource,
   inlinePreviewAvailable,
+  fidelityAvailable = false,
+  showingFidelity = false,
   onSelectAttachment,
   onSelectInlinePreview,
+  onSelectFidelityView,
   readerError,
   onRetryReaderView,
   fontSize,
@@ -67,7 +74,7 @@ export function PreviewToolbar({
                 type="button"
                 onClick={() => onSelectAttachment(preferredReaderAttachment)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  previewSource === 'reader'
+                  previewSource === 'reader' && !showingFidelity
                     ? 'bg-sky-600 text-white shadow-sm'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
@@ -75,6 +82,21 @@ export function PreviewToolbar({
                 title="Show source file preview"
               >
                 Source file
+              </button>
+            )}
+            {fidelityAvailable && (
+              <button
+                type="button"
+                onClick={() => onSelectFidelityView?.()}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                  showingFidelity
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                aria-label="Show the original page layout"
+                title="Show the original page layout"
+              >
+                Original layout
               </button>
             )}
           </div>

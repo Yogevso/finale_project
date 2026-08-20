@@ -27,6 +27,15 @@ interface PreviewCanvasProps {
   documentPaperClass: string
   activeHtmlContent: string | null
   showingReaderView: boolean
+  /**
+   * Page-faithful PDF render. It relies on <style>, inline positioning and inline SVG,
+   * all of which sanitizeHtmlForPreview strips, so it is isolated in a sandboxed iframe
+   * instead of going through the normal render path.
+   */
+  showingFidelity?: boolean
+  fidelityHtml?: string | null
+  fidelityError?: string | null
+  isFidelityLoading?: boolean
   showDocumentTitle?: boolean
   documentTitle?: string
   selectedAttachmentFilename?: string
@@ -67,6 +76,10 @@ export function PreviewCanvas({
   documentPaperClass,
   activeHtmlContent,
   showingReaderView,
+  showingFidelity = false,
+  fidelityHtml = null,
+  fidelityError = null,
+  isFidelityLoading = false,
   showDocumentTitle = true,
   documentTitle,
   selectedAttachmentFilename,
@@ -264,13 +277,13 @@ export function PreviewCanvas({
               Page {readerCurrentPage}
             </span>
           )}
-          {isEditor && !showingReaderView ? (
+          {isEditor && !showingReaderView && !showingFidelity ? (
             <span className="text-xs bg-emerald-500/80 px-2 py-0.5 rounded whitespace-nowrap">
               Click section to edit
             </span>
           ) : (
             <span className="text-xs bg-white/20 px-2 py-0.5 rounded whitespace-nowrap">
-              {showingReaderView ? 'Reader View' : 'Read Only'}
+              {showingFidelity ? 'Original Layout' : showingReaderView ? 'Reader View' : 'Read Only'}
             </span>
           )}
         </div>
@@ -304,7 +317,9 @@ export function PreviewCanvas({
 
       <div
         ref={previewPaneRef}
-        className="document-preview-scroll-region flex-1 relative overflow-y-auto overflow-x-auto document-preview-pane"
+        className={`document-preview-scroll-region flex-1 relative document-preview-pane ${
+          showingFidelity ? 'overflow-hidden' : 'overflow-y-auto overflow-x-auto'
+        }`}
         onScroll={onScroll}
       >
         <div className="document-reading-progress z-10 h-[3px]" aria-hidden="true">
@@ -315,18 +330,39 @@ export function PreviewCanvas({
           />
         </div>
 
-        <div className={documentPaperClass} data-testid="document-preview-paper">
-          <div
-            id="document-content-area"
-            data-tour="document-inline-comment-area"
-            className={`document-preview-content ${
-              showingReaderView ? 'document-preview-content--reader' : ''
-            }`}
-            style={contentStyle}
-          >
-            {renderedContent}
+        {showingFidelity ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-100">
+            {fidelityHtml ? (
+              <iframe
+                title="Original page layout"
+                data-testid="document-fidelity-frame"
+                srcDoc={fidelityHtml}
+                // Fully restricted: the render is static markup, CSS and embedded fonts.
+                sandbox=""
+                className="h-full w-full border-0"
+              />
+            ) : isFidelityLoading ? (
+              <p className="helper-copy">Rendering the original layout...</p>
+            ) : (
+              <p className="helper-copy text-amber-700">
+                {fidelityError || 'Original layout is unavailable for this attachment.'}
+              </p>
+            )}
           </div>
-        </div>
+        ) : (
+          <div className={documentPaperClass} data-testid="document-preview-paper">
+            <div
+              id="document-content-area"
+              data-tour="document-inline-comment-area"
+              className={`document-preview-content ${
+                showingReaderView ? 'document-preview-content--reader' : ''
+              }`}
+              style={contentStyle}
+            >
+              {renderedContent}
+            </div>
+          </div>
+        )}
 
         <InlineCommentPopups
           hasUser={hasUser}
