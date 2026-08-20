@@ -11,6 +11,9 @@ export interface SelectionPopupState {
   y: number
   text: string
   anchorId: string
+  /** Viewport-space edges of the selected text, so popups can be placed against it. */
+  anchorTop?: number
+  anchorBottom?: number
 }
 
 export interface CommentPopupState {
@@ -19,6 +22,8 @@ export interface CommentPopupState {
   y: number
   text: string
   anchorId: string
+  anchorTop?: number
+  anchorBottom?: number
 }
 
 interface MouseUpTargetEvent {
@@ -220,6 +225,8 @@ export function useInlineComments(documentId: number, reviewId: number | null = 
           y: rect.top - 10,
           text: selectedText,
           anchorId: resolveAnchorId(selection),
+          anchorTop: rect.top,
+          anchorBottom: rect.bottom,
         })
       } else {
         setSelectionPopup(EMPTY_SELECTION_POPUP)
@@ -237,6 +244,8 @@ export function useInlineComments(documentId: number, reviewId: number | null = 
       y: selectionPopup.y + 60,
       text: selectionPopup.text,
       anchorId: selectionPopup.anchorId || 'document-content-area',
+      anchorTop: selectionPopup.anchorTop,
+      anchorBottom: selectionPopup.anchorBottom,
     })
     setSelectionPopup(EMPTY_SELECTION_POPUP)
   }, [selectionPopup])
