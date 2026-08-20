@@ -293,6 +293,12 @@ export interface Version {
   row_version?: number
   etag?: string
   content: string | null
+  /**
+   * Contents for this version, stored beside the HTML at conversion time.
+   * Entries keep the page numbers and heading ids the source document declared,
+   * which scraping the rendered HTML cannot recover.
+   */
+  toc_items?: AttachmentOutlineItem[]
   changes_summary: string | null
   is_published: boolean
   published_at: string | null

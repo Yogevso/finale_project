@@ -14,6 +14,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.conversion.version_toc import build_version_toc
 from app.domain.aggregates import DocumentAggregate
 from app.errors import ServiceUnavailableError, ValidationError
 from app.legacy_wrappers import get_document_converter_wrapper
@@ -210,6 +211,9 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                 )
 
                 if html_content:
+                    # Read the structure from the same bytes the HTML came from;
+                    # the converter returns only a string, so it cannot carry it.
+                    version_toc = build_version_toc(content, content_type, original_filename)
                     existing_version = (
                         db.query(Version)
                         .filter(Version.document_id == document_id)
@@ -238,6 +242,7 @@ class AttachmentServiceUploadMixin(AttachmentServiceCommonMixin):
                         if existing_version
                         else VersionBumpType.MAJOR,
                         content=html_content,
+                        toc_json=json.dumps(version_toc) if version_toc else None,
                         changes_summary=f"Initial content from uploaded file: {original_filename}",
                         is_published=should_publish_version,
                         published_at=attachment.uploaded_at if should_publish_version else None,

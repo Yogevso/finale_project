@@ -1,7 +1,8 @@
 """Pydantic Schemas - API Contracts"""
 
+import json
 from datetime import date, datetime
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -339,7 +340,22 @@ class VersionResponse(VersionBase):
     # Audience snapshot at publish time (carry-forward auditing)
     audience_visibility_snapshot: Optional[str] = None
     audience_company_ids_snapshot: Optional[str] = None
+    # Contents for this version, held beside the HTML rather than scraped from
+    # it, so entries keep the page numbers and heading ids the source declared.
+    toc_items: List["AttachmentOutlineItem"] = Field(default_factory=list)
     warnings: List[str] = []
+
+    @field_validator("toc_items", mode="before")
+    @classmethod
+    def _parse_toc_json(cls, value: Any) -> Any:
+        """Accept the stored JSON string as well as an already-parsed list."""
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (TypeError, ValueError):
+                return []
+            return parsed if isinstance(parsed, list) else []
+        return value or []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -366,7 +382,6 @@ class VersionReviewSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-VersionResponse.model_rebuild()
 VersionReviewSummary.model_rebuild()
 
 
@@ -435,6 +450,9 @@ class AttachmentOutlineItem(BaseModel):
 
 
 AttachmentReaderViewResponse.model_rebuild()
+# VersionResponse carries AttachmentOutlineItem, so it resolves only once that
+# model exists; rebuilding earlier leaves the forward reference undefined.
+VersionResponse.model_rebuild()
 
 
 # ========== Comment Schemas ==========

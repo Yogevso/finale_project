@@ -23,6 +23,7 @@ import {
   clearHighlights,
   findSectionMatchInRoot,
   getUsableVersionContent,
+  mapOutlineItemsToSections,
   processHtmlIntoSections,
   resolveSectionPageStart,
   type TocSection,
@@ -864,10 +865,15 @@ export function DocumentPreview({
         const versionContent = getUsableVersionContent(versionToShow?.content);
         if (versionContent) {
           const processed = processHtmlIntoSections(versionContent);
+          // The stored contents carry real page numbers and the heading ids the
+          // source declared; headings scraped back out of the HTML carry neither.
+          const storedSections = mapOutlineItemsToSections(versionToShow?.toc_items);
+          const resolvedSections =
+            storedSections.length > 0 ? storedSections : processed.sections;
           setHtmlContent(processed.html);
-          setInlineSections(processed.sections);
+          setInlineSections(resolvedSections);
           if (!selectedAttachmentRef.current) {
-            setSections(processed.sections);
+            setSections(resolvedSections);
           }
         } else {
           setHtmlContent(null);
