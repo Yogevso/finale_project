@@ -61,6 +61,13 @@ _REPEAT_IMAGE_RATIO = 0.5
 _MIN_IMAGE_DIMENSION = 32
 # Fraction of a text block that must sit inside a table to be claimed by it.
 _TABLE_CLAIM_OVERLAP = 0.5
+# A single cell holding at least this share of a table's text means the grid was
+# mis-detected and the row collapsed instead of splitting across its columns.
+_COLLAPSED_CELL_SHARE = 0.4
+# Below this many rows a single filled cell is an ordinary title row, not a failure.
+_MIN_ROWS_FOR_COLLAPSE_CHECK = 3
+# A collapsed row may only be dropped when every one of its words already appears
+# elsewhere in the table. Anything short of that would lose content.
 # Optional-content layer names that mark decorative page furniture.
 _DECORATIVE_OCG_NAMES = {"background", "watermark", "watermarks"}
 
@@ -304,6 +311,9 @@ def _extract_tables(
             rect = fitz.Rect(table.bbox)
         except Exception:  # policy: DEGRADED — without a bbox the table cannot claim text
             rect = None
+        cleaned = _drop_empty_columns(_repair_collapsed_rows(cleaned, page_idx, warnings))
+        if len(cleaned) < 2:
+            continue
         if rect is not None:
             regions.append(rect)
         blocks.append(
@@ -314,6 +324,79 @@ def _extract_tables(
             )
         )
     return regions, blocks
+
+
+def _row_is_collapsed(row: list[str], table_text_len: int) -> bool:
+    """True when one cell swallowed the row instead of the text splitting by column."""
+    filled = [cell for cell in row if cell]
+    if len(row) < 2 or len(filled) != 1 or table_text_len <= 0:
+        return False
+    return len(filled[0]) >= table_text_len * _COLLAPSED_CELL_SHARE
+
+
+def _has_collapsed_row(rows: list[list[str]]) -> bool:
+    if len(rows) < _MIN_ROWS_FOR_COLLAPSE_CHECK:
+        return False
+    total = sum(len(cell) for row in rows for cell in row)
+    return any(_row_is_collapsed(row, total) for row in rows)
+
+
+def _table_words(text: str) -> list[str]:
+    return re.findall(r"\w+", text.lower())
+
+
+def _is_covered_elsewhere(cell: str, other_text: str) -> bool:
+    """True when a cell carries no word the rest of the table does not already hold."""
+    available = set(_table_words(other_text))
+    return all(word in available for word in _table_words(cell))
+
+
+def _repair_collapsed_rows(
+    rows: list[list[str]],
+    page_idx: int,
+    warnings: list[str],
+) -> list[list[str]]:
+    """Drop rows that collapsed into one cell, but only where nothing is lost."""
+    if len(rows) < _MIN_ROWS_FOR_COLLAPSE_CHECK:
+        return rows
+
+    table_text_len = sum(len(cell) for row in rows for cell in row)
+    kept: list[list[str]] = []
+    for index, row in enumerate(rows):
+        if not _row_is_collapsed(row, table_text_len):
+            kept.append(row)
+            continue
+
+        collapsed_cell = next(cell for cell in row if cell)
+        elsewhere = " ".join(
+            cell for other, values in enumerate(rows) if other != index for cell in values
+        )
+        if not _is_covered_elsewhere(collapsed_cell, elsewhere):
+            # Dropping this would remove text the table does not carry anywhere else.
+            kept.append(row)
+            continue
+
+        warnings.append(
+            f"Page {page_idx + 1}: dropped a mis-detected table row that repeated the table."
+        )
+
+    return kept if len(kept) >= 2 else rows
+
+
+def _drop_empty_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Remove phantom columns that mis-detection inserts and that hold no text."""
+    if not rows:
+        return rows
+
+    width = max(len(row) for row in rows)
+    keep = [index for index in range(width) if any(_cell_at(row, index) for row in rows)]
+    if len(keep) == width or len(keep) < 2:
+        return rows
+    return [[_cell_at(row, index) for index in keep] for row in rows]
+
+
+def _cell_at(row: list[str], index: int) -> str:
+    return row[index] if index < len(row) else ""
 
 
 def _clean_table_rows(rows: list[list[str | None]]) -> list[list[str]]:
