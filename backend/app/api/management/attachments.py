@@ -362,6 +362,24 @@ def get_attachment_reader_view(
     return AttachmentReaderViewResponse(**payload)
 
 
+@router.get(
+    "/documents/{document_id}/attachments/{attachment_id}/fidelity-view",
+)
+def get_attachment_fidelity_view(
+    document_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_get_current_active_user_or_token),
+):
+    """Render a PDF attachment as page-faithful HTML.
+
+    This is a read-only companion to the Reader View. It is generated on
+    demand and never stored, so it takes no part in editing, review or
+    publishing.
+    """
+    return AttachmentService.get_fidelity_view(db, document_id, attachment_id, current_user)
+
+
 @router.post(
     "/documents/{document_id}/attachments/{attachment_id}/reader-view/retry",
     response_model=AttachmentReaderViewResponse,

@@ -12,6 +12,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.errors import ValidationError
 from app.legacy_wrappers import get_document_converter_wrapper
 from app.models import Attachment, AttachmentArtifact, User
 
@@ -490,3 +491,32 @@ class AttachmentServiceReaderViewMixin(AttachmentServiceArtifactsMixin):
             background_tasks=background_tasks,
             force_retry=True,
         )
+
+    @classmethod
+    def get_fidelity_view(
+        cls,
+        db: Session,
+        document_id: int,
+        attachment_id: int,
+        current_user: User,
+    ) -> dict:
+        """Render a PDF attachment as page-faithful HTML.
+
+        This is the appearance-preserving companion to the structured reader
+        view; it is generated on demand rather than stored, so it never
+        participates in the edit, review or publish flows.
+        """
+        from app.conversion.pdf_fidelity import build_fidelity_reader_artifact
+
+        attachment = cls.get_attachment(db, document_id, attachment_id, current_user)
+        if cls._resolve_structured_reader_kind(attachment) != "pdf":
+            raise ValidationError("Fidelity view is only available for PDF attachments")
+
+        original_bytes = cls._load_original_bytes_for_attachment(attachment)
+        artifact = build_fidelity_reader_artifact(original_bytes)
+        return {
+            "status": artifact["status"],
+            "html_content": artifact["html_content"],
+            "toc_items": artifact["toc_items"],
+            "error": artifact["error"],
+        }
