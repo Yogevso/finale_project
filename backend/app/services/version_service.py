@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.conversion.version_toc import derive_version_toc
 from app.domain.aggregates import DocumentAggregate
 from app.domain.events import InProcessDomainEventDispatcher
 from app.domain.factories import VersionFactory
@@ -42,6 +43,18 @@ from app.services.version_scheduling_service import VersionSchedulingService
 from app.utils.concurrency import ensure_if_match_matches
 
 logger = logging.getLogger(__name__)
+
+
+def _stored_toc(version: Version) -> list[dict]:
+    """Read a version's stored contents, tolerating a null or malformed column."""
+    raw = getattr(version, "toc_json", None)
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return parsed if isinstance(parsed, list) else []
 
 
 class VersionService(SessionService):
@@ -412,6 +425,11 @@ class VersionService(SessionService):
         with UnitOfWork(self.db):
             if version_data.content is not None:
                 version.content = version_data.content
+                # The contents describe the content; rewriting one without the
+                # other leaves a review comparing against entries that no longer
+                # match the document.
+                rebuilt = derive_version_toc(version.content, _stored_toc(version))
+                version.toc_json = json.dumps(rebuilt) if rebuilt else None
             if version_data.changes_summary is not None:
                 version.changes_summary = version_data.changes_summary
             mentioned_user_ids = self._notify_version_mentions(
