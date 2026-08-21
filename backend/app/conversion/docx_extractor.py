@@ -55,6 +55,10 @@ IMAGE_CONTENT_TYPES = {
 }
 MAX_EMBEDDED_IMAGE_SIZE = 1_000_000
 COMPACT_HEADING_STYLE_RE = re.compile(r"^heading([1-6])$")
+# "toc 1" / "toc3": a line of the contents page Word generates. It is
+# navigation furniture, not content, and it is served separately as the
+# document's table of contents.
+COMPACT_TOC_STYLE_RE = re.compile(r"^toc([1-9])$")
 COMPACT_LIST_STYLE_RE = re.compile(r"^list(?:bullet|number)(\d+)?$")
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 MONOSPACE_FONT_TOKENS = {
@@ -326,6 +330,14 @@ class DocxExtractor:
 
     def _extract_paragraphs(self, parsed_document: ParsedDocxDocument) -> list[ParagraphBlock]:
         return parsed_document.paragraphs
+
+    def _is_generated_toc_paragraph(self, paragraph: ParagraphBlock) -> bool:
+        """True for a line of the contents page Word generated."""
+        for candidate in (paragraph.style_name, paragraph.style_id):
+            normalized = self._normalize_style_token(candidate)
+            if normalized and COMPACT_TOC_STYLE_RE.fullmatch(normalized):
+                return True
+        return False
 
     def _read_declared_toc(self, data: bytes) -> list[dict[str, Any]]:
         """Read the contents page Word generated, if the document has one."""
@@ -697,6 +709,15 @@ class DocxExtractor:
         while index < len(blocks):
             block = blocks[index]
             if block.kind == "paragraph" and block.paragraph is not None:
+                # Every line of the generated contents page would otherwise become
+                # a body paragraph, and downstream each one becomes a phantom
+                # "section" anchored to a page number rather than to a heading. A
+                # review then reports all of them as deleted the moment the page
+                # is regenerated, burying the change the author actually made.
+                if self._is_generated_toc_paragraph(block.paragraph):
+                    index += 1
+                    continue
+
                 heading_item = heading_lookup.get(id(block.paragraph))
                 # Numbered headings ("1.1 Release Kit Summary") carry a numPr just like
                 # list items do. Without this guard the list branch claims them and the
