@@ -1,4 +1,5 @@
 import { SEO } from '@/components/SEO'
+import '@/styles/comic-portal.css'
 import {
   PublicDocumentsResults,
   PublicDocumentsSidebar,
@@ -11,20 +12,22 @@ export default function PublicDocumentsPage() {
   const controller = usePublicDocumentsPageController()
 
   return (
-    <div className="min-h-screen animate-fade-in bg-slate-50 dark:bg-slate-950">
+    <div className="comic-portal min-h-screen animate-fade-in">
       <SEO
         title="Documentation Library"
         description="Explore approved documentation, release notes, and technical guides."
       />
 
-      <section className="bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 text-white">
-        <div className="content-shell py-14">
+      <section className="comic-hero">
+        <div className="content-shell relative py-16">
           <div className="max-w-3xl">
-            <div className="mb-3 text-xs uppercase tracking-widest text-white/85">
-              Viewer Portal
-            </div>
-            <h1 className="mb-3 text-4xl font-display font-bold">Documentation Library</h1>
-            <p className="text-blue-100">
+            <div className="comic-eyebrow mb-5 text-[0.7rem]">Viewer Portal</div>
+            <h1 className="comic-title mb-6 font-display text-5xl md:text-6xl">
+              Documentation
+              <br />
+              Library
+            </h1>
+            <p className="comic-caption max-w-xl text-sm md:text-base">
               Explore approved documentation, release notes, and technical guides curated by the
               docs team.
             </p>

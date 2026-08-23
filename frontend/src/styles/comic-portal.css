@@ -1,0 +1,189 @@
+/*
+ * Comic-book treatment for the public documentation library.
+ *
+ * Everything here is scoped under `.comic-portal`, so removing the class from the page
+ * removes the theme entirely and nothing else in the application can be reached by it.
+ *
+ * The vocabulary is the printing process, not any publisher's: halftone dots, heavy ink
+ * outlines, hard offset shadows where a plate was slightly out of register, gutters
+ * between panels, and the four-colour palette a newsstand comic was printed with. No
+ * logo, wordmark, character or typeface belonging to anyone is used or imitated.
+ */
+
+.comic-portal {
+  --ink: #10100f;
+  --newsprint: #f6efe2;
+  --plate-red: #d81f26;
+  --plate-gold: #f2b705;
+  --plate-blue: #1b3fae;
+  --panel: #fffdf7;
+
+  background-color: var(--newsprint);
+  /* Halftone: two offset dot grids, the way a screened tint is actually laid down. */
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(16, 16, 15, 0.16) 1px, transparent 0),
+    radial-gradient(circle at 4px 4px, rgba(216, 31, 38, 0.09) 1px, transparent 0);
+  background-size:
+    8px 8px,
+    8px 8px;
+}
+
+/* ---------------------------------------------------------------- the splash panel */
+
+.comic-portal .comic-hero {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 5px solid var(--ink);
+  background: var(--plate-blue);
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.06) 0 14px,
+      transparent 14px 28px
+    ),
+    radial-gradient(circle at 78% 30%, rgba(242, 183, 5, 0.5), transparent 46%);
+  color: #fff;
+}
+
+/* The burst a cover puts behind its title. */
+.comic-portal .comic-hero::before {
+  content: '';
+  position: absolute;
+  top: -28%;
+  right: -6%;
+  width: 46rem;
+  height: 46rem;
+  background: conic-gradient(
+    from 8deg,
+    rgba(242, 183, 5, 0.34) 0 6deg,
+    transparent 6deg 12deg
+  );
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.comic-portal .comic-eyebrow {
+  display: inline-block;
+  transform: rotate(-2deg);
+  border: 3px solid var(--ink);
+  background: var(--plate-gold);
+  color: var(--ink);
+  padding: 0.2rem 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.comic-portal .comic-title {
+  position: relative;
+  text-transform: uppercase;
+  font-weight: 900;
+  letter-spacing: -0.015em;
+  line-height: 0.94;
+  /* The ink outline plus the shifted plate underneath it. */
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow:
+    6px 6px 0 var(--plate-red),
+    10px 10px 0 var(--ink);
+}
+
+/* The caption box a narrator speaks from, bottom-left of the panel. */
+.comic-portal .comic-caption {
+  display: inline-block;
+  border: 3px solid var(--ink);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+/* ------------------------------------------------------------------- panels & cards */
+
+.comic-portal .surface-card,
+.comic-portal .surface-card-hover {
+  border: 3px solid var(--ink) !important;
+  border-radius: 0 !important;
+  background: var(--panel) !important;
+  box-shadow: 7px 7px 0 var(--ink) !important;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.comic-portal .surface-card-hover:hover {
+  transform: translate(-3px, -3px) rotate(-0.35deg);
+  box-shadow: 11px 11px 0 var(--plate-red) !important;
+}
+
+.comic-portal .card-title {
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.comic-portal .surface-card-hover:hover .card-title {
+  color: var(--plate-red);
+}
+
+/* Tags read as the cover flashes that shout a price or an issue number. */
+.comic-portal .pill {
+  border: 2px solid var(--ink) !important;
+  border-radius: 999px !important;
+  background: var(--plate-gold) !important;
+  color: var(--ink) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.comic-portal .body-copy,
+.comic-portal .helper-copy {
+  color: #3b352c;
+}
+
+/* ------------------------------------------------------------------------- controls */
+
+.comic-portal input[type='text'],
+.comic-portal input[type='search'],
+.comic-portal select,
+.comic-portal .input-field,
+.comic-portal .select-field {
+  border: 3px solid var(--ink) !important;
+  border-radius: 0 !important;
+  background: var(--panel) !important;
+  color: var(--ink) !important;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.comic-portal button {
+  letter-spacing: 0.04em;
+}
+
+.comic-portal .btn-primary,
+.comic-portal button[type='submit'] {
+  border: 3px solid var(--ink) !important;
+  border-radius: 0 !important;
+  background: var(--plate-red) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.comic-portal .btn-primary:active,
+.comic-portal button[type='submit']:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* Someone reading this with reduced motion still gets the ink, not the lurch. */
+@media (prefers-reduced-motion: reduce) {
+  .comic-portal .surface-card-hover,
+  .comic-portal .surface-card-hover:hover {
+    transform: none;
+    transition: none;
+  }
+}
