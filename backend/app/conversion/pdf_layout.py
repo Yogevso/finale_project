@@ -73,6 +73,10 @@ class LayoutSpan:
     font_size: float
     bold: bool
     italic: bool
+    # sRGB packed into an int, as PyMuPDF reports it. Carried because a renderer
+    # reading colour from the PDF separately would be a second extraction whose
+    # spans could disagree with these.
+    color: int = 0
 
     @property
     def signature(self) -> tuple[str, float, bool, bool]:
@@ -192,6 +196,7 @@ def _span_from_raw(raw: dict[str, Any]) -> LayoutSpan | None:
         font_size=float(raw.get("size", 0.0)),
         bold=bool(flags & _FLAG_BOLD) or "bold" in lowered,
         italic=bool(flags & _FLAG_ITALIC) or "italic" in lowered or "oblique" in lowered,
+        color=int(raw.get("color", 0) or 0),
     )
 
 
@@ -359,33 +364,54 @@ def _read_outline(doc: Any, warnings: list[str]) -> list[OutlineEntry]:
     return entries
 
 
-def extract_layout_document(pdf_bytes: bytes) -> LayoutDocument:
+def extract_layout_document(pdf_bytes: bytes, *, max_pages: int | None = None) -> LayoutDocument:
     """Build a :class:`LayoutDocument` from raw PDF bytes."""
-    document = LayoutDocument()
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     except Exception as exc:  # policy: FAIL_FAST — an unreadable PDF is a stable error
+        document = LayoutDocument()
         document.error = f"Failed to open PDF: {exc}"
         return document
 
     try:
-        if len(doc) == 0:
-            document.error = "PDF has no pages"
-            return document
-
-        document.pages = [
-            LayoutPage(
-                number=index + 1,
-                width=float(doc[index].rect.width),
-                height=float(doc[index].rect.height),
-                rotation=int(doc[index].rotation),
-            )
-            for index in range(len(doc))
-        ]
-        document.outline = _read_outline(doc, document.warnings)
-        pages_lines = [_collect_lines(doc[index]) for index in range(len(doc))]
+        return extract_layout_from_document(doc, max_pages=max_pages)
     finally:
         doc.close()
+
+
+def extract_layout_from_document(doc: Any, *, max_pages: int | None = None) -> LayoutDocument:
+    """Extract from a document the caller already has open.
+
+    ``pdf_fidelity`` holds the document open for the page backgrounds and the
+    embedded font programs, and renders the text from these nodes. Going back to
+    the bytes for a second extraction would parse the file twice and produce a
+    second set of ids that the first set has no reason to agree with.
+
+    Ownership stays with the caller: this does not close ``doc``.
+    """
+    document = LayoutDocument()
+    page_count = len(doc)
+    if page_count == 0:
+        document.error = "PDF has no pages"
+        return document
+
+    # Reading stops where rendering does, so a caller that renders a prefix of a
+    # very long PDF does not pay for extracting the rest.
+    limit = page_count if max_pages is None else max(1, min(page_count, max_pages))
+
+    document.pages = [
+        LayoutPage(
+            number=index + 1,
+            width=float(doc[index].rect.width),
+            height=float(doc[index].rect.height),
+            rotation=int(doc[index].rotation),
+        )
+        for index in range(limit)
+    ]
+    document.outline = [
+        entry for entry in _read_outline(doc, document.warnings) if entry.page <= limit
+    ]
+    pages_lines = [_collect_lines(doc[index]) for index in range(limit)]
 
     family, size = _detect_body_font(pages_lines)
     document.body_font_family = family

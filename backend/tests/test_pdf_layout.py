@@ -8,6 +8,8 @@ that alternates between the left and right margin on facing pages, and an inline
 
 from __future__ import annotations
 
+import fitz
+
 from app.conversion.pdf_layout import (
     LayoutDocument,
     LayoutNode,
@@ -16,6 +18,7 @@ from app.conversion.pdf_layout import (
     _classify_headings,
     _detect_chrome,
     _merge_baselines,
+    extract_layout_from_document,
     join_spans,
 )
 
@@ -148,3 +151,49 @@ def test_a_line_of_pure_punctuation_is_not_a_heading():
     _classify_headings(document)
 
     assert separator.type == "paragraph"
+
+
+def _open_pdf(pages: int = 6) -> fitz.Document:
+    doc = fitz.open()
+    for index in range(pages):
+        page = doc.new_page()
+        page.insert_text((72, 260), f"Body copy on page {index + 1}", fontsize=9)
+    doc.set_toc([[1, f"Chapter {index + 1}", index + 1] for index in range(pages)])
+    return doc
+
+
+def test_extracting_from_an_open_document_leaves_it_to_the_caller():
+    """The fidelity renderer keeps using the document after extracting from it."""
+    doc = _open_pdf(pages=2)
+    try:
+        document = extract_layout_from_document(doc)
+
+        assert document.error is None
+        assert doc.page_count == 2  # still open: closing it here would raise
+    finally:
+        doc.close()
+
+
+def test_max_pages_bounds_the_read():
+    """Reading stops where rendering stops, outline included."""
+    doc = _open_pdf(pages=6)
+    try:
+        document = extract_layout_from_document(doc, max_pages=2)
+    finally:
+        doc.close()
+
+    assert [page.number for page in document.pages] == [1, 2]
+    assert {node.page for node in document.nodes} == {1, 2}
+    assert [entry.page for entry in document.outline] == [1, 2]
+
+
+def test_spans_carry_the_colour_the_pdf_gave_them():
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 260), "Intel blue", fontsize=9, color=(0, 0.28, 0.73))
+    try:
+        document = extract_layout_from_document(doc)
+    finally:
+        doc.close()
+
+    assert document.nodes[0].spans[0].color != 0

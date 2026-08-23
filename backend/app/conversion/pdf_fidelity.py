@@ -15,6 +15,13 @@ font files.
 
 Compared with rasterising each page, this keeps text selectable and searchable,
 stays sharp at any zoom, and is markedly smaller.
+
+The text layer is rendered from ``pdf_layout``'s document model rather than from
+a second pass over the PDF. That model already knows which spans form one line,
+which lines are headings and which are the running header, so every rendered
+line can carry the ``data-node-id`` of the node it came from. A heading in the
+table of contents and the heading on the page are then the same node under the
+same id, and navigation is a lookup rather than a text search.
 """
 
 from __future__ import annotations
@@ -24,10 +31,14 @@ import html
 import io
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
 import fitz  # PyMuPDF
+
+from app.conversion.document_toc import build_toc_from_layout
+from app.conversion.pdf_layout import LayoutNode, LayoutSpan, extract_layout_from_document
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +58,7 @@ _STYLE = """
   box-shadow:0 2px 10px rgba(15,23,42,.18);max-width:1000px;container-type:inline-size}
 .pdf-fidelity-page svg{display:block;width:100%;height:auto}
 .pdf-fidelity-text{position:absolute;inset:0;overflow:hidden}
+.pdf-fidelity-node{position:absolute}
 .pdf-fidelity-text span{position:absolute;white-space:pre;line-height:1;transform-origin:0 0}
 """
 
@@ -88,11 +100,32 @@ def convert_pdf_to_fidelity_html(pdf_bytes: bytes) -> FidelityResult:
 
         fonts = _extract_fonts(doc, result.warnings)
         result.font_count = len(fonts)
-        result.toc_items = _build_toc_items(doc)
+
+        layout = extract_layout_from_document(doc, max_pages=page_limit)
+        if layout.error:
+            result.error = layout.error
+            return result
+        result.warnings.extend(layout.warnings)
+        # The outline is authoritative but often shallow, so detected headings
+        # fill in below it - the same contents the structured reader shows, over
+        # ids that exist in this render.
+        result.toc_items = build_toc_from_layout(layout)
+
+        nodes_by_page: dict[int, list[LayoutNode]] = defaultdict(list)
+        for node in layout.nodes:
+            nodes_by_page[node.page].append(node)
 
         parts = [f"<style>{_STYLE}</style>", _font_face_css(fonts), '<div class="pdf-fidelity">']
         for page_index in range(page_limit):
-            parts.append(_render_page(doc[page_index], fonts, result.warnings, page_index))
+            parts.append(
+                _render_page(
+                    doc[page_index],
+                    nodes_by_page.get(page_index + 1, []),
+                    fonts,
+                    result.warnings,
+                    page_index,
+                )
+            )
         parts.append("</div>")
 
         rendered = "".join(parts)
@@ -214,6 +247,7 @@ def _font_face_css(fonts: dict[str, tuple[str, str]]) -> str:
 
 def _render_page(
     page: Any,
+    nodes: list[LayoutNode],
     fonts: dict[str, tuple[str, str]],
     warnings: list[str],
     page_index: int,
@@ -223,11 +257,11 @@ def _render_page(
         return ""
 
     background = _render_background(page, warnings, page_index)
-    spans = _render_text_spans(page, fonts, width)
+    text_layer = _render_text_layer(nodes, fonts, width)
     return (
         f'<div class="pdf-fidelity-page" style="aspect-ratio:{width}/{height}"'
         f' data-page="{page_index + 1}">{background}'
-        f'<div class="pdf-fidelity-text">{spans}</div></div>'
+        f'<div class="pdf-fidelity-text">{text_layer}</div></div>'
     )
 
 
@@ -241,77 +275,81 @@ def _render_background(page: Any, warnings: list[str], page_index: int) -> str:
     return _SVG_TEXT_NODES.sub("", svg)
 
 
-def _render_text_spans(page: Any, fonts: dict[str, tuple[str, str]], page_width: float) -> str:
-    """Place each text span over the background in container-relative units.
+def _cqw(value: float, page_width: float) -> str:
+    """Express a PDF-space length as a share of the page container's width.
 
-    Percentages resolve against the parent font size, so ``cqw`` is used: it is
-    a share of the page container's width and therefore scales with the page.
+    Percentages would resolve against the parent font size, and the vertical
+    axis uses the same unit as the horizontal one deliberately: the page has a
+    fixed aspect ratio, so one scale factor keeps x and y in proportion.
     """
-    try:
-        text_dict = page.get_text("dict")
-    except Exception:  # policy: LOSSY — an unreadable page renders as graphics only
-        return ""
+    return f"{100 * value / page_width:.3f}cqw"
 
-    spans: list[str] = []
-    for block in text_dict.get("blocks", []):
-        if block.get("type") != 0:
+
+def _render_text_layer(
+    nodes: list[LayoutNode],
+    fonts: dict[str, tuple[str, str]],
+    page_width: float,
+) -> str:
+    """Place the page's layout nodes over the background, keeping their identity.
+
+    Each node is a positioned box rather than a bare grouping element. The
+    reader scrolls to it and anchors comments against it, and an element with no
+    box of its own - ``display:contents``, say - reports neither a position nor
+    a size to do that with.
+
+    Span offsets are relative to the node's own box. ``cqw`` still resolves
+    against the page, because only the page declares ``container-type``.
+    """
+    parts: list[str] = []
+    for node in nodes:
+        if not node.spans:
             continue
-        for line in block.get("lines", []):
-            for span in line.get("spans", []):
-                text = span.get("text", "")
-                if not text.strip():
-                    continue
-                x0, y0 = span["bbox"][0], span["bbox"][1]
-                size = span.get("size", 10.0)
-                span_font = _SUBSET_PREFIX.sub("", span.get("font", ""))
-                entry = fonts.get(span_font)
-                # Families are pre-quoted with single quotes; this string is
-                # interpolated into a double-quoted HTML attribute.
-                stack = entry[0] if entry else (_fallback_stack(span_font) if span_font else "")
-                family = f"font-family:{stack};" if stack else ""
-                colour = span.get("color", 0)
-                rgb = f"#{colour & 0xFFFFFF:06x}" if isinstance(colour, int) else "#000000"
-                spans.append(
-                    f'<span style="left:{100 * x0 / page_width:.3f}cqw;'
-                    f"top:{100 * y0 / page_width:.3f}cqw;"
-                    f"font-size:{100 * size / page_width:.3f}cqw;"
-                    f'{family}color:{rgb}">{html.escape(text)}</span>'
-                )
-    return "".join(spans)
 
-
-# ---------------------------------------------------------------------------
-# Table of contents
-# ---------------------------------------------------------------------------
-
-
-def _build_toc_items(doc: Any) -> list[dict[str, Any]]:
-    """Use the PDF's own outline, which is authoritative, rather than guessing."""
-    try:
-        outline = doc.get_toc(simple=True)
-    except Exception:  # policy: DEGRADED — a missing outline just means no table of contents
-        return []
-
-    items: list[dict[str, Any]] = []
-    for index, entry in enumerate(outline or []):
-        try:
-            level, title, page = int(entry[0]), str(entry[1]).strip(), int(entry[2])
-        except (TypeError, ValueError, IndexError):
-            continue
-        if not title:
-            continue
-        items.append(
-            {
-                "id": f"toc-{index}",
-                "title": title,
-                "level": max(1, level),
-                "page": max(1, page),
-                "page_start": max(1, page),
-                "page_end": None,
-                "anchor_id": "",
-            }
+        left, top, right, bottom = node.bbox
+        attributes = (
+            f' data-node-id="{html.escape(node.id, quote=True)}"'
+            f' data-node-type="{html.escape(node.type, quote=True)}"'
         )
-    return items
+        if node.level is not None:
+            attributes += f' data-node-level="{int(node.level)}"'
+
+        parts.append(
+            f'<div class="pdf-fidelity-node"{attributes}'
+            f' style="left:{_cqw(left, page_width)};top:{_cqw(top, page_width)};'
+            f'width:{_cqw(right - left, page_width)};height:{_cqw(bottom - top, page_width)}">'
+        )
+        parts.extend(_render_span(span, fonts, page_width, left, top) for span in node.spans)
+        parts.append("</div>")
+    return "".join(parts)
+
+
+def _render_span(
+    span: LayoutSpan,
+    fonts: dict[str, tuple[str, str]],
+    page_width: float,
+    origin_x: float,
+    origin_y: float,
+) -> str:
+    stack = _css_font_family(span.font_family, fonts)
+    # Families are pre-quoted with single quotes; this string is interpolated
+    # into a double-quoted HTML attribute.
+    family = f"font-family:{stack};" if stack else ""
+    return (
+        f'<span style="left:{_cqw(span.bbox[0] - origin_x, page_width)};'
+        f"top:{_cqw(span.bbox[1] - origin_y, page_width)};"
+        f"font-size:{_cqw(span.font_size, page_width)};"
+        f'{family}color:#{span.color & 0xFFFFFF:06x}">{html.escape(span.text)}</span>'
+    )
+
+
+def _css_font_family(family: str, fonts: dict[str, tuple[str, str]]) -> str:
+    """The stack for a span: the embedded face where there is one, else a match."""
+    # ``pdf_layout`` reports a span with no font name as "unknown"; naming that
+    # in CSS only sends the browser looking for a family that cannot exist.
+    if not family or family == "unknown":
+        return ""
+    entry = fonts.get(family)
+    return entry[0] if entry else _fallback_stack(family)
 
 
 def build_fidelity_reader_artifact(pdf_bytes: bytes) -> dict[str, Any]:
@@ -327,12 +365,12 @@ def build_fidelity_reader_artifact(pdf_bytes: bytes) -> dict[str, Any]:
             "error": result.error,
         }
     return {
-        "status": "completed",
+        "status": "ready",
         "html_content": result.html,
         "toc_items": result.toc_items,
         "toc_source": "pdf_outline",
         "payload": {
-            "status": "completed",
+            "status": "ready",
             "mode": "fidelity",
             "page_count": result.page_count,
             "font_count": result.font_count,
