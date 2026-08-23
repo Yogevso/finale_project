@@ -170,6 +170,9 @@ class TableBlock:
 
     rows: list[TableRowBlock] = field(default_factory=list)
     has_header_row: bool = False
+    # Fractions of the table width, one per grid column, from the DOCX's own
+    # ``w:tblGrid``. Empty when the document declares no usable grid.
+    column_widths: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -806,6 +809,7 @@ class DocxExtractor:
             styles={
                 "wrapper_classes": ["table-wrapper"],
                 "table_classes": ["extracted-table"],
+                "column_widths": list(table.column_widths),
             },
             children=rows,
         )
@@ -981,8 +985,49 @@ class DocxExtractor:
                 image_number += self._count_images_in_blocks(cell.blocks)
             table.rows.append(row)
 
+        # A grid that does not match the columns the rows actually span would shift
+        # every cell in the table, which is worse than having no grid at all.
+        column_widths = self._read_table_grid(table_element)
+        spanned = max(
+            (sum(cell.colspan for cell in row.cells) for row in table.rows),
+            default=0,
+        )
+        table.column_widths = column_widths if len(column_widths) == spanned else []
+
         self._apply_rowspans(table)
         return table, nested_table_count
+
+    def _read_table_grid(self, table_element: _Element) -> list[float]:
+        """The column widths the document states for itself, as fractions of the table.
+
+        Word stores a table's grid in twentieths of a point and every real template
+        sets it. Dropping it leaves the browser to infer widths from content, and auto
+        layout gives almost everything to whichever column holds the most prose: on the
+        Intel release notes that shaved the id and version columns below the width of
+        the values they hold, so an id wrapped across two lines.
+
+        Returned as fractions rather than absolute widths because the reading pane is
+        not the page the author was laying out - only the proportions carry over.
+        """
+        grid = table_element.find("w:tblGrid", XML_NAMESPACES)
+        if grid is None:
+            return []
+
+        widths: list[float] = []
+        for column in grid.findall("w:gridCol", XML_NAMESPACES):
+            raw = column.get(self._ns_attr("w", "w"))
+            try:
+                width = float(raw) if raw is not None else 0.0
+            except (TypeError, ValueError):  # policy: DEGRADED — an unreadable grid is no grid
+                return []
+            if width <= 0:
+                return []
+            widths.append(width)
+
+        total = sum(widths)
+        if not widths or total <= 0:
+            return []
+        return [width / total for width in widths]
 
     def _parse_table_cell(
         self,
