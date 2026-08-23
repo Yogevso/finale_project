@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { ChevronRight, Menu, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
 
@@ -12,6 +12,7 @@ import AnnouncementBanner from './AnnouncementBanner'
 import AssistantChatBubble from './AssistantChatBubble'
 import { SkipNavLink } from './a11y/SkipNavLink'
 import { ThemeToggle } from './ThemeToggle'
+import { RouteContentSkeleton } from '@/components/skeletons'
 
 export default function Layout() {
   const { user, logout, isSystemAdmin } = useAuth()
@@ -23,6 +24,46 @@ export default function Layout() {
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isFullscreen = location.search.includes('fullscreen=1') || location.pathname.endsWith('/fullscreen')
   const { getBadgeCount } = useRouteBadgeCounts(user?.role || null)
+
+  const primaryNavItems = navItems.filter((item) => item.section === 'main')
+  const secondaryNavItems = navItems.filter((item) => item.section !== 'main')
+
+  const renderNavLink = (item: (typeof navItems)[number], primary: boolean) => {
+    const Icon = item.icon
+    const badge = getBadgeCount(item.path)
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        className={({ isActive }) =>
+          `relative rounded-full transition-colors ${
+            primary ? 'px-4 py-2' : 'px-3 py-1'
+          } ${
+            isActive
+              ? 'border border-blue-200 bg-white font-semibold text-blue-800 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300'
+              : primary
+                ? 'text-slate-700 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white'
+                : 'text-slate-500 hover:bg-white/70 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-100'
+          }`
+        }
+      >
+        {primary && (
+          <span className="mr-1.5 inline-flex align-middle">
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
+        {item.label}
+        {badge > 0 && (
+          <span
+            className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"
+            aria-label={`${badge} pending items`}
+          >
+            <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
+          </span>
+        )}
+      </NavLink>
+    )
+  }
 
   useEffect(() => {
     setMobileMenuOpen(false)
@@ -160,35 +201,21 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex flex-wrap items-center gap-2 text-sm" aria-label="Primary">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const badge = getBadgeCount(item.path)
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `relative px-4 py-2 rounded-full transition-colors ${
-                      isActive
-                        ? 'border border-blue-200 bg-white font-semibold text-blue-800 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300'
-                        : 'text-slate-600 hover:bg-white/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white'
-                    }`
-                  }
-                >
-                  <span className="mr-1.5 inline-flex align-middle">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  {item.label}
-                  {badge > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white" aria-label={`${badge} pending items`}>
-                      <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
-                    </span>
-                  )}
-                </NavLink>
-              )
-            })}
+          {/* Desktop Navigation.
+              Every route already declares the section it belongs to, and getSectionLabel
+              has been waiting to be used. Rendering all fourteen at one weight made the
+              daily screens - documents, chat, reviews - read exactly like admin ops, and
+              took a third of the window doing it. The primary work sits at full weight;
+              everything else keeps its place, quieter. Nothing is hidden. */}
+          <nav className="hidden md:block text-sm" aria-label="Primary">
+            <div className="flex flex-wrap items-center gap-2">
+              {primaryNavItems.map((item) => renderNavLink(item, true))}
+            </div>
+            {secondaryNavItems.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-1 gap-y-1 text-[0.8125rem]">
+                {secondaryNavItems.map((item) => renderNavLink(item, false))}
+              </div>
+            )}
           </nav>
 
           {/* Global Search (Y2-001) */}
@@ -282,7 +309,9 @@ export default function Layout() {
       {/* Main Content */}
       <main id="main-content" className="app-shell-main flex-1">
         <div className={`${isFullscreen ? 'px-0 py-0' : 'max-w-7xl mx-auto px-6 py-8 md:px-10 lg:px-16 animate-fade-in'}`}>
-          <Outlet />
+          <Suspense fallback={<RouteContentSkeleton />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 
