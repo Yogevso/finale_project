@@ -130,13 +130,13 @@ export function DocumentsTable({
                         {showDeleted ? (
                           <div className="block min-w-0">
                             <div
-                              className="max-w-[40rem] text-[0.95rem] font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]"
+                              className="max-w-[40rem] text-[0.95rem] font-semibold leading-snug text-slate-900 [overflow-wrap:break-word]"
                               title={documentTitle}
                             >
                               {documentTitle}
                             </div>
                             <div className="mt-1 text-sm text-slate-500">{doc.document_number}</div>
-                            <p className="mt-1 max-w-[38rem] whitespace-pre-wrap text-sm leading-6 text-slate-500 line-clamp-2 [overflow-wrap:anywhere]">
+                            <p className="mt-1 max-w-[38rem] whitespace-pre-wrap text-sm leading-6 text-slate-500 line-clamp-2 [overflow-wrap:break-word]">
                               {documentDescription}
                             </p>
                             {doc.due_date ? (
@@ -163,13 +163,13 @@ export function DocumentsTable({
                         ) : (
                           <Link to={`/documents/${doc.id}/fullscreen`} className="block min-w-0 hover:text-blue-700">
                             <div
-                              className="max-w-[40rem] text-[0.95rem] font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]"
+                              className="max-w-[40rem] text-[0.95rem] font-semibold leading-snug text-slate-900 [overflow-wrap:break-word]"
                               title={documentTitle}
                             >
                               {documentTitle}
                             </div>
                             <div className="mt-1 text-sm text-slate-500">{doc.document_number}</div>
-                            <p className="mt-1 max-w-[38rem] whitespace-pre-wrap text-sm leading-6 text-slate-500 line-clamp-2 [overflow-wrap:anywhere]">
+                            <p className="mt-1 max-w-[38rem] whitespace-pre-wrap text-sm leading-6 text-slate-500 line-clamp-2 [overflow-wrap:break-word]">
                               {documentDescription}
                             </p>
                             {doc.due_date ? (

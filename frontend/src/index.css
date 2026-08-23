@@ -340,7 +340,14 @@
 
   .admin-table-cell {
     @apply px-5 py-3.5 align-top;
-    overflow-wrap: anywhere;
+    /* A row-header cell is a <th>, and the browser centres those by default, so the
+       document's identity block sat centred while every other column was left-aligned. */
+    text-align: left;
+    /* `anywhere` also drops the cell's min-content width to one character, so a squeezed
+       table shaves the title column instead of letting the shell scroll: at 700px the
+       title column fell to 115px and "709759-005 (2)" broke two characters per line,
+       871px tall. `break-word` still breaks a token that cannot fit. */
+    overflow-wrap: break-word;
     transition: background-color 180ms ease;
   }
 
