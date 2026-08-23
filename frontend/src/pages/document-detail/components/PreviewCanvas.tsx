@@ -317,8 +317,11 @@ export function PreviewCanvas({
 
       <div
         ref={previewPaneRef}
+        // In fidelity mode the render is an absolutely positioned overlay, so nothing is
+        // left in flow for this region to take its height from and it collapses to the
+        // progress bar. Every other mode is sized by the paper it contains.
         className={`document-preview-scroll-region flex-1 relative document-preview-pane ${
-          showingFidelity ? 'overflow-hidden' : 'overflow-y-auto overflow-x-auto'
+          showingFidelity ? 'overflow-hidden min-h-[70vh]' : 'overflow-y-auto overflow-x-auto'
         }`}
         onScroll={onScroll}
       >
