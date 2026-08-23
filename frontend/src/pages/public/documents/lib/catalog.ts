@@ -1,3 +1,4 @@
+import { formatDocumentDate } from '@/lib/dateUtils'
 import type {
   PublicCategoryCount,
   PublicPlatformHistoryResponse,
@@ -94,11 +95,7 @@ export function buildCategoryTree(items: PublicCategoryCount[]): CategoryTreeNod
 }
 
 export function formatPublicDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatDocumentDate(dateStr)
 }
 
 export function getDocumentTags(tags?: string) {

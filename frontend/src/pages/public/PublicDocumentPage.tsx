@@ -21,6 +21,7 @@ import NotFoundState from '@/components/NotFoundState'
 import Skeleton from '@/components/Skeleton'
 import { FullscreenTopBar } from '@/pages/document-detail/components/FullscreenTopBar'
 import { SEO } from '@/components/SEO'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 export default function PublicDocumentPage() {
   const { id } = useParams<{ id: string }>()
@@ -44,12 +45,7 @@ export default function PublicDocumentPage() {
   })
   const renderedContent = useMemo(() => parseDocumentHtml(doc?.content ?? ''), [doc?.content])
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+  const formatDate = (dateStr: string) => formatDocumentDate(dateStr)
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`

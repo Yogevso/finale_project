@@ -7,6 +7,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { TableSkeleton } from '@/components/skeletons'
 import { publicApi, type PublicPlatformOverviewItem } from '@/lib/publicApi'
 import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 type PlatformSort = 'latest' | 'docs' | 'name'
 
@@ -43,14 +44,7 @@ export default function PublicPlatformsPage() {
     })
   }, [data?.items, searchTerm, sortBy])
 
-  const formatDateOrDash = (value?: string) => {
-    if (!value) return '-'
-    return new Date(value).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  const formatDateOrDash = (value?: string) => formatDocumentDate(value)
 
   const openPlatform = (platform: PublicPlatformOverviewItem) => {
     navigate(`/platforms/${platform.id}`)

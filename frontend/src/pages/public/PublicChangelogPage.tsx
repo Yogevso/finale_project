@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { SEO } from '@/components/SEO'
 import { ListSkeleton } from '@/components/skeletons'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 const CATEGORY_COLORS: Record<string, string> = {
   feature: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200',
@@ -78,11 +79,7 @@ export default function PublicChangelogPage() {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="helper-copy flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
-                        {new Date(entry.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
+                        {formatDocumentDate(entry.created_at)}
                       </span>
                       {entry.version_tag ? (
                         <span className="pill border-slate-200 bg-slate-100 font-mono text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">

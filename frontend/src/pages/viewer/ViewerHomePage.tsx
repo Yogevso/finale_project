@@ -7,6 +7,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { CardSkeleton } from '@/components/skeletons'
 import { audienceSensitiveQueryOptions, fetchFresh } from '@/lib/queryFreshness'
 import type { Document, DocumentListResponse } from '@/types'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 export default function ViewerHomePage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -225,7 +226,7 @@ export default function ViewerHomePage() {
                 ) : null}
 
                 <div className="mt-auto flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-                  <span className="helper-copy">Updated {new Date(doc.updated_at).toLocaleDateString()}</span>
+                  <span className="helper-copy">Updated {formatDocumentDate(doc.updated_at)}</span>
                   <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 group-hover:underline">
                     Read more
                     <ArrowRight className="h-4 w-4" />

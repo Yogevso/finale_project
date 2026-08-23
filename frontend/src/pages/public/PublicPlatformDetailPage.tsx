@@ -7,6 +7,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { TableSkeleton } from '@/components/skeletons'
 import { publicApi } from '@/lib/publicApi'
 import { audienceSensitiveQueryOptions } from '@/lib/queryFreshness'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 type DocumentSort = 'latest' | 'name' | 'category' | 'version' | 'status'
 
@@ -36,14 +37,7 @@ export default function PublicPlatformDetailPage() {
     ...audienceSensitiveQueryOptions,
   })
 
-  const formatDateOrDash = (value?: string) => {
-    if (!value) return '-'
-    return new Date(value).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  const formatDateOrDash = (value?: string) => formatDocumentDate(value)
 
   const formatStatus = (status: string) =>
     status

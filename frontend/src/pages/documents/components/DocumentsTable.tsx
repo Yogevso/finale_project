@@ -7,6 +7,7 @@ import { formatDueDate, isOverdueDueDate } from '@/lib/documentDueDates'
 import { getDocumentDisplayDescription, getDocumentDisplayTitle } from '@/lib/documentDisplay'
 import Skeleton from '@/components/Skeleton'
 import type { DocumentListResponse, DocumentStatus, DocumentVisibility } from '@/types'
+import { formatDocumentDate } from '@/lib/dateUtils'
 
 type VisibilityChangeRequest = {
   id: number
@@ -152,10 +153,10 @@ export function DocumentsTable({
                             {showDeleted && (doc.deleted_at || doc.purge_at) ? (
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-rose-600">
                                 {doc.deleted_at ? (
-                                  <span>Deleted {new Date(doc.deleted_at).toLocaleDateString()}</span>
+                                  <span>Deleted {formatDocumentDate(doc.deleted_at)}</span>
                                 ) : null}
                                 {doc.purge_at ? (
-                                  <span>Purge {new Date(doc.purge_at).toLocaleDateString()}</span>
+                                  <span>Purge {formatDocumentDate(doc.purge_at)}</span>
                                 ) : null}
                               </div>
                             ) : null}
@@ -252,7 +253,7 @@ export function DocumentsTable({
                       })()}
                     </td>
                     <td className="admin-table-cell whitespace-nowrap text-slate-500">
-                      {new Date(doc.created_at).toLocaleDateString()}
+                      {formatDocumentDate(doc.created_at)}
                     </td>
                     <td className="admin-table-cell whitespace-nowrap text-right">
                       {showDeleted ? (
