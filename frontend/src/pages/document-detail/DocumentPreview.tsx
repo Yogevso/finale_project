@@ -55,6 +55,7 @@ import { usePreviewShortcuts } from '@/pages/document-detail/hooks/usePreviewSho
 import { usePreviewSource } from '@/pages/document-detail/hooks/usePreviewSource';
 import { useReaderView } from '@/pages/document-detail/hooks/useReaderView';
 import {
+  DOCUMENT_FONT_SCALE_VALUES,
   DOCUMENT_FONT_SIZE_VALUES,
   getDocumentFontSize,
   getDocumentTheme,
@@ -482,6 +483,7 @@ export function DocumentPreview({
     () =>
       ({
         '--doc-font-size': DOCUMENT_FONT_SIZE_VALUES[fontSize],
+        '--doc-font-scale': DOCUMENT_FONT_SCALE_VALUES[fontSize],
       }) as CSSProperties,
     [fontSize]
   );

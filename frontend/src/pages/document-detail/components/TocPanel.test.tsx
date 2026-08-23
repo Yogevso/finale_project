@@ -124,3 +124,34 @@ describe('TocPanel', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('TocPanel numbering', () => {
+  const numbered: TocSection[] = [
+    { id: 'a', text: '1 Release Kit Summary', level: 1, html: '', index: 0, anchorId: 'a', pageStart: 1 },
+    { id: 'b', text: 'yejim', level: 2, html: '', index: 1, anchorId: 'b', pageStart: 1 },
+    { id: 'c', text: '1.1 Release Kit Details', level: 2, html: '', index: 2, anchorId: 'c', pageStart: 2 },
+    { id: 'd', text: '2 General Information', level: 1, html: '', index: 3, anchorId: 'd', pageStart: 3 },
+  ]
+
+  it("shows the document's own numbering once, not beside a positional count", () => {
+    // The rail used to render "1.2" next to a heading the document calls "1.1", because
+    // the unnumbered section ahead of it had taken slot 1.1.
+    renderTocPanel({ sections: numbered, activeHeading: 'a' })
+
+    const entry = screen.getByTitle('1.1 Release Kit Details')
+    expect(entry.textContent).toBe('1.1Release Kit Details')
+    expect(entry.textContent).not.toContain('1.21.1')
+  })
+
+  it('leaves an unnumbered heading unnumbered rather than contradicting its neighbours', () => {
+    renderTocPanel({ sections: numbered, activeHeading: 'a' })
+
+    expect(screen.getByTitle('yejim').textContent).toBe('yejim')
+  })
+
+  it('still counts positions for a document that numbers nothing', () => {
+    renderTocPanel()
+
+    expect(screen.getByTitle('Release Details').textContent).toBe('1.1Release Details')
+  })
+})

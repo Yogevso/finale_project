@@ -10,6 +10,19 @@ export const DOCUMENT_FONT_SIZE_VALUES: Record<DocumentFontSize, string> = {
   large: '1.15rem',
 }
 
+/**
+ * The same three steps as a unitless multiplier.
+ *
+ * The reading surface sizes itself fluidly with the viewport, so it cannot simply take
+ * `--doc-font-size` as its font size without losing that. It multiplies by this instead.
+ * Keep the two maps in step: they are the same control.
+ */
+export const DOCUMENT_FONT_SCALE_VALUES: Record<DocumentFontSize, string> = {
+  small: '0.9',
+  default: '1',
+  large: '1.15',
+}
+
 export const DOCUMENT_THEME_CLASS_NAMES: Record<DocumentTheme, string> = {
   light: 'document-preview-paper--light',
   sepia: 'document-preview-paper--sepia',
