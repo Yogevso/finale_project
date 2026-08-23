@@ -620,7 +620,11 @@
   }
 
   .dropdown-menu {
-    @apply rounded-2xl border border-slate-200 bg-white p-1 shadow-lg animate-scale-in;
+    /* The nav links in the header are positioned, so without a stacking order of its own
+       a dropdown is painted underneath whichever of them comes later in the DOM. Every
+       call site that remembered to set one still overrides this: utilities outrank
+       components. */
+    @apply relative z-50 rounded-2xl border border-slate-200 bg-white p-1 shadow-lg animate-scale-in;
   }
 
   .dropdown-item {
